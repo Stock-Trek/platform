@@ -7,25 +7,32 @@ version = "0.2.0"
 edition = "2024"
 
 [workspace.dependencies]
-platform-build-agent = { path = "crates/apps/build-agent" }
-platform-config = { path = "crates/platform/config" }
-platform-errors = { path = "crates/platform/errors" }
-platform-exchange-gateway = { path = "crates/integrations/exchange-gateway" }
-platform-exchange-types = { path = "crates/protocols/exchange-types" }
+platform-build-agent = { path = "crates/build-plane/build-agent" }
+platform-build-orchestrator = { path = "crates/build-plane/build-orchestrator" }
+platform-git-webhook = { path = "crates/build-plane/git-webhook" }
+
 platform-exit-codes = { path = "crates/compute/exit_codes" }
+platform-runner = { path = "crates/compute/runner" }
+
+platform-market-data = { path = "crates/data-plane/market-data-old" }
+
+platform-exchange-gateway = { path = "crates/integrations/exchange-gateway" }
 platform-git = { path = "crates/integrations/git" }
 platform-github = { path = "crates/integrations/github" }
-platform-market-data = { path = "crates/data-plane/market-data-old" }
-platform-messages = { path = "crates/protocols/messages" }
-platform-metrics = { path = "crates/observability/metrics" }
-platform-build-orchestrator = { path = "crates/apps/build-orchestrator" }
-platform-proto-gen = { path = "crates/protocols/proto_gen" }
-platform-runner = { path = "crates/compute/runner" }
 platform-sqs = { path = "crates/integrations/sqs" }
+
+platform-metrics = { path = "crates/observability/metrics" }
+
+platform-config = { path = "crates/platform/config" }
+platform-errors = { path = "crates/platform/errors" }
 platform-time = { path = "crates/platform/time" }
-platform-type-bridge = { path = "crates/protocols/type-bridge" }
 platform-types = { path = "crates/platform/types" }
-platform-git-webhook = { path = "crates/apps/git-webhook" }
+
+platform-exchange-types = { path = "crates/protocols/exchange-types" }
+platform-messages = { path = "crates/protocols/messages" }
+platform-proto-gen = { path = "crates/protocols/proto_gen" }
+platform-type-bridge = { path = "crates/protocols/type-bridge" }
+
 arrow-array = "60"
 arrow-schema = "60"
 async-trait = "0.1"
