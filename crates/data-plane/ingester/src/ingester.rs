@@ -1,5 +1,6 @@
 use crate::{
     event::{GapMarker, MarketEvent},
+    exchange::CexIdExt,
     publisher::EventPublisher,
     sequence::{SequenceObservation, SequenceTracker},
     source::ParsedMessage,
@@ -8,11 +9,12 @@ use chrono::Utc;
 use platform_errors::BpResult;
 use platform_types::new_types::TimestampMilliseconds;
 use std::{collections::HashMap, sync::Arc};
+use stock_trek_types::cex::cex_id::CexId;
 use tracing::debug;
 
 #[derive(Debug, Clone)]
 pub struct IngestOptions {
-    pub exchange: String,
+    pub exchange: CexId,
     pub subject_prefix: String,
 }
 
@@ -30,7 +32,10 @@ impl IngestOptions {
             .collect::<String>();
         format!(
             "{}.{}.{}.{}",
-            self.subject_prefix, category, self.exchange, stream
+            self.subject_prefix,
+            category,
+            self.exchange.slug(),
+            stream
         )
     }
 }
@@ -52,7 +57,7 @@ impl<P: EventPublisher> Ingester<P> {
 
     pub async fn ingest(&mut self, message: ParsedMessage) -> BpResult<()> {
         let event = MarketEvent {
-            exchange: self.options.exchange.clone(),
+            exchange: self.options.exchange,
             stream: message.stream,
             sequence: message.sequence,
             exchange_timestamp: message.exchange_timestamp,
@@ -79,7 +84,7 @@ impl<P: EventPublisher> Ingester<P> {
                 missing_to,
             } => {
                 let gap = GapMarker {
-                    exchange: event.exchange.clone(),
+                    exchange: event.exchange,
                     stream: event.stream.clone(),
                     previous_sequence: missing_from - 1,
                     observed_sequence: sequence,
@@ -156,7 +161,7 @@ mod tests {
         Ingester::new(
             publisher,
             IngestOptions {
-                exchange: "binance".to_string(),
+                exchange: CexId::Binance,
                 subject_prefix: "market".to_string(),
             },
         )

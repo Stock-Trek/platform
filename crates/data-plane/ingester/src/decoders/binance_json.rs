@@ -5,6 +5,7 @@ use crate::{
 use platform_errors::IngesterError;
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::{Map, Value};
+use stock_trek_types::cex::cex_id::CexId;
 
 const EVENT_TYPE: &str = "e";
 const SYMBOL: &str = "s";
@@ -25,7 +26,7 @@ pub struct BinanceJsonMapping;
 impl JsonMapping for BinanceJsonMapping {
     fn map(
         &self,
-        _exchange: &str,
+        _exchange: CexId,
         message: Value,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
@@ -86,7 +87,7 @@ mod tests {
     use serde_json::json;
 
     fn decoder() -> BinanceJsonDecoder {
-        BinanceJsonDecoder::new("binance", BinanceJsonMapping)
+        BinanceJsonDecoder::new(CexId::Binance, BinanceJsonMapping)
     }
 
     #[test]

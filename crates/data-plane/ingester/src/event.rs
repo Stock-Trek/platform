@@ -1,9 +1,10 @@
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
+use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarketEvent {
-    pub exchange: String,
+    pub exchange: CexId,
     pub stream: String,
     pub sequence: Option<u64>,
     pub exchange_timestamp: Option<TimestampMilliseconds>,
@@ -15,7 +16,7 @@ pub struct MarketEvent {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GapMarker {
-    pub exchange: String,
+    pub exchange: CexId,
     pub stream: String,
     pub previous_sequence: u64,
     pub observed_sequence: u64,

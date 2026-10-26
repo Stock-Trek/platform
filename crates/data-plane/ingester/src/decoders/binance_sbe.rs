@@ -1,10 +1,12 @@
 use crate::{
     decoders::decoder::{BinaryDecoder, FrameDecoder},
+    exchange::CexIdExt,
     source::ParsedMessage,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::IngesterError;
 use platform_types::new_types::TimestampMilliseconds;
+use stock_trek_types::cex::cex_id::CexId;
 
 const BINANCE_SBE_SCHEMA_ID: u16 = 1;
 
@@ -17,22 +19,21 @@ const BINANCE_DEPTH_DIFF_TEMPLATE_ID: u16 = 10_003;
 ///
 /// Schema: <https://github.com/binance/binance-spot-api-docs/blob/master/sbe/schemas/stream_1_0.xml>
 pub struct BinanceSbeDecoder {
-    exchange: String,
+    exchange: CexId,
 }
 
 impl BinanceSbeDecoder {
-    pub fn new(exchange: impl Into<String>) -> Self {
-        Self {
-            exchange: exchange.into(),
-        }
+    pub fn new(exchange: CexId) -> Self {
+        Self { exchange }
     }
 
     fn decode_frame(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
-        let cursor = SbeCursor::new(frame, &self.exchange);
+        let exchange = self.exchange.slug();
+        let cursor = SbeCursor::new(frame, &exchange);
         let schema_id = cursor.read_u16(4)?;
         if schema_id != BINANCE_SBE_SCHEMA_ID {
             return Err(IngesterError::malformed_sbe(
-                &self.exchange,
+                exchange.as_str(),
                 format!("expected schema id {BINANCE_SBE_SCHEMA_ID}, got {schema_id}"),
             ));
         }
@@ -43,7 +44,7 @@ impl BinanceSbeDecoder {
             BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID => self.depth_snapshot_event(&cursor, frame),
             BINANCE_DEPTH_DIFF_TEMPLATE_ID => self.depth_diff_event(&cursor, frame),
             template_id => Err(IngesterError::unknown_sbe_template(
-                &self.exchange,
+                exchange.as_str(),
                 template_id,
             )),
         }
@@ -123,8 +124,8 @@ impl BinanceSbeDecoder {
 }
 
 impl FrameDecoder for BinanceSbeDecoder {
-    fn exchange(&self) -> &str {
-        &self.exchange
+    fn exchange(&self) -> CexId {
+        self.exchange
     }
 
     fn decode(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
@@ -308,7 +309,7 @@ mod tests {
     #[test]
     fn decodes_binance_sbe_trades() {
         let frame = sbe_trades_frame();
-        let decoder = BinanceSbeDecoder::new("binance");
+        let decoder = BinanceSbeDecoder::new(CexId::Binance);
 
         let parsed = decoder.decode(&frame).unwrap();
 
@@ -324,7 +325,7 @@ mod tests {
     #[test]
     fn decodes_binance_sbe_best_bid_ask() {
         let frame = sbe_best_bid_ask_frame();
-        let decoder = BinanceSbeDecoder::new("binance");
+        let decoder = BinanceSbeDecoder::new(CexId::Binance);
 
         let parsed = decoder.decode(&frame).unwrap();
 
@@ -335,7 +336,7 @@ mod tests {
     #[test]
     fn decodes_binance_sbe_depth_diff_and_skips_groups() {
         let frame = sbe_depth_diff_frame();
-        let decoder = BinanceSbeDecoder::new("binance");
+        let decoder = BinanceSbeDecoder::new(CexId::Binance);
 
         let parsed = decoder.decode(&frame).unwrap();
 
@@ -346,7 +347,7 @@ mod tests {
     #[test]
     fn rejects_unknown_sbe_templates() {
         let frame = sbe_header(1);
-        let decoder = BinanceSbeDecoder::new("binance");
+        let decoder = BinanceSbeDecoder::new(CexId::Binance);
 
         let error = decoder.decode(&frame).unwrap_err();
 

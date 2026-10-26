@@ -5,6 +5,7 @@ use crate::{
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::IngesterError;
 use serde_json::{Map, Value};
+use stock_trek_types::cex::cex_id::CexId;
 
 /// Exchange-specific interpretation of a decoded JSON websocket message.
 ///
@@ -14,7 +15,7 @@ use serde_json::{Map, Value};
 pub trait JsonMapping: Send + Sync + 'static {
     fn map(
         &self,
-        exchange: &str,
+        exchange: CexId,
         message: Value,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError>;
@@ -22,28 +23,25 @@ pub trait JsonMapping: Send + Sync + 'static {
 
 /// Generic JSON websocket decoder driven by an exchange-specific [JsonMapping].
 pub struct MappedJsonDecoder<M> {
-    exchange: String,
+    exchange: CexId,
     mapping: M,
 }
 
 impl<M: JsonMapping> MappedJsonDecoder<M> {
-    pub fn new(exchange: impl Into<String>, mapping: M) -> Self {
-        Self {
-            exchange: exchange.into(),
-            mapping,
-        }
+    pub fn new(exchange: CexId, mapping: M) -> Self {
+        Self { exchange, mapping }
     }
 }
 
 impl<M: JsonMapping> FrameDecoder for MappedJsonDecoder<M> {
-    fn exchange(&self) -> &str {
-        &self.exchange
+    fn exchange(&self) -> CexId {
+        self.exchange
     }
 
     fn decode(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
         let message = serde_json::from_slice(frame)
-            .map_err(|source| IngesterError::json(&self.exchange, source))?;
-        self.mapping.map(&self.exchange, message, frame)
+            .map_err(|source| IngesterError::json(self.exchange.to_string(), source))?;
+        self.mapping.map(self.exchange, message, frame)
     }
 }
 
@@ -90,7 +88,7 @@ pub struct EnvelopeJsonMapping;
 impl JsonMapping for EnvelopeJsonMapping {
     fn map(
         &self,
-        _exchange: &str,
+        _exchange: CexId,
         message: Value,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
@@ -117,7 +115,7 @@ mod tests {
             "data": { "e": "trade" }
         }))
         .unwrap();
-        let decoder = MappedJsonDecoder::new("example", EnvelopeJsonMapping);
+        let decoder = MappedJsonDecoder::new(CexId::Binance, EnvelopeJsonMapping);
 
         let parsed = decoder.decode(&frame).unwrap();
 
@@ -129,7 +127,7 @@ mod tests {
     #[test]
     fn envelope_mapping_requires_a_stream() {
         let frame = serde_json::to_vec(&json!({ "e": "trade" })).unwrap();
-        let decoder = MappedJsonDecoder::new("example", EnvelopeJsonMapping);
+        let decoder = MappedJsonDecoder::new(CexId::Binance, EnvelopeJsonMapping);
 
         let error = decoder.decode(&frame).unwrap_err();
 

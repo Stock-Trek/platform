@@ -9,11 +9,13 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 http = { workspace = true }
+iris = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+stock-trek-types = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tokio-websockets = { workspace = true, features = ["client", "fastrand", "ring", "rustls-webpki-roots"] }

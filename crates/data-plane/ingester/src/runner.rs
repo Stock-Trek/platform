@@ -1,27 +1,10 @@
-pub mod config;
-pub mod decoders;
-pub mod event;
-pub mod ingester;
-pub mod nats;
-pub mod publisher;
-pub mod sequence;
-pub mod source;
-
-pub use config::IngesterConfig;
-pub use decoders::{
-    binance_json::{BinanceJsonDecoder, BinanceJsonMapping},
-    binance_sbe::BinanceSbeDecoder,
-    decoder::{BinaryDecoder, FrameDecoder, JsonDecoder},
-    factory::DecoderFactory,
-    json::{EnvelopeJsonMapping, JsonMapping, MappedJsonDecoder},
+use crate::{
+    config::IngesterConfig,
+    ingester::{IngestOptions, Ingester},
+    nats::NatsJetstreamPublisher,
+    publisher::EventPublisher,
+    source::{ParsedMessage, WebsocketSource},
 };
-pub use event::{GapMarker, MarketEvent};
-pub use ingester::{IngestOptions, Ingester};
-pub use nats::NatsJetstreamPublisher;
-pub use publisher::EventPublisher;
-pub use sequence::{SequenceObservation, SequenceTracker};
-pub use source::{ParsedMessage, StreamFormat, WebsocketSource};
-
 use platform_errors::BpResult;
 use std::sync::Arc;
 use tokio::sync::mpsc;
@@ -55,7 +38,7 @@ impl IngesterRunner {
         let mut ingester = Ingester::new(
             publisher,
             IngestOptions {
-                exchange: self.config.exchange.clone(),
+                exchange: self.config.exchange,
                 subject_prefix: self.config.subject_prefix.clone(),
             },
         );

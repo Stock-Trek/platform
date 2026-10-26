@@ -1,9 +1,11 @@
 use crate::{
+    exchange::CexIdExt,
     nats::{NatsAddress, NatsSubject},
     source::StreamFormat,
 };
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
+use stock_trek_types::cex::cex_id::CexId;
 
 const EXCHANGE: &str = "INGESTER_EXCHANGE";
 const WEBSOCKET_URL: &str = "INGESTER_WEBSOCKET_URL";
@@ -16,7 +18,7 @@ const LOG_FILTER: &str = "RUST_LOG";
 #[derive(Debug, Clone)]
 pub struct IngesterConfig {
     pub log_filter: String,
-    pub exchange: String,
+    pub exchange: CexId,
     pub websocket_url: String,
     pub websocket_api_key: Option<String>,
     pub stream_format: StreamFormat,
@@ -30,12 +32,14 @@ impl IngesterConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let exchange = vars.required(EXCHANGE)?;
+        let exchange_value = vars.required(EXCHANGE)?;
+        let exchange = CexId::parse_exchange(&exchange_value).ok_or_else(|| {
+            BpError::config_invalid(EXCHANGE, format!("unsupported exchange {exchange_value}"))
+        })?;
         let websocket_url = vars.required_url(WEBSOCKET_URL, &["ws", "wss"])?;
         let websocket_api_key = vars.optional(WEBSOCKET_API_KEY)?;
-        let stream_format =
-            StreamFormat::for_exchange(&vars.required(STREAM_FORMAT)?, &exchange)
-                .map_err(|error| BpError::config_invalid_source(STREAM_FORMAT, error))?;
+        let stream_format = StreamFormat::for_exchange(&vars.required(STREAM_FORMAT)?, exchange)
+            .map_err(|error| BpError::config_invalid_source(STREAM_FORMAT, error))?;
         let nats_url = vars.required(NATS_URL)?;
         NatsAddress::validate(&nats_url)?;
         let subject_prefix = vars.required(NATS_SUBJECT_PREFIX)?;
@@ -75,7 +79,7 @@ mod tests {
     fn reads_ingester_configuration() {
         let config = IngesterConfig::from_vars(&vars()).unwrap();
 
-        assert_eq!(config.exchange, "binance");
+        assert_eq!(config.exchange, CexId::Binance);
         assert!(matches!(config.stream_format, StreamFormat::Binary(_)));
         assert_eq!(config.websocket_api_key, None);
         assert_eq!(config.subject_prefix, "market");
@@ -103,7 +107,7 @@ mod tests {
     }
 
     #[test]
-    fn accepts_urls_for_other_exchanges() {
+    fn rejects_unknown_exchanges() {
         let vars = EnvVars::from_map([
             (EXCHANGE, "coinbase"),
             (WEBSOCKET_URL, "wss://ws-feed.exchange.coinbase.com"),
@@ -113,10 +117,7 @@ mod tests {
             (LOG_FILTER, "info"),
         ]);
 
-        let config = IngesterConfig::from_vars(&vars).unwrap();
-
-        assert_eq!(config.exchange, "coinbase");
-        assert!(matches!(config.stream_format, StreamFormat::Json(_)));
+        assert!(IngesterConfig::from_vars(&vars).is_err());
     }
 
     #[test]

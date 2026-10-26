@@ -1,6 +1,17 @@
+mod config;
+mod decoders;
+mod event;
+mod exchange;
+mod ingester;
+mod nats;
+mod publisher;
+mod runner;
+mod sequence;
+mod source;
+
+use crate::{config::IngesterConfig, runner::IngesterRunner};
 use platform_config::tracing_setup::TracingSetup;
 use platform_errors::BpResult;
-use platform_ingester::{IngesterConfig, IngesterRunner};
 
 #[tokio::main]
 async fn main() -> BpResult<()> {
