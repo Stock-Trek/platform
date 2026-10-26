@@ -11,7 +11,12 @@ platform-build-agent = { path = "crates/build-plane/build-agent" }
 platform-build-orchestrator = { path = "crates/build-plane/build-orchestrator" }
 platform-git-webhook = { path = "crates/build-plane/git-webhook" }
 
-platform-market-data = { path = "crates/data-plane/market-data-old" }
+platform-aggregator = { path = "crates/data-plane/aggregator" }
+platform-archiver = { path = "crates/data-plane/archiver" }
+platform-backfiller = { path = "crates/data-plane/backfiller" }
+platform-compactor = { path = "crates/data-plane/compactor" }
+platform-ingester = { path = "crates/data-plane/ingester" }
+platform-market-data-old = { path = "crates/data-plane/market-data-old" }
 
 platform-config = { path = "crates/foundation/config" }
 platform-errors = { path = "crates/foundation/errors" }

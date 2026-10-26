@@ -1,0 +1,6 @@
+[package]
+name = "platform-aggregator"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

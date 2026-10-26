@@ -3141,6 +3141,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
+name = "platform-aggregator"
+version = "0.2.0"
+
+[[package]]
+name = "platform-archiver"
+version = "0.2.0"
+
+[[package]]
+name = "platform-backfiller"
+version = "0.2.0"
+
+[[package]]
 name = "platform-build-agent"
 version = "0.2.0"
 dependencies = [
@@ -3196,6 +3208,10 @@ dependencies = [
  "url",
  "zip",
 ]
+
+[[package]]
+name = "platform-compactor"
+version = "0.2.0"
 
 [[package]]
 name = "platform-config"
@@ -3350,6 +3366,10 @@ dependencies = [
  "tokio",
  "url",
 ]
+
+[[package]]
+name = "platform-ingester"
+version = "0.2.0"
 
 [[package]]
 name = "platform-market-data-old"
