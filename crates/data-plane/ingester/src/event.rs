@@ -1,6 +1,5 @@
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarketEvent {
@@ -9,7 +8,9 @@ pub struct MarketEvent {
     pub sequence: Option<u64>,
     pub exchange_timestamp: Option<TimestampMilliseconds>,
     pub received_at: TimestampMilliseconds,
-    pub payload: Value,
+    /// Base64 encoded raw frame from the exchange. Keeping the original bytes
+    /// lets downstream consumers decode exchange-specific binary formats.
+    pub payload: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

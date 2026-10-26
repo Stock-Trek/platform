@@ -1,8 +1,14 @@
-use crate::nats::{validate_subject, validate_url};
+use crate::{
+    nats::{NatsAddress, NatsSubject},
+    source::StreamFormat,
+};
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
 
-const BINANCE_WEBSOCKET_URL: &str = "INGESTER_BINANCE_WEBSOCKET_URL";
+const EXCHANGE: &str = "INGESTER_EXCHANGE";
+const WEBSOCKET_URL: &str = "INGESTER_WEBSOCKET_URL";
+const WEBSOCKET_API_KEY: &str = "INGESTER_WEBSOCKET_API_KEY";
+const STREAM_FORMAT: &str = "INGESTER_STREAM_FORMAT";
 const NATS_URL: &str = "INGESTER_NATS_URL";
 const NATS_SUBJECT_PREFIX: &str = "INGESTER_NATS_SUBJECT_PREFIX";
 const LOG_FILTER: &str = "RUST_LOG";
@@ -10,7 +16,10 @@ const LOG_FILTER: &str = "RUST_LOG";
 #[derive(Debug, Clone)]
 pub struct IngesterConfig {
     pub log_filter: String,
-    pub binance_websocket_url: String,
+    pub exchange: String,
+    pub websocket_url: String,
+    pub websocket_api_key: Option<String>,
+    pub stream_format: StreamFormat,
     pub nats_url: String,
     pub subject_prefix: String,
 }
@@ -21,15 +30,21 @@ impl IngesterConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let binance_websocket_url = vars.required_url(BINANCE_WEBSOCKET_URL, &["ws", "wss"])?;
+        let exchange = vars.required(EXCHANGE)?;
+        let websocket_url = vars.required_url(WEBSOCKET_URL, &["ws", "wss"])?;
+        let websocket_api_key = vars.optional(WEBSOCKET_API_KEY)?;
+        let stream_format = vars.required_parsed(STREAM_FORMAT)?;
         let nats_url = vars.required(NATS_URL)?;
-        validate_url(&nats_url)?;
+        NatsAddress::validate(&nats_url)?;
         let subject_prefix = vars.required(NATS_SUBJECT_PREFIX)?;
-        validate_subject(&subject_prefix)?;
+        NatsSubject::validate(&subject_prefix)?;
 
         Ok(Self {
             log_filter: vars.required_log_filter(LOG_FILTER)?,
-            binance_websocket_url,
+            exchange,
+            websocket_url,
+            websocket_api_key,
+            stream_format,
             nats_url,
             subject_prefix,
         })
@@ -42,10 +57,12 @@ mod tests {
 
     fn vars() -> EnvVars {
         EnvVars::from_map([
+            (EXCHANGE, "binance"),
             (
-                BINANCE_WEBSOCKET_URL,
-                "wss://stream.binance.com:9443/stream?streams=btcusdt@trade",
+                WEBSOCKET_URL,
+                "wss://stream-sbe.binance.com:9443/stream?streams=btcusdt@trade",
             ),
+            (STREAM_FORMAT, "binance_sbe"),
             (NATS_URL, "nats://localhost:4222"),
             (NATS_SUBJECT_PREFIX, "market"),
             (LOG_FILTER, "info"),
@@ -56,17 +73,56 @@ mod tests {
     fn reads_ingester_configuration() {
         let config = IngesterConfig::from_vars(&vars()).unwrap();
 
+        assert_eq!(config.exchange, "binance");
+        assert_eq!(config.stream_format, StreamFormat::BinanceSbe);
+        assert_eq!(config.websocket_api_key, None);
         assert_eq!(config.subject_prefix, "market");
         assert_eq!(config.log_filter, "info");
     }
 
     #[test]
-    fn rejects_a_non_websocket_binance_url() {
-        let vars = EnvVars::from_map([
+    fn reads_an_optional_api_key() {
+        let values = EnvVars::from_map([
+            (EXCHANGE, "binance"),
             (
-                BINANCE_WEBSOCKET_URL,
-                "https://stream.binance.com:9443/stream",
+                WEBSOCKET_URL,
+                "wss://stream-sbe.binance.com:9443/stream?streams=btcusdt@trade",
             ),
+            (WEBSOCKET_API_KEY, "secret"),
+            (STREAM_FORMAT, "binance_sbe"),
+            (NATS_URL, "nats://localhost:4222"),
+            (NATS_SUBJECT_PREFIX, "market"),
+            (LOG_FILTER, "info"),
+        ]);
+
+        let config = IngesterConfig::from_vars(&values).unwrap();
+
+        assert_eq!(config.websocket_api_key.as_deref(), Some("secret"));
+    }
+
+    #[test]
+    fn accepts_urls_for_other_exchanges() {
+        let vars = EnvVars::from_map([
+            (EXCHANGE, "coinbase"),
+            (WEBSOCKET_URL, "wss://ws-feed.exchange.coinbase.com"),
+            (STREAM_FORMAT, "json"),
+            (NATS_URL, "nats://localhost:4222"),
+            (NATS_SUBJECT_PREFIX, "market"),
+            (LOG_FILTER, "info"),
+        ]);
+
+        let config = IngesterConfig::from_vars(&vars).unwrap();
+
+        assert_eq!(config.exchange, "coinbase");
+        assert_eq!(config.stream_format, StreamFormat::Json);
+    }
+
+    #[test]
+    fn rejects_a_non_websocket_url() {
+        let vars = EnvVars::from_map([
+            (EXCHANGE, "binance"),
+            (WEBSOCKET_URL, "https://stream.binance.com:9443/stream"),
+            (STREAM_FORMAT, "binance_sbe"),
             (NATS_URL, "nats://localhost:4222"),
             (NATS_SUBJECT_PREFIX, "market"),
             (LOG_FILTER, "info"),
@@ -78,12 +134,31 @@ mod tests {
     #[test]
     fn rejects_an_invalid_nats_subject_prefix() {
         let vars = EnvVars::from_map([
+            (EXCHANGE, "binance"),
             (
-                BINANCE_WEBSOCKET_URL,
-                "wss://stream.binance.com:9443/stream?streams=btcusdt@trade",
+                WEBSOCKET_URL,
+                "wss://stream-sbe.binance.com:9443/stream?streams=btcusdt@trade",
             ),
+            (STREAM_FORMAT, "binance_sbe"),
             (NATS_URL, "nats://localhost:4222"),
             (NATS_SUBJECT_PREFIX, "market.*"),
+            (LOG_FILTER, "info"),
+        ]);
+
+        assert!(IngesterConfig::from_vars(&vars).is_err());
+    }
+
+    #[test]
+    fn rejects_an_unknown_stream_format() {
+        let vars = EnvVars::from_map([
+            (EXCHANGE, "binance"),
+            (
+                WEBSOCKET_URL,
+                "wss://stream-sbe.binance.com:9443/stream?streams=btcusdt@trade",
+            ),
+            (STREAM_FORMAT, "protobuf"),
+            (NATS_URL, "nats://localhost:4222"),
+            (NATS_SUBJECT_PREFIX, "market"),
             (LOG_FILTER, "info"),
         ]);
 

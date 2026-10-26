@@ -1,6 +1,6 @@
 use crate::publisher::EventPublisher;
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult, ValidationError};
+use platform_errors::{BpError, BpResult, IngesterError, ValidationError};
 use serde_json::{Map, Value, json};
 use tokio::{
     io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
@@ -12,12 +12,8 @@ use url::Url;
 
 const DEFAULT_NATS_PORT: u16 = 4222;
 
-pub(crate) fn validate_url(value: &str) -> BpResult<()> {
-    NatsAddress::parse(value).map(|_| ())
-}
-
 #[derive(Debug, Clone)]
-struct NatsAddress {
+pub(crate) struct NatsAddress {
     host: String,
     port: u16,
     username: Option<String>,
@@ -25,6 +21,10 @@ struct NatsAddress {
 }
 
 impl NatsAddress {
+    pub(crate) fn validate(value: &str) -> BpResult<()> {
+        Self::parse(value).map(|_| ())
+    }
+
     fn parse(value: &str) -> BpResult<Self> {
         let url =
             Url::parse(value).map_err(|error| BpError::config_invalid_source("NATS_URL", error))?;
@@ -45,6 +45,27 @@ impl NatsAddress {
             username,
             password,
         })
+    }
+}
+
+pub(crate) struct NatsSubject;
+
+impl NatsSubject {
+    pub(crate) fn validate(subject: &str) -> BpResult<()> {
+        let invalid = subject.is_empty()
+            || subject.split('.').any(|token| {
+                token.is_empty()
+                    || token.chars().any(|character| {
+                        character.is_whitespace() || matches!(character, '>' | '*')
+                    })
+            });
+        if invalid {
+            return Err(BpError::Validation(ValidationError::InvalidValue {
+                name: "NATS subject".to_string(),
+                value: subject.to_string(),
+            }));
+        }
+        Ok(())
     }
 }
 
@@ -69,7 +90,7 @@ impl NatsJetstreamPublisher {
 #[async_trait]
 impl EventPublisher for NatsJetstreamPublisher {
     async fn publish(&self, subject: &str, payload: &[u8]) -> BpResult<()> {
-        validate_subject(subject)?;
+        NatsSubject::validate(subject)?;
         let mut connection = self.connection.lock().await;
         if connection.is_none() {
             *connection = Some(NatsConnection::connect(&self.address, &self.name).await?);
@@ -95,9 +116,9 @@ impl NatsConnection {
         let stream = TcpStream::connect((address.host.as_str(), address.port)).await?;
         let (read_half, write_half) = stream.into_split();
         let mut reader = BufReader::new(read_half);
-        let info = read_protocol_line(&mut reader).await?;
+        let info = Self::read_protocol_line(&mut reader).await?;
         if !info.starts_with("INFO ") {
-            return Err(protocol_error(format!(
+            return Err(Self::protocol_error(format!(
                 "expected INFO from NATS server, got {info:?}"
             )));
         }
@@ -128,12 +149,12 @@ impl NatsConnection {
         writer.flush().await?;
 
         loop {
-            let line = read_protocol_line(&mut reader).await?;
+            let line = Self::read_protocol_line(&mut reader).await?;
             if line == "PONG" {
                 break;
             }
             if line.starts_with("-ERR") {
-                return Err(protocol_error(line));
+                return Err(Self::protocol_error(line));
             }
         }
 
@@ -153,38 +174,20 @@ impl NatsConnection {
         self.writer.flush().await?;
         Ok(())
     }
-}
 
-async fn read_protocol_line(reader: &mut BufReader<OwnedReadHalf>) -> BpResult<String> {
-    let mut line = String::new();
-    if reader.read_line(&mut line).await? == 0 {
-        return Err(protocol_error("NATS connection closed during handshake"));
+    async fn read_protocol_line(reader: &mut BufReader<OwnedReadHalf>) -> BpResult<String> {
+        let mut line = String::new();
+        if reader.read_line(&mut line).await? == 0 {
+            return Err(Self::protocol_error(
+                "NATS connection closed during handshake",
+            ));
+        }
+        Ok(line.trim_end_matches(['\r', '\n']).to_string())
     }
-    Ok(line.trim_end_matches(['\r', '\n']).to_string())
-}
 
-fn protocol_error(message: impl Into<String>) -> BpError {
-    BpError::external(std::io::Error::new(
-        std::io::ErrorKind::InvalidData,
-        message.into(),
-    ))
-}
-
-pub(crate) fn validate_subject(subject: &str) -> BpResult<()> {
-    let invalid = subject.is_empty()
-        || subject.split('.').any(|token| {
-            token.is_empty()
-                || token
-                    .chars()
-                    .any(|character| character.is_whitespace() || matches!(character, '>' | '*'))
-        });
-    if invalid {
-        return Err(BpError::Validation(ValidationError::InvalidValue {
-            name: "NATS subject".to_string(),
-            value: subject.to_string(),
-        }));
+    fn protocol_error(message: impl Into<String>) -> BpError {
+        BpError::Ingester(IngesterError::protocol(message))
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -208,10 +211,10 @@ mod tests {
 
     #[test]
     fn rejects_publish_subjects_with_wildcards_or_empty_tokens() {
-        assert!(validate_subject("market.events.binance.btcusdt.trade").is_ok());
-        assert!(validate_subject("market..trade").is_err());
-        assert!(validate_subject("market.*").is_err());
-        assert!(validate_subject("market.>").is_err());
-        assert!(validate_subject("market trade").is_err());
+        assert!(NatsSubject::validate("market.events.binance.btcusdt.trade").is_ok());
+        assert!(NatsSubject::validate("market..trade").is_err());
+        assert!(NatsSubject::validate("market.*").is_err());
+        assert!(NatsSubject::validate("market.>").is_err());
+        assert!(NatsSubject::validate("market trade").is_err());
     }
 }

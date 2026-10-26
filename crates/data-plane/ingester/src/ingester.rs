@@ -16,6 +16,25 @@ pub struct IngestOptions {
     pub subject_prefix: String,
 }
 
+impl IngestOptions {
+    fn subject(&self, category: &str, stream: &str) -> String {
+        let stream = stream
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+                    character.to_ascii_lowercase()
+                } else {
+                    '.'
+                }
+            })
+            .collect::<String>();
+        format!(
+            "{}.{}.{}.{}",
+            self.subject_prefix, category, self.exchange, stream
+        )
+    }
+}
+
 pub struct Ingester<P> {
     publisher: Arc<P>,
     options: IngestOptions,
@@ -40,12 +59,7 @@ impl<P: EventPublisher> Ingester<P> {
             received_at: TimestampMilliseconds(Utc::now().timestamp_millis()),
             payload: message.payload,
         };
-        let event_subject = subject(
-            &self.options.subject_prefix,
-            "events",
-            &self.options.exchange,
-            &event.stream,
-        );
+        let event_subject = self.options.subject("events", &event.stream);
 
         let Some(sequence) = event.sequence else {
             return self.publish_event(&event_subject, &event).await;
@@ -73,12 +87,7 @@ impl<P: EventPublisher> Ingester<P> {
                     missing_to,
                     detected_at: event.received_at,
                 };
-                let gap_subject = subject(
-                    &self.options.subject_prefix,
-                    "gaps",
-                    &self.options.exchange,
-                    &event.stream,
-                );
+                let gap_subject = self.options.subject("gaps", &event.stream);
                 self.publisher
                     .publish(&gap_subject, &serde_json::to_vec(&gap)?)
                     .await?;
@@ -103,26 +112,12 @@ impl<P: EventPublisher> Ingester<P> {
     }
 }
 
-fn subject(prefix: &str, category: &str, exchange: &str, stream: &str) -> String {
-    let stream = stream
-        .chars()
-        .map(|character| {
-            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
-                character.to_ascii_lowercase()
-            } else {
-                '.'
-            }
-        })
-        .collect::<String>();
-    format!("{prefix}.{category}.{exchange}.{stream}")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use async_trait::async_trait;
     use platform_errors::BpResult;
-    use serde_json::{Value, json};
+    use serde_json::Value;
     use std::sync::Mutex;
 
     #[derive(Default)]
@@ -153,7 +148,7 @@ mod tests {
             stream: "btcusdt@trade".to_string(),
             sequence,
             exchange_timestamp: Some(TimestampMilliseconds(1_700_000_000_000)),
-            payload: json!({ "e": "trade", "t": sequence }),
+            payload: "eyJlIjoidHJhZGUifQ==".to_string(),
         }
     }
 
