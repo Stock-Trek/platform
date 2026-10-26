@@ -15,7 +15,12 @@ platform-market-data = { path = "crates/data-plane/market-data-old" }
 
 platform-config = { path = "crates/foundation/config" }
 platform-errors = { path = "crates/foundation/errors" }
+platform-exchange-types = { path = "crates/foundation/exchange-types" }
+platform-messages = { path = "crates/foundation/messages" }
 platform-metrics = { path = "crates/foundation/metrics" }
+platform-proto-gen = { path = "crates/foundation/proto-gen" }
+platform-type-bridge = { path = "crates/foundation/type-bridge" }
+
 platform-time = { path = "crates/foundation/time" }
 platform-types = { path = "crates/foundation/types" }
 
@@ -24,12 +29,7 @@ platform-git = { path = "crates/integrations/git" }
 platform-github = { path = "crates/integrations/github" }
 platform-sqs = { path = "crates/integrations/sqs" }
 
-platform-exchange-types = { path = "crates/protocols/exchange-types" }
-platform-messages = { path = "crates/protocols/messages" }
-platform-proto-gen = { path = "crates/protocols/proto_gen" }
-platform-type-bridge = { path = "crates/protocols/type-bridge" }
-
-platform-exit-codes = { path = "crates/sandbox-plane/exit_codes" }
+platform-exit-codes = { path = "crates/sandbox-plane/exit-codes" }
 platform-runner = { path = "crates/sandbox-plane/runner" }
 
 arrow-array = "60"
