@@ -116,7 +116,7 @@ mod tests {
         let config = IngesterConfig::from_vars(&vars).unwrap();
 
         assert_eq!(config.exchange, "coinbase");
-        assert_eq!(config.stream_format, StreamFormat::Json);
+        assert!(matches!(config.stream_format, StreamFormat::Json(_)));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 use crate::{
     config::IngesterConfig,
-    decoders::{BinanceSbeDecoder, BinaryDecoder, JsonDecoder},
+    decoders::{self, BinaryDecoder, JsonDecoder},
 };
 use futures::{SinkExt, StreamExt};
 use http::{HeaderName, HeaderValue, Uri};
@@ -25,19 +25,21 @@ pub struct ParsedMessage {
 
 /// Wire format used by an exchange websocket.
 ///
-/// TODO: select the binary decoder from configuration so exchanges other than
-/// Binance can expose binary streams.
+/// Each variant carries the decoder that understands that format for the
+/// configured exchange, so the transport does not need exchange knowledge.
 #[derive(Clone)]
 pub enum StreamFormat {
-    Json,
+    Json(Arc<dyn JsonDecoder>),
     Binary(Arc<dyn BinaryDecoder>),
 }
 
 impl StreamFormat {
     pub fn for_exchange(value: &str, exchange: &str) -> Result<Self, IngesterError> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "json" => Ok(Self::Json),
-            "binary" | "binance_sbe" | "binance-sbe" => Ok(Self::Binary(binary_decoder(exchange))),
+            "json" => Ok(Self::Json(decoders::json_decoder(exchange))),
+            "binary" | "binance_sbe" | "binance-sbe" => {
+                Ok(Self::Binary(decoders::binary_decoder(exchange)?))
+            }
             _ => Err(IngesterError::UnsupportedStreamFormat {
                 format: value.to_string(),
             }),
@@ -45,20 +47,15 @@ impl StreamFormat {
     }
 
     fn accepts_text(&self) -> bool {
-        matches!(self, Self::Json)
+        matches!(self, Self::Json(_))
     }
 
-    fn decode(&self, exchange: &str, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
+    fn decode(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
         match self {
-            Self::Json => JsonDecoder::new().decode(exchange, frame),
+            Self::Json(decoder) => decoder.decode(frame),
             Self::Binary(decoder) => decoder.decode(frame),
         }
     }
-}
-
-fn binary_decoder(exchange: &str) -> Arc<dyn BinaryDecoder> {
-    // TODO: support additional exchange binary schemas.
-    Arc::new(BinanceSbeDecoder::new(exchange))
 }
 
 impl FromStr for StreamFormat {
@@ -72,7 +69,10 @@ impl FromStr for StreamFormat {
 impl fmt::Debug for StreamFormat {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Json => formatter.write_str("Json"),
+            Self::Json(decoder) => formatter
+                .debug_tuple("Json")
+                .field(&decoder.exchange())
+                .finish(),
             Self::Binary(decoder) => formatter
                 .debug_tuple("Binary")
                 .field(&decoder.exchange())
@@ -84,7 +84,7 @@ impl fmt::Debug for StreamFormat {
 impl PartialEq for StreamFormat {
     fn eq(&self, other: &Self) -> bool {
         match (self, other) {
-            (Self::Json, Self::Json) => true,
+            (Self::Json(left), Self::Json(right)) => left.exchange() == right.exchange(),
             (Self::Binary(left), Self::Binary(right)) => left.exchange() == right.exchange(),
             _ => false,
         }
@@ -176,7 +176,7 @@ impl WebsocketSource {
                 continue;
             };
 
-            match self.stream_format.decode(&self.exchange, &frame) {
+            match self.stream_format.decode(&frame) {
                 Ok(parsed) => {
                     if sender.send(parsed).await.is_err() {
                         return Ok(false);
@@ -197,10 +197,10 @@ mod tests {
 
     #[test]
     fn parses_json_stream_format() {
-        assert_eq!(
+        assert!(matches!(
             " json ".parse::<StreamFormat>().unwrap(),
-            StreamFormat::Json
-        );
+            StreamFormat::Json(_)
+        ));
     }
 
     #[test]

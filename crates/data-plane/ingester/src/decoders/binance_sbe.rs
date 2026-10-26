@@ -1,4 +1,7 @@
-use crate::{decoders::BinaryDecoder, source::ParsedMessage};
+use crate::{
+    decoders::{BinaryDecoder, FrameDecoder},
+    source::ParsedMessage,
+};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::IngesterError;
 use platform_types::new_types::TimestampMilliseconds;
@@ -119,7 +122,7 @@ impl BinanceSbeDecoder {
     }
 }
 
-impl BinaryDecoder for BinanceSbeDecoder {
+impl FrameDecoder for BinanceSbeDecoder {
     fn exchange(&self) -> &str {
         &self.exchange
     }
@@ -128,6 +131,8 @@ impl BinaryDecoder for BinanceSbeDecoder {
         self.decode_frame(frame)
     }
 }
+
+impl BinaryDecoder for BinanceSbeDecoder {}
 
 struct SbeCursor<'a> {
     frame: &'a [u8],

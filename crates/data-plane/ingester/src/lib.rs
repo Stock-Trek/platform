@@ -8,7 +8,10 @@ pub mod sequence;
 pub mod source;
 
 pub use config::IngesterConfig;
-pub use decoders::{BinanceSbeDecoder, BinaryDecoder, JsonDecoder};
+pub use decoders::{
+    BinanceJsonDecoder, BinanceJsonMapping, BinanceSbeDecoder, BinaryDecoder, EnvelopeJsonMapping,
+    FrameDecoder, JsonDecoder, JsonMapping, MappedJsonDecoder,
+};
 pub use event::{GapMarker, MarketEvent};
 pub use ingester::{IngestOptions, Ingester};
 pub use nats::NatsJetstreamPublisher;
