@@ -1,5 +1,5 @@
 use crate::{
-    decoders::{FrameDecoder, JsonDecoder},
+    decoders::decoder::{FrameDecoder, JsonDecoder},
     source::ParsedMessage,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -49,31 +49,36 @@ impl<M: JsonMapping> FrameDecoder for MappedJsonDecoder<M> {
 
 impl<M: JsonMapping> JsonDecoder for MappedJsonDecoder<M> {}
 
-/// Splits the common `{"stream": ..., "data": ...}` envelope.
-pub(crate) fn split_envelope(
-    message: Value,
-) -> Result<(Option<String>, Map<String, Value>), IngesterError> {
-    match message {
-        Value::Object(mut object) => match object.remove("stream") {
-            Some(Value::String(stream)) => {
-                let data = object
-                    .remove("data")
-                    .ok_or(IngesterError::MissingField("data"))?;
-                let data = data
-                    .as_object()
-                    .cloned()
-                    .ok_or(IngesterError::PayloadNotAnObject)?;
-                Ok((Some(stream), data))
-            }
-            Some(_) => Err(IngesterError::InvalidField("stream")),
-            None => Ok((None, object)),
-        },
-        _ => Err(IngesterError::NotAnObject),
-    }
-}
+/// Helpers shared by JSON mappings for common websocket frame shapes.
+pub(crate) struct JsonFrame;
 
-pub(crate) fn encode_frame(frame: &[u8]) -> String {
-    BASE64.encode(frame)
+impl JsonFrame {
+    /// Splits the common `{"stream": ..., "data": ...}` envelope.
+    pub(crate) fn split_envelope(
+        message: Value,
+    ) -> Result<(Option<String>, Map<String, Value>), IngesterError> {
+        match message {
+            Value::Object(mut object) => match object.remove("stream") {
+                Some(Value::String(stream)) => {
+                    let data = object
+                        .remove("data")
+                        .ok_or(IngesterError::MissingField("data"))?;
+                    let data = data
+                        .as_object()
+                        .cloned()
+                        .ok_or(IngesterError::PayloadNotAnObject)?;
+                    Ok((Some(stream), data))
+                }
+                Some(_) => Err(IngesterError::InvalidField("stream")),
+                None => Ok((None, object)),
+            },
+            _ => Err(IngesterError::NotAnObject),
+        }
+    }
+
+    pub(crate) fn encode(frame: &[u8]) -> String {
+        BASE64.encode(frame)
+    }
 }
 
 /// Minimal mapping for exchanges that only expose the common stream envelope.
@@ -89,13 +94,13 @@ impl JsonMapping for EnvelopeJsonMapping {
         message: Value,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
-        let (stream, _data) = split_envelope(message)?;
+        let (stream, _data) = JsonFrame::split_envelope(message)?;
         let stream = stream.ok_or(IngesterError::MissingField("stream"))?;
         Ok(ParsedMessage {
             stream,
             sequence: None,
             exchange_timestamp: None,
-            payload: encode_frame(frame),
+            payload: JsonFrame::encode(frame),
         })
     }
 }

@@ -1,6 +1,9 @@
 use crate::{
     config::IngesterConfig,
-    decoders::{self, BinaryDecoder, JsonDecoder},
+    decoders::{
+        decoder::{BinaryDecoder, JsonDecoder},
+        factory::DecoderFactory,
+    },
 };
 use futures::{SinkExt, StreamExt};
 use http::{HeaderName, HeaderValue, Uri};
@@ -36,9 +39,9 @@ pub enum StreamFormat {
 impl StreamFormat {
     pub fn for_exchange(value: &str, exchange: &str) -> Result<Self, IngesterError> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "json" => Ok(Self::Json(decoders::json_decoder(exchange))),
+            "json" => Ok(Self::Json(DecoderFactory::json_decoder(exchange))),
             "binary" | "binance_sbe" | "binance-sbe" => {
-                Ok(Self::Binary(decoders::binary_decoder(exchange)?))
+                Ok(Self::Binary(DecoderFactory::binary_decoder(exchange)?))
             }
             _ => Err(IngesterError::UnsupportedStreamFormat {
                 format: value.to_string(),

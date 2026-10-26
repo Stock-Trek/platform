@@ -1,5 +1,5 @@
 use crate::{
-    decoders::json::{JsonMapping, encode_frame, split_envelope},
+    decoders::json::{JsonFrame, JsonMapping},
     source::ParsedMessage,
 };
 use platform_errors::IngesterError;
@@ -29,7 +29,7 @@ impl JsonMapping for BinanceJsonMapping {
         message: Value,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
-        let (stream, data) = split_envelope(message)?;
+        let (stream, data) = JsonFrame::split_envelope(message)?;
         let event_type = data.get(EVENT_TYPE).and_then(Value::as_str);
         let stream = match stream {
             Some(stream) => stream,
@@ -45,40 +45,43 @@ impl JsonMapping for BinanceJsonMapping {
 
         Ok(ParsedMessage {
             stream,
-            sequence: sequence(event_type, &data)?,
+            sequence: self.sequence(event_type, &data)?,
             exchange_timestamp: data
                 .get(EVENT_TIME)
                 .and_then(Value::as_i64)
                 .map(TimestampMilliseconds),
-            payload: encode_frame(frame),
+            payload: JsonFrame::encode(frame),
         })
     }
 }
 
-pub type BinanceJsonDecoder = crate::decoders::MappedJsonDecoder<BinanceJsonMapping>;
-
-fn sequence(
-    event_type: Option<&str>,
-    data: &Map<String, Value>,
-) -> Result<Option<u64>, IngesterError> {
-    // TODO: validate depth updates using the `U`/`pu` range. A single depth
-    // event can span many update ids, so `u` alone is not always contiguous.
-    let Some((_, field)) = SEQUENCE_FIELDS
-        .iter()
-        .find(|(candidate, _)| Some(*candidate) == event_type)
-    else {
-        return Ok(None);
-    };
-    data.get(*field)
-        .and_then(Value::as_u64)
-        .map(Some)
-        .ok_or(IngesterError::MissingSequence { field })
+impl BinanceJsonMapping {
+    fn sequence(
+        &self,
+        event_type: Option<&str>,
+        data: &Map<String, Value>,
+    ) -> Result<Option<u64>, IngesterError> {
+        // TODO: validate depth updates using the `U`/`pu` range. A single depth
+        // event can span many update ids, so `u` alone is not always contiguous.
+        let Some((_, field)) = SEQUENCE_FIELDS
+            .iter()
+            .find(|(candidate, _)| Some(*candidate) == event_type)
+        else {
+            return Ok(None);
+        };
+        data.get(*field)
+            .and_then(Value::as_u64)
+            .map(Some)
+            .ok_or(IngesterError::MissingSequence { field })
+    }
 }
+
+pub type BinanceJsonDecoder = crate::decoders::json::MappedJsonDecoder<BinanceJsonMapping>;
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::decoders::FrameDecoder;
+    use crate::decoders::decoder::FrameDecoder;
     use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
     use serde_json::json;
 

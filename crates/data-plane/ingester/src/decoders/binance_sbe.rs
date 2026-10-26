@@ -1,5 +1,5 @@
 use crate::{
-    decoders::{BinaryDecoder, FrameDecoder},
+    decoders::decoder::{BinaryDecoder, FrameDecoder},
     source::ParsedMessage,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
