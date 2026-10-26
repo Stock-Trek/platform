@@ -32,7 +32,7 @@ jobs:
         with:
           method: "oidc"
           identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
-          project-slug: "publish"
+          project-slug: "agents"
           env-slug: "prod"
 
       - name: Set up shipyard ssh auth
