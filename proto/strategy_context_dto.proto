@@ -1,0 +1,23 @@
+syntax = "proto3";
+package dto;
+
+import "asset_id_dto.proto";
+import "market_dto.proto";
+
+message StrategyContextDto {
+  map<string, AssetMarketsDto> exchange_asset_markets_dto = 1;
+}
+
+message AssetMarketsDto {
+  repeated MarketByBaseDto markets_by_base_dto = 1;
+}
+
+message MarketByBaseDto {
+  AssetIdDto base_asset_id_dto = 1;
+  repeated MarketByQuoteDto markets_by_quote_dto = 2;
+}
+
+message MarketByQuoteDto {
+  AssetIdDto quote_asset_id_dto = 1;
+  MarketDto market_dto = 2;
+}

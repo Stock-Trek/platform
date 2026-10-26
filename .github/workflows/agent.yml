@@ -1,0 +1,1042 @@
+name: Agent
+
+# Restrict the default GITHUB_TOKEN permissions
+permissions:
+  contents: read
+
+on:
+  issues:
+    types: [edited, opened, reopened]
+  issue_comment:
+    types: [created, edited]
+
+# Prevent multiple agents editing the branch at the same time
+concurrency:
+  group: agent-${{ github.event.issue.number }}
+  cancel-in-progress: false
+
+jobs:
+  triage:
+    if: |
+      (github.event_name == 'issues' && (contains(github.event.issue.title, '@agent') || contains(github.event.issue.body, '@agent'))) ||
+      (github.event_name == 'issue_comment' && (contains(github.event.comment.body, '@agent')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    outputs:
+      issue-branch-base: ${{ steps.gather-branches.outputs.issue-branch-base }}
+      issue-branch: ${{ steps.gather-branches.outputs.issue-branch }}
+      address-issue-base64: ${{ steps.prompts.outputs.address-issue-base64 }}
+      classify-request-base64: ${{ steps.prompts.outputs.classify-request-base64 }}
+      classify-response-base64: ${{ steps.prompts.outputs.classify-response-base64 }}
+      extra-information-required-base64: ${{ steps.prompts.outputs.extra-information-required-base64 }}
+      information-list-base64: ${{ steps.schemas.outputs.information-list-base64 }}
+      request-classification-base64: ${{ steps.schemas.outputs.request-classification-base64 }}
+      response-classification-base64: ${{ steps.schemas.outputs.response-classification-base64 }}
+      issue-context-base64: ${{ steps.gather-context.outputs.context-base64 }}
+      request-type: ${{ steps.save-request-type.outputs.request-type }}
+      provider: ${{ steps.save-model.outputs.provider }}
+      model: ${{ steps.save-model.outputs.model }}
+    steps:
+      # Fetch only the App credentials this job needs. Without secret-name the
+      # Infisical action injects every secret in the project/environment into
+      # the job, where later steps and actions can read them.
+      - name: Fetch GitHub App client ID
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "GITHUB_APP_AGENT_HELPER_CLIENT_ID"
+
+      - name: Fetch GitHub App private key
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "GITHUB_APP_AGENT_HELPER_PRIVATE_KEY"
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        env:
+          GITHUB_APP_AGENT_HELPER_CLIENT_ID: ${{ env.GITHUB_APP_AGENT_HELPER_CLIENT_ID }}
+          GITHUB_APP_AGENT_HELPER_PRIVATE_KEY: ${{ env.GITHUB_APP_AGENT_HELPER_PRIVATE_KEY }}
+        with:
+          client-id: ${{ env.GITHUB_APP_AGENT_HELPER_CLIENT_ID }}
+          private-key: ${{ env.GITHUB_APP_AGENT_HELPER_PRIVATE_KEY }}
+          # Scope the installation token to what this job actually does.
+          permission-contents: read
+          permission-issues: write
+
+      - name: Remove GitHub App credentials from the environment
+        run: |
+          # The short-lived installation token has now been minted. Remove the
+          # long-lived App private key so later steps cannot read it.
+          for name in \
+            GITHUB_APP_AGENT_HELPER_CLIENT_ID \
+            GITHUB_APP_AGENT_HELPER_PRIVATE_KEY; do
+            if [ -n "${!name:-}" ]; then
+              printf '%s=\n' "${name}" >> "$GITHUB_ENV"
+            fi
+          done
+
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Remove all previous reactions from the comment or issue that triggered the workflow
+        uses: ./.github/actions/remove-emoji-reactions
+        with:
+          comment-id: ${{ github.event.comment.id }}
+          issue-number: ${{ github.event_name == 'issues' && github.event.issue.number || '' }}
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Acknowledge
+        uses: ./.github/actions/emoji-react
+        with:
+          comment-id: ${{ github.event.comment.id }}
+          issue-number: ${{ github.event_name == 'issues' && github.event.issue.number || '' }}
+          reaction: 'eyes'
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Gather issue branches
+        id: gather-branches
+        uses: ./.github/actions/gather-issue-branches
+        with:
+          issue-number: ${{ github.event.issue.number }}
+          issue-branch-base: ${{ github.event.repository.default_branch }}
+
+      - name: Save base64 prompts
+        id: prompts
+        run: |
+          {
+            echo "address-issue-base64=$(base64 -w 0 < .github/prompts/address-issue.txt)"
+            echo "classify-request-base64=$(base64 -w 0 < .github/prompts/classify-request.txt)"
+            echo "classify-response-base64=$(base64 -w 0 < .github/prompts/classify-response.txt)"
+            echo "extra-information-required-base64=$(base64 -w 0 < .github/prompts/extra-information-required.txt)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Save base64 schemas
+        id: schemas
+        run: |
+          {
+            echo "information-list-base64=$(base64 -w 0 < .github/schemas/information-list.json)"
+            echo "request-classification-base64=$(base64 -w 0 < .github/schemas/request-classification.json)"
+            echo "response-classification-base64=$(base64 -w 0 < .github/schemas/response-classification.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Get last 50 comments
+        id: gather-context
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        with:
+          base-url: ${{ github.api_url }}
+          script: |
+            const { data: issue } = await github.rest.issues.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number
+            });
+            const comments = [];
+            for await (const response of github.paginate.iterator(
+              github.rest.issues.listComments,
+              {
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                per_page: 100
+              }
+            )) {
+              comments.push(...response.data);
+            }
+            // Strip @agent and @model = "model-id" tags
+            const stripTags = (text) => (text || '')
+              .replace(/@model\s*=\s*["'][^"']+["']/g, '')
+              .replace(/@agent\b/g, '')
+              .replace(/\n{3,}/g, '\n\n')
+              .trim();
+            // Only send the most recent comments to the model: the full history
+            // of a long-lived issue can be huge (cost, tokens and job output
+            // size), and older comments are rarely relevant.
+            const history = comments.slice(-50).map(comment => ({
+              author: comment.user.login,
+              date: comment.created_at,
+              body: stripTags(comment.body),
+            }));
+            const issueContext = {
+              title: stripTags(issue.title),
+              body: stripTags(issue.body),
+              history
+            };
+            const stringified = JSON.stringify(issueContext);
+            const context_base64 = Buffer.from(stringified).toString('base64');
+            core.setOutput('context-base64', context_base64);
+
+      - name: Set up pi models
+        uses: ./.github/actions/set-up-pi-models
+
+      - name: Save selected model
+        id: save-model
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        with:
+          base-url: ${{ github.api_url }}
+          script: |
+            // A model can be named by: [full id, short key, any unambiguous suffix of its id]
+            // Matching is case-insensitive
+            const fs = require('fs');
+            const os = require('os');
+            const path = require('path');
+
+            let text = '';
+            if (context.eventName === 'issue_comment') {
+              text = (context.payload.comment && context.payload.comment.body) || '';
+            } else {
+              const issue = context.payload.issue || {};
+              text = `${issue.title || ''}\n${issue.body || ''}`;
+            }
+            const match = text.match(/@model\s*=\s*["']([^"']+)["']/);
+            const requested = match ? match[1].trim() : '';
+
+            const DEFAULT_PROVIDER = 'deepseek';
+            const DEFAULT_MODEL = 'deepseek-flash';
+            let provider = DEFAULT_PROVIDER;
+            let model = DEFAULT_MODEL;
+
+            if (requested) {
+              const modelsPath = path.join(os.homedir(), '.pi', 'agent', 'models.json');
+              if (fs.existsSync(modelsPath)) {
+                const configured = JSON.parse(fs.readFileSync(modelsPath, 'utf8')).providers || {};
+                const models = [];
+                for (const [name, config] of Object.entries(configured)) {
+                  for (const entry of (config && config.models) || []) {
+                    if (entry && entry.id) {
+                      models.push({ provider: name, id: entry.id, key: (entry.key || '').toLowerCase() });
+                    }
+                  }
+                }
+                const requestedLower = requested.toLowerCase();
+                // Try, in order: exact full id, exact short key, unique suffix of full id
+                // Only resolves when it matches exactly one model, default is deepseek-flash
+                const findMatch = (criteria) => {
+                  const hits = models.filter(criteria);
+                  return hits.length === 1 ? hits[0] : null;
+                };
+                const selected =
+                  findMatch(m => m.id.toLowerCase() === requestedLower) ||
+                  findMatch(m => m.key && m.key === requestedLower) ||
+                  findMatch(m => m.id.toLowerCase().endsWith(requestedLower));
+                if (selected) {
+                  provider = selected.provider;
+                  model = selected.id;
+                }
+              }
+            }
+            console.log(`Requested model: ${requested || '(none, using default)'}`);
+            console.log(`Using provider: ${provider}, model: ${model}`);
+            core.setOutput('provider', provider);
+            core.setOutput('model', model);
+
+      - name: Fetch selected provider API key
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          # Only the provider selected for this run needs to be reachable.
+          secret-name: ${{ steps.save-model.outputs.provider == 'eden' && 'EDENAI_API_KEY' || 'DEEPSEEK_API_KEY' }}
+
+      - name: Classify request
+        id: classify-request
+        uses: ./.github/actions/question-pi
+        with:
+          context-base64: ${{ steps.gather-context.outputs.context-base64 }}
+          prompt-base64: ${{ steps.prompts.outputs.classify-request-base64 }}
+          schema-base64: ${{ steps.schemas.outputs.request-classification-base64 }}
+          provider: ${{ steps.save-model.outputs.provider }}
+          model: ${{ steps.save-model.outputs.model }}
+
+      - name: Save request type
+        id: save-request-type
+        run: |
+          REQUEST_TYPE=$(echo "${{ steps.classify-request.outputs.response-base64 }}" | base64 -d | jq -r .request_type)
+          # Guard against unexpected model output: default to OTHER so the user
+          # always gets a visible response instead of a silent no-op.
+          case "${REQUEST_TYPE}" in
+            BUG_FIX|CHANGE_REQUEST|FEATURE_REQUEST|INVESTIGATION|QUESTION|SPAM|CAN_IGNORE|OTHER) ;;
+            *) REQUEST_TYPE=OTHER ;;
+          esac
+          echo "request-type: ${REQUEST_TYPE}"
+          echo "request-type=${REQUEST_TYPE}" >> "$GITHUB_OUTPUT"
+
+  thumbs-down-spam:
+    needs: [triage]
+    if: needs.triage.outputs.request-type == 'SPAM'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      # Fetch only the App credentials this job needs. Without secret-name the
+      # Infisical action injects every secret in the project/environment into
+      # the job, where later steps and actions can read them.
+      - name: Fetch GitHub App client ID
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "GITHUB_APP_AGENT_HELPER_CLIENT_ID"
+
+      - name: Fetch GitHub App private key
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "GITHUB_APP_AGENT_HELPER_PRIVATE_KEY"
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        env:
+          GITHUB_APP_AGENT_HELPER_CLIENT_ID: ${{ env.GITHUB_APP_AGENT_HELPER_CLIENT_ID }}
+          GITHUB_APP_AGENT_HELPER_PRIVATE_KEY: ${{ env.GITHUB_APP_AGENT_HELPER_PRIVATE_KEY }}
+        with:
+          client-id: ${{ env.GITHUB_APP_AGENT_HELPER_CLIENT_ID }}
+          private-key: ${{ env.GITHUB_APP_AGENT_HELPER_PRIVATE_KEY }}
+          # Scope the installation token to what this job actually does.
+          permission-contents: read
+          permission-issues: write
+
+      - name: Remove GitHub App credentials from the environment
+        run: |
+          # The short-lived installation token has now been minted. Remove the
+          # long-lived App private key so later steps cannot read it.
+          for name in \
+            GITHUB_APP_AGENT_HELPER_CLIENT_ID \
+            GITHUB_APP_AGENT_HELPER_PRIVATE_KEY; do
+            if [ -n "${!name:-}" ]; then
+              printf '%s=\n' "${name}" >> "$GITHUB_ENV"
+            fi
+          done
+
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Thumbs down
+        uses: ./.github/actions/emoji-react
+        with:
+          comment-id: ${{ github.event.comment.id }}
+          issue-number: ${{ github.event_name == 'issues' && github.event.issue.number || '' }}
+          reaction: '-1'
+          token: ${{ steps.app-token.outputs.token }}
+
+  other-request:
+    needs: [triage]
+    if: needs.triage.outputs.request-type == 'OTHER'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      id-token: write
+      issues: write
+    steps:
+      # Fetch only the App credentials this job needs. Without secret-name the
+      # Infisical action injects every secret in the project/environment into
+      # the job, where later steps and actions can read them.
+      - name: Fetch GitHub App client ID
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "GITHUB_APP_AGENT_HELPER_CLIENT_ID"
+
+      - name: Fetch GitHub App private key
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "GITHUB_APP_AGENT_HELPER_PRIVATE_KEY"
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        env:
+          GITHUB_APP_AGENT_HELPER_CLIENT_ID: ${{ env.GITHUB_APP_AGENT_HELPER_CLIENT_ID }}
+          GITHUB_APP_AGENT_HELPER_PRIVATE_KEY: ${{ env.GITHUB_APP_AGENT_HELPER_PRIVATE_KEY }}
+        with:
+          client-id: ${{ env.GITHUB_APP_AGENT_HELPER_CLIENT_ID }}
+          private-key: ${{ env.GITHUB_APP_AGENT_HELPER_PRIVATE_KEY }}
+          # Scope the installation token to what this job actually does.
+          permission-contents: read
+          permission-issues: write
+
+      - name: Remove GitHub App credentials from the environment
+        run: |
+          # The short-lived installation token has now been minted. Remove the
+          # long-lived App private key so later steps cannot read it.
+          for name in \
+            GITHUB_APP_AGENT_HELPER_CLIENT_ID \
+            GITHUB_APP_AGENT_HELPER_PRIVATE_KEY; do
+            if [ -n "${!name:-}" ]; then
+              printf '%s=\n' "${name}" >> "$GITHUB_ENV"
+            fi
+          done
+
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: React confused
+        uses: ./.github/actions/emoji-react
+        with:
+          comment-id: ${{ github.event.comment.id }}
+          issue-number: ${{ github.event_name == 'issues' && github.event.issue.number || '' }}
+          reaction: 'confused'
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Add comment
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        with:
+          base-url: ${{ github.api_url }}
+          script: |
+            const body = "I'm sorry I wasn't able to understand the issue type. If it's a bug fix, change request, feature request, investigation or question please mention it specifically.";
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  respond:
+    needs: [triage]
+    if: (needs.triage.outputs.request-type == 'BUG_FIX') || (needs.triage.outputs.request-type == 'CHANGE_REQUEST') || (needs.triage.outputs.request-type == 'FEATURE_REQUEST') || (needs.triage.outputs.request-type == 'INVESTIGATION') || (needs.triage.outputs.request-type == 'QUESTION')
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      id-token: write
+      issues: write
+      pull-requests: write
+    steps:
+      # Fetch only the App credentials this job needs. Without secret-name the
+      # Infisical action injects every secret in the project/environment into
+      # the job, where later steps and actions can read them.
+      - name: Fetch GitHub App client ID
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "GITHUB_APP_AGENT_HELPER_CLIENT_ID"
+
+      - name: Fetch GitHub App private key
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "GITHUB_APP_AGENT_HELPER_PRIVATE_KEY"
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
+        env:
+          GITHUB_APP_AGENT_HELPER_CLIENT_ID: ${{ env.GITHUB_APP_AGENT_HELPER_CLIENT_ID }}
+          GITHUB_APP_AGENT_HELPER_PRIVATE_KEY: ${{ env.GITHUB_APP_AGENT_HELPER_PRIVATE_KEY }}
+        with:
+          client-id: ${{ env.GITHUB_APP_AGENT_HELPER_CLIENT_ID }}
+          private-key: ${{ env.GITHUB_APP_AGENT_HELPER_PRIVATE_KEY }}
+          # Scope the installation token to what this job actually does.
+          permission-contents: write
+          permission-issues: write
+          permission-pull-requests: write
+
+      - name: Remove GitHub App credentials from the environment
+        run: |
+          # The short-lived installation token has now been minted. Remove the
+          # long-lived App private key so later steps cannot read it.
+          for name in \
+            GITHUB_APP_AGENT_HELPER_CLIENT_ID \
+            GITHUB_APP_AGENT_HELPER_PRIVATE_KEY; do
+            if [ -n "${!name:-}" ]; then
+              printf '%s=\n' "${name}" >> "$GITHUB_ENV"
+            fi
+          done
+
+      - name: Checkout repository
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Checkout issue branch if it exists
+        id: checkout-issue-branch
+        uses: ./.github/actions/checkout-branch
+        with:
+          branch: ${{ needs.triage.outputs.issue-branch }}
+          base: ${{ needs.triage.outputs.issue-branch-base }}
+          create-if-not-exists: false
+
+      - name: Set up pi models
+        uses: ./.github/actions/set-up-pi-models
+
+      - name: Fetch selected provider API key
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          # Only the provider selected for this run needs to be reachable.
+          secret-name: ${{ needs.triage.outputs.provider == 'eden' && 'EDENAI_API_KEY' || 'DEEPSEEK_API_KEY' }}
+
+      - name: Classify response
+        id: classify-response
+        uses: ./.github/actions/question-pi
+        with:
+          context-base64: ${{ needs.triage.outputs.issue-context-base64 }}
+          prompt-base64: ${{ needs.triage.outputs.classify-response-base64 }}
+          schema-base64: ${{ needs.triage.outputs.response-classification-base64 }}
+          provider: ${{ needs.triage.outputs.provider }}
+          model: ${{ needs.triage.outputs.model }}
+      - name: Save response type
+        id: save-response-type
+        run: |
+          RESPONSE_TYPE=$(echo "${{ steps.classify-response.outputs.response-base64 }}" | base64 -d | jq -r .response_type)
+          # Guard against unexpected model output: default to
+          # REQUIRES_MORE_INFORMATION so the user always gets a visible response
+          # instead of a silent no-op.
+          case "${RESPONSE_TYPE}" in
+            ALREADY_ADDRESSED|REQUIRES_HUMAN|REQUIRES_MORE_INFORMATION|CAN_ADDRESS_FULLY) ;;
+            *) RESPONSE_TYPE=REQUIRES_MORE_INFORMATION ;;
+          esac
+          echo "RESPONSE_TYPE: ${RESPONSE_TYPE}"
+          echo "response-type=${RESPONSE_TYPE}" >> "$GITHUB_OUTPUT"
+
+      - name: Classify extra information required
+        id: classify-extra-information-required
+        if: steps.save-response-type.outputs.response-type == 'REQUIRES_MORE_INFORMATION'
+        uses: ./.github/actions/question-pi
+        with:
+          context-base64: ${{ needs.triage.outputs.issue-context-base64 }}
+          prompt-base64: ${{ needs.triage.outputs.extra-information-required-base64 }}
+          schema-base64: ${{ needs.triage.outputs.information-list-base64 }}
+          provider: ${{ needs.triage.outputs.provider }}
+          model: ${{ needs.triage.outputs.model }}
+      - name: Save extra information required
+        id: save-extra-information-required
+        if: steps.save-response-type.outputs.response-type == 'REQUIRES_MORE_INFORMATION'
+        run: |
+          EXTRA_INFORMATION_REQUIRED=$(echo "${{ steps.classify-extra-information-required.outputs.response-base64 }}" | base64 -d | jq -c .information)
+          echo "EXTRA_INFORMATION_REQUIRED: ${EXTRA_INFORMATION_REQUIRED}"
+          # Use a random delimiter so a model response containing a line that
+          # reads "EOF" cannot truncate the multi-line output value.
+          DELIM="GHA_EOF_$RANDOM"
+          {
+            echo "extra-information-required<<${DELIM}"
+            echo "${EXTRA_INFORMATION_REQUIRED}"
+            echo "${DELIM}"
+          } >> "$GITHUB_OUTPUT"
+
+# Already addressed
+      - name: Reply as already addressed
+        if: steps.save-response-type.outputs.response-type == 'ALREADY_ADDRESSED'
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        with:
+          base-url: ${{ github.api_url }}
+          script: |
+            let body = "I think this has already been addressed.\nIf it hasn't please add another comment.";
+            if (${{ steps.checkout-issue-branch.outputs.issue-branch-exists }} == true) {
+              body += "\n[The changes I have made can be found here.](https://github.com/" + `${context.repo.owner}/${context.repo.repo}` + "/compare/${{ needs.triage.outputs.issue-branch-base }}...${{ needs.triage.outputs.issue-branch }})";
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+# Require human
+      - name: Require human
+        if: steps.save-response-type.outputs.response-type == 'REQUIRES_HUMAN'
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        with:
+          base-url: ${{ github.api_url }}
+          script: |
+            const body = "I'm sorry I cannot address this issue as it requires a human.";
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+# Ask for more information
+      - name: Add confused reaction
+        if: steps.save-response-type.outputs.response-type == 'REQUIRES_MORE_INFORMATION'
+        uses: ./.github/actions/emoji-react
+        with:
+          comment-id: ${{ github.event.comment.id }}
+          issue-number: ${{ github.event_name == 'issues' && github.event.issue.number || '' }}
+          reaction: 'confused'
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Ask for required information
+        if: steps.save-response-type.outputs.response-type == 'REQUIRES_MORE_INFORMATION'
+        env:
+          EXTRA_INFO: ${{ steps.save-extra-information-required.outputs.extra-information-required }}
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        with:
+          base-url: ${{ github.api_url }}
+          script: |
+            // Read the JSON from the environment rather than interpolating it
+            // into the script: the model-generated text may contain characters
+            // that would break the generated JavaScript.
+            let extraInfo = process.env.EXTRA_INFO;
+            // The response is schema-validated JSON (an array of strings); parse
+            // it, falling back to the raw text for robustness.
+            if (typeof extraInfo === 'string') {
+              try {
+                extraInfo = JSON.parse(extraInfo);
+              } catch (e) {
+                // Not JSON; use the raw text.
+              }
+            }
+            let body = "The following additional information is required:\n";
+            if (Array.isArray(extraInfo)) {
+              extraInfo.forEach(item => {
+                body += `- ${item}\n`;
+              });
+            } else {
+              body += `${extraInfo}`;
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+# Respond
+      - name: Add thumbs up reaction
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
+        uses: ./.github/actions/emoji-react
+        with:
+          comment-id: ${{ github.event.comment.id }}
+          issue-number: ${{ github.event_name == 'issues' && github.event.issue.number || '' }}
+          reaction: '+1'
+          token: ${{ steps.app-token.outputs.token }}
+      - name: Configure git credentials for issue branch creation
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
+        env:
+          GIT_AUTH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          # question-pi removed the persisted credential before running the
+          # classification model. Restore it only for the branch creation
+          # below; invoke-pi removes it again before the agent runs.
+          GIT_AUTH_HEADER=$(printf 'x-access-token:%s' "${GIT_AUTH_TOKEN}")
+          GIT_AUTH_HEADER=$(printf '%s' "${GIT_AUTH_HEADER}" | base64 -w 0)
+          git config --local --unset-all \
+            "http.https://github.com/.extraheader" 2>/dev/null || true
+          git config --local "http.https://github.com/.extraheader" \
+            "AUTHORIZATION: basic ${GIT_AUTH_HEADER}"
+      - name: Ensure issue branch
+        if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY')
+        uses: ./.github/actions/checkout-branch
+        with:
+          branch: ${{ needs.triage.outputs.issue-branch }}
+          base: ${{ needs.triage.outputs.issue-branch-base }}
+          create-if-not-exists: true
+      # Do not add a step here that writes a private registry key to ~/.ssh.
+      # invoke-pi removes ~/.ssh and other credential stores immediately
+      # before starting the agent, and the agent would be able to read anything
+      # left on disk. Repositories that need a private registry should uncomment
+      # the optional section below, which prefetches the dependencies in a
+      # trusted step and leaves the agent to run offline. That step writes no
+      # credential to disk and removes the key and token from the environment
+      # afterwards. The PR push below uses HTTPS with the GitHub App token, so
+      # no SSH key is needed after the agent has run. See copying.md.
+      - name: Configure git identity
+        run: |
+          git config --global user.email "agent@stock-trek.com"
+          git config --global user.name "Stock-Trek Agent"
+
+      # ---------------------------------------------------------------------
+      # Optional private crate registry access (for example Shipyard).
+      #
+      # When copying this workflow into a repository that pulls private crates
+      # from Shipyard, uncomment the steps below. Dependencies are fetched here,
+      # in a trusted step, before the agent starts; the agent then runs with
+      # CARGO_NET_OFFLINE=true and resolves everything from Cargo's local cache.
+      # Neither the deploy key nor the registry token enters the agent's
+      # environment or filesystem.
+      #
+      # Use a dedicated read-only registry token with the shortest practical
+      # expiry (CARGO_REGISTRIES_SHIPYARD_TOKEN) and a read-only deploy key, never
+      # a personal key. The prefetch action removes both from the environment
+      # and shuts down its ssh-agent before the agent runs.
+      #
+      # Limitation: adding a new private dependency during the agent run would
+      # need another prefetch in a trusted step.
+      #
+      # If your secret names differ, update the secret-name values (see
+      # copying.md). Keep the `if:` conditions so the secrets are only fetched
+      # when the agent is actually going to make changes.
+      # ---------------------------------------------------------------------
+      - name: Fetch Shipyard read-only registry token
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "CARGO_REGISTRIES_SHIPYARD_TOKEN"
+      - name: Fetch Shipyard read-only deploy key
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "SHIPYARD_SSH_PRIVATE_KEY_READONLY"
+
+      - name: Fetch Shipyard known host
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "SHIPYARD_KNOWN_HOST"
+      - name: Prefetch cargo dependencies
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
+        env:
+          CARGO_REGISTRIES_SHIPYARD_TOKEN: ${{ env.CARGO_REGISTRIES_SHIPYARD_TOKEN }}
+          SHIPYARD_SSH_PRIVATE_KEY_READONLY: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
+          SHIPYARD_KNOWN_HOST: ${{ env.SHIPYARD_KNOWN_HOST }}
+        uses: ./.github/actions/prefetch-cargo-deps
+        with:
+          shipyard-cargo-token: ${{ env.CARGO_REGISTRIES_SHIPYARD_TOKEN }}
+          shipyard-ssh-private-key: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
+          shipyard-known-host: ${{ env.SHIPYARD_KNOWN_HOST }}
+
+      - name: Address issue
+        id: address-issue
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
+        uses: ./.github/actions/invoke-pi
+        with:
+          context-base64: ${{ needs.triage.outputs.issue-context-base64 }}
+          prompt-base64: ${{ needs.triage.outputs.address-issue-base64 }}
+          provider: ${{ needs.triage.outputs.provider }}
+          model: ${{ needs.triage.outputs.model }}
+      - name: Save address response
+        id: save-address-issue-summary
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
+        run: |
+          SUMMARY=$(echo "${{ steps.address-issue.outputs.response-base64 }}" | base64 -d)
+          # Use a random delimiter so a summary containing a line that reads
+          # "EOF" cannot truncate the multi-line output value.
+          DELIM="GHA_EOF_$RANDOM"
+          {
+            echo "summary<<${DELIM}"
+            echo "${SUMMARY}"
+            echo "${DELIM}"
+          } >> "$GITHUB_OUTPUT"
+      - name: Check for code changes
+        id: check-for-code-changes
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
+        run: |
+          # quick local check: uncommitted changes made by the agent
+          if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # slow network check: committed changes. The agent may commit (and
+          # even push) its own changes, so compare the branch tip against the
+          # BASE branch - never against the issue branch, which the agent may
+          # have just pushed to (comparing against it always shows no diff).
+          ISSUE_BRANCH_BASE="${{ needs.triage.outputs.issue-branch-base }}"
+          git fetch origin "$ISSUE_BRANCH_BASE" 2>/dev/null || true
+          REFERENCE=""
+          for CANDIDATE in "origin/$ISSUE_BRANCH_BASE" "$ISSUE_BRANCH_BASE"; do
+            if git rev-parse --verify --quiet "$CANDIDATE" >/dev/null 2>&1; then
+              REFERENCE="$CANDIDATE"
+              break
+            fi
+          done
+          if [ -n "$REFERENCE" ]; then
+            # If the commit count cannot be determined, be conservative and
+            # treat it as a change so the PR and links are not silently dropped.
+            COMMITS_AHEAD=$(git rev-list --count "$REFERENCE"..HEAD 2>/dev/null || echo 1)
+            if [ "${COMMITS_AHEAD}" -gt 0 ]; then
+              HAS_CHANGES=true
+            else
+              HAS_CHANGES=false
+            fi
+          else
+            # No base reference is available (e.g. the fetch failed or the base
+            # branch was renamed). Be conservative: report a change so the
+            # workflow still commits, raises a PR and posts the links.
+            HAS_CHANGES=true
+          fi
+          echo "has-changes=${HAS_CHANGES}" >> "$GITHUB_OUTPUT"
+      - name: Commit code changes
+        if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'true')
+        run: |
+          # This step has no credentials in its environment: the App token is
+          # only restored in the push step below. The agent controls the
+          # working tree, so disable git hooks while operating on it.
+          # The agent may have switched branches or rebased while addressing the
+          # issue; make sure the changes are committed on the issue branch
+          # rather than whatever branch we are on now.
+          ISSUE_BRANCH="${{ needs.triage.outputs.issue-branch }}"
+          if [ "$(/usr/bin/git rev-parse --abbrev-ref HEAD)" != "${ISSUE_BRANCH}" ]; then
+            if /usr/bin/git rev-parse --verify --quiet "refs/heads/${ISSUE_BRANCH}" >/dev/null 2>&1; then
+              /usr/bin/git -c core.hooksPath=/dev/null checkout "${ISSUE_BRANCH}"
+            else
+              /usr/bin/git -c core.hooksPath=/dev/null checkout -b "${ISSUE_BRANCH}" --track "origin/${ISSUE_BRANCH}"
+            fi
+          fi
+          /usr/bin/git add .
+          if ! /usr/bin/git diff --cached --quiet || [ -n "$(/usr/bin/git ls-files --others --exclude-standard)" ]; then
+            /usr/bin/git -c core.hooksPath=/dev/null -c commit.gpgSign=false \
+              commit -m "Commit changes made by pi"
+          fi
+      - name: Push code changes
+        if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'true')
+        env:
+          GIT_AUTH_TOKEN: ${{ steps.app-token.outputs.token }}
+        run: |
+          # The agent step removes the persisted git credential so the agent
+          # cannot use it; restore it only for this push, now that the agent
+          # has finished and the changes are committed.
+          GIT_AUTH_HEADER=$(printf 'x-access-token:%s' "${GIT_AUTH_TOKEN}")
+          GIT_AUTH_HEADER=$(printf '%s' "${GIT_AUTH_HEADER}" | /usr/bin/base64 -w 0)
+          # Drop HTTP/credential-helper settings the agent may have added to
+          # the local config. The token header and remote URL are supplied on
+          # the command line below, so the token is never written to
+          # .git/config and included config files cannot override them.
+          for key in \
+            'http.proxy' \
+            'http.https://github.com.proxy' \
+            'http.https://github.com/.extraheader' \
+            'credential.helper' \
+            'core.askPass'; do
+            /usr/bin/git config --local --unset-all "${key}" 2>/dev/null || true
+          done
+          ISSUE_BRANCH="${{ needs.triage.outputs.issue-branch }}"
+          for key in url pushurl receivepack uploadpack proxy fetch; do
+            /usr/bin/git config --local --unset-all "remote.origin.${key}" 2>/dev/null || true
+          done
+          # A plain push can be rejected as non-fast-forward when the remote
+          # branch has moved since we last fetched it (e.g. a previous run
+          # pushed to it, or the agent rebased the branch onto a newer base).
+          # The branch is only ever used by this issue, so force push it.
+          # Fetch first so --force-with-lease allows overwriting the remote
+          # state we know about, while still guarding against a change that
+          # appears between the fetch and the push.
+          #
+          # Run the network commands with a minimal environment so env vars the
+          # agent may have injected (proxy settings, askpass helpers, a
+          # different global config, ...) cannot see the restored token.
+          GIT_CONFIG_ARGS=(
+            -c core.hooksPath=/dev/null
+            -c "http.https://github.com/.extraheader=AUTHORIZATION: basic ${GIT_AUTH_HEADER}"
+            -c "remote.origin.url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+            -c "remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*"
+          )
+          env -i HOME="$HOME" PATH=/usr/bin:/bin \
+            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+            /usr/bin/git "${GIT_CONFIG_ARGS[@]}" \
+            fetch origin "${ISSUE_BRANCH}" 2>/dev/null || true
+          env -i HOME="$HOME" PATH=/usr/bin:/bin \
+            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+            /usr/bin/git "${GIT_CONFIG_ARGS[@]}" \
+            push --force-with-lease origin "HEAD:${ISSUE_BRANCH}"
+          # The push deliberately removed the local remote configuration so an
+          # agent-injected remote could not redirect the token. Restore a safe
+          # origin URL for later steps (notably the gh calls that raise the PR)
+          # without restoring any credentials.
+          /usr/bin/git config --local remote.origin.url \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          /usr/bin/git config --local remote.origin.fetch \
+            '+refs/heads/*:refs/remotes/origin/*'
+      - name: Reply if no code changes made
+        if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'false')
+        env:
+          SUMMARY: ${{ steps.save-address-issue-summary.outputs.summary }}
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        with:
+          base-url: ${{ github.api_url }}
+          script: |
+            // Read the summary from the environment rather than interpolating
+            // it into the script: the summary is free-form text that may
+            // contain characters that would break the generated JavaScript.
+            let body = process.env.SUMMARY;
+            if (typeof body !== 'string' || body.trim() === '') {
+              body = "I have now addressed this, but no code changes were needed.";
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+      - name: Raise PR if code changes made
+        id: raise-pr
+        if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'true')
+        env:
+          GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          GH_HOST: github.com
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_IS_PR: ${{ github.event.issue.pull_request != null }}
+        run: |
+          # Use the system gh binary, not one the agent could have placed earlier
+          # in PATH, and pin the API host so an injected GH_HOST cannot send the
+          # token somewhere else.
+          GH=/usr/bin/gh
+          CAT=/usr/bin/cat
+          # Use a fresh gh config directory and a minimal environment for the
+          # API calls, so config/env values the agent may have left behind
+          # cannot redirect the token or turn on debug logging.
+          GH_CONFIG_DIR=$(/usr/bin/mktemp -d)
+          trap 'rm -rf "$GH_CONFIG_DIR"' EXIT
+          # Resolve the repository explicitly rather than relying on a git
+          # remote: the push step removes remote configuration before pushing
+          # with a one-off URL, so the checkout may have no remotes at all.
+          REPO="${GITHUB_REPOSITORY}"
+          # Write title and body to temporary files to handle quotes and backticks
+          # Use a random, quoted delimiter so a summary containing "EOF" or shell metacharacters cannot break the heredoc
+          # Event data is passed via environment variables so an issue title containing shell metacharacters cannot be injected into the script
+          # When the request came from a comment on a pull request, reference rather than "close" it: the number refers to a PR, not an issue
+          if [ "${ISSUE_IS_PR}" == "true" ]; then
+            REFERENCE="Addresses"
+          else
+            REFERENCE="Closes"
+          fi
+          printf '%s #%s %s\n' "${REFERENCE}" "${ISSUE_NUMBER}" "${ISSUE_TITLE}" > /tmp/pr_title.txt
+          # shellcheck disable=SC2034 # PR_BODY_DELIM is used as the heredoc delimiter below
+          PR_BODY_DELIM="PR_BODY_EOF_$RANDOM"
+          ${CAT} > /tmp/pr_body.txt << "$PR_BODY_DELIM"
+          ${{ steps.save-address-issue-summary.outputs.summary }}
+          $PR_BODY_DELIM
+          # Reuse an existing open PR for this branch if one was already created
+          # by a previous run, otherwise create a new one.
+          PR_URL=$(env -i HOME="$HOME" PATH=/usr/bin:/bin \
+            GH_TOKEN="$GH_TOKEN" GH_HOST=github.com GH_CONFIG_DIR="$GH_CONFIG_DIR" \
+            "${GH}" pr list \
+            --repo "${REPO}" \
+            --head "${{ needs.triage.outputs.issue-branch }}" \
+            --state open \
+            --json url \
+            --jq '.[0].url // empty' 2>/dev/null || true)
+          if [ -z "$PR_URL" ]; then
+            PR_URL=$(env -i HOME="$HOME" PATH=/usr/bin:/bin \
+              GH_TOKEN="$GH_TOKEN" GH_HOST=github.com GH_CONFIG_DIR="$GH_CONFIG_DIR" \
+              "${GH}" pr create \
+              --repo "${REPO}" \
+              --base "${{ needs.triage.outputs.issue-branch-base }}" \
+              --head "${{ needs.triage.outputs.issue-branch }}" \
+              --title "$(${CAT} /tmp/pr_title.txt)" \
+              --body-file /tmp/pr_body.txt)
+          fi
+          echo "pull-request-url=$PR_URL" >> "$GITHUB_OUTPUT"
+      - name: Reply with diff and PR link
+        if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'true')
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        with:
+          base-url: ${{ github.api_url }}
+          script: |
+            const body = "I have now addressed this.\n" +
+                          "[The changes I have made can be found here.](https://github.com/" + `${context.repo.owner}/${context.repo.repo}` + "/compare/${{ needs.triage.outputs.issue-branch-base }}...${{ needs.triage.outputs.issue-branch }})\n" +
+                          "[The PR is available here.](${{ steps.raise-pr.outputs.pull-request-url }})";
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body
+            });
+
+  notify-failure:
+    needs: [triage, thumbs-down-spam, other-request, respond]
+    if: failure() || cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      issues: write
+    steps:
+      - name: Comment failure details on the issue
+        uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
+        with:
+          base-url: ${{ github.api_url }}
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const issueNumber = context.issue.number;
+            const runId = context.runId;
+
+            const { data: run } = await github.rest.actions.getWorkflowRun({
+              owner,
+              repo,
+              run_id: runId
+            });
+            const { data: jobs } = await github.rest.actions.listJobsForWorkflowRun({
+              owner,
+              repo,
+              run_id: runId,
+              per_page: 100
+            });
+
+            const PROBLEM_CONCLUSIONS = new Set(['failure', 'cancelled', 'timed_out', 'startup_failure']);
+            const failedJobs = jobs.jobs.filter(job => PROBLEM_CONCLUSIONS.has(job.conclusion));
+
+            let body = "⚠️ I'm sorry, something went wrong while I was trying to address this issue.\n\n";
+            if (failedJobs.length === 0) {
+              body += "The workflow did not report a specific failed job.\n";
+            } else {
+              body += "The following failed:\n";
+              for (const job of failedJobs) {
+                body += `\n**${job.name}**\n`;
+                const failedSteps = (job.steps || []).filter(step => PROBLEM_CONCLUSIONS.has(step.conclusion));
+                if (failedSteps.length === 0) {
+                  body += "- The job failed without reporting a specific step.\n";
+                } else {
+                  for (const step of failedSteps) {
+                    body += `- ${step.name}\n`;
+                  }
+                }
+              }
+            }
+            body += `\nYou can find the full logs [here](${run.html_url}).\n`;
+            body += "\nIf you'd like me to try again, please add a comment mentioning '@ agent' (no space).";
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issueNumber,
+              body
+            });

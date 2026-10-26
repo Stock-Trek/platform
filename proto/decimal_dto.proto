@@ -1,0 +1,10 @@
+syntax = "proto3";
+package dto;
+
+message DecimalDto {
+  fixed32 lo = 1;
+  fixed32 mid = 2;
+  fixed32 hi = 3;
+  fixed32 scale = 4;
+  bool negative = 5;
+}

@@ -1,0 +1,9 @@
+syntax = "proto3";
+package dto;
+
+import "decimal_dto.proto";
+
+message MarketQuoteDto {
+  DecimalDto price_dto = 1;
+  DecimalDto quantity_dto = 2;
+}

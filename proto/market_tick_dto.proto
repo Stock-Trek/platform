@@ -1,0 +1,15 @@
+syntax = "proto3";
+package dto;
+
+import "market_quote_dto.proto";
+
+message MarketTickDto {
+  uint64 timestamp_millis = 1;
+  MarketQuoteDto bid_dto = 2;
+  MarketQuoteDto ask_dto = 3;
+  MarketQuoteDto last_dto = 4;
+}
+
+message MarketTicksDto {
+  repeated MarketTickDto ticks_dto = 1;
+}

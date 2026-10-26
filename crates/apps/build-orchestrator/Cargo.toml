@@ -1,0 +1,35 @@
+[package]
+name = "platform-build-orchestrator"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+platform-config = { workspace = true }
+platform-errors = { workspace = true }
+platform-github = { workspace = true }
+platform-git = { workspace = true }
+platform-messages = { workspace = true }
+platform-metrics = { workspace = true }
+platform-sqs = { workspace = true }
+platform-time = { workspace = true }
+aws-config = { workspace = true }
+aws-credential-types = { workspace = true }
+aws_lambda_events = { workspace = true, default-features = false, features = ["sqs"] }
+aws-sdk-lambda = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sdk-sqs = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
+base64 = { workspace = true }
+futures = { workspace = true }
+hex = { workspace = true }
+hmac = { workspace = true }
+lambda_runtime = { workspace = true }
+metrics = { workspace = true }
+metrics_cloudwatch_embedded = { workspace = true, features = ["lambda"] }
+reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
+tracing = { workspace = true }
+url = { workspace = true }
+zip = { workspace = true, default-features = false, features = ["deflate"] }

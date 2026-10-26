@@ -1,0 +1,9 @@
+syntax = "proto3";
+package dto;
+
+import "market_quote_dto.proto";
+
+message MarketOrderBookDto {
+  repeated MarketQuoteDto bids_dto = 1;
+  repeated MarketQuoteDto asks_dto = 2;
+}

@@ -1,0 +1,11 @@
+[package]
+name = "platform-config"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+platform-errors = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true, features = ["env-filter"] }
+url = { workspace = true, features = ["serde"] }

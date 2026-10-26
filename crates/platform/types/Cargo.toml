@@ -1,0 +1,10 @@
+[package]
+name = "platform-types"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+strum = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+url = { workspace = true, features = ["serde"] }

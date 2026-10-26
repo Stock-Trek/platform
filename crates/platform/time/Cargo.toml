@@ -1,0 +1,7 @@
+[package]
+name = "platform-time"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+platform-errors = { workspace = true }

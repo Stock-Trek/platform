@@ -1,0 +1,18 @@
+[package]
+name = "platform-github"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+base64 = { workspace = true }
+platform-config = { workspace = true }
+platform-errors = { workspace = true }
+platform-git = { workspace = true }
+platform-time = { workspace = true }
+jsonwebtoken = { workspace = true, default-features = false, features = ["use_pem"] }
+lru = { workspace = true }
+octocrab = { workspace = true }
+parking_lot = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["time"] }
+url = { workspace = true, features = ["serde"] }

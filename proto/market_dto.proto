@@ -1,0 +1,17 @@
+syntax = "proto3";
+package dto;
+
+import "decimal_dto.proto";
+import "market_tick_dto.proto";
+import "market_candle_dto.proto";
+import "market_order_book_dto.proto";
+
+message MarketDto {
+  DecimalDto base_increment_dto = 1;
+  DecimalDto quote_increment_dto = 2;
+  DecimalDto minimum_notional_dto = 3;
+  MarketTicksDto ticks_dto = 4;
+  map<uint32, MarketCandleDto> rolling_dto = 5;
+  map<uint32, MarketCandlesDto> aligned_dto = 6;
+  MarketOrderBookDto order_book_dto = 7;
+}

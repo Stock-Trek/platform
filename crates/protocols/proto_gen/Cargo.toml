@@ -1,0 +1,11 @@
+[package]
+name = "platform-proto-gen"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["lib"]
+
+[dependencies]
+prost-build = { workspace = true }
+protoc-bin-vendored = { workspace = true }

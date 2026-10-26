@@ -1,0 +1,14 @@
+syntax = "proto3";
+package dto;
+
+import "decimal_dto.proto";
+
+message MarketOhlcvDto {
+  DecimalDto open_dto = 1;
+  DecimalDto high_dto = 2;
+  DecimalDto low_dto = 3;
+  DecimalDto close_dto = 4;
+  DecimalDto volume_dto = 5;
+  DecimalDto quote_volume_dto = 6;
+  DecimalDto vwap_dto = 7;
+}

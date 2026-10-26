@@ -1,0 +1,71 @@
+syntax = "proto3";
+package dto;
+
+import "asset_id_dto.proto";
+import "decimal_dto.proto";
+
+message OrderRequestDto {
+  oneof order_request {
+    LimitOrderRequestDto limit = 1;
+    MarketBuyOrderRequestDto market_buy = 2;
+    MarketSellOrderRequestDto market_sell = 3;
+  }
+}
+
+message LimitOrderRequestDto {
+  AssetIdDto base_dto = 1;
+  AssetIdDto quote_dto = 2;
+  string side = 3;
+  ActivationDto activation_dto = 4;
+  DecimalDto limit_price_dto = 5;
+  string time_in_force = 6;
+  QuantityDto quantity_dto = 7;
+  string tag = 8;
+}
+
+message MarketBuyOrderRequestDto {
+  AssetIdDto base_dto = 1;
+  AssetIdDto quote_dto = 2;
+  ActivationDto activation_dto = 3;
+  DecimalDto quote_quantity_dto = 4;
+  string tag = 5;
+}
+
+message MarketSellOrderRequestDto {
+  AssetIdDto base_dto = 1;
+  AssetIdDto quote_dto = 2;
+  ActivationDto activation_dto = 3;
+  DecimalDto base_quantity_dto = 4;
+  string tag = 5;
+}
+
+message ActivationDto {
+  oneof activation {
+    ImmediateActivationDto immediate = 1;
+    PriceTriggeredActivationDto price_triggered = 2;
+    TrailingActivationDto trailing = 3;
+  }
+}
+
+message ImmediateActivationDto {}
+
+message PriceTriggeredActivationDto {
+  DecimalDto activation_price_dto = 1;
+  string basis = 2;
+  string direction = 3;
+  string mode = 4;
+}
+
+message TrailingActivationDto {
+  DecimalDto activation_price_dto = 1;
+  string basis = 2;
+  uint32 callback_rate_bps = 3;
+  string direction = 4;
+}
+
+message QuantityDto {
+  oneof quantity {
+    DecimalDto of_base = 1;
+    DecimalDto of_quote = 2;
+  }
+}

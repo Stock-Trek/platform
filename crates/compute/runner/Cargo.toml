@@ -1,0 +1,15 @@
+[package]
+name = "platform-runner"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+platform-exit-codes = { workspace = true }
+prost = { workspace = true }
+rust_decimal = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+stock-trek = { workspace = true }

@@ -1,0 +1,34 @@
+syntax = "proto3";
+package dto;
+
+import "asset_id_dto.proto";
+import "decimal_dto.proto";
+import "order_request_dto.proto";
+
+message PortfolioDto {
+  map<string, CexAccountsDto> cex_accounts_dto = 1;
+}
+
+message CexAccountsDto {
+  map<string, CexAccountPortfolioDto> account_portfolios_dto = 1;
+}
+
+message CexAccountPortfolioDto {
+  repeated AssetCountDto asset_counts_dto = 1;
+  map<string, PendingOrdersDto> pending_orders_dto = 2;
+}
+
+message PendingOrdersDto {
+  repeated PendingOrderDto pending_orders_dto = 1;
+}
+
+message PendingOrderDto {
+  OrderRequestDto order_request_dto = 1;
+  DecimalDto filled_base_quantity_dto = 2;
+  DecimalDto filled_quote_quantity_dto = 3;
+}
+
+message AssetCountDto {
+  AssetIdDto asset_id_dto = 1;
+  DecimalDto count_dto = 2;
+}

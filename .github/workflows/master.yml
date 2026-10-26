@@ -1,0 +1,143 @@
+name: Build and Deploy
+
+on:
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.event.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/master'
+    steps:
+      - name: Get secrets
+        uses: Infisical/secrets-action@v1.0.16
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "aws"
+          env-slug: "prod"
+
+      - name: Get secrets
+        uses: Infisical/secrets-action@v1.0.16
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "publish"
+          env-slug: "prod"
+
+      - name: Set up shipyard ssh auth
+        env:
+          SHIPYARD_KNOWN_HOST: ${{ env.SHIPYARD_KNOWN_HOST }}
+          SHIPYARD_SSH_PRIVATE_KEY_PLATFORM: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_PLATFORM }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "${{ env.SHIPYARD_SSH_PRIVATE_KEY_PLATFORM }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "${{ env.SHIPYARD_KNOWN_HOST }}" >> ~/.ssh/known_hosts
+          ssh -T git@ssh.shipyard.rs
+
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v3
+        env:
+          GITHUB_APP_CREATE_TAGS_CLIENT_ID: ${{ env.GITHUB_APP_CREATE_TAGS_CLIENT_ID }}
+          GITHUB_APP_CREATE_TAGS_PRIVATE_KEY: ${{ env.GITHUB_APP_CREATE_TAGS_PRIVATE_KEY }}
+        with:
+          client-id: ${{ env.GITHUB_APP_CREATE_TAGS_CLIENT_ID }}
+          private-key: ${{ env.GITHUB_APP_CREATE_TAGS_PRIVATE_KEY }}
+
+      - name: Checkout
+        uses: actions/checkout@v5
+        with:
+          fetch-tags: true
+          token: ${{ steps.app-token.outputs.token }}
+
+      - name: Install Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+
+      - name: Run checks
+        run: |
+          cargo fmt --check
+          cargo clippy -- -D warnings
+          cargo test
+
+
+      # - name: Get version, check if tag exists, create and publish if not
+      #   id: tags
+      #   env:
+      #     AWS_ACCOUNT_ID: ${{ env.AWS_ACCOUNT_ID }}
+      #     AWS_REGION: ${{ env.AWS_REGION }}
+      #   run: |
+      #     VERSION=$(cargo pkgid --package build-agent | rev | cut -d '@' -f 1 | cut -d '#' -f 1 | rev)
+      #     IMAGE_PREFIX="${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/stock-trek-build-agent"
+      #     GIT_TAG="v${VERSION}"
+      #     if git ls-remote --tags origin "refs/tags/${GIT_TAG}" | grep -q "refs/tags/${GIT_TAG}"; then
+      #       echo "Tag ${GIT_TAG} already exists"
+      #       echo "tag-exists=true" >> $GITHUB_OUTPUT
+      #     else
+      #       echo "Creating tag ${GIT_TAG}"
+      #       git config user.name "github-actions[bot]"
+      #       git config user.email 'CreateTags[bot]@users.noreply.github.com'
+      #       git tag "${GIT_TAG}"
+      #       git push origin "${GIT_TAG}"
+      #       echo "tag-exists=false" >> $GITHUB_OUTPUT
+      #       echo "image-master=${IMAGE_PREFIX}:master" >> $GITHUB_OUTPUT
+      #       echo "image-versioned=${IMAGE_PREFIX}:${VERSION}" >> $GITHUB_OUTPUT
+      #     fi
+
+      # - name: Configure AWS credentials
+      #   if: steps.tags.outputs.tag-exists == 'false'
+      #   uses: aws-actions/configure-aws-credentials@v6
+      #   env:
+      #     AWS_ACCOUNT_ID: ${{ env.AWS_ACCOUNT_ID }}
+      #     AWS_REGION: ${{ env.AWS_REGION }}
+      #     AWS_ROLE_UPDATE_LAMBDA_BUILD_AGENT_RUST: ${{ env.AWS_ROLE_UPDATE_LAMBDA_BUILD_AGENT_RUST }}
+      #   with:
+      #     aws-region: ${{ env.AWS_REGION }}
+      #     role-to-assume: "arn:aws:iam::${{ env.AWS_ACCOUNT_ID }}:role/${{ env.AWS_ROLE_UPDATE_LAMBDA_BUILD_AGENT_RUST }}"
+      #     role-session-name: "build-agent-${{ github.run_id }}"
+      #     retry-max-attempts: 3
+      #     mask-aws-account-id: true
+
+      # - name: Login to ECR
+      #   if: steps.tags.outputs.tag-exists == 'false'
+      #   uses: aws-actions/amazon-ecr-login@v2
+
+      # - name: Set up Docker Buildx (required for caching)
+      #   if: steps.tags.outputs.tag-exists == 'false'
+      #   uses: docker/setup-buildx-action@v4
+
+      # - name: Build and push with cache
+      #   if: steps.tags.outputs.tag-exists == 'false'
+      #   uses: docker/build-push-action@v7
+      #   with:
+      #     context: .
+      #     platforms: linux/arm64
+      #     push: true
+      #     tags: |
+      #       ${{ steps.tags.outputs.image-master }}
+      #       ${{ steps.tags.outputs.image-versioned }}
+      #     cache-from: type=gha
+      #     cache-to: type=gha,mode=max
+      #     provenance: false
+      #     sbom: false
+
+      # - name: Update lambda to use latest image from master
+      #   if: steps.tags.outputs.tag-exists == 'false'
+      #   env:
+      #     AWS_ACCOUNT_ID: ${{ env.AWS_ACCOUNT_ID }}
+      #     AWS_REGION: ${{ env.AWS_REGION }}
+      #   run: |
+      #     aws lambda update-function-code \
+      #       --function-name stock-trek-compile-rust \
+      #       --image-uri "${{ env.AWS_ACCOUNT_ID }}.dkr.ecr.${{ env.AWS_REGION }}.amazonaws.com/algorithm-compiler:master"

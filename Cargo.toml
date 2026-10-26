@@ -1,0 +1,99 @@
+[workspace]
+resolver = "2"
+members = ["crates/*/*"]
+
+[workspace.package]
+version = "0.2.0"
+edition = "2024"
+
+[workspace.dependencies]
+platform-build-agent = { path = "crates/apps/build-agent" }
+platform-config = { path = "crates/platform/config" }
+platform-errors = { path = "crates/platform/errors" }
+platform-exchange-gateway = { path = "crates/integrations/exchange-gateway" }
+platform-exchange-types = { path = "crates/protocols/exchange-types" }
+platform-exit-codes = { path = "crates/compute/exit_codes" }
+platform-git = { path = "crates/integrations/git" }
+platform-github = { path = "crates/integrations/github" }
+platform-market-data = { path = "crates/apps/market-data" }
+platform-messages = { path = "crates/protocols/messages" }
+platform-metrics = { path = "crates/observability/metrics" }
+platform-build-orchestrator = { path = "crates/apps/build-orchestrator" }
+platform-proto-gen = { path = "crates/protocols/proto_gen" }
+platform-runner = { path = "crates/compute/runner" }
+platform-sqs = { path = "crates/integrations/sqs" }
+platform-time = { path = "crates/platform/time" }
+platform-type-bridge = { path = "crates/protocols/type-bridge" }
+platform-types = { path = "crates/platform/types" }
+platform-git-webhook = { path = "crates/apps/git-webhook" }
+arrow-array = "60"
+arrow-schema = "60"
+async-trait = "0.1"
+aws-config = "1"
+aws-credential-types = "1"
+aws_lambda_events = "1"
+aws-sdk-lambda = "1"
+aws-sdk-s3 = "1"
+aws-sdk-s3-transfer-manager = "0.2"
+aws-sdk-sqs = "1"
+aws-sigv4 = "1"
+aws-smithy-runtime-api = "1"
+aws-smithy-types = "1"
+axum = "0.8"
+base64 = "0.23"
+bimap = "0.6"
+bs58 = "0.5"
+bytes = "1"
+chrono = "0.4"
+data-encoding = "2"
+ed25519-compact = "2"
+futures = "0.3"
+futures-timer = "3"
+hex = "0.4"
+hmac = "0.13"
+http = "1"
+httpdate = "1"
+iris = { version = "1", registry = "shipyard" }
+jsonwebtoken = "10"
+lambda_http = "1"
+lambda_runtime = "1"
+lru = "0.18"
+metrics = "0.24"
+metrics_cloudwatch_embedded = "0.10"
+octocrab = "0.54"
+p256 = "0.13"
+p384 = "0.13"
+parking_lot = "0.12"
+parquet = "60"
+prost = "0.14"
+prost-build = "0.14"
+protoc-bin-vendored = "3"
+query-params = { version = "2", registry = "shipyard" }
+rand = "0.8"
+reqwest = "0.12"
+rsa = "0.9"
+rust_decimal = "1"
+secrecy = "0.10"
+serde = "1"
+serde_json = "1"
+serde_with = "3"
+sha2 = "0.11"
+stock-trek = "0.14"
+stock-trek-check = "0.3"
+stock-trek-types = "0.4"
+strum = "0.28"
+subtle = "2"
+tempfile = "3"
+thiserror = "2"
+time = "0.3"
+tokio = "1"
+tracing = "0.1"
+tracing-subscriber = "0.3"
+url = "2"
+urlencoding = "2"
+uuid = "1"
+zip = "9"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1

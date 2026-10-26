@@ -1,0 +1,37 @@
+[package]
+name = "platform-git-webhook"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+platform-config = { workspace = true }
+platform-errors = { workspace = true }
+platform-github = { workspace = true }
+platform-messages = { workspace = true }
+platform-metrics = { workspace = true }
+platform-sqs = { workspace = true }
+platform-time = { workspace = true }
+aws-config = { workspace = true }
+aws-credential-types = { workspace = true }
+aws-sdk-sqs = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
+aws-sigv4 = { workspace = true }
+aws-smithy-runtime-api = { workspace = true, features = ["client", "http-1x"] }
+base64 = { workspace = true }
+hex = { workspace = true }
+hmac = { workspace = true }
+http = { workspace = true }
+lambda_http = { workspace = true, features = ["pass_through"] }
+lru = { workspace = true }
+parking_lot = { workspace = true }
+metrics = { workspace = true }
+metrics_cloudwatch_embedded = { workspace = true, features = ["lambda"] }
+reqwest = { workspace = true, default-features = false, features = ["json", "rustls-tls"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+subtle = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tracing = { workspace = true }
+urlencoding = { workspace = true }

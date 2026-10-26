@@ -1,0 +1,17 @@
+syntax = "proto3";
+package dto;
+
+import "market_ohlcv_dto.proto";
+
+message MarketCandleDto {
+  uint64 start_time_millis_inc = 1;
+  uint64 end_time_millis_exc = 2;
+  uint64 duration_millis = 3;
+  bool is_candle_closed = 4;
+  MarketOhlcvDto ohlcv_dto = 5;
+  uint64 trade_count = 6;
+}
+
+message MarketCandlesDto {
+  repeated MarketCandleDto candles_dto = 1;
+}

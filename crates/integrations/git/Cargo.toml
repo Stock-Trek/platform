@@ -1,0 +1,8 @@
+[package]
+name = "platform-git"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+platform-errors = { workspace = true }
+platform-time = { workspace = true }

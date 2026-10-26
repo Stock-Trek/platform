@@ -1,0 +1,6 @@
+syntax = "proto3";
+package dto;
+
+message AssetIdDto {
+  string asset_id = 1;
+}

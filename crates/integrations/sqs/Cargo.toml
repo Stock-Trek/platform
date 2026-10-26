@@ -1,0 +1,16 @@
+[package]
+name = "platform-sqs"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aws-config = { workspace = true }
+aws-sdk-sqs = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
+platform-errors = { workspace = true }
+platform-messages = { workspace = true }
+platform-metrics = { workspace = true }
+platform-time = { workspace = true }
+lru = { workspace = true }
+parking_lot = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
