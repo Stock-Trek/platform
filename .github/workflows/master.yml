@@ -38,10 +38,10 @@ jobs:
       - name: Set up shipyard ssh auth
         env:
           SHIPYARD_KNOWN_HOST: ${{ env.SHIPYARD_KNOWN_HOST }}
-          SHIPYARD_SSH_PRIVATE_KEY_PLATFORM: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_PLATFORM }}
+          SHIPYARD_SSH_PRIVATE_KEY_READONLY: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
         run: |
           mkdir -p ~/.ssh
-          printf '%s\n' "${{ env.SHIPYARD_SSH_PRIVATE_KEY_PLATFORM }}" > ~/.ssh/id_ed25519
+          printf '%s\n' "${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}" > ~/.ssh/id_ed25519
           chmod 600 ~/.ssh/id_ed25519
           echo "${{ env.SHIPYARD_KNOWN_HOST }}" >> ~/.ssh/known_hosts
           ssh -T git@ssh.shipyard.rs
