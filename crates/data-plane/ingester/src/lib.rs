@@ -1,4 +1,5 @@
 pub mod config;
+pub mod decoders;
 pub mod event;
 pub mod ingester;
 pub mod nats;
@@ -7,14 +8,13 @@ pub mod sequence;
 pub mod source;
 
 pub use config::IngesterConfig;
+pub use decoders::{BinaryDecoder, BinanceSbeDecoder, JsonDecoder};
 pub use event::{GapMarker, MarketEvent};
 pub use ingester::{IngestOptions, Ingester};
 pub use nats::NatsJetstreamPublisher;
 pub use publisher::EventPublisher;
 pub use sequence::{SequenceObservation, SequenceTracker};
-pub use source::{
-    BinanceSbeDecoder, JsonDecoder, ParsedMessage, StreamDecoder, StreamFormat, WebsocketSource,
-};
+pub use source::{ParsedMessage, StreamFormat, WebsocketSource};
 
 use platform_errors::BpResult;
 use std::sync::Arc;
