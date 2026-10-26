@@ -11,9 +11,6 @@ platform-build-agent = { path = "crates/build-plane/build-agent" }
 platform-build-orchestrator = { path = "crates/build-plane/build-orchestrator" }
 platform-git-webhook = { path = "crates/build-plane/git-webhook" }
 
-platform-exit-codes = { path = "crates/compute/exit_codes" }
-platform-runner = { path = "crates/compute/runner" }
-
 platform-market-data = { path = "crates/data-plane/market-data-old" }
 
 platform-exchange-gateway = { path = "crates/integrations/exchange-gateway" }
@@ -32,6 +29,9 @@ platform-exchange-types = { path = "crates/protocols/exchange-types" }
 platform-messages = { path = "crates/protocols/messages" }
 platform-proto-gen = { path = "crates/protocols/proto_gen" }
 platform-type-bridge = { path = "crates/protocols/type-bridge" }
+
+platform-exit-codes = { path = "crates/sandbox-plane/exit_codes" }
+platform-runner = { path = "crates/sandbox-plane/runner" }
 
 arrow-array = "60"
 arrow-schema = "60"
