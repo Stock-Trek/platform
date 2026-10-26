@@ -1,7 +1,4 @@
-use crate::{
-    decoders::BinaryDecoder,
-    source::ParsedMessage,
-};
+use crate::{decoders::BinaryDecoder, source::ParsedMessage};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::IngesterError;
 use platform_types::new_types::TimestampMilliseconds;

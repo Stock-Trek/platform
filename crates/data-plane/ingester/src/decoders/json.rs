@@ -17,21 +17,13 @@ impl JsonDecoder {
         Self
     }
 
-    pub fn decode(
-        &self,
-        exchange: &str,
-        frame: &[u8],
-    ) -> Result<ParsedMessage, IngesterError> {
+    pub fn decode(&self, exchange: &str, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
         let message = serde_json::from_slice(frame)
             .map_err(|source| IngesterError::json(exchange, source))?;
         self.decode_value(message, frame)
     }
 
-    fn decode_value(
-        &self,
-        message: Value,
-        frame: &[u8],
-    ) -> Result<ParsedMessage, IngesterError> {
+    fn decode_value(&self, message: Value, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
         let (stream, data) = match message {
             Value::Object(mut object) => match object.remove("stream") {
                 Some(Value::String(stream)) => {

@@ -33,8 +33,9 @@ impl IngesterConfig {
         let exchange = vars.required(EXCHANGE)?;
         let websocket_url = vars.required_url(WEBSOCKET_URL, &["ws", "wss"])?;
         let websocket_api_key = vars.optional(WEBSOCKET_API_KEY)?;
-        let stream_format = StreamFormat::for_exchange(&vars.required(STREAM_FORMAT)?, &exchange)
-            .map_err(|error| BpError::config_invalid_source(STREAM_FORMAT, error))?;
+        let stream_format =
+            StreamFormat::for_exchange(&vars.required(STREAM_FORMAT)?, &exchange)
+                .map_err(|error| BpError::config_invalid_source(STREAM_FORMAT, error))?;
         let nats_url = vars.required(NATS_URL)?;
         NatsAddress::validate(&nats_url)?;
         let subject_prefix = vars.required(NATS_SUBJECT_PREFIX)?;
