@@ -13,17 +13,17 @@ platform-git-webhook = { path = "crates/build-plane/git-webhook" }
 
 platform-market-data = { path = "crates/data-plane/market-data-old" }
 
+platform-config = { path = "crates/foundation/config" }
+platform-errors = { path = "crates/foundation/errors" }
+platform-time = { path = "crates/foundation/time" }
+platform-types = { path = "crates/foundation/types" }
+
 platform-exchange-gateway = { path = "crates/integrations/exchange-gateway" }
 platform-git = { path = "crates/integrations/git" }
 platform-github = { path = "crates/integrations/github" }
 platform-sqs = { path = "crates/integrations/sqs" }
 
 platform-metrics = { path = "crates/observability/metrics" }
-
-platform-config = { path = "crates/platform/config" }
-platform-errors = { path = "crates/platform/errors" }
-platform-time = { path = "crates/platform/time" }
-platform-types = { path = "crates/platform/types" }
 
 platform-exchange-types = { path = "crates/protocols/exchange-types" }
 platform-messages = { path = "crates/protocols/messages" }
