@@ -1,6 +1,6 @@
-use platform_messages::sqs_message::SqsMessage;
 use lru::LruCache;
 use parking_lot::Mutex;
+use platform_messages::sqs_message::SqsMessage;
 use std::{
     num::NonZeroUsize,
     sync::Arc,

@@ -1,6 +1,6 @@
 use crate::{constants::UPDATE_QUANTIZATION, path::MarketDataPath, quantized_time::Quantization};
-use platform_errors::{BpError, BpResult, DataError};
 use chrono::{Datelike, NaiveDate};
+use platform_errors::{BpError, BpResult, DataError};
 
 pub struct SubFolders;
 

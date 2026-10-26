@@ -1,6 +1,5 @@
 use crate::s3::{Bucket, ObjectKey};
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
-use platform_errors::BpError;
 use bytes::Bytes;
 use futures::{FutureExt, future::BoxFuture};
 use parquet::{
@@ -8,6 +7,7 @@ use parquet::{
     errors::{ParquetError, Result as ParquetResult},
     file::metadata::{ParquetMetaData, ParquetMetaDataReader},
 };
+use platform_errors::BpError;
 use std::{ops::Range, sync::Arc};
 
 #[derive(Clone)]

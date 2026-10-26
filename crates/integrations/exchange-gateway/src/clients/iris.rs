@@ -3,9 +3,9 @@ use crate::{
     websocket_listener::WebsocketListener,
 };
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult, ConnectorError, TimeoutError};
 use futures_timer::Delay;
 use iris::{Client as IrisClient, Config as IrisConfig, ConnectionError, Listener as IrisListener};
+use platform_errors::{BpError, BpResult, ConnectorError, TimeoutError};
 use std::{
     future::{Future, poll_fn},
     sync::Arc,

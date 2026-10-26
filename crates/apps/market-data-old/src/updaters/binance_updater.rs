@@ -1,4 +1,5 @@
 use crate::{constants::KLINE_LIMIT, updaters::exchange_updater::ExchangeUpdater};
+use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult, ExchangeError};
 use platform_exchange_gateway::{
     async_trait, clients::reqwest::ReqwestHttpClient, connector::Connector,
@@ -16,7 +17,6 @@ use platform_exchange_types::{
     signer::Signer,
 };
 use platform_type_bridge::{BinanceConverter, Converter};
-use chrono::{DateTime, Utc};
 use std::time::Duration;
 use stock_trek_types::cex::trading_pair::TradingPair;
 

@@ -12,10 +12,10 @@ use aws_smithy_runtime_api::{
     },
 };
 use aws_smithy_types::config_bag::ConfigBag;
+use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult, DataError};
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_time::deadline::Deadline;
-use chrono::{DateTime, Utc};
 use std::{
     sync::{
         Arc, Mutex,

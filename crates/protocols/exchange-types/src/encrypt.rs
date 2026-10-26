@@ -1,7 +1,7 @@
 use crate::api_key_credential::ApiKeyCredentials;
-use platform_errors::{BpError, BpResult, ExchangeError};
 use hmac::{Hmac, KeyInit, Mac};
 use p256::ecdsa::signature::Signer as SignerTrait;
+use platform_errors::{BpError, BpResult, ExchangeError};
 use rsa::{
     RsaPrivateKey, pkcs1::DecodeRsaPrivateKey, pkcs1v15::SigningKey as RsaPkcs1v15SigningKey,
     pkcs8::DecodePrivateKey, sha2::Sha256,

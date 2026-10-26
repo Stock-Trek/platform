@@ -5,8 +5,8 @@ use crate::{
     quantized_time::{Quantization, QuantizedTime, TopOfHour, TopOfMonth},
     s3::ObjectKey,
 };
-use platform_errors::BpResult;
 use chrono::{DateTime, TimeZone, Utc};
+use platform_errors::BpResult;
 use std::collections::HashSet;
 
 /// A single update window that still needs to be ingested.

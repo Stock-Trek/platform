@@ -1,7 +1,7 @@
 use crate::{constants::common_trading_pairs, feed::Feed, path::MarketDataPath, s3::ObjectKey};
+use chrono::{DateTime, NaiveDate, Utc};
 use platform_errors::{BpError, BpResult, DataError};
 use platform_exchange_types::urls::TradingMode;
-use chrono::{DateTime, NaiveDate, Utc};
 use serde::{Deserialize, Deserializer, Serialize, de};
 use serde_json::{Map, Value};
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};

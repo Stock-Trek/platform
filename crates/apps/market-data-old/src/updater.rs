@@ -13,6 +13,7 @@ use crate::{
 use arrow_schema::SchemaRef;
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
+use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult, ExchangeError, SystemError};
 use platform_exchange_types::urls::TradingMode;
 use platform_metrics::{
@@ -20,7 +21,6 @@ use platform_metrics::{
     market_data::MarketDataMetrics,
 };
 use platform_time::deadline::Deadline;
-use chrono::{DateTime, Utc};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,

@@ -2,8 +2,8 @@ use crate::{
     constants::PARQUET_SUFFIX, feed::Feed, granularity::Granularity, s3::ObjectKey,
     subfolders::SubFolders,
 };
-use platform_errors::{BpError, BpResult, DataError};
 use chrono::{DateTime, Datelike, Timelike, Utc};
+use platform_errors::{BpError, BpResult, DataError};
 use std::fmt;
 
 /// The root path segment that contains in-progress staged files.

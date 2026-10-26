@@ -4,9 +4,9 @@ use aws_credential_types::{
     provider::{ProvideCredentials, SharedCredentialsProvider},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use hmac::{Hmac, KeyInit, Mac};
 use platform_errors::{BpError, BpResult, StorageError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
-use hmac::{Hmac, KeyInit, Mac};
 use reqwest::Client;
 use serde_json::json;
 use sha2::{Digest, Sha256};

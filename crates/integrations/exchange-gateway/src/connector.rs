@@ -12,6 +12,8 @@ use crate::{
     submission::{Submission, SubmissionOutcome},
     websocket_listener::WebsocketListener,
 };
+use futures_timer::Delay;
+use iris::{Config as IrisConfig, DisconnectedBehavior, ServerCloseBehavior};
 use platform_errors::{
     BpError, BpResult, ConnectorError, RateLimitError, SendFailure, TimeoutError,
 };
@@ -27,8 +29,6 @@ use platform_exchange_types::{
     urls::Protocol,
     websocket_id::ETWebsocketId,
 };
-use futures_timer::Delay;
-use iris::{Config as IrisConfig, DisconnectedBehavior, ServerCloseBehavior};
 use std::{
     collections::HashMap,
     future::{Future, poll_fn},

@@ -2,9 +2,9 @@ use crate::{
     dto::github::github_event_converter::GitHubEventConverter, event_response::EventResponse,
     infisical::secrets::Secrets,
 };
+use lambda_http::Request;
 use platform_errors::BpResult;
 use platform_github::host_allow_list::HostAllowlist;
-use lambda_http::Request;
 
 pub trait EventConverter: Send + Sync {
     fn event_response(&self, event: &Request) -> BpResult<EventResponse>;

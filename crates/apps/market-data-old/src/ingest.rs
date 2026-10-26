@@ -8,12 +8,12 @@ use crate::{
 use arrow_array::{ArrayRef, Decimal128Array, Int64Array, RecordBatch};
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
-use platform_errors::{BpError, BpResult, DecimalScaleError};
-use platform_exchange_types::klines::Kline;
-use platform_metrics::market_data::MarketDataMetrics;
 use bytes::Bytes;
 use chrono::{DateTime, Utc};
 use parquet::arrow::ArrowWriter;
+use platform_errors::{BpError, BpResult, DecimalScaleError};
+use platform_exchange_types::klines::Kline;
+use platform_metrics::market_data::MarketDataMetrics;
 use rust_decimal::Decimal;
 use std::sync::Arc;
 use stock_trek_types::cex::trading_pair::TradingPair;
@@ -177,9 +177,9 @@ impl Ingest {
 mod tests {
     use super::*;
     use arrow_array::Array;
-    use platform_exchange_types::new_types::TimestampMilliseconds;
     use chrono::TimeZone;
     use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+    use platform_exchange_types::new_types::TimestampMilliseconds;
 
     fn utc(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(year, month, day, hour, minute, 0)

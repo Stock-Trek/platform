@@ -4,8 +4,8 @@
 //! This module only provides the raw, fallible reads; it deliberately has no
 //! knowledge of which variables any particular process needs.
 
-use platform_errors::{BpError, BpResult};
 use chrono::{DateTime, NaiveDate, Utc};
+use platform_errors::{BpError, BpResult};
 use std::{
     collections::HashMap,
     ffi::{OsStr, OsString},

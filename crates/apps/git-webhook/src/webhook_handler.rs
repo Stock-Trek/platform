@@ -3,12 +3,12 @@ use crate::{
     event_response::EventResponse,
     responses::Responses,
 };
+use http::{Response, StatusCode};
+use lambda_http::{Body, Request, RequestExt};
 use platform_errors::{BpError, BpResult, GitHubError, HttpError, SecretsError, SqsError};
 use platform_messages::sqs_message::SqsMessage;
 use platform_metrics::{event::EventMetrics, route::RouteMetrics};
 use platform_time::{deadline::Deadline, request_context::RequestContext};
-use http::{Response, StatusCode};
-use lambda_http::{Body, Request, RequestExt};
 
 const WEBHOOK_ROUTE: &str = "webhook";
 const ERROR_TYPE_HTTP: &str = "http";

@@ -18,11 +18,11 @@ use crate::{
     event_response::EventResponse,
     infisical::secrets::Secrets,
 };
+use hmac::{Hmac, KeyInit, Mac};
 use platform_errors::{BpError, BpResult, GitHubError, HttpError};
 use platform_github::host_allow_list::HostAllowlist;
 use platform_messages::sqs_message::{GitSource, SqsDetail, SqsMessage, SqsRefType};
 use platform_metrics::event::EventMetrics;
-use hmac::{Hmac, KeyInit, Mac};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 

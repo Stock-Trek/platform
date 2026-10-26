@@ -1,5 +1,5 @@
-use platform_errors::{BpError, BpResult, DataError};
 use chrono::{DateTime, Datelike, Duration, TimeZone, Utc, Weekday};
+use platform_errors::{BpError, BpResult, DataError};
 
 pub struct QuantizedTime;
 

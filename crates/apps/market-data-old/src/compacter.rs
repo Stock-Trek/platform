@@ -10,11 +10,11 @@ use crate::{
 };
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
+use futures::TryStreamExt;
+use parquet::arrow::{AsyncArrowWriter, ParquetRecordBatchStreamBuilder};
 use platform_errors::{BpError, BpResult, DataError};
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_time::deadline::Deadline;
-use futures::TryStreamExt;
-use parquet::arrow::{AsyncArrowWriter, ParquetRecordBatchStreamBuilder};
 use std::{
     io::ErrorKind,
     path::{Path, PathBuf},
