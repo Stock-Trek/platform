@@ -15,6 +15,7 @@ platform-market-data = { path = "crates/data-plane/market-data-old" }
 
 platform-config = { path = "crates/foundation/config" }
 platform-errors = { path = "crates/foundation/errors" }
+platform-metrics = { path = "crates/foundation/metrics" }
 platform-time = { path = "crates/foundation/time" }
 platform-types = { path = "crates/foundation/types" }
 
@@ -22,8 +23,6 @@ platform-exchange-gateway = { path = "crates/integrations/exchange-gateway" }
 platform-git = { path = "crates/integrations/git" }
 platform-github = { path = "crates/integrations/github" }
 platform-sqs = { path = "crates/integrations/sqs" }
-
-platform-metrics = { path = "crates/observability/metrics" }
 
 platform-exchange-types = { path = "crates/protocols/exchange-types" }
 platform-messages = { path = "crates/protocols/messages" }
