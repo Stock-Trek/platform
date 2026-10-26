@@ -15,7 +15,7 @@ platform-exchange-types = { path = "crates/protocols/exchange-types" }
 platform-exit-codes = { path = "crates/compute/exit_codes" }
 platform-git = { path = "crates/integrations/git" }
 platform-github = { path = "crates/integrations/github" }
-platform-market-data = { path = "crates/apps/market-data" }
+platform-market-data = { path = "crates/data-plane/market-data-old" }
 platform-messages = { path = "crates/protocols/messages" }
 platform-metrics = { path = "crates/observability/metrics" }
 platform-build-orchestrator = { path = "crates/apps/build-orchestrator" }
