@@ -197,8 +197,8 @@ impl KlinesUpdater {
         let pair = MarketDataPath::trading_pair(
             resolved.trading_mode,
             resolved.cex_id,
-            MarketDataPath::asset_segment(resolved.trading_pair.base),
-            MarketDataPath::asset_segment(resolved.trading_pair.quote),
+            resolved.trading_pair.base,
+            resolved.trading_pair.quote,
         );
         let candles_base_path = MarketDataPath::feed(&pair, backfill.feed);
         let base_path_prefix = MarketDataPath::feed_prefix(&pair, backfill.feed);
@@ -425,8 +425,8 @@ impl KlinesUpdater {
         let pair = MarketDataPath::trading_pair(
             trading_mode,
             cex_id,
-            MarketDataPath::asset_segment(trading_pair.base),
-            MarketDataPath::asset_segment(trading_pair.quote),
+            trading_pair.base,
+            trading_pair.quote,
         );
         let candles_base_path = MarketDataPath::feed(&pair, Feed::Trades);
         let base_path_prefix = MarketDataPath::feed_prefix(&pair, Feed::Trades);

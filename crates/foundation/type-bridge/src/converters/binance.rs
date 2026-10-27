@@ -194,11 +194,20 @@ impl Converter for BinanceConverter {
                 }
             }
         };
-        let time_in_force = time_in_force.map(|time_in_force| match time_in_force {
-            TimeInForce::FillOrKill => BinanceTimeInForce::FOK,
-            TimeInForce::GoodTillCancelled => BinanceTimeInForce::GTC,
-            TimeInForce::ImmediateOrCancel => BinanceTimeInForce::IOC,
-        });
+        let time_in_force = match time_in_force {
+            None => None,
+            Some(time_in_force) => Some(match time_in_force {
+                TimeInForce::FillOrKill => BinanceTimeInForce::FOK,
+                TimeInForce::GoodTillCancelled => BinanceTimeInForce::GTC,
+                TimeInForce::ImmediateOrCancel => BinanceTimeInForce::IOC,
+                other => {
+                    return Err(BpError::Validation(ValidationError::Unsupported {
+                        name: "time_in_force".into(),
+                        value: other.to_string(),
+                    }));
+                }
+            }),
+        };
         let trailing_delta = match activation {
             Activation::Trailing {
                 callback_rate_bps, ..
@@ -313,7 +322,17 @@ impl Converter for BinanceConverter {
                 Some(BinanceOrderStatus::PENDING_CANCEL) => OrderStatus::PendingCancel,
                 Some(BinanceOrderStatus::PENDING_NEW) => OrderStatus::New,
                 Some(BinanceOrderStatus::REJECTED) => OrderStatus::Rejected,
-                _ => OrderStatus::Unknown,
+                Some(other) => {
+                    return Err(BpError::Validation(ValidationError::Unsupported {
+                        name: "status".into(),
+                        value: other.to_string(),
+                    }));
+                }
+                None => {
+                    return Err(BpError::Validation(ValidationError::MissingValue(
+                        "status".into(),
+                    )));
+                }
             };
             Ok(OrderResponse {
                 client_order_id: clientOrderId,

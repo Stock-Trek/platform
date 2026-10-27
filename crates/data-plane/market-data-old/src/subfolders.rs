@@ -200,7 +200,7 @@ mod tests {
     use crate::quantized_time::{TopOfHour, TopOfMinute, TopOfMonth};
     use chrono::Weekday;
 
-    const PAIR: &str = "paper/binance/bitcoin/tetherusd/trades";
+    const PAIR: &str = "paper/binance/bitcoin/tether_usd/trades";
 
     #[test]
     fn minutes_follow_quantization() {

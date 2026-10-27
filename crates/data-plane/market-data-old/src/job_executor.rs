@@ -182,8 +182,8 @@ impl JobExecutor {
                     MarketDataPath::trading_pair(
                         trading_mode,
                         cex_id,
-                        MarketDataPath::asset_segment(trading_pair.base),
-                        MarketDataPath::asset_segment(trading_pair.quote),
+                        trading_pair.base,
+                        trading_pair.quote,
                     )
                 })
             })

@@ -11,7 +11,7 @@ use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 /// The canonical wire format is an internally tagged object, for example:
 ///
 /// ```json
-/// { "mode": "backfill", "pair": "paper/binance/bitcoin/tetherusd",
+/// { "mode": "backfill", "pair": "paper/binance/bitcoin/tether_usd",
 ///   "feed": "trades", "start": "2024-01-01T00:00:00Z",
 ///   "end": "2024-01-02T00:00:00Z", "force": true }
 /// ```
@@ -230,7 +230,7 @@ impl CompactJob {
     }
 }
 
-/// A trading-pair path such as `paper/binance/bitcoin/tetherusd`.
+/// A trading-pair path such as `paper/binance/bitcoin/tether_usd`.
 ///
 /// It can be supplied as a string or as an object with `trading_mode`, `cex_id`,
 /// `base`, and `quote` fields.
@@ -247,12 +247,7 @@ impl TradingPairPath {
     }
 
     pub fn resolve(&self) -> BpResult<ResolvedTradingPair> {
-        let normalized = self
-            .0
-            .trim()
-            .trim_matches('/')
-            .replace([':', '\\'], "/")
-            .replace('_', "");
+        let normalized = self.0.trim().trim_matches('/').replace([':', '\\'], "/");
         if normalized.is_empty() {
             return Err(BpError::Data(DataError::InvalidTradingPairPath {
                 pair: self.0.clone(),
@@ -263,8 +258,8 @@ impl TradingPairPath {
                 let candidate = MarketDataPath::trading_pair(
                     trading_mode,
                     cex_id,
-                    MarketDataPath::asset_segment(trading_pair.base),
-                    MarketDataPath::asset_segment(trading_pair.quote),
+                    trading_pair.base,
+                    trading_pair.quote,
                 );
                 if candidate.eq_ignore_ascii_case(&normalized) {
                     return Ok(ResolvedTradingPair {
@@ -417,7 +412,7 @@ mod tests {
         assert!(
             Job::from_value(json!({
                 "mode": "backfill",
-                "pair": "paper/binance/bitcoin/tetherusd",
+                "pair": "paper/binance/bitcoin/tether_usd",
                 "feed": "trades",
                 "start": "2024-01-01",
                 "end": "2024-01-02",
@@ -429,7 +424,7 @@ mod tests {
         assert!(
             Job::from_value(json!({
                 "mode": "compact",
-                "target": "paper/binance/bitcoin/tetherusd",
+                "target": "paper/binance/bitcoin/tether_usd",
                 "extra": true
             }))
             .is_err()
@@ -458,7 +453,7 @@ mod tests {
         assert!(
             Job::from_value(json!({
                 "mode": "backfill",
-                "pair": "paper/binance/bitcoin/tetherusd",
+                "pair": "paper/binance/bitcoin/tether_usd",
                 "feed": "trades",
                 "start": "2024-01-01",
                 "end": "2024-01-02"
@@ -472,7 +467,7 @@ mod tests {
         assert!(
             Job::from_value(json!({
                 "mode": "backfill",
-                "pair": "paper/binance/bitcoin/tetherusd",
+                "pair": "paper/binance/bitcoin/tether_usd",
                 "start": "2024-01-01",
                 "end": "2024-01-02",
                 "force": false
@@ -494,7 +489,7 @@ mod tests {
     fn backfill_is_parsed_with_force() {
         let job = Job::from_value(json!({
             "mode": "backfill",
-            "pair": "paper/binance/bitcoin/tetherusd",
+            "pair": "paper/binance/bitcoin/tether_usd",
             "feed": "trades",
             "start": "2024-01-01",
             "end": "2024-01-02T00:00:00Z",
@@ -504,7 +499,7 @@ mod tests {
         let Job::Backfill(backfill) = job else {
             panic!("expected a backfill job");
         };
-        assert_eq!(backfill.pair.as_str(), "paper/binance/bitcoin/tetherusd");
+        assert_eq!(backfill.pair.as_str(), "paper/binance/bitcoin/tether_usd");
         assert_eq!(backfill.feed, Feed::Trades);
         assert_eq!(backfill.start, utc(2024, 1, 1));
         assert_eq!(backfill.end, utc(2024, 1, 2));
@@ -516,7 +511,7 @@ mod tests {
     fn backfill_accepts_a_feed() {
         let job = Job::from_value(json!({
             "mode": "backfill",
-            "pair": "paper/binance/bitcoin/tetherusd",
+            "pair": "paper/binance/bitcoin/tether_usd",
             "feed": "open_interest",
             "start": "2024-01-01",
             "end": "2024-01-02",
@@ -535,9 +530,9 @@ mod tests {
             "mode": "backfill",
             "pair": {
                 "trading_mode": "Paper",
-                "cex_id": "Binance",
-                "base": "Bitcoin",
-                "quote": "TetherUSD"
+                "cex_id": "binance",
+                "base": "bitcoin",
+                "quote": "tether_usd"
             },
             "feed": "trades",
             "start": "2024-01-01T00:00:00Z",
@@ -558,7 +553,7 @@ mod tests {
         let job = Job::from_value(json!({
             "mode": {
                 "compact": {
-                    "target": "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/"
+                    "target": "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/"
                 }
             }
         }))
@@ -568,22 +563,22 @@ mod tests {
         };
         assert_eq!(
             compact.prefix().unwrap().as_str(),
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/"
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/"
         );
     }
 
     #[test]
     fn compact_prefix_is_normalized() {
-        let compact = CompactJob::new("paper/binance/bitcoin/tetherusd/trades/raw");
+        let compact = CompactJob::new("paper/binance/bitcoin/tether_usd/trades/raw");
         assert_eq!(
             compact.prefix().unwrap().as_str(),
-            "paper/binance/bitcoin/tetherusd/trades/raw/"
+            "paper/binance/bitcoin/tether_usd/trades/raw/"
         );
         let compact =
-            CompactJob::new("paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00/06.parquet");
+            CompactJob::new("paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00/06.parquet");
         assert_eq!(
             compact.prefix().unwrap().as_str(),
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00/"
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00/"
         );
     }
 
@@ -594,16 +589,16 @@ mod tests {
             "random/prefix/with/segments",
             "paper/binance/bitcoin",
             "paper/binance/bitcoin/dogecoin",
-            "other/binance/bitcoin/tetherusd",
+            "other/binance/bitcoin/tether_usd",
             "_locks/market-data-updater",
-            "/paper/binance/bitcoin/tetherusd",
-            "paper//binance/bitcoin/tetherusd",
-            "paper/binance/bitcoin/tetherusd/../other",
-            "paper/binance/bitcoin/tetherusd",
-            "paper/binance/bitcoin/tetherusd/not-a-feed",
-            "paper/binance/bitcoin/tetherusd/not-a-feed/2024",
-            "paper/binance/bitcoin/tetherusd/not-a-feed/raw",
-            "paper/binance/bitcoin/tetherusd/not-a-feed/raw/2024",
+            "/paper/binance/bitcoin/tether_usd",
+            "paper//binance/bitcoin/tether_usd",
+            "paper/binance/bitcoin/tether_usd/../other",
+            "paper/binance/bitcoin/tether_usd",
+            "paper/binance/bitcoin/tether_usd/not-a-feed",
+            "paper/binance/bitcoin/tether_usd/not-a-feed/2024",
+            "paper/binance/bitcoin/tether_usd/not-a-feed/raw",
+            "paper/binance/bitcoin/tether_usd/not-a-feed/raw/2024",
         ] {
             assert!(
                 CompactJob::new(target).prefix().is_err(),
@@ -615,12 +610,12 @@ mod tests {
     #[test]
     fn compact_rejects_invalid_depths_and_time_segments() {
         for target in [
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00/00",
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00/00/00",
-            "paper/binance/bitcoin/tetherusd/trades/raw/not-a-year",
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/13",
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/32",
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/24",
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00/00",
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00/00/00",
+            "paper/binance/bitcoin/tether_usd/trades/raw/not-a-year",
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/13",
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/32",
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/24",
         ] {
             assert!(
                 CompactJob::new(target).prefix().is_err(),
@@ -632,12 +627,12 @@ mod tests {
     #[test]
     fn compact_accepts_each_valid_data_depth() {
         for target in [
-            "paper/binance/bitcoin/tetherusd/trades/raw",
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024",
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01",
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01",
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00",
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00/06.parquet",
+            "paper/binance/bitcoin/tether_usd/trades/raw",
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024",
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01",
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01",
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00",
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00/06.parquet",
         ] {
             assert!(
                 CompactJob::new(target).prefix().is_ok(),
@@ -652,7 +647,7 @@ mod tests {
         assert!(
             Job::from_value(json!({
                 "mode": "backfill",
-                "pair": "paper/binance/bitcoin/tetherusd",
+                "pair": "paper/binance/bitcoin/tether_usd",
                 "feed": "trades",
                 "start": "2024-01-02",
                 "end": "2024-01-01",
@@ -663,7 +658,7 @@ mod tests {
         assert!(
             Job::from_value(json!({
                 "mode": "backfill",
-                "pair": "paper/binance/bitcoin/tetherusd",
+                "pair": "paper/binance/bitcoin/tether_usd",
                 "feed": "trades",
                 "start": "2024-01-01",
                 "end": "2024-01-02",
@@ -677,7 +672,7 @@ mod tests {
 
     #[test]
     fn unsupported_pair_is_rejected() {
-        let pair = TradingPairPath::new("paper/binance/dogecoin/tetherusd");
+        let pair = TradingPairPath::new("paper/binance/dogecoin/tether_usd");
         assert!(pair.resolve().is_err());
     }
 
