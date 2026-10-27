@@ -2,6 +2,18 @@ use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use stock_trek_types::cex::cex_id::CexId;
 
+/// A decoded exchange websocket frame.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ParsedMessage {
+    pub stream: String,
+    pub sequence: Option<u64>,
+    pub exchange_timestamp: Option<TimestampMilliseconds>,
+    /// Base64 encoded raw frame from the exchange.
+    pub payload: String,
+}
+
+/// A market data event published by the ingester and consumed by the
+/// aggregator.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct MarketEvent {
     pub exchange: CexId,

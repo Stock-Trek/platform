@@ -1,16 +1,28 @@
-use crate::{event::MarketEvent, trade::Trade};
+use crate::{decoders::json::JsonFrame, event::MarketEvent};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_errors::{BpError, BpResult, ExchangeError, IngesterError};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
+use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
+use stock_trek_types::cex::cex_id::CexId;
+
+/// A single exchange trade used to build candles.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Trade {
+    pub exchange: CexId,
+    pub symbol: String,
+    pub price: Decimal,
+    pub quantity: Decimal,
+    pub timestamp: TimestampMilliseconds,
+}
 
 /// Decodes exchange trade frames into the small trade model used for
 /// aggregation.
 ///
-/// TODO: dispatch through exchange-specific decoders, including Binance SBE and
-/// batched trade frames. The first cut only understands JSON spot trade and
-/// aggregate-trade streams.
+/// TODO: dispatch through the shared SBE codec as well. Binary trade frames
+/// currently contain prices and quantities that the ingester decoder skips over,
+/// so only JSON spot trade and aggregate-trade streams are supported for now.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct TradeDecoder;
 
@@ -25,14 +37,7 @@ impl TradeDecoder {
             .decode(&event.payload)
             .map_err(|error| IngesterError::malformed_binary(error.to_string()))?;
         let value: Value = serde_json::from_slice(&frame).map_err(IngesterError::json)?;
-        let data = match value {
-            Value::Object(mut object) => match object.remove("data") {
-                Some(Value::Object(data)) => data,
-                Some(_) => return Err(IngesterError::PayloadNotAnObject.into()),
-                None => object,
-            },
-            _ => return Err(IngesterError::NotAnObject.into()),
-        };
+        let (_, data) = JsonFrame::split_envelope(value)?;
 
         if data
             .get("e")
@@ -107,6 +112,7 @@ mod tests {
         MarketEvent {
             exchange: CexId::Binance,
             stream: stream.to_string(),
+            sequence: None,
             exchange_timestamp: Some(TimestampMilliseconds(1_700_000_000_000)),
             received_at: TimestampMilliseconds(1_700_000_000_001),
             payload: STANDARD.encode(serde_json::to_vec(&payload).unwrap()),
@@ -160,6 +166,7 @@ mod tests {
         let market_event = MarketEvent {
             exchange: CexId::Binance,
             stream: "btcusdt@trade".to_string(),
+            sequence: None,
             exchange_timestamp: None,
             received_at: TimestampMilliseconds(0),
             payload: "not base64".to_string(),

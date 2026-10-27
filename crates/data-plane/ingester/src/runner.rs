@@ -3,9 +3,10 @@ use crate::{
     ingester::{IngestOptions, Ingester},
     nats::NatsJetstreamPublisher,
     publisher::EventPublisher,
-    source::{ParsedMessage, WebsocketSource},
+    source::WebsocketSource,
 };
 use platform_errors::BpResult;
+use platform_market_data::event::ParsedMessage;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};

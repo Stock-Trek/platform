@@ -1,13 +1,10 @@
 mod aggregator;
 mod candle;
 mod config;
-mod decoder;
-mod event;
 mod nats;
 mod runner;
 mod sink;
 mod source;
-mod trade;
 
 use crate::{config::AggregatorConfig, runner::AggregatorRunner};
 use platform_config::tracing_setup::TracingSetup;

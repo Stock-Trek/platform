@@ -1,6 +1,6 @@
-use crate::event::MarketEvent;
 use async_trait::async_trait;
 use platform_errors::BpResult;
+use platform_market_data::event::MarketEvent;
 
 /// Source of ingester market events.
 #[async_trait]

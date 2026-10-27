@@ -3145,10 +3145,10 @@ name = "platform-aggregator"
 version = "0.2.0"
 dependencies = [
  "async-trait",
- "base64 0.23.1",
  "chrono",
  "platform-config",
  "platform-errors",
+ "platform-market-data",
  "platform-types",
  "rust_decimal",
  "serde",
@@ -3388,20 +3388,32 @@ name = "platform-ingester"
 version = "0.2.0"
 dependencies = [
  "async-trait",
- "base64 0.23.1",
  "chrono",
  "iris",
  "platform-config",
  "platform-errors",
+ "platform-market-data",
  "platform-types",
+ "serde_json",
+ "stock-trek-types",
+ "tokio",
+ "tracing",
+ "url",
+]
+
+[[package]]
+name = "platform-market-data"
+version = "0.2.0"
+dependencies = [
+ "base64 0.23.1",
+ "iris",
+ "platform-errors",
+ "platform-types",
+ "rust_decimal",
  "serde",
  "serde_json",
  "stock-trek-types",
- "thiserror",
- "tokio",
  "tokio-websockets",
- "tracing",
- "url",
 ]
 
 [[package]]

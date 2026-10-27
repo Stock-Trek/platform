@@ -1,4 +1,4 @@
-use crate::source::ParsedMessage;
+use crate::event::ParsedMessage;
 use iris::{Codec, ConnectionError};
 use platform_errors::IngesterError;
 use std::{fmt, sync::Arc};

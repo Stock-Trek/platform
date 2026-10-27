@@ -3,7 +3,7 @@ use crate::{
         binary::BinaryCursor,
         decoder::{DecodedFrame, FrameBytes},
     },
-    source::ParsedMessage,
+    event::ParsedMessage,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use iris::{Codec, ConnectionError};

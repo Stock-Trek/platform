@@ -1,7 +1,5 @@
-use crate::{
-    candle::{Candle, CandleInterval, CandleKey},
-    trade::Trade,
-};
+use crate::candle::{Candle, CandleInterval, CandleKey};
+use platform_market_data::decoders::trade::Trade;
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;

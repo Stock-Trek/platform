@@ -2,12 +2,12 @@ use crate::{
     aggregator::ClosedCandle,
     candle::Candle,
     config::AggregatorConfig,
-    event::MarketEvent,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::MarketEventSource,
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult, IngesterError};
+use platform_market_data::event::MarketEvent;
 use serde_json::{Map, Value, json};
 use tokio::{
     io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},

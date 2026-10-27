@@ -1,13 +1,13 @@
 use crate::{
     aggregator::CandleAggregator,
     config::AggregatorConfig,
-    decoder::TradeDecoder,
     nats::{NatsCandleSink, NatsMarketEventSource},
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::MarketEventSource,
 };
 use chrono::Utc;
 use platform_errors::BpResult;
+use platform_market_data::{decoders::trade::TradeDecoder, event::MarketEvent};
 use platform_types::new_types::TimestampMilliseconds;
 use std::time::Duration;
 use tokio::{
@@ -74,7 +74,7 @@ impl AggregatorRunner {
 }
 
 async fn run_until_shutdown(
-    receiver: &mut mpsc::Receiver<crate::event::MarketEvent>,
+    receiver: &mut mpsc::Receiver<MarketEvent>,
     sink: &NatsCandleSink,
     aggregator: &mut CandleAggregator,
     flush_interval: Duration,

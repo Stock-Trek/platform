@@ -1,17 +1,17 @@
-use crate::{
-    config::IngesterConfig,
-    decoders::{
-        decoder::{CodecHandle, DecodedFrame, SharedCodec},
-        factory::CodecFactory,
-    },
-};
+use crate::config::IngesterConfig;
 use async_trait::async_trait;
 use iris::{
     Client as IrisClient, Config as IrisConfig, ConnectionError as IrisConnectionError,
     Listener as IrisListener, ServerCloseBehavior,
 };
 use platform_errors::{BpError, BpResult, IngesterError};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::{
+    decoders::{
+        decoder::{CodecHandle, DecodedFrame, SharedCodec},
+        factory::CodecFactory,
+    },
+    event::ParsedMessage,
+};
 use std::{fmt, str::FromStr, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
 use tokio::sync::mpsc;
@@ -19,15 +19,6 @@ use tracing::{debug, info, warn};
 
 const BINANCE_API_KEY_HEADER: &str = "X-MBX-APIKEY";
 const DEFAULT_API_KEY_HEADER: &str = "X-API-KEY";
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ParsedMessage {
-    pub stream: String,
-    pub sequence: Option<u64>,
-    pub exchange_timestamp: Option<TimestampMilliseconds>,
-    /// Base64 encoded raw frame from the exchange.
-    pub payload: String,
-}
 
 /// Wire format used by an exchange websocket.
 ///
