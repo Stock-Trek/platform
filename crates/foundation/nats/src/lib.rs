@@ -211,7 +211,9 @@ impl NatsConnection {
                 let size = tokens
                     .last()
                     .and_then(|size| size.parse::<usize>().ok())
-                    .ok_or_else(|| Self::protocol_error(format!("malformed MSG size in {line:?}")))?;
+                    .ok_or_else(|| {
+                        Self::protocol_error(format!("malformed MSG size in {line:?}"))
+                    })?;
                 let mut payload = vec![0_u8; size];
                 self.reader.read_exact(&mut payload).await?;
                 let mut terminator = [0_u8; 2];
@@ -244,9 +246,7 @@ impl NatsConnection {
         Ok(())
     }
 
-    async fn read_protocol_line(
-        reader: &mut BufReader<OwnedReadHalf>,
-    ) -> BpResult<Option<String>> {
+    async fn read_protocol_line(reader: &mut BufReader<OwnedReadHalf>) -> BpResult<Option<String>> {
         let mut line = String::new();
         if reader.read_line(&mut line).await? == 0 {
             return Ok(None);
