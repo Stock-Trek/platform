@@ -1,7 +1,7 @@
 use crate::{
-    codec::RawFrameCodec,
     config::IngesterConfig,
     decoders::{
+        binance::codec::{BinanceBinaryCodec, BinanceBinaryFrame},
         decoder::{BinaryDecoder, FrameDecoder, JsonDecoder},
         factory::DecoderFactory,
     },
@@ -13,6 +13,7 @@ use iris::{
 };
 use platform_errors::{BpError, BpResult, IngesterError};
 use platform_types::new_types::TimestampMilliseconds;
+use serde_json::Value;
 use std::{fmt, str::FromStr, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
 use tokio::sync::mpsc;
@@ -104,18 +105,40 @@ impl WebsocketSource {
     }
 
     pub async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BpResult<()> {
-        let decoder: Arc<dyn FrameDecoder> = match &self.stream_format {
-            StreamFormat::Json(decoder) => decoder.clone(),
-            StreamFormat::Binary(decoder) => decoder.clone(),
-        };
+        match &self.stream_format {
+            StreamFormat::Json(decoder) => self.run_json(decoder.clone(), sender).await,
+            StreamFormat::Binary(decoder) => self.run_binary(decoder.clone(), sender).await,
+        }
+    }
+
+    async fn run_json(
+        &self,
+        decoder: Arc<dyn JsonDecoder>,
+        sender: mpsc::Sender<ParsedMessage>,
+    ) -> BpResult<()> {
         let listener = Arc::new(IrisFrameListener::new(self.exchange, decoder, sender));
-        let client = IrisClient::<(), Vec<u8>, RawFrameCodec>::new_with_codec(
+        let client = IrisClient::<(), Value>::new(self.iris_config()?, listener, &self.url);
+        client.connect().await.map_err(BpError::external)?;
+        self.wait_for_shutdown().await
+    }
+
+    async fn run_binary(
+        &self,
+        decoder: Arc<dyn BinaryDecoder>,
+        sender: mpsc::Sender<ParsedMessage>,
+    ) -> BpResult<()> {
+        let listener = Arc::new(IrisFrameListener::new(self.exchange, decoder, sender));
+        let client = IrisClient::<(), BinanceBinaryFrame, BinanceBinaryCodec>::new_with_codec(
             self.iris_config()?,
             listener,
             &self.url,
-            RawFrameCodec,
+            BinanceBinaryCodec,
         );
         client.connect().await.map_err(BpError::external)?;
+        self.wait_for_shutdown().await
+    }
+
+    async fn wait_for_shutdown(&self) -> BpResult<()> {
         info!(
             exchange = %self.exchange,
             format = ?self.stream_format,
@@ -163,20 +186,8 @@ impl IrisFrameListener {
             sender,
         }
     }
-}
 
-impl fmt::Debug for IrisFrameListener {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter
-            .debug_struct("IrisFrameListener")
-            .field("exchange", &self.exchange)
-            .finish()
-    }
-}
-
-#[async_trait]
-impl IrisListener<Vec<u8>> for IrisFrameListener {
-    async fn on_message(&self, frame: Vec<u8>) {
+    async fn handle_frame(&self, frame: Vec<u8>) {
         match self.decoder.decode(&frame) {
             Ok(parsed) => {
                 if self.sender.send(parsed).await.is_err() {
@@ -189,8 +200,46 @@ impl IrisListener<Vec<u8>> for IrisFrameListener {
         }
     }
 
-    async fn on_error(&self, error: &IrisConnectionError) {
+    fn handle_error(&self, error: &IrisConnectionError) {
         warn!(exchange = %self.exchange, %error, "exchange websocket error");
+    }
+}
+
+impl fmt::Debug for IrisFrameListener {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("IrisFrameListener")
+            .field("exchange", &self.exchange)
+            .finish()
+    }
+}
+
+#[async_trait]
+impl IrisListener<Value> for IrisFrameListener {
+    async fn on_message(&self, message: Value) {
+        let frame = match serde_json::to_vec(&message) {
+            Ok(frame) => frame,
+            Err(error) => {
+                warn!(exchange = %self.exchange, %error, "discarding unencodable JSON frame");
+                return;
+            }
+        };
+        self.handle_frame(frame).await;
+    }
+
+    async fn on_error(&self, error: &IrisConnectionError) {
+        self.handle_error(error);
+    }
+}
+
+#[async_trait]
+impl IrisListener<BinanceBinaryFrame> for IrisFrameListener {
+    async fn on_message(&self, frame: BinanceBinaryFrame) {
+        self.handle_frame(frame.into_bytes()).await;
+    }
+
+    async fn on_error(&self, error: &IrisConnectionError) {
+        self.handle_error(error);
     }
 }
 

@@ -1,4 +1,3 @@
-mod codec;
 mod config;
 mod decoders;
 mod event;
