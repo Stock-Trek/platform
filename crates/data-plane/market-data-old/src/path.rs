@@ -330,6 +330,7 @@ impl MarketDataPath {
 mod tests {
     use super::*;
     use chrono::TimeZone;
+    use stock_trek_types::cex::asset_id::AssetId;
 
     fn utc(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(year, month, day, hour, minute, 0)
@@ -339,27 +340,36 @@ mod tests {
 
     #[test]
     fn builds_the_complete_path_from_its_parts() {
-        let pair = MarketDataPath::trading_pair("paper", "binance", "bitcoin", "tetherusd");
-        assert_eq!(pair, "paper/binance/bitcoin/tetherusd");
+        let pair = MarketDataPath::trading_pair("paper", "binance", "bitcoin", "tether_usd");
+        assert_eq!(pair, "paper/binance/bitcoin/tether_usd");
         assert_eq!(
             MarketDataPath::feed_prefix(&pair, Feed::Trades).as_str(),
-            "paper/binance/bitcoin/tetherusd/trades/"
+            "paper/binance/bitcoin/tether_usd/trades/"
         );
         assert_eq!(
             MarketDataPath::tier_prefix(&pair, Feed::Trades, Granularity::Raw).as_str(),
-            "paper/binance/bitcoin/tetherusd/trades/raw/"
+            "paper/binance/bitcoin/tether_usd/trades/raw/"
         );
+    }
+
+    #[test]
+    fn builds_asset_segments_with_the_established_path_spelling() {
+        assert_eq!(AssetId::Bitcoin.to_string(), "bitcoin".to_string());
+        assert_eq!(AssetId::TetherUSD.to_string(), "tether_usd".to_string());
     }
 
     #[test]
     fn joins_prefixes_and_children_without_duplicate_separators() {
         assert_eq!(
-            MarketDataPath::join("paper/binance/bitcoin/tetherusd/trades/raw/", "00/"),
-            "paper/binance/bitcoin/tetherusd/trades/raw/00/"
+            MarketDataPath::join("paper/binance/bitcoin/tether_usd/trades/raw/", "00/"),
+            "paper/binance/bitcoin/tether_usd/trades/raw/00/"
         );
         assert_eq!(
-            MarketDataPath::join("/paper/binance/bitcoin/tetherusd/trades/raw", "/00.parquet"),
-            "/paper/binance/bitcoin/tetherusd/trades/raw/00.parquet"
+            MarketDataPath::join(
+                "/paper/binance/bitcoin/tether_usd/trades/raw",
+                "/00.parquet"
+            ),
+            "/paper/binance/bitcoin/tether_usd/trades/raw/00.parquet"
         );
     }
 
@@ -388,16 +398,16 @@ mod tests {
     #[test]
     fn places_staged_files_under_the_staging_root_segment() {
         let compacted_file =
-            ObjectKey::new("paper/binance/bitcoin/tetherusd/trades/hourly/2024/01/01/03.parquet");
+            ObjectKey::new("paper/binance/bitcoin/tether_usd/trades/hourly/2024/01/01/03.parquet");
         assert_eq!(
             MarketDataPath::staged_file_path(&compacted_file).as_str(),
-            "staging/paper/binance/bitcoin/tetherusd/trades/hourly/2024/01/01/03.parquet"
+            "staging/paper/binance/bitcoin/tether_usd/trades/hourly/2024/01/01/03.parquet"
         );
     }
 
     #[test]
     fn parses_feed_and_granularity_from_the_same_layout() {
-        let path = "paper/binance/bitcoin/tetherusd/open_interest/hourly/2024/01";
+        let path = "paper/binance/bitcoin/tether_usd/open_interest/hourly/2024/01";
         assert_eq!(
             MarketDataPath::feed_from_path(path),
             Some(Feed::OpenInterest)
@@ -408,7 +418,7 @@ mod tests {
         );
         assert_eq!(MarketDataPath::time_segment_count(path), Some(2));
         assert_eq!(
-            MarketDataPath::feed_from_path("paper/binance/bitcoin/tetherusd/not-a-feed/raw"),
+            MarketDataPath::feed_from_path("paper/binance/bitcoin/tether_usd/not-a-feed/raw"),
             None
         );
     }
@@ -416,18 +426,18 @@ mod tests {
     #[test]
     fn normalizes_compaction_targets() {
         assert_eq!(
-            MarketDataPath::compact_prefix("paper/binance/bitcoin/tetherusd/trades/raw")
+            MarketDataPath::compact_prefix("paper/binance/bitcoin/tether_usd/trades/raw")
                 .unwrap()
                 .as_str(),
-            "paper/binance/bitcoin/tetherusd/trades/raw/"
+            "paper/binance/bitcoin/tether_usd/trades/raw/"
         );
         assert_eq!(
             MarketDataPath::compact_prefix(
-                "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00/06.parquet"
+                "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00/06.parquet"
             )
             .unwrap()
             .as_str(),
-            "paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00/"
+            "paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00/"
         );
     }
 }

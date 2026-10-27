@@ -5,7 +5,7 @@ use std::fmt;
 /// The type of market data stored below a trading pair.
 ///
 /// The feed is the path segment between the quote asset and the data
-/// granularity, for example `paper/binance/bitcoin/tetherusd/trades/raw/...`.
+/// granularity, for example `paper/binance/bitcoin/tether_usd/trades/raw/...`.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Feed {
@@ -71,15 +71,15 @@ mod tests {
     #[test]
     fn feed_is_the_segment_after_the_quote_asset() {
         assert_eq!(
-            Feed::from_path("paper/binance/bitcoin/tetherusd/open_interest/raw/2024"),
+            Feed::from_path("paper/binance/bitcoin/tether_usd/open_interest/raw/2024"),
             Some(Feed::OpenInterest)
         );
         assert_eq!(
-            Feed::from_path("/paper/binance/bitcoin/tetherusd/book/hourly/"),
+            Feed::from_path("/paper/binance/bitcoin/tether_usd/book/hourly/"),
             Some(Feed::Book)
         );
         assert_eq!(
-            Feed::from_path("paper/binance/bitcoin/tetherusd/not-a-feed/raw"),
+            Feed::from_path("paper/binance/bitcoin/tether_usd/not-a-feed/raw"),
             None
         );
     }

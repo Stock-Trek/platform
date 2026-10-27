@@ -91,15 +91,15 @@ mod tests {
 
     #[test]
     fn paths_require_a_feed_before_the_granularity() {
-        let path = "paper/binance/bitcoin/tetherusd/trades/raw/2024/01";
+        let path = "paper/binance/bitcoin/tether_usd/trades/raw/2024/01";
         assert_eq!(Granularity::from_path(path), Some(Granularity::Raw));
         assert_eq!(Granularity::time_segment_count(path), Some(2));
         assert_eq!(
-            Granularity::from_path("paper/binance/bitcoin/tetherusd/not-a-feed/raw"),
+            Granularity::from_path("paper/binance/bitcoin/tether_usd/not-a-feed/raw"),
             None
         );
         assert_eq!(
-            Granularity::time_segment_count("paper/binance/bitcoin/tetherusd/not-a-feed/raw"),
+            Granularity::time_segment_count("paper/binance/bitcoin/tether_usd/not-a-feed/raw"),
             None
         );
     }

@@ -590,7 +590,7 @@ mod tests {
 
     #[test]
     fn complete_hour_produces_a_compaction_target() {
-        let prefix = ObjectKey::new("paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00/");
+        let prefix = ObjectKey::new("paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00/");
         let source_files = (0..60)
             .step_by(6)
             .map(|minute| ObjectKey::new(format!("{prefix}{minute:02}.parquet")))
@@ -604,7 +604,7 @@ mod tests {
                 prefix: prefix.clone(),
                 source_files,
                 compacted_file: ObjectKey::new(
-                    "paper/binance/bitcoin/tetherusd/trades/hourly/2024/01/01/00.parquet"
+                    "paper/binance/bitcoin/tether_usd/trades/hourly/2024/01/01/00.parquet"
                 ),
             }
         );
@@ -612,7 +612,7 @@ mod tests {
 
     #[test]
     fn complete_day_produces_a_compaction_target() {
-        let prefix = ObjectKey::new("paper/binance/bitcoin/tetherusd/trades/hourly/2024/01/01/");
+        let prefix = ObjectKey::new("paper/binance/bitcoin/tether_usd/trades/hourly/2024/01/01/");
         let source_files = (0..24)
             .map(|hour| ObjectKey::new(format!("{prefix}{hour:02}.parquet")))
             .collect::<Vec<_>>();
@@ -621,14 +621,14 @@ mod tests {
             .unwrap();
         assert_eq!(
             target.compacted_file,
-            ObjectKey::new("paper/binance/bitcoin/tetherusd/trades/daily/2024/01/01.parquet")
+            ObjectKey::new("paper/binance/bitcoin/tether_usd/trades/daily/2024/01/01.parquet")
         );
         assert_eq!(target.source_files, source_files);
     }
 
     #[test]
     fn missing_source_file_does_not_produce_a_target() {
-        let prefix = ObjectKey::new("paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00/");
+        let prefix = ObjectKey::new("paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00/");
         let mut source_files = (0..60)
             .step_by(6)
             .map(|minute| ObjectKey::new(format!("{prefix}{minute:02}.parquet")))
@@ -642,7 +642,8 @@ mod tests {
 
     #[test]
     fn leaf_path_does_not_produce_a_target() {
-        let prefix = ObjectKey::new("paper/binance/bitcoin/tetherusd/trades/raw/2024/01/01/00/00/");
+        let prefix =
+            ObjectKey::new("paper/binance/bitcoin/tether_usd/trades/raw/2024/01/01/00/00/");
         assert_eq!(
             Planner::plan_compaction_with_suffix(&prefix, [] as [ObjectKey; 0], PARQUET_SUFFIX)
                 .unwrap(),
