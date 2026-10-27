@@ -1,4 +1,4 @@
-use platform_market_data::decoders::trade::Trade;
+use crate::decoders::trade::Trade;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};

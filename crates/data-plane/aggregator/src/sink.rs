@@ -1,6 +1,7 @@
-use crate::{aggregator::ClosedCandle, candle::Candle, config::AggregatorConfig};
+use crate::{aggregator::ClosedCandle, config::AggregatorConfig};
 use async_trait::async_trait;
 use platform_errors::BpResult;
+use platform_market_data::candle::Candle;
 use platform_nats::NatsPublisher;
 use serde::Serialize;
 

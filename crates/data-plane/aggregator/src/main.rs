@@ -1,5 +1,4 @@
 mod aggregator;
-mod candle;
 mod config;
 mod runner;
 mod sink;

@@ -1,6 +1,6 @@
-use crate::candle::CandleInterval;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
+use platform_market_data::candle::CandleInterval;
 use platform_nats::NatsSubject;
 use std::{str::FromStr, time::Duration};
 
