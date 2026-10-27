@@ -1,5 +1,8 @@
 use crate::{
-    decoders::decoder::{BinaryDecoder, FrameDecoder},
+    decoders::{
+        binary::BinaryCursor,
+        decoder::{BinaryDecoder, FrameDecoder},
+    },
     source::ParsedMessage,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -20,7 +23,7 @@ pub struct BinanceSbeDecoder;
 
 impl BinanceSbeDecoder {
     fn decode_frame(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
-        let cursor = SbeCursor::new(frame);
+        let cursor = BinaryCursor::new(frame);
         let schema_id = cursor.read_u16(4)?;
         if schema_id != BINANCE_SBE_SCHEMA_ID {
             return Err(IngesterError::malformed_sbe(format!(
@@ -39,7 +42,7 @@ impl BinanceSbeDecoder {
 
     fn trades_event(
         &self,
-        cursor: &SbeCursor<'_>,
+        cursor: &BinaryCursor<'_>,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
         let event_time_us = cursor.read_i64(8)?;
@@ -57,7 +60,7 @@ impl BinanceSbeDecoder {
 
     fn best_bid_ask_event(
         &self,
-        cursor: &SbeCursor<'_>,
+        cursor: &BinaryCursor<'_>,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
         let event_time_us = cursor.read_i64(8)?;
@@ -68,7 +71,7 @@ impl BinanceSbeDecoder {
 
     fn depth_snapshot_event(
         &self,
-        cursor: &SbeCursor<'_>,
+        cursor: &BinaryCursor<'_>,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
         let event_time_us = cursor.read_i64(8)?;
@@ -81,7 +84,7 @@ impl BinanceSbeDecoder {
 
     fn depth_diff_event(
         &self,
-        cursor: &SbeCursor<'_>,
+        cursor: &BinaryCursor<'_>,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
         let event_time_us = cursor.read_i64(8)?;
@@ -118,71 +121,13 @@ impl FrameDecoder for BinanceSbeDecoder {
 
 impl BinaryDecoder for BinanceSbeDecoder {}
 
-struct SbeCursor<'a> {
-    frame: &'a [u8],
+/// SBE-specific group traversal layered on top of the generic binary cursor.
+trait SbeGroupExt {
+    fn group_size32(&self, offset: usize) -> Result<(usize, usize, usize), IngesterError>;
+    fn end_of_group16(&self, offset: usize) -> Result<usize, IngesterError>;
 }
 
-impl<'a> SbeCursor<'a> {
-    fn new(frame: &'a [u8]) -> Self {
-        Self { frame }
-    }
-
-    fn get(&self, offset: usize, length: usize) -> Result<&'a [u8], IngesterError> {
-        let end = offset
-            .checked_add(length)
-            .ok_or_else(|| IngesterError::malformed_sbe("frame offset overflow"))?;
-        self.frame.get(offset..end).ok_or_else(|| {
-            IngesterError::malformed_sbe(format!(
-                "frame is too short for {length} bytes at offset {offset}"
-            ))
-        })
-    }
-
-    fn read_u8(&self, offset: usize) -> Result<u8, IngesterError> {
-        Ok(self.get(offset, 1)?[0])
-    }
-
-    fn read_u16(&self, offset: usize) -> Result<u16, IngesterError> {
-        let bytes: [u8; 2] = self
-            .get(offset, 2)?
-            .try_into()
-            .map_err(|_| IngesterError::malformed_sbe("invalid u16"))?;
-        Ok(u16::from_le_bytes(bytes))
-    }
-
-    fn read_u32(&self, offset: usize) -> Result<u32, IngesterError> {
-        let bytes: [u8; 4] = self
-            .get(offset, 4)?
-            .try_into()
-            .map_err(|_| IngesterError::malformed_sbe("invalid u32"))?;
-        Ok(u32::from_le_bytes(bytes))
-    }
-
-    fn read_i64(&self, offset: usize) -> Result<i64, IngesterError> {
-        let bytes: [u8; 8] = self
-            .get(offset, 8)?
-            .try_into()
-            .map_err(|_| IngesterError::malformed_sbe("invalid i64"))?;
-        Ok(i64::from_le_bytes(bytes))
-    }
-
-    fn read_sequence(&self, offset: usize) -> Result<u64, IngesterError> {
-        let value = self.read_i64(offset)?;
-        u64::try_from(value).map_err(|_| {
-            IngesterError::malformed_sbe(format!("negative sequence {value} at offset {offset}"))
-        })
-    }
-
-    fn read_var_string(&self, offset: usize) -> Result<String, IngesterError> {
-        let length = self.read_u8(offset)? as usize;
-        let start = offset
-            .checked_add(1)
-            .ok_or_else(|| IngesterError::malformed_sbe("string offset overflow"))?;
-        let bytes = self.get(start, length)?;
-        let value = std::str::from_utf8(bytes).map_err(IngesterError::utf8)?;
-        Ok(value.to_string())
-    }
-
+impl SbeGroupExt for BinaryCursor<'_> {
     fn group_size32(&self, offset: usize) -> Result<(usize, usize, usize), IngesterError> {
         let block_length = self.read_u16(offset)? as usize;
         let count = self.read_u32(offset + 2)? as usize;
@@ -199,20 +144,6 @@ impl<'a> SbeCursor<'a> {
             .checked_add(4)
             .ok_or_else(|| IngesterError::malformed_sbe("group offset overflow"))?;
         self.advance(entries, count, block_length)
-    }
-
-    fn advance(&self, base: usize, count: usize, stride: usize) -> Result<usize, IngesterError> {
-        let length = count
-            .checked_mul(stride)
-            .and_then(|length| base.checked_add(length))
-            .ok_or_else(|| IngesterError::malformed_sbe("group size overflow"))?;
-        if length > self.frame.len() {
-            return Err(IngesterError::malformed_sbe(format!(
-                "group ends at {length} beyond frame length {}",
-                self.frame.len()
-            )));
-        }
-        Ok(length)
     }
 }
 

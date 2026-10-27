@@ -1,5 +1,5 @@
-pub mod binance_json;
-pub mod binance_sbe;
+pub mod binary;
+pub mod binance;
 pub mod decoder;
 pub mod factory;
 pub mod json;

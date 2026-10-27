@@ -1,6 +1,8 @@
 use crate::decoders::{
-    binance_json::{BinanceJsonDecoder, BinanceJsonMapping},
-    binance_sbe::BinanceSbeDecoder,
+    binance::{
+        json::{BinanceJsonDecoder, BinanceJsonMapping},
+        sbe::BinanceSbeDecoder,
+    },
     decoder::{BinaryDecoder, JsonDecoder},
     json::{EnvelopeJsonMapping, MappedJsonDecoder},
 };

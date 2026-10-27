@@ -16,6 +16,8 @@ pub enum IngesterError {
     MissingSequence { field: &'static str },
     #[error("unsupported stream format: {format}")]
     UnsupportedStreamFormat { format: String },
+    #[error("malformed binary frame: {message}")]
+    MalformedBinaryFrame { message: String },
     #[error("malformed SBE frame: {message}")]
     MalformedSbeFrame { message: String },
     #[error("unknown SBE template id {template_id}")]
@@ -35,6 +37,12 @@ pub enum IngesterError {
 }
 
 impl IngesterError {
+    pub fn malformed_binary(message: impl Into<String>) -> Self {
+        Self::MalformedBinaryFrame {
+            message: message.into(),
+        }
+    }
+
     pub fn malformed_sbe(message: impl Into<String>) -> Self {
         Self::MalformedSbeFrame {
             message: message.into(),
