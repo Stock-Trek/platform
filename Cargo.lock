@@ -2324,9 +2324,9 @@ checksum = "791930b43c0d5973160d90a8f3894509f2b273430f5c5c73b668636d0287c5c0"
 
 [[package]]
 name = "iris"
-version = "1.0.4"
+version = "1.0.6"
 source = "registry+ssh://git@ssh.shipyard.rs/stock-trek/crate-index.git"
-checksum = "e25d15f22dd6901893031ff6ec26c2cbcc841e6dca91f5e1dbf9f1464d4ef2ec"
+checksum = "82dd3ae454b089ea96ed1fa2d3e87190fe29048c2dfc252e6abfc6f9de53f009"
 dependencies = [
  "async-trait",
  "futures",
@@ -3370,6 +3370,23 @@ dependencies = [
 [[package]]
 name = "platform-ingester"
 version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "base64 0.23.1",
+ "chrono",
+ "iris",
+ "platform-config",
+ "platform-errors",
+ "platform-types",
+ "serde",
+ "serde_json",
+ "stock-trek-types",
+ "thiserror",
+ "tokio",
+ "tokio-websockets",
+ "tracing",
+ "url",
+]
 
 [[package]]
 name = "platform-market-data-old"
@@ -4679,13 +4696,14 @@ dependencies = [
 
 [[package]]
 name = "stock-trek-types"
-version = "0.4.2"
+version = "0.4.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "419dcc3aabc8567ba3e4b6ff894c2a7b50b9b5b82bd8f9acf04740c6b6e823ef"
+checksum = "9dab60e04ce4771749fb72376d343bf37b4e53a7251f635a52ccfdaa1acc7959"
 dependencies = [
  "rust_decimal",
  "serde",
  "strum",
+ "strum_macros",
 ]
 
 [[package]]

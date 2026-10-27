@@ -77,6 +77,18 @@ impl EnvVars {
         Ok(value.to_string_lossy().into_owned())
     }
 
+    /// Reads an optional UTF-8 variable. Missing and empty values yield `None`.
+    pub fn optional(&self, name: &str) -> BpResult<Option<String>> {
+        let Some(value) = self.vars.get(OsStr::new(name)) else {
+            return Ok(None);
+        };
+        let value = value
+            .clone()
+            .into_string()
+            .map_err(|_| BpError::config_not_unicode(name))?;
+        Ok((!value.is_empty()).then_some(value))
+    }
+
     /// Reads and parses a required variable.
     pub fn required_parsed<T>(&self, name: &str) -> BpResult<T>
     where

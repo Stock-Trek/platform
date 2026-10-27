@@ -1,9 +1,9 @@
 use crate::{
     binance::BinanceError, config::ConfigError, connector::ConnectorError, connector::SendFailure,
-    data::DataError, exchange::ExchangeError, github::GitHubError, http::HttpError, io::IoError,
-    lambda::LambdaError, rate_limit::RateLimitError, retryability::Retryability,
-    secrets::SecretsError, sqs::SqsError, storage::StorageError, system::SystemError,
-    timeout::TimeoutError, validation::ValidationError,
+    data::DataError, exchange::ExchangeError, github::GitHubError, http::HttpError,
+    ingester::IngesterError, io::IoError, lambda::LambdaError, rate_limit::RateLimitError,
+    retryability::Retryability, secrets::SecretsError, sqs::SqsError, storage::StorageError,
+    system::SystemError, timeout::TimeoutError, validation::ValidationError,
 };
 use lambda_runtime::Diagnostic;
 use platform_messages::sqs_message::SqsMessageError;
@@ -28,6 +28,8 @@ pub enum BpError {
     GitHub(#[from] GitHubError),
     #[error(transparent)]
     Http(#[from] HttpError),
+    #[error(transparent)]
+    Ingester(#[from] IngesterError),
     #[error(transparent)]
     Io(#[from] IoError),
     #[error(transparent)]
@@ -245,6 +247,7 @@ impl BpError {
             Self::Exchange(error) => error.error_type(),
             Self::GitHub(error) => error.error_type(),
             Self::Http(error) => error.error_type(),
+            Self::Ingester(error) => error.error_type(),
             Self::Io(error) => error.error_type(),
             Self::Lambda(error) => error.error_type(),
             Self::RateLimit(error) => error.error_type(),
@@ -266,6 +269,7 @@ impl BpError {
             Self::Exchange(error) => error.retryability(),
             Self::GitHub(error) => error.retryability(),
             Self::Http(error) => error.retryability(),
+            Self::Ingester(error) => error.retryability(),
             Self::Io(error) => error.retryability(),
             Self::Lambda(error) => error.retryability(),
             Self::RateLimit(error) => error.retryability(),
