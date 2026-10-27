@@ -39,7 +39,7 @@ impl IngesterRunner {
             publisher,
             IngestOptions {
                 exchange: self.config.exchange,
-                subject_prefix: self.config.subject_prefix.clone(),
+                subject_prefix: self.config.nats_subject_prefix.clone(),
             },
         );
 

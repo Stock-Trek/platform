@@ -5,7 +5,6 @@ use crate::{
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::IngesterError;
 use platform_types::new_types::TimestampMilliseconds;
-use stock_trek_types::cex::cex_id::CexId;
 
 const BINANCE_SBE_SCHEMA_ID: u16 = 1;
 
@@ -17,24 +16,16 @@ const BINANCE_DEPTH_DIFF_TEMPLATE_ID: u16 = 10_003;
 /// Decoder for Binance's SBE market data streams.
 ///
 /// Schema: <https://github.com/binance/binance-spot-api-docs/blob/master/sbe/schemas/stream_1_0.xml>
-pub struct BinanceSbeDecoder {
-    exchange: CexId,
-}
+pub struct BinanceSbeDecoder;
 
 impl BinanceSbeDecoder {
-    pub fn new(exchange: CexId) -> Self {
-        Self { exchange }
-    }
-
     fn decode_frame(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
-        let exchange = self.exchange.to_string();
-        let cursor = SbeCursor::new(frame, &exchange);
+        let cursor = SbeCursor::new(frame);
         let schema_id = cursor.read_u16(4)?;
         if schema_id != BINANCE_SBE_SCHEMA_ID {
-            return Err(IngesterError::malformed_sbe(
-                exchange.as_str(),
-                format!("expected schema id {BINANCE_SBE_SCHEMA_ID}, got {schema_id}"),
-            ));
+            return Err(IngesterError::malformed_sbe(format!(
+                "expected schema id {BINANCE_SBE_SCHEMA_ID}, got {schema_id}"
+            )));
         }
 
         match cursor.read_u16(2)? {
@@ -42,10 +33,7 @@ impl BinanceSbeDecoder {
             BINANCE_BEST_BID_ASK_TEMPLATE_ID => self.best_bid_ask_event(&cursor, frame),
             BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID => self.depth_snapshot_event(&cursor, frame),
             BINANCE_DEPTH_DIFF_TEMPLATE_ID => self.depth_diff_event(&cursor, frame),
-            template_id => Err(IngesterError::unknown_sbe_template(
-                exchange.as_str(),
-                template_id,
-            )),
+            template_id => Err(IngesterError::unknown_sbe_template(template_id)),
         }
     }
 
@@ -123,10 +111,6 @@ impl BinanceSbeDecoder {
 }
 
 impl FrameDecoder for BinanceSbeDecoder {
-    fn exchange(&self) -> CexId {
-        self.exchange
-    }
-
     fn decode(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
         self.decode_frame(frame)
     }
@@ -136,23 +120,21 @@ impl BinaryDecoder for BinanceSbeDecoder {}
 
 struct SbeCursor<'a> {
     frame: &'a [u8],
-    exchange: &'a str,
 }
 
 impl<'a> SbeCursor<'a> {
-    fn new(frame: &'a [u8], exchange: &'a str) -> Self {
-        Self { frame, exchange }
+    fn new(frame: &'a [u8]) -> Self {
+        Self { frame }
     }
 
     fn get(&self, offset: usize, length: usize) -> Result<&'a [u8], IngesterError> {
         let end = offset
             .checked_add(length)
-            .ok_or_else(|| IngesterError::malformed_sbe(self.exchange, "frame offset overflow"))?;
+            .ok_or_else(|| IngesterError::malformed_sbe("frame offset overflow"))?;
         self.frame.get(offset..end).ok_or_else(|| {
-            IngesterError::malformed_sbe(
-                self.exchange,
-                format!("frame is too short for {length} bytes at offset {offset}"),
-            )
+            IngesterError::malformed_sbe(format!(
+                "frame is too short for {length} bytes at offset {offset}"
+            ))
         })
     }
 
@@ -164,7 +146,7 @@ impl<'a> SbeCursor<'a> {
         let bytes: [u8; 2] = self
             .get(offset, 2)?
             .try_into()
-            .map_err(|_| IngesterError::malformed_sbe(self.exchange, "invalid u16"))?;
+            .map_err(|_| IngesterError::malformed_sbe("invalid u16"))?;
         Ok(u16::from_le_bytes(bytes))
     }
 
@@ -172,7 +154,7 @@ impl<'a> SbeCursor<'a> {
         let bytes: [u8; 4] = self
             .get(offset, 4)?
             .try_into()
-            .map_err(|_| IngesterError::malformed_sbe(self.exchange, "invalid u32"))?;
+            .map_err(|_| IngesterError::malformed_sbe("invalid u32"))?;
         Ok(u32::from_le_bytes(bytes))
     }
 
@@ -180,17 +162,14 @@ impl<'a> SbeCursor<'a> {
         let bytes: [u8; 8] = self
             .get(offset, 8)?
             .try_into()
-            .map_err(|_| IngesterError::malformed_sbe(self.exchange, "invalid i64"))?;
+            .map_err(|_| IngesterError::malformed_sbe("invalid i64"))?;
         Ok(i64::from_le_bytes(bytes))
     }
 
     fn read_sequence(&self, offset: usize) -> Result<u64, IngesterError> {
         let value = self.read_i64(offset)?;
         u64::try_from(value).map_err(|_| {
-            IngesterError::malformed_sbe(
-                self.exchange,
-                format!("negative sequence {value} at offset {offset}"),
-            )
+            IngesterError::malformed_sbe(format!("negative sequence {value} at offset {offset}"))
         })
     }
 
@@ -198,10 +177,9 @@ impl<'a> SbeCursor<'a> {
         let length = self.read_u8(offset)? as usize;
         let start = offset
             .checked_add(1)
-            .ok_or_else(|| IngesterError::malformed_sbe(self.exchange, "string offset overflow"))?;
+            .ok_or_else(|| IngesterError::malformed_sbe("string offset overflow"))?;
         let bytes = self.get(start, length)?;
-        let value = std::str::from_utf8(bytes)
-            .map_err(|source| IngesterError::utf8(self.exchange, source))?;
+        let value = std::str::from_utf8(bytes).map_err(IngesterError::utf8)?;
         Ok(value.to_string())
     }
 
@@ -210,7 +188,7 @@ impl<'a> SbeCursor<'a> {
         let count = self.read_u32(offset + 2)? as usize;
         let entries = offset
             .checked_add(6)
-            .ok_or_else(|| IngesterError::malformed_sbe(self.exchange, "group offset overflow"))?;
+            .ok_or_else(|| IngesterError::malformed_sbe("group offset overflow"))?;
         Ok((block_length, count, entries))
     }
 
@@ -219,7 +197,7 @@ impl<'a> SbeCursor<'a> {
         let count = self.read_u16(offset + 2)? as usize;
         let entries = offset
             .checked_add(4)
-            .ok_or_else(|| IngesterError::malformed_sbe(self.exchange, "group offset overflow"))?;
+            .ok_or_else(|| IngesterError::malformed_sbe("group offset overflow"))?;
         self.advance(entries, count, block_length)
     }
 
@@ -227,15 +205,12 @@ impl<'a> SbeCursor<'a> {
         let length = count
             .checked_mul(stride)
             .and_then(|length| base.checked_add(length))
-            .ok_or_else(|| IngesterError::malformed_sbe(self.exchange, "group size overflow"))?;
+            .ok_or_else(|| IngesterError::malformed_sbe("group size overflow"))?;
         if length > self.frame.len() {
-            return Err(IngesterError::malformed_sbe(
-                self.exchange,
-                format!(
-                    "group ends at {length} beyond frame length {}",
-                    self.frame.len()
-                ),
-            ));
+            return Err(IngesterError::malformed_sbe(format!(
+                "group ends at {length} beyond frame length {}",
+                self.frame.len()
+            )));
         }
         Ok(length)
     }
@@ -308,7 +283,7 @@ mod tests {
     #[test]
     fn decodes_binance_sbe_trades() {
         let frame = sbe_trades_frame();
-        let decoder = BinanceSbeDecoder::new(CexId::Binance);
+        let decoder = BinanceSbeDecoder;
 
         let parsed = decoder.decode(&frame).unwrap();
 
@@ -324,7 +299,7 @@ mod tests {
     #[test]
     fn decodes_binance_sbe_best_bid_ask() {
         let frame = sbe_best_bid_ask_frame();
-        let decoder = BinanceSbeDecoder::new(CexId::Binance);
+        let decoder = BinanceSbeDecoder;
 
         let parsed = decoder.decode(&frame).unwrap();
 
@@ -335,7 +310,7 @@ mod tests {
     #[test]
     fn decodes_binance_sbe_depth_diff_and_skips_groups() {
         let frame = sbe_depth_diff_frame();
-        let decoder = BinanceSbeDecoder::new(CexId::Binance);
+        let decoder = BinanceSbeDecoder;
 
         let parsed = decoder.decode(&frame).unwrap();
 
@@ -346,13 +321,13 @@ mod tests {
     #[test]
     fn rejects_unknown_sbe_templates() {
         let frame = sbe_header(1);
-        let decoder = BinanceSbeDecoder::new(CexId::Binance);
+        let decoder = BinanceSbeDecoder;
 
         let error = decoder.decode(&frame).unwrap_err();
 
         assert!(matches!(
             error,
-            IngesterError::UnknownSbeTemplate { template_id: 1, .. }
+            IngesterError::UnknownSbeTemplate { template_id: 1 }
         ));
     }
 }

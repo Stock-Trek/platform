@@ -62,29 +62,11 @@ impl FromStr for StreamFormat {
 impl fmt::Debug for StreamFormat {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Json(decoder) => formatter
-                .debug_tuple("Json")
-                .field(&decoder.exchange())
-                .finish(),
-            Self::Binary(decoder) => formatter
-                .debug_tuple("Binary")
-                .field(&decoder.exchange())
-                .finish(),
+            Self::Json(_) => formatter.write_str("Json"),
+            Self::Binary(_) => formatter.write_str("Binary"),
         }
     }
 }
-
-impl PartialEq for StreamFormat {
-    fn eq(&self, other: &Self) -> bool {
-        match (self, other) {
-            (Self::Json(left), Self::Json(right)) => left.exchange() == right.exchange(),
-            (Self::Binary(left), Self::Binary(right)) => left.exchange() == right.exchange(),
-            _ => false,
-        }
-    }
-}
-
-impl Eq for StreamFormat {}
 
 /// Websocket transport shared by all exchange decoders.
 pub struct WebsocketSource {
@@ -121,14 +103,16 @@ impl WebsocketSource {
     pub async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BpResult<()> {
         match &self.stream_format {
             StreamFormat::Json(decoder) => self.run_iris(decoder.clone(), sender).await,
-            // TODO: iris deserializes every frame as JSON, so binary streams
-            // cannot be transported until it exposes raw frames.
-            StreamFormat::Binary(_) => {
-                Err(BpError::Ingester(IngesterError::UnsupportedStreamFormat {
-                    format: "binary frames are not supported by iris".to_string(),
-                }))
-            }
+            StreamFormat::Binary(decoder) => self.run_binary(decoder.clone()).await,
         }
+    }
+
+    async fn run_binary(&self, _decoder: Arc<dyn BinaryDecoder>) -> BpResult<()> {
+        // TODO: iris deserializes every frame as JSON, so binary streams
+        // cannot be transported until it exposes raw frames.
+        Err(BpError::Ingester(IngesterError::UnsupportedStreamFormat {
+            format: "binary frames are not supported by iris".to_string(),
+        }))
     }
 
     async fn run_iris(
@@ -182,7 +166,6 @@ impl fmt::Debug for IrisJsonListener {
         formatter
             .debug_struct("IrisJsonListener")
             .field("exchange", &self.exchange)
-            .field("decoder", &self.decoder.exchange())
             .finish()
     }
 }

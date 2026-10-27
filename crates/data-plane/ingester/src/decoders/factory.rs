@@ -17,8 +17,8 @@ impl DecoderFactory {
     /// TODO: register additional exchange mappings as they are implemented.
     pub fn json_decoder(exchange: CexId) -> Arc<dyn JsonDecoder> {
         match exchange {
-            CexId::Binance => Arc::new(BinanceJsonDecoder::new(exchange, BinanceJsonMapping)),
-            _ => Arc::new(MappedJsonDecoder::new(exchange, EnvelopeJsonMapping)),
+            CexId::Binance => Arc::new(BinanceJsonDecoder::new(BinanceJsonMapping)),
+            _ => Arc::new(MappedJsonDecoder::new(EnvelopeJsonMapping)),
         }
     }
 
@@ -27,7 +27,7 @@ impl DecoderFactory {
     /// TODO: register additional exchange binary decoders as they are implemented.
     pub fn binary_decoder(exchange: CexId) -> Result<Arc<dyn BinaryDecoder>, IngesterError> {
         match exchange {
-            CexId::Binance => Ok(Arc::new(BinanceSbeDecoder::new(exchange))),
+            CexId::Binance => Ok(Arc::new(BinanceSbeDecoder)),
             _ => Err(IngesterError::UnsupportedStreamFormat {
                 format: format!("binary for exchange {}", exchange),
             }),
