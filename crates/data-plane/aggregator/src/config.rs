@@ -36,12 +36,12 @@ impl AggregatorConfig {
         let open_candle_subject_prefix = vars.required(AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX)?;
         let closed_candle_subject_prefix =
             vars.required(AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX)?;
-        validate_subject_prefix(AGGREGATOR_EVENT_SUBJECT_PREFIX, &event_subject_prefix)?;
-        validate_subject_prefix(
+        Self::validate_subject_prefix(AGGREGATOR_EVENT_SUBJECT_PREFIX, &event_subject_prefix)?;
+        Self::validate_subject_prefix(
             AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX,
             &open_candle_subject_prefix,
         )?;
-        validate_subject_prefix(
+        Self::validate_subject_prefix(
             AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX,
             &closed_candle_subject_prefix,
         )?;
@@ -91,10 +91,11 @@ impl AggregatorConfig {
             flush_interval: Duration::from_secs(flush_interval_secs),
         })
     }
-}
 
-fn validate_subject_prefix(name: &str, value: &str) -> BpResult<()> {
-    NatsSubject::validate(value).map_err(|error| BpError::config_invalid(name, error.to_string()))
+    fn validate_subject_prefix(name: &str, value: &str) -> BpResult<()> {
+        NatsSubject::validate(value)
+            .map_err(|error| BpError::config_invalid(name, error.to_string()))
+    }
 }
 
 #[cfg(test)]

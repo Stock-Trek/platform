@@ -8,7 +8,6 @@ use chrono::Utc;
 use platform_errors::BpResult;
 use platform_market_data::{decoders::trade::TradeDecoder, event::MarketEvent};
 use platform_types::new_types::TimestampMilliseconds;
-use std::time::Duration;
 use tokio::{
     sync::mpsc,
     time::{self, MissedTickBehavior},
@@ -60,77 +59,73 @@ impl AggregatorRunner {
             "aggregator started"
         );
 
-        let result = run_until_shutdown(
-            &mut receiver,
-            &sink,
-            &mut aggregator,
-            self.config.flush_interval,
-        )
-        .await;
+        let result = self
+            .run_until_shutdown(&mut receiver, &sink, &mut aggregator)
+            .await;
         source_task.abort();
         result
     }
-}
 
-async fn run_until_shutdown(
-    receiver: &mut mpsc::Receiver<MarketEvent>,
-    sink: &NatsCandleSink,
-    aggregator: &mut CandleAggregator,
-    flush_interval: Duration,
-) -> BpResult<()> {
-    let decoder = TradeDecoder;
-    let mut flush_ticker = time::interval(flush_interval);
-    flush_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    async fn run_until_shutdown(
+        &self,
+        receiver: &mut mpsc::Receiver<MarketEvent>,
+        sink: &NatsCandleSink,
+        aggregator: &mut CandleAggregator,
+    ) -> BpResult<()> {
+        let decoder = TradeDecoder;
+        let mut flush_ticker = time::interval(self.config.flush_interval);
+        flush_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-    loop {
-        tokio::select! {
-            maybe_event = receiver.recv() => {
-                let Some(event) = maybe_event else {
-                    info!("market event channel closed");
-                    break;
-                };
-                match decoder.decode(&event) {
-                    Ok(trades) => {
-                        for trade in trades {
-                            let update = aggregator.apply_trade(&trade);
-                            if update.is_empty() {
-                                continue;
-                            }
-                            if !update.closed.is_empty() {
-                                sink.publish_closed(&update.closed).await?;
-                            }
-                            if !update.open.is_empty() {
-                                sink.update_open(&update.open).await?;
+        loop {
+            tokio::select! {
+                maybe_event = receiver.recv() => {
+                    let Some(event) = maybe_event else {
+                        info!("market event channel closed");
+                        break;
+                    };
+                    match decoder.decode(&event) {
+                        Ok(trades) => {
+                            for trade in trades {
+                                let update = aggregator.apply_trade(&trade);
+                                if update.is_empty() {
+                                    continue;
+                                }
+                                if !update.closed.is_empty() {
+                                    sink.publish_closed(&update.closed).await?;
+                                }
+                                if !update.open.is_empty() {
+                                    sink.update_open(&update.open).await?;
+                                }
                             }
                         }
-                    }
-                    Err(error) => {
-                        // Exchange streams can contain binary formats that this
-                        // first cut does not decode yet. Skip the event instead
-                        // of stopping aggregation for every market.
-                        warn!(%error, stream = %event.stream, "skipping unreadable market event");
+                        Err(error) => {
+                            // Exchange streams can contain binary formats that this
+                            // first cut does not decode yet. Skip the event instead
+                            // of stopping aggregation for every market.
+                            warn!(%error, stream = %event.stream, "skipping unreadable market event");
+                        }
                     }
                 }
-            }
-            _ = flush_ticker.tick() => {
-                let closed = aggregator
-                    .flush_closed_at_or_before(TimestampMilliseconds(Utc::now().timestamp_millis()));
-                if !closed.is_empty() {
-                    sink.publish_closed(&closed).await?;
+                _ = flush_ticker.tick() => {
+                    let closed = aggregator
+                        .flush_closed_at_or_before(TimestampMilliseconds(Utc::now().timestamp_millis()));
+                    if !closed.is_empty() {
+                        sink.publish_closed(&closed).await?;
+                    }
                 }
-            }
-            signal = tokio::signal::ctrl_c() => {
-                signal?;
-                info!("shutdown requested");
-                break;
+                signal = tokio::signal::ctrl_c() => {
+                    signal?;
+                    info!("shutdown requested");
+                    break;
+                }
             }
         }
-    }
 
-    let closed =
-        aggregator.flush_closed_at_or_before(TimestampMilliseconds(Utc::now().timestamp_millis()));
-    if !closed.is_empty() {
-        sink.publish_closed(&closed).await?;
+        let closed = aggregator
+            .flush_closed_at_or_before(TimestampMilliseconds(Utc::now().timestamp_millis()));
+        if !closed.is_empty() {
+            sink.publish_closed(&closed).await?;
+        }
+        Ok(())
     }
-    Ok(())
 }

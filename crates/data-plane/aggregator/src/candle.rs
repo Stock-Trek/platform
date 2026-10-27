@@ -139,9 +139,9 @@ impl Candle {
         Self {
             key: CandleKey::new(trade.exchange, trade.symbol.clone(), interval),
             market_candle: MarketCandle::new(
-                to_millis(start_time.0),
-                to_millis(end_time.0),
-                to_millis(interval.duration().0),
+                Self::to_millis(start_time.0),
+                Self::to_millis(end_time.0),
+                Self::to_millis(interval.duration().0),
                 false,
                 MarketOhlcv::new(price, price, price, price, quantity, quote_volume, price),
                 1,
@@ -172,20 +172,20 @@ impl Candle {
     }
 
     pub fn start_time(&self) -> TimestampMilliseconds {
-        to_timestamp(self.market_candle.start_time_millis_inc)
+        Self::to_timestamp(self.market_candle.start_time_millis_inc)
     }
 
     pub fn end_time(&self) -> TimestampMilliseconds {
-        to_timestamp(self.market_candle.end_time_millis_exc)
+        Self::to_timestamp(self.market_candle.end_time_millis_exc)
     }
-}
 
-fn to_millis(value: i64) -> u64 {
-    u64::try_from(value).unwrap_or_default()
-}
+    fn to_millis(value: i64) -> u64 {
+        u64::try_from(value).unwrap_or_default()
+    }
 
-fn to_timestamp(value: u64) -> TimestampMilliseconds {
-    TimestampMilliseconds(i64::try_from(value).unwrap_or(i64::MAX))
+    fn to_timestamp(value: u64) -> TimestampMilliseconds {
+        TimestampMilliseconds(i64::try_from(value).unwrap_or(i64::MAX))
+    }
 }
 
 #[cfg(test)]

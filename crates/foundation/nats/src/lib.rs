@@ -135,11 +135,11 @@ impl NatsConnection {
         let stream = TcpStream::connect((address.host.as_str(), address.port)).await?;
         let (read_half, write_half) = stream.into_split();
         let mut reader = BufReader::new(read_half);
-        let info = read_protocol_line(&mut reader)
+        let info = Self::read_protocol_line(&mut reader)
             .await?
-            .ok_or_else(|| protocol_error("NATS connection closed during handshake"))?;
+            .ok_or_else(|| Self::protocol_error("NATS connection closed during handshake"))?;
         if !info.starts_with("INFO ") {
-            return Err(protocol_error(format!(
+            return Err(Self::protocol_error(format!(
                 "expected INFO from NATS server, got {info:?}"
             )));
         }
@@ -170,14 +170,14 @@ impl NatsConnection {
         writer.flush().await?;
 
         loop {
-            let line = read_protocol_line(&mut reader)
+            let line = Self::read_protocol_line(&mut reader)
                 .await?
-                .ok_or_else(|| protocol_error("NATS connection closed during handshake"))?;
+                .ok_or_else(|| Self::protocol_error("NATS connection closed during handshake"))?;
             if line == "PONG" {
                 break;
             }
             if line.starts_with("-ERR") {
-                return Err(protocol_error(line));
+                return Err(Self::protocol_error(line));
             }
         }
 
@@ -193,7 +193,7 @@ impl NatsConnection {
 
     async fn next_message(&mut self) -> BpResult<Option<(String, Vec<u8>)>> {
         loop {
-            let Some(line) = read_protocol_line(&mut self.reader).await? else {
+            let Some(line) = Self::read_protocol_line(&mut self.reader).await? else {
                 return Ok(None);
             };
             if line == "PING" {
@@ -204,14 +204,14 @@ impl NatsConnection {
             if line.starts_with("MSG ") {
                 let tokens: Vec<&str> = line.split_whitespace().collect();
                 if tokens.len() < 4 {
-                    return Err(protocol_error(format!("malformed MSG line {line:?}")));
+                    return Err(Self::protocol_error(format!("malformed MSG line {line:?}")));
                 }
                 let subject = tokens[1].to_string();
                 // MSG <subject> <sid> [reply-to] <#bytes>
                 let size = tokens
                     .last()
                     .and_then(|size| size.parse::<usize>().ok())
-                    .ok_or_else(|| protocol_error(format!("malformed MSG size in {line:?}")))?;
+                    .ok_or_else(|| Self::protocol_error(format!("malformed MSG size in {line:?}")))?;
                 let mut payload = vec![0_u8; size];
                 self.reader.read_exact(&mut payload).await?;
                 let mut terminator = [0_u8; 2];
@@ -219,7 +219,7 @@ impl NatsConnection {
                 return Ok(Some((subject, payload)));
             }
             if line.starts_with("-ERR") {
-                return Err(protocol_error(line));
+                return Err(Self::protocol_error(line));
             }
             if line.is_empty()
                 || line.starts_with("+OK")
@@ -229,7 +229,7 @@ impl NatsConnection {
                 continue;
             }
             // TODO: support header messages and reconnects.
-            return Err(protocol_error(format!(
+            return Err(Self::protocol_error(format!(
                 "unsupported NATS protocol message {line:?}"
             )));
         }
@@ -243,18 +243,20 @@ impl NatsConnection {
         self.writer.flush().await?;
         Ok(())
     }
-}
 
-async fn read_protocol_line(reader: &mut BufReader<OwnedReadHalf>) -> BpResult<Option<String>> {
-    let mut line = String::new();
-    if reader.read_line(&mut line).await? == 0 {
-        return Ok(None);
+    async fn read_protocol_line(
+        reader: &mut BufReader<OwnedReadHalf>,
+    ) -> BpResult<Option<String>> {
+        let mut line = String::new();
+        if reader.read_line(&mut line).await? == 0 {
+            return Ok(None);
+        }
+        Ok(Some(line.trim_end_matches(['\r', '\n']).to_string()))
     }
-    Ok(Some(line.trim_end_matches(['\r', '\n']).to_string()))
-}
 
-fn protocol_error(message: impl Into<String>) -> BpError {
-    BpError::Ingester(IngesterError::protocol(message))
+    fn protocol_error(message: impl Into<String>) -> BpError {
+        BpError::Ingester(IngesterError::protocol(message))
+    }
 }
 
 #[cfg(test)]

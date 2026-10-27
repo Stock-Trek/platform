@@ -62,8 +62,8 @@ impl TradeDecoder {
                     .map(|(symbol, _)| symbol.to_ascii_lowercase())
             })
             .ok_or(IngesterError::MissingField("s"))?;
-        let price = decimal_field(&data, "p")?;
-        let quantity = decimal_field(&data, "q")?;
+        let price = Self::decimal_field(&data, "p")?;
+        let quantity = Self::decimal_field(&data, "q")?;
         if price <= Decimal::ZERO || quantity <= Decimal::ZERO {
             // TODO: surface invalid trades through metrics rather than silently
             // dropping them.
@@ -86,20 +86,20 @@ impl TradeDecoder {
             timestamp,
         }])
     }
-}
 
-fn decimal_field(data: &Map<String, Value>, field: &'static str) -> BpResult<Decimal> {
-    let value = data
-        .get(field)
-        .and_then(Value::as_str)
-        .ok_or(IngesterError::MissingField(field))?;
-    Decimal::from_str_exact(value).map_err(|error| {
-        BpError::Exchange(ExchangeError::BadValue {
-            name: field.to_string(),
-            value: value.to_string(),
-            reason: error.to_string(),
+    fn decimal_field(data: &Map<String, Value>, field: &'static str) -> BpResult<Decimal> {
+        let value = data
+            .get(field)
+            .and_then(Value::as_str)
+            .ok_or(IngesterError::MissingField(field))?;
+        Decimal::from_str_exact(value).map_err(|error| {
+            BpError::Exchange(ExchangeError::BadValue {
+                name: field.to_string(),
+                value: value.to_string(),
+                reason: error.to_string(),
+            })
         })
-    })
+    }
 }
 
 #[cfg(test)]
