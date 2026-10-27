@@ -50,7 +50,7 @@ impl CandleAggregator {
 
         // Clone the short interval list so aggregation can mutate the map.
         for interval in self.intervals.clone() {
-            let key = CandleKey::new(trade.exchange, trade.symbol.clone(), interval);
+            let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
             let candle_start = interval.start_for(trade.timestamp);
             let current_start = self.open.get(&key).map(Candle::start_time);
 
@@ -121,12 +121,12 @@ impl CandleAggregator {
 mod tests {
     use super::*;
     use rust_decimal::Decimal;
-    use stock_trek_types::cex::cex_id::CexId;
+    use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
     fn trade(price: &str, timestamp: i64) -> Trade {
         Trade {
             exchange: CexId::Binance,
-            symbol: "BTCUSDT".to_string(),
+            trading_pair: TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
             price: Decimal::from_str_exact(price).unwrap(),
             quantity: Decimal::ONE,
             timestamp: TimestampMilliseconds(timestamp),

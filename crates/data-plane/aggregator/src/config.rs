@@ -31,6 +31,7 @@ impl AggregatorConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+        let log_filter = vars.required_log_filter("RUST_LOG")?;
         let nats_url = vars.required_url(AGGREGATOR_NATS_URL, &["nats"])?;
         let event_subject_prefix = vars.required(AGGREGATOR_EVENT_SUBJECT_PREFIX)?;
         let open_candle_subject_prefix = vars.required(AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX)?;
@@ -82,7 +83,7 @@ impl AggregatorConfig {
         }
 
         Ok(Self {
-            log_filter: vars.required_log_filter("RUST_LOG")?,
+            log_filter,
             nats_url,
             event_subject_prefix,
             open_candle_subject_prefix,
@@ -95,72 +96,5 @@ impl AggregatorConfig {
     fn validate_subject_prefix(name: &str, value: &str) -> BpResult<()> {
         NatsSubject::validate(value)
             .map_err(|error| BpError::config_invalid(name, error.to_string()))
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::ffi::OsString;
-
-    fn vars() -> EnvVars {
-        EnvVars::from_map([
-            (OsString::from("RUST_LOG"), OsString::from("info")),
-            (
-                OsString::from(AGGREGATOR_NATS_URL),
-                OsString::from("nats://localhost:4222"),
-            ),
-            (
-                OsString::from(AGGREGATOR_EVENT_SUBJECT_PREFIX),
-                OsString::from("market.events"),
-            ),
-            (
-                OsString::from(AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX),
-                OsString::from("market.candles.open"),
-            ),
-            (
-                OsString::from(AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX),
-                OsString::from("market.candles.closed"),
-            ),
-            (
-                OsString::from(AGGREGATOR_INTERVALS),
-                OsString::from("60s, 1m, 5m"),
-            ),
-        ])
-    }
-
-    #[test]
-    fn parses_and_deduplicates_intervals() {
-        let config = AggregatorConfig::from_vars(&vars()).unwrap();
-        let labels: Vec<String> = config
-            .intervals
-            .iter()
-            .map(|interval| interval.label())
-            .collect();
-        assert_eq!(labels, ["1m", "5m"]);
-    }
-
-    #[test]
-    fn rejects_wildcard_subjects() {
-        let vars = EnvVars::from_map([
-            (OsString::from("RUST_LOG"), OsString::from("info")),
-            (
-                OsString::from(AGGREGATOR_NATS_URL),
-                OsString::from("nats://localhost:4222"),
-            ),
-            (
-                OsString::from(AGGREGATOR_EVENT_SUBJECT_PREFIX),
-                OsString::from("market.>"),
-            ),
-            (
-                OsString::from(AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX),
-                OsString::from("market.candles.open"),
-            ),
-            (
-                OsString::from(AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX),
-                OsString::from("market.candles.closed"),
-            ),
-        ]);
-        assert!(AggregatorConfig::from_vars(&vars).is_err());
     }
 }

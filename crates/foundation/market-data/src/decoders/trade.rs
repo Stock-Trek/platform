@@ -1,17 +1,18 @@
 use crate::{decoders::json::JsonFrame, event::MarketEvent};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_errors::{BpError, BpResult, ExchangeError, IngesterError};
+use platform_type_bridge::{BinanceConverter, Converter};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
-use stock_trek_types::cex::cex_id::CexId;
+use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 
 /// A single exchange trade used to build candles.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Trade {
     pub exchange: CexId,
-    pub symbol: String,
+    pub trading_pair: TradingPair,
     pub price: Decimal,
     pub quantity: Decimal,
     pub timestamp: TimestampMilliseconds,
@@ -55,13 +56,15 @@ impl TradeDecoder {
         let symbol = data
             .get("s")
             .and_then(Value::as_str)
-            .map(str::to_ascii_lowercase)
-            .or_else(|| {
-                stream
-                    .split_once('@')
-                    .map(|(symbol, _)| symbol.to_ascii_lowercase())
-            })
+            .or_else(|| stream.split_once('@').map(|(symbol, _)| symbol))
             .ok_or(IngesterError::MissingField("s"))?;
+        let trading_pair = Self::trading_pair(event.exchange, symbol).ok_or_else(|| {
+            BpError::Exchange(ExchangeError::BadValue {
+                name: "symbol".to_string(),
+                value: symbol.to_string(),
+                reason: "could not resolve base and quote assets".to_string(),
+            })
+        })?;
         let price = Self::decimal_field(&data, "p")?;
         let quantity = Self::decimal_field(&data, "q")?;
         if price <= Decimal::ZERO || quantity <= Decimal::ZERO {
@@ -80,11 +83,21 @@ impl TradeDecoder {
 
         Ok(vec![Trade {
             exchange: event.exchange,
-            symbol,
+            trading_pair,
             price,
             quantity,
             timestamp,
         }])
+    }
+
+    fn trading_pair(exchange: CexId, symbol: &str) -> Option<TradingPair> {
+        match exchange {
+            CexId::Binance => BinanceConverter::default()
+                .ticker_mapping()
+                .trading_pair_from_symbol(symbol),
+            // TODO: add symbol mappings for the remaining exchanges.
+            _ => None,
+        }
     }
 
     fn decimal_field(data: &Map<String, Value>, field: &'static str) -> BpResult<Decimal> {
@@ -106,6 +119,7 @@ impl TradeDecoder {
 mod tests {
     use super::*;
     use serde_json::json;
+    use stock_trek_types::cex::asset_id::AssetId;
     use stock_trek_types::cex::cex_id::CexId;
 
     fn event(stream: &str, payload: Value) -> MarketEvent {
@@ -137,7 +151,10 @@ mod tests {
 
         let trades = TradeDecoder.decode(&market_event).unwrap();
         assert_eq!(trades.len(), 1);
-        assert_eq!(trades[0].symbol, "btcusdt");
+        assert_eq!(
+            trades[0].trading_pair,
+            TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD)
+        );
         assert_eq!(trades[0].price, Decimal::from_str_exact("100.25").unwrap());
         assert_eq!(trades[0].quantity, Decimal::from_str_exact("2.5").unwrap());
         assert_eq!(

@@ -4,7 +4,7 @@ use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use stock_trek::markets::{MarketCandle, MarketOhlcv};
-use stock_trek_types::cex::cex_id::CexId;
+use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 use thiserror::Error;
 
 const MILLIS_PER_SECOND: i64 = 1_000;
@@ -88,27 +88,30 @@ pub enum CandleIntervalError {
     ZeroOrOverflow,
 }
 
-/// Identity of an open candle. One candle is maintained per exchange, symbol,
-/// and interval.
+/// Identity of an open candle. One candle is maintained per exchange, trading
+/// pair, and interval.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct CandleKey {
     pub exchange: CexId,
-    pub symbol: String,
+    pub trading_pair: TradingPair,
     pub interval: CandleInterval,
 }
 
 impl CandleKey {
-    pub fn new(exchange: CexId, symbol: impl Into<String>, interval: CandleInterval) -> Self {
+    pub fn new(exchange: CexId, trading_pair: TradingPair, interval: CandleInterval) -> Self {
         Self {
             exchange,
-            symbol: symbol.into().to_ascii_lowercase(),
+            trading_pair,
             interval,
         }
     }
 
     /// The subject/key segment used when publishing this candle.
     pub fn subject_suffix(&self) -> String {
-        format!("{}.{}.{}", self.exchange, self.symbol, self.interval)
+        format!(
+            "{}.{}.{}.{}",
+            self.exchange, self.trading_pair.base, self.trading_pair.quote, self.interval
+        )
     }
 }
 
@@ -137,7 +140,7 @@ impl Candle {
         let end_time = interval.end_for(trade.timestamp);
 
         Self {
-            key: CandleKey::new(trade.exchange, trade.symbol.clone(), interval),
+            key: CandleKey::new(trade.exchange, trade.trading_pair, interval),
             market_candle: MarketCandle::new(
                 Self::to_millis(start_time.0),
                 Self::to_millis(end_time.0),
@@ -192,6 +195,7 @@ impl Candle {
 mod tests {
     use super::*;
     use rust_decimal::Decimal;
+    use stock_trek_types::cex::asset_id::AssetId;
 
     fn decimal(value: &str) -> Decimal {
         Decimal::from_str_exact(value).unwrap()
@@ -200,7 +204,7 @@ mod tests {
     fn trade(price: &str, quantity: &str, timestamp: i64) -> Trade {
         Trade {
             exchange: CexId::Binance,
-            symbol: "BTCUSDT".to_string(),
+            trading_pair: TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
             price: decimal(price),
             quantity: decimal(quantity),
             timestamp: TimestampMilliseconds(timestamp),
@@ -243,12 +247,12 @@ mod tests {
     }
 
     #[test]
-    fn key_uses_lowercase_symbol_and_canonical_interval() {
+    fn key_uses_asset_ids_and_canonical_interval() {
         let key = CandleKey::new(
             CexId::Binance,
-            "BTCUSDT",
+            TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
             CandleInterval::from_label("60s").unwrap(),
         );
-        assert_eq!(key.subject_suffix(), "binance.btcusdt.1m");
+        assert_eq!(key.subject_suffix(), "binance.bitcoin.tether_usd.1m");
     }
 }
