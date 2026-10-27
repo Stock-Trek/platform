@@ -3374,8 +3374,6 @@ dependencies = [
  "async-trait",
  "base64 0.23.1",
  "chrono",
- "futures",
- "http 1.5.0",
  "iris",
  "platform-config",
  "platform-errors",
@@ -3385,7 +3383,6 @@ dependencies = [
  "stock-trek-types",
  "thiserror",
  "tokio",
- "tokio-websockets",
  "tracing",
  "url",
 ]
