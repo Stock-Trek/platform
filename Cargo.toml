@@ -64,7 +64,7 @@ hex = "0.4"
 hmac = "0.13"
 http = "1"
 httpdate = "1"
-iris = { version = "1.0.6", registry = "shipyard" }
+iris = { version = "1", registry = "shipyard" }
 jsonwebtoken = "10"
 lambda_http = "1"
 lambda_runtime = "1"
