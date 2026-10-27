@@ -1,39 +1,48 @@
 use crate::{
-    decoders::decoder::{FrameDecoder, JsonDecoder},
+    decoders::decoder::{DecodedFrame, FrameBytes},
     source::ParsedMessage,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use iris::{Codec, ConnectionError};
 use platform_errors::IngesterError;
 use serde_json::{Map, Value};
+use tokio_websockets::Message;
 
 /// Exchange-specific interpretation of a decoded JSON websocket message.
 ///
 /// Implementations are responsible for identifying the stream, sequence and
-/// exchange timestamp. Envelope parsing and payload encoding stay in
-/// [MappedJsonDecoder] so implementations only describe their own fields.
+/// exchange timestamp. Envelope parsing, frame encoding and transport concerns
+/// stay in [MappedJsonCodec] so implementations only describe their own fields.
 pub trait JsonMapping: Send + Sync + 'static {
     fn map(&self, message: Value, frame: &[u8]) -> Result<ParsedMessage, IngesterError>;
 }
 
-/// Generic JSON websocket decoder driven by an exchange-specific [JsonMapping].
-pub struct MappedJsonDecoder<M> {
+/// Generic JSON websocket codec driven by an exchange-specific [JsonMapping].
+pub struct MappedJsonCodec<M> {
     mapping: M,
 }
 
-impl<M: JsonMapping> MappedJsonDecoder<M> {
+impl<M: JsonMapping> MappedJsonCodec<M> {
     pub fn new(mapping: M) -> Self {
         Self { mapping }
     }
 }
 
-impl<M: JsonMapping> FrameDecoder for MappedJsonDecoder<M> {
-    fn decode(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
-        let message = serde_json::from_slice(frame).map_err(IngesterError::json)?;
-        self.mapping.map(message, frame)
+impl<M: JsonMapping> Codec<(), DecodedFrame> for MappedJsonCodec<M> {
+    fn encode(&self, _request: &()) -> Result<Vec<u8>, ConnectionError> {
+        Err(ConnectionError::Codec(
+            "the ingester does not send websocket messages".to_string(),
+        ))
+    }
+
+    fn decode(&self, message: Message) -> Result<DecodedFrame, ConnectionError> {
+        let frame = FrameBytes::from_message(message)?;
+        let result = serde_json::from_slice(&frame)
+            .map_err(IngesterError::json)
+            .and_then(|message| self.mapping.map(message, &frame));
+        Ok(DecodedFrame::new(result))
     }
 }
-
-impl<M: JsonMapping> JsonDecoder for MappedJsonDecoder<M> {}
 
 /// Helpers shared by JSON mappings for common websocket frame shapes.
 pub(crate) struct JsonFrame;
@@ -98,9 +107,13 @@ mod tests {
             "data": { "e": "trade" }
         }))
         .unwrap();
-        let decoder = MappedJsonDecoder::new(EnvelopeJsonMapping);
+        let codec = MappedJsonCodec::new(EnvelopeJsonMapping);
 
-        let parsed = decoder.decode(&frame).unwrap();
+        let parsed = codec
+            .decode(Message::binary(frame))
+            .unwrap()
+            .result
+            .unwrap();
 
         assert_eq!(parsed.stream, "btcusdt@trade");
         assert_eq!(parsed.sequence, None);
@@ -110,10 +123,22 @@ mod tests {
     #[test]
     fn envelope_mapping_requires_a_stream() {
         let frame = serde_json::to_vec(&json!({ "e": "trade" })).unwrap();
-        let decoder = MappedJsonDecoder::new(EnvelopeJsonMapping);
+        let codec = MappedJsonCodec::new(EnvelopeJsonMapping);
 
-        let error = decoder.decode(&frame).unwrap_err();
+        let error = codec.decode(Message::binary(frame)).unwrap().result;
 
-        assert!(matches!(error, IngesterError::MissingField("stream")));
+        assert!(matches!(error, Err(IngesterError::MissingField("stream"))));
+    }
+
+    #[test]
+    fn malformed_json_is_reported_without_failing_the_codec() {
+        let codec = MappedJsonCodec::new(EnvelopeJsonMapping);
+
+        let result = codec.decode(Message::text("not json".to_string()));
+
+        assert!(matches!(
+            result.unwrap().result,
+            Err(IngesterError::Json { .. })
+        ));
     }
 }

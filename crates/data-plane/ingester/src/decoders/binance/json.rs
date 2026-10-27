@@ -1,5 +1,5 @@
 use crate::{
-    decoders::json::{JsonFrame, JsonMapping},
+    decoders::json::{JsonFrame, JsonMapping, MappedJsonCodec},
     source::ParsedMessage,
 };
 use platform_errors::IngesterError;
@@ -17,6 +17,9 @@ const SEQUENCE_FIELDS: &[(&str, &str)] = &[
     ("depthUpdate", "u"),
     ("bookTicker", "u"),
 ];
+
+/// Binance JSON websocket codec.
+pub type BinanceJsonCodec = MappedJsonCodec<BinanceJsonMapping>;
 
 /// Binance-specific field mapping for JSON websocket streams.
 #[derive(Debug, Default, Clone, Copy)]
@@ -71,17 +74,20 @@ impl BinanceJsonMapping {
     }
 }
 
-pub type BinanceJsonDecoder = crate::decoders::json::MappedJsonDecoder<BinanceJsonMapping>;
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::decoders::decoder::FrameDecoder;
     use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+    use iris::Codec;
     use serde_json::json;
+    use tokio_websockets::Message;
 
-    fn decoder() -> BinanceJsonDecoder {
-        BinanceJsonDecoder::new(BinanceJsonMapping)
+    fn codec() -> BinanceJsonCodec {
+        BinanceJsonCodec::new(BinanceJsonMapping)
+    }
+
+    fn decode(frame: Vec<u8>) -> Result<ParsedMessage, IngesterError> {
+        codec().decode(Message::binary(frame)).unwrap().result
     }
 
     #[test]
@@ -99,7 +105,7 @@ mod tests {
         }))
         .unwrap();
 
-        let parsed = decoder().decode(&frame).unwrap();
+        let parsed = decode(frame.clone()).unwrap();
 
         assert_eq!(parsed.stream, "btcusdt@trade");
         assert_eq!(parsed.sequence, Some(42));
@@ -120,7 +126,7 @@ mod tests {
         }))
         .unwrap();
 
-        let parsed = decoder().decode(&frame).unwrap();
+        let parsed = decode(frame).unwrap();
 
         assert_eq!(parsed.stream, "btcusdt@depthUpdate");
         assert_eq!(parsed.sequence, Some(99));
@@ -138,7 +144,7 @@ mod tests {
         }))
         .unwrap();
 
-        let parsed = decoder().decode(&frame).unwrap();
+        let parsed = decode(frame).unwrap();
 
         assert_eq!(parsed.sequence, None);
     }
@@ -154,7 +160,7 @@ mod tests {
         }))
         .unwrap();
 
-        let error = decoder().decode(&frame).unwrap_err();
+        let error = decode(frame).unwrap_err();
 
         assert!(matches!(
             error,

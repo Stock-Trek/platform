@@ -1,13 +1,15 @@
 use crate::{
     decoders::{
         binary::BinaryCursor,
-        decoder::{BinaryDecoder, FrameDecoder},
+        decoder::{DecodedFrame, FrameBytes},
     },
     source::ParsedMessage,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use iris::{Codec, ConnectionError};
 use platform_errors::IngesterError;
 use platform_types::new_types::TimestampMilliseconds;
+use tokio_websockets::Message;
 
 const BINANCE_SBE_SCHEMA_ID: u16 = 1;
 
@@ -16,12 +18,13 @@ const BINANCE_BEST_BID_ASK_TEMPLATE_ID: u16 = 10_001;
 const BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID: u16 = 10_002;
 const BINANCE_DEPTH_DIFF_TEMPLATE_ID: u16 = 10_003;
 
-/// Decoder for Binance's SBE market data streams.
+/// Codec for Binance's binary SBE market data streams.
 ///
 /// Schema: <https://github.com/binance/binance-spot-api-docs/blob/master/sbe/schemas/stream_1_0.xml>
-pub struct BinanceSbeDecoder;
+#[derive(Debug, Default, Clone, Copy)]
+pub struct BinanceSbeCodec;
 
-impl BinanceSbeDecoder {
+impl BinanceSbeCodec {
     fn decode_frame(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
         let mut cursor = BinaryCursor::new(frame);
         let _block_length = cursor.read_u16()?;
@@ -133,13 +136,24 @@ impl BinanceSbeDecoder {
     }
 }
 
-impl FrameDecoder for BinanceSbeDecoder {
-    fn decode(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
-        self.decode_frame(frame)
+impl Codec<(), DecodedFrame> for BinanceSbeCodec {
+    fn encode(&self, _request: &()) -> Result<Vec<u8>, ConnectionError> {
+        Err(ConnectionError::Codec(
+            "the ingester does not send websocket messages".to_string(),
+        ))
+    }
+
+    fn decode(&self, message: Message) -> Result<DecodedFrame, ConnectionError> {
+        if !message.is_binary() {
+            return Err(ConnectionError::BadMessagePayload);
+        }
+
+        // TODO: validate the SBE header here once multiple binary message
+        // versions need to be supported.
+        let frame = FrameBytes::from_message(message)?;
+        Ok(DecodedFrame::new(self.decode_frame(&frame)))
     }
 }
-
-impl BinaryDecoder for BinanceSbeDecoder {}
 
 /// SBE group header and the location of its entries within the frame.
 #[derive(Debug, Clone, Copy)]
@@ -263,12 +277,18 @@ mod tests {
         frame
     }
 
+    fn decode(frame: Vec<u8>) -> Result<ParsedMessage, IngesterError> {
+        BinanceSbeCodec
+            .decode(Message::binary(frame))
+            .unwrap()
+            .result
+    }
+
     #[test]
     fn decodes_binance_sbe_trades() {
         let frame = sbe_trades_frame();
-        let decoder = BinanceSbeDecoder;
 
-        let parsed = decoder.decode(&frame).unwrap();
+        let parsed = decode(frame.clone()).unwrap();
 
         assert_eq!(parsed.stream, "btcusdt@trade");
         assert_eq!(parsed.sequence, Some(43));
@@ -281,10 +301,7 @@ mod tests {
 
     #[test]
     fn decodes_binance_sbe_best_bid_ask() {
-        let frame = sbe_best_bid_ask_frame();
-        let decoder = BinanceSbeDecoder;
-
-        let parsed = decoder.decode(&frame).unwrap();
+        let parsed = decode(sbe_best_bid_ask_frame()).unwrap();
 
         assert_eq!(parsed.stream, "btcusdt@bestBidAsk");
         assert_eq!(parsed.sequence, Some(99));
@@ -292,10 +309,7 @@ mod tests {
 
     #[test]
     fn decodes_binance_sbe_depth_diff_and_skips_groups() {
-        let frame = sbe_depth_diff_frame();
-        let decoder = BinanceSbeDecoder;
-
-        let parsed = decoder.decode(&frame).unwrap();
+        let parsed = decode(sbe_depth_diff_frame()).unwrap();
 
         assert_eq!(parsed.stream, "btcusdt@depth");
         assert_eq!(parsed.sequence, Some(123));
@@ -303,14 +317,25 @@ mod tests {
 
     #[test]
     fn rejects_unknown_sbe_templates() {
-        let frame = sbe_header(1);
-        let decoder = BinanceSbeDecoder;
-
-        let error = decoder.decode(&frame).unwrap_err();
+        let error = decode(sbe_header(1)).unwrap_err();
 
         assert!(matches!(
             error,
             IngesterError::UnknownSbeTemplate { template_id: 1 }
         ));
+    }
+
+    #[test]
+    fn rejects_non_binary_frames() {
+        let result = BinanceSbeCodec.decode(Message::text("{}".to_string()));
+
+        assert!(matches!(result, Err(ConnectionError::BadMessagePayload)));
+    }
+
+    #[test]
+    fn encoding_requests_is_unsupported() {
+        let result = BinanceSbeCodec.encode(&());
+
+        assert!(matches!(result, Err(ConnectionError::Codec(_))));
     }
 }

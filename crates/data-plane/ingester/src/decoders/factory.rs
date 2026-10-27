@@ -1,35 +1,35 @@
 use crate::decoders::{
     binance::{
-        json::{BinanceJsonDecoder, BinanceJsonMapping},
-        sbe::BinanceSbeDecoder,
+        json::{BinanceJsonCodec, BinanceJsonMapping},
+        sbe::BinanceSbeCodec,
     },
-    decoder::{BinaryDecoder, JsonDecoder},
-    json::{EnvelopeJsonMapping, MappedJsonDecoder},
+    decoder::SharedCodec,
+    json::{EnvelopeJsonMapping, MappedJsonCodec},
 };
 use platform_errors::IngesterError;
 use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
 
-/// Builds exchange-specific decoders for a websocket stream format.
-pub struct DecoderFactory;
+/// Builds exchange-specific websocket codecs for a stream format.
+pub struct CodecFactory;
 
-impl DecoderFactory {
-    /// Builds the JSON decoder for an exchange.
+impl CodecFactory {
+    /// Builds the JSON codec for an exchange.
     ///
     /// TODO: register additional exchange mappings as they are implemented.
-    pub fn json_decoder(exchange: CexId) -> Arc<dyn JsonDecoder> {
+    pub fn json_codec(exchange: CexId) -> SharedCodec {
         match exchange {
-            CexId::Binance => Arc::new(BinanceJsonDecoder::new(BinanceJsonMapping)),
-            _ => Arc::new(MappedJsonDecoder::new(EnvelopeJsonMapping)),
+            CexId::Binance => Arc::new(BinanceJsonCodec::new(BinanceJsonMapping)),
+            _ => Arc::new(MappedJsonCodec::new(EnvelopeJsonMapping)),
         }
     }
 
-    /// Builds the binary decoder for an exchange.
+    /// Builds the binary codec for an exchange.
     ///
-    /// TODO: register additional exchange binary decoders as they are implemented.
-    pub fn binary_decoder(exchange: CexId) -> Result<Arc<dyn BinaryDecoder>, IngesterError> {
+    /// TODO: register additional exchange binary codecs as they are implemented.
+    pub fn binary_codec(exchange: CexId) -> Result<SharedCodec, IngesterError> {
         match exchange {
-            CexId::Binance => Ok(Arc::new(BinanceSbeDecoder)),
+            CexId::Binance => Ok(Arc::new(BinanceSbeCodec)),
             _ => Err(IngesterError::UnsupportedStreamFormat {
                 format: format!("binary for exchange {}", exchange),
             }),
