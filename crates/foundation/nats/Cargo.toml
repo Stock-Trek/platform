@@ -1,0 +1,10 @@
+[package]
+name = "platform-nats"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+platform-errors = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["io-util", "net", "sync"] }
+url = { workspace = true }

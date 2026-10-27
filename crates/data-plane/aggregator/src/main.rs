@@ -1,7 +1,6 @@
 mod aggregator;
 mod candle;
 mod config;
-mod nats;
 mod runner;
 mod sink;
 mod source;

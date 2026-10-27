@@ -1,6 +1,7 @@
 use crate::candle::CandleInterval;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
+use platform_nats::NatsSubject;
 use std::{str::FromStr, time::Duration};
 
 pub const AGGREGATOR_NATS_URL: &str = "AGGREGATOR_NATS_URL";
@@ -93,19 +94,7 @@ impl AggregatorConfig {
 }
 
 fn validate_subject_prefix(name: &str, value: &str) -> BpResult<()> {
-    let invalid = value.split('.').any(|token| {
-        token.is_empty()
-            || token
-                .chars()
-                .any(|character| character.is_whitespace() || matches!(character, '*' | '>'))
-    });
-    if invalid {
-        return Err(BpError::config_invalid(
-            name,
-            "must be a concrete NATS subject prefix without wildcards or empty tokens",
-        ));
-    }
-    Ok(())
+    NatsSubject::validate(value).map_err(|error| BpError::config_invalid(name, error.to_string()))
 }
 
 #[cfg(test)]

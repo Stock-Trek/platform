@@ -1,6 +1,5 @@
 mod config;
 mod ingester;
-mod nats;
 mod publisher;
 mod runner;
 mod sequence;

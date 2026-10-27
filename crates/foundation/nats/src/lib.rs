@@ -1,11 +1,13 @@
-use crate::publisher::EventPublisher;
-use async_trait::async_trait;
+//! Minimal NATS client shared by the market data services.
+
 use platform_errors::{BpError, BpResult, IngesterError, ValidationError};
 use serde_json::{Map, Value, json};
 use tokio::{
-    io::{AsyncBufReadExt, AsyncWriteExt, BufReader},
-    net::TcpStream,
-    net::tcp::{OwnedReadHalf, OwnedWriteHalf},
+    io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader},
+    net::{
+        TcpStream,
+        tcp::{OwnedReadHalf, OwnedWriteHalf},
+    },
     sync::Mutex,
 };
 use url::Url;
@@ -13,7 +15,7 @@ use url::Url;
 const DEFAULT_NATS_PORT: u16 = 4222;
 
 #[derive(Debug, Clone)]
-pub(crate) struct NatsAddress {
+pub struct NatsAddress {
     host: String,
     port: u16,
     username: Option<String>,
@@ -21,7 +23,7 @@ pub(crate) struct NatsAddress {
 }
 
 impl NatsAddress {
-    pub(crate) fn validate(value: &str) -> BpResult<()> {
+    pub fn validate(value: &str) -> BpResult<()> {
         Self::parse(value).map(|_| ())
     }
 
@@ -37,21 +39,19 @@ impl NatsAddress {
         let host = url
             .host_str()
             .ok_or_else(|| BpError::config_invalid("NATS_URL", "missing host"))?;
-        let username = (!url.username().is_empty()).then(|| url.username().to_string());
-        let password = url.password().map(str::to_string);
         Ok(Self {
             host: host.to_string(),
             port: url.port().unwrap_or(DEFAULT_NATS_PORT),
-            username,
-            password,
+            username: (!url.username().is_empty()).then(|| url.username().to_string()),
+            password: url.password().map(str::to_string),
         })
     }
 }
 
-pub(crate) struct NatsSubject;
+pub struct NatsSubject;
 
 impl NatsSubject {
-    pub(crate) fn validate(subject: &str) -> BpResult<()> {
+    pub fn validate(subject: &str) -> BpResult<()> {
         let invalid = subject.is_empty()
             || subject.split('.').any(|token| {
                 token.is_empty()
@@ -69,13 +69,14 @@ impl NatsSubject {
     }
 }
 
-pub struct NatsJetstreamPublisher {
+/// Reconnecting publisher for core NATS subjects.
+pub struct NatsPublisher {
     address: NatsAddress,
     name: String,
     connection: Mutex<Option<NatsConnection>>,
 }
 
-impl NatsJetstreamPublisher {
+impl NatsPublisher {
     pub async fn connect(url: &str, name: &str) -> BpResult<Self> {
         let address = NatsAddress::parse(url)?;
         let connection = NatsConnection::connect(&address, name).await?;
@@ -85,11 +86,10 @@ impl NatsJetstreamPublisher {
             connection: Mutex::new(Some(connection)),
         })
     }
-}
 
-#[async_trait]
-impl EventPublisher for NatsJetstreamPublisher {
-    async fn publish(&self, subject: &str, payload: &[u8]) -> BpResult<()> {
+    // TODO: use JetStream publish acknowledgements and a deterministic message
+    // id so a reconnect cannot duplicate or silently drop events.
+    pub async fn publish(&self, subject: &str, payload: &[u8]) -> BpResult<()> {
         NatsSubject::validate(subject)?;
         let mut connection = self.connection.lock().await;
         if connection.is_none() {
@@ -106,8 +106,27 @@ impl EventPublisher for NatsJetstreamPublisher {
     }
 }
 
+/// Subscription that yields the raw subject and payload for each message.
+pub struct NatsSubscriber {
+    connection: NatsConnection,
+}
+
+impl NatsSubscriber {
+    pub async fn connect(url: &str, name: &str, subject: &str, sid: &str) -> BpResult<Self> {
+        let address = NatsAddress::parse(url)?;
+        let mut connection = NatsConnection::connect(&address, name).await?;
+        connection.subscribe(subject, sid).await?;
+        Ok(Self { connection })
+    }
+
+    pub async fn next_message(&mut self) -> BpResult<Option<(String, Vec<u8>)>> {
+        // TODO: reconnect and resubscribe if the connection drops.
+        self.connection.next_message().await
+    }
+}
+
 struct NatsConnection {
-    _reader: BufReader<OwnedReadHalf>,
+    reader: BufReader<OwnedReadHalf>,
     writer: OwnedWriteHalf,
 }
 
@@ -116,9 +135,11 @@ impl NatsConnection {
         let stream = TcpStream::connect((address.host.as_str(), address.port)).await?;
         let (read_half, write_half) = stream.into_split();
         let mut reader = BufReader::new(read_half);
-        let info = Self::read_protocol_line(&mut reader).await?;
+        let info = read_protocol_line(&mut reader)
+            .await?
+            .ok_or_else(|| protocol_error("NATS connection closed during handshake"))?;
         if !info.starts_with("INFO ") {
-            return Err(Self::protocol_error(format!(
+            return Err(protocol_error(format!(
                 "expected INFO from NATS server, got {info:?}"
             )));
         }
@@ -149,23 +170,71 @@ impl NatsConnection {
         writer.flush().await?;
 
         loop {
-            let line = Self::read_protocol_line(&mut reader).await?;
+            let line = read_protocol_line(&mut reader)
+                .await?
+                .ok_or_else(|| protocol_error("NATS connection closed during handshake"))?;
             if line == "PONG" {
                 break;
             }
             if line.starts_with("-ERR") {
-                return Err(Self::protocol_error(line));
+                return Err(protocol_error(line));
             }
         }
 
-        Ok(Self {
-            _reader: reader,
-            writer,
-        })
+        Ok(Self { reader, writer })
     }
 
-    // TODO: use JetStream publish acknowledgements and a deterministic message
-    // id so a reconnect cannot duplicate or silently drop events.
+    async fn subscribe(&mut self, subject: &str, sid: &str) -> BpResult<()> {
+        let command = format!("SUB {subject} {sid}\r\n");
+        self.writer.write_all(command.as_bytes()).await?;
+        self.writer.flush().await?;
+        Ok(())
+    }
+
+    async fn next_message(&mut self) -> BpResult<Option<(String, Vec<u8>)>> {
+        loop {
+            let Some(line) = read_protocol_line(&mut self.reader).await? else {
+                return Ok(None);
+            };
+            if line == "PING" {
+                self.writer.write_all(b"PONG\r\n").await?;
+                self.writer.flush().await?;
+                continue;
+            }
+            if line.starts_with("MSG ") {
+                let tokens: Vec<&str> = line.split_whitespace().collect();
+                if tokens.len() < 4 {
+                    return Err(protocol_error(format!("malformed MSG line {line:?}")));
+                }
+                let subject = tokens[1].to_string();
+                // MSG <subject> <sid> [reply-to] <#bytes>
+                let size = tokens
+                    .last()
+                    .and_then(|size| size.parse::<usize>().ok())
+                    .ok_or_else(|| protocol_error(format!("malformed MSG size in {line:?}")))?;
+                let mut payload = vec![0_u8; size];
+                self.reader.read_exact(&mut payload).await?;
+                let mut terminator = [0_u8; 2];
+                self.reader.read_exact(&mut terminator).await?;
+                return Ok(Some((subject, payload)));
+            }
+            if line.starts_with("-ERR") {
+                return Err(protocol_error(line));
+            }
+            if line.is_empty()
+                || line.starts_with("+OK")
+                || line.starts_with("INFO")
+                || line == "PONG"
+            {
+                continue;
+            }
+            // TODO: support header messages and reconnects.
+            return Err(protocol_error(format!(
+                "unsupported NATS protocol message {line:?}"
+            )));
+        }
+    }
+
     async fn publish(&mut self, subject: &str, payload: &[u8]) -> BpResult<()> {
         let header = format!("PUB {subject} {}\r\n", payload.len());
         self.writer.write_all(header.as_bytes()).await?;
@@ -174,20 +243,18 @@ impl NatsConnection {
         self.writer.flush().await?;
         Ok(())
     }
+}
 
-    async fn read_protocol_line(reader: &mut BufReader<OwnedReadHalf>) -> BpResult<String> {
-        let mut line = String::new();
-        if reader.read_line(&mut line).await? == 0 {
-            return Err(Self::protocol_error(
-                "NATS connection closed during handshake",
-            ));
-        }
-        Ok(line.trim_end_matches(['\r', '\n']).to_string())
+async fn read_protocol_line(reader: &mut BufReader<OwnedReadHalf>) -> BpResult<Option<String>> {
+    let mut line = String::new();
+    if reader.read_line(&mut line).await? == 0 {
+        return Ok(None);
     }
+    Ok(Some(line.trim_end_matches(['\r', '\n']).to_string()))
+}
 
-    fn protocol_error(message: impl Into<String>) -> BpError {
-        BpError::Ingester(IngesterError::protocol(message))
-    }
+fn protocol_error(message: impl Into<String>) -> BpError {
+    BpError::Ingester(IngesterError::protocol(message))
 }
 
 #[cfg(test)]

@@ -1,9 +1,8 @@
 use crate::{
     aggregator::CandleAggregator,
     config::AggregatorConfig,
-    nats::{NatsCandleSink, NatsMarketEventSource},
-    sink::{ClosedCandlePublisher, OpenCandleStore},
-    source::MarketEventSource,
+    sink::{ClosedCandlePublisher, NatsCandleSink, OpenCandleStore},
+    source::{MarketEventSource, NatsMarketEventSource},
 };
 use chrono::Utc;
 use platform_errors::BpResult;
