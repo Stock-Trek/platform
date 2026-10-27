@@ -1,7 +1,8 @@
 use crate::{
+    codec::RawFrameCodec,
     config::IngesterConfig,
     decoders::{
-        decoder::{BinaryDecoder, JsonDecoder},
+        decoder::{BinaryDecoder, FrameDecoder, JsonDecoder},
         factory::DecoderFactory,
     },
 };
@@ -12,11 +13,13 @@ use iris::{
 };
 use platform_errors::{BpError, BpResult, IngesterError};
 use platform_types::new_types::TimestampMilliseconds;
-use serde_json::Value;
 use std::{fmt, str::FromStr, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
 use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
+
+const BINANCE_API_KEY_HEADER: &str = "X-MBX-APIKEY";
+const DEFAULT_API_KEY_HEADER: &str = "X-API-KEY";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedMessage {
@@ -101,56 +104,57 @@ impl WebsocketSource {
     }
 
     pub async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BpResult<()> {
-        match &self.stream_format {
-            StreamFormat::Json(decoder) => self.run_iris(decoder.clone(), sender).await,
-            StreamFormat::Binary(decoder) => self.run_binary(decoder.clone()).await,
-        }
-    }
-
-    async fn run_binary(&self, _decoder: Arc<dyn BinaryDecoder>) -> BpResult<()> {
-        // TODO: iris deserializes every frame as JSON, so binary streams
-        // cannot be transported until it exposes raw frames.
-        Err(BpError::Ingester(IngesterError::UnsupportedStreamFormat {
-            format: "binary frames are not supported by iris".to_string(),
-        }))
-    }
-
-    async fn run_iris(
-        &self,
-        decoder: Arc<dyn JsonDecoder>,
-        sender: mpsc::Sender<ParsedMessage>,
-    ) -> BpResult<()> {
-        if self.api_key.is_some() {
-            // TODO: iris does not currently expose custom websocket headers.
-            warn!(
-                exchange = %self.exchange,
-                "ignoring websocket api key because iris does not support custom headers"
-            );
-        }
-
-        let listener = Arc::new(IrisJsonListener::new(self.exchange, decoder, sender));
-        let config = IrisConfig::new().with_server_close_behavior(ServerCloseBehavior::Reconnect);
-        let client = IrisClient::<(), Value>::new(config, listener, &self.url);
+        let decoder: Arc<dyn FrameDecoder> = match &self.stream_format {
+            StreamFormat::Json(decoder) => decoder.clone(),
+            StreamFormat::Binary(decoder) => decoder.clone(),
+        };
+        let listener = Arc::new(IrisFrameListener::new(self.exchange, decoder, sender));
+        let client = IrisClient::<(), Vec<u8>, RawFrameCodec>::new_with_codec(
+            self.iris_config()?,
+            listener,
+            &self.url,
+            RawFrameCodec,
+        );
         client.connect().await.map_err(BpError::external)?;
-        info!(exchange = %self.exchange, "connected to exchange websocket through iris");
+        info!(
+            exchange = %self.exchange,
+            format = ?self.stream_format,
+            "connected to exchange websocket through iris"
+        );
 
         // iris owns reconnect, ping and pong handling. The runner aborts this
         // task when the process is shutting down.
         std::future::pending::<()>().await;
         Ok(())
     }
+
+    fn iris_config(&self) -> BpResult<IrisConfig> {
+        let mut config =
+            IrisConfig::new().with_server_close_behavior(ServerCloseBehavior::Reconnect);
+        if let Some(api_key) = &self.api_key {
+            // TODO: map authentication headers to each exchange explicitly.
+            let header = match self.exchange {
+                CexId::Binance => BINANCE_API_KEY_HEADER,
+                _ => DEFAULT_API_KEY_HEADER,
+            };
+            config = config
+                .with_header_str(header, api_key)
+                .map_err(BpError::external)?;
+        }
+        Ok(config)
+    }
 }
 
-struct IrisJsonListener {
+struct IrisFrameListener {
     exchange: CexId,
-    decoder: Arc<dyn JsonDecoder>,
+    decoder: Arc<dyn FrameDecoder>,
     sender: mpsc::Sender<ParsedMessage>,
 }
 
-impl IrisJsonListener {
+impl IrisFrameListener {
     fn new(
         exchange: CexId,
-        decoder: Arc<dyn JsonDecoder>,
+        decoder: Arc<dyn FrameDecoder>,
         sender: mpsc::Sender<ParsedMessage>,
     ) -> Self {
         Self {
@@ -161,33 +165,18 @@ impl IrisJsonListener {
     }
 }
 
-impl fmt::Debug for IrisJsonListener {
+impl fmt::Debug for IrisFrameListener {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("IrisJsonListener")
+            .debug_struct("IrisFrameListener")
             .field("exchange", &self.exchange)
             .finish()
     }
 }
 
 #[async_trait]
-impl IrisListener<Value> for IrisJsonListener {
-    async fn on_message(&self, message: Value) {
-        // iris hands us a parsed value rather than the original frame, so the
-        // payload is the canonical re-serialised message.
-        // TODO: preserve the exact raw frame once iris exposes it.
-        let frame = match serde_json::to_vec(&message) {
-            Ok(frame) => frame,
-            Err(error) => {
-                warn!(
-                    exchange = %self.exchange,
-                    %error,
-                    "discarding websocket message that could not be serialised"
-                );
-                return;
-            }
-        };
-
+impl IrisListener<Vec<u8>> for IrisFrameListener {
+    async fn on_message(&self, frame: Vec<u8>) {
         match self.decoder.decode(&frame) {
             Ok(parsed) => {
                 if self.sender.send(parsed).await.is_err() {
