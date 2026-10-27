@@ -6,8 +6,13 @@ use crate::{
 };
 use chrono::Utc;
 use platform_errors::BpResult;
-use platform_market_data::{decoders::trade::TradeDecoder, event::MarketEvent};
+use platform_market_data::{
+    decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
+    event::MarketEvent,
+};
 use platform_types::new_types::TimestampMilliseconds;
+use std::collections::{HashMap, hash_map::Entry};
+use stock_trek_types::cex::cex_id::CexId;
 use tokio::{
     sync::mpsc,
     time::{self, MissedTickBehavior},
@@ -72,7 +77,7 @@ impl AggregatorRunner {
         sink: &NatsCandleSink,
         aggregator: &mut CandleAggregator,
     ) -> BpResult<()> {
-        let decoder = TradeDecoder;
+        let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
         let mut flush_ticker = time::interval(self.config.flush_interval);
         flush_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
@@ -82,6 +87,16 @@ impl AggregatorRunner {
                     let Some(event) = maybe_event else {
                         info!("market event channel closed");
                         break;
+                    };
+                    let decoder = match decoders.entry(event.exchange) {
+                        Entry::Occupied(entry) => entry.into_mut(),
+                        Entry::Vacant(entry) => match TradeDecoderFactory::for_exchange(event.exchange) {
+                            Ok(decoder) => entry.insert(decoder),
+                            Err(error) => {
+                                warn!(%error, exchange = %event.exchange, "no trade decoder for exchange");
+                                continue;
+                            }
+                        },
                     };
                     match decoder.decode(&event) {
                         Ok(trades) => {
