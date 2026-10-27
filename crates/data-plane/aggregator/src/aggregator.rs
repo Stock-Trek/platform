@@ -5,14 +5,14 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
 /// A candle that has left its aggregation window.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClosedCandle {
     pub revision: u64,
     pub candle: Candle,
 }
 
 /// Candles updated by a single trade.
-#[derive(Debug, Default, Clone, PartialEq)]
+#[derive(Debug, Default, Clone)]
 pub struct AggregationUpdate {
     /// Candles that need to be written back to the open-candle store.
     pub open: Vec<Candle>,
@@ -50,7 +50,7 @@ impl CandleAggregator {
         for interval in self.intervals.clone() {
             let key = CandleKey::new(trade.exchange, trade.symbol.clone(), interval);
             let candle_start = interval.start_for(trade.timestamp);
-            let current_start = self.open.get(&key).map(|candle| candle.start_time);
+            let current_start = self.open.get(&key).map(Candle::start_time);
 
             match current_start {
                 Some(start) if start == candle_start => {
@@ -95,7 +95,7 @@ impl CandleAggregator {
         let mut keys: Vec<CandleKey> = self
             .open
             .iter()
-            .filter(|(_, candle)| candle.end_time <= timestamp)
+            .filter(|(_, candle)| candle.end_time() <= timestamp)
             .map(|(key, _)| key.clone())
             .collect();
         keys.sort_by_key(CandleKey::subject_suffix);
@@ -142,9 +142,9 @@ mod tests {
 
         assert!(update.closed.is_empty());
         assert_eq!(update.open.len(), 1);
-        assert_eq!(update.open[0].start_time, TimestampMilliseconds(60_000));
-        assert_eq!(update.open[0].ohlcv.open, Decimal::from(100));
-        assert!(!update.open[0].is_candle_closed);
+        assert_eq!(update.open[0].start_time(), TimestampMilliseconds(60_000));
+        assert_eq!(update.open[0].market_candle.ohlcv.open, 100.0);
+        assert!(!update.open[0].market_candle.is_candle_closed);
     }
 
     #[test]
@@ -155,13 +155,13 @@ mod tests {
 
         assert_eq!(update.closed.len(), 1);
         assert_eq!(update.closed[0].revision, 1);
-        assert!(update.closed[0].candle.is_candle_closed);
+        assert!(update.closed[0].candle.market_candle.is_candle_closed);
         assert_eq!(
-            update.closed[0].candle.start_time,
+            update.closed[0].candle.start_time(),
             TimestampMilliseconds(60_000)
         );
         assert_eq!(update.open.len(), 1);
-        assert_eq!(update.open[0].start_time, TimestampMilliseconds(120_000));
+        assert_eq!(update.open[0].start_time(), TimestampMilliseconds(120_000));
 
         let next = aggregator.apply_trade(&trade("102", 181_000));
         assert_eq!(next.closed[0].revision, 2);
@@ -192,7 +192,7 @@ mod tests {
         );
         let closed = aggregator.flush_closed_at_or_before(TimestampMilliseconds(120_000));
         assert_eq!(closed.len(), 1);
-        assert!(closed[0].candle.is_candle_closed);
+        assert!(closed[0].candle.market_candle.is_candle_closed);
         assert_eq!(closed[0].revision, 1);
     }
 

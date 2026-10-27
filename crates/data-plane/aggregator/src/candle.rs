@@ -1,8 +1,9 @@
 use platform_market_data::decoders::trade::Trade;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
-use rust_decimal::Decimal;
+use rust_decimal::prelude::ToPrimitive;
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use stock_trek::markets::{MarketCandle, MarketOhlcv};
 use stock_trek_types::cex::cex_id::CexId;
 use thiserror::Error;
 
@@ -117,67 +118,74 @@ impl fmt::Display for CandleKey {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Ohlcv {
-    pub open: Decimal,
-    pub high: Decimal,
-    pub low: Decimal,
-    pub close: Decimal,
-    pub volume: Decimal,
-    pub quote_volume: Decimal,
-    pub vwap: Decimal,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+/// An aggregated candle together with its exchange and interval identity.
+///
+/// The candle body reuses the stock-trek market data DTOs so downstream
+/// consumers receive the same representation as other market data producers.
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Candle {
     pub key: CandleKey,
-    pub start_time: TimestampMilliseconds,
-    pub end_time: TimestampMilliseconds,
-    pub duration: DurationMilliseconds,
-    pub is_candle_closed: bool,
-    pub ohlcv: Ohlcv,
-    pub trade_count: u64,
+    pub market_candle: MarketCandle,
 }
 
 impl Candle {
     pub fn open(trade: &Trade, interval: CandleInterval) -> Self {
-        let quote_volume = trade.price * trade.quantity;
+        let price = trade.price.to_f64().unwrap_or_default();
+        let quantity = trade.quantity.to_f64().unwrap_or_default();
+        let quote_volume = price * quantity;
+        let start_time = interval.start_for(trade.timestamp);
+        let end_time = interval.end_for(trade.timestamp);
+
         Self {
             key: CandleKey::new(trade.exchange, trade.symbol.clone(), interval),
-            start_time: interval.start_for(trade.timestamp),
-            end_time: interval.end_for(trade.timestamp),
-            duration: interval.duration(),
-            is_candle_closed: false,
-            ohlcv: Ohlcv {
-                open: trade.price,
-                high: trade.price,
-                low: trade.price,
-                close: trade.price,
-                volume: trade.quantity,
-                quote_volume,
-                vwap: trade.price,
-            },
-            trade_count: 1,
+            market_candle: MarketCandle::new(
+                to_millis(start_time.0),
+                to_millis(end_time.0),
+                to_millis(interval.duration().0),
+                false,
+                MarketOhlcv::new(price, price, price, price, quantity, quote_volume, price),
+                1,
+            ),
         }
     }
 
     pub fn apply_trade(&mut self, trade: &Trade) {
-        self.ohlcv.high = self.ohlcv.high.max(trade.price);
-        self.ohlcv.low = self.ohlcv.low.min(trade.price);
-        self.ohlcv.close = trade.price;
-        self.ohlcv.volume += trade.quantity;
-        self.ohlcv.quote_volume += trade.price * trade.quantity;
-        self.ohlcv.vwap = self
-            .ohlcv
-            .quote_volume
-            .checked_div(self.ohlcv.volume)
-            .unwrap_or(Decimal::ZERO);
-        self.trade_count = self.trade_count.saturating_add(1);
+        let price = trade.price.to_f64().unwrap_or_default();
+        let quantity = trade.quantity.to_f64().unwrap_or_default();
+        let ohlcv = &mut self.market_candle.ohlcv;
+
+        ohlcv.high = ohlcv.high.max(price);
+        ohlcv.low = ohlcv.low.min(price);
+        ohlcv.close = price;
+        ohlcv.volume += quantity;
+        ohlcv.quote_volume += price * quantity;
+        ohlcv.vwap = if ohlcv.volume == 0.0 {
+            0.0
+        } else {
+            ohlcv.quote_volume / ohlcv.volume
+        };
+        self.market_candle.trade_count = self.market_candle.trade_count.saturating_add(1);
     }
 
     pub fn close(&mut self) {
-        self.is_candle_closed = true;
+        self.market_candle.is_candle_closed = true;
     }
+
+    pub fn start_time(&self) -> TimestampMilliseconds {
+        to_timestamp(self.market_candle.start_time_millis_inc)
+    }
+
+    pub fn end_time(&self) -> TimestampMilliseconds {
+        to_timestamp(self.market_candle.end_time_millis_exc)
+    }
+}
+
+fn to_millis(value: i64) -> u64 {
+    u64::try_from(value).unwrap_or_default()
+}
+
+fn to_timestamp(value: u64) -> TimestampMilliseconds {
+    TimestampMilliseconds(i64::try_from(value).unwrap_or(i64::MAX))
 }
 
 #[cfg(test)]
@@ -223,14 +231,15 @@ mod tests {
         candle.apply_trade(&trade("110", "1", 62_000));
         candle.apply_trade(&trade("90", "3", 63_000));
 
-        assert_eq!(candle.ohlcv.open, decimal("100"));
-        assert_eq!(candle.ohlcv.high, decimal("110"));
-        assert_eq!(candle.ohlcv.low, decimal("90"));
-        assert_eq!(candle.ohlcv.close, decimal("90"));
-        assert_eq!(candle.ohlcv.volume, decimal("6"));
-        assert_eq!(candle.ohlcv.quote_volume, decimal("580"));
-        assert_eq!(candle.ohlcv.vwap, decimal("96.66666666666666666666666667"));
-        assert_eq!(candle.trade_count, 3);
+        let ohlcv = &candle.market_candle.ohlcv;
+        assert_eq!(ohlcv.open, 100.0);
+        assert_eq!(ohlcv.high, 110.0);
+        assert_eq!(ohlcv.low, 90.0);
+        assert_eq!(ohlcv.close, 90.0);
+        assert_eq!(ohlcv.volume, 6.0);
+        assert_eq!(ohlcv.quote_volume, 580.0);
+        assert!((ohlcv.vwap - 96.666_666_666_666_67).abs() < f64::EPSILON);
+        assert_eq!(candle.market_candle.trade_count, 3);
     }
 
     #[test]

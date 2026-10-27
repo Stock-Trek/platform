@@ -3153,6 +3153,7 @@ dependencies = [
  "rust_decimal",
  "serde",
  "serde_json",
+ "stock-trek",
  "stock-trek-types",
  "thiserror",
  "tokio",
