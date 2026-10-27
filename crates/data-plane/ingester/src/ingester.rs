@@ -1,6 +1,5 @@
 use crate::{
     event::{GapMarker, MarketEvent},
-    exchange::CexIdExt,
     publisher::EventPublisher,
     sequence::{SequenceObservation, SequenceTracker},
     source::ParsedMessage,
@@ -34,7 +33,7 @@ impl IngestOptions {
             "{}.{}.{}.{}",
             self.subject_prefix,
             category,
-            self.exchange.slug(),
+            self.exchange.to_string(),
             stream
         )
     }

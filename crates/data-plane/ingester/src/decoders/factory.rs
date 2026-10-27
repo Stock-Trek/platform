@@ -1,11 +1,8 @@
-use crate::{
-    decoders::{
-        binance_json::{BinanceJsonDecoder, BinanceJsonMapping},
-        binance_sbe::BinanceSbeDecoder,
-        decoder::{BinaryDecoder, JsonDecoder},
-        json::{EnvelopeJsonMapping, MappedJsonDecoder},
-    },
-    exchange::CexIdExt,
+use crate::decoders::{
+    binance_json::{BinanceJsonDecoder, BinanceJsonMapping},
+    binance_sbe::BinanceSbeDecoder,
+    decoder::{BinaryDecoder, JsonDecoder},
+    json::{EnvelopeJsonMapping, MappedJsonDecoder},
 };
 use platform_errors::IngesterError;
 use std::sync::Arc;
@@ -32,7 +29,7 @@ impl DecoderFactory {
         match exchange {
             CexId::Binance => Ok(Arc::new(BinanceSbeDecoder::new(exchange))),
             _ => Err(IngesterError::UnsupportedStreamFormat {
-                format: format!("binary for exchange {}", exchange.slug()),
+                format: format!("binary for exchange {}", exchange.to_string()),
             }),
         }
     }

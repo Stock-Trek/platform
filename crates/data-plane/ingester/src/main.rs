@@ -1,7 +1,6 @@
 mod config;
 mod decoders;
 mod event;
-mod exchange;
 mod ingester;
 mod nats;
 mod publisher;

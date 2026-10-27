@@ -1,6 +1,5 @@
 use crate::{
     decoders::decoder::{BinaryDecoder, FrameDecoder},
-    exchange::CexIdExt,
     source::ParsedMessage,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -28,7 +27,7 @@ impl BinanceSbeDecoder {
     }
 
     fn decode_frame(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
-        let exchange = self.exchange.slug();
+        let exchange = self.exchange.to_string();
         let cursor = SbeCursor::new(frame, &exchange);
         let schema_id = cursor.read_u16(4)?;
         if schema_id != BINANCE_SBE_SCHEMA_ID {

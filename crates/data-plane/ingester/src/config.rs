@@ -1,5 +1,4 @@
 use crate::{
-    exchange::CexIdExt,
     nats::{NatsAddress, NatsSubject},
     source::StreamFormat,
 };
@@ -33,7 +32,7 @@ impl IngesterConfig {
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         let exchange_value = vars.required(EXCHANGE)?;
-        let exchange = CexId::parse_exchange(&exchange_value).ok_or_else(|| {
+        let exchange = CexId::try_from(exchange_value.as_str()).map_err(|_| {
             BpError::config_invalid(EXCHANGE, format!("unsupported exchange {exchange_value}"))
         })?;
         let websocket_url = vars.required_url(WEBSOCKET_URL, &["ws", "wss"])?;
