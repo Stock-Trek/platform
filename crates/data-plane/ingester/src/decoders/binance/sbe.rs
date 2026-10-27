@@ -23,75 +23,95 @@ pub struct BinanceSbeDecoder;
 
 impl BinanceSbeDecoder {
     fn decode_frame(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
-        let cursor = BinaryCursor::new(frame);
-        let schema_id = cursor.read_u16(4)?;
+        let mut cursor = BinaryCursor::new(frame);
+        let _block_length = cursor.read_u16()?;
+        let template_id = cursor.read_u16()?;
+        let schema_id = cursor.read_u16()?;
+        let _version = cursor.read_u16()?;
         if schema_id != BINANCE_SBE_SCHEMA_ID {
             return Err(IngesterError::malformed_sbe(format!(
                 "expected schema id {BINANCE_SBE_SCHEMA_ID}, got {schema_id}"
             )));
         }
 
-        match cursor.read_u16(2)? {
-            BINANCE_TRADES_TEMPLATE_ID => self.trades_event(&cursor, frame),
-            BINANCE_BEST_BID_ASK_TEMPLATE_ID => self.best_bid_ask_event(&cursor, frame),
-            BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID => self.depth_snapshot_event(&cursor, frame),
-            BINANCE_DEPTH_DIFF_TEMPLATE_ID => self.depth_diff_event(&cursor, frame),
+        match template_id {
+            BINANCE_TRADES_TEMPLATE_ID => self.trades_event(&mut cursor, frame),
+            BINANCE_BEST_BID_ASK_TEMPLATE_ID => self.best_bid_ask_event(&mut cursor, frame),
+            BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID => self.depth_snapshot_event(&mut cursor, frame),
+            BINANCE_DEPTH_DIFF_TEMPLATE_ID => self.depth_diff_event(&mut cursor, frame),
             template_id => Err(IngesterError::unknown_sbe_template(template_id)),
         }
     }
 
     fn trades_event(
         &self,
-        cursor: &BinaryCursor<'_>,
+        cursor: &mut BinaryCursor<'_>,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
-        let event_time_us = cursor.read_i64(8)?;
-        let (block_length, count, entries) = cursor.group_size32(26)?;
-        let sequence = if count == 0 {
+        let event_time_us = cursor.read_i64()?;
+        let _transact_time_us = cursor.read_i64()?;
+        let _price_exponent = cursor.read_u8()?;
+        let _qty_exponent = cursor.read_u8()?;
+        let trades = cursor.read_group32()?;
+        let sequence = if trades.count == 0 {
             None
         } else {
-            let last_trade = cursor.advance(entries, count - 1, block_length)?;
-            Some(cursor.read_sequence(last_trade)?)
+            cursor.seek(trades.entry(trades.count - 1)?)?;
+            Some(cursor.read_sequence()?)
         };
-        let symbol_offset = cursor.advance(entries, count, block_length)?;
-        let symbol = cursor.read_var_string(symbol_offset)?;
+        cursor.seek(trades.end()?)?;
+        let symbol = cursor.read_var_string()?;
         Ok(self.parsed(frame, &symbol, "trade", sequence, Some(event_time_us)))
     }
 
     fn best_bid_ask_event(
         &self,
-        cursor: &BinaryCursor<'_>,
+        cursor: &mut BinaryCursor<'_>,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
-        let event_time_us = cursor.read_i64(8)?;
-        let sequence = Some(cursor.read_sequence(16)?);
-        let symbol = cursor.read_var_string(58)?;
+        let event_time_us = cursor.read_i64()?;
+        let sequence = Some(cursor.read_sequence()?);
+        let _price_exponent = cursor.read_u8()?;
+        let _qty_exponent = cursor.read_u8()?;
+        // TODO: decode the best bid and ask prices and quantities.
+        cursor.skip(32)?;
+        let symbol = cursor.read_var_string()?;
         Ok(self.parsed(frame, &symbol, "bestBidAsk", sequence, Some(event_time_us)))
     }
 
     fn depth_snapshot_event(
         &self,
-        cursor: &BinaryCursor<'_>,
+        cursor: &mut BinaryCursor<'_>,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
-        let event_time_us = cursor.read_i64(8)?;
-        let after_bids = cursor.end_of_group16(26)?;
-        let after_asks = cursor.end_of_group16(after_bids)?;
-        let symbol = cursor.read_var_string(after_asks)?;
+        let event_time_us = cursor.read_i64()?;
+        let _last_update_id = cursor.read_i64()?;
+        let _price_exponent = cursor.read_u8()?;
+        let _qty_exponent = cursor.read_u8()?;
+        let bids = cursor.read_group16()?;
+        cursor.seek(bids.end()?)?;
+        let asks = cursor.read_group16()?;
+        cursor.seek(asks.end()?)?;
+        let symbol = cursor.read_var_string()?;
         // TODO: snapshots are independent of the incremental update sequence.
         Ok(self.parsed(frame, &symbol, "depth20", None, Some(event_time_us)))
     }
 
     fn depth_diff_event(
         &self,
-        cursor: &BinaryCursor<'_>,
+        cursor: &mut BinaryCursor<'_>,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
-        let event_time_us = cursor.read_i64(8)?;
-        let sequence = Some(cursor.read_sequence(24)?);
-        let after_bids = cursor.end_of_group16(34)?;
-        let after_asks = cursor.end_of_group16(after_bids)?;
-        let symbol = cursor.read_var_string(after_asks)?;
+        let event_time_us = cursor.read_i64()?;
+        let _transact_time_us = cursor.read_i64()?;
+        let sequence = Some(cursor.read_sequence()?);
+        let _price_exponent = cursor.read_u8()?;
+        let _qty_exponent = cursor.read_u8()?;
+        let bids = cursor.read_group16()?;
+        cursor.seek(bids.end()?)?;
+        let asks = cursor.read_group16()?;
+        cursor.seek(asks.end()?)?;
+        let symbol = cursor.read_var_string()?;
         Ok(self.parsed(frame, &symbol, "depth", sequence, Some(event_time_us)))
     }
 
@@ -121,29 +141,61 @@ impl FrameDecoder for BinanceSbeDecoder {
 
 impl BinaryDecoder for BinanceSbeDecoder {}
 
+/// SBE group header and the location of its entries within the frame.
+#[derive(Debug, Clone, Copy)]
+struct SbeGroup {
+    entries_start: usize,
+    block_length: usize,
+    count: usize,
+}
+
+impl SbeGroup {
+    fn entry(&self, index: usize) -> Result<usize, IngesterError> {
+        if index >= self.count {
+            return Err(IngesterError::malformed_sbe(format!(
+                "group entry {index} is out of bounds for {} entries",
+                self.count
+            )));
+        }
+        index
+            .checked_mul(self.block_length)
+            .and_then(|offset| self.entries_start.checked_add(offset))
+            .ok_or_else(|| IngesterError::malformed_sbe("group entry offset overflow"))
+    }
+
+    fn end(&self) -> Result<usize, IngesterError> {
+        self.count
+            .checked_mul(self.block_length)
+            .and_then(|length| self.entries_start.checked_add(length))
+            .ok_or_else(|| IngesterError::malformed_sbe("group size overflow"))
+    }
+}
+
 /// SBE-specific group traversal layered on top of the generic binary cursor.
 trait SbeGroupExt {
-    fn group_size32(&self, offset: usize) -> Result<(usize, usize, usize), IngesterError>;
-    fn end_of_group16(&self, offset: usize) -> Result<usize, IngesterError>;
+    fn read_group32(&mut self) -> Result<SbeGroup, IngesterError>;
+    fn read_group16(&mut self) -> Result<SbeGroup, IngesterError>;
 }
 
 impl SbeGroupExt for BinaryCursor<'_> {
-    fn group_size32(&self, offset: usize) -> Result<(usize, usize, usize), IngesterError> {
-        let block_length = self.read_u16(offset)? as usize;
-        let count = self.read_u32(offset + 2)? as usize;
-        let entries = offset
-            .checked_add(6)
-            .ok_or_else(|| IngesterError::malformed_sbe("group offset overflow"))?;
-        Ok((block_length, count, entries))
+    fn read_group32(&mut self) -> Result<SbeGroup, IngesterError> {
+        let block_length = self.read_u16()? as usize;
+        let count = self.read_u32()? as usize;
+        Ok(SbeGroup {
+            entries_start: self.position(),
+            block_length,
+            count,
+        })
     }
 
-    fn end_of_group16(&self, offset: usize) -> Result<usize, IngesterError> {
-        let block_length = self.read_u16(offset)? as usize;
-        let count = self.read_u16(offset + 2)? as usize;
-        let entries = offset
-            .checked_add(4)
-            .ok_or_else(|| IngesterError::malformed_sbe("group offset overflow"))?;
-        self.advance(entries, count, block_length)
+    fn read_group16(&mut self) -> Result<SbeGroup, IngesterError> {
+        let block_length = self.read_u16()? as usize;
+        let count = self.read_u16()? as usize;
+        Ok(SbeGroup {
+            entries_start: self.position(),
+            block_length,
+            count,
+        })
     }
 }
 
