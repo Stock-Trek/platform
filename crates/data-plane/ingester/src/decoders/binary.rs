@@ -20,10 +20,6 @@ impl<'a> BinaryCursor<'a> {
         self.position
     }
 
-    pub fn remaining(&self) -> usize {
-        self.frame.len().saturating_sub(self.position)
-    }
-
     pub fn seek(&mut self, position: usize) -> Result<(), IngesterError> {
         if position > self.frame.len() {
             return Err(IngesterError::malformed_binary(format!(
@@ -69,9 +65,7 @@ impl<'a> BinaryCursor<'a> {
 
     pub fn read_u32(&mut self) -> Result<u32, IngesterError> {
         let bytes = self.read_bytes(4)?;
-        Ok(u32::from_le_bytes([
-            bytes[0], bytes[1], bytes[2], bytes[3],
-        ]))
+        Ok(u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]))
     }
 
     pub fn read_i64(&mut self) -> Result<i64, IngesterError> {
@@ -83,9 +77,8 @@ impl<'a> BinaryCursor<'a> {
 
     pub fn read_sequence(&mut self) -> Result<u64, IngesterError> {
         let value = self.read_i64()?;
-        u64::try_from(value).map_err(|_| {
-            IngesterError::malformed_binary(format!("negative sequence {value}"))
-        })
+        u64::try_from(value)
+            .map_err(|_| IngesterError::malformed_binary(format!("negative sequence {value}")))
     }
 
     pub fn read_var_string(&mut self) -> Result<String, IngesterError> {
@@ -110,7 +103,6 @@ mod tests {
         assert_eq!(cursor.read_u16().unwrap(), 2);
         assert_eq!(cursor.read_u32().unwrap(), 3);
         assert_eq!(cursor.position(), frame.len());
-        assert_eq!(cursor.remaining(), 0);
     }
 
     #[test]
@@ -140,6 +132,6 @@ mod tests {
         let mut cursor = BinaryCursor::new(frame);
 
         assert_eq!(cursor.read_var_string().unwrap(), "abc");
-        assert_eq!(cursor.remaining(), 0);
+        assert_eq!(cursor.position(), frame.len());
     }
 }
