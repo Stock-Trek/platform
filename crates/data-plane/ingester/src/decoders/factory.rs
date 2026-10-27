@@ -29,7 +29,7 @@ impl DecoderFactory {
         match exchange {
             CexId::Binance => Ok(Arc::new(BinanceSbeDecoder::new(exchange))),
             _ => Err(IngesterError::UnsupportedStreamFormat {
-                format: format!("binary for exchange {}", exchange.to_string()),
+                format: format!("binary for exchange {}", exchange),
             }),
         }
     }

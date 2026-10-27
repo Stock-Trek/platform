@@ -31,10 +31,7 @@ impl IngestOptions {
             .collect::<String>();
         format!(
             "{}.{}.{}.{}",
-            self.subject_prefix,
-            category,
-            self.exchange.to_string(),
-            stream
+            self.subject_prefix, category, self.exchange, stream
         )
     }
 }
