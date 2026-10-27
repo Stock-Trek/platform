@@ -28,7 +28,7 @@ parquet = { workspace = true, features = ["async"] }
 rust_decimal = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-stock-trek-types = { workspace = true }
+stock-trek-types = { workspace = true, features = ["serde"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "macros", "rt", "rt-multi-thread", "sync", "time"] }
 tracing = { workspace = true }

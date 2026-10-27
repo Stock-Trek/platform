@@ -5,6 +5,7 @@ use crate::{
 use chrono::{DateTime, Datelike, Timelike, Utc};
 use platform_errors::{BpError, BpResult, DataError};
 use std::fmt;
+use stock_trek_types::cex::asset_id::AssetId;
 
 /// The root path segment that contains in-progress staged files.
 pub const STAGING_SEGMENT: &str = "staging";
@@ -42,6 +43,14 @@ impl MarketDataPath {
         quote: impl fmt::Display,
     ) -> String {
         format!("{trading_mode}/{cex_id}/{base}/{quote}")
+    }
+
+    /// Format an asset using the established path spelling.
+    ///
+    /// Asset ids are rendered in snake case, but market data paths use their
+    /// lowercase, separator-free spelling (for example `tetherusd`).
+    pub fn asset_segment(asset: AssetId) -> String {
+        asset.to_string().replace('_', "")
     }
 
     /// Build a trading-pair prefix with a trailing slash.
@@ -348,6 +357,15 @@ mod tests {
         assert_eq!(
             MarketDataPath::tier_prefix(&pair, Feed::Trades, Granularity::Raw).as_str(),
             "paper/binance/bitcoin/tetherusd/trades/raw/"
+        );
+    }
+
+    #[test]
+    fn builds_asset_segments_with_the_established_path_spelling() {
+        assert_eq!(MarketDataPath::asset_segment(AssetId::Bitcoin), "bitcoin");
+        assert_eq!(
+            MarketDataPath::asset_segment(AssetId::TetherUSD),
+            "tetherusd"
         );
     }
 

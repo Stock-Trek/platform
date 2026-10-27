@@ -247,7 +247,12 @@ impl TradingPairPath {
     }
 
     pub fn resolve(&self) -> BpResult<ResolvedTradingPair> {
-        let normalized = self.0.trim().trim_matches('/').replace([':', '\\'], "/");
+        let normalized = self
+            .0
+            .trim()
+            .trim_matches('/')
+            .replace([':', '\\'], "/")
+            .replace('_', "");
         if normalized.is_empty() {
             return Err(BpError::Data(DataError::InvalidTradingPairPath {
                 pair: self.0.clone(),
@@ -258,8 +263,8 @@ impl TradingPairPath {
                 let candidate = MarketDataPath::trading_pair(
                     trading_mode,
                     cex_id,
-                    trading_pair.base,
-                    trading_pair.quote,
+                    MarketDataPath::asset_segment(trading_pair.base),
+                    MarketDataPath::asset_segment(trading_pair.quote),
                 );
                 if candidate.eq_ignore_ascii_case(&normalized) {
                     return Ok(ResolvedTradingPair {
