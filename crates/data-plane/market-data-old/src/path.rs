@@ -330,7 +330,6 @@ impl MarketDataPath {
 mod tests {
     use super::*;
     use chrono::TimeZone;
-    use stock_trek_types::cex::asset_id::AssetId;
 
     fn utc(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> DateTime<Utc> {
         Utc.with_ymd_and_hms(year, month, day, hour, minute, 0)
@@ -350,12 +349,6 @@ mod tests {
             MarketDataPath::tier_prefix(&pair, Feed::Trades, Granularity::Raw).as_str(),
             "paper/binance/bitcoin/tether_usd/trades/raw/"
         );
-    }
-
-    #[test]
-    fn builds_asset_segments_with_the_established_path_spelling() {
-        assert_eq!(AssetId::Bitcoin.to_string(), "bitcoin".to_string());
-        assert_eq!(AssetId::TetherUSD.to_string(), "tether_usd".to_string());
     }
 
     #[test]
