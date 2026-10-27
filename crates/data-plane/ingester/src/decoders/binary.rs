@@ -53,9 +53,7 @@ impl<'a> BinaryCursor<'a> {
     pub fn read_sequence(&self, offset: usize) -> Result<u64, IngesterError> {
         let value = self.read_i64(offset)?;
         u64::try_from(value).map_err(|_| {
-            IngesterError::malformed_binary(format!(
-                "negative sequence {value} at offset {offset}"
-            ))
+            IngesterError::malformed_binary(format!("negative sequence {value} at offset {offset}"))
         })
     }
 
@@ -69,7 +67,12 @@ impl<'a> BinaryCursor<'a> {
         Ok(value.to_string())
     }
 
-    pub fn advance(&self, base: usize, count: usize, stride: usize) -> Result<usize, IngesterError> {
+    pub fn advance(
+        &self,
+        base: usize,
+        count: usize,
+        stride: usize,
+    ) -> Result<usize, IngesterError> {
         let length = count
             .checked_mul(stride)
             .and_then(|length| base.checked_add(length))
