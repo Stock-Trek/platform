@@ -16,6 +16,11 @@ const DURABLE_NAME: &str = "backfiller-gaps";
 pub trait GapMarkerSource: Send {
     /// Returns `None` when the source has reached its end.
     async fn next_gap(&mut self) -> BpResult<Option<GapMarker>>;
+
+    /// Acknowledges the gap returned by the previous call to [`Self::next_gap`].
+    async fn ack(&mut self, _gap: &GapMarker) -> BpResult<()> {
+        Ok(())
+    }
 }
 
 /// Reads gap markers from a durable JetStream consumer.
@@ -24,6 +29,7 @@ pub trait GapMarkerSource: Send {
 /// unprocessed gaps are redelivered after a restart instead of being lost.
 pub struct NatsGapMarkerSource {
     gaps: JetStreamConsumer,
+    in_flight: Option<Message>,
 }
 
 impl NatsGapMarkerSource {
@@ -39,7 +45,10 @@ impl NatsGapMarkerSource {
             &durable,
         )
         .await?;
-        Ok(Self { gaps })
+        Ok(Self {
+            gaps,
+            in_flight: None,
+        })
     }
 }
 
@@ -47,25 +56,31 @@ impl NatsGapMarkerSource {
 impl GapMarkerSource for NatsGapMarkerSource {
     async fn next_gap(&mut self) -> BpResult<Option<GapMarker>> {
         loop {
-            let message = self.gaps.next_message("gap marker").await;
-            if let Some(gap) = Self::decode_gap(message) {
-                return Ok(Some(gap));
+            let Some(message) = self.gaps.next_message_unacked().await else {
+                return Ok(None);
+            };
+            match GapMarker::decode(&message.payload) {
+                Ok(gap) => {
+                    self.in_flight = Some(message);
+                    return Ok(Some(gap));
+                }
+                Err(error) => {
+                    MarketDataMetrics::record_decode_failure(
+                        STAGE_BACKFILLER,
+                        DECODE_KIND_GAP_MARKER,
+                    );
+                    warn!(%error, "skipping malformed gap marker");
+                    self.gaps.ack(&message).await?;
+                }
             }
         }
     }
-}
 
-impl NatsGapMarkerSource {
-    fn decode_gap(message: Option<Message>) -> Option<GapMarker> {
-        let message = message?;
-        match GapMarker::decode(&message.payload) {
-            Ok(gap) => Some(gap),
-            Err(error) => {
-                MarketDataMetrics::record_decode_failure(STAGE_BACKFILLER, DECODE_KIND_GAP_MARKER);
-                warn!(%error, "skipping malformed gap marker");
-                None
-            }
-        }
+    async fn ack(&mut self, _gap: &GapMarker) -> BpResult<()> {
+        let Some(message) = self.in_flight.take() else {
+            return Ok(());
+        };
+        self.gaps.ack(&message).await
     }
 }
 
@@ -95,10 +110,7 @@ mod tests {
             ..Message::default()
         };
 
-        assert_eq!(
-            NatsGapMarkerSource::decode_gap(Some(message)),
-            Some(expected)
-        );
+        assert_eq!(GapMarker::decode(&message.payload).ok(), Some(expected));
     }
 
     #[test]
@@ -108,6 +120,6 @@ mod tests {
             ..Message::default()
         };
 
-        assert_eq!(NatsGapMarkerSource::decode_gap(Some(message)), None);
+        assert!(GapMarker::decode(&message.payload).is_err());
     }
 }

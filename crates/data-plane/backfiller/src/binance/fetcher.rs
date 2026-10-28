@@ -1,25 +1,29 @@
 use crate::{
-    binance::{event_page_source::BinanceEventPageSource, stream::MarketStream},
+    binance::{
+        event_page_source::BinanceEventPageSource,
+        stream::{MarketStream, MarketStreamKind},
+    },
     config::BackfillerConfig,
     fetcher::{BackfilledEvent, MissingEventFetcher, PaginatedFetcher},
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_exchange_gateway::clients::reqwest::ReqwestHttpClient;
 use platform_exchange_gateway::connector::Connector;
 use platform_exchange_types::{
     binance::exchange::BinanceExchange, encode::ByteEncoder, signer::Signer,
 };
 use platform_market_data::event::GapMarker;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use stock_trek_types::cex::cex_id::CexId;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_RETRIES: u8 = 3;
 
-/// Reconstructs Binance trade gaps from the API-key protected historical-trades
-/// endpoint.
+/// Reconstructs Binance gaps from REST snapshots.
 pub struct BinanceGapFetcher {
-    fetcher: PaginatedFetcher<BinanceEventPageSource>,
+    connector: Arc<Connector<BinanceExchange, ReqwestHttpClient>>,
+    api_key: Option<String>,
 }
 
 impl BinanceGapFetcher {
@@ -40,11 +44,13 @@ impl BinanceGapFetcher {
         )
         .map_err(|error| BpError::exchange("create Binance backfill connector", error))?;
         Ok(Self {
-            fetcher: PaginatedFetcher::new(BinanceEventPageSource::new(
-                connector,
-                config.exchange_api_key.clone(),
-            )),
+            connector: Arc::new(connector),
+            api_key: config.exchange_api_key.clone(),
         })
+    }
+
+    fn source(&self) -> BinanceEventPageSource {
+        BinanceEventPageSource::from_arc(Arc::clone(&self.connector), self.api_key.clone())
     }
 }
 
@@ -52,8 +58,24 @@ impl BinanceGapFetcher {
 impl MissingEventFetcher for BinanceGapFetcher {
     async fn fetch(&self, gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>> {
         let stream = MarketStream::parse(&gap.stream)?;
-        self.fetcher
-            .fetch_range(&stream.symbol, gap.missing_from, gap.missing_to)
-            .await
+        let source = self.source();
+        match stream.kind {
+            MarketStreamKind::Trade => {
+                PaginatedFetcher::new(source)
+                    .fetch_range(&stream.symbol, gap.missing_from, gap.missing_to)
+                    .await
+            }
+            MarketStreamKind::Depth => source.fetch_depth(&stream.symbol).await,
+            MarketStreamKind::BookTicker => {
+                source
+                    .fetch_book_ticker(&stream.symbol, gap.missing_to)
+                    .await
+            }
+            MarketStreamKind::Kline(interval) => {
+                source
+                    .fetch_klines(&stream.symbol, &interval, gap.missing_from, gap.missing_to)
+                    .await
+            }
+        }
     }
 }

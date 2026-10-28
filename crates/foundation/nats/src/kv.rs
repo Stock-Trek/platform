@@ -95,6 +95,16 @@ impl KeyValue {
             .map_err(|error| protocol_error("failed to read KV value", error))
     }
 
+    /// Deletes the value stored under `key`, if any. The deletion is a
+    /// non-destructive KV marker so consumers can observe the removal.
+    pub async fn delete(&self, key: &str) -> BpResult<()> {
+        NatsSubject::validate_named("KV key", key)?;
+        self.store
+            .delete(key)
+            .await
+            .map_err(|error| protocol_error("failed to delete KV value", error))
+    }
+
     /// Lists every key in the bucket.
     pub async fn keys(&self) -> BpResult<Vec<String>> {
         self.store

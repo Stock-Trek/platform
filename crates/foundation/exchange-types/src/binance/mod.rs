@@ -1,8 +1,10 @@
 pub mod account_status;
 pub mod amend_order;
 pub mod asset_limits;
+pub mod book_ticker;
 pub mod cancel_all_open_orders;
 pub mod cancel_order;
+pub mod depth;
 pub mod exchange;
 pub mod exchange_info;
 pub mod filters;

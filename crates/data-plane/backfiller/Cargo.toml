@@ -16,6 +16,7 @@ platform-metrics = { workspace = true }
 platform-nats = { workspace = true }
 platform-runtime = { workspace = true }
 platform-types = { workspace = true }
+serde = { workspace = true }
 serde_json = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }

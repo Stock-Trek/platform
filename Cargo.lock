@@ -3301,6 +3301,7 @@ dependencies = [
  "platform-nats",
  "platform-runtime",
  "platform-types",
+ "serde",
  "serde_json",
  "stock-trek-types",
  "tokio",
