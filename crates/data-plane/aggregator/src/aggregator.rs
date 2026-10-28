@@ -1,17 +1,9 @@
 use platform_market_data::{
-    candle::{Candle, CandleInterval, CandleKey},
+    candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
     decoders::trade::Trade,
 };
 use platform_types::new_types::TimestampMilliseconds;
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-
-/// A candle that has left its aggregation window.
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ClosedCandle {
-    pub revision: u64,
-    pub candle: Candle,
-}
 
 /// Candles updated by a single trade.
 #[derive(Debug, Default, Clone)]
