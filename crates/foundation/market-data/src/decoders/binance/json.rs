@@ -1,6 +1,6 @@
 use crate::{
     decoders::json::{JsonFrame, JsonMapping, MappedJsonCodec},
-    source::ParsedMessage,
+    event::ParsedMessage,
 };
 use platform_errors::IngesterError;
 use platform_types::new_types::TimestampMilliseconds;

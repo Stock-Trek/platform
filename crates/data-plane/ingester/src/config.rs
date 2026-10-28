@@ -1,9 +1,7 @@
-use crate::{
-    nats::{NatsAddress, NatsSubject},
-    source::StreamFormat,
-};
+use crate::source::StreamFormat;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
+use platform_nats::{NatsAddress, NatsSubject};
 use stock_trek_types::cex::cex_id::CexId;
 
 const INGESTER_EXCHANGE: &str = "INGESTER_EXCHANGE";

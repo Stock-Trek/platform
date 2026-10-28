@@ -31,4 +31,44 @@ impl TickerMapping {
             None => format!("{}{}", base.0, quote.0),
         })
     }
+
+    /// Resolves an exchange symbol, such as `BTCUSDT`, into its base and quote
+    /// assets. Returns `None` if either asset is not present in this mapping.
+    pub fn trading_pair_from_symbol(&self, symbol: &str) -> Option<TradingPair> {
+        let symbol = symbol.trim().to_ascii_uppercase();
+        let mut resolved: Option<(usize, TradingPair)> = None;
+
+        for (base, base_ticker) in &self.map {
+            let ticker = base_ticker.0.to_ascii_uppercase();
+            let Some(remainder) = symbol.strip_prefix(&ticker) else {
+                continue;
+            };
+            let remainder = match self.symbol_separator {
+                Some(separator) => match remainder.strip_prefix(separator as char) {
+                    Some(remainder) => remainder,
+                    None => continue,
+                },
+                None => remainder,
+            };
+            let Some((quote, _)) = self
+                .map
+                .iter()
+                .find(|(_, quote_ticker)| quote_ticker.0.eq_ignore_ascii_case(remainder))
+            else {
+                continue;
+            };
+            if base == quote {
+                continue;
+            }
+
+            let should_replace = resolved
+                .as_ref()
+                .is_none_or(|(length, _)| ticker.len() > *length);
+            if should_replace {
+                resolved = Some((ticker.len(), TradingPair::new(*base, *quote)));
+            }
+        }
+
+        resolved.map(|(_, trading_pair)| trading_pair)
+    }
 }

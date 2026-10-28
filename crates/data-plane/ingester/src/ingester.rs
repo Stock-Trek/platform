@@ -1,11 +1,10 @@
 use crate::{
-    event::{GapMarker, MarketEvent},
     publisher::EventPublisher,
     sequence::{SequenceObservation, SequenceTracker},
-    source::ParsedMessage,
 };
 use chrono::Utc;
 use platform_errors::BpResult;
+use platform_market_data::event::{GapMarker, MarketEvent, ParsedMessage};
 use platform_types::new_types::TimestampMilliseconds;
 use std::{collections::HashMap, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;

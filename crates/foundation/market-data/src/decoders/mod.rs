@@ -1,5 +1,6 @@
 pub mod binance;
 pub mod binary;
-pub mod decoder;
-pub mod factory;
+pub mod codec;
+pub mod frame;
 pub mod json;
+pub mod trade;

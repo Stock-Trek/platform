@@ -3143,6 +3143,21 @@ checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 [[package]]
 name = "platform-aggregator"
 version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "platform-config",
+ "platform-errors",
+ "platform-market-data",
+ "platform-nats",
+ "platform-types",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "stock-trek-types",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "platform-archiver"
@@ -3372,20 +3387,35 @@ name = "platform-ingester"
 version = "0.2.0"
 dependencies = [
  "async-trait",
- "base64 0.23.1",
  "chrono",
  "iris",
  "platform-config",
  "platform-errors",
+ "platform-market-data",
+ "platform-nats",
  "platform-types",
- "serde",
  "serde_json",
  "stock-trek-types",
- "thiserror",
  "tokio",
- "tokio-websockets",
  "tracing",
- "url",
+]
+
+[[package]]
+name = "platform-market-data"
+version = "0.2.0"
+dependencies = [
+ "base64 0.23.1",
+ "iris",
+ "platform-errors",
+ "platform-type-bridge",
+ "platform-types",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+ "stock-trek",
+ "stock-trek-types",
+ "thiserror",
+ "tokio-websockets",
 ]
 
 [[package]]
@@ -3438,6 +3468,16 @@ name = "platform-metrics"
 version = "0.2.0"
 dependencies = [
  "metrics",
+]
+
+[[package]]
+name = "platform-nats"
+version = "0.2.0"
+dependencies = [
+ "platform-errors",
+ "serde_json",
+ "tokio",
+ "url",
 ]
 
 [[package]]

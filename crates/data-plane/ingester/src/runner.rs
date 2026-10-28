@@ -1,11 +1,12 @@
 use crate::{
     config::IngesterConfig,
     ingester::{IngestOptions, Ingester},
-    nats::NatsJetstreamPublisher,
     publisher::EventPublisher,
-    source::{ParsedMessage, WebsocketSource},
+    source::WebsocketSource,
 };
 use platform_errors::BpResult;
+use platform_market_data::event::ParsedMessage;
+use platform_nats::NatsPublisher;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
@@ -22,9 +23,8 @@ impl IngesterRunner {
     }
 
     pub async fn run(self) -> BpResult<()> {
-        let publisher = Arc::new(
-            NatsJetstreamPublisher::connect(&self.config.nats_url, "platform-ingester").await?,
-        );
+        let publisher =
+            Arc::new(NatsPublisher::connect(&self.config.nats_url, "platform-ingester").await?);
         info!("connected to NATS");
 
         let (sender, mut receiver) = mpsc::channel(MESSAGE_CHANNEL_CAPACITY);

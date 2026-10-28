@@ -1,0 +1,18 @@
+[package]
+name = "platform-market-data"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+base64 = { workspace = true }
+iris = { workspace = true }
+platform-errors = { workspace = true }
+platform-type-bridge = { workspace = true }
+platform-types = { workspace = true }
+rust_decimal = { workspace = true, features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+stock-trek = { workspace = true }
+stock-trek-types = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }
+tokio-websockets = { workspace = true, default-features = false }

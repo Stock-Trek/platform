@@ -1,7 +1,6 @@
-use crate::source::ParsedMessage;
-use iris::{Codec, ConnectionError};
+use crate::event::ParsedMessage;
+use iris::ConnectionError;
 use platform_errors::IngesterError;
-use std::{fmt, sync::Arc};
 use tokio_websockets::Message;
 
 /// Result of decoding a single exchange websocket frame.
@@ -16,37 +15,6 @@ pub struct DecodedFrame {
 impl DecodedFrame {
     pub fn new(result: Result<ParsedMessage, IngesterError>) -> Self {
         Self { result }
-    }
-}
-
-/// Type-erased codec for an exchange websocket stream.
-pub type SharedCodec = Arc<dyn Codec<(), DecodedFrame>>;
-
-/// Wraps a shared codec so iris, which takes codecs by value, can use it.
-#[derive(Clone)]
-pub struct CodecHandle {
-    codec: SharedCodec,
-}
-
-impl CodecHandle {
-    pub fn new(codec: SharedCodec) -> Self {
-        Self { codec }
-    }
-}
-
-impl Codec<(), DecodedFrame> for CodecHandle {
-    fn encode(&self, request: &()) -> Result<Vec<u8>, ConnectionError> {
-        self.codec.encode(request)
-    }
-
-    fn decode(&self, message: Message) -> Result<DecodedFrame, ConnectionError> {
-        self.codec.decode(message)
-    }
-}
-
-impl fmt::Debug for CodecHandle {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        formatter.debug_struct("CodecHandle").finish()
     }
 }
 
