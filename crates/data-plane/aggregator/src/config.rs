@@ -2,7 +2,7 @@ use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::CandleInterval;
 use platform_nats::NatsSubject;
-use std::{str::FromStr, time::Duration};
+use std::time::Duration;
 
 pub const AGGREGATOR_NATS_URL: &str = "AGGREGATOR_NATS_URL";
 pub const AGGREGATOR_EVENT_SUBJECT_PREFIX: &str = "AGGREGATOR_EVENT_SUBJECT_PREFIX";
@@ -69,12 +69,8 @@ impl AggregatorConfig {
             ));
         }
 
-        let flush_interval_secs = match vars.optional(AGGREGATOR_FLUSH_INTERVAL_SECS)? {
-            Some(value) => u64::from_str(&value).map_err(|error| {
-                BpError::config_invalid_source(AGGREGATOR_FLUSH_INTERVAL_SECS, error)
-            })?,
-            None => DEFAULT_FLUSH_INTERVAL_SECS,
-        };
+        let flush_interval_secs =
+            vars.optional_parsed_or(AGGREGATOR_FLUSH_INTERVAL_SECS, DEFAULT_FLUSH_INTERVAL_SECS)?;
         if flush_interval_secs == 0 {
             return Err(BpError::config_invalid(
                 AGGREGATOR_FLUSH_INTERVAL_SECS,

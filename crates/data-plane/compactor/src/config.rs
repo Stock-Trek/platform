@@ -1,6 +1,6 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
-use std::{str::FromStr, time::Duration};
+use std::time::Duration;
 
 const COMPACTOR_S3_BUCKET: &str = "COMPACTOR_S3_BUCKET";
 const COMPACTOR_S3_PREFIX: &str = "COMPACTOR_S3_PREFIX";
@@ -42,11 +42,8 @@ impl CompactorConfig {
             .optional(COMPACTOR_OUTPUT_PREFIX)?
             .unwrap_or_else(|| DEFAULT_OUTPUT_PREFIX.to_string());
 
-        let poll_interval_secs = Self::optional_parsed(
-            vars,
-            COMPACTOR_POLL_INTERVAL_SECS,
-            DEFAULT_POLL_INTERVAL_SECS,
-        )?;
+        let poll_interval_secs =
+            vars.optional_parsed_or(COMPACTOR_POLL_INTERVAL_SECS, DEFAULT_POLL_INTERVAL_SECS)?;
         if poll_interval_secs == 0 {
             return Err(BpError::config_invalid(
                 COMPACTOR_POLL_INTERVAL_SECS,
@@ -54,9 +51,9 @@ impl CompactorConfig {
             ));
         }
 
-        let settle_secs = Self::optional_parsed(vars, COMPACTOR_SETTLE_SECS, DEFAULT_SETTLE_SECS)?;
+        let settle_secs = vars.optional_parsed_or(COMPACTOR_SETTLE_SECS, DEFAULT_SETTLE_SECS)?;
         let min_source_files =
-            Self::optional_parsed(vars, COMPACTOR_MIN_SOURCE_FILES, DEFAULT_MIN_SOURCE_FILES)?;
+            vars.optional_parsed_or(COMPACTOR_MIN_SOURCE_FILES, DEFAULT_MIN_SOURCE_FILES)?;
         if min_source_files == 0 {
             return Err(BpError::config_invalid(
                 COMPACTOR_MIN_SOURCE_FILES,
@@ -73,18 +70,5 @@ impl CompactorConfig {
             settle: Duration::from_secs(settle_secs),
             min_source_files,
         })
-    }
-
-    fn optional_parsed<T>(vars: &EnvVars, name: &str, default: T) -> BpResult<T>
-    where
-        T: FromStr,
-        T::Err: std::error::Error + Send + Sync + 'static,
-    {
-        match vars.optional(name)? {
-            Some(value) => value
-                .parse::<T>()
-                .map_err(|error| BpError::config_invalid_source(name, error)),
-            None => Ok(default),
-        }
     }
 }

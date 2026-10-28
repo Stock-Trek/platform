@@ -100,6 +100,31 @@ impl EnvVars {
             .map_err(|error| BpError::config_invalid_source(name, error))
     }
 
+    /// Reads and parses an optional variable.
+    pub fn optional_parsed<T>(&self, name: &str) -> BpResult<Option<T>>
+    where
+        T: std::str::FromStr,
+        T::Err: std::error::Error + Send + Sync + 'static,
+    {
+        match self.optional(name)? {
+            Some(value) => value
+                .parse::<T>()
+                .map(Some)
+                .map_err(|error| BpError::config_invalid_source(name, error)),
+            None => Ok(None),
+        }
+    }
+
+    /// Reads and parses an optional variable, falling back to `default` when it
+    /// is missing or empty.
+    pub fn optional_parsed_or<T>(&self, name: &str, default: T) -> BpResult<T>
+    where
+        T: std::str::FromStr,
+        T::Err: std::error::Error + Send + Sync + 'static,
+    {
+        Ok(self.optional_parsed(name)?.unwrap_or(default))
+    }
+
     /// Reads a required duration expressed as whole seconds.
     pub fn required_duration_secs(&self, name: &str) -> BpResult<Duration> {
         Ok(Duration::from_secs(self.required_parsed(name)?))
@@ -230,6 +255,20 @@ mod tests {
         let vars = env_vars([("COUNT", "not a number")]);
         assert!(matches!(
             vars.required_parsed::<usize>("COUNT").unwrap_err(),
+            BpError::Config(ConfigError::Invalid { name, .. }) if name == "COUNT"
+        ));
+    }
+
+    #[test]
+    fn optional_parsed_uses_defaults_only_for_missing_or_empty_values() {
+        let vars = env_vars([("COUNT", "42"), ("EMPTY", "")]);
+        assert_eq!(vars.optional_parsed_or("COUNT", 1).unwrap(), 42);
+        assert_eq!(vars.optional_parsed_or("MISSING", 7).unwrap(), 7);
+        assert_eq!(vars.optional_parsed_or("EMPTY", 9).unwrap(), 9);
+
+        let vars = env_vars([("COUNT", "not a number")]);
+        assert!(matches!(
+            vars.optional_parsed_or("COUNT", 1).unwrap_err(),
             BpError::Config(ConfigError::Invalid { name, .. }) if name == "COUNT"
         ));
     }

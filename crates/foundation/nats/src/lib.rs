@@ -51,6 +51,20 @@ impl NatsAddress {
 pub struct NatsSubject;
 
 impl NatsSubject {
+    /// Converts an arbitrary value into a safe single-token subject segment.
+    pub fn normalize_segment(value: &str) -> String {
+        value
+            .chars()
+            .map(|character| {
+                if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
+                    character.to_ascii_lowercase()
+                } else {
+                    '.'
+                }
+            })
+            .collect()
+    }
+
     pub fn validate(subject: &str) -> BpResult<()> {
         let invalid = subject.is_empty()
             || subject.split('.').any(|token| {

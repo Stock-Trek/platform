@@ -1,0 +1,16 @@
+[package]
+name = "platform-archive"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+arrow-array = { workspace = true }
+arrow-schema = { workspace = true }
+bytes = { workspace = true }
+parquet = { workspace = true }
+platform-errors = { workspace = true }
+platform-market-data = { workspace = true }
+platform-types = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+stock-trek = { workspace = true }
+stock-trek-types = { workspace = true, features = ["serde"] }

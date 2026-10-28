@@ -1,4 +1,5 @@
-use crate::{config::ArchiverConfig, record::ArchiveRecord};
+use crate::config::ArchiverConfig;
+use platform_archive::ArchiveRecord;
 use platform_errors::BpResult;
 use platform_market_data::{candle::ClosedCandle, event::MarketEvent};
 use platform_nats::NatsSubscriber;

@@ -3160,25 +3160,36 @@ dependencies = [
 ]
 
 [[package]]
-name = "platform-archiver"
+name = "platform-archive"
 version = "0.2.0"
 dependencies = [
  "arrow-array",
  "arrow-schema",
+ "bytes",
+ "parquet",
+ "platform-errors",
+ "platform-market-data",
+ "platform-types",
+ "serde",
+ "stock-trek",
+ "stock-trek-types",
+]
+
+[[package]]
+name = "platform-archiver"
+version = "0.2.0"
+dependencies = [
  "async-trait",
  "aws-config",
  "aws-sdk-s3",
- "bytes",
  "chrono",
- "parquet",
+ "platform-archive",
  "platform-config",
  "platform-errors",
  "platform-market-data",
  "platform-nats",
  "platform-types",
- "serde",
  "serde_json",
- "stock-trek-types",
  "tokio",
  "tracing",
  "uuid",
@@ -3265,13 +3276,11 @@ dependencies = [
 name = "platform-compactor"
 version = "0.2.0"
 dependencies = [
- "arrow-array",
- "arrow-schema",
  "aws-config",
  "aws-sdk-s3",
  "bytes",
  "chrono",
- "parquet",
+ "platform-archive",
  "platform-config",
  "platform-errors",
  "platform-types",

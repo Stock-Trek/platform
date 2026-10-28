@@ -4,22 +4,17 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-arrow-array = { workspace = true }
-arrow-schema = { workspace = true }
 async-trait = { workspace = true }
 aws-config = { workspace = true }
 aws-sdk-s3 = { workspace = true }
-bytes = { workspace = true }
 chrono = { workspace = true }
-parquet = { workspace = true }
+platform-archive = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-market-data = { workspace = true }
 platform-nats = { workspace = true }
 platform-types = { workspace = true }
-serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
-stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
 tracing = { workspace = true }
 uuid = { workspace = true }

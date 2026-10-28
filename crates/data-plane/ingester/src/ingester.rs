@@ -5,6 +5,7 @@ use crate::{
 use chrono::Utc;
 use platform_errors::BpResult;
 use platform_market_data::event::{GapMarker, MarketEvent, ParsedMessage};
+use platform_nats::NatsSubject;
 use platform_types::new_types::TimestampMilliseconds;
 use std::{collections::HashMap, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
@@ -18,19 +19,12 @@ pub struct IngestOptions {
 
 impl IngestOptions {
     fn subject(&self, category: &str, stream: &str) -> String {
-        let stream = stream
-            .chars()
-            .map(|character| {
-                if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
-                    character.to_ascii_lowercase()
-                } else {
-                    '.'
-                }
-            })
-            .collect::<String>();
         format!(
             "{}.{}.{}.{}",
-            self.subject_prefix, category, self.exchange, stream
+            self.subject_prefix,
+            category,
+            self.exchange,
+            NatsSubject::normalize_segment(stream)
         )
     }
 }

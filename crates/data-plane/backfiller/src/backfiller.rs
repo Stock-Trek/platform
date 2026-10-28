@@ -6,7 +6,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
 use platform_errors::BpResult;
 use platform_market_data::event::{GapMarker, MarketEvent};
-use platform_nats::NatsPublisher;
+use platform_nats::{NatsPublisher, NatsSubject};
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::json;
 use stock_trek_types::cex::cex_id::CexId;
@@ -20,19 +20,11 @@ pub struct BackfillOptions {
 
 impl BackfillOptions {
     fn subject(&self, stream: &str) -> String {
-        let stream = stream
-            .chars()
-            .map(|character| {
-                if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
-                    character.to_ascii_lowercase()
-                } else {
-                    '.'
-                }
-            })
-            .collect::<String>();
         format!(
             "{}.events.{}.{}",
-            self.event_subject_prefix, self.exchange, stream
+            self.event_subject_prefix,
+            self.exchange,
+            NatsSubject::normalize_segment(stream)
         )
     }
 }

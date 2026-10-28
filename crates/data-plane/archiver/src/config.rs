@@ -1,7 +1,7 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_nats::NatsSubject;
-use std::{str::FromStr, time::Duration};
+use std::time::Duration;
 
 const ARCHIVER_NATS_URL: &str = "ARCHIVER_NATS_URL";
 const ARCHIVER_EVENT_SUBJECT_PREFIX: &str = "ARCHIVER_EVENT_SUBJECT_PREFIX";
@@ -51,11 +51,8 @@ impl ArchiverConfig {
             .optional(ARCHIVER_S3_PREFIX)?
             .unwrap_or_else(|| DEFAULT_S3_PREFIX.to_string());
 
-        let flush_interval_secs = Self::optional_parsed(
-            vars,
-            ARCHIVER_FLUSH_INTERVAL_SECS,
-            DEFAULT_FLUSH_INTERVAL_SECS,
-        )?;
+        let flush_interval_secs =
+            vars.optional_parsed_or(ARCHIVER_FLUSH_INTERVAL_SECS, DEFAULT_FLUSH_INTERVAL_SECS)?;
         if flush_interval_secs == 0 {
             return Err(BpError::config_invalid(
                 ARCHIVER_FLUSH_INTERVAL_SECS,
@@ -63,7 +60,7 @@ impl ArchiverConfig {
             ));
         }
 
-        let bucket_secs = Self::optional_parsed(vars, ARCHIVER_BUCKET_SECS, DEFAULT_BUCKET_SECS)?;
+        let bucket_secs = vars.optional_parsed_or(ARCHIVER_BUCKET_SECS, DEFAULT_BUCKET_SECS)?;
         if bucket_secs == 0 {
             return Err(BpError::config_invalid(
                 ARCHIVER_BUCKET_SECS,
@@ -77,7 +74,7 @@ impl ArchiverConfig {
                 BpError::config_invalid(ARCHIVER_BUCKET_SECS, "is too large to represent")
             })?;
 
-        let max_records = Self::optional_parsed(vars, ARCHIVER_MAX_RECORDS, DEFAULT_MAX_RECORDS)?;
+        let max_records = vars.optional_parsed_or(ARCHIVER_MAX_RECORDS, DEFAULT_MAX_RECORDS)?;
         if max_records == 0 {
             return Err(BpError::config_invalid(
                 ARCHIVER_MAX_RECORDS,
@@ -86,7 +83,7 @@ impl ArchiverConfig {
         }
 
         let dedupe_capacity =
-            Self::optional_parsed(vars, ARCHIVER_DEDUPE_CAPACITY, DEFAULT_DEDUPE_CAPACITY)?;
+            vars.optional_parsed_or(ARCHIVER_DEDUPE_CAPACITY, DEFAULT_DEDUPE_CAPACITY)?;
         if dedupe_capacity == 0 {
             return Err(BpError::config_invalid(
                 ARCHIVER_DEDUPE_CAPACITY,
@@ -106,18 +103,5 @@ impl ArchiverConfig {
             max_records,
             dedupe_capacity,
         })
-    }
-
-    fn optional_parsed<T>(vars: &EnvVars, name: &str, default: T) -> BpResult<T>
-    where
-        T: FromStr,
-        T::Err: std::error::Error + Send + Sync + 'static,
-    {
-        match vars.optional(name)? {
-            Some(value) => value
-                .parse::<T>()
-                .map_err(|error| BpError::config_invalid_source(name, error)),
-            None => Ok(default),
-        }
     }
 }

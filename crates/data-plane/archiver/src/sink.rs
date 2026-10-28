@@ -1,11 +1,8 @@
-use crate::{
-    config::ArchiverConfig,
-    parquet::ArchiveParquet,
-    record::{ArchiveKind, ArchiveRecord},
-};
+use crate::config::ArchiverConfig;
 use async_trait::async_trait;
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
 use chrono::{DateTime, Datelike, Timelike, Utc};
+use platform_archive::{ArchiveKind, ArchiveParquet, ArchiveRecord};
 use platform_errors::{BpError, BpResult, DataError};
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::HashMap;
@@ -18,12 +15,12 @@ pub trait ArchiveSink: Send + Sync {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct ArchivePartition {
+struct ArchiveBucket {
     kind: ArchiveKind,
     bucket_start: TimestampMilliseconds,
 }
 
-impl ArchivePartition {
+impl ArchiveBucket {
     fn new(record: &ArchiveRecord, bucket_millis: i64) -> Self {
         let timestamp = record.timestamp().0;
         Self {
@@ -58,7 +55,7 @@ impl S3ParquetSink {
         })
     }
 
-    fn object_key(&self, partition: ArchivePartition) -> BpResult<String> {
+    fn object_key(&self, partition: ArchiveBucket) -> BpResult<String> {
         let bucket = DateTime::<Utc>::from_timestamp_millis(partition.bucket_start.0).ok_or(
             BpError::Data(DataError::DateTimeOutOfRange {
                 operation: "build archive object key",
@@ -85,10 +82,10 @@ impl S3ParquetSink {
 #[async_trait]
 impl ArchiveSink for S3ParquetSink {
     async fn write(&self, records: &[ArchiveRecord]) -> BpResult<()> {
-        let mut partitions: HashMap<ArchivePartition, Vec<ArchiveRecord>> = HashMap::new();
+        let mut partitions: HashMap<ArchiveBucket, Vec<ArchiveRecord>> = HashMap::new();
         for record in records {
             partitions
-                .entry(ArchivePartition::new(record, self.bucket_millis))
+                .entry(ArchiveBucket::new(record, self.bucket_millis))
                 .or_default()
                 .push(record.clone());
         }
