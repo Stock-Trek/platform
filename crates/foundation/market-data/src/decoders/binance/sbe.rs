@@ -88,7 +88,7 @@ impl BinanceSbeCodec {
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
         let event_time_us = cursor.read_i64()?;
-        let _last_update_id = cursor.read_i64()?;
+        let sequence = Some(cursor.read_sequence()?);
         let _price_exponent = cursor.read_u8()?;
         let _qty_exponent = cursor.read_u8()?;
         let bids = cursor.read_group16()?;
@@ -96,8 +96,7 @@ impl BinanceSbeCodec {
         let asks = cursor.read_group16()?;
         cursor.seek(asks.end()?)?;
         let symbol = cursor.read_var_string()?;
-        // TODO: snapshots are independent of the incremental update sequence.
-        Ok(self.parsed(frame, &symbol, "depth20", None, Some(event_time_us)))
+        Ok(self.parsed(frame, &symbol, "depth20", sequence, Some(event_time_us)))
     }
 
     fn depth_diff_event(
@@ -263,6 +262,21 @@ mod tests {
         frame
     }
 
+    fn sbe_depth_snapshot_frame() -> Vec<u8> {
+        let mut frame = sbe_header(BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID);
+        frame.extend_from_slice(&1_700_000_000_123_000_i64.to_le_bytes());
+        frame.extend_from_slice(&456_i64.to_le_bytes());
+        frame.push(0);
+        frame.push(0);
+        for _ in 0..2 {
+            frame.extend_from_slice(&16u16.to_le_bytes());
+            frame.extend_from_slice(&1u16.to_le_bytes());
+            frame.extend_from_slice(&[0u8; 16]);
+        }
+        append_var_string(&mut frame, "btcusdt");
+        frame
+    }
+
     fn sbe_depth_diff_frame() -> Vec<u8> {
         let mut frame = sbe_header(BINANCE_DEPTH_DIFF_TEMPLATE_ID);
         frame.extend_from_slice(&1_700_000_000_123_000_i64.to_le_bytes());
@@ -307,6 +321,14 @@ mod tests {
 
         assert_eq!(parsed.stream, "btcusdt@bestBidAsk");
         assert_eq!(parsed.sequence, Some(99));
+    }
+
+    #[test]
+    fn decodes_binance_sbe_depth_snapshot_last_update_id() {
+        let parsed = decode(sbe_depth_snapshot_frame()).unwrap();
+
+        assert_eq!(parsed.stream, "btcusdt@depth20");
+        assert_eq!(parsed.sequence, Some(456));
     }
 
     #[test]
