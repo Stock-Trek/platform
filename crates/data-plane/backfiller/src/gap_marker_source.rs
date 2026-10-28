@@ -1,7 +1,9 @@
 use crate::config::BackfillerConfig;
 use async_trait::async_trait;
 use platform_errors::BpResult;
-use platform_market_data::event::GapMarker;
+use platform_market_data::{
+    envelope::EnvelopeCodec, event::GapMarker, subject::MarketEventSubject,
+};
 use platform_nats::NatsSubscriber;
 
 /// Source of gap markers emitted by the ingester.
@@ -18,13 +20,11 @@ pub struct NatsGapMarkerSource {
 
 impl NatsGapMarkerSource {
     pub async fn connect(config: &BackfillerConfig) -> BpResult<Self> {
-        let subscriber = NatsSubscriber::connect(
-            &config.nats_url,
-            "platform-backfiller-gaps",
-            &format!("{}.>", config.gap_subject_prefix),
-            "1",
-        )
-        .await?;
+        let subject =
+            MarketEventSubject::new(&config.gap_subject_prefix, config.exchange).gap_wildcard();
+        let subscriber =
+            NatsSubscriber::connect(&config.nats_url, "platform-backfiller-gaps", &subject, "1")
+                .await?;
         Ok(Self { subscriber })
     }
 }
@@ -37,6 +37,6 @@ impl GapMarkerSource for NatsGapMarkerSource {
         let Some((_subject, payload)) = self.subscriber.next_message().await? else {
             return Ok(None);
         };
-        Ok(Some(serde_json::from_slice(&payload)?))
+        Ok(Some(GapMarker::decode(&payload)?))
     }
 }

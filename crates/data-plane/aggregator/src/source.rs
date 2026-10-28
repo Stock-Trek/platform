@@ -1,7 +1,9 @@
 use crate::config::AggregatorConfig;
 use async_trait::async_trait;
 use platform_errors::BpResult;
-use platform_market_data::event::MarketEvent;
+use platform_market_data::{
+    envelope::EnvelopeCodec, event::MarketEvent, subject::MarketEventSubject,
+};
 use platform_nats::NatsSubscriber;
 
 /// Source of ingester market events.
@@ -21,7 +23,7 @@ impl NatsMarketEventSource {
         let subscriber = NatsSubscriber::connect(
             &config.nats_url,
             "platform-aggregator-events",
-            &format!("{}.>", config.event_subject_prefix),
+            &MarketEventSubject::prefix_wildcard(&config.event_subject_prefix),
             "1",
         )
         .await?;
@@ -35,6 +37,6 @@ impl MarketEventSource for NatsMarketEventSource {
         let Some((_subject, payload)) = self.subscriber.next_message().await? else {
             return Ok(None);
         };
-        Ok(Some(serde_json::from_slice(&payload)?))
+        Ok(Some(MarketEvent::decode(&payload)?))
     }
 }

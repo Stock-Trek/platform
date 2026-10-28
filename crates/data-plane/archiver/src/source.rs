@@ -1,7 +1,9 @@
 use crate::config::ArchiverConfig;
 use platform_archive::ArchiveRecord;
 use platform_errors::BpResult;
-use platform_market_data::{candle::ClosedCandle, event::MarketEvent};
+use platform_market_data::{
+    candle::ClosedCandle, envelope::EnvelopeCodec, event::MarketEvent, subject::MarketEventSubject,
+};
 use platform_nats::NatsSubscriber;
 use tracing::{info, warn};
 
@@ -22,7 +24,7 @@ impl NatsArchiveSource {
         let events = NatsSubscriber::connect(
             &config.nats_url,
             "platform-archiver-events",
-            &format!("{}.>", config.event_subject_prefix),
+            &MarketEventSubject::prefix_wildcard(&config.event_subject_prefix),
             "1",
         )
         .await?;
@@ -50,7 +52,7 @@ impl NatsArchiveSource {
             tokio::select! {
                 message = self.events.next_message(), if self.events_open => {
                     match message? {
-                        Some((_subject, payload)) => match serde_json::from_slice::<MarketEvent>(&payload) {
+                        Some((_subject, payload)) => match MarketEvent::decode(&payload) {
                             Ok(event) => return Ok(Some(ArchiveRecord::MarketEvent(event))),
                             Err(error) => warn!(%error, "skipping malformed market event"),
                         },
@@ -62,7 +64,7 @@ impl NatsArchiveSource {
                 }
                 message = self.candles.next_message(), if self.candles_open => {
                     match message? {
-                        Some((_subject, payload)) => match serde_json::from_slice::<ClosedCandle>(&payload) {
+                        Some((_subject, payload)) => match ClosedCandle::decode(&payload) {
                             Ok(candle) => return Ok(Some(ArchiveRecord::ClosedCandle(candle))),
                             Err(error) => warn!(%error, "skipping malformed closed candle"),
                         },
