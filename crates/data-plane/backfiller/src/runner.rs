@@ -3,9 +3,11 @@ use crate::{
     config::BackfillerConfig,
     fetcher::MissingEventFetcher,
     gap_marker_source::GapMarkerSource,
+    retry::GapRetryStore,
 };
 use platform_errors::BpResult;
 use platform_nats::EventPublisher;
+use std::sync::Arc;
 use tracing::info;
 
 pub struct BackfillerRunner<S, F, P> {
@@ -30,7 +32,19 @@ where
         }
     }
 
+    #[allow(dead_code)]
     pub async fn run(self) -> BpResult<()> {
+        self.run_inner(None).await
+    }
+
+    pub async fn run_with_retry_store<R>(self, retries: R) -> BpResult<()>
+    where
+        R: GapRetryStore + 'static,
+    {
+        self.run_inner(Some(Arc::new(retries))).await
+    }
+
+    async fn run_inner(self, retries: Option<Arc<dyn GapRetryStore>>) -> BpResult<()> {
         let Self {
             config,
             source,
@@ -48,16 +62,18 @@ where
             event_subject_prefix = %config.event_subject_prefix,
             "backfiller started"
         );
-        BackfillService::new(source, fetcher, publisher, options)
-            .run()
-            .await
+        let service = BackfillService::new(source, fetcher, publisher, options);
+        match retries {
+            Some(retries) => service.with_retry_store_arc(retries).run().await,
+            None => service.run().await,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::fetcher::BackfilledEvent;
+    use crate::{fetcher::BackfilledEvent, retry::InMemoryGapRetryStore};
     use async_trait::async_trait;
     use platform_errors::BpResult;
     use platform_market_data::event::GapMarker;
@@ -108,5 +124,15 @@ mod tests {
         let runner = BackfillerRunner::new(config(), FakeSource, FakeFetcher, FakePublisher);
 
         runner.run().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn accepts_a_durable_retry_store() {
+        let runner = BackfillerRunner::new(config(), FakeSource, FakeFetcher, FakePublisher);
+
+        runner
+            .run_with_retry_store(InMemoryGapRetryStore::new())
+            .await
+            .unwrap();
     }
 }

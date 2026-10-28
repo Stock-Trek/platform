@@ -20,6 +20,16 @@ pub struct BackfilledEvent {
 #[async_trait]
 pub trait MissingEventFetcher: Send + Sync {
     async fn fetch(&self, gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>>;
+
+    /// Fetches a gap with knowledge of how many durable retries have already
+    /// failed. Implementations may use this to widen their REST window.
+    async fn fetch_with_attempt(
+        &self,
+        gap: &GapMarker,
+        _attempt: u32,
+    ) -> BpResult<Vec<BackfilledEvent>> {
+        self.fetch(gap).await
+    }
 }
 
 /// Shared pagination structure for exchange-specific REST fetchers.

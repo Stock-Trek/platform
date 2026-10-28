@@ -56,10 +56,10 @@ pub struct BinanceKlineResponse(
     String,
     String,
     TimestampMilliseconds,
-    #[allow(unused)] String,
+    String,
     u32,
-    #[allow(unused)] String,
-    #[allow(unused)] String,
+    String,
+    String,
     #[allow(unused)] String,
 );
 
@@ -98,6 +98,59 @@ pub enum BinanceKlinesInterval {
     ONE_WEEK,
     #[serde(rename = "1M")]
     ONE_MONTH,
+}
+
+impl TryFrom<&str> for BinanceKlinesInterval {
+    type Error = BpError;
+
+    fn try_from(value: &str) -> Result<Self, Self::Error> {
+        match value.trim() {
+            "1s" => Ok(Self::ONE_SECOND),
+            "1m" => Ok(Self::ONE_MINUTE),
+            "3m" => Ok(Self::THREE_MINUTE),
+            "5m" => Ok(Self::FIVE_MINUTE),
+            "15m" => Ok(Self::FIFTEEN_MINUTE),
+            "30m" => Ok(Self::THIRTY_MINUTE),
+            "1h" => Ok(Self::ONE_HOUR),
+            "2h" => Ok(Self::TWO_HOUR),
+            "4h" => Ok(Self::FOUR_HOUR),
+            "6h" => Ok(Self::SIX_HOUR),
+            "8h" => Ok(Self::EIGHT_HOUR),
+            "12h" => Ok(Self::TWELVE_HOUR),
+            "1d" => Ok(Self::ONE_DAY),
+            "3d" => Ok(Self::THREE_DAY),
+            "1w" => Ok(Self::ONE_WEEK),
+            "1M" => Ok(Self::ONE_MONTH),
+            other => Err(BpError::Exchange(ExchangeError::BadValue {
+                name: "interval".to_string(),
+                value: other.to_string(),
+                reason: "unsupported kline interval".to_string(),
+            })),
+        }
+    }
+}
+
+impl BinanceKlinesInterval {
+    pub fn millis(&self) -> i64 {
+        match self {
+            Self::ONE_SECOND => 1_000,
+            Self::ONE_MINUTE => 60_000,
+            Self::THREE_MINUTE => 180_000,
+            Self::FIVE_MINUTE => 300_000,
+            Self::FIFTEEN_MINUTE => 900_000,
+            Self::THIRTY_MINUTE => 1_800_000,
+            Self::ONE_HOUR => 3_600_000,
+            Self::TWO_HOUR => 7_200_000,
+            Self::FOUR_HOUR => 14_400_000,
+            Self::SIX_HOUR => 21_600_000,
+            Self::EIGHT_HOUR => 28_800_000,
+            Self::TWELVE_HOUR => 43_200_000,
+            Self::ONE_DAY => 86_400_000,
+            Self::THREE_DAY => 259_200_000,
+            Self::ONE_WEEK => 604_800_000,
+            Self::ONE_MONTH => 2_592_000_000,
+        }
+    }
 }
 
 impl KlinesHttpRequest<BinanceResponse<BinanceKlinesResponse>> for BinanceKlinesRequest {}
@@ -149,6 +202,50 @@ impl TryFrom<&BinanceKlineResponse> for Kline {
 }
 
 impl BinanceKlineResponse {
+    pub fn open_time(&self) -> TimestampMilliseconds {
+        self.0
+    }
+
+    pub fn close_time(&self) -> TimestampMilliseconds {
+        self.6
+    }
+
+    pub fn open(&self) -> &str {
+        &self.1
+    }
+
+    pub fn high(&self) -> &str {
+        &self.2
+    }
+
+    pub fn low(&self) -> &str {
+        &self.3
+    }
+
+    pub fn close(&self) -> &str {
+        &self.4
+    }
+
+    pub fn volume(&self) -> &str {
+        &self.5
+    }
+
+    pub fn trades(&self) -> u32 {
+        self.8
+    }
+
+    pub fn quote_volume(&self) -> &str {
+        &self.7
+    }
+
+    pub fn taker_buy_base_volume(&self) -> &str {
+        &self.9
+    }
+
+    pub fn taker_buy_quote_volume(&self) -> &str {
+        &self.10
+    }
+
     fn str_to_decimal(name: &str, value: &str) -> BpResult<Decimal> {
         Decimal::from_str_exact(value).map_err(|e| {
             BpError::Exchange(ExchangeError::BadValue {

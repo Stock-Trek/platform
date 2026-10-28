@@ -156,17 +156,24 @@ impl JetStreamConsumer {
     }
 
     /// Fetches the next message, waiting up to [`FETCH_WINDOW`] and retrying
-    /// transient failures with [`RETRY_BACKOFF`]. The message is acknowledged
-    /// once fetched, so a crash before processing completes leads to
-    /// redelivery instead of message loss.
+    /// transient failures with [`RETRY_BACKOFF`]. The message is left
+    /// unacknowledged so callers can acknowledge it after durable processing.
+    ///
+    /// Returns `None` when the fetch window expired or all messages were
+    /// negatively acknowledged.
+    pub async fn next_message_unacked(&self) -> Option<Message> {
+        let messages = self
+            .fetch_retrying(FETCH_BATCH, FETCH_WINDOW, RETRY_BACKOFF)
+            .await;
+        messages.into_iter().next()
+    }
+
+    /// Fetches the next message and acknowledges it once fetched.
     ///
     /// Returns `None` when the fetch window expired without a message or the
     /// acknowledgement failed; callers should simply retry.
     pub async fn next_message(&self, log_label: &str) -> Option<Message> {
-        let messages = self
-            .fetch_retrying(FETCH_BATCH, FETCH_WINDOW, RETRY_BACKOFF)
-            .await;
-        let message = messages.into_iter().next()?;
+        let message = self.next_message_unacked().await?;
         if let Err(error) = self.ack(&message).await {
             tracing::warn!(%error, "failed to acknowledge {log_label}; waiting for redelivery");
             return None;

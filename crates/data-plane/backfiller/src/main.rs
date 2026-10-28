@@ -4,11 +4,12 @@ mod config;
 mod event_page_source;
 mod fetcher;
 mod gap_marker_source;
+mod retry;
 mod runner;
 
 use crate::{
     binance::fetcher::BinanceGapFetcher, config::BackfillerConfig,
-    gap_marker_source::NatsGapMarkerSource, runner::BackfillerRunner,
+    gap_marker_source::NatsGapMarkerSource, retry::NatsGapRetryStore, runner::BackfillerRunner,
 };
 use platform_errors::BpResult;
 use platform_nats::NatsPublisher;
@@ -23,11 +24,12 @@ async fn main() -> BpResult<()> {
     SERVICE.init_logging(&config.log_filter)?;
     let source = NatsGapMarkerSource::connect(&config).await?;
     let fetcher = BinanceGapFetcher::try_new(&config)?;
+    let retries = NatsGapRetryStore::connect(&config).await?;
     let publisher = NatsPublisher::connect(&config.nats_url, NATS_CLIENT_NAME).await?;
     publisher
         .ensure_stream(&config.event_subject_prefix)
         .await?;
     BackfillerRunner::new(config, source, fetcher, publisher)
-        .run()
+        .run_with_retry_store(retries)
         .await
 }
