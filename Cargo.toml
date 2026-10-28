@@ -19,6 +19,7 @@ platform-compactor = { path = "crates/data-plane/compactor" }
 platform-ingester = { path = "crates/data-plane/ingester" }
 platform-runtime = { path = "crates/data-plane/runtime" }
 
+platform-aws = { path = "crates/foundation/aws" }
 platform-config = { path = "crates/foundation/config" }
 platform-errors = { path = "crates/foundation/errors" }
 platform-exchange-types = { path = "crates/foundation/exchange-types" }
@@ -49,7 +50,7 @@ aws-credential-types = "1"
 aws_lambda_events = "1"
 aws-sdk-lambda = "1"
 aws-sdk-s3 = "1"
-aws-sdk-s3-transfer-manager = "0.2"
+aws-sdk-s3-transfer-manager = "0.3"
 aws-sdk-sqs = "1"
 aws-sigv4 = "1"
 aws-smithy-runtime-api = "1"

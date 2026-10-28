@@ -2,7 +2,6 @@ use crate::infisical::{
     aws_auth::{InfisicalAwsAuthRequest, InfisicalTokenResponse},
     secrets::InfisicalSecretsResponse,
 };
-use aws_config::{Region, SdkConfig};
 use aws_credential_types::{Credentials, provider::ProvideCredentials};
 use aws_sigv4::http_request::{
     PayloadChecksumKind, SignableBody, SignableRequest, SigningInstructions, SigningParams,
@@ -11,6 +10,7 @@ use aws_sigv4::http_request::{
 use aws_smithy_runtime_api::client::identity::Identity;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use http::{HeaderMap, HeaderName, HeaderValue, Method};
+use platform_aws::{Region, SdkConfig};
 use platform_errors::{BpError, BpResult, HttpError, StorageError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 use std::{

@@ -5,7 +5,6 @@ use platform_errors::{BpError, BpResult};
 use platform_runtime::Service;
 use std::sync::Arc;
 
-mod aws;
 mod config;
 mod context;
 mod dedup;

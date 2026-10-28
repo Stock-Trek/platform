@@ -62,7 +62,7 @@ impl ParquetReader {
                     error,
                 )))
             })?;
-            data.extend_from_slice(&chunk.data.into_bytes());
+            data.extend_from_slice(&chunk.data.into_contiguous());
         }
         Ok(Bytes::from(data))
     }

@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
-use platform_archive::{ArchiveHour, ArchiveParquet, ArchivePath, SourceBatch};
+use platform_archive::{ArchiveHour, ArchiveParquet, ArchivePath, S3, SourceBatch};
 use platform_errors::{BpError, BpResult, DataError};
 use std::{fs::File, path::Path};
 use tokio::io::{AsyncWriteExt, copy};
@@ -44,9 +44,8 @@ pub struct Compactor {
 
 impl Compactor {
     pub async fn connect(config: &CompactorConfig) -> BpResult<Self> {
-        let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
         Ok(Self {
-            client: S3Client::new(&sdk_config),
+            client: S3::s3_client().await,
             bucket: config.s3_bucket.clone(),
             output_prefix: config.output_prefix.trim_matches('/').to_string(),
             spill_records: config.spill_records,

@@ -1,27 +1,16 @@
-use aws_config::SdkConfig;
+use crate::aws_ops::presigned_post::PresignedPostSigner;
 use aws_credential_types::{
     Credentials,
     provider::{ProvideCredentials, SharedCredentialsProvider},
 };
-use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use hmac::{Hmac, KeyInit, Mac};
+use aws_sdk_s3::{Client as S3Client, presigning::PresigningConfig, primitives::ByteStream};
+use platform_aws::SdkConfig;
 use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BpError, BpResult, StorageError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
-use reqwest::Client;
-use serde_json::json;
-use sha2::{Digest, Sha256};
-use std::{
-    collections::BTreeMap,
-    num::NonZeroU64,
-    time::{Duration, SystemTime},
-};
-use time::OffsetDateTime;
-use url::Url;
+use std::{num::NonZeroU64, time::Duration};
 
-const ALGORITHM: &str = "AWS4-HMAC-SHA256";
-const MIN_OBJECT_SIZE_BYTES: u64 = 0;
-const SERVICE: &str = "s3";
+pub use crate::aws_ops::presigned_post::PresignedPost;
 
 #[derive(Debug, Clone)]
 pub struct S3Config {
@@ -32,67 +21,32 @@ pub struct S3Config {
     pub endpoint_url: Option<String>,
 }
 
-pub struct PresignedPost {
-    pub url: String,
-    pub fields: BTreeMap<String, String>,
-    max_artifact_size_bytes: NonZeroU64,
-}
-
 pub struct UploadedObject {
     pub signed_get_url: String,
 }
 
-struct ObjectLocation {
-    scheme: String,
-    host: String,
-    path: String,
-}
-
-impl PresignedPost {
-    pub fn max_artifact_size_bytes(&self) -> NonZeroU64 {
-        self.max_artifact_size_bytes
-    }
-}
-
-#[cfg(test)]
-impl PresignedPost {
-    pub(crate) fn for_test(
-        url: String,
-        fields: BTreeMap<String, String>,
-        max_artifact_size_bytes: NonZeroU64,
-    ) -> Self {
-        Self {
-            url,
-            fields,
-            max_artifact_size_bytes,
-        }
-    }
-}
-
 pub struct S3 {
-    config: S3Config,
+    client: S3Client,
+    signer: PresignedPostSigner,
     credentials_provider: SharedCredentialsProvider,
-    endpoint_url: Option<String>,
-    region: String,
     timeouts: Timeouts,
-    http: Client,
+    config: S3Config,
 }
 
 impl S3 {
-    pub fn new(
+    fn new(
+        client: S3Client,
+        signer: PresignedPostSigner,
         credentials_provider: SharedCredentialsProvider,
-        region: String,
-        endpoint_url: Option<String>,
         timeouts: Timeouts,
         config: S3Config,
     ) -> Self {
         Self {
-            config,
+            client,
+            signer,
             credentials_provider,
-            endpoint_url,
-            region,
             timeouts,
-            http: Client::new(),
+            config,
         }
     }
 
@@ -112,10 +66,22 @@ impl S3 {
             .endpoint_url
             .clone()
             .or_else(|| sdk_config.endpoint_url().map(str::to_string));
-        Ok(Self::new(
-            credentials_provider,
+        let client = match endpoint_url.as_deref() {
+            Some(endpoint_url) => {
+                platform_aws::s3_client_with_path_style_endpoint(sdk_config, endpoint_url)
+            }
+            None => platform_aws::s3_client(sdk_config),
+        };
+        let signer = PresignedPostSigner::new(
+            config.user_artifacts_bucket.clone(),
             region,
             endpoint_url,
+            config.max_artifact_size_bytes,
+        );
+        Ok(Self::new(
+            client,
+            signer,
+            credentials_provider,
             timeouts,
             config,
         ))
@@ -127,10 +93,10 @@ impl S3 {
         deadline: Deadline,
     ) -> BpResult<PresignedPost> {
         let credentials = self.credentials(deadline).await?;
-        self.presigned_post(
+        self.signer.sign(
             &credentials,
             key_prefix,
-            SystemTime::now(),
+            std::time::SystemTime::now(),
             self.config.signed_url_expiry,
         )
     }
@@ -149,21 +115,16 @@ impl S3 {
                 max_bytes: max_source_archive_size_bytes,
             }));
         }
-        let credentials = self.credentials(deadline).await?;
-        let url = self.presigned_url(
-            &credentials,
-            "PUT",
-            key,
-            SystemTime::now(),
-            self.config.signed_url_expiry,
-        )?;
+        let target = format!("s3://{}/{key}", self.config.user_artifacts_bucket);
         let timeout = self.timeouts.operation_timeout(deadline)?;
-        let response = tokio::time::timeout(
+        tokio::time::timeout(
             timeout,
-            self.http
-                .put(url)
-                .header(reqwest::header::CONTENT_TYPE, "application/zip")
-                .body(contents)
+            self.client
+                .put_object()
+                .bucket(&self.config.user_artifacts_bucket)
+                .key(key)
+                .content_type("application/zip")
+                .body(ByteStream::from(contents))
                 .send(),
         )
         .await
@@ -172,25 +133,32 @@ impl S3 {
                 operation: "S3 upload object",
             })
         })?
-        .map_err(|source| BpError::http_request("upload object", key, source))?;
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(BpError::http_rejected(
-                "upload object",
-                key,
-                status.as_u16(),
-                body,
-            ));
-        }
-        let signed_get_url = self.presigned_url(
-            &credentials,
-            "GET",
-            key,
-            SystemTime::now(),
-            self.config.signed_url_expiry,
-        )?;
+        .map_err(|error| BpError::s3("upload object", target, error))?;
+        let signed_get_url = self.signed_get_url(key, deadline).await?;
         Ok(UploadedObject { signed_get_url })
+    }
+
+    async fn signed_get_url(&self, key: &str, deadline: Deadline) -> BpResult<String> {
+        let target = format!("s3://{}/{key}", self.config.user_artifacts_bucket);
+        let presigning_config = PresigningConfig::expires_in(self.config.signed_url_expiry)
+            .map_err(|error| BpError::config_invalid_source(S3_SIGNED_URL_EXPIRY_SECS, error))?;
+        let timeout = self.timeouts.operation_timeout(deadline)?;
+        let request = tokio::time::timeout(
+            timeout,
+            self.client
+                .get_object()
+                .bucket(&self.config.user_artifacts_bucket)
+                .key(key)
+                .presigned(presigning_config),
+        )
+        .await
+        .map_err(|_| {
+            BpError::Timeout(TimeoutError::Operation {
+                operation: "S3 presign object download",
+            })
+        })?
+        .map_err(|error| BpError::s3("presign object download", target, error))?;
+        Ok(request.uri().to_string())
     }
 
     async fn credentials(&self, deadline: Deadline) -> BpResult<Credentials> {
@@ -206,280 +174,14 @@ impl S3 {
     }
 }
 
-impl S3 {
-    fn presigned_url(
-        &self,
-        credentials: &Credentials,
-        method: &str,
-        key: &str,
-        now: SystemTime,
-        expires_in: Duration,
-    ) -> BpResult<String> {
-        let location = self.object_location(key)?;
-        let (date, amz_date) = Self::amz_date(now);
-        let credential = format!(
-            "{}/{}/{}/{}/aws4_request",
-            credentials.access_key_id(),
-            date,
-            self.region,
-            SERVICE
-        );
-        let mut query = vec![
-            ("X-Amz-Algorithm".to_string(), ALGORITHM.to_string()),
-            ("X-Amz-Credential".to_string(), credential),
-            ("X-Amz-Date".to_string(), amz_date.clone()),
-            (
-                "X-Amz-Expires".to_string(),
-                expires_in.as_secs().to_string(),
-            ),
-            ("X-Amz-SignedHeaders".to_string(), "host".to_string()),
-        ];
-        if let Some(token) = credentials.session_token() {
-            query.push(("X-Amz-Security-Token".to_string(), token.to_string()));
-        }
-        query.sort_by(|left, right| left.0.cmp(&right.0));
-        let canonical_query = query
-            .iter()
-            .map(|(name, value)| format!("{}={}", Self::uri_encode(name), Self::uri_encode(value)))
-            .collect::<Vec<_>>()
-            .join("&");
-        let canonical_headers = format!("host:{}\n", location.host);
-        let canonical_request = format!(
-            "{method}\n{}\n{canonical_query}\n{canonical_headers}\nhost\nUNSIGNED-PAYLOAD",
-            location.path
-        );
-        let scope = format!("{date}/{}/{SERVICE}/aws4_request", self.region);
-        let string_to_sign = format!(
-            "{ALGORITHM}\n{amz_date}\n{scope}\n{}",
-            hex::encode(Sha256::digest(canonical_request.as_bytes()))
-        );
-        let signing_key = Self::signing_key(credentials.secret_access_key(), &date, &self.region);
-        let signature = hex::encode(Self::hmac_sha256(&signing_key, string_to_sign.as_bytes()));
-        Ok(format!(
-            "{}://{}{}?{canonical_query}&X-Amz-Signature={signature}",
-            location.scheme, location.host, location.path
-        ))
-    }
-
-    fn object_location(&self, key: &str) -> BpResult<ObjectLocation> {
-        let key = Self::encode_path(key);
-        match &self.endpoint_url {
-            Some(endpoint) => {
-                let url = Url::parse(endpoint)
-                    .map_err(|source| BpError::Storage(StorageError::InvalidEndpoint { source }))?;
-                let host = url.host_str().ok_or_else(|| {
-                    BpError::Storage(StorageError::InvalidEndpointHost {
-                        endpoint: endpoint.clone(),
-                    })
-                })?;
-                let host = match url.port() {
-                    Some(port) => format!("{host}:{port}"),
-                    None => host.to_owned(),
-                };
-                let base_path = url.path().trim_end_matches('/');
-                Ok(ObjectLocation {
-                    scheme: url.scheme().to_owned(),
-                    host,
-                    path: format!(
-                        "{base_path}/{}/{key}",
-                        Self::uri_encode(&self.config.user_artifacts_bucket)
-                    ),
-                })
-            }
-            None => Ok(ObjectLocation {
-                scheme: "https".to_owned(),
-                host: format!(
-                    "{}.s3.{}.{}",
-                    self.config.user_artifacts_bucket,
-                    self.region,
-                    Self::dns_suffix(&self.region)
-                ),
-                path: format!("/{key}"),
-            }),
-        }
-    }
-
-    fn encode_path(value: &str) -> String {
-        value
-            .split('/')
-            .map(Self::uri_encode)
-            .collect::<Vec<_>>()
-            .join("/")
-    }
-
-    fn uri_encode(value: &str) -> String {
-        let mut encoded = String::new();
-        for byte in value.bytes() {
-            match byte {
-                b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
-                    encoded.push(char::from(byte));
-                }
-                byte => {
-                    encoded.push('%');
-                    encoded.push_str(&format!("{byte:02X}"));
-                }
-            }
-        }
-        encoded
-    }
-
-    fn presigned_post(
-        &self,
-        credentials: &Credentials,
-        key_prefix: &str,
-        now: SystemTime,
-        expires_in: Duration,
-    ) -> BpResult<PresignedPost> {
-        let expires_at = now.checked_add(expires_in).ok_or_else(|| {
-            BpError::config_invalid(
-                S3_SIGNED_URL_EXPIRY_SECS,
-                "expiry overflows the system clock",
-            )
-        })?;
-        let (date, amz_date) = Self::amz_date(now);
-        let credential = format!(
-            "{}/{}/{}/{}/aws4_request",
-            credentials.access_key_id(),
-            date,
-            self.region,
-            SERVICE
-        );
-        let policy = Self::policy(
-            &self.config.user_artifacts_bucket,
-            key_prefix,
-            &credential,
-            &amz_date,
-            expires_at,
-            credentials.session_token(),
-            self.config.max_artifact_size_bytes.get(),
-        );
-        let policy_base64 = BASE64.encode(serde_json::to_string(&policy)?);
-        let signing_key = Self::signing_key(credentials.secret_access_key(), &date, &self.region);
-        let signature = hex::encode(Self::hmac_sha256(&signing_key, policy_base64.as_bytes()));
-        let mut fields = BTreeMap::from([
-            ("key".to_string(), format!("{key_prefix}${{filename}}")),
-            ("policy".to_string(), policy_base64),
-            ("x-amz-algorithm".to_string(), ALGORITHM.to_string()),
-            ("x-amz-credential".to_string(), credential),
-            ("x-amz-date".to_string(), amz_date),
-            ("x-amz-signature".to_string(), signature),
-        ]);
-        if let Some(token) = credentials.session_token() {
-            fields.insert("x-amz-security-token".to_string(), token.to_string());
-        }
-        Ok(PresignedPost {
-            url: self.bucket_url(),
-            fields,
-            max_artifact_size_bytes: self.config.max_artifact_size_bytes,
-        })
-    }
-
-    fn bucket_url(&self) -> String {
-        match &self.endpoint_url {
-            Some(endpoint) => format!(
-                "{}/{}/",
-                endpoint.trim_end_matches('/'),
-                self.config.user_artifacts_bucket
-            ),
-            None => format!(
-                "https://{}.s3.{}.{}/",
-                self.config.user_artifacts_bucket,
-                self.region,
-                Self::dns_suffix(&self.region)
-            ),
-        }
-    }
-
-    fn dns_suffix(region: &str) -> &'static str {
-        if region.starts_with("cn-") {
-            "amazonaws.com.cn"
-        } else {
-            "amazonaws.com"
-        }
-    }
-
-    fn policy(
-        bucket: &str,
-        key_prefix: &str,
-        credential: &str,
-        amz_date: &str,
-        expires_at: SystemTime,
-        session_token: Option<&str>,
-        max_artifact_size_bytes: u64,
-    ) -> serde_json::Value {
-        let mut conditions = vec![
-            json!({ "bucket": bucket }),
-            json!(["starts-with", "$key", key_prefix]),
-            json!({ "x-amz-algorithm": ALGORITHM }),
-            json!({ "x-amz-credential": credential }),
-            json!({ "x-amz-date": amz_date }),
-        ];
-        conditions.push(json!([
-            "content-length-range",
-            MIN_OBJECT_SIZE_BYTES,
-            max_artifact_size_bytes
-        ]));
-        if let Some(token) = session_token {
-            conditions.push(json!({ "x-amz-security-token": token }));
-        }
-        json!({
-            "expiration": Self::expiration(expires_at),
-            "conditions": conditions,
-        })
-    }
-
-    fn signing_key(secret_access_key: &str, date: &str, region: &str) -> Vec<u8> {
-        let secret = format!("AWS4{secret_access_key}");
-        let date_key = Self::hmac_sha256(secret.as_bytes(), date.as_bytes());
-        let region_key = Self::hmac_sha256(&date_key, region.as_bytes());
-        let service_key = Self::hmac_sha256(&region_key, SERVICE.as_bytes());
-        Self::hmac_sha256(&service_key, b"aws4_request")
-    }
-
-    fn hmac_sha256(key: &[u8], data: &[u8]) -> Vec<u8> {
-        let mut mac = Hmac::<Sha256>::new_from_slice(key).expect("HMAC accepts keys of any size");
-        mac.update(data);
-        mac.finalize().into_bytes().to_vec()
-    }
-
-    fn amz_date(time: SystemTime) -> (String, String) {
-        let date_time = OffsetDateTime::from(time);
-        let date = format!(
-            "{:04}{:02}{:02}",
-            date_time.year(),
-            u8::from(date_time.month()),
-            date_time.day()
-        );
-        let amz_date = format!(
-            "{date}T{:02}{:02}{:02}Z",
-            date_time.hour(),
-            date_time.minute(),
-            date_time.second()
-        );
-        (date, amz_date)
-    }
-
-    fn expiration(time: SystemTime) -> String {
-        let date_time = OffsetDateTime::from(time);
-        format!(
-            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.000Z",
-            date_time.year(),
-            u8::from(date_time.month()),
-            date_time.day(),
-            date_time.hour(),
-            date_time.minute(),
-            date_time.second()
-        )
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use aws_credential_types::Credentials;
+    use platform_aws::Region;
     use platform_time::timeouts::Timeout;
 
-    #[test]
-    fn presigns_get_url_with_sigv4() {
+    fn s3_client() -> (S3, Credentials) {
         let credentials = Credentials::new(
             "AKIAIOSFODNN7EXAMPLE",
             "wJalrXUtnFEMI/K7MDENG+bPxRfiCYEXAMPLEKEY",
@@ -487,10 +189,12 @@ mod tests {
             None,
             "test",
         );
-        let s3 = S3::new(
-            SharedCredentialsProvider::new(credentials.clone()),
-            "us-east-1".to_string(),
-            None,
+        let sdk_config = SdkConfig::builder()
+            .region(Region::new("us-east-1"))
+            .credentials_provider(SharedCredentialsProvider::new(credentials.clone()))
+            .build();
+        let s3 = S3::from_sdk_config(
+            &sdk_config,
             Timeouts {
                 connect: Timeout::Disabled,
                 operation: Timeout::Disabled,
@@ -502,29 +206,30 @@ mod tests {
                 signed_url_expiry: Duration::from_secs(900),
                 endpoint_url: None,
             },
-        );
+        )
+        .unwrap();
+        (s3, credentials)
+    }
+
+    #[tokio::test]
+    async fn presigns_get_url_with_sdk() {
+        let (s3, _) = s3_client();
         let url = s3
-            .presigned_url(
-                &credentials,
-                "GET",
+            .signed_get_url(
                 "github/github.com/42/7/heads/main/abc123/source/algorithms.zip",
-                SystemTime::UNIX_EPOCH + Duration::from_secs(1_735_787_045),
-                Duration::from_secs(900),
+                Deadline::new(
+                    std::time::SystemTime::now() + Duration::from_secs(30),
+                    Duration::ZERO,
+                ),
             )
+            .await
             .unwrap();
 
-        assert_eq!(
-            url,
-            concat!(
-                "https://stock-trek-user-artifacts.s3.us-east-1.amazonaws.com/",
-                "github/github.com/42/7/heads/main/abc123/source/algorithms.zip?",
-                "X-Amz-Algorithm=AWS4-HMAC-SHA256&",
-                "X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20250102%2Fus-east-1%2Fs3%2Faws4_request&",
-                "X-Amz-Date=20250102T030405Z&X-Amz-Expires=900&",
-                "X-Amz-Security-Token=token%2Fwith%2Bchars%3D&",
-                "X-Amz-SignedHeaders=host&",
-                "X-Amz-Signature=d7e1bf04e1b60f2f22bdd583f5d7ba2345100a9b6865061ac753e5497e1ff760"
-            )
-        );
+        assert!(url.starts_with(concat!(
+            "https://stock-trek-user-artifacts.s3.us-east-1.amazonaws.com/",
+            "github/github.com/42/7/heads/main/abc123/source/algorithms.zip?"
+        )));
+        assert!(url.contains("X-Amz-Expires=900"));
+        assert!(url.contains("X-Amz-Signature="));
     }
 }

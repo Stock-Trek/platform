@@ -1,5 +1,5 @@
 use crate::infisical::auth_flow::InfisicalAwsAuth;
-use aws_config::SdkConfig;
+use platform_aws::SdkConfig;
 use platform_errors::{BpError, BpResult, HttpError};
 use platform_time::{
     deadline::Deadline,

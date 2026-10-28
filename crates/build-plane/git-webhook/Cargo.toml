@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+platform-aws = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["github", "http", "storage"] }
 platform-github = { workspace = true }
@@ -12,7 +13,6 @@ platform-metrics = { workspace = true }
 platform-runtime = { workspace = true }
 platform-sqs = { workspace = true }
 platform-time = { workspace = true }
-aws-config = { workspace = true }
 aws-credential-types = { workspace = true }
 aws-sdk-sqs = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sigv4 = { workspace = true }

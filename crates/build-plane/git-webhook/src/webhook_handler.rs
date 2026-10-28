@@ -157,7 +157,6 @@ impl WebhookHandler {
                     }
                     let send_result = request_context
                         .context
-                        .aws
                         .sqs
                         .send_batch(&messages, request_context.deadline)
                         .await;
@@ -187,7 +186,6 @@ impl WebhookHandler {
                             );
                             match request_context
                                 .context
-                                .aws
                                 .sqs
                                 .send_individually(&unsent, request_context.deadline)
                                 .await
