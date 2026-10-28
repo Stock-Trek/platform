@@ -9,6 +9,7 @@ platform-errors = { workspace = true }
 platform-github = { workspace = true }
 platform-messages = { workspace = true }
 platform-metrics = { workspace = true }
+platform-runtime = { workspace = true }
 platform-sqs = { workspace = true }
 platform-time = { workspace = true }
 aws-config = { workspace = true }

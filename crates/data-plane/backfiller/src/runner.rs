@@ -3,9 +3,9 @@ use crate::{
     config::BackfillerConfig,
     fetcher::MissingEventFetcher,
     gap_marker_source::GapMarkerSource,
-    publisher::EventPublisher,
 };
 use platform_errors::BpResult;
+use platform_nats::EventPublisher;
 use tracing::info;
 
 pub struct BackfillerRunner<S, F, P> {

@@ -1,10 +1,10 @@
 use crate::{config::AgentConfig, handler::Handler, source::SourceLimits};
 use lambda_runtime::{LambdaEvent, service_fn};
 use metrics_cloudwatch_embedded::lambda::service::run;
-use platform_config::tracing_setup::TracingSetup;
 use platform_errors::{BpError, BpResult};
 use platform_messages::build_request::{BuildOutcome, BuildRequest};
-use platform_metrics::{build::BuildMetrics, descriptions::DescriptionsMetrics};
+use platform_metrics::build::BuildMetrics;
+use platform_runtime::Service;
 use std::time::{Instant, SystemTime};
 
 mod artifacts;
@@ -13,16 +13,14 @@ mod handler;
 mod s3;
 mod source;
 
+const SERVICE: Service = Service::new("platform-build-agent");
+
 #[tokio::main]
 async fn main() -> BpResult<()> {
     let config = AgentConfig::from_env()?;
-    TracingSetup::setup(&config.log_filter)?;
-    let recorder = metrics_cloudwatch_embedded::Builder::new()
-        .cloudwatch_namespace("platform/agent")
-        .with_dimension("function", config.lambda_function_name.clone())
-        .lambda_cold_start_metric(platform_metrics::descriptions::COLD_STARTS_TOTAL)
-        .init()?;
-    DescriptionsMetrics::describe();
+    SERVICE.init_logging(&config.log_filter)?;
+    let recorder =
+        SERVICE.init_lambda_metrics("platform/agent", config.lambda_function_name.clone())?;
     let source_limits = SourceLimits::new(
         config.source_download_timeout,
         config.max_source_archive_size_bytes,

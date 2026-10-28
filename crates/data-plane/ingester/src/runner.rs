@@ -1,11 +1,11 @@
 use crate::{
     config::IngesterConfig,
     ingester::{IngestOptions, Ingester},
-    publisher::EventPublisher,
     source::MarketMessageSource,
 };
 use platform_errors::BpResult;
 use platform_market_data::event::ParsedMessage;
+use platform_nats::EventPublisher;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};

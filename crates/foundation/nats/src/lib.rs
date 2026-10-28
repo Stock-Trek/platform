@@ -18,6 +18,6 @@ pub use consumer::JetStreamConsumer;
 pub use jetstream::JetStream;
 pub use kv::KeyValue;
 pub use message::Message;
-pub use publisher::{NatsPublisher, PublishAck};
+pub use publisher::{EventPublisher, NatsPublisher, PublishAck};
 pub use subject::NatsSubject;
 pub use subscriber::NatsSubscriber;

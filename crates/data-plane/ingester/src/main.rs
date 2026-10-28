@@ -1,6 +1,5 @@
 mod config;
 mod ingester;
-mod publisher;
 mod runner;
 mod sequence;
 mod source;
@@ -8,13 +7,16 @@ mod source;
 use crate::{config::IngesterConfig, runner::IngesterRunner, source::WebsocketSource};
 use platform_errors::BpResult;
 use platform_nats::NatsPublisher;
+use platform_runtime::Service;
 use std::sync::Arc;
+
+const SERVICE: Service = Service::new("platform-ingester");
 
 #[tokio::main]
 async fn main() -> BpResult<()> {
     let config = IngesterConfig::from_env()?;
-    platform_runtime::Runtime::init_logging(&config.log_filter)?;
-    let publisher = Arc::new(NatsPublisher::connect(&config.nats_url, "platform-ingester").await?);
+    SERVICE.init_logging(&config.log_filter)?;
+    let publisher = Arc::new(NatsPublisher::connect(&config.nats_url, SERVICE.name()).await?);
     publisher.ensure_stream(&config.nats_subject_prefix).await?;
     let source = WebsocketSource::from_config(&config);
     IngesterRunner::new(config, source, publisher).run().await

@@ -4,7 +4,6 @@ mod config;
 mod event_page_source;
 mod fetcher;
 mod gap_marker_source;
-mod publisher;
 mod runner;
 
 use crate::{
@@ -13,14 +12,18 @@ use crate::{
 };
 use platform_errors::BpResult;
 use platform_nats::NatsPublisher;
+use platform_runtime::Service;
+
+const SERVICE: Service = Service::new("platform-backfiller");
+const NATS_CLIENT_NAME: &str = "platform-backfiller-events";
 
 #[tokio::main]
 async fn main() -> BpResult<()> {
     let config = BackfillerConfig::from_env()?;
-    platform_runtime::Runtime::init_logging(&config.log_filter)?;
+    SERVICE.init_logging(&config.log_filter)?;
     let source = NatsGapMarkerSource::connect(&config).await?;
     let fetcher = BinanceGapFetcher::try_new(&config)?;
-    let publisher = NatsPublisher::connect(&config.nats_url, "platform-backfiller-events").await?;
+    let publisher = NatsPublisher::connect(&config.nats_url, NATS_CLIENT_NAME).await?;
     publisher
         .ensure_stream(&config.event_subject_prefix)
         .await?;
