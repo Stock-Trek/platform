@@ -17,6 +17,7 @@ pub mod response;
 pub mod spot_order;
 pub mod supporting_types;
 pub mod time;
+pub mod trades;
 pub mod urls;
 pub mod websocket_session_logon;
 pub mod websocket_session_logout;

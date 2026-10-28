@@ -3166,6 +3166,22 @@ version = "0.2.0"
 [[package]]
 name = "platform-backfiller"
 version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "base64 0.23.1",
+ "chrono",
+ "platform-config",
+ "platform-errors",
+ "platform-exchange-gateway",
+ "platform-exchange-types",
+ "platform-market-data",
+ "platform-nats",
+ "platform-types",
+ "serde_json",
+ "stock-trek-types",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "platform-build-agent"
