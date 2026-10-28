@@ -5,7 +5,15 @@ use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveParquet, ArchiveRecord, Bucket, ObjectKey, S3,
 };
 use platform_errors::BpResult;
+use platform_metrics::descriptions::S3_OPERATION_ARCHIVE_UPLOAD;
+use platform_metrics::market_data::MarketDataMetrics;
+use std::time::Duration;
+use tokio::time::sleep;
+use tracing::warn;
 use uuid::Uuid;
+
+const UPLOAD_MAX_ATTEMPTS: u32 = 3;
+const UPLOAD_RETRY_BACKOFF: Duration = Duration::from_millis(500);
 
 /// Writes a batch of de-duplicated records to long-term storage.
 #[async_trait]
@@ -42,6 +50,24 @@ impl S3ParquetSink {
             .raw_key(&self.prefix, format!("{}.parquet", Uuid::new_v4()))
             .map(ObjectKey::new)
     }
+
+    async fn upload_with_retry(&self, key: &ObjectKey, bytes: Bytes) -> BpResult<()> {
+        let mut attempt = 1_u32;
+        loop {
+            match S3::upload_bytes(&self.transfer_client, &self.bucket, key, bytes.clone()).await {
+                Ok(()) => return Ok(()),
+                Err(error) => {
+                    if attempt >= UPLOAD_MAX_ATTEMPTS {
+                        return Err(error);
+                    }
+                    MarketDataMetrics::record_s3_retry(S3_OPERATION_ARCHIVE_UPLOAD);
+                    warn!(%error, attempt, "S3 upload failed, retrying");
+                    sleep(UPLOAD_RETRY_BACKOFF * attempt).await;
+                    attempt += 1;
+                }
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -65,13 +91,7 @@ impl ArchiveSink for S3ParquetSink {
             let key = self.object_key(partition)?;
             let batch = ArchiveBatch::new(partition.kind, records[start..end].to_vec())?;
             let bytes = ArchiveParquet::encode(&batch)?;
-            S3::upload_bytes(
-                &self.transfer_client,
-                &self.bucket,
-                &key,
-                Bytes::from(bytes),
-            )
-            .await?;
+            self.upload_with_retry(&key, Bytes::from(bytes)).await?;
             start = end;
         }
         Ok(())

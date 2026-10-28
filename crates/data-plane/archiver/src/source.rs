@@ -5,6 +5,10 @@ use platform_errors::BpResult;
 use platform_market_data::{
     candle::ClosedCandle, envelope::EnvelopeCodec, event::MarketEvent, subject::MarketEventSubject,
 };
+use platform_metrics::descriptions::{
+    DECODE_KIND_CLOSED_CANDLE, DECODE_KIND_MARKET_EVENT, STAGE_ARCHIVER,
+};
+use platform_metrics::market_data::MarketDataMetrics;
 use platform_nats::NatsSubscriber;
 use tracing::{info, warn};
 
@@ -65,7 +69,13 @@ impl ArchiveSource for NatsArchiveSource {
                     match message? {
                         Some((_subject, payload)) => match MarketEvent::decode(&payload) {
                             Ok(event) => return Ok(Some(ArchiveRecord::MarketEvent(event))),
-                            Err(error) => warn!(%error, "skipping malformed market event"),
+                            Err(error) => {
+                                MarketDataMetrics::record_decode_failure(
+                                    STAGE_ARCHIVER,
+                                    DECODE_KIND_MARKET_EVENT,
+                                );
+                                warn!(%error, "skipping malformed market event");
+                            }
                         },
                         None => {
                             self.events_open = false;
@@ -77,7 +87,13 @@ impl ArchiveSource for NatsArchiveSource {
                     match message? {
                         Some((_subject, payload)) => match ClosedCandle::decode(&payload) {
                             Ok(candle) => return Ok(Some(ArchiveRecord::ClosedCandle(candle))),
-                            Err(error) => warn!(%error, "skipping malformed closed candle"),
+                            Err(error) => {
+                                MarketDataMetrics::record_decode_failure(
+                                    STAGE_ARCHIVER,
+                                    DECODE_KIND_CLOSED_CANDLE,
+                                );
+                                warn!(%error, "skipping malformed closed candle");
+                            }
                         },
                         None => {
                             self.candles_open = false;

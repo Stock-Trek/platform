@@ -31,6 +31,19 @@ pub const MARKET_DATA_INGEST_SKIPPED_WINDOWS_TOTAL: &str =
     "market_data_ingest_skipped_windows_total";
 pub const MARKET_DATA_COMPACTION_OUTCOMES_TOTAL: &str = "market_data_compaction_outcomes_total";
 pub const MARKET_DATA_COMPACTION_DURATION_SECONDS: &str = "market_data_compaction_duration_seconds";
+pub const MARKET_DATA_DROPPED_EVENTS_TOTAL: &str = "market_data_dropped_events_total";
+pub const MARKET_DATA_DECODE_FAILURES_TOTAL: &str = "market_data_decode_failures_total";
+pub const MARKET_DATA_BACKFILL_GAPS_TOTAL: &str = "market_data_backfill_gaps_total";
+pub const MARKET_DATA_BACKFILL_GAP_EVENTS_EXPECTED_TOTAL: &str =
+    "market_data_backfill_gap_events_expected_total";
+pub const MARKET_DATA_BACKFILL_GAP_EVENTS_PUBLISHED_TOTAL: &str =
+    "market_data_backfill_gap_events_published_total";
+pub const MARKET_DATA_BACKFILL_GAP_COVERAGE_RATIO: &str = "market_data_backfill_gap_coverage_ratio";
+pub const MARKET_DATA_ARCHIVE_FLUSHES_TOTAL: &str = "market_data_archive_flushes_total";
+pub const MARKET_DATA_ARCHIVE_FLUSH_RECORDS_TOTAL: &str = "market_data_archive_flush_records_total";
+pub const MARKET_DATA_ARCHIVE_FLUSH_DURATION_SECONDS: &str =
+    "market_data_archive_flush_duration_seconds";
+pub const MARKET_DATA_S3_RETRIES_TOTAL: &str = "market_data_s3_retries_total";
 
 pub const STATUS_SUCCESS: &str = "success";
 pub const STATUS_ERROR: &str = "error";
@@ -43,6 +56,31 @@ pub const INGEST_OUTCOME_SKIPPED_INCOMPLETE: &str = "skipped_incomplete";
 pub const INGEST_OUTCOME_ERROR: &str = "error";
 pub const INGEST_SKIP_REASON_COMPACTED: &str = "compacted";
 pub const INGEST_SKIP_REASON_DEADLINE: &str = "deadline";
+
+pub const STAGE_INGESTER: &str = "ingester";
+pub const STAGE_AGGREGATOR: &str = "aggregator";
+pub const STAGE_ARCHIVER: &str = "archiver";
+
+pub const DROP_REASON_DUPLICATE: &str = "duplicate";
+pub const DROP_REASON_OUT_OF_ORDER: &str = "out_of_order";
+pub const DROP_REASON_NO_DECODER: &str = "no_decoder";
+pub const DROP_REASON_CHANNEL_CLOSED: &str = "channel_closed";
+
+pub const DECODE_KIND_FRAME: &str = "frame";
+pub const DECODE_KIND_MARKET_EVENT: &str = "market_event";
+pub const DECODE_KIND_CLOSED_CANDLE: &str = "closed_candle";
+pub const DECODE_KIND_TRADE: &str = "trade";
+
+pub const BACKFILL_OUTCOME_COVERED: &str = "covered";
+pub const BACKFILL_OUTCOME_PARTIAL: &str = "partial";
+pub const BACKFILL_OUTCOME_EMPTY: &str = "empty";
+pub const BACKFILL_OUTCOME_ERROR: &str = "error";
+
+pub const FLUSH_REASON_SIZE: &str = "size";
+pub const FLUSH_REASON_INTERVAL: &str = "interval";
+pub const FLUSH_REASON_SHUTDOWN: &str = "shutdown";
+
+pub const S3_OPERATION_ARCHIVE_UPLOAD: &str = "archive_upload";
 
 pub struct DescriptionsMetrics;
 
@@ -160,6 +198,46 @@ impl DescriptionsMetrics {
         describe_histogram!(
             MARKET_DATA_COMPACTION_DURATION_SECONDS,
             "Duration of market data compaction targets in seconds, labelled by status"
+        );
+        describe_counter!(
+            MARKET_DATA_DROPPED_EVENTS_TOTAL,
+            "Total number of market data events dropped, labelled by stage and reason"
+        );
+        describe_counter!(
+            MARKET_DATA_DECODE_FAILURES_TOTAL,
+            "Total number of market data payloads that failed to decode, labelled by stage and kind"
+        );
+        describe_counter!(
+            MARKET_DATA_BACKFILL_GAPS_TOTAL,
+            "Total number of gap markers processed by the backfiller, labelled by outcome"
+        );
+        describe_counter!(
+            MARKET_DATA_BACKFILL_GAP_EVENTS_EXPECTED_TOTAL,
+            "Total number of events expected by processed gap markers"
+        );
+        describe_counter!(
+            MARKET_DATA_BACKFILL_GAP_EVENTS_PUBLISHED_TOTAL,
+            "Total number of events published while backfilling gap markers"
+        );
+        describe_histogram!(
+            MARKET_DATA_BACKFILL_GAP_COVERAGE_RATIO,
+            "Fraction of each gap marker covered by published backfill events"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_FLUSHES_TOTAL,
+            "Total number of archive flushes, labelled by trigger reason and status"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_FLUSH_RECORDS_TOTAL,
+            "Total number of records written by successful archive flushes"
+        );
+        describe_histogram!(
+            MARKET_DATA_ARCHIVE_FLUSH_DURATION_SECONDS,
+            "Duration of archive flushes in seconds, labelled by trigger reason and status"
+        );
+        describe_counter!(
+            MARKET_DATA_S3_RETRIES_TOTAL,
+            "Total number of S3 upload retries, labelled by operation"
         );
     }
 }
