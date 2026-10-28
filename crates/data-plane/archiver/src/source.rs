@@ -1,4 +1,5 @@
 use crate::config::ArchiverConfig;
+use async_trait::async_trait;
 use platform_archive::ArchiveRecord;
 use platform_errors::BpResult;
 use platform_market_data::{
@@ -10,6 +11,13 @@ use platform_metrics::descriptions::{
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_nats::NatsSubscriber;
 use tracing::{info, warn};
+
+/// Source of records that should be written to the archive.
+#[async_trait]
+pub trait ArchiveSource: Send {
+    /// Returns `None` when the source has reached its end.
+    async fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>>;
+}
 
 /// Reads market events and closed candles from NATS.
 ///
@@ -46,8 +54,11 @@ impl NatsArchiveSource {
             candles_open: true,
         })
     }
+}
 
-    pub async fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>> {
+#[async_trait]
+impl ArchiveSource for NatsArchiveSource {
+    async fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>> {
         loop {
             if !self.events_open && !self.candles_open {
                 return Ok(None);

@@ -1,3 +1,4 @@
+pub mod batch;
 pub mod buffer;
 pub mod constants;
 pub mod layout;
@@ -11,6 +12,7 @@ pub mod s3;
 pub mod source;
 pub mod subfolders;
 
+pub use batch::ArchiveBatch;
 pub use buffer::ArchiveBuffer;
 pub use layout::{ArchiveBucket, ArchiveHour, ArchiveLayout, ArchivePath, ArchiveTimePartition};
 pub use parquet::{ArchiveParquet, ArchiveParquetBatches, ArchiveParquetWriter};

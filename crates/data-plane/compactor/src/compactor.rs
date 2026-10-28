@@ -3,6 +3,7 @@ use crate::{
     partition_output::PartitionOutput,
     spill::{DedupeSpill, PartitionSpill},
 };
+use async_trait::async_trait;
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
 use platform_archive::{ArchiveHour, ArchiveParquet, ArchivePath, SourceBatch};
 use platform_errors::{BpError, BpResult, DataError};
@@ -16,6 +17,12 @@ pub struct CompactionStats {
     pub records_read: usize,
     pub records_written: usize,
     pub output_files: usize,
+}
+
+/// Compacts a batch of raw archive files into partitioned output files.
+#[async_trait]
+pub trait BatchCompactor: Send + Sync {
+    async fn compact(&self, batch: &SourceBatch) -> BpResult<CompactionStats>;
 }
 
 /// Reads raw archive files, de-duplicates and sorts their rows, then writes one
@@ -73,7 +80,7 @@ impl Compactor {
                     )
                 })?;
                 for decoded in ArchiveParquet::decode_batches(batch.kind, file)? {
-                    let records = decoded?;
+                    let records = decoded?.into_records();
                     stats.records_read += records.len();
                     for record in records {
                         dedupe.push(record)?;
@@ -178,5 +185,12 @@ impl Compactor {
             &self.output_prefix,
             &format!("{partition}/{}", hour.file_path("data.parquet")),
         ))
+    }
+}
+
+#[async_trait]
+impl BatchCompactor for Compactor {
+    async fn compact(&self, batch: &SourceBatch) -> BpResult<CompactionStats> {
+        Compactor::compact(self, batch).await
     }
 }
