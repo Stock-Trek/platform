@@ -1,7 +1,7 @@
 use crate::{
     backfiller::{BackfillOptions, BackfillService},
+    binance::BinanceGapFetcher,
     config::BackfillerConfig,
-    fetcher::BinanceGapFetcher,
     source::NatsGapMarkerSource,
 };
 use platform_errors::BpResult;

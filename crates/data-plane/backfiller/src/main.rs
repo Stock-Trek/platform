@@ -1,9 +1,9 @@
 mod backfiller;
+mod binance;
 mod config;
 mod fetcher;
 mod runner;
 mod source;
-mod stream;
 
 use crate::{config::BackfillerConfig, runner::BackfillerRunner};
 use platform_config::tracing_setup::TracingSetup;
