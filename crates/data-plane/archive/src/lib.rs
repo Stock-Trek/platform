@@ -1,15 +1,12 @@
 pub mod batch;
 pub mod buffer;
-pub mod constants;
 pub mod layout;
 pub mod parquet;
 pub mod parquet_reader;
-pub mod plan;
 pub mod quantized_time;
 pub mod record;
 pub mod s3;
 pub mod source;
-pub mod subfolders;
 
 pub use batch::ArchiveBatch;
 pub use buffer::ArchiveBuffer;
