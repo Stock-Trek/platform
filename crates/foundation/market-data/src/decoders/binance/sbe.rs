@@ -1,7 +1,7 @@
 use crate::{
     decoders::{
         binary::BinaryCursor,
-        decoder::{DecodedFrame, FrameBytes},
+        frame::{DecodedFrame, FrameBytes},
     },
     event::ParsedMessage,
 };

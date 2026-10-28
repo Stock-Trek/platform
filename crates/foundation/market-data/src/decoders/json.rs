@@ -1,5 +1,5 @@
 use crate::{
-    decoders::decoder::{DecodedFrame, FrameBytes},
+    decoders::frame::{DecodedFrame, FrameBytes},
     event::ParsedMessage,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};

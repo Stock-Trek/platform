@@ -7,8 +7,8 @@ use iris::{
 use platform_errors::{BpError, BpResult, IngesterError};
 use platform_market_data::{
     decoders::{
-        decoder::{CodecHandle, DecodedFrame, SharedCodec},
-        factory::CodecFactory,
+        codec::{CodecFactory, CodecHandle, SharedCodec},
+        frame::DecodedFrame,
     },
     event::ParsedMessage,
 };
