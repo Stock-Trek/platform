@@ -10,6 +10,7 @@ platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-market-data = { workspace = true }
 platform-nats = { workspace = true }
+platform-runtime = { workspace = true }
 platform-types = { workspace = true }
 rust_decimal = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }

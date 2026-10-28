@@ -1,0 +1,11 @@
+[package]
+name = "platform-runtime"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+platform-config = { workspace = true }
+platform-errors = { workspace = true }
+platform-nats = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tracing = { workspace = true }

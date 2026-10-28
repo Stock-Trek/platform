@@ -1,7 +1,7 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::CandleInterval;
-use platform_nats::NatsSubject;
+use platform_runtime::Config;
 use std::time::Duration;
 
 pub const AGGREGATOR_NATS_URL: &str = "AGGREGATOR_NATS_URL";
@@ -31,21 +31,14 @@ impl AggregatorConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let log_filter = vars.required_log_filter("RUST_LOG")?;
-        let nats_url = vars.required_url(AGGREGATOR_NATS_URL, &["nats"])?;
-        let event_subject_prefix = vars.required(AGGREGATOR_EVENT_SUBJECT_PREFIX)?;
-        let open_candle_subject_prefix = vars.required(AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX)?;
+        let log_filter = Config::log_filter(vars)?;
+        let nats_url = Config::required_nats_url(vars, AGGREGATOR_NATS_URL)?;
+        let event_subject_prefix =
+            Config::required_nats_subject(vars, AGGREGATOR_EVENT_SUBJECT_PREFIX)?;
+        let open_candle_subject_prefix =
+            Config::required_nats_subject(vars, AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX)?;
         let closed_candle_subject_prefix =
-            vars.required(AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX)?;
-        Self::validate_subject_prefix(AGGREGATOR_EVENT_SUBJECT_PREFIX, &event_subject_prefix)?;
-        Self::validate_subject_prefix(
-            AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX,
-            &open_candle_subject_prefix,
-        )?;
-        Self::validate_subject_prefix(
-            AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX,
-            &closed_candle_subject_prefix,
-        )?;
+            Config::required_nats_subject(vars, AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX)?;
 
         let interval_labels = vars
             .optional(AGGREGATOR_INTERVALS)?
@@ -69,14 +62,11 @@ impl AggregatorConfig {
             ));
         }
 
-        let flush_interval_secs =
-            vars.optional_parsed_or(AGGREGATOR_FLUSH_INTERVAL_SECS, DEFAULT_FLUSH_INTERVAL_SECS)?;
-        if flush_interval_secs == 0 {
-            return Err(BpError::config_invalid(
-                AGGREGATOR_FLUSH_INTERVAL_SECS,
-                "must be greater than zero",
-            ));
-        }
+        let flush_interval = Config::optional_positive_duration_secs(
+            vars,
+            AGGREGATOR_FLUSH_INTERVAL_SECS,
+            DEFAULT_FLUSH_INTERVAL_SECS,
+        )?;
 
         Ok(Self {
             log_filter,
@@ -85,12 +75,7 @@ impl AggregatorConfig {
             open_candle_subject_prefix,
             closed_candle_subject_prefix,
             intervals,
-            flush_interval: Duration::from_secs(flush_interval_secs),
+            flush_interval,
         })
-    }
-
-    fn validate_subject_prefix(name: &str, value: &str) -> BpResult<()> {
-        NatsSubject::validate(value)
-            .map_err(|error| BpError::config_invalid(name, error.to_string()))
     }
 }

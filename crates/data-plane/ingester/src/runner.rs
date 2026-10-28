@@ -64,9 +64,8 @@ impl IngesterRunner {
                         error!(%error, "failed to ingest market event");
                     }
                 }
-                signal = tokio::signal::ctrl_c() => {
+                signal = platform_runtime::Runtime::shutdown_signal() => {
                     signal?;
-                    info!("shutdown requested");
                     break;
                 }
             }

@@ -70,9 +70,8 @@ impl ArchiverRunner {
                 _ = flush_ticker.tick() => {
                     self.flush(sink, buffer).await?;
                 }
-                signal = tokio::signal::ctrl_c() => {
+                signal = platform_runtime::Runtime::shutdown_signal() => {
                     signal?;
-                    info!("shutdown requested");
                     break;
                 }
             }

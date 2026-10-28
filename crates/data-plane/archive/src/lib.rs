@@ -1,10 +1,3 @@
-//! Shared archive records, Parquet encoding, storage helpers, and planning.
-//!
-//! The archiver writes these records and the compactor reads them back, so the
-//! record shape, deduplication keys, partitioning, Parquet schema, object-key
-//! layout, and storage operations live here instead of being reimplemented by
-//! each service.
-
 pub mod buffer;
 pub mod constants;
 pub mod layout;

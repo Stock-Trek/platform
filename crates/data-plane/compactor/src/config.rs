@@ -1,5 +1,6 @@
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::BpResult;
+use platform_runtime::Config;
 use std::time::Duration;
 
 const COMPACTOR_S3_BUCKET: &str = "COMPACTOR_S3_BUCKET";
@@ -9,7 +10,6 @@ const COMPACTOR_POLL_INTERVAL_SECS: &str = "COMPACTOR_POLL_INTERVAL_SECS";
 const COMPACTOR_SETTLE_SECS: &str = "COMPACTOR_SETTLE_SECS";
 const COMPACTOR_MIN_SOURCE_FILES: &str = "COMPACTOR_MIN_SOURCE_FILES";
 const COMPACTOR_SPILL_RECORDS: &str = "COMPACTOR_SPILL_RECORDS";
-const RUST_LOG: &str = "RUST_LOG";
 
 const DEFAULT_S3_PREFIX: &str = "market-data/raw";
 const DEFAULT_OUTPUT_PREFIX: &str = "market-data/compacted";
@@ -36,7 +36,7 @@ impl CompactorConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let log_filter = vars.required_log_filter(RUST_LOG)?;
+        let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(COMPACTOR_S3_BUCKET)?;
         let s3_prefix = vars
             .optional(COMPACTOR_S3_PREFIX)?
@@ -45,41 +45,33 @@ impl CompactorConfig {
             .optional(COMPACTOR_OUTPUT_PREFIX)?
             .unwrap_or_else(|| DEFAULT_OUTPUT_PREFIX.to_string());
 
-        let poll_interval_secs =
-            vars.optional_parsed_or(COMPACTOR_POLL_INTERVAL_SECS, DEFAULT_POLL_INTERVAL_SECS)?;
-        if poll_interval_secs == 0 {
-            return Err(BpError::config_invalid(
-                COMPACTOR_POLL_INTERVAL_SECS,
-                "must be greater than zero",
-            ));
-        }
+        let poll_interval = Config::optional_positive_duration_secs(
+            vars,
+            COMPACTOR_POLL_INTERVAL_SECS,
+            DEFAULT_POLL_INTERVAL_SECS,
+        )?;
 
-        let settle_secs = vars.optional_parsed_or(COMPACTOR_SETTLE_SECS, DEFAULT_SETTLE_SECS)?;
-        let min_source_files =
-            vars.optional_parsed_or(COMPACTOR_MIN_SOURCE_FILES, DEFAULT_MIN_SOURCE_FILES)?;
-        if min_source_files == 0 {
-            return Err(BpError::config_invalid(
-                COMPACTOR_MIN_SOURCE_FILES,
-                "must be greater than zero",
-            ));
-        }
+        let settle = Config::optional_positive_duration_secs(
+            vars,
+            COMPACTOR_SETTLE_SECS,
+            DEFAULT_SETTLE_SECS,
+        )?;
+        let min_source_files = Config::optional_positive_usize(
+            vars,
+            COMPACTOR_MIN_SOURCE_FILES,
+            DEFAULT_MIN_SOURCE_FILES,
+        )?;
 
         let spill_records =
-            vars.optional_parsed_or(COMPACTOR_SPILL_RECORDS, DEFAULT_SPILL_RECORDS)?;
-        if spill_records == 0 {
-            return Err(BpError::config_invalid(
-                COMPACTOR_SPILL_RECORDS,
-                "must be greater than zero",
-            ));
-        }
+            Config::optional_positive_usize(vars, COMPACTOR_SPILL_RECORDS, DEFAULT_SPILL_RECORDS)?;
 
         Ok(Self {
             log_filter,
             s3_bucket,
             s3_prefix,
             output_prefix,
-            poll_interval: Duration::from_secs(poll_interval_secs),
-            settle: Duration::from_secs(settle_secs),
+            poll_interval,
+            settle,
             min_source_files,
             spill_records,
         })

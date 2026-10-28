@@ -32,9 +32,8 @@ impl CompactorRunner {
                         warn!(%error, "compaction cycle failed");
                     }
                 }
-                signal = tokio::signal::ctrl_c() => {
+                signal = platform_runtime::Runtime::shutdown_signal() => {
                     signal?;
-                    info!("shutdown requested");
                     break;
                 }
             }

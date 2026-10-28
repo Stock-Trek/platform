@@ -24,21 +24,30 @@ pub struct NatsAddress {
 
 impl NatsAddress {
     pub fn validate(value: &str) -> BpResult<()> {
-        Self::parse(value).map(|_| ())
+        Self::validate_named("NATS_URL", value)
+    }
+
+    /// Validates a NATS address, reporting errors against `name` so callers can
+    /// use the environment variable that actually held the value.
+    pub fn validate_named(name: &str, value: &str) -> BpResult<()> {
+        Self::parse_named(name, value).map(|_| ())
     }
 
     fn parse(value: &str) -> BpResult<Self> {
-        let url =
-            Url::parse(value).map_err(|error| BpError::config_invalid_source("NATS_URL", error))?;
+        Self::parse_named("NATS_URL", value)
+    }
+
+    fn parse_named(name: &str, value: &str) -> BpResult<Self> {
+        let url = Url::parse(value).map_err(|error| BpError::config_invalid_source(name, error))?;
         if url.scheme() != "nats" {
             return Err(BpError::config_invalid(
-                "NATS_URL",
+                name,
                 format!("must use the nats scheme, got {}", url.scheme()),
             ));
         }
         let host = url
             .host_str()
-            .ok_or_else(|| BpError::config_invalid("NATS_URL", "missing host"))?;
+            .ok_or_else(|| BpError::config_invalid(name, "missing host"))?;
         Ok(Self {
             host: host.to_string(),
             port: url.port().unwrap_or(DEFAULT_NATS_PORT),
@@ -66,6 +75,12 @@ impl NatsSubject {
     }
 
     pub fn validate(subject: &str) -> BpResult<()> {
+        Self::validate_named("NATS subject", subject)
+    }
+
+    /// Validates a NATS subject, reporting errors against `name` so callers can
+    /// identify the configuration value that was invalid.
+    pub fn validate_named(name: &str, subject: &str) -> BpResult<()> {
         let invalid = subject.is_empty()
             || subject.split('.').any(|token| {
                 token.is_empty()
@@ -75,7 +90,7 @@ impl NatsSubject {
             });
         if invalid {
             return Err(BpError::Validation(ValidationError::InvalidValue {
-                name: "NATS subject".to_string(),
+                name: name.to_string(),
                 value: subject.to_string(),
             }));
         }
