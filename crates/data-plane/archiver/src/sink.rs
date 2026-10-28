@@ -1,10 +1,8 @@
 use crate::config::ArchiverConfig;
 use async_trait::async_trait;
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
-use chrono::{DateTime, Datelike, Timelike, Utc};
-use platform_archive::{ArchiveKind, ArchiveParquet, ArchiveRecord};
-use platform_errors::{BpError, BpResult, DataError};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_archive::{ArchiveBucket, ArchiveParquet, ArchiveRecord};
+use platform_errors::{BpError, BpResult};
 use std::collections::HashMap;
 use uuid::Uuid;
 
@@ -12,24 +10,6 @@ use uuid::Uuid;
 #[async_trait]
 pub trait ArchiveSink: Send + Sync {
     async fn write(&self, records: &[ArchiveRecord]) -> BpResult<()>;
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-struct ArchiveBucket {
-    kind: ArchiveKind,
-    bucket_start: TimestampMilliseconds,
-}
-
-impl ArchiveBucket {
-    fn new(record: &ArchiveRecord, bucket_millis: i64) -> Self {
-        let timestamp = record.timestamp().0;
-        Self {
-            kind: record.kind(),
-            bucket_start: TimestampMilliseconds(
-                timestamp.div_euclid(bucket_millis) * bucket_millis,
-            ),
-        }
-    }
 }
 
 /// Writes Parquet files to S3, partitioned by record kind and exchange time.
@@ -56,26 +36,7 @@ impl S3ParquetSink {
     }
 
     fn object_key(&self, partition: ArchiveBucket) -> BpResult<String> {
-        let bucket = DateTime::<Utc>::from_timestamp_millis(partition.bucket_start.0).ok_or(
-            BpError::Data(DataError::DateTimeOutOfRange {
-                operation: "build archive object key",
-            }),
-        )?;
-        let file = format!(
-            "{}/year={:04}/month={:02}/day={:02}/hour={:02}/{}.parquet",
-            partition.kind.label(),
-            bucket.year(),
-            bucket.month(),
-            bucket.day(),
-            bucket.hour(),
-            Uuid::new_v4(),
-        );
-        let prefix = self.prefix.trim_matches('/');
-        if prefix.is_empty() {
-            Ok(file)
-        } else {
-            Ok(format!("{prefix}/{file}"))
-        }
+        partition.raw_key(&self.prefix, format!("{}.parquet", Uuid::new_v4()))
     }
 }
 

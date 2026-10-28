@@ -1,10 +1,10 @@
 use crate::config::CompactorConfig;
 use aws_sdk_s3::{Client as S3Client, primitives::DateTime};
-use chrono::{TimeZone, Utc};
-use platform_archive::{ArchiveKind, SourceBatch};
+use chrono::Utc;
+use platform_archive::{ArchiveKind, ArchivePath, SourceBatch};
 use platform_errors::{BpError, BpResult};
 use platform_types::new_types::TimestampMilliseconds;
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 use tracing::warn;
 
 /// Lists raw archive Parquet files from S3 and groups them by their source
@@ -60,18 +60,14 @@ impl S3ArchiveSource {
                 if !key.ends_with(".parquet") {
                     continue;
                 }
-                let Some(relative) = Self::relative_key(key, &list_prefix) else {
+                let Some(relative) = ArchivePath::relative_key(key, &list_prefix) else {
                     continue;
                 };
-                let Some(kind) = relative
-                    .split('/')
-                    .next()
-                    .and_then(ArchiveKind::from_segment)
-                else {
+                let Some(kind) = ArchivePath::kind(relative) else {
                     warn!(key, "skipping archive object with an unknown kind");
                     continue;
                 };
-                let Some(bucket_start) = Self::bucket_start(relative) else {
+                let Some(bucket_start) = ArchivePath::bucket_start_from_key(relative) else {
                     warn!(key, "skipping archive object outside the hourly layout");
                     continue;
                 };
@@ -112,35 +108,6 @@ impl S3ArchiveSource {
             .collect::<Vec<_>>();
         batches.sort_by_key(|batch| (batch.bucket_start.0, batch.prefix.clone()));
         Ok(batches)
-    }
-
-    fn relative_key<'a>(key: &'a str, prefix: &str) -> Option<&'a str> {
-        if prefix.is_empty() {
-            Some(key)
-        } else {
-            key.strip_prefix(prefix)
-        }
-    }
-
-    fn bucket_start(relative: &str) -> Option<TimestampMilliseconds> {
-        let year = Self::bucket_field::<i32>(relative, "year=")?;
-        let month = Self::bucket_field::<u32>(relative, "month=")?;
-        let day = Self::bucket_field::<u32>(relative, "day=")?;
-        let hour = Self::bucket_field::<u32>(relative, "hour=")?;
-        let bucket = Utc
-            .with_ymd_and_hms(year, month, day, hour, 0, 0)
-            .single()?;
-        Some(TimestampMilliseconds(bucket.timestamp_millis()))
-    }
-
-    fn bucket_field<T>(relative: &str, name: &str) -> Option<T>
-    where
-        T: FromStr,
-    {
-        relative
-            .split('/')
-            .find_map(|segment| segment.strip_prefix(name))
-            .and_then(|value| value.parse().ok())
     }
 
     fn modified_millis(value: &DateTime) -> i64 {
