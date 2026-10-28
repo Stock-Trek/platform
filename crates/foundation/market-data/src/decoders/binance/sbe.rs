@@ -129,6 +129,8 @@ impl BinanceSbeCodec {
         ParsedMessage {
             stream: format!("{}@{suffix}", symbol.to_ascii_lowercase()),
             sequence,
+            first_sequence: None,
+            previous_sequence: None,
             exchange_timestamp: event_time_us
                 .map(|microseconds| TimestampMilliseconds(microseconds / 1_000)),
             payload: BASE64.encode(frame),

@@ -18,27 +18,39 @@ impl SequenceTracker {
         self.last
     }
 
+    #[cfg(test)]
     pub fn observe(&mut self, sequence: u64) -> SequenceObservation {
-        let Some(last) = self.last else {
-            self.last = Some(sequence);
+        self.observe_range(sequence, sequence)
+    }
+
+    /// Observes an inclusive range of update IDs.
+    ///
+    /// Exchanges such as Binance can pack many update IDs into one depth
+    /// event. Continuity is checked against the first update ID in the range,
+    /// not against `previous + 1` of the final ID.
+    pub fn observe_range(&mut self, first: u64, last: u64) -> SequenceObservation {
+        debug_assert!(first <= last, "sequence range must not be inverted");
+        let first = first.min(last);
+
+        let Some(previous) = self.last else {
+            self.last = Some(last);
             return SequenceObservation::First;
         };
 
-        if sequence == last {
+        if last == previous {
             return SequenceObservation::Duplicate;
         }
-        if sequence < last {
+        if last < previous {
             return SequenceObservation::OutOfOrder;
         }
 
-        self.last = Some(sequence);
-        match last.checked_add(1) {
-            Some(expected) if sequence == expected => SequenceObservation::InOrder,
-            Some(expected) => SequenceObservation::Gap {
+        self.last = Some(last);
+        match previous.checked_add(1) {
+            Some(expected) if first > expected => SequenceObservation::Gap {
                 missing_from: expected,
-                missing_to: sequence - 1,
+                missing_to: first - 1,
             },
-            None => SequenceObservation::InOrder,
+            _ => SequenceObservation::InOrder,
         }
     }
 }
@@ -95,5 +107,56 @@ mod tests {
 
         tracker.observe(u64::MAX);
         assert_eq!(tracker.observe(u64::MAX), SequenceObservation::Duplicate);
+    }
+
+    #[test]
+    fn ranges_spanning_many_update_ids_are_in_order() {
+        let mut tracker = SequenceTracker::default();
+
+        assert_eq!(tracker.observe_range(100, 105), SequenceObservation::First);
+        assert_eq!(
+            tracker.observe_range(106, 120),
+            SequenceObservation::InOrder
+        );
+        assert_eq!(tracker.last(), Some(120));
+    }
+
+    #[test]
+    fn range_gaps_are_measured_from_the_first_update_id() {
+        let mut tracker = SequenceTracker::default();
+
+        tracker.observe_range(100, 105);
+        assert_eq!(
+            tracker.observe_range(110, 120),
+            SequenceObservation::Gap {
+                missing_from: 106,
+                missing_to: 109,
+            }
+        );
+        assert_eq!(tracker.last(), Some(120));
+    }
+
+    #[test]
+    fn overlapping_ranges_advance_the_final_sequence() {
+        let mut tracker = SequenceTracker::default();
+
+        tracker.observe_range(100, 105);
+        assert_eq!(
+            tracker.observe_range(103, 108),
+            SequenceObservation::InOrder
+        );
+        assert_eq!(tracker.last(), Some(108));
+    }
+
+    #[test]
+    fn ranges_that_end_at_the_previous_sequence_are_duplicates() {
+        let mut tracker = SequenceTracker::default();
+
+        tracker.observe_range(100, 105);
+        assert_eq!(
+            tracker.observe_range(103, 105),
+            SequenceObservation::Duplicate
+        );
+        assert_eq!(tracker.last(), Some(105));
     }
 }
