@@ -2,7 +2,7 @@ use crate::{
     backfiller::{BackfillOptions, BackfillService},
     binance::fetcher::BinanceGapFetcher,
     config::BackfillerConfig,
-    source::NatsGapMarkerSource,
+    gap_marker_source::NatsGapMarkerSource,
 };
 use platform_errors::BpResult;
 use platform_nats::NatsPublisher;

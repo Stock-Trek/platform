@@ -1,21 +1,13 @@
 use crate::{
-    binance::{parser::BinanceEventParser, stream::MarketStream},
+    binance::{event_page_source::BinanceEventPageSource, stream::MarketStream},
     config::BackfillerConfig,
-    event_page_source::EventPageSource,
     fetcher::{BackfilledEvent, MissingEventFetcher, PaginatedFetcher},
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult, ExchangeError};
-use platform_exchange_gateway::{
-    clients::reqwest::ReqwestHttpClient, connector::Connector, submission::SubmissionOutcome,
-};
+use platform_exchange_gateway::connector::Connector;
 use platform_exchange_types::{
-    binance::{
-        exchange::BinanceExchange,
-        trades::{BinanceHistoricalTradesRequest, BinanceTradeResponse},
-    },
-    encode::ByteEncoder,
-    signer::Signer,
+    binance::exchange::BinanceExchange, encode::ByteEncoder, signer::Signer,
 };
 use platform_market_data::event::GapMarker;
 use std::time::Duration;
@@ -48,10 +40,10 @@ impl BinanceGapFetcher {
         )
         .map_err(|error| BpError::exchange("create Binance backfill connector", error))?;
         Ok(Self {
-            fetcher: PaginatedFetcher::new(BinanceEventPageSource {
+            fetcher: PaginatedFetcher::new(BinanceEventPageSource::new(
                 connector,
-                api_key: config.exchange_api_key.clone(),
-            }),
+                config.exchange_api_key.clone(),
+            )),
         })
     }
 }
@@ -63,65 +55,5 @@ impl MissingEventFetcher for BinanceGapFetcher {
         self.fetcher
             .fetch_range(&stream.symbol, gap.missing_from, gap.missing_to)
             .await
-    }
-}
-
-struct BinanceEventPageSource {
-    connector: Connector<BinanceExchange, ReqwestHttpClient>,
-    api_key: Option<String>,
-}
-
-impl BinanceEventPageSource {
-    async fn fetch_trade_page(
-        &self,
-        symbol: &str,
-        from_sequence: u64,
-        limit: u32,
-        api_key: String,
-    ) -> BpResult<Vec<BinanceTradeResponse>> {
-        let request = BinanceHistoricalTradesRequest::new(
-            symbol.to_string(),
-            from_sequence,
-            limit,
-            Some(api_key),
-        );
-        let submission = self.connector.submit_http(request).map_err(|error| {
-            BpError::exchange("submit Binance historical trades request", error)
-        })?;
-        match submission
-            .wait()
-            .await
-            .map_err(|error| BpError::exchange("await Binance historical trades response", error))?
-        {
-            SubmissionOutcome::Submitted(response) => response.historical_trades(),
-            SubmissionOutcome::Unknown { .. } => {
-                Err(BpError::Exchange(ExchangeError::UnknownSubmissionOutcome {
-                    exchange: "Binance",
-                }))
-            }
-        }
-    }
-}
-
-#[async_trait]
-impl EventPageSource for BinanceEventPageSource {
-    async fn fetch_page(
-        &self,
-        symbol: &str,
-        from_sequence: u64,
-        limit: u32,
-    ) -> BpResult<Vec<BackfilledEvent>> {
-        let Some(api_key) = self.api_key.clone() else {
-            // TODO: allow the API key to come from a secret manager instead of
-            // the process environment.
-            return Err(BpError::config_missing("BACKFILLER_EXCHANGE_API_KEY"));
-        };
-        let trades = self
-            .fetch_trade_page(symbol, from_sequence, limit, api_key)
-            .await?;
-        Ok(trades
-            .iter()
-            .map(|trade| BinanceEventParser::trade(symbol, trade))
-            .collect())
     }
 }
