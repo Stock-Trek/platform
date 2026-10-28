@@ -1,9 +1,9 @@
 use crate::{
-    buffer::ArchiveBuffer,
     config::ArchiverConfig,
     sink::{ArchiveSink, S3ParquetSink},
     source::NatsArchiveSource,
 };
+use platform_archive::ArchiveBuffer;
 use platform_errors::BpResult;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{info, warn};

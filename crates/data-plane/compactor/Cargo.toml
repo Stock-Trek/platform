@@ -4,13 +4,11 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-arrow-array = { workspace = true }
-arrow-schema = { workspace = true }
 aws-config = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
-parquet = { workspace = true }
+platform-archive = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-types = { workspace = true }

@@ -1,19 +1,11 @@
-use crate::{config::CompactorConfig, record::ArchiveKind};
+use crate::config::CompactorConfig;
 use aws_sdk_s3::{Client as S3Client, primitives::DateTime};
 use chrono::{TimeZone, Utc};
+use platform_archive::{ArchiveKind, SourceBatch};
 use platform_errors::{BpError, BpResult};
 use platform_types::new_types::TimestampMilliseconds;
 use std::{collections::HashMap, str::FromStr};
 use tracing::warn;
-
-/// A group of raw archive files that can be compacted together.
-#[derive(Debug)]
-pub struct SourceBatch {
-    pub kind: ArchiveKind,
-    pub prefix: String,
-    pub bucket_start: TimestampMilliseconds,
-    pub files: Vec<String>,
-}
 
 /// Lists raw archive Parquet files from S3 and groups them by their source
 /// folder.

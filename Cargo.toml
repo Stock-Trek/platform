@@ -12,6 +12,7 @@ platform-build-orchestrator = { path = "crates/build-plane/build-orchestrator" }
 platform-git-webhook = { path = "crates/build-plane/git-webhook" }
 
 platform-aggregator = { path = "crates/data-plane/aggregator" }
+platform-archive = { path = "crates/data-plane/archive" }
 platform-archiver = { path = "crates/data-plane/archiver" }
 platform-backfiller = { path = "crates/data-plane/backfiller" }
 platform-compactor = { path = "crates/data-plane/compactor" }

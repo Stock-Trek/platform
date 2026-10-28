@@ -1,7 +1,5 @@
 mod compactor;
 mod config;
-mod parquet;
-mod record;
 mod runner;
 mod source;
 
