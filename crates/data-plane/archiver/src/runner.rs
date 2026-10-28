@@ -47,60 +47,13 @@ where
             "archiver started"
         );
 
-<<<<<<< HEAD
-        let result = self
-            .run_until_shutdown(&mut source, &sink, &mut buffer, &mut flush_ticker)
-            .await;
-        let flush_result = self.flush(&sink, &mut buffer, FLUSH_REASON_SHUTDOWN).await;
-=======
         let result = run_until_shutdown(&mut source, &sink, &mut buffer, &mut flush_ticker).await;
-        let flush_result = flush(&sink, &mut buffer).await;
->>>>>>> master
+        let flush_result = flush(&sink, &mut buffer, FLUSH_REASON_SHUTDOWN).await;
         result?;
         flush_result
     }
 }
 
-<<<<<<< HEAD
-    async fn run_until_shutdown(
-        &self,
-        source: &mut NatsArchiveSource,
-        sink: &S3ParquetSink,
-        buffer: &mut ArchiveBuffer,
-        flush_ticker: &mut time::Interval,
-    ) -> BpResult<()> {
-        loop {
-            tokio::select! {
-                record = source.next_record() => {
-                    match record {
-                        Ok(Some(record)) => {
-                            if !buffer.push(record) {
-                                MarketDataMetrics::record_dropped_event(
-                                    STAGE_ARCHIVER,
-                                    DROP_REASON_DUPLICATE,
-                                );
-                            }
-                            if buffer.should_flush() {
-                                self.flush(sink, buffer, FLUSH_REASON_SIZE).await?;
-                            }
-                        }
-                        Ok(None) => {
-                            info!("archive source ended");
-                            break;
-                        }
-                        Err(error) => {
-                            warn!(%error, "archive source stopped");
-                            break;
-                        }
-                    }
-                }
-                _ = flush_ticker.tick() => {
-                    self.flush(sink, buffer, FLUSH_REASON_INTERVAL).await?;
-                }
-                signal = platform_runtime::Runtime::shutdown_signal() => {
-                    signal?;
-                    break;
-=======
 async fn run_until_shutdown<S, K>(
     source: &mut S,
     sink: &K,
@@ -116,9 +69,14 @@ where
             record = source.next_record() => {
                 match record {
                     Ok(Some(record)) => {
-                        buffer.push(record);
+                        if !buffer.push(record) {
+                            MarketDataMetrics::record_dropped_event(
+                                STAGE_ARCHIVER,
+                                DROP_REASON_DUPLICATE,
+                            );
+                        }
                         if buffer.should_flush() {
-                            flush(sink, buffer).await?;
+                            flush(sink, buffer, FLUSH_REASON_SIZE).await?;
                         }
                     }
                     Ok(None) => {
@@ -129,11 +87,10 @@ where
                         warn!(%error, "archive source stopped");
                         break;
                     }
->>>>>>> master
                 }
             }
             _ = flush_ticker.tick() => {
-                flush(sink, buffer).await?;
+                flush(sink, buffer, FLUSH_REASON_INTERVAL).await?;
             }
             signal = platform_runtime::Runtime::shutdown_signal() => {
                 signal?;
@@ -144,7 +101,7 @@ where
     Ok(())
 }
 
-async fn flush<K>(sink: &K, buffer: &mut ArchiveBuffer) -> BpResult<()>
+async fn flush<K>(sink: &K, buffer: &mut ArchiveBuffer, reason: &'static str) -> BpResult<()>
 where
     K: ArchiveSink,
 {
@@ -152,7 +109,15 @@ where
         return Ok(());
     }
     let records = buffer.len();
-    sink.write(buffer.records_mut()).await?;
+    let started_at = Instant::now();
+    let result = sink.write(buffer.records_mut()).await;
+    MarketDataMetrics::record_archive_flush(
+        reason,
+        records,
+        result.is_ok(),
+        started_at.elapsed(),
+    );
+    result?;
     buffer.clear_records();
     info!(
         records,
@@ -177,34 +142,6 @@ mod tests {
         records: Vec<ArchiveRecord>,
     }
 
-<<<<<<< HEAD
-    async fn flush(
-        &self,
-        sink: &S3ParquetSink,
-        buffer: &mut ArchiveBuffer,
-        reason: &'static str,
-    ) -> BpResult<()> {
-        if buffer.is_empty() {
-            return Ok(());
-        }
-        let records = buffer.len();
-        let started_at = Instant::now();
-        let result = sink.write(buffer.records_mut()).await;
-        MarketDataMetrics::record_archive_flush(
-            reason,
-            records,
-            result.is_ok(),
-            started_at.elapsed(),
-        );
-        result?;
-        buffer.clear_records();
-        info!(
-            records,
-            duplicates = buffer.duplicates(),
-            "flushed archive batch"
-        );
-        Ok(())
-=======
     #[async_trait]
     impl ArchiveSource for FakeSource {
         async fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>> {
@@ -269,6 +206,5 @@ mod tests {
             .unwrap();
 
         assert_eq!(*observed.writes.lock().unwrap(), 1);
->>>>>>> master
     }
 }

@@ -11,15 +11,11 @@ use platform_market_data::{
     event::{GapMarker, MarketEvent},
     subject::MarketEventSubject,
 };
-<<<<<<< HEAD
 use platform_metrics::descriptions::{
     BACKFILL_OUTCOME_COVERED, BACKFILL_OUTCOME_EMPTY, BACKFILL_OUTCOME_ERROR,
     BACKFILL_OUTCOME_PARTIAL,
 };
 use platform_metrics::market_data::MarketDataMetrics;
-use platform_nats::NatsPublisher;
-=======
->>>>>>> master
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::json;
 use stock_trek_types::cex::cex_id::CexId;

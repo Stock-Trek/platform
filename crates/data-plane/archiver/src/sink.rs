@@ -89,20 +89,9 @@ impl ArchiveSink for S3ParquetSink {
             }
 
             let key = self.object_key(partition)?;
-<<<<<<< HEAD
-            let bytes = ArchiveParquet::encode(partition.kind, &records[start..end])?;
-            self.upload_with_retry(&key, Bytes::from(bytes)).await?;
-=======
             let batch = ArchiveBatch::new(partition.kind, records[start..end].to_vec())?;
             let bytes = ArchiveParquet::encode(&batch)?;
-            S3::upload_bytes(
-                &self.transfer_client,
-                &self.bucket,
-                &key,
-                Bytes::from(bytes),
-            )
-            .await?;
->>>>>>> master
+            self.upload_with_retry(&key, Bytes::from(bytes)).await?;
             start = end;
         }
         Ok(())

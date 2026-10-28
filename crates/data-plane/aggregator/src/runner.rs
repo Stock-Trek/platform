@@ -97,25 +97,6 @@ where
     let mut flush_ticker = time::interval(config.flush_interval);
     flush_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-<<<<<<< HEAD
-        loop {
-            tokio::select! {
-                maybe_event = receiver.recv() => {
-                    let Some(event) = maybe_event else {
-                        info!("market event channel closed");
-                        break;
-                    };
-                    let decoder = match decoders.entry(event.exchange) {
-                        Entry::Occupied(entry) => entry.into_mut(),
-                        Entry::Vacant(entry) => match TradeDecoderFactory::for_exchange(event.exchange) {
-                            Ok(decoder) => entry.insert(decoder),
-                            Err(error) => {
-                                MarketDataMetrics::record_dropped_event(
-                                    STAGE_AGGREGATOR,
-                                    DROP_REASON_NO_DECODER,
-                                );
-                                warn!(%error, exchange = %event.exchange, "no trade decoder for exchange");
-=======
     loop {
         tokio::select! {
             maybe_event = receiver.recv() => {
@@ -128,6 +109,10 @@ where
                     Entry::Vacant(entry) => match TradeDecoderFactory::for_exchange(event.exchange) {
                         Ok(decoder) => entry.insert(decoder),
                         Err(error) => {
+                            MarketDataMetrics::record_dropped_event(
+                                STAGE_AGGREGATOR,
+                                DROP_REASON_NO_DECODER,
+                            );
                             warn!(%error, exchange = %event.exchange, "no trade decoder for exchange");
                             continue;
                         }
@@ -138,7 +123,6 @@ where
                         for trade in trades {
                             let update = aggregator.apply_trade(&trade);
                             if update.is_empty() {
->>>>>>> master
                                 continue;
                             }
                             if !update.closed.is_empty() {
@@ -148,21 +132,15 @@ where
                                 sink.update_open(&update.open).await?;
                             }
                         }
-<<<<<<< HEAD
-                        Err(error) => {
-                            // Exchange streams can contain binary formats that this
-                            // first cut does not decode yet. Skip the event instead
-                            // of stopping aggregation for every market.
-                            MarketDataMetrics::record_decode_failure(STAGE_AGGREGATOR, DECODE_KIND_TRADE);
-                            warn!(%error, stream = %event.stream, "skipping unreadable market event");
-                        }
-=======
->>>>>>> master
                     }
                     Err(error) => {
                         // Exchange streams can contain binary formats that this
                         // first cut does not decode yet. Skip the event instead
                         // of stopping aggregation for every market.
+                        MarketDataMetrics::record_decode_failure(
+                            STAGE_AGGREGATOR,
+                            DECODE_KIND_TRADE,
+                        );
                         warn!(%error, stream = %event.stream, "skipping unreadable market event");
                     }
                 }
