@@ -8,6 +8,7 @@ const COMPACTOR_OUTPUT_PREFIX: &str = "COMPACTOR_OUTPUT_PREFIX";
 const COMPACTOR_POLL_INTERVAL_SECS: &str = "COMPACTOR_POLL_INTERVAL_SECS";
 const COMPACTOR_SETTLE_SECS: &str = "COMPACTOR_SETTLE_SECS";
 const COMPACTOR_MIN_SOURCE_FILES: &str = "COMPACTOR_MIN_SOURCE_FILES";
+const COMPACTOR_SPILL_RECORDS: &str = "COMPACTOR_SPILL_RECORDS";
 const RUST_LOG: &str = "RUST_LOG";
 
 const DEFAULT_S3_PREFIX: &str = "market-data/raw";
@@ -15,6 +16,7 @@ const DEFAULT_OUTPUT_PREFIX: &str = "market-data/compacted";
 const DEFAULT_POLL_INTERVAL_SECS: u64 = 300;
 const DEFAULT_SETTLE_SECS: u64 = 3_600;
 const DEFAULT_MIN_SOURCE_FILES: usize = 1;
+const DEFAULT_SPILL_RECORDS: usize = 50_000;
 
 #[derive(Debug, Clone)]
 pub struct CompactorConfig {
@@ -25,6 +27,7 @@ pub struct CompactorConfig {
     pub poll_interval: Duration,
     pub settle: Duration,
     pub min_source_files: usize,
+    pub spill_records: usize,
 }
 
 impl CompactorConfig {
@@ -61,6 +64,15 @@ impl CompactorConfig {
             ));
         }
 
+        let spill_records =
+            vars.optional_parsed_or(COMPACTOR_SPILL_RECORDS, DEFAULT_SPILL_RECORDS)?;
+        if spill_records == 0 {
+            return Err(BpError::config_invalid(
+                COMPACTOR_SPILL_RECORDS,
+                "must be greater than zero",
+            ));
+        }
+
         Ok(Self {
             log_filter,
             s3_bucket,
@@ -69,6 +81,7 @@ impl CompactorConfig {
             poll_interval: Duration::from_secs(poll_interval_secs),
             settle: Duration::from_secs(settle_secs),
             min_source_files,
+            spill_records,
         })
     }
 }

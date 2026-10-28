@@ -3278,12 +3278,14 @@ version = "0.2.0"
 dependencies = [
  "aws-config",
  "aws-sdk-s3",
- "bytes",
  "chrono",
  "platform-archive",
  "platform-config",
  "platform-errors",
+ "platform-market-data",
  "platform-types",
+ "stock-trek-types",
+ "tempfile",
  "tokio",
  "tracing",
 ]

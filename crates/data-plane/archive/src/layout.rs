@@ -195,7 +195,7 @@ impl ArchiveHour {
 pub type ArchiveTimePartition = ArchiveHour;
 
 /// A record kind and the hourly bucket it belongs to.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct ArchiveBucket {
     pub kind: ArchiveKind,
     pub bucket_start: TimestampMilliseconds,

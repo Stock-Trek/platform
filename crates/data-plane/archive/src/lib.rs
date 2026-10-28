@@ -12,6 +12,6 @@ pub mod source;
 
 pub use buffer::ArchiveBuffer;
 pub use layout::{ArchiveBucket, ArchiveHour, ArchiveLayout, ArchivePath, ArchiveTimePartition};
-pub use parquet::ArchiveParquet;
+pub use parquet::{ArchiveParquet, ArchiveParquetBatches, ArchiveParquetWriter};
 pub use record::{ArchiveKind, ArchivePartition, ArchiveRecord, ArchiveRecordKey};
 pub use source::SourceBatch;

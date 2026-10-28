@@ -84,8 +84,8 @@ impl ArchiverRunner {
         if buffer.is_empty() {
             return Ok(());
         }
-        let records = buffer.records().len();
-        sink.write(buffer.records()).await?;
+        let records = buffer.len();
+        sink.write(buffer.records_mut()).await?;
         buffer.clear_records();
         info!(
             records,

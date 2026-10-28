@@ -6,11 +6,15 @@ edition.workspace = true
 [dependencies]
 aws-config = { workspace = true }
 aws-sdk-s3 = { workspace = true }
-bytes = { workspace = true }
 chrono = { workspace = true }
 platform-archive = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-types = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt-multi-thread", "signal", "time"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+platform-market-data = { workspace = true }
+stock-trek-types = { workspace = true }

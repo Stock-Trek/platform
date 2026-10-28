@@ -1,12 +1,14 @@
-use crate::config::CompactorConfig;
-use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
-use bytes::Bytes;
-use platform_archive::{
-    ArchiveParquet, ArchivePartition, ArchivePath, ArchiveRecord, ArchiveRecordKey, SourceBatch,
+use crate::{
+    config::CompactorConfig,
+    partition_output::PartitionOutput,
+    spill::{DedupeSpill, PartitionSpill},
 };
-use platform_errors::{BpError, BpResult};
-use std::collections::HashMap;
-use tracing::info;
+use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
+use platform_archive::{ArchiveHour, ArchiveParquet, ArchivePath, SourceBatch};
+use platform_errors::{BpError, BpResult, DataError};
+use std::{fs::File, path::Path};
+use tokio::io::{AsyncWriteExt, copy};
+use tracing::{info, warn};
 
 #[derive(Debug, Default, Clone, Copy)]
 pub struct CompactionStats {
@@ -19,12 +21,18 @@ pub struct CompactionStats {
 /// Reads raw archive files, de-duplicates and sorts their rows, then writes one
 /// compacted file per symbol partition.
 ///
+/// Source objects are streamed to temporary files and decoded in bounded
+/// batches. Both the de-duplication map and the partition sort spill to sorted
+/// Parquet runs once they reach the configured record limit, so a single large
+/// compaction batch does not have to fit in memory.
+///
 /// TODO: register compacted files in the Iceberg catalog and track/delete the
 /// raw source objects after a successful commit.
 pub struct Compactor {
     client: S3Client,
     bucket: String,
     output_prefix: String,
+    spill_records: usize,
 }
 
 impl Compactor {
@@ -34,44 +42,72 @@ impl Compactor {
             client: S3Client::new(&sdk_config),
             bucket: config.s3_bucket.clone(),
             output_prefix: config.output_prefix.trim_matches('/').to_string(),
+            spill_records: config.spill_records,
         })
     }
 
     pub async fn compact(&self, batch: &SourceBatch) -> BpResult<CompactionStats> {
-        let mut records = HashMap::<ArchiveRecordKey, ArchiveRecord>::new();
+        let temp_dir = tempfile::tempdir().map_err(|error| {
+            BpError::io(
+                "create compaction temporary directory",
+                std::env::temp_dir().display().to_string(),
+                error,
+            )
+        })?;
         let mut stats = CompactionStats {
             source_files: batch.files.len(),
             ..CompactionStats::default()
         };
 
-        for key in &batch.files {
-            let bytes = self.read_object(key).await?;
-            let decoded = ArchiveParquet::decode(batch.kind, bytes)?;
-            stats.records_read += decoded.len();
-            for record in decoded {
-                records.insert(record.key(), record);
+        let mut dedupe = DedupeSpill::new(batch.kind, temp_dir.path(), self.spill_records)?;
+        for (index, key) in batch.files.iter().enumerate() {
+            let path = temp_dir.path().join(format!("source-{index}.parquet"));
+            self.download_to_file(key, &path).await?;
+
+            {
+                let file = File::open(&path).map_err(|error| {
+                    BpError::io(
+                        "open downloaded archive object",
+                        path.display().to_string(),
+                        error,
+                    )
+                })?;
+                for decoded in ArchiveParquet::decode_batches(batch.kind, file)? {
+                    let records = decoded?;
+                    stats.records_read += records.len();
+                    for record in records {
+                        dedupe.push(record)?;
+                    }
+                }
+            }
+
+            if let Err(error) = tokio::fs::remove_file(&path).await {
+                warn!(
+                    path = %path.display(),
+                    %error,
+                    "failed to remove temporary source file"
+                );
             }
         }
 
-        let mut partitions = HashMap::<ArchivePartition, Vec<ArchiveRecord>>::new();
-        for record in records.into_values() {
-            partitions
-                .entry(record.partition())
-                .or_default()
-                .push(record);
+        let mut deduped = dedupe.finish()?;
+        let mut partitions = PartitionSpill::new(batch.kind, temp_dir.path(), self.spill_records)?;
+        while let Some(record) = deduped.next_record()? {
+            partitions.push(record)?;
         }
 
-        for (partition, mut partition_records) in partitions {
-            partition_records.sort_by_key(ArchiveRecord::sort_key);
-            stats.records_written += partition_records.len();
-            let bytes = ArchiveParquet::encode(batch.kind, &partition_records)?;
-            let key = self.output_key(batch, &partition)?;
-            self.write_object(&key, bytes).await?;
-            stats.output_files += 1;
+        let outputs =
+            PartitionOutput::write_all(batch.kind, partitions.finish()?, temp_dir.path())?;
+        stats.records_written = outputs.iter().map(|output| output.records).sum();
+        stats.output_files = outputs.len();
+
+        for output in outputs {
+            let key = self.output_key(batch, &output.partition)?;
+            self.write_object_from_path(&key, &output.path).await?;
             info!(
-                partition = %partition.path(),
+                partition = %output.partition,
                 key = %key,
-                records = partition_records.len(),
+                records = output.records,
                 "wrote compacted partition"
             );
         }
@@ -79,7 +115,8 @@ impl Compactor {
         Ok(stats)
     }
 
-    async fn read_object(&self, key: &str) -> BpResult<Bytes> {
+    async fn download_to_file(&self, key: &str, path: &Path) -> BpResult<()> {
+        let target = format!("s3://{}/{key}", self.bucket);
         let output = self
             .client
             .get_object()
@@ -87,52 +124,59 @@ impl Compactor {
             .key(key)
             .send()
             .await
-            .map_err(|error| {
-                BpError::s3(
-                    "get raw archive object",
-                    format!("s3://{}/{key}", self.bucket),
-                    error,
-                )
-            })?;
-        output
-            .body
-            .collect()
+            .map_err(|error| BpError::s3("get raw archive object", target.clone(), error))?;
+
+        let mut body = Box::pin(output.body.into_async_read());
+        let mut file = tokio::fs::File::create(path).await.map_err(|error| {
+            BpError::io(
+                "create temporary source file",
+                path.display().to_string(),
+                error,
+            )
+        })?;
+        copy(&mut body, &mut file)
             .await
-            .map(|body| body.into_bytes())
-            .map_err(|error| {
-                BpError::s3(
-                    "read raw archive object body",
-                    format!("s3://{}/{key}", self.bucket),
-                    error,
-                )
-            })
+            .map_err(|error| BpError::io("stream raw archive object", target, error))?;
+        file.flush().await.map_err(|error| {
+            BpError::io(
+                "flush temporary source file",
+                path.display().to_string(),
+                error,
+            )
+        })?;
+        Ok(())
     }
 
-    async fn write_object(&self, key: &str, bytes: Vec<u8>) -> BpResult<()> {
+    async fn write_object_from_path(&self, key: &str, path: &Path) -> BpResult<()> {
+        let body = ByteStream::from_path(path).await.map_err(|error| {
+            BpError::io(
+                "read compacted parquet file",
+                path.display().to_string(),
+                error,
+            )
+        })?;
+        let target = format!("s3://{}/{key}", self.bucket);
         self.client
             .put_object()
             .bucket(&self.bucket)
             .key(key)
             .content_type("application/vnd.apache.parquet")
-            .body(ByteStream::from(bytes))
+            .body(body)
             .send()
             .await
-            .map_err(|error| {
-                BpError::s3(
-                    "put compacted parquet object",
-                    format!("s3://{}/{key}", self.bucket),
-                    error,
-                )
-            })?;
+            .map_err(|error| BpError::s3("put compacted parquet object", target, error))?;
         Ok(())
     }
 
-    fn output_key(&self, batch: &SourceBatch, partition: &ArchivePartition) -> BpResult<String> {
-        ArchivePath::compacted_key(
+    fn output_key(&self, batch: &SourceBatch, partition: &str) -> BpResult<String> {
+        let hour = ArchiveHour::from_timestamp(batch.bucket_start).ok_or(BpError::Data(
+            DataError::DateTimeOutOfRange {
+                operation: "build compacted object key",
+            },
+        ))?;
+        Ok(ArchivePath::join(
             &self.output_prefix,
-            partition,
-            batch.bucket_start,
-            "data.parquet",
-        )
+            &format!("{partition}/{}", hour.file_path("data.parquet")),
+        ))
     }
 }

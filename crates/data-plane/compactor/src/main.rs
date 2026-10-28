@@ -1,7 +1,9 @@
 mod compactor;
 mod config;
+mod partition_output;
 mod runner;
 mod source;
+mod spill;
 
 use crate::{config::CompactorConfig, runner::CompactorRunner};
 use platform_config::tracing_setup::TracingSetup;

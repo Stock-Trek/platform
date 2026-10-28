@@ -5,9 +5,12 @@ use arrow_array::{
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use bytes::Bytes;
 use parquet::{
-    arrow::{ArrowWriter, arrow_reader::ParquetRecordBatchReaderBuilder},
+    arrow::{
+        ArrowWriter,
+        arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder},
+    },
     basic::Compression,
-    file::properties::WriterProperties,
+    file::{properties::WriterProperties, reader::ChunkReader},
 };
 use platform_errors::{BpError, BpResult};
 use platform_market_data::{
@@ -15,12 +18,71 @@ use platform_market_data::{
     event::MarketEvent,
 };
 use platform_types::new_types::TimestampMilliseconds;
-use std::{fmt::Display, io::ErrorKind, str::FromStr, sync::Arc};
+use std::{
+    fmt::Display,
+    io::{ErrorKind, Write},
+    str::FromStr,
+    sync::Arc,
+};
 use stock_trek::markets::{MarketCandle, MarketOhlcv};
 use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
 /// Reads and writes the Parquet format shared by the archiver and compactor.
 pub struct ArchiveParquet;
+
+/// Streams decoded archive records one bounded batch at a time.
+pub struct ArchiveParquetBatches {
+    kind: ArchiveKind,
+    reader: ParquetRecordBatchReader,
+}
+
+impl Iterator for ArchiveParquetBatches {
+    type Item = BpResult<Vec<ArchiveRecord>>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self.reader.next()? {
+            Ok(batch) => Some(ArchiveParquet::decode_batch(self.kind, &batch)),
+            Err(error) => Some(Err(error.into())),
+        }
+    }
+}
+
+/// Streams encoded archive records into a writer without building the whole
+/// Parquet file in memory.
+pub struct ArchiveParquetWriter<W: Write + Send> {
+    kind: ArchiveKind,
+    writer: ArrowWriter<W>,
+}
+
+impl<W: Write + Send> ArchiveParquetWriter<W> {
+    pub fn try_new(kind: ArchiveKind, sink: W) -> BpResult<Self> {
+        let schema = match kind {
+            ArchiveKind::Events => ArchiveParquet::event_schema(),
+            ArchiveKind::Candles => ArchiveParquet::candle_schema(),
+        };
+        Ok(Self {
+            kind,
+            writer: ArrowWriter::try_new(sink, schema, Some(ArchiveParquet::writer_properties()))?,
+        })
+    }
+
+    pub fn write(&mut self, records: &[ArchiveRecord]) -> BpResult<()> {
+        if records.is_empty() {
+            return Ok(());
+        }
+        let batch = match self.kind {
+            ArchiveKind::Events => ArchiveParquet::event_batch(records)?,
+            ArchiveKind::Candles => ArchiveParquet::candle_batch(records)?,
+        };
+        self.writer.write(&batch)?;
+        Ok(())
+    }
+
+    pub fn close(self) -> BpResult<()> {
+        self.writer.close()?;
+        Ok(())
+    }
+}
 
 impl ArchiveParquet {
     pub fn encode(kind: ArchiveKind, records: &[ArchiveRecord]) -> BpResult<Vec<u8>> {
@@ -37,25 +99,36 @@ impl ArchiveParquet {
     }
 
     pub fn decode(kind: ArchiveKind, bytes: Bytes) -> BpResult<Vec<ArchiveRecord>> {
-        let builder = ParquetRecordBatchReaderBuilder::try_new(bytes)?;
-        let reader = builder.with_batch_size(8_192).build()?;
         let mut records = Vec::new();
-        for batch in reader {
-            let batch = batch?;
-            match kind {
-                ArchiveKind::Events => records.extend(
-                    Self::decode_events(&batch)?
-                        .into_iter()
-                        .map(ArchiveRecord::MarketEvent),
-                ),
-                ArchiveKind::Candles => records.extend(
-                    Self::decode_candles(&batch)?
-                        .into_iter()
-                        .map(ArchiveRecord::ClosedCandle),
-                ),
-            }
+        for batch in Self::decode_batches(kind, bytes)? {
+            records.extend(batch?);
         }
         Ok(records)
+    }
+
+    /// Decodes a Parquet source in bounded batches. The source can be an
+    /// in-memory buffer or a file, so callers can avoid materializing both the
+    /// encoded object and every decoded record at once.
+    pub fn decode_batches<R>(kind: ArchiveKind, source: R) -> BpResult<ArchiveParquetBatches>
+    where
+        R: ChunkReader + 'static,
+    {
+        let builder = ParquetRecordBatchReaderBuilder::try_new(source)?;
+        let reader = builder.with_batch_size(8_192).build()?;
+        Ok(ArchiveParquetBatches { kind, reader })
+    }
+
+    fn decode_batch(kind: ArchiveKind, batch: &RecordBatch) -> BpResult<Vec<ArchiveRecord>> {
+        match kind {
+            ArchiveKind::Events => Ok(Self::decode_events(batch)?
+                .into_iter()
+                .map(ArchiveRecord::MarketEvent)
+                .collect()),
+            ArchiveKind::Candles => Ok(Self::decode_candles(batch)?
+                .into_iter()
+                .map(ArchiveRecord::ClosedCandle)
+                .collect()),
+        }
     }
 
     fn decode_events(batch: &RecordBatch) -> BpResult<Vec<MarketEvent>> {
