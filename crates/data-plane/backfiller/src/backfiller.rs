@@ -1,6 +1,7 @@
 use crate::{
     fetcher::{BackfilledEvent, MissingEventFetcher},
     gap_marker_source::GapMarkerSource,
+    publisher::EventPublisher,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
@@ -10,7 +11,6 @@ use platform_market_data::{
     event::{GapMarker, MarketEvent},
     subject::MarketEventSubject,
 };
-use platform_nats::NatsPublisher;
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::json;
 use stock_trek_types::cex::cex_id::CexId;
@@ -30,19 +30,20 @@ impl BackfillOptions {
 
 /// Turns gap markers into reconstructed market events on the ingester's event
 /// subjects.
-pub struct BackfillService<S, F> {
+pub struct BackfillService<S, F, P> {
     source: S,
     fetcher: F,
-    publisher: NatsPublisher,
+    publisher: P,
     options: BackfillOptions,
 }
 
-impl<S, F> BackfillService<S, F>
+impl<S, F, P> BackfillService<S, F, P>
 where
     S: GapMarkerSource,
     F: MissingEventFetcher,
+    P: EventPublisher,
 {
-    pub fn new(source: S, fetcher: F, publisher: NatsPublisher, options: BackfillOptions) -> Self {
+    pub fn new(source: S, fetcher: F, publisher: P, options: BackfillOptions) -> Self {
         Self {
             source,
             fetcher,

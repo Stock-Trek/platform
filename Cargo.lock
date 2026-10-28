@@ -3198,6 +3198,7 @@ dependencies = [
  "platform-runtime",
  "platform-types",
  "serde_json",
+ "stock-trek-types",
  "tokio",
  "tracing",
  "uuid",
@@ -3285,6 +3286,7 @@ dependencies = [
 name = "platform-compactor"
 version = "0.2.0"
 dependencies = [
+ "async-trait",
  "aws-config",
  "aws-sdk-s3",
  "chrono",

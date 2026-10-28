@@ -1,40 +1,112 @@
 use crate::{
     backfiller::{BackfillOptions, BackfillService},
-    binance::fetcher::BinanceGapFetcher,
     config::BackfillerConfig,
-    gap_marker_source::NatsGapMarkerSource,
+    fetcher::MissingEventFetcher,
+    gap_marker_source::GapMarkerSource,
+    publisher::EventPublisher,
 };
 use platform_errors::BpResult;
-use platform_nats::NatsPublisher;
 use tracing::info;
 
-pub struct BackfillerRunner {
+pub struct BackfillerRunner<S, F, P> {
     config: BackfillerConfig,
+    source: S,
+    fetcher: F,
+    publisher: P,
 }
 
-impl BackfillerRunner {
-    pub fn new(config: BackfillerConfig) -> Self {
-        Self { config }
+impl<S, F, P> BackfillerRunner<S, F, P>
+where
+    S: GapMarkerSource,
+    F: MissingEventFetcher,
+    P: EventPublisher,
+{
+    pub fn new(config: BackfillerConfig, source: S, fetcher: F, publisher: P) -> Self {
+        Self {
+            config,
+            source,
+            fetcher,
+            publisher,
+        }
     }
 
     pub async fn run(self) -> BpResult<()> {
-        let source = NatsGapMarkerSource::connect(&self.config).await?;
-        let fetcher = BinanceGapFetcher::try_new(&self.config)?;
-        let publisher =
-            NatsPublisher::connect(&self.config.nats_url, "platform-backfiller-events").await?;
+        let Self {
+            config,
+            source,
+            fetcher,
+            publisher,
+        } = self;
         let options = BackfillOptions {
-            exchange: self.config.exchange,
-            event_subject_prefix: self.config.event_subject_prefix.clone(),
+            exchange: config.exchange,
+            event_subject_prefix: config.event_subject_prefix.clone(),
         };
 
         info!(
-            exchange = %self.config.exchange,
-            gap_subject_prefix = %self.config.gap_subject_prefix,
-            event_subject_prefix = %self.config.event_subject_prefix,
+            exchange = %config.exchange,
+            gap_subject_prefix = %config.gap_subject_prefix,
+            event_subject_prefix = %config.event_subject_prefix,
             "backfiller started"
         );
         BackfillService::new(source, fetcher, publisher, options)
             .run()
             .await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::fetcher::BackfilledEvent;
+    use async_trait::async_trait;
+    use platform_errors::BpResult;
+    use platform_market_data::event::GapMarker;
+    use stock_trek_types::cex::cex_id::CexId;
+
+    struct FakeSource;
+
+    #[async_trait]
+    impl GapMarkerSource for FakeSource {
+        async fn next_gap(&mut self) -> BpResult<Option<GapMarker>> {
+            Ok(None)
+        }
+    }
+
+    struct FakeFetcher;
+
+    #[async_trait]
+    impl MissingEventFetcher for FakeFetcher {
+        async fn fetch(&self, _gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>> {
+            Ok(Vec::new())
+        }
+    }
+
+    #[derive(Default)]
+    struct FakePublisher;
+
+    #[async_trait]
+    impl EventPublisher for FakePublisher {
+        async fn publish(&self, _subject: &str, _payload: &[u8]) -> BpResult<()> {
+            Ok(())
+        }
+    }
+
+    fn config() -> BackfillerConfig {
+        BackfillerConfig {
+            log_filter: "info".to_string(),
+            exchange: CexId::Binance,
+            nats_url: "nats://localhost:4222".to_string(),
+            gap_subject_prefix: "market.gaps".to_string(),
+            event_subject_prefix: "market.events".to_string(),
+            exchange_http_url: "https://example.invalid".to_string(),
+            exchange_api_key: None,
+        }
+    }
+
+    #[tokio::test]
+    async fn runs_with_injected_source_fetcher_and_publisher() {
+        let runner = BackfillerRunner::new(config(), FakeSource, FakeFetcher, FakePublisher);
+
+        runner.run().await.unwrap();
     }
 }

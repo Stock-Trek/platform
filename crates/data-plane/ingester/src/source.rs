@@ -61,6 +61,12 @@ impl fmt::Debug for StreamFormat {
     }
 }
 
+/// Source of parsed exchange websocket messages.
+#[async_trait]
+pub trait MarketMessageSource: Send + Sync {
+    async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BpResult<()>;
+}
+
 /// Websocket transport shared by all exchange codecs.
 pub struct WebsocketSource {
     exchange: CexId,
@@ -135,6 +141,13 @@ impl WebsocketSource {
                 .map_err(BpError::external)?;
         }
         Ok(config)
+    }
+}
+
+#[async_trait]
+impl MarketMessageSource for WebsocketSource {
+    async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BpResult<()> {
+        WebsocketSource::run(self, sender).await
     }
 }
 

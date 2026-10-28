@@ -1,9 +1,16 @@
 use crate::config::CompactorConfig;
+use async_trait::async_trait;
 use platform_archive::{ArchiveKind, ArchivePath, Bucket, ObjectKey, S3, SourceBatch};
 use platform_errors::BpResult;
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::HashMap;
 use tracing::warn;
+
+/// Finds raw archive files that are ready to be compacted.
+#[async_trait]
+pub trait ArchiveBatchSource: Send + Sync {
+    async fn pending_batches(&self) -> BpResult<Vec<SourceBatch>>;
+}
 
 /// Lists raw archive Parquet files from S3 and groups them by their source
 /// folder.
@@ -30,8 +37,11 @@ impl S3ArchiveSource {
             min_source_files: config.min_source_files,
         })
     }
+}
 
-    pub async fn pending_batches(&self) -> BpResult<Vec<SourceBatch>> {
+#[async_trait]
+impl ArchiveBatchSource for S3ArchiveSource {
+    async fn pending_batches(&self) -> BpResult<Vec<SourceBatch>> {
         let list_prefix = if self.prefix.is_empty() {
             String::new()
         } else {
