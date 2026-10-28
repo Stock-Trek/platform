@@ -1,8 +1,8 @@
 use crate::config::ArchiverConfig;
 use async_trait::async_trait;
-use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
-use platform_archive::{ArchiveBucket, ArchiveParquet, ArchiveRecord};
-use platform_errors::{BpError, BpResult};
+use bytes::Bytes;
+use platform_archive::{ArchiveBucket, ArchiveParquet, ArchiveRecord, Bucket, ObjectKey, S3};
+use platform_errors::BpResult;
 use uuid::Uuid;
 
 /// Writes a batch of de-duplicated records to long-term storage.
@@ -19,25 +19,26 @@ pub trait ArchiveSink: Send + Sync {
 /// writing raw Parquet objects, and use Iceberg metadata for retries and
 /// compaction.
 pub struct S3ParquetSink {
-    client: S3Client,
-    bucket: String,
+    transfer_client: aws_sdk_s3_transfer_manager::Client,
+    bucket: Bucket,
     prefix: String,
     bucket_millis: i64,
 }
 
 impl S3ParquetSink {
     pub async fn connect(config: &ArchiverConfig) -> BpResult<Self> {
-        let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
         Ok(Self {
-            client: S3Client::new(&sdk_config),
-            bucket: config.s3_bucket.clone(),
+            transfer_client: S3::transfer_client().await,
+            bucket: Bucket::new(config.s3_bucket.clone()),
             prefix: config.s3_prefix.clone(),
             bucket_millis: config.bucket_millis,
         })
     }
 
-    fn object_key(&self, partition: ArchiveBucket) -> BpResult<String> {
-        partition.raw_key(&self.prefix, format!("{}.parquet", Uuid::new_v4()))
+    fn object_key(&self, partition: ArchiveBucket) -> BpResult<ObjectKey> {
+        partition
+            .raw_key(&self.prefix, format!("{}.parquet", Uuid::new_v4()))
+            .map(ObjectKey::new)
     }
 }
 
@@ -61,16 +62,13 @@ impl ArchiveSink for S3ParquetSink {
 
             let key = self.object_key(partition)?;
             let bytes = ArchiveParquet::encode(partition.kind, &records[start..end])?;
-            let target = format!("s3://{}/{key}", self.bucket);
-            self.client
-                .put_object()
-                .bucket(&self.bucket)
-                .key(&key)
-                .content_type("application/vnd.apache.parquet")
-                .body(ByteStream::from(bytes))
-                .send()
-                .await
-                .map_err(|error| BpError::s3("put archived parquet object", target, error))?;
+            S3::upload_bytes(
+                &self.transfer_client,
+                &self.bucket,
+                &key,
+                Bytes::from(bytes),
+            )
+            .await?;
             start = end;
         }
         Ok(())
