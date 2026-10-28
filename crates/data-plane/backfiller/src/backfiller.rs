@@ -5,8 +5,12 @@ use crate::{
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
 use platform_errors::BpResult;
-use platform_market_data::event::{GapMarker, MarketEvent};
-use platform_nats::{NatsPublisher, NatsSubject};
+use platform_market_data::{
+    envelope::EnvelopeCodec,
+    event::{GapMarker, MarketEvent},
+    subject::MarketEventSubject,
+};
+use platform_nats::NatsPublisher;
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::json;
 use stock_trek_types::cex::cex_id::CexId;
@@ -20,12 +24,7 @@ pub struct BackfillOptions {
 
 impl BackfillOptions {
     fn subject(&self, stream: &str) -> String {
-        format!(
-            "{}.events.{}.{}",
-            self.event_subject_prefix,
-            self.exchange,
-            NatsSubject::normalize_segment(stream)
-        )
+        MarketEventSubject::new(&self.event_subject_prefix, self.exchange).event(stream)
     }
 }
 
@@ -127,10 +126,7 @@ where
             payload,
         };
         self.publisher
-            .publish(
-                &self.options.subject(&gap.stream),
-                &serde_json::to_vec(&market_event)?,
-            )
+            .publish(&self.options.subject(&gap.stream), &market_event.encode()?)
             .await
     }
 }

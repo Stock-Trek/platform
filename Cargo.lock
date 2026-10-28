@@ -3467,6 +3467,7 @@ dependencies = [
  "base64 0.23.1",
  "iris",
  "platform-errors",
+ "platform-nats",
  "platform-type-bridge",
  "platform-types",
  "rust_decimal",

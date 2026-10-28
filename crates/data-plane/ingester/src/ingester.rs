@@ -4,8 +4,11 @@ use crate::{
 };
 use chrono::Utc;
 use platform_errors::BpResult;
-use platform_market_data::event::{GapMarker, MarketEvent, ParsedMessage};
-use platform_nats::NatsSubject;
+use platform_market_data::{
+    envelope::EnvelopeCodec,
+    event::{GapMarker, MarketEvent, ParsedMessage},
+    subject::MarketEventSubject,
+};
 use platform_types::new_types::TimestampMilliseconds;
 use std::{collections::HashMap, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
@@ -18,14 +21,12 @@ pub struct IngestOptions {
 }
 
 impl IngestOptions {
-    fn subject(&self, category: &str, stream: &str) -> String {
-        format!(
-            "{}.{}.{}.{}",
-            self.subject_prefix,
-            category,
-            self.exchange,
-            NatsSubject::normalize_segment(stream)
-        )
+    fn event_subject(&self, stream: &str) -> String {
+        MarketEventSubject::new(&self.subject_prefix, self.exchange).event(stream)
+    }
+
+    fn gap_subject(&self, stream: &str) -> String {
+        MarketEventSubject::new(&self.subject_prefix, self.exchange).gap(stream)
     }
 }
 
@@ -53,7 +54,7 @@ impl<P: EventPublisher> Ingester<P> {
             received_at: TimestampMilliseconds(Utc::now().timestamp_millis()),
             payload: message.payload,
         };
-        let event_subject = self.options.subject("events", &event.stream);
+        let event_subject = self.options.event_subject(&event.stream);
 
         let Some(sequence) = event.sequence else {
             return self.publish_event(&event_subject, &event).await;
@@ -81,10 +82,8 @@ impl<P: EventPublisher> Ingester<P> {
                     missing_to,
                     detected_at: event.received_at,
                 };
-                let gap_subject = self.options.subject("gaps", &event.stream);
-                self.publisher
-                    .publish(&gap_subject, &serde_json::to_vec(&gap)?)
-                    .await?;
+                let gap_subject = self.options.gap_subject(&event.stream);
+                self.publisher.publish(&gap_subject, &gap.encode()?).await?;
                 self.publish_event(&event_subject, &event).await
             }
             SequenceObservation::Duplicate | SequenceObservation::OutOfOrder => {
@@ -100,9 +99,7 @@ impl<P: EventPublisher> Ingester<P> {
     }
 
     async fn publish_event(&self, subject: &str, event: &MarketEvent) -> BpResult<()> {
-        self.publisher
-            .publish(subject, &serde_json::to_vec(event)?)
-            .await
+        self.publisher.publish(subject, &event.encode()?).await
     }
 }
 
