@@ -6,12 +6,18 @@ edition.workspace = true
 [dependencies]
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-s3-transfer-manager = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
-parquet = { workspace = true }
+futures = { workspace = true }
+parquet = { workspace = true, features = ["async"] }
 platform-errors = { workspace = true }
 platform-market-data = { workspace = true }
 platform-types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 stock-trek = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
+tokio = { workspace = true, features = ["fs", "macros", "rt", "rt-multi-thread", "sync", "time"] }
+tracing = { workspace = true }

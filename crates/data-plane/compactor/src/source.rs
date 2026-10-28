@@ -1,8 +1,6 @@
 use crate::config::CompactorConfig;
-use aws_sdk_s3::{Client as S3Client, primitives::DateTime};
-use chrono::Utc;
-use platform_archive::{ArchiveKind, ArchivePath, SourceBatch};
-use platform_errors::{BpError, BpResult};
+use platform_archive::{ArchiveKind, ArchivePath, Bucket, ObjectKey, S3, SourceBatch};
+use platform_errors::BpResult;
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::HashMap;
 use tracing::warn;
@@ -13,8 +11,8 @@ use tracing::warn;
 /// TODO: track processed source files instead of rescanning every raw object on
 /// each cycle.
 pub struct S3ArchiveSource {
-    client: S3Client,
-    bucket: String,
+    client: aws_sdk_s3::Client,
+    bucket: Bucket,
     prefix: String,
     settle_millis: i64,
     min_source_files: usize,
@@ -22,11 +20,11 @@ pub struct S3ArchiveSource {
 
 impl S3ArchiveSource {
     pub async fn connect(config: &CompactorConfig) -> BpResult<Self> {
-        let sdk_config = aws_config::load_defaults(aws_config::BehaviorVersion::latest()).await;
+        let (client, _) = S3::clients().await;
         let settle_millis = i64::try_from(config.settle.as_millis()).unwrap_or(i64::MAX);
         Ok(Self {
-            client: S3Client::new(&sdk_config),
-            bucket: config.s3_bucket.clone(),
+            client,
+            bucket: Bucket::new(config.s3_bucket.clone()),
             prefix: config.s3_prefix.trim_matches('/').to_string(),
             settle_millis,
             min_source_files: config.min_source_files,
@@ -39,59 +37,47 @@ impl S3ArchiveSource {
         } else {
             format!("{}/", self.prefix)
         };
-        let mut request = self.client.list_objects_v2().bucket(&self.bucket);
-        if !list_prefix.is_empty() {
-            request = request.prefix(&list_prefix);
-        }
-        let mut paginator = request.into_paginator().send();
+        let objects = S3::list_objects(
+            &self.client,
+            &self.bucket,
+            &ObjectKey::new(list_prefix.clone()),
+        )
+        .await?;
         let mut groups: HashMap<String, PendingGroup> = HashMap::new();
 
-        while let Some(page) = paginator.try_next().await.map_err(|error| {
-            BpError::s3(
-                "list raw archive objects",
-                format!("s3://{}/{}", self.bucket, list_prefix),
-                error,
-            )
-        })? {
-            for object in page.contents() {
-                let Some(key) = object.key() else {
-                    continue;
-                };
-                if !key.ends_with(".parquet") {
-                    continue;
-                }
-                let Some(relative) = ArchivePath::relative_key(key, &list_prefix) else {
-                    continue;
-                };
-                let Some(kind) = ArchivePath::kind(relative) else {
-                    warn!(key, "skipping archive object with an unknown kind");
-                    continue;
-                };
-                let Some(bucket_start) = ArchivePath::bucket_start_from_key(relative) else {
-                    warn!(key, "skipping archive object outside the hourly layout");
-                    continue;
-                };
-                let Some((parent, _)) = key.rsplit_once('/') else {
-                    continue;
-                };
-                let modified_at = object
-                    .last_modified()
-                    .map(Self::modified_millis)
-                    .unwrap_or(bucket_start.0);
-                let group = groups
-                    .entry(parent.to_string())
-                    .or_insert_with(|| PendingGroup {
-                        kind,
-                        bucket_start,
-                        latest_modified: modified_at,
-                        files: Vec::new(),
-                    });
-                group.latest_modified = group.latest_modified.max(modified_at);
-                group.files.push(key.to_string());
+        for object in objects {
+            let key = object.key.as_str();
+            if !key.ends_with(".parquet") {
+                continue;
             }
+            let Some(relative) = ArchivePath::relative_key(key, &list_prefix) else {
+                continue;
+            };
+            let Some(kind) = ArchivePath::kind(relative) else {
+                warn!(key, "skipping archive object with an unknown kind");
+                continue;
+            };
+            let Some(bucket_start) = ArchivePath::bucket_start_from_key(relative) else {
+                warn!(key, "skipping archive object outside the hourly layout");
+                continue;
+            };
+            let Some((parent, _)) = key.rsplit_once('/') else {
+                continue;
+            };
+            let modified_at = object.last_modified_millis().unwrap_or(bucket_start.0);
+            let group = groups
+                .entry(parent.to_string())
+                .or_insert_with(|| PendingGroup {
+                    kind,
+                    bucket_start,
+                    latest_modified: modified_at,
+                    files: Vec::new(),
+                });
+            group.latest_modified = group.latest_modified.max(modified_at);
+            group.files.push(key.to_string());
         }
 
-        let cutoff = Utc::now()
+        let cutoff = chrono::Utc::now()
             .timestamp_millis()
             .saturating_sub(self.settle_millis);
         let mut batches = groups
@@ -108,13 +94,6 @@ impl S3ArchiveSource {
             .collect::<Vec<_>>();
         batches.sort_by_key(|batch| (batch.bucket_start.0, batch.prefix.clone()));
         Ok(batches)
-    }
-
-    fn modified_millis(value: &DateTime) -> i64 {
-        value
-            .secs()
-            .saturating_mul(1_000)
-            .saturating_add(i64::from(value.subsec_nanos() / 1_000_000))
     }
 }
 

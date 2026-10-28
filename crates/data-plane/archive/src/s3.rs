@@ -84,6 +84,19 @@ impl From<String> for ObjectKey {
     }
 }
 
+/// An object returned by an S3 listing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct S3Object {
+    pub key: ObjectKey,
+    pub last_modified_millis: Option<i64>,
+}
+
+impl S3Object {
+    pub fn last_modified_millis(&self) -> Option<i64> {
+        self.last_modified_millis
+    }
+}
+
 pub struct S3;
 
 impl S3 {
@@ -92,12 +105,12 @@ impl S3 {
         (s3_client, transfer_client)
     }
 
-    async fn s3_client() -> S3Client {
+    pub async fn s3_client() -> S3Client {
         let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
         S3Client::new(&config)
     }
 
-    async fn transfer_client() -> TransferClient {
+    pub async fn transfer_client() -> TransferClient {
         let config = aws_sdk_s3_transfer_manager::from_env().load().await;
         TransferClient::new(config)
     }
@@ -163,6 +176,20 @@ impl S3 {
         bucket: &Bucket,
         prefix: &ObjectKey,
     ) -> BpResult<Vec<ObjectKey>> {
+        Ok(Self::list_objects(s3_client, bucket, prefix)
+            .await?
+            .into_iter()
+            .map(|object| object.key)
+            .collect())
+    }
+
+    /// List objects together with the metadata needed to decide when a partition
+    /// is settled.
+    pub async fn list_objects(
+        s3_client: &S3Client,
+        bucket: &Bucket,
+        prefix: &ObjectKey,
+    ) -> BpResult<Vec<S3Object>> {
         let target = Self::object_target(bucket, prefix);
         info!("listing files with prefix {}", prefix);
         let mut files = Vec::new();
@@ -177,11 +204,35 @@ impl S3 {
                 page_result.map_err(|error| BpError::s3("list objects", target.clone(), error))?;
             for object in page.contents() {
                 if let Some(key) = object.key() {
-                    files.push(ObjectKey::new(key));
+                    files.push(S3Object {
+                        key: ObjectKey::new(key),
+                        last_modified_millis: object.last_modified().map(Self::modified_millis),
+                    });
                 }
             }
         }
         Ok(files)
+    }
+
+    pub async fn get_bytes(
+        s3_client: &S3Client,
+        bucket: &Bucket,
+        key: &ObjectKey,
+    ) -> BpResult<Bytes> {
+        let target = Self::object_target(bucket, key);
+        let output = s3_client
+            .get_object()
+            .bucket(bucket.as_str())
+            .key(key.as_str())
+            .send()
+            .await
+            .map_err(|error| BpError::s3("get object", target.clone(), error))?;
+        output
+            .body
+            .collect()
+            .await
+            .map(|body| body.into_bytes())
+            .map_err(|error| BpError::s3("read object body", target, error))
     }
 
     pub async fn delete(s3_client: &S3Client, bucket: &Bucket, key: &ObjectKey) -> BpResult<()> {
@@ -338,6 +389,13 @@ impl S3 {
 
     pub fn object_target(bucket: &Bucket, key: &ObjectKey) -> String {
         format!("s3://{bucket}/{key}")
+    }
+
+    fn modified_millis(value: &aws_sdk_s3::primitives::DateTime) -> i64 {
+        value
+            .secs()
+            .saturating_mul(1000)
+            .saturating_add(i64::from(value.subsec_nanos() / 1_000_000))
     }
 
     fn objects_target(bucket: &Bucket, count: usize) -> String {

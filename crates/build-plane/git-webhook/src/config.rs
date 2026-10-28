@@ -1,3 +1,4 @@
+use crate::infisical::secrets::InfisicalConfig;
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
 use platform_github::host_allow_list::HostAllowlist;
