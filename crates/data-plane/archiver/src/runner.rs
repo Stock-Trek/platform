@@ -1,0 +1,97 @@
+use crate::{
+    buffer::ArchiveBuffer,
+    config::ArchiverConfig,
+    sink::{ArchiveSink, S3ParquetSink},
+    source::NatsArchiveSource,
+};
+use platform_errors::BpResult;
+use tokio::time::{self, MissedTickBehavior};
+use tracing::{info, warn};
+
+pub struct ArchiverRunner {
+    config: ArchiverConfig,
+}
+
+impl ArchiverRunner {
+    pub fn new(config: ArchiverConfig) -> Self {
+        Self { config }
+    }
+
+    pub async fn run(self) -> BpResult<()> {
+        let mut source = NatsArchiveSource::connect(&self.config).await?;
+        let sink = S3ParquetSink::connect(&self.config).await?;
+        let mut buffer = ArchiveBuffer::new(self.config.max_records, self.config.dedupe_capacity);
+        let mut flush_ticker = time::interval(self.config.flush_interval);
+        flush_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+
+        info!(
+            event_subject_prefix = %self.config.event_subject_prefix,
+            closed_candle_subject_prefix = %self.config.closed_candle_subject_prefix,
+            s3_bucket = %self.config.s3_bucket,
+            s3_prefix = %self.config.s3_prefix,
+            "archiver started"
+        );
+
+        let result = self
+            .run_until_shutdown(&mut source, &sink, &mut buffer, &mut flush_ticker)
+            .await;
+        let flush_result = self.flush(&sink, &mut buffer).await;
+        result?;
+        flush_result
+    }
+
+    async fn run_until_shutdown(
+        &self,
+        source: &mut NatsArchiveSource,
+        sink: &S3ParquetSink,
+        buffer: &mut ArchiveBuffer,
+        flush_ticker: &mut time::Interval,
+    ) -> BpResult<()> {
+        loop {
+            tokio::select! {
+                record = source.next_record() => {
+                    match record {
+                        Ok(Some(record)) => {
+                            buffer.push(record);
+                            if buffer.should_flush() {
+                                self.flush(sink, buffer).await?;
+                            }
+                        }
+                        Ok(None) => {
+                            info!("archive source ended");
+                            break;
+                        }
+                        Err(error) => {
+                            warn!(%error, "archive source stopped");
+                            break;
+                        }
+                    }
+                }
+                _ = flush_ticker.tick() => {
+                    self.flush(sink, buffer).await?;
+                }
+                signal = tokio::signal::ctrl_c() => {
+                    signal?;
+                    info!("shutdown requested");
+                    break;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    async fn flush(&self, sink: &S3ParquetSink, buffer: &mut ArchiveBuffer) -> BpResult<()> {
+        if buffer.is_empty() {
+            return Ok(());
+        }
+        let records = buffer.records().len();
+        sink.write(buffer.records()).await?;
+        buffer.clear_records();
+        info!(
+            records,
+            duplicates = buffer.duplicates(),
+            "flushed archive batch"
+        );
+        Ok(())
+    }
+}

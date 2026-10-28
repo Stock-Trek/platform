@@ -3162,6 +3162,27 @@ dependencies = [
 [[package]]
 name = "platform-archiver"
 version = "0.2.0"
+dependencies = [
+ "arrow-array",
+ "arrow-schema",
+ "async-trait",
+ "aws-config",
+ "aws-sdk-s3",
+ "bytes",
+ "chrono",
+ "parquet",
+ "platform-config",
+ "platform-errors",
+ "platform-market-data",
+ "platform-nats",
+ "platform-types",
+ "serde",
+ "serde_json",
+ "stock-trek-types",
+ "tokio",
+ "tracing",
+ "uuid",
+]
 
 [[package]]
 name = "platform-backfiller"

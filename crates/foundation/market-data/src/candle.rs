@@ -131,6 +131,13 @@ pub struct Candle {
     pub market_candle: MarketCandle,
 }
 
+/// A candle that has left its aggregation window and is ready to be archived.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ClosedCandle {
+    pub revision: u64,
+    pub candle: Candle,
+}
+
 impl Candle {
     pub fn open(trade: &Trade, interval: CandleInterval) -> Self {
         let price = trade.price.to_f64().unwrap_or_default();
