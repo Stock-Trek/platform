@@ -1,21 +1,26 @@
 //! Durable JetStream pull consumer with explicit acknowledgements.
 
 use crate::{
-    NatsAddress, NatsSubject, connection::NatsConnection, jetstream::JetStream, message::Message,
+    NatsAddress, NatsSubject,
+    jetstream::{ACK_WAIT, JetStream, protocol_error},
+    message::Message,
 };
+use async_nats::{
+    Client,
+    jetstream::{
+        self,
+        consumer::{AckPolicy, DeliverPolicy, pull},
+        stream,
+    },
+};
+use futures::StreamExt;
 use platform_errors::BpResult;
 use std::time::Duration;
-use tokio::sync::Mutex as AsyncMutex;
 
 const DEFAULT_EXPIRES: Duration = Duration::from_secs(1);
 const FETCH_BATCH: usize = 1;
 const FETCH_WINDOW: Duration = Duration::from_secs(30);
 const RETRY_BACKOFF: Duration = Duration::from_secs(1);
-
-struct State {
-    connection: Option<NatsConnection>,
-    fetch_sid: Option<u64>,
-}
 
 /// A durable pull consumer over a JetStream stream.
 ///
@@ -23,12 +28,11 @@ struct State {
 /// resumes from the last acknowledged message instead of missing everything
 /// that happened while the process was down.
 pub struct JetStreamConsumer {
-    address: NatsAddress,
-    name: String,
+    client: Client,
+    consumer: async_nats::jetstream::consumer::Consumer<pull::Config>,
     stream: String,
     durable: String,
     filter: String,
-    state: AsyncMutex<State>,
 }
 
 impl JetStreamConsumer {
@@ -44,23 +48,38 @@ impl JetStreamConsumer {
         let address = NatsAddress::parse(url)?;
         NatsSubject::validate_named("filter subject", filter_subject)?;
         let stream = JetStream::stream_name(stream_subject_prefix);
-        let mut connection = NatsConnection::connect(&address, name).await?;
-        connection
-            .ensure_stream(&stream, stream_subject_prefix)
-            .await?;
-        connection
-            .ensure_consumer(&stream, durable, filter_subject)
-            .await?;
+        let client = address.connect(name).await?;
+        let context = jetstream::new(client.clone());
+        let stream_handle = context
+            .get_or_create_stream(stream::Config {
+                name: stream.clone(),
+                subjects: vec![format!("{stream_subject_prefix}.>")],
+                storage: stream::StorageType::File,
+                ..Default::default()
+            })
+            .await
+            .map_err(|error| protocol_error("failed to ensure JetStream stream", error))?;
+        let consumer = stream_handle
+            .get_or_create_consumer(
+                durable,
+                pull::Config {
+                    durable_name: Some(durable.to_string()),
+                    filter_subject: filter_subject.to_string(),
+                    deliver_policy: DeliverPolicy::All,
+                    ack_policy: AckPolicy::Explicit,
+                    ack_wait: ACK_WAIT,
+                    max_deliver: -1,
+                    ..Default::default()
+                },
+            )
+            .await
+            .map_err(|error| protocol_error("failed to ensure JetStream consumer", error))?;
         Ok(Self {
-            address,
-            name: name.to_string(),
+            client,
+            consumer,
             stream,
             durable: durable.to_string(),
             filter: filter_subject.to_string(),
-            state: AsyncMutex::new(State {
-                connection: Some(connection),
-                fetch_sid: None,
-            }),
         })
     }
 
@@ -84,38 +103,21 @@ impl JetStreamConsumer {
         } else {
             expires
         };
-        let mut state = self.state.lock().await;
-        let result = self.fetch_locked(&mut state, batch, expires).await;
-        if result.is_err() {
-            state.connection = None;
-            state.fetch_sid = None;
-        }
-        result
-    }
-
-    async fn fetch_locked(
-        &self,
-        state: &mut State,
-        batch: usize,
-        expires: Duration,
-    ) -> BpResult<Vec<Message>> {
-        if state.connection.is_none() {
-            state.connection = Some(NatsConnection::connect(&self.address, &self.name).await?);
-            state.fetch_sid = None;
-        }
-        let connection = state
-            .connection
-            .as_mut()
-            .expect("NATS connection was initialised above");
-        connection
-            .pull_fetch(
-                &mut state.fetch_sid,
-                &self.stream,
-                &self.durable,
-                batch,
-                expires,
-            )
+        let mut stream = self
+            .consumer
+            .fetch()
+            .max_messages(batch)
+            .expires(expires)
+            .messages()
             .await
+            .map_err(|error| protocol_error("failed to fetch JetStream messages", error))?;
+        let mut messages = Vec::with_capacity(batch);
+        while let Some(message) = stream.next().await {
+            let message = message
+                .map_err(|error| protocol_error("failed to read JetStream message", error))?;
+            messages.push(Message::from(message.message));
+        }
+        Ok(messages)
     }
 
     /// Acknowledges a fetched message. Redelivery after a lost acknowledgement
@@ -124,20 +126,14 @@ impl JetStreamConsumer {
         let Some(reply) = &message.reply_to else {
             return Ok(());
         };
-        let mut state = self.state.lock().await;
-        if state.connection.is_none() {
-            state.connection = Some(NatsConnection::connect(&self.address, &self.name).await?);
-            state.fetch_sid = None;
-        }
-        let connection = state
-            .connection
-            .as_mut()
-            .expect("NATS connection was initialised above");
-        let result = connection.publish(reply, b"").await;
-        if result.is_err() {
-            state.connection = None;
-        }
-        result
+        self.client
+            .publish(reply.clone(), Vec::new().into())
+            .await
+            .map_err(|error| protocol_error("failed to acknowledge JetStream message", error))?;
+        self.client
+            .flush()
+            .await
+            .map_err(|error| protocol_error("failed to flush JetStream acknowledgement", error))
     }
 
     /// Fetches with retries so transient connection loss does not surface to
