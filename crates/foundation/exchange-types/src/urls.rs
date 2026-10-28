@@ -1,4 +1,4 @@
-pub use platform_types::protocol::Protocol;
+use platform_types::protocol::Protocol;
 use serde::{Deserialize, Serialize};
 use strum::Display;
 

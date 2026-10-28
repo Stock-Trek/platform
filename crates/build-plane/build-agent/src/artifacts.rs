@@ -2,7 +2,12 @@ use crate::{
     s3::SignedPost,
     source::{Source, SourceLimits},
 };
-use platform_errors::{BpError, BpResult, ConfigError, IoError, ValidationError};
+use platform_errors::{
+    bp::{BpError, BpResult},
+    config::ConfigError,
+    io::IoError,
+    validation::ValidationError,
+};
 use std::{
     fs as std_fs,
     io::{self, Cursor, Write},

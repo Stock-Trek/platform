@@ -1,5 +1,5 @@
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::bp::{BpError, BpResult};
 use std::{num::NonZeroU64, path::PathBuf, time::Duration};
 
 const AWS_LAMBDA_FUNCTION_NAME: &str = "AWS_LAMBDA_FUNCTION_NAME";

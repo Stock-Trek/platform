@@ -12,7 +12,9 @@
 //! of the uploaded file.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use platform_errors::{BpError, BpResult, ConfigError, StorageError};
+use platform_errors::bp::{BpError, BpResult};
+use platform_errors::config::ConfigError;
+use platform_errors::storage::StorageError;
 use platform_messages::build_request::BuildRequestSignedPost;
 use std::{
     collections::BTreeMap,

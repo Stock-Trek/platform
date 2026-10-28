@@ -93,8 +93,9 @@ impl DataError {
 
 #[cfg(test)]
 mod tests {
+    use crate::{config::ConfigError, timeout::TimeoutError};
+
     use super::*;
-    use crate::{ConfigError, TimeoutError};
     use std::time::Duration;
 
     #[test]

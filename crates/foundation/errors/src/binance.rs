@@ -1,5 +1,5 @@
 use crate::{exchange::ExchangeError, retryability::Retryability};
-use platform_types::new_types::Seconds;
+use platform_types::new_types::DurationSeconds;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone)]
@@ -29,15 +29,19 @@ impl BinanceError {
         Retryability::from_binance_code_and_status(self.code, status)
     }
 
-    pub fn retry_after(&self) -> Option<Seconds> {
+    pub fn retry_after(&self) -> Option<DurationSeconds> {
         let data = self.data.as_ref()?;
         let retry_at_ms = data.retryAfter?;
         let now_ms = data.serverTime?;
         let backoff_ms = retry_at_ms.saturating_sub(now_ms).max(0) as u64;
-        Some(Seconds(backoff_ms.div_ceil(1000) as i64))
+        Some(DurationSeconds(backoff_ms.div_ceil(1000) as i64))
     }
 
-    pub fn exchange_error(&self, status: u16, retry_after: Option<Seconds>) -> ExchangeError {
+    pub fn exchange_error(
+        &self,
+        status: u16,
+        retry_after: Option<DurationSeconds>,
+    ) -> ExchangeError {
         ExchangeError::Response {
             code: self.code,
             message: self.msg.clone(),

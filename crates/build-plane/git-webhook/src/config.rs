@@ -4,8 +4,6 @@ use platform_github::host_allow_list::HostAllowlist;
 use platform_time::timeouts::Timeouts;
 use std::{num::NonZeroUsize, time::Duration};
 
-pub use crate::infisical::secrets::InfisicalConfig;
-
 const AWS_CONNECT_TIMEOUT_SECS: &str = "AWS_CONNECT_TIMEOUT_SECS";
 const AWS_LAMBDA_FUNCTION_NAME: &str = "AWS_LAMBDA_FUNCTION_NAME";
 const AWS_OPERATION_TIMEOUT_SECS: &str = "AWS_OPERATION_TIMEOUT_SECS";

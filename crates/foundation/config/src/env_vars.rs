@@ -5,7 +5,7 @@
 //! knowledge of which variables any particular process needs.
 
 use chrono::{DateTime, NaiveDate, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::bp::{BpError, BpResult};
 use std::{
     collections::HashMap,
     ffi::{OsStr, OsString},
@@ -217,8 +217,9 @@ impl EnvVars {
 
 #[cfg(test)]
 mod tests {
+    use platform_errors::config::ConfigError;
+
     use super::*;
-    use platform_errors::ConfigError;
 
     fn env_vars<I, K, V>(values: I) -> EnvVars
     where
