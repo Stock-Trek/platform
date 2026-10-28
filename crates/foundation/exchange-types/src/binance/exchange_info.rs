@@ -1,7 +1,7 @@
 use crate::{
     binance::{
-        exchange::BinanceExchange,
         filters::{BinanceExchangeFilter, BinanceSymbolFilter},
+        macros::impl_binance_request,
         rate_limits::BinanceRateLimit,
         request::BinanceRequestFactory,
         response::BinanceResponse,
@@ -9,9 +9,9 @@ use crate::{
     },
     encode::ByteEncoder,
     http::{HttpMethod, HttpRequest},
-    new_types::{TimestampMilliseconds, UsageCount},
+    new_types::UsageCount,
     rate_limited::RateLimitRestriction,
-    request::{ETHttpRequest, ETRequest, ETWebsocketRequest, WebsocketResponseMatcher},
+    request::{ETHttpRequest, ETWebsocketRequest, WebsocketResponseMatcher},
     signer::Signer,
     ticker::Ticker,
     websocket_id::ETWebsocketId,
@@ -163,29 +163,19 @@ impl BinanceExchangeInfoRequest {
             .join(",");
         format!("[{values}]")
     }
-}
-
-impl ETRequest for BinanceExchangeInfoRequest {
-    type Exchange = BinanceExchange;
-
-    fn is_signed(&self) -> bool {
-        false
-    }
-    fn is_idempotent(&self) -> bool {
-        true
-    }
-    fn rate_limit_usage(&self, restriction: RateLimitRestriction) -> UsageCount {
-        match restriction {
-            RateLimitRestriction::Weight => UsageCount(20),
-            _ => UsageCount::ZERO,
-        }
-    }
-    fn set_api_key(&mut self, _api_key: Option<String>) {}
-    fn set_timestamp(&mut self, _timestamp: TimestampMilliseconds) {}
-    fn query_params(&self, percent_encode: bool) -> String {
+    fn binance_query_params(&self, percent_encode: bool) -> String {
         self.query_params(percent_encode)
     }
 }
+
+impl_binance_request!(
+    unsigned BinanceExchangeInfoRequest,
+    idempotent: true,
+    rate_limit: {
+        RateLimitRestriction::Weight => UsageCount(20),
+        _ => UsageCount::ZERO,
+    }
+);
 
 impl ETHttpRequest for BinanceExchangeInfoRequest {
     type Response = BinanceResponse<BinanceExchangeInfoResponse>;

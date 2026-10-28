@@ -1,12 +1,12 @@
 use crate::{
     binance::{
-        exchange::BinanceExchange,
+        macros::impl_binance_request,
         response::{BinanceResponse, BinanceResponsePayload},
     },
     http::{HttpMethod, HttpRequest},
     new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::RateLimitRestriction,
-    request::{ETHttpRequest, ETRequest},
+    request::ETHttpRequest,
     signer::Signer,
 };
 use platform_errors::{BpError, BpResult};
@@ -77,31 +77,20 @@ impl BinanceResponse<BinanceHistoricalTradesResponse> {
     }
 }
 
-impl ETRequest for BinanceHistoricalTradesRequest {
-    type Exchange = BinanceExchange;
-
-    fn is_signed(&self) -> bool {
-        false
-    }
-    fn is_idempotent(&self) -> bool {
-        true
-    }
-    fn rate_limit_usage(&self, restriction: RateLimitRestriction) -> UsageCount {
-        match restriction {
-            RateLimitRestriction::Weight => UsageCount(20),
-            _ => UsageCount::ZERO,
-        }
-    }
-    fn set_api_key(&mut self, api_key: Option<String>) {
-        if api_key.is_some() {
-            self.api_key = api_key;
-        }
-    }
-    fn set_timestamp(&mut self, _timestamp: TimestampMilliseconds) {}
-    fn query_params(&self, percent_encode: bool) -> String {
+impl BinanceHistoricalTradesRequest {
+    fn binance_query_params(&self, percent_encode: bool) -> String {
         self.query.query_params(true, percent_encode)
     }
 }
+
+impl_binance_request!(
+    unsigned_with_api_key BinanceHistoricalTradesRequest,
+    idempotent: true,
+    rate_limit: {
+        RateLimitRestriction::Weight => UsageCount(20),
+        _ => UsageCount::ZERO,
+    }
+);
 
 impl ETHttpRequest for BinanceHistoricalTradesRequest {
     type Response = BinanceResponse<BinanceHistoricalTradesResponse>;

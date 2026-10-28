@@ -1,8 +1,7 @@
 use crate::{
     binance::{
-        exchange::BinanceExchange,
+        macros::binance_signed_request,
         order_status::BinanceOrderStatusRequest,
-        recv_window::BinanceRecvWindow,
         request::BinanceRequestFactory,
         response::BinanceResponse,
         supporting_types::{
@@ -12,9 +11,9 @@ use crate::{
         },
     },
     http::{HttpMethod, HttpRequest},
-    new_types::{TimestampMilliseconds, UsageCount},
+    new_types::UsageCount,
     rate_limited::RateLimitRestriction,
-    request::{ETHttpRequest, ETRequest, ETWebsocketRequest, WebsocketResponseMatcher},
+    request::{ETHttpRequest, ETWebsocketRequest, WebsocketResponseMatcher},
     signer::Signer,
     ticker::Ticker,
     websocket_id::ETWebsocketId,
@@ -26,32 +25,36 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use strum::Display;
 
-#[allow(non_snake_case)]
-#[skip_serializing_none]
-#[derive(Serialize, Debug, Clone, Hash, QueryParams)]
-pub struct BinanceSpotOrderRequest {
-    apiKey: Option<String>,
-    timestamp: i64,
-    pub icebergQty: Option<Decimal>,
-    pub newClientOrderId: Option<String>,
-    pub newOrderRespType: Option<BinanceNewOrderResponseType>,
-    pub pegPriceType: Option<BinancePegPriceType>,
-    pub pegOffsetValue: Option<i32>,
-    pub pegOffsetType: Option<BinancePegOffsetType>,
-    pub price: Option<Decimal>,
-    pub quantity: Option<Decimal>,
-    pub quoteOrderQty: Option<Decimal>,
-    pub recvWindow: Option<BinanceRecvWindow>,
-    pub selfTradePreventionMode: Option<BinanceSelfTradeProtection>,
-    pub side: BinanceSide,
-    pub stopPrice: Option<Decimal>,
-    pub strategyId: Option<i64>,
-    pub strategyType: Option<i32>,
-    pub symbol: String,
-    pub timeInForce: Option<BinanceTimeInForce>,
-    pub trailingDelta: Option<i64>,
-    #[serde(rename = "type")]
-    pub r#type: BinanceOrderType,
+binance_signed_request! {
+    #[allow(non_snake_case)]
+    #[skip_serializing_none]
+    #[derive(Serialize, Debug, Clone, Hash, QueryParams)]
+    pub struct BinanceSpotOrderRequest {
+        pub icebergQty: Option<Decimal>,
+        pub newClientOrderId: Option<String>,
+        pub newOrderRespType: Option<BinanceNewOrderResponseType>,
+        pub pegPriceType: Option<BinancePegPriceType>,
+        pub pegOffsetValue: Option<i32>,
+        pub pegOffsetType: Option<BinancePegOffsetType>,
+        pub price: Option<Decimal>,
+        pub quantity: Option<Decimal>,
+        pub quoteOrderQty: Option<Decimal>,
+        pub selfTradePreventionMode: Option<BinanceSelfTradeProtection>,
+        pub side: BinanceSide,
+        pub stopPrice: Option<Decimal>,
+        pub strategyId: Option<i64>,
+        pub strategyType: Option<i32>,
+        pub symbol: String,
+        pub timeInForce: Option<BinanceTimeInForce>,
+        pub trailingDelta: Option<i64>,
+        #[serde(rename = "type")]
+        pub r#type: BinanceOrderType,
+    }
+    idempotent: false,
+    rate_limit: {
+        RateLimitRestriction::OrderCount | RateLimitRestriction::Weight => UsageCount::ONE,
+        _ => UsageCount::ZERO,
+    }
 }
 
 impl BinanceSpotOrderRequest {
@@ -144,29 +147,6 @@ pub struct BinanceFill {
     pub price: Decimal,
     pub qty: Decimal,
     pub tradeId: i64,
-}
-
-impl ETRequest for BinanceSpotOrderRequest {
-    type Exchange = BinanceExchange;
-
-    fn is_signed(&self) -> bool {
-        true
-    }
-    fn rate_limit_usage(&self, restriction: RateLimitRestriction) -> UsageCount {
-        match restriction {
-            RateLimitRestriction::OrderCount | RateLimitRestriction::Weight => UsageCount::ONE,
-            _ => UsageCount::ZERO,
-        }
-    }
-    fn set_api_key(&mut self, api_key: Option<String>) {
-        self.apiKey = api_key;
-    }
-    fn set_timestamp(&mut self, timestamp: TimestampMilliseconds) {
-        self.timestamp = timestamp.0;
-    }
-    fn query_params(&self, percent_encode: bool) -> String {
-        self.query_params(true, percent_encode)
-    }
 }
 
 impl ETHttpRequest for BinanceSpotOrderRequest {

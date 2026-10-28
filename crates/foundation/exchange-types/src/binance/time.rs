@@ -1,13 +1,13 @@
 use crate::{
     binance::{
-        exchange::BinanceExchange,
+        macros::binance_unsigned_request,
         request::BinanceRequestFactory,
         response::{BinanceResponse, BinanceResponsePayload},
     },
     http::{HttpMethod, HttpRequest},
     new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::RateLimitRestriction,
-    request::{ETHttpRequest, ETRequest, ETWebsocketRequest, WebsocketResponseMatcher},
+    request::{ETHttpRequest, ETWebsocketRequest, WebsocketResponseMatcher},
     server_time::{ServerTimeHttpRequest, ServerTimeResponse, ServerTimeWebsocketRequest},
     signer::Signer,
     websocket_id::ETWebsocketId,
@@ -16,8 +16,15 @@ use platform_errors::{BpError, BpResult};
 use query_params::QueryParams;
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Debug, Clone, Hash, QueryParams)]
-pub struct BinanceTimeRequest {}
+binance_unsigned_request! {
+    #[derive(Serialize, Debug, Clone, Hash, QueryParams)]
+    pub struct BinanceTimeRequest {}
+    idempotent: true,
+    rate_limit: {
+        RateLimitRestriction::Weight => UsageCount::ONE,
+        _ => UsageCount::ZERO,
+    }
+}
 
 #[allow(clippy::new_without_default)]
 impl BinanceTimeRequest {
@@ -48,28 +55,6 @@ impl ServerTimeResponse for BinanceResponse<BinanceTimeResponse> {
                 Ok(TimestampMilliseconds(payload.serverTime))
             }
         }
-    }
-}
-
-impl ETRequest for BinanceTimeRequest {
-    type Exchange = BinanceExchange;
-
-    fn is_signed(&self) -> bool {
-        false
-    }
-    fn is_idempotent(&self) -> bool {
-        true
-    }
-    fn rate_limit_usage(&self, restriction: RateLimitRestriction) -> UsageCount {
-        match restriction {
-            RateLimitRestriction::Weight => UsageCount::ONE,
-            _ => UsageCount::ZERO,
-        }
-    }
-    fn set_api_key(&mut self, _api_key: Option<String>) {}
-    fn set_timestamp(&mut self, _timestamp: TimestampMilliseconds) {}
-    fn query_params(&self, percent_encode: bool) -> String {
-        self.query_params(true, percent_encode)
     }
 }
 

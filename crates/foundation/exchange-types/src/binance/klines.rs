@@ -1,7 +1,7 @@
 use crate::{
     binance::{
-        exchange::BinanceExchange,
         klines_limit::BinanceKlinesLimit,
+        macros::binance_unsigned_request,
         request::BinanceRequestFactory,
         response::{BinanceResponse, BinanceResponsePayload},
     },
@@ -9,7 +9,7 @@ use crate::{
     klines::{Kline, KlinesHttpRequest, KlinesResponse, KlinesWebsocketRequest},
     new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::RateLimitRestriction,
-    request::{ETHttpRequest, ETRequest, ETWebsocketRequest, WebsocketResponseMatcher},
+    request::{ETHttpRequest, ETWebsocketRequest, WebsocketResponseMatcher},
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
@@ -20,16 +20,23 @@ use serde::{Deserialize, Serialize};
 use serde_with::skip_serializing_none;
 use strum::Display;
 
-#[allow(non_snake_case)]
-#[skip_serializing_none]
-#[derive(Serialize, Debug, Clone, Hash, QueryParams)]
-pub struct BinanceKlinesRequest {
-    pub symbol: String,
-    pub interval: BinanceKlinesInterval,
-    pub startTime: Option<TimestampMilliseconds>,
-    pub endTime: Option<TimestampMilliseconds>,
-    pub timezone: Option<String>,
-    pub limit: Option<BinanceKlinesLimit>,
+binance_unsigned_request! {
+    #[allow(non_snake_case)]
+    #[skip_serializing_none]
+    #[derive(Serialize, Debug, Clone, Hash, QueryParams)]
+    pub struct BinanceKlinesRequest {
+        pub symbol: String,
+        pub interval: BinanceKlinesInterval,
+        pub startTime: Option<TimestampMilliseconds>,
+        pub endTime: Option<TimestampMilliseconds>,
+        pub timezone: Option<String>,
+        pub limit: Option<BinanceKlinesLimit>,
+    }
+    idempotent: true,
+    rate_limit: {
+        RateLimitRestriction::Weight => UsageCount(2),
+        _ => UsageCount::ZERO,
+    }
 }
 
 impl BinanceKlinesRequest {
@@ -157,28 +164,6 @@ impl BinanceKlineResponse {
                 reason: e.to_string(),
             })
         })
-    }
-}
-
-impl ETRequest for BinanceKlinesRequest {
-    type Exchange = BinanceExchange;
-
-    fn is_signed(&self) -> bool {
-        false
-    }
-    fn is_idempotent(&self) -> bool {
-        true
-    }
-    fn rate_limit_usage(&self, restriction: RateLimitRestriction) -> UsageCount {
-        match restriction {
-            RateLimitRestriction::Weight => UsageCount(2),
-            _ => UsageCount::ZERO,
-        }
-    }
-    fn set_api_key(&mut self, _api_key: Option<String>) {}
-    fn set_timestamp(&mut self, _timestamp: TimestampMilliseconds) {}
-    fn query_params(&self, percent_encode: bool) -> String {
-        self.query_params(true, percent_encode)
     }
 }
 

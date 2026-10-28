@@ -1,11 +1,11 @@
 use crate::{
     binance::{
-        exchange::BinanceExchange, request::BinanceRequestFactory, response::BinanceResponse,
-        supporting_types::BinanceWebsocketSessionResponse,
+        macros::binance_unsigned_request, request::BinanceRequestFactory,
+        response::BinanceResponse, supporting_types::BinanceWebsocketSessionResponse,
     },
-    new_types::{TimestampMilliseconds, UsageCount},
+    new_types::UsageCount,
     rate_limited::RateLimitRestriction,
-    request::{ETRequest, ETWebsocketRequest, WebsocketResponseMatcher},
+    request::{ETWebsocketRequest, WebsocketResponseMatcher},
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
@@ -13,35 +13,20 @@ use platform_errors::BpResult;
 use query_params::QueryParams;
 use serde::Serialize;
 
-#[derive(Serialize, Debug, Clone, Hash, QueryParams)]
-pub struct BinanceSessionLogoutRequest {}
+binance_unsigned_request! {
+    #[derive(Serialize, Debug, Clone, Hash, QueryParams)]
+    pub struct BinanceSessionLogoutRequest {}
+    idempotent: true,
+    rate_limit: {
+        RateLimitRestriction::Weight => UsageCount(2),
+        _ => UsageCount::ZERO,
+    }
+}
 
 #[allow(clippy::new_without_default)]
 impl BinanceSessionLogoutRequest {
     pub fn new() -> Self {
         Self {}
-    }
-}
-
-impl ETRequest for BinanceSessionLogoutRequest {
-    type Exchange = BinanceExchange;
-
-    fn is_signed(&self) -> bool {
-        false
-    }
-    fn is_idempotent(&self) -> bool {
-        true
-    }
-    fn rate_limit_usage(&self, restriction: RateLimitRestriction) -> UsageCount {
-        match restriction {
-            RateLimitRestriction::Weight => UsageCount(2),
-            _ => UsageCount::ZERO,
-        }
-    }
-    fn set_api_key(&mut self, _api_key: Option<String>) {}
-    fn set_timestamp(&mut self, _timestamp: TimestampMilliseconds) {}
-    fn query_params(&self, percent_encode: bool) -> String {
-        self.query_params(true, percent_encode)
     }
 }
 
