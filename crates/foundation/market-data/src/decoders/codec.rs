@@ -12,7 +12,6 @@ use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
 use tokio_websockets::Message;
 
-/// Type-erased codec for an exchange websocket stream.
 pub type SharedCodec = Arc<dyn Codec<(), DecodedFrame>>;
 
 /// Wraps a shared codec so iris, which takes codecs by value, can use it.
@@ -43,13 +42,9 @@ impl std::fmt::Debug for CodecHandle {
     }
 }
 
-/// Builds exchange-specific websocket codecs for a stream format.
 pub struct CodecFactory;
 
 impl CodecFactory {
-    /// Builds the JSON codec for an exchange.
-    ///
-    /// TODO: register additional exchange mappings as they are implemented.
     pub fn json_codec(exchange: CexId) -> SharedCodec {
         match exchange {
             CexId::Binance => Arc::new(BinanceJsonCodec::new(BinanceJsonMapping)),
@@ -57,9 +52,6 @@ impl CodecFactory {
         }
     }
 
-    /// Builds the binary codec for an exchange.
-    ///
-    /// TODO: register additional exchange binary codecs as they are implemented.
     pub fn binary_codec(exchange: CexId) -> Result<SharedCodec, IngesterError> {
         match exchange {
             CexId::Binance => Ok(Arc::new(BinanceSbeCodec)),

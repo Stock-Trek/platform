@@ -31,7 +31,6 @@ impl TradeDecoderFactory {
     pub fn for_exchange(exchange: CexId) -> BpResult<SharedTradeDecoder> {
         match exchange {
             CexId::Binance => Ok(Arc::new(BinanceTradeDecoder)),
-            // TODO: register trade decoders for additional exchanges.
             exchange => Err(BpError::Exchange(ExchangeError::UnsupportedExchange {
                 exchange: exchange.to_string(),
             })),
