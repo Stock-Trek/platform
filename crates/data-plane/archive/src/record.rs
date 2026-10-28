@@ -22,7 +22,7 @@ impl ArchiveKind {
     }
 
     pub fn from_segment(segment: &str) -> Option<Self> {
-        match segment {
+        match segment.strip_prefix("kind=").unwrap_or(segment) {
             "events" => Some(Self::Events),
             "candles" => Some(Self::Candles),
             _ => None,

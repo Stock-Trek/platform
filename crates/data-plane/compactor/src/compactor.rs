@@ -1,11 +1,10 @@
 use crate::config::CompactorConfig;
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
 use bytes::Bytes;
-use chrono::{DateTime, Datelike, Timelike, Utc};
 use platform_archive::{
-    ArchiveParquet, ArchivePartition, ArchiveRecord, ArchiveRecordKey, SourceBatch,
+    ArchiveParquet, ArchivePartition, ArchivePath, ArchiveRecord, ArchiveRecordKey, SourceBatch,
 };
-use platform_errors::{BpError, BpResult, DataError};
+use platform_errors::{BpError, BpResult};
 use std::collections::HashMap;
 use tracing::info;
 
@@ -129,23 +128,11 @@ impl Compactor {
     }
 
     fn output_key(&self, batch: &SourceBatch, partition: &ArchivePartition) -> BpResult<String> {
-        let bucket = DateTime::<Utc>::from_timestamp_millis(batch.bucket_start.0).ok_or(
-            BpError::Data(DataError::DateTimeOutOfRange {
-                operation: "build compacted object key",
-            }),
-        )?;
-        let file = format!(
-            "{}/year={:04}/month={:02}/day={:02}/hour={:02}/data.parquet",
-            partition.path(),
-            bucket.year(),
-            bucket.month(),
-            bucket.day(),
-            bucket.hour(),
-        );
-        if self.output_prefix.is_empty() {
-            Ok(file)
-        } else {
-            Ok(format!("{}/{file}", self.output_prefix))
-        }
+        ArchivePath::compacted_key(
+            &self.output_prefix,
+            partition,
+            batch.bucket_start,
+            "data.parquet",
+        )
     }
 }

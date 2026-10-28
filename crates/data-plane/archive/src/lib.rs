@@ -5,11 +5,13 @@
 //! instead of being reimplemented by each service.
 
 pub mod buffer;
+pub mod layout;
 pub mod parquet;
 pub mod record;
 pub mod source;
 
 pub use buffer::ArchiveBuffer;
+pub use layout::{ArchiveBucket, ArchiveHour, ArchiveLayout, ArchivePath, ArchiveTimePartition};
 pub use parquet::ArchiveParquet;
 pub use record::{ArchiveKind, ArchivePartition, ArchiveRecord, ArchiveRecordKey};
 pub use source::SourceBatch;
