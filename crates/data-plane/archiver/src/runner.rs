@@ -111,12 +111,7 @@ where
     let records = buffer.len();
     let started_at = Instant::now();
     let result = sink.write(buffer.records_mut()).await;
-    MarketDataMetrics::record_archive_flush(
-        reason,
-        records,
-        result.is_ok(),
-        started_at.elapsed(),
-    );
+    MarketDataMetrics::record_archive_flush(reason, records, result.is_ok(), started_at.elapsed());
     result?;
     buffer.clear_records();
     info!(
