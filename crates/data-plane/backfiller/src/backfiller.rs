@@ -51,12 +51,7 @@ where
     S: GapMarkerSource,
     F: MissingEventFetcher,
 {
-    pub fn new(
-        source: S,
-        fetcher: F,
-        publisher: NatsPublisher,
-        options: BackfillOptions,
-    ) -> Self {
+    pub fn new(source: S, fetcher: F, publisher: NatsPublisher, options: BackfillOptions) -> Self {
         Self {
             source,
             fetcher,

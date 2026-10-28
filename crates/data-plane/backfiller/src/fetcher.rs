@@ -182,16 +182,11 @@ impl BinanceGapFetcher {
         limit: u32,
         api_key: String,
     ) -> BpResult<Vec<BinanceTradeResponse>> {
-        let request = BinanceHistoricalTradesRequest::new(
-            symbol.to_string(),
-            from_id,
-            limit,
-            Some(api_key),
-        );
-        let submission = self
-            .connector
-            .submit_http(request)
-            .map_err(|error| BpError::exchange("submit Binance historical trades request", error))?;
+        let request =
+            BinanceHistoricalTradesRequest::new(symbol.to_string(), from_id, limit, Some(api_key));
+        let submission = self.connector.submit_http(request).map_err(|error| {
+            BpError::exchange("submit Binance historical trades request", error)
+        })?;
         match submission
             .wait()
             .await
@@ -206,10 +201,7 @@ impl BinanceGapFetcher {
         }
     }
 
-    fn agg_trade_event(
-        stream: &MarketStream,
-        trade: &BinanceAggTradeResponse,
-    ) -> BackfilledEvent {
+    fn agg_trade_event(stream: &MarketStream, trade: &BinanceAggTradeResponse) -> BackfilledEvent {
         BackfilledEvent {
             sequence: trade.a,
             exchange_timestamp: trade.T,

@@ -216,6 +216,7 @@ impl ETHttpRequest for BinanceHistoricalTradesRequest {
         "historicalTrades"
     }
     fn try_into_http(self, _signer: &Signer) -> BpResult<HttpRequest> {
+        let path = self.http_endpoint().to_string();
         let query = self.query.query_params(true, true);
         let headers = self
             .api_key
@@ -223,7 +224,7 @@ impl ETHttpRequest for BinanceHistoricalTradesRequest {
             .unwrap_or_default();
         Ok(HttpRequest {
             method: HttpMethod::GET,
-            path: self.http_endpoint().to_string(),
+            path,
             query: (!query.is_empty()).then_some(query),
             headers,
             body: None,
