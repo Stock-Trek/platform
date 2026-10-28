@@ -1,0 +1,10 @@
+[package]
+name = "platform-aws"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-s3-transfer-manager = { workspace = true }
+platform-time = { workspace = true }

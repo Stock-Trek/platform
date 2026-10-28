@@ -1,6 +1,5 @@
 use crate::{
     aws_ops::{
-        aws::Aws,
         lambda::{Lambda, LambdaConfig},
         s3::S3,
     },
@@ -14,7 +13,9 @@ use platform_sqs::{sqs::Sqs, sqs::SqsConfig, sqs_dedup::SqsDedup};
 use std::time::Duration;
 
 pub struct RsOrchestratorContext {
-    pub aws: Aws,
+    pub lambda: Lambda,
+    pub s3: S3,
+    pub sqs: Sqs,
     pub github_auth: GitHubAuth,
     pub dedup: SqsDedup,
     pub sqs_process_concurrency: usize,
@@ -24,19 +25,17 @@ pub struct RsOrchestratorContext {
 impl RsOrchestratorContext {
     pub async fn new(config: &OrchestratorConfig) -> BpResult<Self> {
         let aws_timeouts = config.aws_timeouts;
-        let sdk_config = Aws::load_sdk_config(aws_timeouts).await;
-        let aws = Aws::new(
-            Lambda::new(
-                LambdaClient::new(&sdk_config),
-                aws_timeouts,
-                LambdaConfig::new(config.build_agent_function_name.clone()),
-            ),
-            S3::from_sdk_config(&sdk_config, aws_timeouts, config.s3.clone())?,
-            Sqs::new(
-                SqsClient::new(&sdk_config),
-                aws_timeouts,
-                SqsConfig::new(config.sqs_queue_url.clone()),
-            ),
+        let sdk_config = platform_aws::load_sdk_config(aws_timeouts).await;
+        let lambda = Lambda::new(
+            LambdaClient::new(&sdk_config),
+            aws_timeouts,
+            LambdaConfig::new(config.build_agent_function_name.clone()),
+        );
+        let s3 = S3::from_sdk_config(&sdk_config, aws_timeouts, config.s3.clone())?;
+        let sqs = Sqs::new(
+            SqsClient::new(&sdk_config),
+            aws_timeouts,
+            SqsConfig::new(config.sqs_queue_url.clone()),
         );
         let github_auth = GitHubAuth::with_directory_limits(
             config.github_app_config(),
@@ -47,7 +46,9 @@ impl RsOrchestratorContext {
         )?;
         let dedup = SqsDedup::new(config.sqs_dedup_max_messages, config.sqs_dedup_ttl);
         Ok(Self {
-            aws,
+            lambda,
+            s3,
+            sqs,
             github_auth,
             dedup,
             sqs_process_concurrency: config.sqs_process_concurrency.get(),

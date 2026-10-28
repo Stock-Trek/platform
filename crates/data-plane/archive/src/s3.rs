@@ -1,4 +1,3 @@
-use aws_config::BehaviorVersion;
 use aws_sdk_s3::{
     Client as S3Client,
     error::SdkError,
@@ -6,6 +5,7 @@ use aws_sdk_s3::{
 };
 use aws_sdk_s3_transfer_manager::{Client as TransferClient, io::InputStream};
 use bytes::Bytes;
+use platform_aws::{load_default_sdk_config, s3_client, transfer_client};
 use platform_errors::{BpError, BpResult, S3DeleteObjectFailure, StorageError};
 use std::{fmt, io, path::Path};
 use tracing::info;
@@ -101,18 +101,16 @@ pub struct S3;
 
 impl S3 {
     pub async fn clients() -> (S3Client, TransferClient) {
-        let (s3_client, transfer_client) = tokio::join!(Self::s3_client(), Self::transfer_client());
-        (s3_client, transfer_client)
+        let sdk_config = load_default_sdk_config().await;
+        (s3_client(&sdk_config), transfer_client(&sdk_config))
     }
 
     pub async fn s3_client() -> S3Client {
-        let config = aws_config::load_defaults(BehaviorVersion::latest()).await;
-        S3Client::new(&config)
+        s3_client(&load_default_sdk_config().await)
     }
 
     pub async fn transfer_client() -> TransferClient {
-        let config = aws_sdk_s3_transfer_manager::from_env().load().await;
-        TransferClient::new(config)
+        transfer_client(&load_default_sdk_config().await)
     }
 
     pub async fn has_file(

@@ -1,12 +1,11 @@
 use crate::{
-    aws::Aws,
     config::WebhookConfig,
     dedup::DeliveryDedup,
     dto::event_converter::{EventConverter, EventConverters},
     infisical::secrets::{InfisicalConfig, Secrets},
 };
-use aws_config::SdkConfig;
 use aws_sdk_sqs::Client as SqsClient;
+use platform_aws::SdkConfig;
 use platform_errors::{BpError, BpResult, SecretsError};
 use platform_github::host_allow_list::HostAllowlist;
 use platform_metrics::secret::SecretMetrics;
@@ -33,7 +32,7 @@ enum LoadReason {
 }
 
 pub struct RsWebhookContext {
-    pub aws: Aws,
+    pub sqs: Sqs,
     sdk_config: SdkConfig,
     timeouts: Timeouts,
     converters: RwLock<Option<Converters>>,
@@ -51,15 +50,15 @@ pub struct RsWebhookContext {
 impl RsWebhookContext {
     pub async fn new(config: &WebhookConfig) -> BpResult<Self> {
         let aws_timeouts = config.aws_timeouts;
-        let sdk_config = Aws::load_sdk_config(aws_timeouts).await;
-        let aws = Aws::new(Sqs::new(
+        let sdk_config = platform_aws::load_sdk_config(aws_timeouts).await;
+        let sqs = Sqs::new(
             SqsClient::new(&sdk_config),
             aws_timeouts,
             SqsConfig::new(config.sqs_queue_url.clone()),
-        ));
+        );
         let dedup = DeliveryDedup::new(config.dedup_max_deliveries, config.dedup_ttl);
         let context = Self {
-            aws,
+            sqs,
             sdk_config,
             timeouts: aws_timeouts,
             converters: RwLock::new(None),

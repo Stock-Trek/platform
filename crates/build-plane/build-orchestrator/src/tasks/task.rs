@@ -122,7 +122,6 @@ impl Task {
             .collect::<Vec<_>>();
         request_context
             .context
-            .aws
             .sqs
             .send_batch(&messages, request_context.deadline)
             .await
@@ -200,19 +199,16 @@ impl Task {
         let archive = SourceArchive::create(&files)?;
         let uploaded = request_context
             .context
-            .aws
             .s3
             .put_object(&source_key, archive, request_context.deadline)
             .await?;
         let signed_post = request_context
             .context
-            .aws
             .s3
             .signed_post(&artifact_prefix, request_context.deadline)
             .await?;
         request_context
             .context
-            .aws
             .lambda
             .run_build(
                 BuildRequest {
