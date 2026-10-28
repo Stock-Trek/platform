@@ -3,7 +3,10 @@
 //! Both services build keys through this module so the hourly partitioning and
 //! prefix handling cannot drift apart.
 
-use crate::{ArchiveKind, ArchivePartition, ArchiveRecord};
+use crate::{
+    ArchiveKind, ArchivePartition, ArchiveRecord,
+    quantized_time::{Quantization, QuantizedTime, TopOfHour},
+};
 use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
 use platform_errors::{BpError, BpResult, DataError};
 use platform_types::new_types::TimestampMilliseconds;
@@ -189,7 +192,10 @@ pub struct ArchiveHour {
 
 impl ArchiveHour {
     pub fn from_timestamp(timestamp: TimestampMilliseconds) -> Option<Self> {
-        DateTime::<Utc>::from_timestamp_millis(timestamp.0).map(|start| Self { start })
+        let timestamp = DateTime::<Utc>::from_timestamp_millis(timestamp.0)?;
+        QuantizedTime::timestamp(timestamp, Quantization::Hour(TopOfHour::One))
+            .ok()
+            .map(|start| Self { start })
     }
 
     /// Parse an hourly partition from any path containing the four time fields.
@@ -341,6 +347,17 @@ mod tests {
         assert_eq!(
             ArchivePath::bucket_start(within, 5 * 60 * 1_000),
             TimestampMilliseconds(timestamp(2024, 1, 2, 3, 35))
+        );
+    }
+
+    #[test]
+    fn archive_hours_are_quantized_to_the_top_of_the_hour() {
+        let start = timestamp(2024, 1, 2, 3, 0);
+        let within = TimestampMilliseconds(start + 37 * 60 * 1_000 + 123);
+
+        assert_eq!(
+            ArchiveHour::from_timestamp(within).unwrap().bucket_start(),
+            TimestampMilliseconds(start)
         );
     }
 
