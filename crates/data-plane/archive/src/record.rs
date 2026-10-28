@@ -4,10 +4,11 @@ use platform_market_data::{
 };
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
+use std::cmp::Ordering;
 use stock_trek_types::cex::cex_id::CexId;
 
 /// The kind of market data stored in an archive file.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum ArchiveKind {
     Events,
     Candles,
@@ -109,6 +110,72 @@ pub enum ArchiveRecordKey {
         start_time: TimestampMilliseconds,
         revision: u64,
     },
+}
+
+impl PartialOrd for ArchiveRecordKey {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for ArchiveRecordKey {
+    fn cmp(&self, other: &Self) -> Ordering {
+        match (self, other) {
+            (
+                Self::MarketEvent {
+                    exchange,
+                    stream,
+                    sequence,
+                    payload,
+                },
+                Self::MarketEvent {
+                    exchange: other_exchange,
+                    stream: other_stream,
+                    sequence: other_sequence,
+                    payload: other_payload,
+                },
+            ) => exchange
+                .to_string()
+                .cmp(&other_exchange.to_string())
+                .then_with(|| stream.cmp(other_stream))
+                .then_with(|| sequence.cmp(other_sequence))
+                .then_with(|| payload.cmp(other_payload)),
+            (
+                Self::ClosedCandle {
+                    candle,
+                    start_time,
+                    revision,
+                },
+                Self::ClosedCandle {
+                    candle: other_candle,
+                    start_time: other_start_time,
+                    revision: other_revision,
+                },
+            ) => candle
+                .exchange
+                .to_string()
+                .cmp(&other_candle.exchange.to_string())
+                .then_with(|| {
+                    candle
+                        .trading_pair
+                        .base
+                        .to_string()
+                        .cmp(&other_candle.trading_pair.base.to_string())
+                })
+                .then_with(|| {
+                    candle
+                        .trading_pair
+                        .quote
+                        .to_string()
+                        .cmp(&other_candle.trading_pair.quote.to_string())
+                })
+                .then_with(|| candle.interval.cmp(&other_candle.interval))
+                .then_with(|| start_time.cmp(other_start_time))
+                .then_with(|| revision.cmp(other_revision)),
+            (Self::MarketEvent { .. }, Self::ClosedCandle { .. }) => Ordering::Less,
+            (Self::ClosedCandle { .. }, Self::MarketEvent { .. }) => Ordering::Greater,
+        }
+    }
 }
 
 /// The output partition for a compacted record.

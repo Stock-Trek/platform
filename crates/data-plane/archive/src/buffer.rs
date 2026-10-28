@@ -58,6 +58,12 @@ impl ArchiveBuffer {
         &self.records
     }
 
+    /// Borrows the buffered records for an in-place sink write. The records
+    /// remain buffered until the sink succeeds and the caller clears them.
+    pub fn records_mut(&mut self) -> &mut [ArchiveRecord] {
+        &mut self.records
+    }
+
     pub fn clear_records(&mut self) {
         self.records.clear();
     }

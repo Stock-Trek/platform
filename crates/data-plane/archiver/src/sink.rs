@@ -3,13 +3,14 @@ use async_trait::async_trait;
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
 use platform_archive::{ArchiveBucket, ArchiveParquet, ArchiveRecord};
 use platform_errors::{BpError, BpResult};
-use std::collections::HashMap;
 use uuid::Uuid;
 
 /// Writes a batch of de-duplicated records to long-term storage.
 #[async_trait]
 pub trait ArchiveSink: Send + Sync {
-    async fn write(&self, records: &[ArchiveRecord]) -> BpResult<()>;
+    /// Writes the records, reordering them in place so callers can keep
+    /// ownership of the batch and retry it if the write fails.
+    async fn write(&self, records: &mut [ArchiveRecord]) -> BpResult<()>;
 }
 
 /// Writes Parquet files to S3, partitioned by record kind and exchange time.
@@ -42,18 +43,24 @@ impl S3ParquetSink {
 
 #[async_trait]
 impl ArchiveSink for S3ParquetSink {
-    async fn write(&self, records: &[ArchiveRecord]) -> BpResult<()> {
-        let mut partitions: HashMap<ArchiveBucket, Vec<ArchiveRecord>> = HashMap::new();
-        for record in records {
-            partitions
-                .entry(ArchiveBucket::new(record, self.bucket_millis))
-                .or_default()
-                .push(record.clone());
-        }
+    async fn write(&self, records: &mut [ArchiveRecord]) -> BpResult<()> {
+        // Sort by archive bucket in place. Each contiguous group can then be
+        // encoded from a borrowed slice instead of cloning every record into a
+        // per-partition `Vec`.
+        records.sort_by_key(|record| ArchiveBucket::new(record, self.bucket_millis));
 
-        for (partition, records) in partitions {
+        let mut start = 0;
+        while start < records.len() {
+            let partition = ArchiveBucket::new(&records[start], self.bucket_millis);
+            let mut end = start + 1;
+            while end < records.len()
+                && ArchiveBucket::new(&records[end], self.bucket_millis) == partition
+            {
+                end += 1;
+            }
+
             let key = self.object_key(partition)?;
-            let bytes = ArchiveParquet::encode(partition.kind, &records)?;
+            let bytes = ArchiveParquet::encode(partition.kind, &records[start..end])?;
             let target = format!("s3://{}/{key}", self.bucket);
             self.client
                 .put_object()
@@ -64,6 +71,7 @@ impl ArchiveSink for S3ParquetSink {
                 .send()
                 .await
                 .map_err(|error| BpError::s3("put archived parquet object", target, error))?;
+            start = end;
         }
         Ok(())
     }

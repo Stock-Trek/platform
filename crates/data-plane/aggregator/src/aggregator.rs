@@ -38,10 +38,15 @@ impl CandleAggregator {
     }
 
     pub fn apply_trade(&mut self, trade: &Trade) -> AggregationUpdate {
-        let mut update = AggregationUpdate::default();
+        let mut update = AggregationUpdate {
+            open: Vec::with_capacity(self.intervals.len()),
+            closed: Vec::new(),
+        };
 
-        // Clone the short interval list so aggregation can mutate the map.
-        for interval in self.intervals.clone() {
+        // Iterate by index instead of cloning the interval list on every trade.
+        // `CandleInterval` is `Copy`, so reading the configured interval is cheap.
+        for index in 0..self.intervals.len() {
+            let interval = self.intervals[index];
             let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
             let candle_start = interval.start_for(trade.timestamp);
             let current_start = self.open.get(&key).map(Candle::start_time);
