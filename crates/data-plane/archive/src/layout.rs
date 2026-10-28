@@ -75,6 +75,70 @@ impl ArchivePath {
         }
     }
 
+    /// Normalize and validate a requested compaction target.
+    ///
+    /// The target may name a raw or compacted hour folder, or a Parquet file
+    /// inside one. Paths must contain a known archive kind and a complete set
+    /// of `year=`, `month=`, `day=`, and `hour=` fields after the kind/partition
+    /// prefix. The returned prefix always ends in a slash.
+    pub fn compaction_prefix(target: &str) -> BpResult<String> {
+        let target = target.trim();
+        if target.is_empty() {
+            return Err(BpError::Data(DataError::InvalidJob {
+                message: "compact target cannot be empty".to_string(),
+            }));
+        }
+        let is_file_target = !target.ends_with('/');
+        let target = target.trim_matches('/');
+        let mut segments = target
+            .split('/')
+            .filter(|segment| !segment.is_empty())
+            .collect::<Vec<_>>();
+        if segments
+            .iter()
+            .any(|segment| matches!(*segment, "." | ".."))
+        {
+            return Err(BpError::Data(DataError::InvalidJob {
+                message: format!("compact target {target} contains an invalid path segment"),
+            }));
+        }
+        if is_file_target
+            && segments
+                .last()
+                .is_some_and(|segment| segment.ends_with(".parquet"))
+        {
+            segments.pop();
+        }
+        if segments
+            .iter()
+            .position(|segment| segment.starts_with(YEAR_FIELD))
+            .is_none_or(|index| {
+                index == 0 || segments.len() < index + 4 || !Self::is_hour_path(&segments[index..])
+            })
+        {
+            return Err(BpError::Data(DataError::InvalidJob {
+                message: format!(
+                    "compact target {target} must end with an hourly archive partition"
+                ),
+            }));
+        }
+        if Self::kind(&segments[..segments.len() - 4].join("/")).is_none() {
+            return Err(BpError::Data(DataError::InvalidJob {
+                message: format!("compact target {target} must include an archive kind"),
+            }));
+        }
+        Ok(format!("{}/", segments.join("/")))
+    }
+
+    fn is_hour_path(segments: &[&str]) -> bool {
+        segments.len() == 4
+            && segments[0].starts_with(YEAR_FIELD)
+            && segments[1].starts_with(MONTH_FIELD)
+            && segments[2].starts_with(DAY_FIELD)
+            && segments[3].starts_with(HOUR_FIELD)
+            && ArchiveHour::parse(&segments.join("/")).is_some()
+    }
+
     /// Remove a configured prefix from an object key.
     pub fn relative_key<'a>(key: &'a str, prefix: &str) -> Option<&'a str> {
         let key = key.trim_start_matches('/');
@@ -360,5 +424,44 @@ mod tests {
         assert!(ArchiveHour::parse("events/year=2024/month=01/day=32/hour=03").is_none());
         assert!(ArchiveHour::parse("events/year=2024/month=01/day=01/hour=24").is_none());
         assert!(ArchiveHour::parse("events/year=2024/month=01/day=01").is_none());
+    }
+
+    #[test]
+    fn compaction_targets_are_normalized_to_hour_prefixes() {
+        assert_eq!(
+            ArchivePath::compaction_prefix(
+                "market-data/raw/events/year=2024/month=01/day=02/hour=03/"
+            )
+            .unwrap(),
+            "market-data/raw/events/year=2024/month=01/day=02/hour=03/"
+        );
+        assert_eq!(
+            ArchivePath::compaction_prefix(
+                "market-data/compacted/kind=candles/exchange=binance/base=bitcoin/quote=tether_usd/interval=1h/year=2024/month=01/day=02/hour=03/data.parquet"
+            )
+            .unwrap(),
+            "market-data/compacted/kind=candles/exchange=binance/base=bitcoin/quote=tether_usd/interval=1h/year=2024/month=01/day=02/hour=03/"
+        );
+    }
+
+    #[test]
+    fn invalid_compaction_targets_are_rejected() {
+        assert!(ArchivePath::compaction_prefix("").is_err());
+        assert!(
+            ArchivePath::compaction_prefix("market-data/raw/events/year=2024/month=01/day=02")
+                .is_err()
+        );
+        assert!(
+            ArchivePath::compaction_prefix(
+                "market-data/raw/unknown/year=2024/month=01/day=02/hour=03/"
+            )
+            .is_err()
+        );
+        assert!(
+            ArchivePath::compaction_prefix(
+                "market-data/raw/events/../../year=2024/month=01/day=02/hour=03/"
+            )
+            .is_err()
+        );
     }
 }

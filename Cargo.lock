@@ -3165,8 +3165,12 @@ version = "0.2.0"
 dependencies = [
  "arrow-array",
  "arrow-schema",
+ "aws-config",
+ "aws-sdk-s3",
+ "aws-sdk-s3-transfer-manager",
  "bytes",
  "chrono",
+ "futures",
  "parquet",
  "platform-errors",
  "platform-market-data",
@@ -3174,6 +3178,8 @@ dependencies = [
  "serde",
  "stock-trek",
  "stock-trek-types",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -3181,8 +3187,8 @@ name = "platform-archiver"
 version = "0.2.0"
 dependencies = [
  "async-trait",
- "aws-config",
- "aws-sdk-s3",
+ "aws-sdk-s3-transfer-manager",
+ "bytes",
  "platform-archive",
  "platform-config",
  "platform-errors",

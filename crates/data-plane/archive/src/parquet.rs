@@ -1,16 +1,21 @@
-use crate::record::{ArchiveKind, ArchiveRecord};
+use crate::{
+    parquet_reader::ParquetReader,
+    parquet_writer::writer_properties,
+    record::{ArchiveKind, ArchiveRecord},
+};
 use arrow_array::{
     Array, ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use bytes::Bytes;
+use futures::StreamExt;
 use parquet::{
     arrow::{
         ArrowWriter,
         arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder},
+        async_reader::ParquetRecordBatchStreamBuilder,
     },
-    basic::Compression,
-    file::{properties::WriterProperties, reader::ChunkReader},
+    file::reader::ChunkReader,
 };
 use platform_errors::{BpError, BpResult};
 use platform_market_data::{
@@ -62,7 +67,7 @@ impl<W: Write + Send> ArchiveParquetWriter<W> {
         };
         Ok(Self {
             kind,
-            writer: ArrowWriter::try_new(sink, schema, Some(ArchiveParquet::writer_properties()))?,
+            writer: ArrowWriter::try_new(sink, schema, Some(writer_properties()))?,
         })
     }
 
@@ -92,7 +97,7 @@ impl ArchiveParquet {
         };
         let mut buffer = Vec::new();
         let mut writer =
-            ArrowWriter::try_new(&mut buffer, batch.schema(), Some(Self::writer_properties()))?;
+            ArrowWriter::try_new(&mut buffer, batch.schema(), Some(writer_properties()))?;
         writer.write(&batch)?;
         writer.close()?;
         Ok(buffer)
@@ -116,6 +121,24 @@ impl ArchiveParquet {
         let builder = ParquetRecordBatchReaderBuilder::try_new(source)?;
         let reader = builder.with_batch_size(8_192).build()?;
         Ok(ArchiveParquetBatches { kind, reader })
+    }
+
+    /// Decode an object without downloading it in full.
+    ///
+    /// The reader fetches the Parquet footer/metadata and only the column chunks
+    /// needed for each record batch through the S3 transfer manager.
+    pub async fn decode_reader(
+        kind: ArchiveKind,
+        reader: ParquetReader,
+    ) -> BpResult<Vec<ArchiveRecord>> {
+        let builder = ParquetRecordBatchStreamBuilder::new(reader).await?;
+        let mut stream = builder.with_batch_size(8_192).build()?;
+        let mut records = Vec::new();
+        while let Some(batch) = stream.next().await {
+            let batch = batch?;
+            records.extend(Self::decode_batch(kind, &batch)?);
+        }
+        Ok(records)
     }
 
     fn decode_batch(kind: ArchiveKind, batch: &RecordBatch) -> BpResult<Vec<ArchiveRecord>> {
@@ -448,12 +471,6 @@ impl ArchiveParquet {
                 format!("column {name} has an unexpected type"),
             ),
         )
-    }
-
-    fn writer_properties() -> WriterProperties {
-        WriterProperties::builder()
-            .set_compression(Compression::ZSTD(Default::default()))
-            .build()
     }
 }
 
