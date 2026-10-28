@@ -89,6 +89,8 @@ impl JsonMapping for EnvelopeJsonMapping {
         Ok(ParsedMessage {
             stream,
             sequence: None,
+            first_sequence: None,
+            previous_sequence: None,
             exchange_timestamp: None,
             payload: JsonFrame::encode(frame),
         })

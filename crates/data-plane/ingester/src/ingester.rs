@@ -48,13 +48,21 @@ impl<P: EventPublisher> Ingester<P> {
     }
 
     pub async fn ingest(&mut self, message: ParsedMessage) -> BpResult<()> {
+        let ParsedMessage {
+            stream,
+            sequence,
+            first_sequence,
+            previous_sequence,
+            exchange_timestamp,
+            payload,
+        } = message;
         let event = MarketEvent {
             exchange: self.options.exchange,
-            stream: message.stream,
-            sequence: message.sequence,
-            exchange_timestamp: message.exchange_timestamp,
+            stream,
+            sequence,
+            exchange_timestamp,
             received_at: TimestampMilliseconds(Utc::now().timestamp_millis()),
-            payload: message.payload,
+            payload,
         };
         let event_subject = self.options.event_subject(&event.stream);
 
@@ -62,9 +70,18 @@ impl<P: EventPublisher> Ingester<P> {
             return self.publish_event(&event_subject, &event).await;
         };
 
+        // `pu` is the final update ID of the preceding event. Checking it,
+        // rather than assuming `U == previous u + 1`, avoids false gaps when
+        // update IDs without book changes are intentionally skipped. Spot
+        // depth events have no `pu`, so their `U` is the continuity boundary.
+        let first_sequence = previous_sequence
+            .and_then(|previous| previous.checked_add(1))
+            .or(first_sequence)
+            .unwrap_or(sequence);
+
         let observation = {
             let tracker = self.sequences.entry(event.stream.clone()).or_default();
-            tracker.observe(sequence)
+            tracker.observe_range(first_sequence, sequence)
         };
 
         match observation {
@@ -142,9 +159,19 @@ mod tests {
     }
 
     fn message(sequence: Option<u64>) -> ParsedMessage {
+        ranged_message(sequence, None, None)
+    }
+
+    fn ranged_message(
+        sequence: Option<u64>,
+        first_sequence: Option<u64>,
+        previous_sequence: Option<u64>,
+    ) -> ParsedMessage {
         ParsedMessage {
             stream: "btcusdt@trade".to_string(),
             sequence,
+            first_sequence,
+            previous_sequence,
             exchange_timestamp: Some(TimestampMilliseconds(1_700_000_000_000)),
             payload: "eyJlIjoidHJhZGUifQ==".to_string(),
         }
@@ -200,5 +227,66 @@ mod tests {
         ingester.ingest(message(Some(10))).await.unwrap();
 
         assert_eq!(publisher.messages().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn ranges_spanning_multiple_update_ids_do_not_create_false_gaps() {
+        let publisher = Arc::new(RecordingPublisher::default());
+        let mut ingester = ingester(publisher.clone());
+
+        ingester
+            .ingest(ranged_message(Some(100), Some(90), Some(89)))
+            .await
+            .unwrap();
+        ingester
+            .ingest(ranged_message(Some(110), Some(102), Some(100)))
+            .await
+            .unwrap();
+
+        let messages = publisher.messages();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[1].1["sequence"], 110);
+    }
+
+    #[tokio::test]
+    async fn previous_update_ids_report_only_the_missing_range() {
+        let publisher = Arc::new(RecordingPublisher::default());
+        let mut ingester = ingester(publisher.clone());
+
+        ingester
+            .ingest(ranged_message(Some(100), Some(90), Some(89)))
+            .await
+            .unwrap();
+        ingester
+            .ingest(ranged_message(Some(120), Some(116), Some(115)))
+            .await
+            .unwrap();
+
+        let messages = publisher.messages();
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[1].0, "market.gaps.binance.btcusdt.trade");
+        assert_eq!(messages[1].1["missing_from"], 101);
+        assert_eq!(messages[1].1["missing_to"], 115);
+        assert_eq!(messages[1].1["observed_sequence"], 120);
+    }
+
+    #[tokio::test]
+    async fn first_update_ids_detect_spot_depth_gaps() {
+        let publisher = Arc::new(RecordingPublisher::default());
+        let mut ingester = ingester(publisher.clone());
+
+        ingester
+            .ingest(ranged_message(Some(100), Some(90), None))
+            .await
+            .unwrap();
+        ingester
+            .ingest(ranged_message(Some(120), Some(110), None))
+            .await
+            .unwrap();
+
+        let messages = publisher.messages();
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[1].1["missing_from"], 101);
+        assert_eq!(messages[1].1["missing_to"], 109);
     }
 }

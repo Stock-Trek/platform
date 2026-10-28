@@ -14,6 +14,11 @@ pub enum IngesterError {
     InvalidField(&'static str),
     #[error("sequenced event is missing sequence field {field}")]
     MissingSequence { field: &'static str },
+    #[error("invalid sequence field {field}: {reason}")]
+    InvalidSequence {
+        field: &'static str,
+        reason: &'static str,
+    },
     #[error("unsupported stream format: {format}")]
     UnsupportedStreamFormat { format: String },
     #[error("malformed binary frame: {message}")]
