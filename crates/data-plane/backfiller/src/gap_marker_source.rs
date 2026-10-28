@@ -5,12 +5,7 @@ use platform_market_data::{
     envelope::EnvelopeCodec, event::GapMarker, subject::MarketEventSubject,
 };
 use platform_nats::JetStreamConsumer;
-use std::time::Duration;
-use tracing::warn;
 
-const FETCH_BATCH: usize = 1;
-const FETCH_WINDOW: Duration = Duration::from_secs(30);
-const RETRY_BACKOFF: Duration = Duration::from_secs(1);
 const DURABLE_NAME: &str = "backfiller-gaps";
 
 /// Source of gap markers emitted by the ingester.
@@ -49,17 +44,9 @@ impl NatsGapMarkerSource {
 impl GapMarkerSource for NatsGapMarkerSource {
     async fn next_gap(&mut self) -> BpResult<Option<GapMarker>> {
         loop {
-            let messages = self
-                .gaps
-                .fetch_retrying(FETCH_BATCH, FETCH_WINDOW, RETRY_BACKOFF)
-                .await;
-            let Some(message) = messages.into_iter().next() else {
+            let Some(message) = self.gaps.next_message("gap marker").await else {
                 continue;
             };
-            if let Err(error) = self.gaps.ack(&message).await {
-                warn!(%error, "failed to acknowledge gap marker; waiting for redelivery");
-                continue;
-            }
             return Ok(Some(GapMarker::decode(&message.payload)?));
         }
     }

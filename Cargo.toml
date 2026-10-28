@@ -17,7 +17,6 @@ platform-archiver = { path = "crates/data-plane/archiver" }
 platform-backfiller = { path = "crates/data-plane/backfiller" }
 platform-compactor = { path = "crates/data-plane/compactor" }
 platform-ingester = { path = "crates/data-plane/ingester" }
-platform-market-data-old = { path = "crates/data-plane/market-data-old" }
 platform-runtime = { path = "crates/data-plane/runtime" }
 
 platform-config = { path = "crates/foundation/config" }
@@ -53,8 +52,6 @@ aws-sdk-s3-transfer-manager = "0.2"
 aws-sdk-sqs = "1"
 aws-sigv4 = "1"
 aws-smithy-runtime-api = "1"
-aws-smithy-types = "1"
-axum = "0.8"
 base64 = "0.23"
 bimap = "0.6"
 bs58 = "0.5"
