@@ -3264,6 +3264,20 @@ dependencies = [
 [[package]]
 name = "platform-compactor"
 version = "0.2.0"
+dependencies = [
+ "arrow-array",
+ "arrow-schema",
+ "aws-config",
+ "aws-sdk-s3",
+ "bytes",
+ "chrono",
+ "parquet",
+ "platform-config",
+ "platform-errors",
+ "platform-types",
+ "tokio",
+ "tracing",
+]
 
 [[package]]
 name = "platform-config"
