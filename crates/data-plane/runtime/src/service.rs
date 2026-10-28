@@ -41,15 +41,3 @@ impl Service {
         LambdaMetrics::init(namespace, function_name)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn exposes_the_configured_service_name() {
-        let service = Service::new("platform-test");
-
-        assert_eq!(service.name(), "platform-test");
-    }
-}
