@@ -12,6 +12,7 @@ platform-errors = { workspace = true }
 platform-exchange-gateway = { workspace = true }
 platform-exchange-types = { workspace = true }
 platform-market-data = { workspace = true }
+platform-metrics = { workspace = true }
 platform-nats = { workspace = true }
 platform-runtime = { workspace = true }
 platform-types = { workspace = true }

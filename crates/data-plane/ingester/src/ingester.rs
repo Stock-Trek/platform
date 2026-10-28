@@ -9,6 +9,10 @@ use platform_market_data::{
     event::{GapMarker, MarketEvent, ParsedMessage},
     subject::MarketEventSubject,
 };
+use platform_metrics::descriptions::{
+    DROP_REASON_DUPLICATE, DROP_REASON_OUT_OF_ORDER, STAGE_INGESTER,
+};
+use platform_metrics::market_data::MarketDataMetrics;
 use platform_types::new_types::TimestampMilliseconds;
 use std::{collections::HashMap, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
@@ -87,6 +91,11 @@ impl<P: EventPublisher> Ingester<P> {
                 self.publish_event(&event_subject, &event).await
             }
             SequenceObservation::Duplicate | SequenceObservation::OutOfOrder => {
+                let reason = match observation {
+                    SequenceObservation::Duplicate => DROP_REASON_DUPLICATE,
+                    _ => DROP_REASON_OUT_OF_ORDER,
+                };
+                MarketDataMetrics::record_dropped_event(STAGE_INGESTER, reason);
                 debug!(
                     exchange = %event.exchange,
                     stream = %event.stream,

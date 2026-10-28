@@ -10,6 +10,11 @@ use platform_market_data::{
     event::{GapMarker, MarketEvent},
     subject::MarketEventSubject,
 };
+use platform_metrics::descriptions::{
+    BACKFILL_OUTCOME_COVERED, BACKFILL_OUTCOME_EMPTY, BACKFILL_OUTCOME_ERROR,
+    BACKFILL_OUTCOME_PARTIAL,
+};
+use platform_metrics::market_data::MarketDataMetrics;
 use platform_nats::NatsPublisher;
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::json;
@@ -67,6 +72,7 @@ where
             if let Err(error) = self.backfill(gap).await {
                 // Keep consuming gaps: one unsupported or temporarily unavailable
                 // stream must not stop backfilling every other market.
+                MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_ERROR);
                 warn!(%error, "failed to backfill gap");
             }
         }
@@ -81,6 +87,7 @@ where
         let expected = gap.missing_to.saturating_sub(gap.missing_from) + 1;
         let events = self.fetcher.fetch(&gap).await?;
         if events.is_empty() {
+            MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_EMPTY);
             warn!(
                 exchange = %gap.exchange,
                 stream = %gap.stream,
@@ -96,9 +103,11 @@ where
             self.publish(&gap, event).await?;
             published += 1;
         }
+        MarketDataMetrics::record_backfill_gap_coverage(expected, published);
         if published < expected {
             // TODO: persist unresolved ranges and retry them with a different REST
             // endpoint or a wider time window instead of only logging.
+            MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_PARTIAL);
             warn!(
                 exchange = %gap.exchange,
                 stream = %gap.stream,
@@ -106,6 +115,8 @@ where
                 published,
                 "backfill did not cover the whole gap"
             );
+        } else {
+            MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_COVERED);
         }
         info!(
             exchange = %gap.exchange,

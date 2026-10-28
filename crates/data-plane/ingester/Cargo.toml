@@ -10,6 +10,7 @@ iris = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-market-data = { workspace = true }
+platform-metrics = { workspace = true }
 platform-nats = { workspace = true }
 platform-runtime = { workspace = true }
 platform-types = { workspace = true }

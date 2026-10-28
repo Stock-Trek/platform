@@ -10,6 +10,8 @@ use platform_market_data::{
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
     event::MarketEvent,
 };
+use platform_metrics::descriptions::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
+use platform_metrics::market_data::MarketDataMetrics;
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::{HashMap, hash_map::Entry};
 use stock_trek_types::cex::cex_id::CexId;
@@ -93,6 +95,10 @@ impl AggregatorRunner {
                         Entry::Vacant(entry) => match TradeDecoderFactory::for_exchange(event.exchange) {
                             Ok(decoder) => entry.insert(decoder),
                             Err(error) => {
+                                MarketDataMetrics::record_dropped_event(
+                                    STAGE_AGGREGATOR,
+                                    DROP_REASON_NO_DECODER,
+                                );
                                 warn!(%error, exchange = %event.exchange, "no trade decoder for exchange");
                                 continue;
                             }
@@ -117,6 +123,7 @@ impl AggregatorRunner {
                             // Exchange streams can contain binary formats that this
                             // first cut does not decode yet. Skip the event instead
                             // of stopping aggregation for every market.
+                            MarketDataMetrics::record_decode_failure(STAGE_AGGREGATOR, DECODE_KIND_TRADE);
                             warn!(%error, stream = %event.stream, "skipping unreadable market event");
                         }
                     }

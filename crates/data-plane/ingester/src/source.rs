@@ -12,6 +12,10 @@ use platform_market_data::{
     },
     event::ParsedMessage,
 };
+use platform_metrics::descriptions::{
+    DECODE_KIND_FRAME, DROP_REASON_CHANNEL_CLOSED, STAGE_INGESTER,
+};
+use platform_metrics::market_data::MarketDataMetrics;
 use std::{fmt, str::FromStr, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
 use tokio::sync::mpsc;
@@ -152,10 +156,15 @@ impl IrisFrameListener {
         match frame.result {
             Ok(parsed) => {
                 if self.sender.send(parsed).await.is_err() {
+                    MarketDataMetrics::record_dropped_event(
+                        STAGE_INGESTER,
+                        DROP_REASON_CHANNEL_CLOSED,
+                    );
                     debug!(exchange = %self.exchange, "ingester message channel closed");
                 }
             }
             Err(error) => {
+                MarketDataMetrics::record_decode_failure(STAGE_INGESTER, DECODE_KIND_FRAME);
                 warn!(exchange = %self.exchange, %error, "discarding undecodable frame");
             }
         }

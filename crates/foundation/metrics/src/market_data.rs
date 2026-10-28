@@ -121,4 +121,68 @@ impl MarketDataMetrics {
         )
         .record(duration.as_secs_f64());
     }
+
+    pub fn record_dropped_event(stage: &'static str, reason: &'static str) {
+        counter!(
+            MARKET_DATA_DROPPED_EVENTS_TOTAL,
+            "stage" => stage,
+            "reason" => reason,
+        )
+        .increment(1);
+    }
+
+    pub fn record_decode_failure(stage: &'static str, kind: &'static str) {
+        counter!(
+            MARKET_DATA_DECODE_FAILURES_TOTAL,
+            "stage" => stage,
+            "kind" => kind,
+        )
+        .increment(1);
+    }
+
+    pub fn record_backfill_gap_outcome(outcome: &'static str) {
+        counter!(MARKET_DATA_BACKFILL_GAPS_TOTAL, "outcome" => outcome).increment(1);
+    }
+
+    pub fn record_backfill_gap_coverage(expected: u64, published: u64) {
+        if expected == 0 {
+            return;
+        }
+        counter!(MARKET_DATA_BACKFILL_GAP_EVENTS_EXPECTED_TOTAL).increment(expected);
+        counter!(MARKET_DATA_BACKFILL_GAP_EVENTS_PUBLISHED_TOTAL).increment(published);
+        let ratio = (published as f64 / expected as f64).clamp(0.0, 1.0);
+        histogram!(MARKET_DATA_BACKFILL_GAP_COVERAGE_RATIO).record(ratio);
+    }
+
+    pub fn record_archive_flush(
+        reason: &'static str,
+        records: usize,
+        success: bool,
+        duration: Duration,
+    ) {
+        let status = if success {
+            STATUS_SUCCESS
+        } else {
+            STATUS_ERROR
+        };
+        counter!(
+            MARKET_DATA_ARCHIVE_FLUSHES_TOTAL,
+            "reason" => reason,
+            "status" => status,
+        )
+        .increment(1);
+        histogram!(
+            MARKET_DATA_ARCHIVE_FLUSH_DURATION_SECONDS,
+            "reason" => reason,
+            "status" => status,
+        )
+        .record(duration.as_secs_f64());
+        if success && records > 0 {
+            counter!(MARKET_DATA_ARCHIVE_FLUSH_RECORDS_TOTAL).increment(records as u64);
+        }
+    }
+
+    pub fn record_s3_retry(operation: &'static str) {
+        counter!(MARKET_DATA_S3_RETRIES_TOTAL, "operation" => operation).increment(1);
+    }
 }
