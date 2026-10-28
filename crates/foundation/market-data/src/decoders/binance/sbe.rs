@@ -34,6 +34,17 @@ pub struct BinanceSbeTrade {
     pub quantity: Decimal,
 }
 
+/// The top of book decoded from a Binance SBE best bid/ask frame.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BinanceSbeBestBidAsk {
+    pub symbol: String,
+    pub event_time_us: i64,
+    pub bid_price: Decimal,
+    pub bid_quantity: Decimal,
+    pub ask_price: Decimal,
+    pub ask_quantity: Decimal,
+}
+
 impl BinanceSbeCodec {
     pub fn is_sbe_frame(frame: &[u8]) -> bool {
         if frame.len() < 8 {
@@ -90,6 +101,18 @@ impl BinanceSbeCodec {
             | BINANCE_DEPTH_DIFF_TEMPLATE_ID => Ok(Vec::new()),
             template_id => Err(IngesterError::unknown_sbe_template(template_id)),
         }
+    }
+
+    /// Decodes the top-of-book carried by an SBE best bid/ask frame.
+    pub fn decode_best_bid_ask(&self, frame: &[u8]) -> Result<BinanceSbeBestBidAsk, IngesterError> {
+        let (template_id, mut cursor) = self.frame_cursor(frame)?;
+        if template_id != BINANCE_BEST_BID_ASK_TEMPLATE_ID {
+            return Err(IngesterError::malformed_sbe(format!(
+                "expected best bid/ask template id {BINANCE_BEST_BID_ASK_TEMPLATE_ID}, got {template_id}"
+            )));
+        }
+        let (_, best_bid_ask) = self.best_bid_ask_fields(&mut cursor)?;
+        Ok(best_bid_ask)
     }
 
     fn trade_entries(
@@ -158,14 +181,40 @@ impl BinanceSbeCodec {
         cursor: &mut BinaryCursor<'_>,
         frame: &[u8],
     ) -> Result<ParsedMessage, IngesterError> {
+        let (sequence, best_bid_ask) = self.best_bid_ask_fields(cursor)?;
+        Ok(self.parsed(
+            frame,
+            &best_bid_ask.symbol,
+            "bestBidAsk",
+            Some(sequence),
+            Some(best_bid_ask.event_time_us),
+        ))
+    }
+
+    fn best_bid_ask_fields(
+        &self,
+        cursor: &mut BinaryCursor<'_>,
+    ) -> Result<(u64, BinanceSbeBestBidAsk), IngesterError> {
         let event_time_us = cursor.read_i64()?;
-        let sequence = Some(cursor.read_sequence()?);
-        let _price_exponent = cursor.read_u8()?;
-        let _qty_exponent = cursor.read_u8()?;
-        // TODO: decode the best bid and ask prices and quantities.
-        cursor.skip(32)?;
+        let sequence = cursor.read_sequence()?;
+        let price_exponent = cursor.read_i8()?;
+        let qty_exponent = cursor.read_i8()?;
+        let bid_price = decimal_from_mantissa(cursor.read_i64()?, price_exponent)?;
+        let bid_quantity = decimal_from_mantissa(cursor.read_i64()?, qty_exponent)?;
+        let ask_price = decimal_from_mantissa(cursor.read_i64()?, price_exponent)?;
+        let ask_quantity = decimal_from_mantissa(cursor.read_i64()?, qty_exponent)?;
         let symbol = cursor.read_var_string()?;
-        Ok(self.parsed(frame, &symbol, "bestBidAsk", sequence, Some(event_time_us)))
+        Ok((
+            sequence,
+            BinanceSbeBestBidAsk {
+                symbol,
+                event_time_us,
+                bid_price,
+                bid_quantity,
+                ask_price,
+                ask_quantity,
+            },
+        ))
     }
 
     fn depth_snapshot_event(
@@ -361,9 +410,12 @@ mod tests {
         let mut frame = sbe_header(BINANCE_BEST_BID_ASK_TEMPLATE_ID);
         frame.extend_from_slice(&1_700_000_000_123_000_i64.to_le_bytes());
         frame.extend_from_slice(&99_i64.to_le_bytes());
-        frame.push(0);
-        frame.push(0);
-        frame.extend_from_slice(&[0u8; 32]);
+        frame.push((-2_i8) as u8);
+        frame.push((-3_i8) as u8);
+        frame.extend_from_slice(&10_025_i64.to_le_bytes());
+        frame.extend_from_slice(&2_500_i64.to_le_bytes());
+        frame.extend_from_slice(&10_050_i64.to_le_bytes());
+        frame.extend_from_slice(&1_000_i64.to_le_bytes());
         append_var_string(&mut frame, "btcusdt");
         frame
     }
@@ -456,6 +508,36 @@ mod tests {
 
         assert_eq!(parsed.stream, "btcusdt@bestBidAsk");
         assert_eq!(parsed.sequence, Some(99));
+        assert_eq!(
+            parsed.exchange_timestamp,
+            Some(TimestampMilliseconds(1_700_000_000_123))
+        );
+    }
+
+    #[test]
+    fn decodes_sbe_best_bid_ask_fields() {
+        let best_bid_ask = BinanceSbeCodec
+            .decode_best_bid_ask(&sbe_best_bid_ask_frame())
+            .unwrap();
+
+        assert_eq!(best_bid_ask.symbol, "btcusdt");
+        assert_eq!(best_bid_ask.event_time_us, 1_700_000_000_123_000);
+        assert_eq!(
+            best_bid_ask.bid_price,
+            Decimal::from_str_exact("100.25").unwrap()
+        );
+        assert_eq!(
+            best_bid_ask.bid_quantity,
+            Decimal::from_str_exact("2.5").unwrap()
+        );
+        assert_eq!(
+            best_bid_ask.ask_price,
+            Decimal::from_str_exact("100.5").unwrap()
+        );
+        assert_eq!(
+            best_bid_ask.ask_quantity,
+            Decimal::from_str_exact("1").unwrap()
+        );
     }
 
     #[test]
