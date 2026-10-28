@@ -1,10 +1,18 @@
+#[cfg(feature = "github")]
+use crate::github::GitHubError;
+#[cfg(feature = "http")]
+use crate::http::HttpError;
+#[cfg(feature = "lambda")]
+use crate::lambda::LambdaError;
+#[cfg(feature = "storage")]
+use crate::storage::StorageError;
 use crate::{
     binance::BinanceError, config::ConfigError, connector::ConnectorError, connector::SendFailure,
-    data::DataError, exchange::ExchangeError, github::GitHubError, http::HttpError,
-    ingester::IngesterError, io::IoError, lambda::LambdaError, rate_limit::RateLimitError,
-    retryability::Retryability, secrets::SecretsError, sqs::SqsError, storage::StorageError,
+    data::DataError, exchange::ExchangeError, ingester::IngesterError, io::IoError,
+    rate_limit::RateLimitError, retryability::Retryability, secrets::SecretsError, sqs::SqsError,
     system::SystemError, timeout::TimeoutError, validation::ValidationError,
 };
+#[cfg(feature = "lambda")]
 use lambda_runtime::Diagnostic;
 use platform_messages::sqs_message::SqsMessageError;
 use platform_types::{new_types::ArithmeticError, protocol::ProtocolError};
@@ -24,14 +32,17 @@ pub enum BpError {
     Data(#[from] DataError),
     #[error(transparent)]
     Exchange(#[from] ExchangeError),
+    #[cfg(feature = "github")]
     #[error(transparent)]
     GitHub(#[from] GitHubError),
+    #[cfg(feature = "http")]
     #[error(transparent)]
     Http(#[from] HttpError),
     #[error(transparent)]
     Ingester(#[from] IngesterError),
     #[error(transparent)]
     Io(#[from] IoError),
+    #[cfg(feature = "lambda")]
     #[error(transparent)]
     Lambda(#[from] LambdaError),
     #[error(transparent)]
@@ -40,6 +51,7 @@ pub enum BpError {
     Secrets(#[from] SecretsError),
     #[error(transparent)]
     Sqs(#[from] SqsError),
+    #[cfg(feature = "storage")]
     #[error(transparent)]
     Storage(#[from] StorageError),
     #[error(transparent)]
@@ -99,6 +111,7 @@ impl BpError {
         })
     }
 
+    #[cfg(feature = "storage")]
     pub fn s3<E>(operation: &'static str, target: impl Into<String>, source: E) -> Self
     where
         E: Into<Box<dyn std::error::Error + Send + Sync>>,
@@ -106,6 +119,7 @@ impl BpError {
         Self::s3_with_retryability(operation, target, true, source)
     }
 
+    #[cfg(feature = "storage")]
     pub fn s3_with_retryability<E>(
         operation: &'static str,
         target: impl Into<String>,
@@ -143,6 +157,7 @@ impl BpError {
         })
     }
 
+    #[cfg(feature = "http")]
     pub fn http_request(
         operation: &'static str,
         target: impl Into<String>,
@@ -155,6 +170,7 @@ impl BpError {
         })
     }
 
+    #[cfg(feature = "http")]
     pub fn http_rejected(
         operation: &'static str,
         target: impl Into<String>,
@@ -225,10 +241,17 @@ impl BpError {
     }
 
     pub fn is_client_error(&self) -> bool {
-        matches!(
-            self,
-            Self::GitHub(GitHubError::HostInvalid { .. } | GitHubError::HostNotAllowed { .. })
-        )
+        #[cfg(feature = "github")]
+        {
+            matches!(
+                self,
+                Self::GitHub(GitHubError::HostInvalid { .. } | GitHubError::HostNotAllowed { .. })
+            )
+        }
+        #[cfg(not(feature = "github"))]
+        {
+            false
+        }
     }
 
     pub fn send_failure(&self) -> Option<SendFailure> {
@@ -245,14 +268,18 @@ impl BpError {
             Self::Connector(error) => error.error_type(),
             Self::Data(error) => error.error_type(),
             Self::Exchange(error) => error.error_type(),
+            #[cfg(feature = "github")]
             Self::GitHub(error) => error.error_type(),
+            #[cfg(feature = "http")]
             Self::Http(error) => error.error_type(),
             Self::Ingester(error) => error.error_type(),
             Self::Io(error) => error.error_type(),
+            #[cfg(feature = "lambda")]
             Self::Lambda(error) => error.error_type(),
             Self::RateLimit(error) => error.error_type(),
             Self::Secrets(error) => error.error_type(),
             Self::Sqs(error) => error.error_type(),
+            #[cfg(feature = "storage")]
             Self::Storage(error) => error.error_type(),
             Self::System(error) => error.error_type(),
             Self::Timeout(error) => error.error_type(),
@@ -267,14 +294,18 @@ impl BpError {
             Self::Connector(error) => error.retryability(),
             Self::Data(error) => error.retryability(),
             Self::Exchange(error) => error.retryability(),
+            #[cfg(feature = "github")]
             Self::GitHub(error) => error.retryability(),
+            #[cfg(feature = "http")]
             Self::Http(error) => error.retryability(),
             Self::Ingester(error) => error.retryability(),
             Self::Io(error) => error.retryability(),
+            #[cfg(feature = "lambda")]
             Self::Lambda(error) => error.retryability(),
             Self::RateLimit(error) => error.retryability(),
             Self::Secrets(error) => error.retryability(),
             Self::Sqs(error) => error.retryability(),
+            #[cfg(feature = "storage")]
             Self::Storage(error) => error.retryability(),
             Self::System(error) => error.retryability(),
             Self::Timeout(error) => error.retryability(),
@@ -283,6 +314,7 @@ impl BpError {
     }
 }
 
+#[cfg(feature = "lambda")]
 impl From<BpError> for Diagnostic {
     fn from(value: BpError) -> Self {
         Diagnostic {
@@ -304,18 +336,21 @@ impl From<std::io::Error> for BpError {
     }
 }
 
+#[cfg(feature = "archive")]
 impl From<zip::result::ZipError> for BpError {
     fn from(error: zip::result::ZipError) -> Self {
         Self::Io(IoError::from(error))
     }
 }
 
+#[cfg(feature = "archive")]
 impl From<arrow_schema::ArrowError> for BpError {
     fn from(error: arrow_schema::ArrowError) -> Self {
         Self::Io(IoError::from(error))
     }
 }
 
+#[cfg(feature = "archive")]
 impl From<parquet::errors::ParquetError> for BpError {
     fn from(error: parquet::errors::ParquetError) -> Self {
         Self::Io(IoError::from(error))
@@ -328,18 +363,28 @@ impl From<tokio::task::JoinError> for BpError {
     }
 }
 
+#[cfg(feature = "http")]
 impl From<serde_json::Error> for BpError {
     fn from(error: serde_json::Error) -> Self {
         Self::Http(HttpError::from(error))
     }
 }
 
+#[cfg(not(feature = "http"))]
+impl From<serde_json::Error> for BpError {
+    fn from(error: serde_json::Error) -> Self {
+        Self::System(SystemError::External(Box::new(error)))
+    }
+}
+
+#[cfg(feature = "http")]
 impl From<http::Error> for BpError {
     fn from(error: http::Error) -> Self {
         Self::Http(HttpError::from(error))
     }
 }
 
+#[cfg(feature = "http")]
 impl From<reqwest::Error> for BpError {
     fn from(error: reqwest::Error) -> Self {
         Self::Http(HttpError::from(error))
@@ -358,6 +403,7 @@ impl From<Box<dyn std::error::Error + Send + Sync>> for BpError {
     }
 }
 
+#[cfg(feature = "lambda")]
 impl From<aws_sdk_lambda::operation::invoke::InvokeError> for BpError {
     fn from(error: aws_sdk_lambda::operation::invoke::InvokeError) -> Self {
         Self::Lambda(LambdaError::from(error))

@@ -13,7 +13,7 @@ bytes = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
 parquet = { workspace = true, features = ["async"] }
-platform-errors = { workspace = true }
+platform-errors = { workspace = true, features = ["storage"] }
 platform-market-data = { workspace = true }
 platform-types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

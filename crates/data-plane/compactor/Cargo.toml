@@ -10,7 +10,7 @@ aws-sdk-s3 = { workspace = true }
 chrono = { workspace = true }
 platform-archive = { workspace = true }
 platform-config = { workspace = true }
-platform-errors = { workspace = true }
+platform-errors = { workspace = true, features = ["storage"] }
 platform-runtime = { workspace = true }
 platform-types = { workspace = true }
 tempfile = { workspace = true }

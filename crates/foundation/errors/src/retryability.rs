@@ -1,9 +1,12 @@
+#[cfg(feature = "aws")]
 use aws_credential_types::provider::error::CredentialsError;
+#[cfg(feature = "lambda")]
 use aws_sdk_lambda::{
     error::ProvideErrorMetadata, operation::invoke::InvokeError as SdkInvokeError,
 };
 use std::{borrow::Borrow, error::Error as StdError, io::ErrorKind, process::ExitStatus};
 
+#[cfg(feature = "github")]
 const HTTP_FORBIDDEN: u16 = 403;
 const HTTP_REQUEST_TIMEOUT: u16 = 408;
 const HTTP_TOO_MANY_REQUESTS: u16 = 429;
@@ -137,6 +140,7 @@ impl Retryability {
         }
     }
 
+    #[cfg(feature = "aws")]
     pub fn from_credentials(error: &CredentialsError) -> Retryability {
         match error {
             CredentialsError::ProviderTimedOut(_) | CredentialsError::ProviderError(_) => {
@@ -146,6 +150,7 @@ impl Retryability {
         }
     }
 
+    #[cfg(feature = "http")]
     pub fn from_reqwest(error: &reqwest::Error) -> Retryability {
         match error.status().map(|status| status.as_u16()) {
             Some(status) => Self::from_http_status(status),
@@ -153,6 +158,7 @@ impl Retryability {
         }
     }
 
+    #[cfg(feature = "github")]
     pub fn from_octocrab(error: &octocrab::Error) -> Retryability {
         match error {
             octocrab::Error::GitHub { source, .. } => Self::from_github_response(
@@ -174,6 +180,7 @@ impl Retryability {
         }
     }
 
+    #[cfg(feature = "lambda")]
     pub fn from_lambda_invoke(error: &SdkInvokeError) -> Retryability {
         match error.code() {
             Some(
@@ -188,6 +195,7 @@ impl Retryability {
         }
     }
 
+    #[cfg(feature = "github")]
     fn from_github_response(
         status: u16,
         message: &str,
@@ -201,11 +209,13 @@ impl Retryability {
         }
     }
 
+    #[cfg(feature = "github")]
     fn is_rate_limit_error(message: &str, documentation_url: Option<&str>) -> bool {
         Self::mentions_rate_limit(message)
             || documentation_url.is_some_and(Self::mentions_rate_limit)
     }
 
+    #[cfg(feature = "github")]
     fn mentions_rate_limit(value: &str) -> bool {
         let value = value.to_ascii_lowercase();
         value.contains("rate limit")

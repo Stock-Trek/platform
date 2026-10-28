@@ -3,20 +3,29 @@ name = "platform-errors"
 version.workspace = true
 edition.workspace = true
 
+[features]
+default = []
+archive = ["dep:arrow-schema", "dep:parquet", "dep:zip"]
+aws = ["dep:aws-credential-types"]
+github = ["dep:base64", "dep:octocrab"]
+http = ["dep:aws-sigv4", "dep:http", "dep:reqwest"]
+lambda = ["aws", "dep:aws-sdk-lambda", "dep:lambda_runtime"]
+storage = ["aws", "archive", "dep:url"]
+
 [dependencies]
-arrow-schema = { workspace = true }
-aws-credential-types = { workspace = true }
-aws-sdk-lambda = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
-aws-sigv4 = { workspace = true }
-base64 = { workspace = true }
+arrow-schema = { workspace = true, optional = true }
+aws-credential-types = { workspace = true, optional = true }
+aws-sdk-lambda = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"], optional = true }
+aws-sigv4 = { workspace = true, optional = true }
+base64 = { workspace = true, optional = true }
 platform-messages = { workspace = true }
 platform-types = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
-http = { workspace = true }
-lambda_runtime = { workspace = true }
-octocrab = { workspace = true }
-parquet = { workspace = true, features = ["async"] }
-reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
+http = { workspace = true, optional = true }
+lambda_runtime = { workspace = true, optional = true }
+octocrab = { workspace = true, optional = true }
+parquet = { workspace = true, features = ["async"], optional = true }
+reqwest = { workspace = true, default-features = false, features = ["rustls-tls"], optional = true }
 rust_decimal = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -24,5 +33,5 @@ strum = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt"] }
 tracing = { workspace = true }
-url = { workspace = true, features = ["serde"] }
-zip = { workspace = true, default-features = false, features = ["deflate"] }
+url = { workspace = true, features = ["serde"], optional = true }
+zip = { workspace = true, default-features = false, features = ["deflate"], optional = true }

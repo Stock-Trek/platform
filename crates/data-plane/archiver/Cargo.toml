@@ -9,7 +9,7 @@ aws-sdk-s3-transfer-manager = { workspace = true }
 bytes = { workspace = true }
 platform-archive = { workspace = true }
 platform-config = { workspace = true }
-platform-errors = { workspace = true }
+platform-errors = { workspace = true, features = ["storage"] }
 platform-market-data = { workspace = true }
 platform-metrics = { workspace = true }
 platform-nats = { workspace = true }
