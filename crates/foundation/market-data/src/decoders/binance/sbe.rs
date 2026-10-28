@@ -9,6 +9,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use iris::{Codec, ConnectionError};
 use platform_errors::IngesterError;
 use platform_types::new_types::TimestampMilliseconds;
+use rust_decimal::Decimal;
 use tokio_websockets::Message;
 
 const BINANCE_SBE_SCHEMA_ID: u16 = 1;
@@ -24,8 +25,33 @@ const BINANCE_DEPTH_DIFF_TEMPLATE_ID: u16 = 10_003;
 #[derive(Debug, Default, Clone, Copy)]
 pub struct BinanceSbeCodec;
 
+/// A trade decoded from a Binance SBE trades frame.
+#[derive(Debug, Clone, PartialEq)]
+pub struct BinanceSbeTrade {
+    pub symbol: String,
+    pub event_time_us: i64,
+    pub price: Decimal,
+    pub quantity: Decimal,
+}
+
 impl BinanceSbeCodec {
-    fn decode_frame(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
+    pub fn is_sbe_frame(frame: &[u8]) -> bool {
+        if frame.len() < 8 {
+            return false;
+        }
+        let template_id = u16::from_le_bytes([frame[2], frame[3]]);
+        let schema_id = u16::from_le_bytes([frame[4], frame[5]]);
+        schema_id == BINANCE_SBE_SCHEMA_ID
+            || matches!(
+                template_id,
+                BINANCE_TRADES_TEMPLATE_ID
+                    | BINANCE_BEST_BID_ASK_TEMPLATE_ID
+                    | BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID
+                    | BINANCE_DEPTH_DIFF_TEMPLATE_ID
+            )
+    }
+
+    fn frame_cursor<'a>(&self, frame: &'a [u8]) -> Result<(u16, BinaryCursor<'a>), IngesterError> {
         let mut cursor = BinaryCursor::new(frame);
         let _block_length = cursor.read_u16()?;
         let template_id = cursor.read_u16()?;
@@ -36,6 +62,11 @@ impl BinanceSbeCodec {
                 "expected schema id {BINANCE_SBE_SCHEMA_ID}, got {schema_id}"
             )));
         }
+        Ok((template_id, cursor))
+    }
+
+    fn decode_frame(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
+        let (template_id, mut cursor) = self.frame_cursor(frame)?;
 
         match template_id {
             BINANCE_TRADES_TEMPLATE_ID => self.trades_event(&mut cursor, frame),
@@ -44,6 +75,61 @@ impl BinanceSbeCodec {
             BINANCE_DEPTH_DIFF_TEMPLATE_ID => self.depth_diff_event(&mut cursor, frame),
             template_id => Err(IngesterError::unknown_sbe_template(template_id)),
         }
+    }
+
+    /// Decodes all trades carried by an SBE trades frame.
+    ///
+    /// Non-trade SBE frames return an empty vector so callers can share the
+    /// stream-level filtering used by JSON trade frames.
+    pub fn decode_trades(&self, frame: &[u8]) -> Result<Vec<BinanceSbeTrade>, IngesterError> {
+        let (template_id, mut cursor) = self.frame_cursor(frame)?;
+        match template_id {
+            BINANCE_TRADES_TEMPLATE_ID => self.trade_entries(&mut cursor),
+            BINANCE_BEST_BID_ASK_TEMPLATE_ID
+            | BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID
+            | BINANCE_DEPTH_DIFF_TEMPLATE_ID => Ok(Vec::new()),
+            template_id => Err(IngesterError::unknown_sbe_template(template_id)),
+        }
+    }
+
+    fn trade_entries(
+        &self,
+        cursor: &mut BinaryCursor<'_>,
+    ) -> Result<Vec<BinanceSbeTrade>, IngesterError> {
+        let event_time_us = cursor.read_i64()?;
+        let _transact_time_us = cursor.read_i64()?;
+        let price_exponent = cursor.read_i8()?;
+        let qty_exponent = cursor.read_i8()?;
+        let trades = cursor.read_group32()?;
+        if trades.count > 0 && trades.block_length == 0 {
+            return Err(IngesterError::malformed_sbe(
+                "trade entries cannot use a zero block length",
+            ));
+        }
+        let entries_start = trades.entries_start;
+        cursor.seek(trades.end()?)?;
+        cursor.seek(entries_start)?;
+
+        let mut values = Vec::with_capacity(trades.count.min(1_024));
+        for index in 0..trades.count {
+            cursor.seek(trades.entry(index)?)?;
+            let _id = cursor.read_i64()?;
+            let price = decimal_from_mantissa(cursor.read_i64()?, price_exponent)?;
+            let quantity = decimal_from_mantissa(cursor.read_i64()?, qty_exponent)?;
+            values.push((price, quantity));
+        }
+        cursor.seek(trades.end()?)?;
+
+        let symbol = cursor.read_var_string()?;
+        Ok(values
+            .into_iter()
+            .map(|(price, quantity)| BinanceSbeTrade {
+                symbol: symbol.clone(),
+                event_time_us,
+                price,
+                quantity,
+            })
+            .collect())
     }
 
     fn trades_event(
@@ -213,6 +299,26 @@ impl SbeGroupExt for BinaryCursor<'_> {
     }
 }
 
+fn decimal_from_mantissa(mantissa: i64, exponent: i8) -> Result<Decimal, IngesterError> {
+    let value = if exponent <= 0 {
+        let scale = u32::from(exponent.unsigned_abs());
+        Decimal::try_from_i128_with_scale(i128::from(mantissa), scale)
+    } else {
+        let factor = 10_i128
+            .checked_pow(u32::from(exponent as u8))
+            .ok_or_else(|| IngesterError::malformed_sbe("decimal exponent overflow"))?;
+        let value = i128::from(mantissa)
+            .checked_mul(factor)
+            .ok_or_else(|| IngesterError::malformed_sbe("decimal mantissa overflow"))?;
+        Decimal::try_from_i128_with_scale(value, 0)
+    };
+    value.map_err(|error| {
+        IngesterError::malformed_sbe(format!(
+            "invalid decimal mantissa {mantissa} with exponent {exponent}: {error}"
+        ))
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -297,6 +403,35 @@ mod tests {
             Some(TimestampMilliseconds(1_700_000_000_123))
         );
         assert_eq!(BASE64.decode(&parsed.payload).unwrap(), frame);
+    }
+
+    #[test]
+    fn decodes_sbe_trade_entries() {
+        let trades = BinanceSbeCodec.decode_trades(&sbe_trades_frame()).unwrap();
+
+        assert_eq!(trades.len(), 2);
+        assert_eq!(trades[0].symbol, "btcusdt");
+        assert_eq!(trades[0].event_time_us, 1_700_000_000_123_000);
+        assert_eq!(
+            trades[0].price,
+            Decimal::from_str_exact("0.000001").unwrap()
+        );
+        assert_eq!(
+            trades[0].quantity,
+            Decimal::from_str_exact("0.00000001").unwrap()
+        );
+        assert_eq!(trades[1].price, trades[0].price);
+        assert_eq!(trades[1].quantity, trades[0].quantity);
+    }
+
+    #[test]
+    fn non_trade_sbe_frames_have_no_trade_entries() {
+        assert!(
+            BinanceSbeCodec
+                .decode_trades(&sbe_best_bid_ask_frame())
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

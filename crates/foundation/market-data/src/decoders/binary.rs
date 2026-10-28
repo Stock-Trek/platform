@@ -58,6 +58,10 @@ impl<'a> BinaryCursor<'a> {
         Ok(self.read_bytes(1)?[0])
     }
 
+    pub fn read_i8(&mut self) -> Result<i8, IngesterError> {
+        Ok(self.read_u8()? as i8)
+    }
+
     pub fn read_u16(&mut self) -> Result<u16, IngesterError> {
         let bytes = self.read_bytes(2)?;
         Ok(u16::from_le_bytes([bytes[0], bytes[1]]))

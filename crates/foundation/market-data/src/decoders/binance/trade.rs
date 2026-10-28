@@ -1,5 +1,6 @@
 use crate::{
     decoders::{
+        binance::sbe::BinanceSbeCodec,
         json::JsonFrame,
         trade::{Trade, TradeDecoder},
     },
@@ -13,11 +14,7 @@ use rust_decimal::Decimal;
 use serde_json::{Map, Value};
 use stock_trek_types::cex::trading_pair::TradingPair;
 
-/// Decodes Binance JSON spot trade and aggregate-trade streams.
-///
-/// TODO: dispatch through the shared SBE codec as well. Binary trade frames
-/// currently contain prices and quantities that the ingester decoder skips over,
-/// so only JSON trade streams are supported for now.
+/// Decodes Binance JSON and SBE spot trade and aggregate-trade streams.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct BinanceTradeDecoder;
 
@@ -31,6 +28,10 @@ impl TradeDecoder for BinanceTradeDecoder {
         let frame = STANDARD
             .decode(&event.payload)
             .map_err(|error| IngesterError::malformed_binary(error.to_string()))?;
+        if BinanceSbeCodec::is_sbe_frame(&frame) {
+            return self.decode_sbe_trades(event, &frame);
+        }
+
         let value: Value = serde_json::from_slice(&frame).map_err(IngesterError::json)?;
         let (_, data) = JsonFrame::split_envelope(value)?;
 
@@ -86,6 +87,36 @@ impl TradeDecoder for BinanceTradeDecoder {
 }
 
 impl BinanceTradeDecoder {
+    fn decode_sbe_trades(&self, event: &MarketEvent, frame: &[u8]) -> BpResult<Vec<Trade>> {
+        let sbe_trades = BinanceSbeCodec.decode_trades(frame)?;
+        let Some(first) = sbe_trades.first() else {
+            return Ok(Vec::new());
+        };
+        let trading_pair = self.trading_pair(&first.symbol).ok_or_else(|| {
+            BpError::Exchange(ExchangeError::BadValue {
+                name: "symbol".to_string(),
+                value: first.symbol.clone(),
+                reason: "could not resolve base and quote assets".to_string(),
+            })
+        })?;
+
+        Ok(sbe_trades
+            .into_iter()
+            .filter(|trade| trade.price > Decimal::ZERO && trade.quantity > Decimal::ZERO)
+            .map(|trade| Trade {
+                exchange: event.exchange,
+                trading_pair,
+                price: trade.price,
+                quantity: trade.quantity,
+                timestamp: if trade.event_time_us > 0 {
+                    TimestampMilliseconds(trade.event_time_us / 1_000)
+                } else {
+                    event.exchange_timestamp.unwrap_or(event.received_at)
+                },
+            })
+            .collect())
+    }
+
     fn trading_pair(&self, symbol: &str) -> Option<TradingPair> {
         BinanceConverter::default()
             .ticker_mapping()
@@ -121,6 +152,38 @@ mod tests {
             exchange_timestamp: Some(TimestampMilliseconds(1_700_000_000_000)),
             received_at: TimestampMilliseconds(1_700_000_000_001),
             payload: STANDARD.encode(serde_json::to_vec(&payload).unwrap()),
+        }
+    }
+
+    fn sbe_trade_event() -> MarketEvent {
+        let event_time_us = 1_700_000_000_123_000_i64;
+        let mut frame = Vec::new();
+        frame.extend_from_slice(&18u16.to_le_bytes());
+        frame.extend_from_slice(&10_000u16.to_le_bytes());
+        frame.extend_from_slice(&1u16.to_le_bytes());
+        frame.extend_from_slice(&0u16.to_le_bytes());
+        frame.extend_from_slice(&event_time_us.to_le_bytes());
+        frame.extend_from_slice(&event_time_us.to_le_bytes());
+        frame.push((-2_i8) as u8);
+        frame.push((-3_i8) as u8);
+        frame.extend_from_slice(&25u16.to_le_bytes());
+        frame.extend_from_slice(&2u32.to_le_bytes());
+        for (trade_id, price, quantity) in [(1_i64, 10_025_i64, 2_500_i64), (2, 10_050, 1_000)] {
+            frame.extend_from_slice(&trade_id.to_le_bytes());
+            frame.extend_from_slice(&price.to_le_bytes());
+            frame.extend_from_slice(&quantity.to_le_bytes());
+            frame.push(0);
+        }
+        frame.push(7);
+        frame.extend_from_slice(b"btcusdt");
+
+        MarketEvent {
+            exchange: CexId::Binance,
+            stream: "btcusdt@trade".to_string(),
+            sequence: Some(2),
+            exchange_timestamp: Some(TimestampMilliseconds(1_700_000_000_123)),
+            received_at: TimestampMilliseconds(1_700_000_000_124),
+            payload: STANDARD.encode(frame),
         }
     }
 
@@ -177,6 +240,25 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn decodes_sbe_trades() {
+        let trades = BinanceTradeDecoder.decode(&sbe_trade_event()).unwrap();
+
+        assert_eq!(trades.len(), 2);
+        assert_eq!(
+            trades[0].trading_pair,
+            TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD)
+        );
+        assert_eq!(trades[0].price, Decimal::from_str_exact("100.25").unwrap());
+        assert_eq!(trades[0].quantity, Decimal::from_str_exact("2.5").unwrap());
+        assert_eq!(
+            trades[0].timestamp,
+            TimestampMilliseconds(1_700_000_000_123)
+        );
+        assert_eq!(trades[1].price, Decimal::from_str_exact("100.5").unwrap());
+        assert_eq!(trades[1].quantity, Decimal::from_str_exact("1").unwrap());
     }
 
     #[test]
