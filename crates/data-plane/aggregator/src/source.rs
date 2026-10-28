@@ -4,7 +4,10 @@ use platform_errors::BpResult;
 use platform_market_data::{
     envelope::EnvelopeCodec, event::MarketEvent, subject::MarketEventSubject,
 };
-use platform_nats::JetStreamConsumer;
+use platform_metrics::descriptions::{DECODE_KIND_MARKET_EVENT, STAGE_AGGREGATOR};
+use platform_metrics::market_data::MarketDataMetrics;
+use platform_nats::{JetStreamConsumer, Message};
+use tracing::warn;
 
 const DURABLE_NAME: &str = "aggregator-events";
 
@@ -42,10 +45,69 @@ impl NatsMarketEventSource {
 impl MarketEventSource for NatsMarketEventSource {
     async fn next_event(&mut self) -> BpResult<Option<MarketEvent>> {
         loop {
-            let Some(message) = self.events.next_message("market event").await else {
-                continue;
-            };
-            return Ok(Some(MarketEvent::decode(&message.payload)?));
+            let message = self.events.next_message("market event").await;
+            if let Some(event) = Self::decode_event(message) {
+                return Ok(Some(event));
+            }
         }
+    }
+}
+
+impl NatsMarketEventSource {
+    fn decode_event(message: Option<Message>) -> Option<MarketEvent> {
+        let message = message?;
+        match MarketEvent::decode(&message.payload) {
+            Ok(event) => Some(event),
+            Err(error) => {
+                MarketDataMetrics::record_decode_failure(
+                    STAGE_AGGREGATOR,
+                    DECODE_KIND_MARKET_EVENT,
+                );
+                warn!(%error, "skipping malformed market event");
+                None
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use platform_types::new_types::TimestampMilliseconds;
+    use stock_trek_types::cex::cex_id::CexId;
+
+    fn event() -> MarketEvent {
+        MarketEvent {
+            exchange: CexId::Binance,
+            stream: "btcusdt@trade".to_string(),
+            sequence: Some(7),
+            exchange_timestamp: Some(TimestampMilliseconds(1_700_000_000_000)),
+            received_at: TimestampMilliseconds(1_700_000_000_001),
+            payload: "eyJlIjoidHJhZGUifQ==".to_string(),
+        }
+    }
+
+    #[test]
+    fn decodes_valid_market_events() {
+        let expected = event();
+        let message = Message {
+            payload: expected.encode().unwrap(),
+            ..Message::default()
+        };
+
+        assert_eq!(
+            NatsMarketEventSource::decode_event(Some(message)),
+            Some(expected)
+        );
+    }
+
+    #[test]
+    fn skips_malformed_market_events() {
+        let message = Message {
+            payload: b"not json".to_vec(),
+            ..Message::default()
+        };
+
+        assert_eq!(NatsMarketEventSource::decode_event(Some(message)), None);
     }
 }
