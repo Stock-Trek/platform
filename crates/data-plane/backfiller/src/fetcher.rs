@@ -1,3 +1,4 @@
+use crate::event_page_source::EventPageSource;
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult, ExchangeError};
 use platform_market_data::event::GapMarker;
@@ -19,17 +20,6 @@ pub struct BackfilledEvent {
 #[async_trait]
 pub trait MissingEventFetcher: Send + Sync {
     async fn fetch(&self, gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>>;
-}
-
-/// A page of exchange records ordered by sequence id.
-#[async_trait]
-pub trait EventPageSource: Send + Sync {
-    async fn fetch_page(
-        &self,
-        symbol: &str,
-        from_sequence: u64,
-        limit: u32,
-    ) -> BpResult<Vec<BackfilledEvent>>;
 }
 
 /// Shared pagination structure for exchange-specific REST fetchers.

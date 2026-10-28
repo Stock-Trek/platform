@@ -1,6 +1,7 @@
 mod backfiller;
 mod binance;
 mod config;
+mod event_page_source;
 mod fetcher;
 mod runner;
 mod source;

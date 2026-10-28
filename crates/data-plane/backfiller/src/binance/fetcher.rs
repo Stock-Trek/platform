@@ -1,7 +1,8 @@
 use crate::{
     binance::{parser::BinanceEventParser, stream::MarketStream},
     config::BackfillerConfig,
-    fetcher::{BackfilledEvent, EventPageSource, MissingEventFetcher, PaginatedFetcher},
+    event_page_source::EventPageSource,
+    fetcher::{BackfilledEvent, MissingEventFetcher, PaginatedFetcher},
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult, ExchangeError};
