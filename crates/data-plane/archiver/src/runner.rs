@@ -1,96 +1,191 @@
-use crate::{
-    config::ArchiverConfig,
-    sink::{ArchiveSink, S3ParquetSink},
-    source::NatsArchiveSource,
-};
+use crate::{config::ArchiverConfig, sink::ArchiveSink, source::ArchiveSource};
 use platform_archive::ArchiveBuffer;
 use platform_errors::BpResult;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{info, warn};
 
-pub struct ArchiverRunner {
+pub struct ArchiverRunner<S, K> {
     config: ArchiverConfig,
+    source: S,
+    sink: K,
 }
 
-impl ArchiverRunner {
-    pub fn new(config: ArchiverConfig) -> Self {
-        Self { config }
+impl<S, K> ArchiverRunner<S, K>
+where
+    S: ArchiveSource,
+    K: ArchiveSink,
+{
+    pub fn new(config: ArchiverConfig, source: S, sink: K) -> Self {
+        Self {
+            config,
+            source,
+            sink,
+        }
     }
 
     pub async fn run(self) -> BpResult<()> {
-        let mut source = NatsArchiveSource::connect(&self.config).await?;
-        let sink = S3ParquetSink::connect(&self.config).await?;
-        let mut buffer = ArchiveBuffer::new(self.config.max_records, self.config.dedupe_capacity);
-        let mut flush_ticker = time::interval(self.config.flush_interval);
+        let Self {
+            config,
+            mut source,
+            sink,
+        } = self;
+        let mut buffer = ArchiveBuffer::new(config.max_records, config.dedupe_capacity);
+        let mut flush_ticker = time::interval(config.flush_interval);
         flush_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
         info!(
-            event_subject_prefix = %self.config.event_subject_prefix,
-            closed_candle_subject_prefix = %self.config.closed_candle_subject_prefix,
-            s3_bucket = %self.config.s3_bucket,
-            s3_prefix = %self.config.s3_prefix,
+            event_subject_prefix = %config.event_subject_prefix,
+            closed_candle_subject_prefix = %config.closed_candle_subject_prefix,
+            s3_bucket = %config.s3_bucket,
+            s3_prefix = %config.s3_prefix,
             "archiver started"
         );
 
-        let result = self
-            .run_until_shutdown(&mut source, &sink, &mut buffer, &mut flush_ticker)
-            .await;
-        let flush_result = self.flush(&sink, &mut buffer).await;
+        let result = run_until_shutdown(&mut source, &sink, &mut buffer, &mut flush_ticker).await;
+        let flush_result = flush(&sink, &mut buffer).await;
         result?;
         flush_result
     }
+}
 
-    async fn run_until_shutdown(
-        &self,
-        source: &mut NatsArchiveSource,
-        sink: &S3ParquetSink,
-        buffer: &mut ArchiveBuffer,
-        flush_ticker: &mut time::Interval,
-    ) -> BpResult<()> {
-        loop {
-            tokio::select! {
-                record = source.next_record() => {
-                    match record {
-                        Ok(Some(record)) => {
-                            buffer.push(record);
-                            if buffer.should_flush() {
-                                self.flush(sink, buffer).await?;
-                            }
-                        }
-                        Ok(None) => {
-                            info!("archive source ended");
-                            break;
-                        }
-                        Err(error) => {
-                            warn!(%error, "archive source stopped");
-                            break;
+async fn run_until_shutdown<S, K>(
+    source: &mut S,
+    sink: &K,
+    buffer: &mut ArchiveBuffer,
+    flush_ticker: &mut time::Interval,
+) -> BpResult<()>
+where
+    S: ArchiveSource,
+    K: ArchiveSink,
+{
+    loop {
+        tokio::select! {
+            record = source.next_record() => {
+                match record {
+                    Ok(Some(record)) => {
+                        buffer.push(record);
+                        if buffer.should_flush() {
+                            flush(sink, buffer).await?;
                         }
                     }
-                }
-                _ = flush_ticker.tick() => {
-                    self.flush(sink, buffer).await?;
-                }
-                signal = platform_runtime::Runtime::shutdown_signal() => {
-                    signal?;
-                    break;
+                    Ok(None) => {
+                        info!("archive source ended");
+                        break;
+                    }
+                    Err(error) => {
+                        warn!(%error, "archive source stopped");
+                        break;
+                    }
                 }
             }
+            _ = flush_ticker.tick() => {
+                flush(sink, buffer).await?;
+            }
+            signal = platform_runtime::Runtime::shutdown_signal() => {
+                signal?;
+                break;
+            }
         }
-        Ok(())
+    }
+    Ok(())
+}
+
+async fn flush<K>(sink: &K, buffer: &mut ArchiveBuffer) -> BpResult<()>
+where
+    K: ArchiveSink,
+{
+    if buffer.is_empty() {
+        return Ok(());
+    }
+    let records = buffer.len();
+    sink.write(buffer.records_mut()).await?;
+    buffer.clear_records();
+    info!(
+        records,
+        duplicates = buffer.duplicates(),
+        "flushed archive batch"
+    );
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use async_trait::async_trait;
+    use platform_archive::ArchiveRecord;
+    use platform_market_data::event::MarketEvent;
+    use platform_types::new_types::TimestampMilliseconds;
+    use std::sync::{Arc, Mutex};
+    use stock_trek_types::cex::cex_id::CexId;
+
+    #[derive(Default)]
+    struct FakeSource {
+        records: Vec<ArchiveRecord>,
     }
 
-    async fn flush(&self, sink: &S3ParquetSink, buffer: &mut ArchiveBuffer) -> BpResult<()> {
-        if buffer.is_empty() {
-            return Ok(());
+    #[async_trait]
+    impl ArchiveSource for FakeSource {
+        async fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>> {
+            if self.records.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(self.records.remove(0)))
+            }
         }
-        let records = buffer.len();
-        sink.write(buffer.records_mut()).await?;
-        buffer.clear_records();
-        info!(
-            records,
-            duplicates = buffer.duplicates(),
-            "flushed archive batch"
-        );
-        Ok(())
+    }
+
+    #[derive(Default, Clone)]
+    struct FakeSink {
+        writes: Arc<Mutex<usize>>,
+    }
+
+    #[async_trait]
+    impl ArchiveSink for FakeSink {
+        async fn write(&self, records: &mut [ArchiveRecord]) -> BpResult<()> {
+            *self.writes.lock().expect("writes lock") += records.len();
+            Ok(())
+        }
+    }
+
+    fn config() -> ArchiverConfig {
+        ArchiverConfig {
+            log_filter: "info".to_string(),
+            nats_url: "nats://localhost:4222".to_string(),
+            event_subject_prefix: "market.events".to_string(),
+            closed_candle_subject_prefix: "market.candles.closed".to_string(),
+            s3_bucket: "archive".to_string(),
+            s3_prefix: "raw".to_string(),
+            flush_interval: std::time::Duration::from_secs(1),
+            bucket_millis: 3_600_000,
+            max_records: 100,
+            dedupe_capacity: 100,
+        }
+    }
+
+    fn record() -> ArchiveRecord {
+        ArchiveRecord::MarketEvent(MarketEvent {
+            exchange: CexId::Binance,
+            stream: "btcusdt@trade".to_string(),
+            sequence: Some(1),
+            exchange_timestamp: Some(TimestampMilliseconds(1_000)),
+            received_at: TimestampMilliseconds(1_000),
+            payload: "payload".to_string(),
+        })
+    }
+
+    #[tokio::test]
+    async fn runs_with_injected_source_and_sink() {
+        let sink = FakeSink::default();
+        let observed = sink.clone();
+        let source = FakeSource {
+            records: vec![record()],
+        };
+
+        ArchiverRunner::new(config(), source, sink)
+            .run()
+            .await
+            .unwrap();
+
+        assert_eq!(*observed.writes.lock().unwrap(), 1);
     }
 }
