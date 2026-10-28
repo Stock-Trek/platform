@@ -1,10 +1,18 @@
 //! JetStream-backed publisher with acknowledgements and idempotent message ids.
 
 use crate::{NatsAddress, NatsSubject, connection::NatsConnection, jetstream::JetStream};
+use async_trait::async_trait;
 use platform_errors::{BpError, BpResult, IngesterError};
 use serde_json::Value;
 use std::sync::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
+
+/// Abstraction over event publication, allowing services to be tested with an
+/// in-memory publisher instead of a live NATS connection.
+#[async_trait]
+pub trait EventPublisher: Send + Sync {
+    async fn publish(&self, subject: &str, payload: &[u8]) -> BpResult<()>;
+}
 
 /// Acknowledgement returned by JetStream for a stored message.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -64,6 +72,13 @@ pub struct NatsPublisher {
     name: String,
     connection: AsyncMutex<Option<NatsConnection>>,
     streams: Mutex<Vec<String>>,
+}
+
+#[async_trait]
+impl EventPublisher for NatsPublisher {
+    async fn publish(&self, subject: &str, payload: &[u8]) -> BpResult<()> {
+        NatsPublisher::publish(self, subject, payload).await
+    }
 }
 
 impl NatsPublisher {

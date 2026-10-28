@@ -4,8 +4,10 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+metrics_cloudwatch_embedded = { workspace = true, features = ["lambda"] }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
+platform-metrics = { workspace = true }
 platform-nats = { workspace = true }
 tokio = { workspace = true, features = ["signal"] }
 tracing = { workspace = true }

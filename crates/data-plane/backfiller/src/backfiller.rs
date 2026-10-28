@@ -1,7 +1,6 @@
 use crate::{
     fetcher::{BackfilledEvent, MissingEventFetcher},
     gap_marker_source::GapMarkerSource,
-    publisher::EventPublisher,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::Utc;
@@ -16,6 +15,7 @@ use platform_metrics::descriptions::{
     BACKFILL_OUTCOME_PARTIAL,
 };
 use platform_metrics::market_data::MarketDataMetrics;
+use platform_nats::EventPublisher;
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::json;
 use stock_trek_types::cex::cex_id::CexId;

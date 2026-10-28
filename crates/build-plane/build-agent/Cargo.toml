@@ -8,6 +8,7 @@ platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http", "storage"] }
 platform-messages = { workspace = true }
 platform-metrics = { workspace = true }
+platform-runtime = { workspace = true }
 base64 = { workspace = true }
 lambda_runtime = { workspace = true }
 metrics = { workspace = true }

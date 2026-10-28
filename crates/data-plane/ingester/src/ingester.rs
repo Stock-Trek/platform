@@ -1,7 +1,4 @@
-use crate::{
-    publisher::EventPublisher,
-    sequence::{SequenceObservation, SequenceTracker},
-};
+use crate::sequence::{SequenceObservation, SequenceTracker};
 use chrono::Utc;
 use platform_errors::BpResult;
 use platform_market_data::{
@@ -13,6 +10,7 @@ use platform_metrics::descriptions::{
     DROP_REASON_DUPLICATE, DROP_REASON_OUT_OF_ORDER, STAGE_INGESTER,
 };
 use platform_metrics::market_data::MarketDataMetrics;
+use platform_nats::EventPublisher;
 use platform_types::new_types::TimestampMilliseconds;
 use std::{collections::HashMap, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
