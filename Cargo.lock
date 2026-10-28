@@ -3488,41 +3488,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "platform-market-data-old"
-version = "0.2.0"
-dependencies = [
- "arrow-array",
- "arrow-schema",
- "aws-config",
- "aws-sdk-s3",
- "aws-sdk-s3-transfer-manager",
- "aws-smithy-runtime-api",
- "aws-smithy-types",
- "bytes",
- "chrono",
- "futures",
- "http 1.5.0",
- "httpdate",
- "lambda_runtime",
- "metrics_cloudwatch_embedded",
- "parquet",
- "platform-config",
- "platform-errors",
- "platform-exchange-gateway",
- "platform-exchange-types",
- "platform-metrics",
- "platform-time",
- "platform-type-bridge",
- "rust_decimal",
- "serde",
- "serde_json",
- "stock-trek-types",
- "thiserror",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "platform-messages"
 version = "0.2.0"
 dependencies = [
