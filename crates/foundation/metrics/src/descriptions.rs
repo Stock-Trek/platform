@@ -59,6 +59,7 @@ pub const INGEST_SKIP_REASON_DEADLINE: &str = "deadline";
 
 pub const STAGE_INGESTER: &str = "ingester";
 pub const STAGE_AGGREGATOR: &str = "aggregator";
+pub const STAGE_BACKFILLER: &str = "backfiller";
 pub const STAGE_ARCHIVER: &str = "archiver";
 
 pub const DROP_REASON_DUPLICATE: &str = "duplicate";
@@ -70,6 +71,7 @@ pub const DECODE_KIND_FRAME: &str = "frame";
 pub const DECODE_KIND_MARKET_EVENT: &str = "market_event";
 pub const DECODE_KIND_CLOSED_CANDLE: &str = "closed_candle";
 pub const DECODE_KIND_TRADE: &str = "trade";
+pub const DECODE_KIND_GAP_MARKER: &str = "gap_marker";
 
 pub const BACKFILL_OUTCOME_COVERED: &str = "covered";
 pub const BACKFILL_OUTCOME_PARTIAL: &str = "partial";
