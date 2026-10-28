@@ -21,6 +21,9 @@ async fn main() -> BpResult<()> {
     let source = NatsGapMarkerSource::connect(&config).await?;
     let fetcher = BinanceGapFetcher::try_new(&config)?;
     let publisher = NatsPublisher::connect(&config.nats_url, "platform-backfiller-events").await?;
+    publisher
+        .ensure_stream(&config.event_subject_prefix)
+        .await?;
     BackfillerRunner::new(config, source, fetcher, publisher)
         .run()
         .await

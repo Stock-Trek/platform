@@ -3519,9 +3519,12 @@ dependencies = [
 name = "platform-nats"
 version = "0.2.0"
 dependencies = [
+ "hex",
  "platform-errors",
  "serde_json",
+ "sha2 0.11.1",
  "tokio",
+ "tracing",
  "url",
 ]
 

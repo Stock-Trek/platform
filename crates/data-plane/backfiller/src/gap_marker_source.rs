@@ -4,7 +4,14 @@ use platform_errors::BpResult;
 use platform_market_data::{
     envelope::EnvelopeCodec, event::GapMarker, subject::MarketEventSubject,
 };
-use platform_nats::NatsSubscriber;
+use platform_nats::JetStreamConsumer;
+use std::time::Duration;
+use tracing::warn;
+
+const FETCH_BATCH: usize = 1;
+const FETCH_WINDOW: Duration = Duration::from_secs(30);
+const RETRY_BACKOFF: Duration = Duration::from_secs(1);
+const DURABLE_NAME: &str = "backfiller-gaps";
 
 /// Source of gap markers emitted by the ingester.
 #[async_trait]
@@ -13,30 +20,47 @@ pub trait GapMarkerSource: Send {
     async fn next_gap(&mut self) -> BpResult<Option<GapMarker>>;
 }
 
-/// Reads gap markers from a NATS wildcard subscription.
+/// Reads gap markers from a durable JetStream consumer.
+///
+/// Gap markers are acknowledged only after delivery to the backfiller, so
+/// unprocessed gaps are redelivered after a restart instead of being lost.
 pub struct NatsGapMarkerSource {
-    subscriber: NatsSubscriber,
+    gaps: JetStreamConsumer,
 }
 
 impl NatsGapMarkerSource {
     pub async fn connect(config: &BackfillerConfig) -> BpResult<Self> {
         let subject =
             MarketEventSubject::new(&config.gap_subject_prefix, config.exchange).gap_wildcard();
-        let subscriber =
-            NatsSubscriber::connect(&config.nats_url, "platform-backfiller-gaps", &subject, "1")
-                .await?;
-        Ok(Self { subscriber })
+        let durable = format!("{DURABLE_NAME}-{}", config.exchange).to_lowercase();
+        let gaps = JetStreamConsumer::connect(
+            &config.nats_url,
+            "platform-backfiller-gaps",
+            &config.gap_subject_prefix,
+            &subject,
+            &durable,
+        )
+        .await?;
+        Ok(Self { gaps })
     }
 }
 
 #[async_trait]
 impl GapMarkerSource for NatsGapMarkerSource {
     async fn next_gap(&mut self) -> BpResult<Option<GapMarker>> {
-        // TODO: persist the last processed gap marker or use a durable JetStream
-        // consumer so gaps are retried after a restart.
-        let Some((_subject, payload)) = self.subscriber.next_message().await? else {
-            return Ok(None);
-        };
-        Ok(Some(GapMarker::decode(&payload)?))
+        loop {
+            let messages = self
+                .gaps
+                .fetch_retrying(FETCH_BATCH, FETCH_WINDOW, RETRY_BACKOFF)
+                .await;
+            let Some(message) = messages.into_iter().next() else {
+                continue;
+            };
+            if let Err(error) = self.gaps.ack(&message).await {
+                warn!(%error, "failed to acknowledge gap marker; waiting for redelivery");
+                continue;
+            }
+            return Ok(Some(GapMarker::decode(&message.payload)?));
+        }
     }
 }

@@ -15,6 +15,7 @@ async fn main() -> BpResult<()> {
     let config = IngesterConfig::from_env()?;
     platform_runtime::Runtime::init_logging(&config.log_filter)?;
     let publisher = Arc::new(NatsPublisher::connect(&config.nats_url, "platform-ingester").await?);
+    publisher.ensure_stream(&config.nats_subject_prefix).await?;
     let source = WebsocketSource::from_config(&config);
     IngesterRunner::new(config, source, publisher).run().await
 }

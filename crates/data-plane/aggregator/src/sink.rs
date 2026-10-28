@@ -5,7 +5,10 @@ use platform_market_data::{
     candle::{Candle, ClosedCandle},
     envelope::EnvelopeCodec,
 };
-use platform_nats::NatsPublisher;
+use platform_nats::{KeyValue, NatsPublisher, kv_bucket_name};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+const NEXT_REVISION_KEY: &str = "next_closed_revision";
 
 /// Stores the latest version of candles that are still open.
 #[async_trait]
@@ -14,19 +17,27 @@ pub trait OpenCandleStore: Send + Sync {
 }
 
 /// Publishes candles after they close.
+///
+/// Implementations assign the authoritative, restart-stable revision to each
+/// closed candle.
 #[async_trait]
 pub trait ClosedCandlePublisher: Send + Sync {
     async fn publish_closed(&self, candles: &[ClosedCandle]) -> BpResult<()>;
 }
 
-/// Publishes open and closed candles to NATS subjects.
+/// Stores open candles in a NATS KV bucket and publishes closed candles to
+/// JetStream.
 ///
-/// TODO: open candles should be written to a NATS KV bucket, and closed candles
-/// should use JetStream acknowledgements with a durable message id. Core NATS
-/// publishing is used here as a first-cut transport.
+/// Open candles are written per key, so the latest state survives restarts.
+/// Closed candles are published with an acknowledgement and a deterministic
+/// message id, and the revision counter is persisted in a KV bucket before
+/// each publish, so neither a reconnect nor a restart can duplicate or skip a
+/// candle revision.
 pub struct NatsCandleSink {
     publisher: NatsPublisher,
-    open_subject_prefix: String,
+    open_candles: KeyValue,
+    revisions: KeyValue,
+    next_revision: AtomicU64,
     closed_subject_prefix: String,
 }
 
@@ -34,34 +45,60 @@ impl NatsCandleSink {
     pub async fn connect(config: &AggregatorConfig) -> BpResult<Self> {
         let publisher =
             NatsPublisher::connect(&config.nats_url, "platform-aggregator-candles").await?;
+        publisher
+            .ensure_stream(&config.closed_candle_subject_prefix)
+            .await?;
+        let open_candles = KeyValue::connect(
+            &config.nats_url,
+            "platform-aggregator-candles",
+            &kv_bucket_name(&config.open_candle_subject_prefix),
+        )
+        .await?;
+        let revisions = KeyValue::connect(
+            &config.nats_url,
+            "platform-aggregator-candles",
+            &kv_bucket_name(&config.closed_candle_subject_prefix),
+        )
+        .await?;
+        let next_revision = revisions
+            .get_last(NEXT_REVISION_KEY)
+            .await?
+            .and_then(|value| parse_revision(&value))
+            .unwrap_or(1);
         Ok(Self {
             publisher,
-            open_subject_prefix: config.open_candle_subject_prefix.clone(),
+            open_candles,
+            revisions,
+            next_revision: AtomicU64::new(next_revision),
             closed_subject_prefix: config.closed_candle_subject_prefix.clone(),
         })
     }
 
-    async fn publish<T: EnvelopeCodec>(
-        &self,
-        prefix: &str,
-        suffix: &str,
-        value: &T,
-    ) -> BpResult<()> {
-        let subject = format!("{prefix}.{suffix}");
-        self.publisher.publish(&subject, &value.encode()?).await
+    async fn persist_next_revision(&self, allocated_revision: u64) -> BpResult<()> {
+        self.revisions
+            .put(
+                NEXT_REVISION_KEY,
+                (allocated_revision + 1).to_string().as_bytes(),
+            )
+            .await
+            .map(|_| ())
     }
+}
+
+fn parse_revision(value: &[u8]) -> Option<u64> {
+    std::str::from_utf8(value)
+        .ok()
+        .and_then(|value| value.trim().parse().ok())
+        .filter(|revision| *revision > 0)
 }
 
 #[async_trait]
 impl OpenCandleStore for NatsCandleSink {
     async fn update_open(&self, candles: &[Candle]) -> BpResult<()> {
         for candle in candles {
-            self.publish(
-                &self.open_subject_prefix,
-                &candle.key.subject_suffix(),
-                candle,
-            )
-            .await?;
+            let key = candle.key.subject_suffix();
+            let payload = candle.encode()?;
+            self.open_candles.put(&key, &payload).await?;
         }
         Ok(())
     }
@@ -71,12 +108,22 @@ impl OpenCandleStore for NatsCandleSink {
 impl ClosedCandlePublisher for NatsCandleSink {
     async fn publish_closed(&self, candles: &[ClosedCandle]) -> BpResult<()> {
         for closed in candles {
-            self.publish(
-                &self.closed_subject_prefix,
-                &closed.candle.key.subject_suffix(),
-                closed,
-            )
-            .await?;
+            let revision = self.next_revision.fetch_add(1, Ordering::Relaxed);
+            self.persist_next_revision(revision).await?;
+            let subject = format!(
+                "{}.{}",
+                self.closed_subject_prefix,
+                closed.candle.key.subject_suffix()
+            );
+            let message_id = format!("{subject}@{}", closed.candle.start_time().0);
+            let payload = ClosedCandle {
+                revision,
+                candle: closed.candle.clone(),
+            }
+            .encode()?;
+            self.publisher
+                .publish_with_message_id(&subject, &message_id, &payload)
+                .await?;
         }
         Ok(())
     }
