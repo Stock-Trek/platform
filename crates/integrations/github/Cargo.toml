@@ -6,7 +6,7 @@ edition.workspace = true
 [dependencies]
 base64 = { workspace = true }
 platform-config = { workspace = true }
-platform-errors = { workspace = true }
+platform-errors = { workspace = true, features = ["github"] }
 platform-git = { workspace = true }
 platform-time = { workspace = true }
 jsonwebtoken = { workspace = true, default-features = false, features = ["use_pem"] }

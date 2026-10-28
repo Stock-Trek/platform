@@ -5,7 +5,7 @@ edition.workspace = true
 
 [dependencies]
 platform-config = { workspace = true }
-platform-errors = { workspace = true }
+platform-errors = { workspace = true, features = ["github", "http", "storage"] }
 platform-github = { workspace = true }
 platform-messages = { workspace = true }
 platform-metrics = { workspace = true }

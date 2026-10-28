@@ -1,7 +1,6 @@
-use crate::{
-    bp::BpError, http::HttpError, retryability::Retryability, system::SystemError,
-    timeout::TimeoutError,
-};
+#[cfg(feature = "http")]
+use crate::http::HttpError;
+use crate::{bp::BpError, retryability::Retryability, system::SystemError, timeout::TimeoutError};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -116,6 +115,7 @@ impl ConnectorError {
                 BpError::Connector(Self::GatewayHttpStatus { status }) => {
                     Retryability::from_http_status(*status)
                 }
+                #[cfg(feature = "http")]
                 BpError::Http(HttpError::Request { source, .. }) => {
                     Retryability::from_reqwest(source)
                 }
