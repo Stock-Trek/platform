@@ -3,10 +3,9 @@ use async_trait::async_trait;
 use platform_errors::BpResult;
 use platform_market_data::{
     candle::{Candle, ClosedCandle},
-    envelope::encode,
+    envelope::EnvelopeCodec,
 };
 use platform_nats::NatsPublisher;
-use serde::Serialize;
 
 /// Stores the latest version of candles that are still open.
 #[async_trait]
@@ -42,9 +41,14 @@ impl NatsCandleSink {
         })
     }
 
-    async fn publish<T: Serialize>(&self, prefix: &str, suffix: &str, value: &T) -> BpResult<()> {
+    async fn publish<T: EnvelopeCodec>(
+        &self,
+        prefix: &str,
+        suffix: &str,
+        value: &T,
+    ) -> BpResult<()> {
         let subject = format!("{prefix}.{suffix}");
-        self.publisher.publish(&subject, &encode(value)?).await
+        self.publisher.publish(&subject, &value.encode()?).await
     }
 }
 

@@ -7,30 +7,16 @@ use crate::{
 use platform_errors::BpResult;
 use serde::{Serialize, de::DeserializeOwned};
 
-/// Encodes a market data message into the JSON bytes carried by NATS.
-pub fn encode<T>(value: &T) -> BpResult<Vec<u8>>
-where
-    T: Serialize + ?Sized,
-{
-    Ok(serde_json::to_vec(value)?)
-}
-
-/// Decodes the JSON payload of a market data message.
-pub fn decode<T>(payload: &[u8]) -> BpResult<T>
-where
-    T: DeserializeOwned,
-{
-    Ok(serde_json::from_slice(payload)?)
-}
-
 /// Shared encode/decode methods for market data envelope payloads.
 pub trait EnvelopeCodec: Serialize + DeserializeOwned + Sized {
+    /// Encodes a market data message into the JSON bytes carried by NATS.
     fn encode(&self) -> BpResult<Vec<u8>> {
-        encode(self)
+        Ok(serde_json::to_vec(self)?)
     }
 
+    /// Decodes the JSON payload of a market data message.
     fn decode(payload: &[u8]) -> BpResult<Self> {
-        decode(payload)
+        Ok(serde_json::from_slice(payload)?)
     }
 }
 
@@ -58,13 +44,13 @@ impl<T> Envelope<T> {
 
 impl<T: Serialize> Envelope<T> {
     pub fn encode(&self) -> BpResult<Vec<u8>> {
-        encode(&self.value)
+        Ok(serde_json::to_vec(&self.value)?)
     }
 }
 
 impl<T: DeserializeOwned> Envelope<T> {
     pub fn decode(payload: &[u8]) -> BpResult<Self> {
-        decode(payload).map(Self::new)
+        Ok(Self::new(serde_json::from_slice(payload)?))
     }
 }
 

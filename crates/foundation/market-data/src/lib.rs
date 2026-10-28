@@ -12,17 +12,3 @@ pub mod decoders;
 pub mod envelope;
 pub mod event;
 pub mod subject;
-
-pub use envelope::{Envelope, EnvelopeCodec};
-pub use subject::MarketEventSubject;
-
-/// The complete NATS message contract shared by the market data services.
-pub mod contract {
-    pub use crate::{
-        envelope::{
-            ClosedCandleEnvelope, Envelope, EnvelopeCodec, GapMarkerEnvelope, MarketEventEnvelope,
-            decode, encode,
-        },
-        subject::MarketEventSubject,
-    };
-}
