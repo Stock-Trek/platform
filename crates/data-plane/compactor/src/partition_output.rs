@@ -1,5 +1,5 @@
 use crate::spill::{PartitionItem, PartitionRecords};
-use platform_archive::{ArchiveKind, ArchiveParquetWriter, ArchiveRecord};
+use platform_archive::{ArchiveBatch, ArchiveKind, ArchiveParquetWriter};
 use platform_errors::{BpError, BpResult};
 use std::{
     fs::File,
@@ -22,7 +22,7 @@ impl PartitionOutput {
     ) -> BpResult<Vec<Self>> {
         let mut outputs = Vec::new();
         let mut current: Option<(Self, ArchiveParquetWriter<File>)> = None;
-        let mut buffer = Vec::<ArchiveRecord>::with_capacity(OUTPUT_BATCH_SIZE);
+        let mut buffer = ArchiveBatch::new(kind, Vec::with_capacity(OUTPUT_BATCH_SIZE))?;
 
         while let Some(PartitionItem {
             partition, record, ..
@@ -59,7 +59,7 @@ impl PartitionOutput {
                 ));
             }
 
-            buffer.push(record);
+            buffer.push(record)?;
             if let Some((output, writer)) = current.as_mut() {
                 output.records += 1;
                 if buffer.len() >= OUTPUT_BATCH_SIZE {

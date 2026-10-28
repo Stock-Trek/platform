@@ -1,6 +1,6 @@
 use platform_archive::{
-    ArchiveKind, ArchiveParquet, ArchiveParquetBatches, ArchiveParquetWriter, ArchiveRecord,
-    ArchiveRecordKey,
+    ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetBatches, ArchiveParquetWriter,
+    ArchiveRecord, ArchiveRecordKey,
 };
 use platform_errors::{BpError, BpResult};
 use std::{
@@ -10,8 +10,6 @@ use std::{
     path::{Path, PathBuf},
     vec::IntoIter,
 };
-
-const RUN_BATCH_SIZE: usize = 8_192;
 
 /// De-duplicates records while keeping only a bounded number of them in memory.
 ///
@@ -87,7 +85,7 @@ impl DedupeSpill {
         let path = self
             .directory
             .join(format!("dedupe-run-{}.parquet", self.runs.len()));
-        SpillRun::write(&path, self.kind, &records)?;
+        SpillRun::write(&path, &ArchiveBatch::new(self.kind, records)?)?;
         self.runs.push(path);
         Ok(())
     }
@@ -133,7 +131,7 @@ impl RunReader {
                 return Ok(Some(record));
             }
             match self.batches.next() {
-                Some(batch) => self.buffer = batch?.into_iter(),
+                Some(batch) => self.buffer = batch?.into_records().into_iter(),
                 None => return Ok(None),
             }
         }
@@ -313,7 +311,7 @@ impl PartitionSpill {
         let path = self
             .directory
             .join(format!("partition-run-{}.parquet", self.runs.len()));
-        SpillRun::write(&path, self.kind, &records)?;
+        SpillRun::write(&path, &ArchiveBatch::new(self.kind, records)?)?;
         self.runs.push(path);
         Ok(())
     }
@@ -359,7 +357,7 @@ impl PartitionRunReader {
                 return Ok(Some(PartitionItem::new(record)));
             }
             match self.batches.next() {
-                Some(batch) => self.buffer = batch?.into_iter(),
+                Some(batch) => self.buffer = batch?.into_records().into_iter(),
                 None => return Ok(None),
             }
         }
@@ -431,7 +429,7 @@ impl PartitionMerge {
 struct SpillRun;
 
 impl SpillRun {
-    fn write(path: &Path, kind: ArchiveKind, records: &[ArchiveRecord]) -> BpResult<()> {
+    fn write(path: &Path, batch: &ArchiveBatch) -> BpResult<()> {
         let file = File::create(path).map_err(|error| {
             BpError::io(
                 "create compaction spill run",
@@ -439,10 +437,8 @@ impl SpillRun {
                 error,
             )
         })?;
-        let mut writer = ArchiveParquetWriter::try_new(kind, file)?;
-        for chunk in records.chunks(RUN_BATCH_SIZE) {
-            writer.write(chunk)?;
-        }
+        let mut writer = ArchiveParquetWriter::try_new(batch.kind(), file)?;
+        writer.write(batch)?;
         writer.close()
     }
 }
