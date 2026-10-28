@@ -1,11 +1,8 @@
 //! NATS KV bucket access built on JetStream.
 
 use crate::{
-    NatsAddress, NatsSubject,
-    connection::NatsConnection,
-    jetstream::{api_request, api_subject, kv_stream, kv_subject, pull_fetch},
-    message::Message,
-    publisher::publish_and_wait,
+    NatsAddress, NatsSubject, connection::NatsConnection, jetstream::JetStream, message::Message,
+    publisher::PublishAck,
 };
 use platform_errors::{BpError, BpResult, IngesterError};
 use serde_json::{Value, json};
@@ -33,7 +30,7 @@ impl KeyValue {
         Self::validate_bucket(bucket)?;
         let address = NatsAddress::parse(url)?;
         let mut connection = NatsConnection::connect(&address, name).await?;
-        ensure_kv_stream(&mut connection, bucket).await?;
+        connection.ensure_kv_stream(bucket).await?;
         Ok(Self {
             address,
             name: name.to_string(),
@@ -50,9 +47,9 @@ impl KeyValue {
     /// server. Repeating an identical write is idempotent.
     pub async fn put(&self, key: &str, value: &[u8]) -> BpResult<u64> {
         NatsSubject::validate_named("KV key", key)?;
-        let subject = kv_subject(&self.bucket, key);
-        let (_, sequence, _) = self.publish(&subject, value).await?;
-        Ok(sequence)
+        let subject = JetStream::kv_subject(&self.bucket, key);
+        let ack = self.publish(&subject, value).await?;
+        Ok(ack.sequence)
     }
 
     /// Returns the latest value stored under `key`, or `None` when the key has
@@ -86,10 +83,10 @@ impl KeyValue {
         connection: &mut NatsConnection,
         key: &str,
     ) -> BpResult<Option<Vec<u8>>> {
-        let subject = api_subject(&format!(
+        let subject = JetStream::api_subject(&format!(
             "DIRECT.GET.{}.{}",
-            kv_stream(&self.bucket),
-            kv_subject(&self.bucket, key)
+            JetStream::kv_stream(&self.bucket),
+            JetStream::kv_subject(&self.bucket, key)
         ));
         let response = connection
             .request(&subject, b"", Duration::from_secs(5))
@@ -101,8 +98,8 @@ impl KeyValue {
     }
 
     async fn keys_on(&self, connection: &mut NatsConnection) -> BpResult<Vec<String>> {
-        let stream = kv_stream(&self.bucket);
-        let create = api_subject(&format!("CONSUMER.CREATE.{stream}"));
+        let stream = JetStream::kv_stream(&self.bucket);
+        let create = JetStream::api_subject(&format!("CONSUMER.CREATE.{stream}"));
         let config = json!({
             "stream_name": stream,
             "config": {
@@ -114,7 +111,7 @@ impl KeyValue {
             }
         });
         let payload = serde_json::to_vec(&config)?;
-        let response = api_request(connection, &create, &payload).await?;
+        let response = connection.api_request(&create, &payload).await?;
         let ephemeral = response
             .pointer("/consumer/name")
             .and_then(Value::as_str)
@@ -129,15 +126,15 @@ impl KeyValue {
         let mut keys = Vec::new();
         let mut fetch_sid = None;
         loop {
-            let messages = pull_fetch(
-                connection,
-                &mut fetch_sid,
-                &stream,
-                &ephemeral,
-                KEYS_FETCH_BATCH,
-                KEYS_FETCH_EXPIRES,
-            )
-            .await?;
+            let messages = connection
+                .pull_fetch(
+                    &mut fetch_sid,
+                    &stream,
+                    &ephemeral,
+                    KEYS_FETCH_BATCH,
+                    KEYS_FETCH_EXPIRES,
+                )
+                .await?;
             let exhausted = messages.len() < KEYS_FETCH_BATCH;
             for Message { subject, .. } in messages {
                 if let Some(key) = subject.strip_prefix(&key_prefix) {
@@ -148,19 +145,19 @@ impl KeyValue {
                 break;
             }
         }
-        let _ = api_request(
-            connection,
-            &api_subject(&format!("CONSUMER.DELETE.{stream}.{ephemeral}")),
-            b"{}",
-        )
-        .await;
+        let _ = connection
+            .api_request(
+                &JetStream::api_subject(&format!("CONSUMER.DELETE.{stream}.{ephemeral}")),
+                b"{}",
+            )
+            .await;
         Ok(keys)
     }
 
-    async fn publish(&self, subject: &str, value: &[u8]) -> BpResult<(String, u64, bool)> {
-        let id = crate::jetstream::message_id(subject, value);
+    async fn publish(&self, subject: &str, value: &[u8]) -> BpResult<PublishAck> {
+        let id = JetStream::message_id(subject, value);
         let result = match self.locked_connection().await?.as_mut() {
-            Some(connection) => publish_and_wait(connection, subject, &id, value).await,
+            Some(connection) => connection.publish_and_wait(subject, &id, value).await,
             None => unreachable!("NATS connection was initialised above"),
         };
         if result.is_err() {
@@ -191,28 +188,5 @@ impl KeyValue {
                 "invalid KV bucket name {bucket:?}: must only contain alphanumeric characters, dashes, and underscores"
             ))))
         }
-    }
-}
-
-/// Creates the stream backing a KV bucket when it does not exist yet.
-async fn ensure_kv_stream(connection: &mut NatsConnection, bucket: &str) -> BpResult<()> {
-    let stream = kv_stream(bucket);
-    let info = api_subject(&format!("STREAM.INFO.{stream}"));
-    match api_request(connection, &info, b"").await {
-        Ok(_) => Ok(()),
-        Err(error) if error.not_found() => {
-            let create = api_subject(&format!("STREAM.CREATE.{stream}"));
-            let config = json!({
-                "name": stream,
-                "subjects": [format!("$KV.{bucket}.>")],
-                "storage": "file",
-                "max_msgs_per_subject": 1,
-                "allow_direct": true,
-            });
-            let payload = serde_json::to_vec(&config)?;
-            api_request(connection, &create, &payload).await?;
-            Ok(())
-        }
-        Err(error) => Err(error.into()),
     }
 }

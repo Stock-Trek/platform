@@ -39,10 +39,6 @@ impl ProtoGen {
     }
 }
 
-pub fn generate(proto_dir: &Path, out_dir: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    ProtoGen::generate(proto_dir, out_dir)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

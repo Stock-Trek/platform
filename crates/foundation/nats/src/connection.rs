@@ -2,7 +2,7 @@
 
 use crate::{
     NatsAddress, NatsSubject,
-    message::{Headers, Message, format_header_block, parse_header_block},
+    message::{Headers, Message},
 };
 use platform_errors::{BpError, BpResult, IngesterError};
 use serde_json::{Map, Value, json};
@@ -145,7 +145,7 @@ impl NatsConnection {
         payload: &[u8],
     ) -> BpResult<()> {
         NatsSubject::validate(subject)?;
-        let block = format_header_block(headers);
+        let block = Message::format_header_block(headers);
         let header = match reply_to {
             Some(reply) => format!(
                 "HPUB {subject} {reply} {} {}\r\n",
@@ -372,7 +372,8 @@ impl NatsConnection {
         let mut terminator = [0_u8; 2];
         self.reader.read_exact(&mut terminator).await?;
         let payload = block.split_off(header_size);
-        let (status, headers) = parse_header_block(&block).map_err(Self::protocol_error)?;
+        let (status, headers) =
+            Message::parse_header_block(&block).map_err(Self::protocol_error)?;
         Ok((status, headers, payload))
     }
 

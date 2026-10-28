@@ -133,7 +133,3 @@ impl Runner {
             .map_err(|_| ExitCode::ServerRunnerStrategyContextNotCreated)
     }
 }
-
-pub fn run(command: Command) -> i32 {
-    Runner::run(command)
-}

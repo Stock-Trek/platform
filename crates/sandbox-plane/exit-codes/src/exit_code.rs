@@ -116,14 +116,6 @@ impl std::fmt::Display for ExitCode {
 
 impl std::error::Error for ExitCode {}
 
-pub fn is_client_error(code: i32) -> bool {
-    ExitCode::is_client_error_code(code)
-}
-
-pub fn is_invalid_request(code: i32) -> bool {
-    ExitCode::is_invalid_request_code(code)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -78,93 +78,90 @@ where
             "aggregator started"
         );
 
-        let result = run_until_shutdown(&config, &mut receiver, &sink, &mut aggregator).await;
+        let result = Self::run_until_shutdown(&config, &mut receiver, &sink, &mut aggregator).await;
         source_task.abort();
         result
     }
-}
 
-async fn run_until_shutdown<K>(
-    config: &AggregatorConfig,
-    receiver: &mut mpsc::Receiver<MarketEvent>,
-    sink: &K,
-    aggregator: &mut CandleAggregator,
-) -> BpResult<()>
-where
-    K: OpenCandleStore + ClosedCandlePublisher,
-{
-    let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
-    let mut flush_ticker = time::interval(config.flush_interval);
-    flush_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    async fn run_until_shutdown(
+        config: &AggregatorConfig,
+        receiver: &mut mpsc::Receiver<MarketEvent>,
+        sink: &K,
+        aggregator: &mut CandleAggregator,
+    ) -> BpResult<()> {
+        let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
+        let mut flush_ticker = time::interval(config.flush_interval);
+        flush_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
 
-    loop {
-        tokio::select! {
-            maybe_event = receiver.recv() => {
-                let Some(event) = maybe_event else {
-                    info!("market event channel closed");
-                    break;
-                };
-                let decoder = match decoders.entry(event.exchange) {
-                    Entry::Occupied(entry) => entry.into_mut(),
-                    Entry::Vacant(entry) => match TradeDecoderFactory::for_exchange(event.exchange) {
-                        Ok(decoder) => entry.insert(decoder),
-                        Err(error) => {
-                            MarketDataMetrics::record_dropped_event(
-                                STAGE_AGGREGATOR,
-                                DROP_REASON_NO_DECODER,
-                            );
-                            warn!(%error, exchange = %event.exchange, "no trade decoder for exchange");
-                            continue;
-                        }
-                    },
-                };
-                match decoder.decode(&event) {
-                    Ok(trades) => {
-                        for trade in trades {
-                            let update = aggregator.apply_trade(&trade);
-                            if update.is_empty() {
+        loop {
+            tokio::select! {
+                maybe_event = receiver.recv() => {
+                    let Some(event) = maybe_event else {
+                        info!("market event channel closed");
+                        break;
+                    };
+                    let decoder = match decoders.entry(event.exchange) {
+                        Entry::Occupied(entry) => entry.into_mut(),
+                        Entry::Vacant(entry) => match TradeDecoderFactory::for_exchange(event.exchange) {
+                            Ok(decoder) => entry.insert(decoder),
+                            Err(error) => {
+                                MarketDataMetrics::record_dropped_event(
+                                    STAGE_AGGREGATOR,
+                                    DROP_REASON_NO_DECODER,
+                                );
+                                warn!(%error, exchange = %event.exchange, "no trade decoder for exchange");
                                 continue;
                             }
-                            if !update.closed.is_empty() {
-                                sink.publish_closed(&update.closed).await?;
-                            }
-                            if !update.open.is_empty() {
-                                sink.update_open(&update.open).await?;
+                        },
+                    };
+                    match decoder.decode(&event) {
+                        Ok(trades) => {
+                            for trade in trades {
+                                let update = aggregator.apply_trade(&trade);
+                                if update.is_empty() {
+                                    continue;
+                                }
+                                if !update.closed.is_empty() {
+                                    sink.publish_closed(&update.closed).await?;
+                                }
+                                if !update.open.is_empty() {
+                                    sink.update_open(&update.open).await?;
+                                }
                             }
                         }
-                    }
-                    Err(error) => {
-                        // Exchange streams can contain binary formats that this
-                        // first cut does not decode yet. Skip the event instead
-                        // of stopping aggregation for every market.
-                        MarketDataMetrics::record_decode_failure(
-                            STAGE_AGGREGATOR,
-                            DECODE_KIND_TRADE,
-                        );
-                        warn!(%error, stream = %event.stream, "skipping unreadable market event");
+                        Err(error) => {
+                            // Exchange streams can contain binary formats that this
+                            // first cut does not decode yet. Skip the event instead
+                            // of stopping aggregation for every market.
+                            MarketDataMetrics::record_decode_failure(
+                                STAGE_AGGREGATOR,
+                                DECODE_KIND_TRADE,
+                            );
+                            warn!(%error, stream = %event.stream, "skipping unreadable market event");
+                        }
                     }
                 }
-            }
-            _ = flush_ticker.tick() => {
-                let closed = aggregator
-                    .flush_closed_at_or_before(TimestampMilliseconds(Utc::now().timestamp_millis()));
-                if !closed.is_empty() {
-                    sink.publish_closed(&closed).await?;
+                _ = flush_ticker.tick() => {
+                    let closed = aggregator
+                        .flush_closed_at_or_before(TimestampMilliseconds(Utc::now().timestamp_millis()));
+                    if !closed.is_empty() {
+                        sink.publish_closed(&closed).await?;
+                    }
                 }
-            }
-            signal = platform_runtime::Runtime::shutdown_signal() => {
-                signal?;
-                break;
+                signal = platform_runtime::Runtime::shutdown_signal() => {
+                    signal?;
+                    break;
+                }
             }
         }
-    }
 
-    let closed =
-        aggregator.flush_closed_at_or_before(TimestampMilliseconds(Utc::now().timestamp_millis()));
-    if !closed.is_empty() {
-        sink.publish_closed(&closed).await?;
+        let closed = aggregator
+            .flush_closed_at_or_before(TimestampMilliseconds(Utc::now().timestamp_millis()));
+        if !closed.is_empty() {
+            sink.publish_closed(&closed).await?;
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]

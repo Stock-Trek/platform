@@ -71,7 +71,7 @@ pub trait CheckedRem<Rhs> {
 }
 
 macro_rules! new_type {
-    ($name:ident, $raw_type:ty, $checked_rem:ident) => {
+    ($name:ident, $raw_type:ty) => {
         #[derive(
             Debug,
             Clone,
@@ -217,7 +217,7 @@ macro_rules! new_type {
                 if rhs.0 == 0 {
                     return Err(ArithmeticError::DivisionByZero);
                 }
-                $checked_rem(self.0, rhs.0).map($name)
+                self.0.raw_checked_rem(rhs.0).map($name)
             }
         }
 
@@ -228,7 +228,7 @@ macro_rules! new_type {
                 if rhs == 0 {
                     return Err(ArithmeticError::DivisionByZero);
                 }
-                $checked_rem(self.0, rhs).map($name)
+                self.0.raw_checked_rem(rhs).map($name)
             }
         }
 
@@ -236,7 +236,7 @@ macro_rules! new_type {
             type Output = $name;
 
             fn checked_rem(self, rhs: NonZero<$name>) -> Result<Self::Output, ArithmeticError> {
-                $checked_rem(self.0, rhs.get().0).map($name)
+                self.0.raw_checked_rem(rhs.get().0).map($name)
             }
         }
 
@@ -244,7 +244,7 @@ macro_rules! new_type {
             type Output = $name;
 
             fn checked_rem(self, rhs: NonZero<$raw_type>) -> Result<Self::Output, ArithmeticError> {
-                $checked_rem(self.0, rhs.get()).map($name)
+                self.0.raw_checked_rem(rhs.get()).map($name)
             }
         }
 
@@ -316,40 +316,45 @@ macro_rules! numeric_ops {
     };
 }
 
-fn i64_checked_rem(dividend: i64, divisor: i64) -> Result<i64, ArithmeticError> {
-    // `i64::MIN % -1` is mathematically zero, even though the corresponding
-    // division cannot be represented in `i64`.
-    if dividend == i64::MIN && divisor == -1 {
-        Ok(0)
-    } else {
-        dividend
-            .checked_rem(divisor)
-            .ok_or(ArithmeticError::Overflow)
+/// Checked remainder on the raw integer component of a newtype.
+trait RawCheckedRem: Copy {
+    fn raw_checked_rem(self, divisor: Self) -> Result<Self, ArithmeticError>;
+}
+
+impl RawCheckedRem for i64 {
+    fn raw_checked_rem(self, divisor: Self) -> Result<Self, ArithmeticError> {
+        // `i64::MIN % -1` is mathematically zero, even though the corresponding
+        // division cannot be represented in `i64`.
+        if self == i64::MIN && divisor == -1 {
+            Ok(0)
+        } else {
+            self.checked_rem(divisor).ok_or(ArithmeticError::Overflow)
+        }
     }
 }
 
-fn u64_checked_rem(dividend: u64, divisor: u64) -> Result<u64, ArithmeticError> {
-    dividend
-        .checked_rem(divisor)
-        .ok_or(ArithmeticError::Overflow)
+impl RawCheckedRem for u64 {
+    fn raw_checked_rem(self, divisor: Self) -> Result<Self, ArithmeticError> {
+        self.checked_rem(divisor).ok_or(ArithmeticError::Overflow)
+    }
 }
 
-new_type!(DurationSeconds, i64, i64_checked_rem);
+new_type!(DurationSeconds, i64);
 numeric_ops!(DurationSeconds, i64);
 
-new_type!(DurationMilliseconds, i64, i64_checked_rem);
+new_type!(DurationMilliseconds, i64);
 numeric_ops!(DurationMilliseconds, i64);
 
-new_type!(DurationMicroseconds, i64, i64_checked_rem);
+new_type!(DurationMicroseconds, i64);
 numeric_ops!(DurationMicroseconds, i64);
 
-new_type!(DurationNanoseconds, i64, i64_checked_rem);
+new_type!(DurationNanoseconds, i64);
 numeric_ops!(DurationNanoseconds, i64);
 
-new_type!(UsageCount, u64, u64_checked_rem);
+new_type!(UsageCount, u64);
 numeric_ops!(UsageCount, u64);
 
-new_type!(TimestampMilliseconds, i64, i64_checked_rem);
+new_type!(TimestampMilliseconds, i64);
 
 impl std::ops::Add<DurationMilliseconds> for TimestampMilliseconds {
     type Output = TimestampMilliseconds;

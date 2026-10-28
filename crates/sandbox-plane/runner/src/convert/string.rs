@@ -13,7 +13,3 @@ impl JsonString {
         })
     }
 }
-
-pub fn from_string<T: DeserializeOwned>(value: &str) -> Result<T, StockTrekError> {
-    JsonString::deserialize(value)
-}

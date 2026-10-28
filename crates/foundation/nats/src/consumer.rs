@@ -1,10 +1,7 @@
 //! Durable JetStream pull consumer with explicit acknowledgements.
 
 use crate::{
-    NatsAddress, NatsSubject,
-    connection::NatsConnection,
-    jetstream::{ensure_consumer, ensure_stream, pull_fetch, stream_name},
-    message::Message,
+    NatsAddress, NatsSubject, connection::NatsConnection, jetstream::JetStream, message::Message,
 };
 use platform_errors::BpResult;
 use std::time::Duration;
@@ -43,10 +40,14 @@ impl JetStreamConsumer {
     ) -> BpResult<Self> {
         let address = NatsAddress::parse(url)?;
         NatsSubject::validate_named("filter subject", filter_subject)?;
-        let stream = stream_name(stream_subject_prefix);
+        let stream = JetStream::stream_name(stream_subject_prefix);
         let mut connection = NatsConnection::connect(&address, name).await?;
-        ensure_stream(&mut connection, &stream, stream_subject_prefix).await?;
-        ensure_consumer(&mut connection, &stream, durable, filter_subject).await?;
+        connection
+            .ensure_stream(&stream, stream_subject_prefix)
+            .await?;
+        connection
+            .ensure_consumer(&stream, durable, filter_subject)
+            .await?;
         Ok(Self {
             address,
             name: name.to_string(),
@@ -103,15 +104,15 @@ impl JetStreamConsumer {
             .connection
             .as_mut()
             .expect("NATS connection was initialised above");
-        pull_fetch(
-            connection,
-            &mut state.fetch_sid,
-            &self.stream,
-            &self.durable,
-            batch,
-            expires,
-        )
-        .await
+        connection
+            .pull_fetch(
+                &mut state.fetch_sid,
+                &self.stream,
+                &self.durable,
+                batch,
+                expires,
+            )
+            .await
     }
 
     /// Acknowledges a fetched message. Redelivery after a lost acknowledgement

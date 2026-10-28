@@ -1,3 +1,3 @@
 mod generator;
 
-pub use generator::{ProtoGen, generate};
+pub use generator::ProtoGen;

@@ -45,7 +45,7 @@ where
         loop {
             tokio::select! {
                 _ = ticker.tick() => {
-                    if let Err(error) = run_cycle(&source, &compactor).await {
+                    if let Err(error) = Self::run_cycle(&source, &compactor).await {
                         warn!(%error, "compaction cycle failed");
                     }
                 }
@@ -57,29 +57,25 @@ where
         }
         Ok(())
     }
-}
 
-async fn run_cycle<S, C>(source: &S, compactor: &C) -> BpResult<()>
-where
-    S: ArchiveBatchSource + ProcessedManifest,
-    C: BatchCompactor,
-{
-    let batches = source.pending_batches().await?;
-    info!(batches = batches.len(), "scanning archive for compaction");
-    for batch in batches {
-        let stats = compactor.compact(&batch).await?;
-        info!(
-            kind = batch.kind.label(),
-            prefix = %batch.prefix,
-            source_files = stats.source_files,
-            records_read = stats.records_read,
-            records_written = stats.records_written,
-            output_files = stats.output_files,
-            "compacted archive batch"
-        );
-        source.mark_processed(&batch.files).await?;
+    async fn run_cycle(source: &S, compactor: &C) -> BpResult<()> {
+        let batches = source.pending_batches().await?;
+        info!(batches = batches.len(), "scanning archive for compaction");
+        for batch in batches {
+            let stats = compactor.compact(&batch).await?;
+            info!(
+                kind = batch.kind.label(),
+                prefix = %batch.prefix,
+                source_files = stats.source_files,
+                records_read = stats.records_read,
+                records_written = stats.records_written,
+                output_files = stats.output_files,
+                "compacted archive batch"
+            );
+            source.mark_processed(&batch.files).await?;
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]
@@ -152,7 +148,9 @@ mod tests {
         let compactor = FakeCompactor::default();
         let observed = compactor.clone();
 
-        run_cycle(&source, &compactor).await.unwrap();
+        CompactorRunner::run_cycle(&source, &compactor)
+            .await
+            .unwrap();
 
         assert_eq!(*observed.batches.lock().unwrap(), 1);
         assert_eq!(source.processed.lock().unwrap().len(), 1);

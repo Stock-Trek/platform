@@ -15,7 +15,7 @@ mod subscriber;
 
 pub use address::NatsAddress;
 pub use consumer::JetStreamConsumer;
-pub use jetstream::{kv_bucket_name, stream_name};
+pub use jetstream::JetStream;
 pub use kv::KeyValue;
 pub use message::Message;
 pub use publisher::{NatsPublisher, PublishAck};

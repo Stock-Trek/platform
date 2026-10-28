@@ -54,35 +54,35 @@ where
             },
         );
 
-        let result = run_until_shutdown(&config, &mut receiver, &mut ingester).await;
+        let result = Self::run_until_shutdown(&config, &mut receiver, &mut ingester).await;
         source_task.abort();
         result
     }
-}
 
-async fn run_until_shutdown<P: EventPublisher>(
-    config: &IngesterConfig,
-    receiver: &mut mpsc::Receiver<ParsedMessage>,
-    ingester: &mut Ingester<P>,
-) -> BpResult<()> {
-    loop {
-        tokio::select! {
-            message = receiver.recv() => {
-                let Some(message) = message else {
-                    warn!(exchange = %config.exchange, "exchange websocket message channel closed");
+    async fn run_until_shutdown(
+        config: &IngesterConfig,
+        receiver: &mut mpsc::Receiver<ParsedMessage>,
+        ingester: &mut Ingester<P>,
+    ) -> BpResult<()> {
+        loop {
+            tokio::select! {
+                message = receiver.recv() => {
+                    let Some(message) = message else {
+                        warn!(exchange = %config.exchange, "exchange websocket message channel closed");
+                        break;
+                    };
+                    if let Err(error) = ingester.ingest(message).await {
+                        error!(%error, "failed to ingest market event");
+                    }
+                }
+                signal = platform_runtime::Runtime::shutdown_signal() => {
+                    signal?;
                     break;
-                };
-                if let Err(error) = ingester.ingest(message).await {
-                    error!(%error, "failed to ingest market event");
                 }
             }
-            signal = platform_runtime::Runtime::shutdown_signal() => {
-                signal?;
-                break;
-            }
         }
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]
