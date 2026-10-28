@@ -1,4 +1,8 @@
-use crate::{compactor::BatchCompactor, config::CompactorConfig, source::ArchiveBatchSource};
+use crate::{
+    compactor::BatchCompactor,
+    config::CompactorConfig,
+    source::{ArchiveBatchSource, ProcessedManifest},
+};
 use platform_errors::BpResult;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{info, warn};
@@ -11,7 +15,7 @@ pub struct CompactorRunner<S, C> {
 
 impl<S, C> CompactorRunner<S, C>
 where
-    S: ArchiveBatchSource,
+    S: ArchiveBatchSource + ProcessedManifest,
     C: BatchCompactor,
 {
     pub fn new(config: CompactorConfig, source: S, compactor: C) -> Self {
@@ -57,7 +61,7 @@ where
 
 async fn run_cycle<S, C>(source: &S, compactor: &C) -> BpResult<()>
 where
-    S: ArchiveBatchSource,
+    S: ArchiveBatchSource + ProcessedManifest,
     C: BatchCompactor,
 {
     let batches = source.pending_batches().await?;
@@ -73,6 +77,7 @@ where
             output_files = stats.output_files,
             "compacted archive batch"
         );
+        source.mark_processed(&batch.files).await?;
     }
     Ok(())
 }
@@ -88,12 +93,35 @@ mod tests {
 
     struct FakeSource {
         batches: Vec<SourceBatch>,
+        processed: Arc<Mutex<Vec<Vec<String>>>>,
     }
 
     #[async_trait]
     impl ArchiveBatchSource for FakeSource {
         async fn pending_batches(&self) -> BpResult<Vec<SourceBatch>> {
             Ok(self.batches.clone())
+        }
+    }
+
+    #[async_trait]
+    impl crate::source::ProcessedManifest for FakeSource {
+        async fn processed_files(&self) -> BpResult<std::collections::HashSet<String>> {
+            Ok(self
+                .processed
+                .lock()
+                .expect("processed files lock")
+                .iter()
+                .flatten()
+                .cloned()
+                .collect())
+        }
+
+        async fn mark_processed(&self, files: &[String]) -> BpResult<()> {
+            self.processed
+                .lock()
+                .expect("processed files lock")
+                .push(files.to_vec());
+            Ok(())
         }
     }
 
@@ -119,6 +147,7 @@ mod tests {
                 bucket_start: TimestampMilliseconds(0),
                 files: vec!["raw/kind=events/data.parquet".to_string()],
             }],
+            processed: Arc::default(),
         };
         let compactor = FakeCompactor::default();
         let observed = compactor.clone();
@@ -126,5 +155,6 @@ mod tests {
         run_cycle(&source, &compactor).await.unwrap();
 
         assert_eq!(*observed.batches.lock().unwrap(), 1);
+        assert_eq!(source.processed.lock().unwrap().len(), 1);
     }
 }

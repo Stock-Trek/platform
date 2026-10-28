@@ -21,11 +21,13 @@ impl AggregationUpdate {
 }
 
 /// Maintains the currently open candle for every configured interval.
+///
+/// The aggregator assigns a placeholder revision of zero; the closed-candle
+/// publisher assigns the authoritative revision when publishing.
 #[derive(Debug)]
 pub struct CandleAggregator {
     intervals: Vec<CandleInterval>,
     open: HashMap<CandleKey, Candle>,
-    next_revision: u64,
 }
 
 impl CandleAggregator {
@@ -33,7 +35,6 @@ impl CandleAggregator {
         Self {
             intervals,
             open: HashMap::new(),
-            next_revision: 1,
         }
     }
 
@@ -107,10 +108,10 @@ impl CandleAggregator {
     fn close_existing(&mut self, key: &CandleKey) -> Option<ClosedCandle> {
         let mut candle = self.open.remove(key)?;
         candle.close();
-        let revision = self.next_revision;
-        self.next_revision = self.next_revision.saturating_add(1);
-        // TODO: persist the revision counter or use a durable stream sequence.
-        Some(ClosedCandle { revision, candle })
+        Some(ClosedCandle {
+            revision: 0,
+            candle,
+        })
     }
 }
 
@@ -153,7 +154,7 @@ mod tests {
         let update = aggregator.apply_trade(&trade("101", 121_000));
 
         assert_eq!(update.closed.len(), 1);
-        assert_eq!(update.closed[0].revision, 1);
+        assert_eq!(update.closed[0].revision, 0);
         assert!(update.closed[0].candle.market_candle.is_candle_closed);
         assert_eq!(
             update.closed[0].candle.start_time(),
@@ -163,7 +164,7 @@ mod tests {
         assert_eq!(update.open[0].start_time(), TimestampMilliseconds(120_000));
 
         let next = aggregator.apply_trade(&trade("102", 181_000));
-        assert_eq!(next.closed[0].revision, 2);
+        assert_eq!(next.closed[0].revision, 0);
     }
 
     #[test]
@@ -192,7 +193,7 @@ mod tests {
         let closed = aggregator.flush_closed_at_or_before(TimestampMilliseconds(120_000));
         assert_eq!(closed.len(), 1);
         assert!(closed[0].candle.market_candle.is_candle_closed);
-        assert_eq!(closed[0].revision, 1);
+        assert_eq!(closed[0].revision, 0);
     }
 
     #[test]
