@@ -9,13 +9,9 @@ use platform_metrics::descriptions::{
     DECODE_KIND_CLOSED_CANDLE, DECODE_KIND_MARKET_EVENT, STAGE_ARCHIVER,
 };
 use platform_metrics::market_data::MarketDataMetrics;
-use platform_nats::JetStreamConsumer;
-use std::time::Duration;
+use platform_nats::{JetStreamConsumer, Message};
 use tracing::warn;
 
-const FETCH_BATCH: usize = 1;
-const FETCH_WINDOW: Duration = Duration::from_secs(30);
-const RETRY_BACKOFF: Duration = Duration::from_secs(1);
 const EVENTS_DURABLE_NAME: &str = "archiver-events";
 const CANDLES_DURABLE_NAME: &str = "archiver-candles";
 
@@ -63,44 +59,42 @@ impl ArchiveSource for NatsArchiveSource {
     async fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>> {
         loop {
             tokio::select! {
-                message = self.events.fetch_retrying(FETCH_BATCH, FETCH_WINDOW, RETRY_BACKOFF) => {
-                    let Some(message) = message.into_iter().next() else {
-                        continue;
-                    };
-                    if let Err(error) = self.events.ack(&message).await {
-                        warn!(%error, "failed to acknowledge market event; waiting for redelivery");
-                        continue;
-                    }
-                    match MarketEvent::decode(&message.payload) {
-                        Ok(event) => return Ok(Some(ArchiveRecord::MarketEvent(event))),
-                        Err(error) => {
-                            MarketDataMetrics::record_decode_failure(
-                                STAGE_ARCHIVER,
-                                DECODE_KIND_MARKET_EVENT,
-                            );
-                            warn!(%error, "skipping malformed market event");
-                        }
+                message = self.events.next_message("market event") => {
+                    if let Some(record) = Self::decode_event(message) {
+                        return Ok(Some(record));
                     }
                 }
-                message = self.candles.fetch_retrying(FETCH_BATCH, FETCH_WINDOW, RETRY_BACKOFF) => {
-                    let Some(message) = message.into_iter().next() else {
-                        continue;
-                    };
-                    if let Err(error) = self.candles.ack(&message).await {
-                        warn!(%error, "failed to acknowledge closed candle; waiting for redelivery");
-                        continue;
-                    }
-                    match ClosedCandle::decode(&message.payload) {
-                        Ok(candle) => return Ok(Some(ArchiveRecord::ClosedCandle(candle))),
-                        Err(error) => {
-                            MarketDataMetrics::record_decode_failure(
-                                STAGE_ARCHIVER,
-                                DECODE_KIND_CLOSED_CANDLE,
-                            );
-                            warn!(%error, "skipping malformed closed candle");
-                        }
+                message = self.candles.next_message("closed candle") => {
+                    if let Some(record) = Self::decode_candle(message) {
+                        return Ok(Some(record));
                     }
                 }
+            }
+        }
+    }
+}
+
+impl NatsArchiveSource {
+    fn decode_event(message: Option<Message>) -> Option<ArchiveRecord> {
+        let message = message?;
+        match MarketEvent::decode(&message.payload) {
+            Ok(event) => Some(ArchiveRecord::MarketEvent(event)),
+            Err(error) => {
+                MarketDataMetrics::record_decode_failure(STAGE_ARCHIVER, DECODE_KIND_MARKET_EVENT);
+                warn!(%error, "skipping malformed market event");
+                None
+            }
+        }
+    }
+
+    fn decode_candle(message: Option<Message>) -> Option<ArchiveRecord> {
+        let message = message?;
+        match ClosedCandle::decode(&message.payload) {
+            Ok(candle) => Some(ArchiveRecord::ClosedCandle(candle)),
+            Err(error) => {
+                MarketDataMetrics::record_decode_failure(STAGE_ARCHIVER, DECODE_KIND_CLOSED_CANDLE);
+                warn!(%error, "skipping malformed closed candle");
+                None
             }
         }
     }

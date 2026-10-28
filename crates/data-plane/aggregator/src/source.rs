@@ -5,12 +5,7 @@ use platform_market_data::{
     envelope::EnvelopeCodec, event::MarketEvent, subject::MarketEventSubject,
 };
 use platform_nats::JetStreamConsumer;
-use std::time::Duration;
-use tracing::warn;
 
-const FETCH_BATCH: usize = 1;
-const FETCH_WINDOW: Duration = Duration::from_secs(30);
-const RETRY_BACKOFF: Duration = Duration::from_secs(1);
 const DURABLE_NAME: &str = "aggregator-events";
 
 /// Source of ingester market events.
@@ -47,17 +42,9 @@ impl NatsMarketEventSource {
 impl MarketEventSource for NatsMarketEventSource {
     async fn next_event(&mut self) -> BpResult<Option<MarketEvent>> {
         loop {
-            let messages = self
-                .events
-                .fetch_retrying(FETCH_BATCH, FETCH_WINDOW, RETRY_BACKOFF)
-                .await;
-            let Some(message) = messages.into_iter().next() else {
+            let Some(message) = self.events.next_message("market event").await else {
                 continue;
             };
-            if let Err(error) = self.events.ack(&message).await {
-                warn!(%error, "failed to acknowledge market event; waiting for redelivery");
-                continue;
-            }
             return Ok(Some(MarketEvent::decode(&message.payload)?));
         }
     }

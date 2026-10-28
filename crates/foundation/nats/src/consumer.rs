@@ -11,6 +11,9 @@ use std::time::Duration;
 use tokio::sync::Mutex as AsyncMutex;
 
 const DEFAULT_EXPIRES: Duration = Duration::from_secs(1);
+const FETCH_BATCH: usize = 1;
+const FETCH_WINDOW: Duration = Duration::from_secs(30);
+const RETRY_BACKOFF: Duration = Duration::from_secs(1);
 
 struct State {
     connection: Option<NatsConnection>,
@@ -153,5 +156,24 @@ impl JetStreamConsumer {
                 }
             }
         }
+    }
+
+    /// Fetches the next message, waiting up to [`FETCH_WINDOW`] and retrying
+    /// transient failures with [`RETRY_BACKOFF`]. The message is acknowledged
+    /// once fetched, so a crash before processing completes leads to
+    /// redelivery instead of message loss.
+    ///
+    /// Returns `None` when the fetch window expired without a message or the
+    /// acknowledgement failed; callers should simply retry.
+    pub async fn next_message(&self, log_label: &str) -> Option<Message> {
+        let messages = self
+            .fetch_retrying(FETCH_BATCH, FETCH_WINDOW, RETRY_BACKOFF)
+            .await;
+        let message = messages.into_iter().next()?;
+        if let Err(error) = self.ack(&message).await {
+            tracing::warn!(%error, "failed to acknowledge {log_label}; waiting for redelivery");
+            return None;
+        }
+        Some(message)
     }
 }
