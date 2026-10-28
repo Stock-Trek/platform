@@ -87,7 +87,7 @@ impl DedupeSpill {
         let path = self
             .directory
             .join(format!("dedupe-run-{}.parquet", self.runs.len()));
-        write_run(&path, self.kind, &records)?;
+        SpillRun::write(&path, self.kind, &records)?;
         self.runs.push(path);
         Ok(())
     }
@@ -313,7 +313,7 @@ impl PartitionSpill {
         let path = self
             .directory
             .join(format!("partition-run-{}.parquet", self.runs.len()));
-        write_run(&path, self.kind, &records)?;
+        SpillRun::write(&path, self.kind, &records)?;
         self.runs.push(path);
         Ok(())
     }
@@ -428,19 +428,23 @@ impl PartitionMerge {
     }
 }
 
-fn write_run(path: &Path, kind: ArchiveKind, records: &[ArchiveRecord]) -> BpResult<()> {
-    let file = File::create(path).map_err(|error| {
-        BpError::io(
-            "create compaction spill run",
-            path.display().to_string(),
-            error,
-        )
-    })?;
-    let mut writer = ArchiveParquetWriter::try_new(kind, file)?;
-    for chunk in records.chunks(RUN_BATCH_SIZE) {
-        writer.write(chunk)?;
+struct SpillRun;
+
+impl SpillRun {
+    fn write(path: &Path, kind: ArchiveKind, records: &[ArchiveRecord]) -> BpResult<()> {
+        let file = File::create(path).map_err(|error| {
+            BpError::io(
+                "create compaction spill run",
+                path.display().to_string(),
+                error,
+            )
+        })?;
+        let mut writer = ArchiveParquetWriter::try_new(kind, file)?;
+        for chunk in records.chunks(RUN_BATCH_SIZE) {
+            writer.write(chunk)?;
+        }
+        writer.close()
     }
-    writer.close()
 }
 
 #[cfg(test)]

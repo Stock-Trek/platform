@@ -103,7 +103,8 @@ impl Compactor {
             partitions.push(record)?;
         }
 
-        let outputs = write_partition_files(batch.kind, partitions.finish()?, temp_dir.path())?;
+        let outputs =
+            PartitionOutput::write_all(batch.kind, partitions.finish()?, temp_dir.path())?;
         stats.records_written = outputs.iter().map(|output| output.records).sum();
         stats.output_files = outputs.len();
 
@@ -193,67 +194,69 @@ struct PartitionOutput {
     records: usize,
 }
 
-fn write_partition_files(
-    kind: ArchiveKind,
-    mut records: PartitionRecords,
-    directory: &Path,
-) -> BpResult<Vec<PartitionOutput>> {
-    let mut outputs = Vec::new();
-    let mut current: Option<(PartitionOutput, ArchiveParquetWriter<File>)> = None;
-    let mut buffer = Vec::<ArchiveRecord>::with_capacity(OUTPUT_BATCH_SIZE);
+impl PartitionOutput {
+    fn write_all(
+        kind: ArchiveKind,
+        mut records: PartitionRecords,
+        directory: &Path,
+    ) -> BpResult<Vec<Self>> {
+        let mut outputs = Vec::new();
+        let mut current: Option<(Self, ArchiveParquetWriter<File>)> = None;
+        let mut buffer = Vec::<ArchiveRecord>::with_capacity(OUTPUT_BATCH_SIZE);
 
-    while let Some(PartitionItem {
-        partition, record, ..
-    }) = records.next_item()?
-    {
-        let start_new_partition = current
-            .as_ref()
-            .is_none_or(|(output, _)| output.partition != partition);
-        if start_new_partition {
-            if let Some((output, mut writer)) = current.take() {
-                if !buffer.is_empty() {
+        while let Some(PartitionItem {
+            partition, record, ..
+        }) = records.next_item()?
+        {
+            let start_new_partition = current
+                .as_ref()
+                .is_none_or(|(output, _)| output.partition != partition);
+            if start_new_partition {
+                if let Some((output, mut writer)) = current.take() {
+                    if !buffer.is_empty() {
+                        writer.write(&buffer)?;
+                        buffer.clear();
+                    }
+                    writer.close()?;
+                    outputs.push(output);
+                }
+
+                let path = directory.join(format!("compacted-{}.parquet", outputs.len()));
+                let file = File::create(&path).map_err(|error| {
+                    BpError::io(
+                        "create compacted partition file",
+                        path.display().to_string(),
+                        error,
+                    )
+                })?;
+                current = Some((
+                    Self {
+                        partition,
+                        path,
+                        records: 0,
+                    },
+                    ArchiveParquetWriter::try_new(kind, file)?,
+                ));
+            }
+
+            buffer.push(record);
+            if let Some((output, writer)) = current.as_mut() {
+                output.records += 1;
+                if buffer.len() >= OUTPUT_BATCH_SIZE {
                     writer.write(&buffer)?;
                     buffer.clear();
                 }
-                writer.close()?;
-                outputs.push(output);
             }
-
-            let path = directory.join(format!("compacted-{}.parquet", outputs.len()));
-            let file = File::create(&path).map_err(|error| {
-                BpError::io(
-                    "create compacted partition file",
-                    path.display().to_string(),
-                    error,
-                )
-            })?;
-            current = Some((
-                PartitionOutput {
-                    partition,
-                    path,
-                    records: 0,
-                },
-                ArchiveParquetWriter::try_new(kind, file)?,
-            ));
         }
 
-        buffer.push(record);
-        if let Some((output, writer)) = current.as_mut() {
-            output.records += 1;
-            if buffer.len() >= OUTPUT_BATCH_SIZE {
+        if let Some((output, mut writer)) = current.take() {
+            if !buffer.is_empty() {
                 writer.write(&buffer)?;
-                buffer.clear();
             }
+            writer.close()?;
+            outputs.push(output);
         }
-    }
 
-    if let Some((output, mut writer)) = current.take() {
-        if !buffer.is_empty() {
-            writer.write(&buffer)?;
-        }
-        writer.close()?;
-        outputs.push(output);
+        Ok(outputs)
     }
-
-    Ok(outputs)
 }
