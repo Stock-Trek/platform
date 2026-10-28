@@ -5,6 +5,7 @@ use aws_credential_types::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use hmac::{Hmac, KeyInit, Mac};
+use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BpError, BpResult, StorageError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 use reqwest::Client;
@@ -21,7 +22,6 @@ use url::Url;
 const ALGORITHM: &str = "AWS4-HMAC-SHA256";
 const MIN_OBJECT_SIZE_BYTES: u64 = 0;
 const SERVICE: &str = "s3";
-const S3_SIGNED_URL_EXPIRY_SECS: &str = "S3_SIGNED_URL_EXPIRY_SECS";
 
 #[derive(Debug, Clone)]
 pub struct S3Config {

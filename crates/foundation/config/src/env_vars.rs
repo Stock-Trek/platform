@@ -130,6 +130,23 @@ impl EnvVars {
         Ok(Duration::from_secs(self.required_parsed(name)?))
     }
 
+    /// Reads a required duration expressed as a positive number of seconds.
+    pub fn required_positive_duration_secs(&self, name: &str) -> BpResult<Duration> {
+        let secs = self.required_parsed(name)?;
+        Self::positive_duration_secs(name, secs)
+    }
+
+    /// Reads an optional duration expressed as a positive number of seconds,
+    /// falling back to `default_secs` when the variable is missing or empty.
+    pub fn optional_positive_duration_secs(
+        &self,
+        name: &str,
+        default_secs: u64,
+    ) -> BpResult<Duration> {
+        let secs = self.optional_parsed_or(name, default_secs)?;
+        Self::positive_duration_secs(name, secs)
+    }
+
     /// Reads a required, non-zero `usize`.
     pub fn required_nonzero_usize(&self, name: &str) -> BpResult<NonZeroUsize> {
         let value: usize = self.required_parsed(name)?;
@@ -183,6 +200,12 @@ impl EnvVars {
         let value = self.required(name)?;
         EnvFilter::try_new(&value).map_err(|error| BpError::config_invalid_source(name, error))?;
         Ok(value)
+    }
+
+    fn positive_duration_secs(name: &str, secs: u64) -> BpResult<Duration> {
+        let secs = NonZeroU64::new(secs)
+            .ok_or_else(|| BpError::config_invalid(name, "must be greater than zero"))?;
+        Ok(Duration::from_secs(secs.get()))
     }
 
     fn parse_timestamp(name: &str, value: &str) -> BpResult<DateTime<Utc>> {
@@ -287,6 +310,39 @@ mod tests {
             vars.required_duration_secs("DURATION_SECS").unwrap(),
             Duration::from_secs(42)
         );
+    }
+
+    #[test]
+    fn positive_durations_reject_zero_and_invalid_values() {
+        let vars = env_vars([("INTERVAL_SECS", "30")]);
+        assert_eq!(
+            vars.required_positive_duration_secs("INTERVAL_SECS")
+                .unwrap(),
+            Duration::from_secs(30)
+        );
+        assert_eq!(
+            vars.optional_positive_duration_secs("INTERVAL_SECS", 5)
+                .unwrap(),
+            Duration::from_secs(30)
+        );
+        assert_eq!(
+            env_vars(Vec::<(String, String)>::new())
+                .optional_positive_duration_secs("INTERVAL_SECS", 5)
+                .unwrap(),
+            Duration::from_secs(5)
+        );
+
+        for value in ["0", "not a number"] {
+            let vars = env_vars([("INTERVAL_SECS", value)]);
+            assert!(
+                vars.required_positive_duration_secs("INTERVAL_SECS")
+                    .is_err()
+            );
+            assert!(
+                vars.optional_positive_duration_secs("INTERVAL_SECS", 5)
+                    .is_err()
+            );
+        }
     }
 
     #[test]

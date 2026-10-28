@@ -4,16 +4,17 @@
 //! variables, but the common validation rules live here so every service
 //! rejects the same malformed values in the same way.
 
+use platform_config::env_names::RUST_LOG;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_nats::{NatsAddress, NatsSubject};
-use std::{num::NonZeroU64, num::NonZeroUsize, time::Duration};
+use std::{num::NonZeroUsize, time::Duration};
 
 /// Common configuration validation and parsing helpers.
 pub struct Config;
 
 impl Config {
-    pub const RUST_LOG: &str = "RUST_LOG";
+    pub const RUST_LOG: &str = RUST_LOG;
 
     /// Reads and validates the common tracing filter.
     pub fn log_filter(vars: &EnvVars) -> BpResult<String> {
@@ -37,8 +38,7 @@ impl Config {
 
     /// Reads a required duration expressed as a positive number of seconds.
     pub fn required_positive_duration_secs(vars: &EnvVars, name: &str) -> BpResult<Duration> {
-        let secs = vars.required_parsed(name)?;
-        Self::positive_duration_secs(name, secs)
+        vars.required_positive_duration_secs(name)
     }
 
     /// Reads an optional duration expressed as a positive number of seconds,
@@ -48,8 +48,7 @@ impl Config {
         name: &str,
         default_secs: u64,
     ) -> BpResult<Duration> {
-        let secs = vars.optional_parsed_or(name, default_secs)?;
-        Self::positive_duration_secs(name, secs)
+        vars.optional_positive_duration_secs(name, default_secs)
     }
 
     /// Reads a required positive `usize`.
@@ -63,12 +62,6 @@ impl Config {
     pub fn optional_positive_usize(vars: &EnvVars, name: &str, default: usize) -> BpResult<usize> {
         let value = vars.optional_parsed_or(name, default)?;
         Self::positive_usize(name, value)
-    }
-
-    fn positive_duration_secs(name: &str, secs: u64) -> BpResult<Duration> {
-        let secs = NonZeroU64::new(secs)
-            .ok_or_else(|| BpError::config_invalid(name, "must be greater than zero"))?;
-        Ok(Duration::from_secs(secs.get()))
     }
 
     fn positive_usize(name: &str, value: usize) -> BpResult<usize> {

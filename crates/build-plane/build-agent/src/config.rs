@@ -1,17 +1,16 @@
+use platform_config::env_names::{
+    AWS_LAMBDA_FUNCTION_NAME, BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS, BUILD_AGENT_TIMEOUT_SECS,
+    RUST_LOG, S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES,
+};
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::BpResult;
 use std::{num::NonZeroU64, path::PathBuf, time::Duration};
 
-const AWS_LAMBDA_FUNCTION_NAME: &str = "AWS_LAMBDA_FUNCTION_NAME";
 const BUILD_AGENT_BUILD_CACHE_DIR: &str = "BUILD_AGENT_BUILD_CACHE_DIR";
 const BUILD_AGENT_MAX_EXTRACTED_SOURCE_SIZE_BYTES: &str =
     "BUILD_AGENT_MAX_EXTRACTED_SOURCE_SIZE_BYTES";
 const BUILD_AGENT_SOURCE_DIR: &str = "BUILD_AGENT_SOURCE_DIR";
-const BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS: &str = "BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS";
-const BUILD_AGENT_TIMEOUT_SECS: &str = "BUILD_AGENT_TIMEOUT_SECS";
 const FAILURE_PUBLISH_BUDGET_SECS: &str = "FAILURE_PUBLISH_BUDGET_SECS";
-const RUST_LOG: &str = "RUST_LOG";
-const S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES: &str = "S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES";
 
 /// Configuration required by the build agent process.
 ///
@@ -37,28 +36,11 @@ impl AgentConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let build_timeout = vars.required_duration_secs(BUILD_AGENT_TIMEOUT_SECS)?;
-        if build_timeout.is_zero() {
-            return Err(BpError::config_invalid(
-                BUILD_AGENT_TIMEOUT_SECS,
-                "must be greater than zero",
-            ));
-        }
+        let build_timeout = vars.required_positive_duration_secs(BUILD_AGENT_TIMEOUT_SECS)?;
         let source_download_timeout =
-            vars.required_duration_secs(BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS)?;
-        if source_download_timeout.is_zero() {
-            return Err(BpError::config_invalid(
-                BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS,
-                "must be greater than zero",
-            ));
-        }
-        let failure_publish_budget = vars.required_duration_secs(FAILURE_PUBLISH_BUDGET_SECS)?;
-        if failure_publish_budget.is_zero() {
-            return Err(BpError::config_invalid(
-                FAILURE_PUBLISH_BUDGET_SECS,
-                "must be greater than zero",
-            ));
-        }
+            vars.required_positive_duration_secs(BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS)?;
+        let failure_publish_budget =
+            vars.required_positive_duration_secs(FAILURE_PUBLISH_BUDGET_SECS)?;
 
         Ok(Self {
             log_filter: vars.required_log_filter(RUST_LOG)?,

@@ -1,36 +1,31 @@
 use crate::aws_ops::s3::S3Config;
+use platform_config::env_names::{
+    AWS_CONNECT_TIMEOUT_SECS, AWS_LAMBDA_FUNCTION_NAME, AWS_OPERATION_TIMEOUT_SECS,
+    BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS, BUILD_AGENT_TIMEOUT_SECS, DEADLINE_BUFFER_SECS,
+    GITHUB_ENTERPRISE_ALLOWED_HOSTS, RUST_LOG, S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES,
+    S3_SIGNED_URL_EXPIRY_SECS, SQS_QUEUE_URL,
+};
 use platform_config::{env_vars::EnvVars, git::DirectoryLimits};
 use platform_errors::{BpError, BpResult};
 use platform_github::{app_config::GitHubAppConfig, host_allow_list::HostAllowlist};
 use platform_time::timeouts::Timeouts;
 use std::{num::NonZeroUsize, time::Duration};
 
-const AWS_CONNECT_TIMEOUT_SECS: &str = "AWS_CONNECT_TIMEOUT_SECS";
 const AWS_ENDPOINT_URL_S3: &str = "AWS_ENDPOINT_URL_S3";
-const AWS_LAMBDA_FUNCTION_NAME: &str = "AWS_LAMBDA_FUNCTION_NAME";
-const AWS_OPERATION_TIMEOUT_SECS: &str = "AWS_OPERATION_TIMEOUT_SECS";
 const BUILD_AGENT_FUNCTION_NAME: &str = "BUILD_AGENT_FUNCTION_NAME";
-const BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS: &str = "BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS";
-const BUILD_AGENT_TIMEOUT_SECS: &str = "BUILD_AGENT_TIMEOUT_SECS";
-const DEADLINE_BUFFER_SECS: &str = "DEADLINE_BUFFER_SECS";
 const GITHUB_APP_ID: &str = "GITHUB_APP_ID";
 const GITHUB_APP_PRIVATE_KEY: &str = "GITHUB_APP_PRIVATE_KEY";
 const GITHUB_CONNECT_TIMEOUT_SECS: &str = "GITHUB_CONNECT_TIMEOUT_SECS";
-const GITHUB_ENTERPRISE_ALLOWED_HOSTS: &str = "GITHUB_ENTERPRISE_ALLOWED_HOSTS";
 const GITHUB_MAX_CACHED_INSTALLATIONS: &str = "GITHUB_MAX_CACHED_INSTALLATIONS";
 const GITHUB_OPERATION_TIMEOUT_SECS: &str = "GITHUB_OPERATION_TIMEOUT_SECS";
 const GIT_MAX_DIRECTORY_BYTES: &str = "GIT_MAX_DIRECTORY_BYTES";
 const GIT_MAX_DIRECTORY_DEPTH: &str = "GIT_MAX_DIRECTORY_DEPTH";
 const GIT_MAX_DIRECTORY_FILES: &str = "GIT_MAX_DIRECTORY_FILES";
-const RUST_LOG: &str = "RUST_LOG";
 const S3_BUCKET_USER_ARTIFACTS: &str = "S3_BUCKET_USER_ARTIFACTS";
 const S3_MAX_ARTIFACT_SIZE_BYTES: &str = "S3_MAX_ARTIFACT_SIZE_BYTES";
-const S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES: &str = "S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES";
-const S3_SIGNED_URL_EXPIRY_SECS: &str = "S3_SIGNED_URL_EXPIRY_SECS";
 const SQS_DEDUP_MAX_MESSAGES: &str = "SQS_DEDUP_MAX_MESSAGES";
 const SQS_DEDUP_TTL_SECS: &str = "SQS_DEDUP_TTL_SECS";
 const SQS_PROCESS_CONCURRENCY: &str = "SQS_PROCESS_CONCURRENCY";
-const SQS_QUEUE_URL: &str = "SQS_QUEUE_URL";
 
 const MAX_SIGNED_URL_EXPIRY: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const SIGNED_POST_UPLOAD_MARGIN_SECS: u64 = 5 * 60;
@@ -86,21 +81,9 @@ impl OrchestratorConfig {
             HostAllowlist::from_hosts(vars.required_csv(GITHUB_ENTERPRISE_ALLOWED_HOSTS)?)?;
 
         let endpoint_url = vars.required_url(AWS_ENDPOINT_URL_S3, &["http", "https"])?;
-        let build_agent_timeout = vars.required_duration_secs(BUILD_AGENT_TIMEOUT_SECS)?;
-        if build_agent_timeout.is_zero() {
-            return Err(BpError::config_invalid(
-                BUILD_AGENT_TIMEOUT_SECS,
-                "must be greater than zero",
-            ));
-        }
+        let build_agent_timeout = vars.required_positive_duration_secs(BUILD_AGENT_TIMEOUT_SECS)?;
         let source_download_timeout =
-            vars.required_duration_secs(BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS)?;
-        if source_download_timeout.is_zero() {
-            return Err(BpError::config_invalid(
-                BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS,
-                "must be greater than zero",
-            ));
-        }
+            vars.required_positive_duration_secs(BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS)?;
         let minimum_signed_post_expiry = build_agent_timeout
             .checked_add(source_download_timeout)
             .and_then(|expiry| {

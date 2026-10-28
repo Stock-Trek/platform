@@ -1,3 +1,4 @@
+use platform_config::env_names::GITHUB_ENTERPRISE_ALLOWED_HOSTS;
 use platform_errors::{BpError, BpResult, GitHubError};
 use std::{
     collections::HashMap,
@@ -6,7 +7,6 @@ use std::{
 use url::{Host, Url};
 
 pub const DEFAULT_HOST: &str = "github.com";
-const ENTERPRISE_ALLOWED_HOSTS: &str = "GITHUB_ENTERPRISE_ALLOWED_HOSTS";
 const DEFAULT_HTTPS_PORT: u16 = 443;
 
 /// The port policy for a single allowlisted host. Ports are owned by the
@@ -153,7 +153,7 @@ impl HostAllowlist {
     fn validated(host: &str) -> BpResult<(String, Option<u16>)> {
         Self::parse(host).ok_or_else(|| {
             BpError::config_invalid(
-                ENTERPRISE_ALLOWED_HOSTS,
+                GITHUB_ENTERPRISE_ALLOWED_HOSTS,
                 format!(
                     "{host:?} is not a hostname, IP address, or host:port (expected e.g. \"ghe.example.com\", \"ghe.example.com:8443\", or \"[2001:db8::1]:8443\")"
                 ),
