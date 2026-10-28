@@ -55,7 +55,7 @@ where
         loop {
             let next_gap = tokio::select! {
                 gap = self.source.next_gap() => gap?,
-                signal = platform_runtime::shutdown_signal() => {
+                signal = platform_runtime::Runtime::shutdown_signal() => {
                     signal?;
                     return Ok(());
                 }

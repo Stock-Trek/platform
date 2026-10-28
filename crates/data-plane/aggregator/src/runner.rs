@@ -128,7 +128,7 @@ impl AggregatorRunner {
                         sink.publish_closed(&closed).await?;
                     }
                 }
-                signal = platform_runtime::shutdown_signal() => {
+                signal = platform_runtime::Runtime::shutdown_signal() => {
                     signal?;
                     break;
                 }

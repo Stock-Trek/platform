@@ -1,8 +1,6 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
-use platform_runtime::config::{
-    log_filter, optional_positive_duration_secs, optional_positive_usize,
-};
+use platform_runtime::Config;
 use std::time::Duration;
 
 const COMPACTOR_S3_BUCKET: &str = "COMPACTOR_S3_BUCKET";
@@ -38,7 +36,7 @@ impl CompactorConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let log_filter = log_filter(vars)?;
+        let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(COMPACTOR_S3_BUCKET)?;
         let s3_prefix = vars
             .optional(COMPACTOR_S3_PREFIX)?
@@ -47,19 +45,19 @@ impl CompactorConfig {
             .optional(COMPACTOR_OUTPUT_PREFIX)?
             .unwrap_or_else(|| DEFAULT_OUTPUT_PREFIX.to_string());
 
-        let poll_interval = optional_positive_duration_secs(
+        let poll_interval = Config::optional_positive_duration_secs(
             vars,
             COMPACTOR_POLL_INTERVAL_SECS,
             DEFAULT_POLL_INTERVAL_SECS,
         )?;
 
         let settle =
-            optional_positive_duration_secs(vars, COMPACTOR_SETTLE_SECS, DEFAULT_SETTLE_SECS)?;
+            Config::optional_positive_duration_secs(vars, COMPACTOR_SETTLE_SECS, DEFAULT_SETTLE_SECS)?;
         let min_source_files =
-            optional_positive_usize(vars, COMPACTOR_MIN_SOURCE_FILES, DEFAULT_MIN_SOURCE_FILES)?;
+            Config::optional_positive_usize(vars, COMPACTOR_MIN_SOURCE_FILES, DEFAULT_MIN_SOURCE_FILES)?;
 
         let spill_records =
-            optional_positive_usize(vars, COMPACTOR_SPILL_RECORDS, DEFAULT_SPILL_RECORDS)?;
+            Config::optional_positive_usize(vars, COMPACTOR_SPILL_RECORDS, DEFAULT_SPILL_RECORDS)?;
 
         Ok(Self {
             log_filter,

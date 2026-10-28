@@ -32,7 +32,7 @@ impl CompactorRunner {
                         warn!(%error, "compaction cycle failed");
                     }
                 }
-                signal = platform_runtime::shutdown_signal() => {
+                signal = platform_runtime::Runtime::shutdown_signal() => {
                     signal?;
                     break;
                 }

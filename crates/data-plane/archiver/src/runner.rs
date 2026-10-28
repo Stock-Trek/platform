@@ -70,7 +70,7 @@ impl ArchiverRunner {
                 _ = flush_ticker.tick() => {
                     self.flush(sink, buffer).await?;
                 }
-                signal = platform_runtime::shutdown_signal() => {
+                signal = platform_runtime::Runtime::shutdown_signal() => {
                     signal?;
                     break;
                 }

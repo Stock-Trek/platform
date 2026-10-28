@@ -1,9 +1,6 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
-use platform_runtime::config::{
-    log_filter, optional_positive_duration_secs, optional_positive_usize, required_nats_subject,
-    required_nats_url,
-};
+use platform_runtime::Config;
 use std::time::Duration;
 
 const ARCHIVER_NATS_URL: &str = "ARCHIVER_NATS_URL";
@@ -42,32 +39,32 @@ impl ArchiverConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let log_filter = log_filter(vars)?;
-        let nats_url = required_nats_url(vars, ARCHIVER_NATS_URL)?;
-        let event_subject_prefix = required_nats_subject(vars, ARCHIVER_EVENT_SUBJECT_PREFIX)?;
+        let log_filter = Config::log_filter(vars)?;
+        let nats_url = Config::required_nats_url(vars, ARCHIVER_NATS_URL)?;
+        let event_subject_prefix = Config::required_nats_subject(vars, ARCHIVER_EVENT_SUBJECT_PREFIX)?;
         let closed_candle_subject_prefix =
-            required_nats_subject(vars, ARCHIVER_CLOSED_CANDLE_SUBJECT_PREFIX)?;
+            Config::required_nats_subject(vars, ARCHIVER_CLOSED_CANDLE_SUBJECT_PREFIX)?;
         let s3_bucket = vars.required(ARCHIVER_S3_BUCKET)?;
         let s3_prefix = vars
             .optional(ARCHIVER_S3_PREFIX)?
             .unwrap_or_else(|| DEFAULT_S3_PREFIX.to_string());
 
-        let flush_interval = optional_positive_duration_secs(
+        let flush_interval = Config::optional_positive_duration_secs(
             vars,
             ARCHIVER_FLUSH_INTERVAL_SECS,
             DEFAULT_FLUSH_INTERVAL_SECS,
         )?;
 
         let bucket =
-            optional_positive_duration_secs(vars, ARCHIVER_BUCKET_SECS, DEFAULT_BUCKET_SECS)?;
+            Config::optional_positive_duration_secs(vars, ARCHIVER_BUCKET_SECS, DEFAULT_BUCKET_SECS)?;
         let bucket_millis = i64::try_from(bucket.as_millis()).map_err(|_| {
             BpError::config_invalid(ARCHIVER_BUCKET_SECS, "is too large to represent")
         })?;
 
-        let max_records = optional_positive_usize(vars, ARCHIVER_MAX_RECORDS, DEFAULT_MAX_RECORDS)?;
+        let max_records = Config::optional_positive_usize(vars, ARCHIVER_MAX_RECORDS, DEFAULT_MAX_RECORDS)?;
 
         let dedupe_capacity =
-            optional_positive_usize(vars, ARCHIVER_DEDUPE_CAPACITY, DEFAULT_DEDUPE_CAPACITY)?;
+            Config::optional_positive_usize(vars, ARCHIVER_DEDUPE_CAPACITY, DEFAULT_DEDUPE_CAPACITY)?;
 
         Ok(Self {
             log_filter,

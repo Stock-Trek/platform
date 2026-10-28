@@ -8,9 +8,5 @@
 pub mod config;
 pub mod runtime;
 
-pub use config::{
-    RUST_LOG, log_filter, optional_positive_duration_secs, optional_positive_usize,
-    required_nats_subject, required_nats_url, required_positive_duration_secs,
-    required_positive_usize,
-};
-pub use runtime::{init_logging, shutdown_signal};
+pub use config::Config;
+pub use runtime::Runtime;

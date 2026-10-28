@@ -1,6 +1,6 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
-use platform_runtime::config::{log_filter, required_nats_subject, required_nats_url};
+use platform_runtime::Config;
 use stock_trek_types::cex::cex_id::CexId;
 
 const BACKFILLER_EXCHANGE: &str = "BACKFILLER_EXCHANGE";
@@ -27,7 +27,7 @@ impl BackfillerConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let log_filter = log_filter(vars)?;
+        let log_filter = Config::log_filter(vars)?;
         let exchange_value = vars.required(BACKFILLER_EXCHANGE)?;
         let exchange = CexId::try_from(exchange_value.as_str()).map_err(|_| {
             BpError::config_invalid(
@@ -35,9 +35,9 @@ impl BackfillerConfig {
                 format!("unsupported exchange {exchange_value}"),
             )
         })?;
-        let nats_url = required_nats_url(vars, BACKFILLER_NATS_URL)?;
-        let gap_subject_prefix = required_nats_subject(vars, BACKFILLER_GAP_SUBJECT_PREFIX)?;
-        let event_subject_prefix = required_nats_subject(vars, BACKFILLER_EVENT_SUBJECT_PREFIX)?;
+        let nats_url = Config::required_nats_url(vars, BACKFILLER_NATS_URL)?;
+        let gap_subject_prefix = Config::required_nats_subject(vars, BACKFILLER_GAP_SUBJECT_PREFIX)?;
+        let event_subject_prefix = Config::required_nats_subject(vars, BACKFILLER_EVENT_SUBJECT_PREFIX)?;
         let exchange_http_url =
             vars.required_url(BACKFILLER_EXCHANGE_HTTP_URL, &["http", "https"])?;
         let exchange_api_key = vars.optional(BACKFILLER_EXCHANGE_API_KEY)?;

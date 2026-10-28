@@ -1,9 +1,7 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::CandleInterval;
-use platform_runtime::config::{
-    log_filter, optional_positive_duration_secs, required_nats_subject, required_nats_url,
-};
+use platform_runtime::Config;
 use std::time::Duration;
 
 pub const AGGREGATOR_NATS_URL: &str = "AGGREGATOR_NATS_URL";
@@ -33,13 +31,13 @@ impl AggregatorConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let log_filter = log_filter(vars)?;
-        let nats_url = required_nats_url(vars, AGGREGATOR_NATS_URL)?;
-        let event_subject_prefix = required_nats_subject(vars, AGGREGATOR_EVENT_SUBJECT_PREFIX)?;
+        let log_filter = Config::log_filter(vars)?;
+        let nats_url = Config::required_nats_url(vars, AGGREGATOR_NATS_URL)?;
+        let event_subject_prefix = Config::required_nats_subject(vars, AGGREGATOR_EVENT_SUBJECT_PREFIX)?;
         let open_candle_subject_prefix =
-            required_nats_subject(vars, AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX)?;
+            Config::required_nats_subject(vars, AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX)?;
         let closed_candle_subject_prefix =
-            required_nats_subject(vars, AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX)?;
+            Config::required_nats_subject(vars, AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX)?;
 
         let interval_labels = vars
             .optional(AGGREGATOR_INTERVALS)?
@@ -63,7 +61,7 @@ impl AggregatorConfig {
             ));
         }
 
-        let flush_interval = optional_positive_duration_secs(
+        let flush_interval = Config::optional_positive_duration_secs(
             vars,
             AGGREGATOR_FLUSH_INTERVAL_SECS,
             DEFAULT_FLUSH_INTERVAL_SECS,

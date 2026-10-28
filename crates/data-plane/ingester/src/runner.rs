@@ -64,7 +64,7 @@ impl IngesterRunner {
                         error!(%error, "failed to ingest market event");
                     }
                 }
-                signal = platform_runtime::shutdown_signal() => {
+                signal = platform_runtime::Runtime::shutdown_signal() => {
                     signal?;
                     break;
                 }
