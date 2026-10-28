@@ -73,7 +73,7 @@ impl Compactor {
                     )
                 })?;
                 for decoded in ArchiveParquet::decode_batches(batch.kind, file)? {
-                    let records = decoded?;
+                    let records = decoded?.into_records();
                     stats.records_read += records.len();
                     for record in records {
                         dedupe.push(record)?;

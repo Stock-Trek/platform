@@ -1,7 +1,9 @@
 use crate::config::ArchiverConfig;
 use async_trait::async_trait;
 use bytes::Bytes;
-use platform_archive::{ArchiveBucket, ArchiveParquet, ArchiveRecord, Bucket, ObjectKey, S3};
+use platform_archive::{
+    ArchiveBatch, ArchiveBucket, ArchiveParquet, ArchiveRecord, Bucket, ObjectKey, S3,
+};
 use platform_errors::BpResult;
 use uuid::Uuid;
 
@@ -61,7 +63,8 @@ impl ArchiveSink for S3ParquetSink {
             }
 
             let key = self.object_key(partition)?;
-            let bytes = ArchiveParquet::encode(partition.kind, &records[start..end])?;
+            let batch = ArchiveBatch::new(partition.kind, records[start..end].to_vec())?;
+            let bytes = ArchiveParquet::encode(&batch)?;
             S3::upload_bytes(
                 &self.transfer_client,
                 &self.bucket,
