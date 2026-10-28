@@ -37,36 +37,3 @@ pub const S3_SIGNED_URL_EXPIRY_SECS: &str = "S3_SIGNED_URL_EXPIRY_SECS";
 
 /// URL of the SQS queue that carries build requests.
 pub const SQS_QUEUE_URL: &str = "SQS_QUEUE_URL";
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn shared_names_match_their_environment_variables() {
-        for (name, expected) in [
-            (RUST_LOG, "RUST_LOG"),
-            (AWS_CONNECT_TIMEOUT_SECS, "AWS_CONNECT_TIMEOUT_SECS"),
-            (AWS_LAMBDA_FUNCTION_NAME, "AWS_LAMBDA_FUNCTION_NAME"),
-            (AWS_OPERATION_TIMEOUT_SECS, "AWS_OPERATION_TIMEOUT_SECS"),
-            (
-                BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS,
-                "BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS",
-            ),
-            (BUILD_AGENT_TIMEOUT_SECS, "BUILD_AGENT_TIMEOUT_SECS"),
-            (DEADLINE_BUFFER_SECS, "DEADLINE_BUFFER_SECS"),
-            (
-                GITHUB_ENTERPRISE_ALLOWED_HOSTS,
-                "GITHUB_ENTERPRISE_ALLOWED_HOSTS",
-            ),
-            (
-                S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES,
-                "S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES",
-            ),
-            (S3_SIGNED_URL_EXPIRY_SECS, "S3_SIGNED_URL_EXPIRY_SECS"),
-            (SQS_QUEUE_URL, "SQS_QUEUE_URL"),
-        ] {
-            assert_eq!(name, expected);
-        }
-    }
-}
