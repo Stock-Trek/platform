@@ -96,7 +96,8 @@ impl ArchiveParquet {
             ArchiveKind::Candles => Self::candle_batch(records)?,
         };
         let mut buffer = Vec::new();
-        let mut writer = ArrowWriter::try_new(&mut buffer, batch.schema(), Some(writer_properties()))?;
+        let mut writer =
+            ArrowWriter::try_new(&mut buffer, batch.schema(), Some(writer_properties()))?;
         writer.write(&batch)?;
         writer.close()?;
         Ok(buffer)
@@ -471,7 +472,6 @@ impl ArchiveParquet {
             ),
         )
     }
-
 }
 
 #[cfg(test)]

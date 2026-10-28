@@ -7,13 +7,10 @@
 
 pub mod buffer;
 pub mod constants;
-pub mod feed;
-pub mod granularity;
 pub mod layout;
 pub mod parquet;
 pub mod parquet_reader;
 pub mod parquet_writer;
-pub mod path;
 pub mod plan;
 pub mod quantized_time;
 pub mod record;
