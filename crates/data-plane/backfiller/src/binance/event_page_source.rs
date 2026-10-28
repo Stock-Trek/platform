@@ -1,6 +1,5 @@
 use crate::{
-    binance::parser::BinanceEventParser,
-    event_page_source::EventPageSource,
+    binance::parser::BinanceEventParser, event_page_source::EventPageSource,
     fetcher::BackfilledEvent,
 };
 use async_trait::async_trait;
