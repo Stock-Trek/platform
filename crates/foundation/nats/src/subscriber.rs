@@ -1,51 +1,39 @@
-use crate::{address::NatsAddress, connection, subject::NatsSubject};
+use crate::{NatsAddress, NatsSubject};
+use async_nats::{Client, Subscriber};
+use futures::StreamExt;
 use platform_errors::BpResult;
-use tokio::sync::Mutex;
 
-/// Subscription that yields the raw subject and payload for each message,
-/// reconnecting and resubscribing when the connection drops.
+/// Subscription that yields the raw subject and payload for each message.
+///
+/// The underlying client reconnects and resubscribes automatically, so callers
+/// do not need to manage connection state.
 pub struct NatsSubscriber {
-    address: NatsAddress,
-    name: String,
-    subject: String,
-    connection: Mutex<Option<connection::NatsConnection>>,
+    _client: Client,
+    subscriber: Subscriber,
 }
 
 impl NatsSubscriber {
     pub async fn connect(url: &str, name: &str, subject: &str) -> BpResult<Self> {
         let address = NatsAddress::parse(url)?;
         NatsSubject::validate(subject)?;
-        let mut connection = connection::NatsConnection::connect(&address, name).await?;
-        connection.subscribe(subject, 1).await?;
+        let client = address.connect(name).await?;
+        let subscriber = client
+            .subscribe(subject.to_string())
+            .await
+            .map_err(|error| {
+                crate::jetstream::protocol_error("failed to subscribe to NATS subject", error)
+            })?;
         Ok(Self {
-            address,
-            name: name.to_string(),
-            subject: subject.to_string(),
-            connection: Mutex::new(Some(connection)),
+            _client: client,
+            subscriber,
         })
     }
 
     pub async fn next_message(&mut self) -> BpResult<Option<(String, Vec<u8>)>> {
-        loop {
-            let result = {
-                let mut guard = self.connection.lock().await;
-                match guard.as_mut() {
-                    Some(connection) => connection.next_message().await,
-                    None => unreachable!("NATS connection was initialised above"),
-                }
-            };
-            match result {
-                Ok(message) => return Ok(message),
-                Err(error) => {
-                    tracing::warn!(%error, "NATS connection lost; reconnecting");
-                    *self.connection.lock().await = None;
-                    let mut connection =
-                        connection::NatsConnection::connect(&self.address, &self.name).await?;
-                    connection.subscribe(&self.subject, 1).await?;
-                    *self.connection.lock().await = Some(connection);
-                    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-                }
-            }
-        }
+        Ok(self
+            .subscriber
+            .next()
+            .await
+            .map(|message| (message.subject.to_string(), message.payload.to_vec())))
     }
 }

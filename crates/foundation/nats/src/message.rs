@@ -24,43 +24,32 @@ impl Message {
     pub fn is_status(&self, code: u16) -> bool {
         self.status == Some(code)
     }
+}
 
-    /// Formats a NATS/1.0 header block, including the terminating blank line.
-    pub(crate) fn format_header_block(headers: &[(String, String)]) -> Vec<u8> {
-        let mut block = String::from("NATS/1.0\r\n");
-        for (name, value) in headers {
-            block.push_str(name);
-            block.push_str(": ");
-            block.push_str(value);
-            block.push_str("\r\n");
-        }
-        block.push_str("\r\n");
-        block.into_bytes()
-    }
+impl From<async_nats::Message> for Message {
+    fn from(message: async_nats::Message) -> Self {
+        let headers = message
+            .headers
+            .as_ref()
+            .map(|headers| {
+                headers
+                    .iter()
+                    .flat_map(|(name, values)| {
+                        values
+                            .iter()
+                            .map(|value| (name.to_string(), value.as_str().to_string()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
 
-    /// Parses a NATS/1.0 header block into a status code and header pairs.
-    pub(crate) fn parse_header_block(block: &[u8]) -> Result<(Option<u16>, Headers), String> {
-        let text = std::str::from_utf8(block)
-            .map_err(|error| format!("header block is not valid UTF-8: {error}"))?;
-        let mut lines = text.split("\r\n");
-        let first = lines.next().unwrap_or_default();
-        let mut tokens = first.split_whitespace();
-        let version = tokens.next().unwrap_or_default();
-        if !version.starts_with("NATS/") {
-            return Err(format!("unexpected header block version {version:?}"));
+        Self {
+            subject: message.subject.to_string(),
+            reply_to: message.reply.map(|reply| reply.to_string()),
+            status: message.status.map(u16::from),
+            headers,
+            payload: message.payload.to_vec(),
         }
-        let status = tokens.next().and_then(|code| code.parse::<u16>().ok());
-        let mut headers = Vec::new();
-        for line in lines {
-            if line.is_empty() {
-                continue;
-            }
-            let Some((name, value)) = line.split_once(':') else {
-                return Err(format!("malformed header line {line:?}"));
-            };
-            headers.push((name.trim().to_string(), value.trim().to_string()));
-        }
-        Ok((status, headers))
     }
 }
 
@@ -69,32 +58,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn formats_and_parses_a_header_block_round_trip() {
-        let headers = vec![
-            ("Nats-Msg-Id".to_string(), "market-events.1".to_string()),
-            ("X-Trace".to_string(), "abc".to_string()),
-        ];
-        let block = Message::format_header_block(&headers);
-        let (status, parsed) = Message::parse_header_block(&block).unwrap();
+    fn converts_async_nats_messages() {
+        let mut headers = async_nats::HeaderMap::new();
+        headers.insert("Nats-Msg-Id", "market-events.1");
+        let message = async_nats::Message {
+            subject: "market.events.binance.btcusdt.trade".to_string().into(),
+            reply: Some("_INBOX.1".to_string().into()),
+            payload: b"payload".to_vec().into(),
+            headers: Some(headers),
+            status: async_nats::StatusCode::from_u16(404).ok(),
+            description: Some("No Messages".to_string()),
+            length: 7,
+        };
 
-        assert_eq!(status, None);
-        assert_eq!(parsed, headers);
-    }
+        let message = Message::from(message);
 
-    #[test]
-    fn parses_status_header_blocks() {
-        let block = b"NATS/1.0 404\r\nDescription: No Messages\r\n\r\n";
-        let (status, headers) = Message::parse_header_block(block).unwrap();
-
-        assert_eq!(status, Some(404));
-        assert_eq!(headers.len(), 1);
-        assert_eq!(headers[0].0, "Description");
-        assert_eq!(headers[0].1, "No Messages");
-    }
-
-    #[test]
-    fn rejects_header_blocks_without_a_version_line() {
-        assert!(Message::parse_header_block(b"HTTP/1.1 200\r\n\r\n").is_err());
-        assert!(Message::parse_header_block(&[0xff, 0xfe]).is_err());
+        assert_eq!(message.subject, "market.events.binance.btcusdt.trade");
+        assert_eq!(message.reply_to.as_deref(), Some("_INBOX.1"));
+        assert_eq!(message.status, Some(404));
+        assert_eq!(message.header("nats-msg-id"), Some("market-events.1"));
+        assert_eq!(message.payload, b"payload");
     }
 }

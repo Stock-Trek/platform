@@ -1,10 +1,9 @@
-//! Minimal NATS client shared by the market data services.
+//! NATS client shared by the market data services.
 //!
-//! Publishes and subscriptions run over JetStream so that events survive
-//! reconnects and restarts, with a core-NATS fallback in [`NatsSubscriber`].
+//! This module wraps [`async_nats`] so services share one implementation of
+//! JetStream publishing, durable pull consumers, and KV access.
 
 mod address;
-mod connection;
 mod consumer;
 mod jetstream;
 mod kv;

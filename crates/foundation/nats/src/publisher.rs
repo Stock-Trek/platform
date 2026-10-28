@@ -1,9 +1,15 @@
 //! JetStream-backed publisher with acknowledgements and idempotent message ids.
 
-use crate::{NatsAddress, NatsSubject, connection::NatsConnection, jetstream::JetStream};
+use crate::{
+    NatsAddress, NatsSubject,
+    jetstream::{JetStream, protocol_error},
+};
+use async_nats::{
+    HeaderMap,
+    jetstream::{self, Context, stream},
+};
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult, IngesterError};
-use serde_json::Value;
+use platform_errors::BpResult;
 use std::sync::Mutex;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -22,42 +28,13 @@ pub struct PublishAck {
     pub duplicate: bool,
 }
 
-impl PublishAck {
-    /// Parses a JetStream publish acknowledgement payload.
-    pub(crate) fn parse(payload: &[u8]) -> BpResult<PublishAck> {
-        let value: Value = serde_json::from_slice(payload)?;
-        if let Some(error) = value.get("error").filter(|error| !error.is_null()) {
-            return Err(BpError::Ingester(IngesterError::protocol(format!(
-                "JetStream publish rejected: {}",
-                error
-                    .get("description")
-                    .and_then(Value::as_str)
-                    .unwrap_or("unknown error")
-            ))));
+impl From<async_nats::jetstream::publish::PublishAck> for PublishAck {
+    fn from(ack: async_nats::jetstream::publish::PublishAck) -> Self {
+        Self {
+            stream: ack.stream,
+            sequence: ack.sequence,
+            duplicate: ack.duplicate,
         }
-        let stream = value
-            .get("stream")
-            .and_then(Value::as_str)
-            .ok_or_else(|| {
-                BpError::Ingester(IngesterError::protocol(
-                    "JetStream ack is missing the stream name",
-                ))
-            })?
-            .to_string();
-        let sequence = value.get("seq").and_then(Value::as_u64).ok_or_else(|| {
-            BpError::Ingester(IngesterError::protocol(
-                "JetStream ack is missing the sequence",
-            ))
-        })?;
-        let duplicate = value
-            .get("duplicate")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
-        Ok(PublishAck {
-            stream,
-            sequence,
-            duplicate,
-        })
     }
 }
 
@@ -70,7 +47,7 @@ impl PublishAck {
 pub struct NatsPublisher {
     address: NatsAddress,
     name: String,
-    connection: AsyncMutex<Option<NatsConnection>>,
+    context: AsyncMutex<Option<Context>>,
     streams: Mutex<Vec<String>>,
 }
 
@@ -87,7 +64,7 @@ impl NatsPublisher {
         Ok(Self {
             address,
             name: name.to_string(),
-            connection: AsyncMutex::new(None),
+            context: AsyncMutex::new(None),
             streams: Mutex::new(Vec::new()),
         })
     }
@@ -105,14 +82,18 @@ impl NatsPublisher {
         {
             return Ok(());
         }
-        let mut connection = self.connection.lock().await;
-        if connection.is_none() {
-            *connection = Some(NatsConnection::connect(&self.address, &self.name).await?);
-        }
-        let result = match connection.as_mut() {
-            Some(connection) => connection.ensure_stream(&stream, subject_prefix).await,
-            None => unreachable!("NATS connection was initialised above"),
-        };
+
+        let context = self.context().await?;
+        let result = context
+            .get_or_create_stream(stream::Config {
+                name: stream.clone(),
+                subjects: vec![format!("{subject_prefix}.>")],
+                storage: stream::StorageType::File,
+                ..Default::default()
+            })
+            .await
+            .map(|_| ())
+            .map_err(|error| protocol_error("failed to ensure JetStream stream", error));
         match result {
             Ok(()) => {
                 self.streams
@@ -122,7 +103,7 @@ impl NatsPublisher {
                 Ok(())
             }
             Err(error) => {
-                *connection = None;
+                *self.context.lock().await = None;
                 Err(error)
             }
         }
@@ -145,21 +126,36 @@ impl NatsPublisher {
         payload: &[u8],
     ) -> BpResult<PublishAck> {
         NatsSubject::validate(subject)?;
-        let mut connection = self.connection.lock().await;
-        if connection.is_none() {
-            *connection = Some(NatsConnection::connect(&self.address, &self.name).await?);
+        let context = self.context().await?;
+        let mut headers = HeaderMap::new();
+        headers.insert("Nats-Msg-Id", message_id);
+        let result = async {
+            let ack = context
+                .publish_with_headers(subject.to_string(), headers, payload.to_vec().into())
+                .await
+                .map_err(|error| protocol_error("failed to publish to JetStream", error))?
+                .await
+                .map_err(|error| {
+                    protocol_error("failed to receive JetStream publish ack", error)
+                })?;
+            Ok(PublishAck::from(ack))
         }
-        let result = match connection.as_mut() {
-            Some(connection) => {
-                connection
-                    .publish_and_wait(subject, message_id, payload)
-                    .await
-            }
-            None => unreachable!("NATS connection was initialised above"),
-        };
+        .await;
         if result.is_err() {
-            *connection = None;
+            *self.context.lock().await = None;
         }
         result
+    }
+
+    async fn context(&self) -> BpResult<Context> {
+        let mut context = self.context.lock().await;
+        if context.is_none() {
+            let client = self.address.connect(&self.name).await?;
+            *context = Some(jetstream::new(client));
+        }
+        Ok(context
+            .as_ref()
+            .expect("NATS context was initialised above")
+            .clone())
     }
 }

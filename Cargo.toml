@@ -42,6 +42,7 @@ platform-runner = { path = "crates/sandbox-plane/runner" }
 
 arrow-array = "60"
 arrow-schema = "60"
+async-nats = "0.51"
 async-trait = "0.1"
 aws-config = "1"
 aws-credential-types = "1"
