@@ -51,10 +51,16 @@ impl CompactorConfig {
             DEFAULT_POLL_INTERVAL_SECS,
         )?;
 
-        let settle =
-            Config::optional_positive_duration_secs(vars, COMPACTOR_SETTLE_SECS, DEFAULT_SETTLE_SECS)?;
-        let min_source_files =
-            Config::optional_positive_usize(vars, COMPACTOR_MIN_SOURCE_FILES, DEFAULT_MIN_SOURCE_FILES)?;
+        let settle = Config::optional_positive_duration_secs(
+            vars,
+            COMPACTOR_SETTLE_SECS,
+            DEFAULT_SETTLE_SECS,
+        )?;
+        let min_source_files = Config::optional_positive_usize(
+            vars,
+            COMPACTOR_MIN_SOURCE_FILES,
+            DEFAULT_MIN_SOURCE_FILES,
+        )?;
 
         let spill_records =
             Config::optional_positive_usize(vars, COMPACTOR_SPILL_RECORDS, DEFAULT_SPILL_RECORDS)?;

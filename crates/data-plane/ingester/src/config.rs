@@ -42,7 +42,8 @@ impl IngesterConfig {
             StreamFormat::for_exchange(&vars.required(INGESTER_STREAM_FORMAT)?, exchange)
                 .map_err(|error| BpError::config_invalid_source(INGESTER_STREAM_FORMAT, error))?;
         let nats_url = Config::required_nats_url(vars, INGESTER_NATS_URL)?;
-        let nats_subject_prefix = Config::required_nats_subject(vars, INGESTER_NATS_SUBJECT_PREFIX)?;
+        let nats_subject_prefix =
+            Config::required_nats_subject(vars, INGESTER_NATS_SUBJECT_PREFIX)?;
 
         Ok(Self {
             log_filter,

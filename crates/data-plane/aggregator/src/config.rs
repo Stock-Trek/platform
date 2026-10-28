@@ -33,7 +33,8 @@ impl AggregatorConfig {
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let nats_url = Config::required_nats_url(vars, AGGREGATOR_NATS_URL)?;
-        let event_subject_prefix = Config::required_nats_subject(vars, AGGREGATOR_EVENT_SUBJECT_PREFIX)?;
+        let event_subject_prefix =
+            Config::required_nats_subject(vars, AGGREGATOR_EVENT_SUBJECT_PREFIX)?;
         let open_candle_subject_prefix =
             Config::required_nats_subject(vars, AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX)?;
         let closed_candle_subject_prefix =

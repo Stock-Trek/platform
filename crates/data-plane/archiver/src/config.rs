@@ -41,7 +41,8 @@ impl ArchiverConfig {
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let nats_url = Config::required_nats_url(vars, ARCHIVER_NATS_URL)?;
-        let event_subject_prefix = Config::required_nats_subject(vars, ARCHIVER_EVENT_SUBJECT_PREFIX)?;
+        let event_subject_prefix =
+            Config::required_nats_subject(vars, ARCHIVER_EVENT_SUBJECT_PREFIX)?;
         let closed_candle_subject_prefix =
             Config::required_nats_subject(vars, ARCHIVER_CLOSED_CANDLE_SUBJECT_PREFIX)?;
         let s3_bucket = vars.required(ARCHIVER_S3_BUCKET)?;
@@ -55,16 +56,23 @@ impl ArchiverConfig {
             DEFAULT_FLUSH_INTERVAL_SECS,
         )?;
 
-        let bucket =
-            Config::optional_positive_duration_secs(vars, ARCHIVER_BUCKET_SECS, DEFAULT_BUCKET_SECS)?;
+        let bucket = Config::optional_positive_duration_secs(
+            vars,
+            ARCHIVER_BUCKET_SECS,
+            DEFAULT_BUCKET_SECS,
+        )?;
         let bucket_millis = i64::try_from(bucket.as_millis()).map_err(|_| {
             BpError::config_invalid(ARCHIVER_BUCKET_SECS, "is too large to represent")
         })?;
 
-        let max_records = Config::optional_positive_usize(vars, ARCHIVER_MAX_RECORDS, DEFAULT_MAX_RECORDS)?;
+        let max_records =
+            Config::optional_positive_usize(vars, ARCHIVER_MAX_RECORDS, DEFAULT_MAX_RECORDS)?;
 
-        let dedupe_capacity =
-            Config::optional_positive_usize(vars, ARCHIVER_DEDUPE_CAPACITY, DEFAULT_DEDUPE_CAPACITY)?;
+        let dedupe_capacity = Config::optional_positive_usize(
+            vars,
+            ARCHIVER_DEDUPE_CAPACITY,
+            DEFAULT_DEDUPE_CAPACITY,
+        )?;
 
         Ok(Self {
             log_filter,

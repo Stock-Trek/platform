@@ -60,11 +60,7 @@ impl Config {
 
     /// Reads an optional positive `usize`, falling back to `default` when the
     /// variable is missing or empty.
-    pub fn optional_positive_usize(
-        vars: &EnvVars,
-        name: &str,
-        default: usize,
-    ) -> BpResult<usize> {
+    pub fn optional_positive_usize(vars: &EnvVars, name: &str, default: usize) -> BpResult<usize> {
         let value = vars.optional_parsed_or(name, default)?;
         Self::positive_usize(name, value)
     }

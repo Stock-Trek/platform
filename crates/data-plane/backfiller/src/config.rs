@@ -36,8 +36,10 @@ impl BackfillerConfig {
             )
         })?;
         let nats_url = Config::required_nats_url(vars, BACKFILLER_NATS_URL)?;
-        let gap_subject_prefix = Config::required_nats_subject(vars, BACKFILLER_GAP_SUBJECT_PREFIX)?;
-        let event_subject_prefix = Config::required_nats_subject(vars, BACKFILLER_EVENT_SUBJECT_PREFIX)?;
+        let gap_subject_prefix =
+            Config::required_nats_subject(vars, BACKFILLER_GAP_SUBJECT_PREFIX)?;
+        let event_subject_prefix =
+            Config::required_nats_subject(vars, BACKFILLER_EVENT_SUBJECT_PREFIX)?;
         let exchange_http_url =
             vars.required_url(BACKFILLER_EXCHANGE_HTTP_URL, &["http", "https"])?;
         let exchange_api_key = vars.optional(BACKFILLER_EXCHANGE_API_KEY)?;
