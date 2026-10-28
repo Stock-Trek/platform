@@ -1,6 +1,5 @@
 use crate::{artifacts::Artifacts, s3::SignedPost, source::SourceLimits};
-use platform_errors::bp::{BpError, BpResult};
-use platform_errors::timeout::TimeoutError;
+use platform_errors::{BpError, BpResult, TimeoutError};
 use platform_messages::build_request::BuildRequest;
 use std::{
     path::PathBuf,

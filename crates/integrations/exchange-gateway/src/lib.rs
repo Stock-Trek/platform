@@ -1,9 +1,13 @@
 pub mod auto_resync_connector;
 pub mod clients;
-pub mod clock;
+mod clock;
 pub mod connector;
-pub mod panic_guard;
+mod panic_guard;
 pub mod rate_limit;
-pub mod retry_after;
+mod retry_after;
 pub mod submission;
 pub mod websocket_listener;
+
+pub use async_trait::async_trait;
+pub use iris;
+pub use websocket_listener::{WaiterForResponse, WebsocketListener};

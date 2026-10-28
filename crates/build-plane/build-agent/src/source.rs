@@ -7,11 +7,7 @@
 //! working directory replaces the checked in algorithm stub with the user's
 //! source.
 
-use platform_errors::{
-    bp::{BpError, BpResult},
-    io::IoError,
-    storage::StorageError,
-};
+use platform_errors::{BpError, BpResult, IoError, StorageError};
 use std::{
     io::{Cursor, Read, Write},
     num::NonZeroU64,

@@ -395,6 +395,12 @@ impl std::ops::Add<TimestampMilliseconds> for DurationMilliseconds {
     }
 }
 
+pub use DurationMicroseconds as Microseconds;
+pub use DurationMilliseconds as Milliseconds;
+pub use DurationNanoseconds as Nanoseconds;
+pub use DurationSeconds as Seconds;
+pub use TimestampMilliseconds as Timestamp;
+
 /// Non-zero duration newtypes, useful as divisor types.
 pub type NonZeroDurationSeconds = NonZero<DurationSeconds>;
 pub type NonZeroDurationMilliseconds = NonZero<DurationMilliseconds>;

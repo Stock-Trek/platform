@@ -2,7 +2,7 @@ use crate::{config::AgentConfig, handler::Handler, source::SourceLimits};
 use lambda_runtime::{LambdaEvent, service_fn};
 use metrics_cloudwatch_embedded::lambda::service::run;
 use platform_config::tracing_setup::TracingSetup;
-use platform_errors::bp::{BpError, BpResult};
+use platform_errors::{BpError, BpResult};
 use platform_messages::build_request::{BuildOutcome, BuildRequest};
 use platform_metrics::{build::BuildMetrics, descriptions::DescriptionsMetrics};
 use std::time::{Instant, SystemTime};
@@ -102,8 +102,7 @@ impl BuildAgent {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use platform_errors::config::ConfigError;
-    use platform_errors::timeout::TimeoutError;
+    use platform_errors::{ConfigError, TimeoutError};
     use std::time::Duration;
 
     #[test]

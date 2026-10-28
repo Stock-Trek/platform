@@ -1,4 +1,4 @@
-use platform_errors::bp::{BpError, BpResult};
+use platform_errors::{BpError, BpResult};
 use tracing_subscriber::{EnvFilter, fmt::Subscriber};
 
 pub struct TracingSetup;
