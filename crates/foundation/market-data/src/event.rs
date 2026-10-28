@@ -2,8 +2,6 @@ use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use stock_trek_types::cex::cex_id::CexId;
 
-pub use crate::subject::MarketEventSubject;
-
 /// A decoded exchange websocket frame.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ParsedMessage {
