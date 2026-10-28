@@ -1,6 +1,6 @@
 use crate::{
     backfiller::{BackfillOptions, BackfillService},
-    binance::BinanceGapFetcher,
+    binance::fetcher::BinanceGapFetcher,
     config::BackfillerConfig,
     source::NatsGapMarkerSource,
 };
