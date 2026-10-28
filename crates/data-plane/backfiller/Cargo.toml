@@ -13,6 +13,7 @@ platform-exchange-gateway = { workspace = true }
 platform-exchange-types = { workspace = true }
 platform-market-data = { workspace = true }
 platform-nats = { workspace = true }
+platform-runtime = { workspace = true }
 platform-types = { workspace = true }
 serde_json = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }

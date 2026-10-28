@@ -18,6 +18,7 @@ platform-backfiller = { path = "crates/data-plane/backfiller" }
 platform-compactor = { path = "crates/data-plane/compactor" }
 platform-ingester = { path = "crates/data-plane/ingester" }
 platform-market-data-old = { path = "crates/data-plane/market-data-old" }
+platform-runtime = { path = "crates/data-plane/runtime" }
 
 platform-config = { path = "crates/foundation/config" }
 platform-errors = { path = "crates/foundation/errors" }

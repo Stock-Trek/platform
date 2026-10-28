@@ -128,9 +128,8 @@ impl AggregatorRunner {
                         sink.publish_closed(&closed).await?;
                     }
                 }
-                signal = tokio::signal::ctrl_c() => {
+                signal = platform_runtime::shutdown_signal() => {
                     signal?;
-                    info!("shutdown requested");
                     break;
                 }
             }

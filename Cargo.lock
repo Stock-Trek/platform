@@ -3150,6 +3150,7 @@ dependencies = [
  "platform-errors",
  "platform-market-data",
  "platform-nats",
+ "platform-runtime",
  "platform-types",
  "rust_decimal",
  "serde",
@@ -3188,6 +3189,7 @@ dependencies = [
  "platform-errors",
  "platform-market-data",
  "platform-nats",
+ "platform-runtime",
  "platform-types",
  "serde_json",
  "tokio",
@@ -3208,6 +3210,7 @@ dependencies = [
  "platform-exchange-types",
  "platform-market-data",
  "platform-nats",
+ "platform-runtime",
  "platform-types",
  "serde_json",
  "stock-trek-types",
@@ -3283,6 +3286,7 @@ dependencies = [
  "platform-config",
  "platform-errors",
  "platform-market-data",
+ "platform-runtime",
  "platform-types",
  "stock-trek-types",
  "tempfile",
@@ -3455,6 +3459,7 @@ dependencies = [
  "platform-errors",
  "platform-market-data",
  "platform-nats",
+ "platform-runtime",
  "platform-types",
  "serde_json",
  "stock-trek-types",
@@ -3561,6 +3566,17 @@ dependencies = [
  "serde",
  "serde_json",
  "stock-trek",
+]
+
+[[package]]
+name = "platform-runtime"
+version = "0.2.0"
+dependencies = [
+ "platform-config",
+ "platform-errors",
+ "platform-nats",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

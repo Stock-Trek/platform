@@ -1,6 +1,6 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
-use platform_nats::{NatsAddress, NatsSubject};
+use platform_runtime::config::{log_filter, required_nats_subject, required_nats_url};
 use stock_trek_types::cex::cex_id::CexId;
 
 const BACKFILLER_EXCHANGE: &str = "BACKFILLER_EXCHANGE";
@@ -9,7 +9,6 @@ const BACKFILLER_GAP_SUBJECT_PREFIX: &str = "BACKFILLER_GAP_SUBJECT_PREFIX";
 const BACKFILLER_EVENT_SUBJECT_PREFIX: &str = "BACKFILLER_EVENT_SUBJECT_PREFIX";
 const BACKFILLER_EXCHANGE_HTTP_URL: &str = "BACKFILLER_EXCHANGE_HTTP_URL";
 const BACKFILLER_EXCHANGE_API_KEY: &str = "BACKFILLER_EXCHANGE_API_KEY";
-const RUST_LOG: &str = "RUST_LOG";
 
 #[derive(Debug, Clone)]
 pub struct BackfillerConfig {
@@ -28,7 +27,7 @@ impl BackfillerConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let log_filter = vars.required_log_filter(RUST_LOG)?;
+        let log_filter = log_filter(vars)?;
         let exchange_value = vars.required(BACKFILLER_EXCHANGE)?;
         let exchange = CexId::try_from(exchange_value.as_str()).map_err(|_| {
             BpError::config_invalid(
@@ -36,12 +35,9 @@ impl BackfillerConfig {
                 format!("unsupported exchange {exchange_value}"),
             )
         })?;
-        let nats_url = vars.required(BACKFILLER_NATS_URL)?;
-        NatsAddress::validate(&nats_url)?;
-        let gap_subject_prefix = vars.required(BACKFILLER_GAP_SUBJECT_PREFIX)?;
-        NatsSubject::validate(&gap_subject_prefix)?;
-        let event_subject_prefix = vars.required(BACKFILLER_EVENT_SUBJECT_PREFIX)?;
-        NatsSubject::validate(&event_subject_prefix)?;
+        let nats_url = required_nats_url(vars, BACKFILLER_NATS_URL)?;
+        let gap_subject_prefix = required_nats_subject(vars, BACKFILLER_GAP_SUBJECT_PREFIX)?;
+        let event_subject_prefix = required_nats_subject(vars, BACKFILLER_EVENT_SUBJECT_PREFIX)?;
         let exchange_http_url =
             vars.required_url(BACKFILLER_EXCHANGE_HTTP_URL, &["http", "https"])?;
         let exchange_api_key = vars.optional(BACKFILLER_EXCHANGE_API_KEY)?;

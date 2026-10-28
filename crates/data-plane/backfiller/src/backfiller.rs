@@ -53,7 +53,14 @@ where
 
     pub async fn run(mut self) -> BpResult<()> {
         loop {
-            let Some(gap) = self.source.next_gap().await? else {
+            let next_gap = tokio::select! {
+                gap = self.source.next_gap() => gap?,
+                signal = platform_runtime::shutdown_signal() => {
+                    signal?;
+                    return Ok(());
+                }
+            };
+            let Some(gap) = next_gap else {
                 info!("gap marker source ended");
                 return Ok(());
             };
