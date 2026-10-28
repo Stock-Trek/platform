@@ -47,79 +47,78 @@ where
             "archiver started"
         );
 
-        let result = run_until_shutdown(&mut source, &sink, &mut buffer, &mut flush_ticker).await;
-        let flush_result = flush(&sink, &mut buffer, FLUSH_REASON_SHUTDOWN).await;
+        let result =
+            Self::run_until_shutdown(&mut source, &sink, &mut buffer, &mut flush_ticker).await;
+        let flush_result = Self::flush(&sink, &mut buffer, FLUSH_REASON_SHUTDOWN).await;
         result?;
         flush_result
     }
-}
 
-async fn run_until_shutdown<S, K>(
-    source: &mut S,
-    sink: &K,
-    buffer: &mut ArchiveBuffer,
-    flush_ticker: &mut time::Interval,
-) -> BpResult<()>
-where
-    S: ArchiveSource,
-    K: ArchiveSink,
-{
-    loop {
-        tokio::select! {
-            record = source.next_record() => {
-                match record {
-                    Ok(Some(record)) => {
-                        if !buffer.push(record) {
-                            MarketDataMetrics::record_dropped_event(
-                                STAGE_ARCHIVER,
-                                DROP_REASON_DUPLICATE,
-                            );
+    async fn run_until_shutdown(
+        source: &mut S,
+        sink: &K,
+        buffer: &mut ArchiveBuffer,
+        flush_ticker: &mut time::Interval,
+    ) -> BpResult<()> {
+        loop {
+            tokio::select! {
+                record = source.next_record() => {
+                    match record {
+                        Ok(Some(record)) => {
+                            if !buffer.push(record) {
+                                MarketDataMetrics::record_dropped_event(
+                                    STAGE_ARCHIVER,
+                                    DROP_REASON_DUPLICATE,
+                                );
+                            }
+                            if buffer.should_flush() {
+                                Self::flush(sink, buffer, FLUSH_REASON_SIZE).await?;
+                            }
                         }
-                        if buffer.should_flush() {
-                            flush(sink, buffer, FLUSH_REASON_SIZE).await?;
+                        Ok(None) => {
+                            info!("archive source ended");
+                            break;
                         }
-                    }
-                    Ok(None) => {
-                        info!("archive source ended");
-                        break;
-                    }
-                    Err(error) => {
-                        warn!(%error, "archive source stopped");
-                        break;
+                        Err(error) => {
+                            warn!(%error, "archive source stopped");
+                            break;
+                        }
                     }
                 }
-            }
-            _ = flush_ticker.tick() => {
-                flush(sink, buffer, FLUSH_REASON_INTERVAL).await?;
-            }
-            signal = platform_runtime::Runtime::shutdown_signal() => {
-                signal?;
-                break;
+                _ = flush_ticker.tick() => {
+                    Self::flush(sink, buffer, FLUSH_REASON_INTERVAL).await?;
+                }
+                signal = platform_runtime::Runtime::shutdown_signal() => {
+                    signal?;
+                    break;
+                }
             }
         }
+        Ok(())
     }
-    Ok(())
-}
 
-async fn flush<K>(sink: &K, buffer: &mut ArchiveBuffer, reason: &'static str) -> BpResult<()>
-where
-    K: ArchiveSink,
-{
-    if buffer.is_empty() {
-        return Ok(());
+    async fn flush(sink: &K, buffer: &mut ArchiveBuffer, reason: &'static str) -> BpResult<()> {
+        if buffer.is_empty() {
+            return Ok(());
+        }
+        let records = buffer.len();
+        let started_at = Instant::now();
+        let result = sink.write(buffer.records_mut()).await;
+        MarketDataMetrics::record_archive_flush(
+            reason,
+            records,
+            result.is_ok(),
+            started_at.elapsed(),
+        );
+        result?;
+        buffer.clear_records();
+        info!(
+            records,
+            duplicates = buffer.duplicates(),
+            "flushed archive batch"
+        );
+        Ok(())
     }
-    let records = buffer.len();
-    let started_at = Instant::now();
-    let result = sink.write(buffer.records_mut()).await;
-    MarketDataMetrics::record_archive_flush(reason, records, result.is_ok(), started_at.elapsed());
-    result?;
-    buffer.clear_records();
-    info!(
-        records,
-        duplicates = buffer.duplicates(),
-        "flushed archive batch"
-    );
-    Ok(())
 }
 
 #[cfg(test)]

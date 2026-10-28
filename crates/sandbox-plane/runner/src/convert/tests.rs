@@ -2,7 +2,7 @@ use crate::{
     convert::{
         decimal::ToDecimal, market_aligned_window::MarketCandlesMap,
         market_rolling_window::MarketCandleMap, market_tick::MarketTickVec, required::IsRequired,
-        string::from_string,
+        string::JsonString,
     },
     generated::dto::*,
 };
@@ -232,16 +232,16 @@ fn required_errors_on_none() {
 
 #[test]
 fn from_string_deserializes_enum_variant() {
-    assert_eq!(from_string::<Side>("Buy").unwrap(), Side::Buy);
+    assert_eq!(JsonString::deserialize::<Side>("Buy").unwrap(), Side::Buy);
     assert_eq!(
-        from_string::<TimeInForce>("FillOrKill").unwrap(),
+        JsonString::deserialize::<TimeInForce>("FillOrKill").unwrap(),
         TimeInForce::FillOrKill
     );
 }
 
 #[test]
 fn from_string_errors_on_unknown_variant() {
-    assert!(from_string::<Side>("Sideways").is_err());
+    assert!(JsonString::deserialize::<Side>("Sideways").is_err());
 }
 
 #[test]

@@ -1,7 +1,4 @@
-use crate::{
-    batch::ArchiveBatch, parquet_reader::ParquetReader, parquet_writer::writer_properties,
-    record::ArchiveKind,
-};
+use crate::{batch::ArchiveBatch, parquet_reader::ParquetReader, record::ArchiveKind};
 use bytes::Bytes;
 use futures::StreamExt;
 use parquet::{
@@ -10,7 +7,8 @@ use parquet::{
         arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder},
         async_reader::ParquetRecordBatchStreamBuilder,
     },
-    file::reader::ChunkReader,
+    basic::Compression,
+    file::{properties::WriterProperties, reader::ChunkReader},
 };
 use platform_errors::{BpError, BpResult};
 use std::io::Write;
@@ -46,8 +44,11 @@ pub struct ArchiveParquetWriter<W: Write + Send> {
 
 impl<W: Write + Send> ArchiveParquetWriter<W> {
     pub fn try_new(kind: ArchiveKind, sink: W) -> BpResult<Self> {
-        let writer =
-            ArrowWriter::try_new(sink, ArchiveBatch::schema(kind), Some(writer_properties()))?;
+        let writer = ArrowWriter::try_new(
+            sink,
+            ArchiveBatch::schema(kind),
+            Some(ArchiveParquet::writer_properties()),
+        )?;
         Ok(Self { kind, writer })
     }
 
@@ -88,7 +89,7 @@ impl ArchiveParquet {
         let batch = batch.to_record_batch()?;
         let mut buffer = Vec::new();
         let mut writer =
-            ArrowWriter::try_new(&mut buffer, batch.schema(), Some(writer_properties()))?;
+            ArrowWriter::try_new(&mut buffer, batch.schema(), Some(Self::writer_properties()))?;
         writer.write(&batch)?;
         writer.close()?;
         Ok(buffer)
@@ -126,5 +127,11 @@ impl ArchiveParquet {
             records.extend(ArchiveBatch::from_record_batch(kind, &batch?)?.into_records());
         }
         ArchiveBatch::new(kind, records)
+    }
+
+    pub(crate) fn writer_properties() -> WriterProperties {
+        WriterProperties::builder()
+            .set_compression(Compression::ZSTD(Default::default()))
+            .build()
     }
 }

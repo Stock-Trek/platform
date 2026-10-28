@@ -90,26 +90,3 @@ impl Enqueue {
         })
     }
 }
-
-pub fn enqueue_metadata(name: &str, description: &str) -> StockTrekResult<()> {
-    Enqueue::metadata(name, description)
-}
-
-pub fn enqueue_preferences(preferences: Preferences) -> StockTrekResult<()> {
-    Enqueue::preferences(preferences)
-}
-
-pub fn enqueue_signals(signals: Signals) -> StockTrekResult<()> {
-    Enqueue::signals(signals)
-}
-
-pub fn enqueue_strategy(command: Command) -> StockTrekResult<()> {
-    Enqueue::strategy(command)
-}
-
-pub fn enqueue_action(
-    action: &ResolvedAction,
-    recovery_policy: &RecoveryPolicy,
-) -> StockTrekResult<()> {
-    Enqueue::action(action, recovery_policy)
-}

@@ -5,7 +5,7 @@ use platform_market_data::{
     candle::{Candle, ClosedCandle},
     envelope::EnvelopeCodec,
 };
-use platform_nats::{KeyValue, NatsPublisher, kv_bucket_name};
+use platform_nats::{JetStream, KeyValue, NatsPublisher};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 const NEXT_REVISION_KEY: &str = "next_closed_revision";
@@ -51,19 +51,19 @@ impl NatsCandleSink {
         let open_candles = KeyValue::connect(
             &config.nats_url,
             "platform-aggregator-candles",
-            &kv_bucket_name(&config.open_candle_subject_prefix),
+            &JetStream::kv_bucket_name(&config.open_candle_subject_prefix),
         )
         .await?;
         let revisions = KeyValue::connect(
             &config.nats_url,
             "platform-aggregator-candles",
-            &kv_bucket_name(&config.closed_candle_subject_prefix),
+            &JetStream::kv_bucket_name(&config.closed_candle_subject_prefix),
         )
         .await?;
         let next_revision = revisions
             .get_last(NEXT_REVISION_KEY)
             .await?
-            .and_then(|value| parse_revision(&value))
+            .and_then(|value| Self::parse_revision(&value))
             .unwrap_or(1);
         Ok(Self {
             publisher,
@@ -83,13 +83,13 @@ impl NatsCandleSink {
             .await
             .map(|_| ())
     }
-}
 
-fn parse_revision(value: &[u8]) -> Option<u64> {
-    std::str::from_utf8(value)
-        .ok()
-        .and_then(|value| value.trim().parse().ok())
-        .filter(|revision| *revision > 0)
+    fn parse_revision(value: &[u8]) -> Option<u64> {
+        std::str::from_utf8(value)
+            .ok()
+            .and_then(|value| value.trim().parse().ok())
+            .filter(|revision| *revision > 0)
+    }
 }
 
 #[async_trait]

@@ -116,7 +116,7 @@ impl Artifacts {
                 continue;
             }
             let to = workspace.join(entry);
-            copy_path(&from, &to).map_err(|source| {
+            Self::copy_path(&from, &to).map_err(|source| {
                 BpError::io(
                     "copy build workspace entry",
                     from.display().to_string(),
@@ -221,7 +221,7 @@ impl Artifacts {
         if source.is_dir() {
             let from = source;
             let to = target_dir.path().to_path_buf();
-            tokio::task::spawn_blocking(move || copy_path(&from, &to))
+            tokio::task::spawn_blocking(move || Self::copy_path(&from, &to))
                 .await
                 .map_err(|source| {
                     BpError::Config(ConfigError::Build(format!(
@@ -478,41 +478,42 @@ impl Artifacts {
         files.sort();
         Ok(files)
     }
-}
 
-/// Recursively copy `from` to `to`, preserving regular files, directories and
-/// symlinks. The source tree is the trusted, read-only workspace baked into the
-/// image; user archives are extracted into the writable copy instead.
-fn copy_path(from: &Path, to: &Path) -> io::Result<()> {
-    let metadata = std_fs::symlink_metadata(from)?;
-    let file_type = metadata.file_type();
-    if file_type.is_symlink() {
-        let target = std_fs::read_link(from)?;
-        #[cfg(unix)]
-        std::os::unix::fs::symlink(target, to)?;
-        #[cfg(not(unix))]
-        return Err(io::Error::new(
-            io::ErrorKind::Unsupported,
-            format!("cannot copy symlink {}", from.display()),
-        ));
-    } else if file_type.is_dir() {
-        std_fs::create_dir_all(to)?;
-        for entry in std_fs::read_dir(from)? {
-            let entry = entry?;
-            copy_path(&entry.path(), &to.join(entry.file_name()))?;
+    /// Recursively copy `from` to `to`, preserving regular files, directories
+    /// and symlinks. The source tree is the trusted, read-only workspace baked
+    /// into the image; user archives are extracted into the writable copy
+    /// instead.
+    fn copy_path(from: &Path, to: &Path) -> io::Result<()> {
+        let metadata = std_fs::symlink_metadata(from)?;
+        let file_type = metadata.file_type();
+        if file_type.is_symlink() {
+            let target = std_fs::read_link(from)?;
+            #[cfg(unix)]
+            std::os::unix::fs::symlink(target, to)?;
+            #[cfg(not(unix))]
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                format!("cannot copy symlink {}", from.display()),
+            ));
+        } else if file_type.is_dir() {
+            std_fs::create_dir_all(to)?;
+            for entry in std_fs::read_dir(from)? {
+                let entry = entry?;
+                Self::copy_path(&entry.path(), &to.join(entry.file_name()))?;
+            }
+        } else if file_type.is_file() {
+            if let Some(parent) = to.parent() {
+                std_fs::create_dir_all(parent)?;
+            }
+            std_fs::copy(from, to)?;
+        } else {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("unsupported workspace entry {}", from.display()),
+            ));
         }
-    } else if file_type.is_file() {
-        if let Some(parent) = to.parent() {
-            std_fs::create_dir_all(parent)?;
-        }
-        std_fs::copy(from, to)?;
-    } else {
-        return Err(io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!("unsupported workspace entry {}", from.display()),
-        ));
+        Ok(())
     }
-    Ok(())
 }
 
 #[cfg(test)]

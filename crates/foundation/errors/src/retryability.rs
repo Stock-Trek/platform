@@ -72,7 +72,7 @@ impl Retryability {
             | ErrorKind::CrossesDevices
             | ErrorKind::NotSeekable
             | ErrorKind::UnexpectedEof => Retryability::Permanent,
-            _ if is_permanent_os_error(error) => Retryability::Permanent,
+            _ if Self::is_permanent_os_error(error) => Retryability::Permanent,
             _ => Retryability::Retryable,
         }
     }
@@ -194,11 +194,37 @@ impl Retryability {
         documentation_url: Option<&str>,
     ) -> Retryability {
         match status {
-            HTTP_FORBIDDEN if is_rate_limit_error(message, documentation_url) => {
+            HTTP_FORBIDDEN if Self::is_rate_limit_error(message, documentation_url) => {
                 Retryability::Retryable
             }
             _ => Self::from_http_status(status),
         }
+    }
+
+    fn is_rate_limit_error(message: &str, documentation_url: Option<&str>) -> bool {
+        Self::mentions_rate_limit(message)
+            || documentation_url.is_some_and(Self::mentions_rate_limit)
+    }
+
+    fn mentions_rate_limit(value: &str) -> bool {
+        let value = value.to_ascii_lowercase();
+        value.contains("rate limit")
+            || value.contains("rate-limit")
+            || value.contains("rate_limit")
+            || value.contains("ratelimit")
+    }
+
+    #[cfg(unix)]
+    fn is_permanent_os_error(error: &std::io::Error) -> bool {
+        matches!(
+            error.raw_os_error(),
+            Some(8 | 19 | 20 | 21 | 25 | 30 | 39 | 40 | 84)
+        )
+    }
+
+    #[cfg(not(unix))]
+    fn is_permanent_os_error(_error: &std::io::Error) -> bool {
+        false
     }
 
     fn is_permanent_sqs_error_code(code: &str) -> bool {
@@ -224,31 +250,6 @@ impl Retryability {
                 | "UnsupportedOperation"
         )
     }
-}
-
-fn is_rate_limit_error(message: &str, documentation_url: Option<&str>) -> bool {
-    mentions_rate_limit(message) || documentation_url.is_some_and(mentions_rate_limit)
-}
-
-fn mentions_rate_limit(value: &str) -> bool {
-    let value = value.to_ascii_lowercase();
-    value.contains("rate limit")
-        || value.contains("rate-limit")
-        || value.contains("rate_limit")
-        || value.contains("ratelimit")
-}
-
-#[cfg(unix)]
-fn is_permanent_os_error(error: &std::io::Error) -> bool {
-    matches!(
-        error.raw_os_error(),
-        Some(8 | 19 | 20 | 21 | 25 | 30 | 39 | 40 | 84)
-    )
-}
-
-#[cfg(not(unix))]
-fn is_permanent_os_error(_error: &std::io::Error) -> bool {
-    false
 }
 
 #[cfg(test)]

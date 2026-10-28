@@ -92,13 +92,32 @@ impl EncryptionAlgorithm {
                 Ok(Encryptor::HmacSha512(signing_slice))
             }
             Self::RsaSha256 => {
-                let signing_key = rsa_signing_key(api_key_credentials.secret.expose_secret())
+                let signing_key = Self::rsa_signing_key(api_key_credentials.secret.expose_secret())
                     .map_err(|e| {
                         BpError::Exchange(ExchangeError::CryptoKey(format!("RSA key error: {e}")))
                     })?;
                 Ok(Encryptor::RsaSha256(Box::new(signing_key)))
             }
         }
+    }
+
+    fn rsa_signing_key(secret: &str) -> Result<RsaPkcs1v15SigningKey<Sha256>, String> {
+        let secret = secret.trim();
+        let private_key = if secret.starts_with("-----BEGIN") {
+            if secret.contains("RSA PRIVATE KEY") {
+                RsaPrivateKey::from_pkcs1_pem(secret)
+                    .map_err(|e| format!("invalid PKCS#1 PEM: {e}"))?
+            } else {
+                RsaPrivateKey::from_pkcs8_pem(secret)
+                    .map_err(|e| format!("invalid PKCS#8 PEM: {e}"))?
+            }
+        } else {
+            let bytes = secret.as_bytes();
+            RsaPrivateKey::from_pkcs8_der(bytes)
+                .or_else(|_| RsaPrivateKey::from_pkcs1_der(bytes))
+                .map_err(|e| format!("invalid PKCS#8 or PKCS#1 DER: {e}"))?
+        };
+        Ok(RsaPkcs1v15SigningKey::<Sha256>::new(private_key))
     }
 }
 
@@ -145,21 +164,4 @@ impl Encryptor {
             }
         }
     }
-}
-
-fn rsa_signing_key(secret: &str) -> Result<RsaPkcs1v15SigningKey<Sha256>, String> {
-    let secret = secret.trim();
-    let private_key = if secret.starts_with("-----BEGIN") {
-        if secret.contains("RSA PRIVATE KEY") {
-            RsaPrivateKey::from_pkcs1_pem(secret).map_err(|e| format!("invalid PKCS#1 PEM: {e}"))?
-        } else {
-            RsaPrivateKey::from_pkcs8_pem(secret).map_err(|e| format!("invalid PKCS#8 PEM: {e}"))?
-        }
-    } else {
-        let bytes = secret.as_bytes();
-        RsaPrivateKey::from_pkcs8_der(bytes)
-            .or_else(|_| RsaPrivateKey::from_pkcs1_der(bytes))
-            .map_err(|e| format!("invalid PKCS#8 or PKCS#1 DER: {e}"))?
-    };
-    Ok(RsaPkcs1v15SigningKey::<Sha256>::new(private_key))
 }

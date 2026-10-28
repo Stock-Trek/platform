@@ -24,44 +24,44 @@ impl Message {
     pub fn is_status(&self, code: u16) -> bool {
         self.status == Some(code)
     }
-}
 
-/// Formats a NATS/1.0 header block, including the terminating blank line.
-pub fn format_header_block(headers: &[(String, String)]) -> Vec<u8> {
-    let mut block = String::from("NATS/1.0\r\n");
-    for (name, value) in headers {
-        block.push_str(name);
-        block.push_str(": ");
-        block.push_str(value);
-        block.push_str("\r\n");
-    }
-    block.push_str("\r\n");
-    block.into_bytes()
-}
-
-/// Parses a NATS/1.0 header block into a status code and header pairs.
-pub fn parse_header_block(block: &[u8]) -> Result<(Option<u16>, Headers), String> {
-    let text = std::str::from_utf8(block)
-        .map_err(|error| format!("header block is not valid UTF-8: {error}"))?;
-    let mut lines = text.split("\r\n");
-    let first = lines.next().unwrap_or_default();
-    let mut tokens = first.split_whitespace();
-    let version = tokens.next().unwrap_or_default();
-    if !version.starts_with("NATS/") {
-        return Err(format!("unexpected header block version {version:?}"));
-    }
-    let status = tokens.next().and_then(|code| code.parse::<u16>().ok());
-    let mut headers = Vec::new();
-    for line in lines {
-        if line.is_empty() {
-            continue;
+    /// Formats a NATS/1.0 header block, including the terminating blank line.
+    pub(crate) fn format_header_block(headers: &[(String, String)]) -> Vec<u8> {
+        let mut block = String::from("NATS/1.0\r\n");
+        for (name, value) in headers {
+            block.push_str(name);
+            block.push_str(": ");
+            block.push_str(value);
+            block.push_str("\r\n");
         }
-        let Some((name, value)) = line.split_once(':') else {
-            return Err(format!("malformed header line {line:?}"));
-        };
-        headers.push((name.trim().to_string(), value.trim().to_string()));
+        block.push_str("\r\n");
+        block.into_bytes()
     }
-    Ok((status, headers))
+
+    /// Parses a NATS/1.0 header block into a status code and header pairs.
+    pub(crate) fn parse_header_block(block: &[u8]) -> Result<(Option<u16>, Headers), String> {
+        let text = std::str::from_utf8(block)
+            .map_err(|error| format!("header block is not valid UTF-8: {error}"))?;
+        let mut lines = text.split("\r\n");
+        let first = lines.next().unwrap_or_default();
+        let mut tokens = first.split_whitespace();
+        let version = tokens.next().unwrap_or_default();
+        if !version.starts_with("NATS/") {
+            return Err(format!("unexpected header block version {version:?}"));
+        }
+        let status = tokens.next().and_then(|code| code.parse::<u16>().ok());
+        let mut headers = Vec::new();
+        for line in lines {
+            if line.is_empty() {
+                continue;
+            }
+            let Some((name, value)) = line.split_once(':') else {
+                return Err(format!("malformed header line {line:?}"));
+            };
+            headers.push((name.trim().to_string(), value.trim().to_string()));
+        }
+        Ok((status, headers))
+    }
 }
 
 #[cfg(test)]
@@ -74,8 +74,8 @@ mod tests {
             ("Nats-Msg-Id".to_string(), "market-events.1".to_string()),
             ("X-Trace".to_string(), "abc".to_string()),
         ];
-        let block = format_header_block(&headers);
-        let (status, parsed) = parse_header_block(&block).unwrap();
+        let block = Message::format_header_block(&headers);
+        let (status, parsed) = Message::parse_header_block(&block).unwrap();
 
         assert_eq!(status, None);
         assert_eq!(parsed, headers);
@@ -84,7 +84,7 @@ mod tests {
     #[test]
     fn parses_status_header_blocks() {
         let block = b"NATS/1.0 404\r\nDescription: No Messages\r\n\r\n";
-        let (status, headers) = parse_header_block(block).unwrap();
+        let (status, headers) = Message::parse_header_block(block).unwrap();
 
         assert_eq!(status, Some(404));
         assert_eq!(headers.len(), 1);
@@ -94,7 +94,7 @@ mod tests {
 
     #[test]
     fn rejects_header_blocks_without_a_version_line() {
-        assert!(parse_header_block(b"HTTP/1.1 200\r\n\r\n").is_err());
-        assert!(parse_header_block(&[0xff, 0xfe]).is_err());
+        assert!(Message::parse_header_block(b"HTTP/1.1 200\r\n\r\n").is_err());
+        assert!(Message::parse_header_block(&[0xff, 0xfe]).is_err());
     }
 }
