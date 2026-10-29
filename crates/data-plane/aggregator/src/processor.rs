@@ -242,6 +242,7 @@ impl CandleProcessor {
         candle_start: TimestampMilliseconds,
         update: &mut ProcessorUpdate,
     ) {
+        let incomplete = self.state.is_window_incomplete(key, candle_start);
         let close_watermark = self.state.watermark.unwrap_or(trade.timestamp);
         let source_offset = self.state.last_processed_offset().unwrap_or_default();
         let state_epoch = self.state.state_epoch;
@@ -257,6 +258,9 @@ impl CandleProcessor {
             return;
         };
         candle.apply_trade(trade);
+        if incomplete {
+            candle.mark_incomplete();
+        }
         candle.close();
         update.late_trades += 1;
         update.closed.push(ClosedCandle::new(
@@ -273,10 +277,16 @@ impl CandleProcessor {
         interval: CandleInterval,
         update: &mut ProcessorUpdate,
     ) {
+        let candle_start = interval.start_for(trade.timestamp);
+        let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
+        let incomplete = self.state.is_window_incomplete(&key, candle_start);
         let close_watermark = self.state.watermark.unwrap_or(trade.timestamp);
         let source_offset = self.state.last_processed_offset().unwrap_or_default();
         let state_epoch = self.state.state_epoch;
         let mut candle = Candle::open(trade, interval);
+        if incomplete {
+            candle.mark_incomplete();
+        }
         candle.close();
         self.state.retain_closed_candle(candle.clone());
         update.late_trades += 1;
@@ -408,10 +418,12 @@ impl CandleProcessor {
         previous_stream_watermark: Option<TimestampMilliseconds>,
         update: &mut ProcessorUpdate,
     ) {
-        let affected = self
+        let mut seen = std::collections::HashSet::new();
+        let mut affected = self
             .state
             .open_candles
             .iter()
+            .chain(self.state.closed_candles.iter())
             .filter(|(key, _)| {
                 key.exchange == gap.exchange
                     && trading_pair.is_none_or(|pair| key.trading_pair == pair)
@@ -419,12 +431,17 @@ impl CandleProcessor {
             .flat_map(|(key, candles)| {
                 candles
                     .iter()
-                    .filter(|candle| match previous_stream_watermark {
-                        Some(previous) => {
-                            candle.end_time() + self.config.allowed_lateness >= previous
-                                && candle.start_time() <= gap.detected_at
+                    .filter(|candle| {
+                        if candle.start_time() > gap.detected_at {
+                            return false;
                         }
-                        None => candle.start_time() <= gap.detected_at,
+                        match previous_stream_watermark {
+                            Some(previous) => {
+                                candle.end_time() + self.config.allowed_lateness >= previous
+                                    || gap.detected_at < candle.end_time()
+                            }
+                            None => true,
+                        }
                     })
                     .map(move |candle| IncompleteWindow {
                         key: key.clone(),
@@ -436,8 +453,18 @@ impl CandleProcessor {
                         detected_at: gap.detected_at,
                     })
             })
+            .filter(|window| seen.insert((window.key.clone(), window.window_start)))
             .collect::<Vec<_>>();
+        affected.sort_by(|left, right| {
+            left.key
+                .subject_suffix()
+                .cmp(&right.key.subject_suffix())
+                .then_with(|| left.window_start.cmp(&right.window_start))
+        });
 
+        let close_watermark = self.state.watermark.unwrap_or(gap.detected_at);
+        let source_offset = self.state.last_processed_offset().unwrap_or_default();
+        let state_epoch = self.state.state_epoch;
         for window in affected {
             if let Some(candle) = self
                 .state
@@ -451,6 +478,25 @@ impl CandleProcessor {
             {
                 candle.mark_incomplete();
                 update.open.push(candle.clone());
+            }
+            if let Some(candle) =
+                self.state
+                    .closed_candles
+                    .get_mut(&window.key)
+                    .and_then(|candles| {
+                        candles
+                            .iter_mut()
+                            .find(|candle| candle.start_time() == window.window_start)
+                    })
+            {
+                candle.mark_incomplete();
+                candle.close();
+                update.closed.push(ClosedCandle::new(
+                    candle.clone(),
+                    close_watermark,
+                    source_offset,
+                    state_epoch,
+                ));
             }
             self.state.record_incomplete_window(window.clone());
             update.incomplete_windows.push(window);
@@ -835,6 +881,32 @@ mod tests {
             ))
             .unwrap();
         assert!(candle.is_incomplete());
+    }
+
+    #[test]
+    fn a_gap_marks_a_retained_closed_candle_incomplete() {
+        let mut processor = CandleProcessor::new(vec![one_minute()]);
+        processor.apply_trade(&trade("100", 61_000));
+        let closed = processor.apply_trade(&trade("101", 121_000));
+        assert!(closed.closed[0].is_complete());
+
+        let update = processor.apply_gap(&GapMarker {
+            detected_at: TimestampMilliseconds(65_000),
+            ..gap(65_000)
+        });
+
+        assert_eq!(update.closed.len(), 1);
+        assert!(update.closed[0].is_incomplete());
+        let key = CandleKey::new(
+            CexId::Binance,
+            TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+            one_minute(),
+        );
+        let retained = processor
+            .state()
+            .closed_candle(&key, TimestampMilliseconds(60_000))
+            .unwrap();
+        assert!(retained.is_incomplete());
     }
 
     #[test]
