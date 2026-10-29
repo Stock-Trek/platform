@@ -8,7 +8,7 @@ use crate::state::{AggregatorState, DeduplicationKey, IncompleteWindow, Sequence
 use platform_errors::BpResult;
 use platform_market_data::{
     candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
-    decoders::trade::Trade,
+    decoders::trade::{Trade, TradeDecoderFactory},
     event::{GapMarker, MarketEvent},
 };
 use platform_metrics::descriptions::{
@@ -16,6 +16,7 @@ use platform_metrics::descriptions::{
 };
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use stock_trek_types::cex::trading_pair::TradingPair;
 
 /// Interval and lateness settings shared by live processing and recovery.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -149,12 +150,14 @@ impl CandleProcessor {
     pub fn apply_gap(&mut self, gap: &GapMarker) -> ProcessorUpdate {
         let mut update = ProcessorUpdate::default();
         let previous_stream_watermark = self.state.stream_watermark(gap.exchange, &gap.stream);
+        let trading_pair =
+            TradeDecoderFactory::trading_pair_for_stream(gap.exchange, &gap.stream).ok();
 
         self.state
             .advance_stream_watermark(gap.exchange, &gap.stream, gap.detected_at);
         self.state.advance_watermark(gap.detected_at);
         self.state.record_gap(gap);
-        self.mark_affected_windows(gap, previous_stream_watermark, &mut update);
+        self.mark_affected_windows(gap, trading_pair, previous_stream_watermark, &mut update);
         self.close_expired(&mut update);
         update
     }
@@ -261,6 +264,7 @@ impl CandleProcessor {
     fn mark_affected_windows(
         &mut self,
         gap: &GapMarker,
+        trading_pair: Option<TradingPair>,
         previous_stream_watermark: Option<TimestampMilliseconds>,
         update: &mut ProcessorUpdate,
     ) {
@@ -268,10 +272,13 @@ impl CandleProcessor {
             .state
             .open_candles
             .iter()
+            .filter(|(key, _)| {
+                key.exchange == gap.exchange
+                    && trading_pair.is_none_or(|pair| key.trading_pair == pair)
+            })
             .flat_map(|(key, candles)| {
                 candles
                     .iter()
-                    .filter(|_| key.exchange == gap.exchange)
                     .filter(|candle| match previous_stream_watermark {
                         Some(previous) => {
                             candle.end_time() + self.config.allowed_lateness >= previous
@@ -526,6 +533,23 @@ mod tests {
         assert_eq!(update.incomplete_windows[0].from_sequence, 2);
         assert_eq!(update.incomplete_windows[0].to_sequence, 2);
         assert!(processor.state().incomplete_windows.len() == 1);
+    }
+
+    #[test]
+    fn gaps_only_mark_windows_for_their_stream_pair() {
+        let mut processor = CandleProcessor::new(vec![one_minute()]);
+        processor.apply_trade(&trade("100", 61_000));
+        let mut ethereum_trade = trade("200", 62_000);
+        ethereum_trade.trading_pair = TradingPair::new(AssetId::Ethereum, AssetId::TetherUSD);
+        processor.apply_trade(&ethereum_trade);
+
+        let update = processor.apply_gap(&gap(120_000));
+
+        assert_eq!(update.incomplete_windows.len(), 1);
+        assert_eq!(
+            update.incomplete_windows[0].key.trading_pair,
+            TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD)
+        );
     }
 
     #[test]

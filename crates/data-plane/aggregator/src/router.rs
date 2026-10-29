@@ -37,18 +37,15 @@ impl HashRouter {
     /// Returns the partitions that must receive `input`.
     ///
     /// An event is routed to every partition owning one of its trading pairs.
-    /// Gap markers carry no trading pair after exchange decoding, so they are
-    /// broadcast to every partition.
-    ///
-    /// TODO: resolve the gap's exchange stream to a trading pair and address
-    /// only the partition that owns it.
+    /// Gap markers are routed to the partition owning the trading pair encoded
+    /// in their exchange stream.
     pub fn partitions(
         &self,
         input: &MarketInput,
         partition_count: usize,
     ) -> BpResult<Vec<PartitionId>> {
         match input {
-            MarketInput::Gap(_) => Ok(all_partitions(partition_count)),
+            MarketInput::Gap(gap) => self.gap_partitions(gap, partition_count),
             MarketInput::Event(event) => self.event_partitions(event, partition_count),
         }
     }
@@ -85,6 +82,30 @@ impl HashRouter {
         decoders.insert(exchange, decoder.clone());
         Ok(decoder)
     }
+
+    fn gap_partitions(
+        &self,
+        gap: &GapMarker,
+        partition_count: usize,
+    ) -> BpResult<Vec<PartitionId>> {
+        let decoder = self.decoder(gap.exchange)?;
+        let trading_pair = decoder.trading_pair_for_stream(&gap.stream)?;
+        Ok(vec![partition_for(
+            gap.exchange,
+            trading_pair,
+            partition_count,
+        )])
+    }
+}
+
+/// Returns the partitions for one gap without retaining a decoder cache.
+pub fn partitions_for_gap(gap: &GapMarker, partition_count: usize) -> BpResult<Vec<PartitionId>> {
+    let trading_pair = TradeDecoderFactory::trading_pair_for_stream(gap.exchange, &gap.stream)?;
+    Ok(vec![partition_for(
+        gap.exchange,
+        trading_pair,
+        partition_count,
+    )])
 }
 
 /// Returns the partitions for one event without retaining a decoder cache.
@@ -206,9 +227,13 @@ where
     }
 }
 
-/// Convenience for callers that only have a gap marker: gaps are broadcast.
-pub fn gap_partitions(partition_count: usize, _gap: &GapMarker) -> Vec<PartitionId> {
-    all_partitions(partition_count)
+/// Convenience for callers that only have a gap marker.
+///
+/// Resolution failures fall back to broadcasting because this helper cannot
+/// report an error. Callers that can handle failures should use
+/// [`partitions_for_gap`].
+pub fn gap_partitions(partition_count: usize, gap: &GapMarker) -> Vec<PartitionId> {
+    partitions_for_gap(gap, partition_count).unwrap_or_else(|_| all_partitions(partition_count))
 }
 
 #[cfg(test)]
@@ -258,12 +283,33 @@ mod tests {
     }
 
     #[test]
-    fn gaps_are_broadcast_to_every_partition() {
+    fn gaps_route_to_the_partition_owning_their_stream_pair() {
         let router = HashRouter::new();
-        let partitions = router.partitions(&MarketInput::Gap(gap()), 4).unwrap();
+        let gap = gap();
+        let expected = vec![partition_for(
+            CexId::Binance,
+            stock_trek_types::cex::trading_pair::TradingPair::new(
+                AssetId::Bitcoin,
+                AssetId::TetherUSD,
+            ),
+            4,
+        )];
+        let partitions = router
+            .partitions(&MarketInput::Gap(gap.clone()), 4)
+            .unwrap();
 
-        assert_eq!(partitions, all_partitions(4));
-        assert_eq!(gap_partitions(4, &gap()), all_partitions(4));
+        assert_eq!(partitions, expected);
+        assert_eq!(gap_partitions(4, &gap), expected);
+        assert_eq!(partitions_for_gap(&gap, 4).unwrap(), expected);
+    }
+
+    #[test]
+    fn unresolved_gaps_are_rejected_instead_of_broadcast() {
+        let router = HashRouter::new();
+        let mut gap = gap();
+        gap.stream = "unknown@trade".to_string();
+
+        assert!(router.partitions(&MarketInput::Gap(gap), 4).is_err());
     }
 
     #[test]

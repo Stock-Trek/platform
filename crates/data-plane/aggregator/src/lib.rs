@@ -25,7 +25,9 @@ pub use restore::{
     RestoreResult, RestoreSource, RestoredPartition, S3ArchivedEventSource,
     rebuild_state_from_archive, restore_partition,
 };
-pub use router::{HashRouter, NatsRouter, partitions_for_event};
+pub use router::{
+    HashRouter, NatsRouter, gap_partitions, partitions_for_event, partitions_for_gap,
+};
 pub use runner::{
     ProcessorRunner, QuiesceReceiver, QuiesceSignal, RebalanceReceiver, RebalanceSignal,
 };
