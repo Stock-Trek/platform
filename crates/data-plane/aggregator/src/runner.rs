@@ -22,8 +22,140 @@ use std::collections::{HashMap, hash_map::Entry};
 use std::sync::Arc;
 use std::time::Instant;
 use stock_trek_types::cex::cex_id::CexId;
+use tokio::sync::watch;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{error, info, warn};
+
+/// A cloneable handle used by a rebalance coordinator to quiesce a worker.
+///
+/// The worker stops polling its source once quiesced, checkpoints and
+/// acknowledges everything it already accepted, and then releases its lease so
+/// the next owner can take over the partition.
+#[derive(Debug, Clone)]
+pub struct QuiesceSignal {
+    sender: watch::Sender<bool>,
+}
+
+impl Default for QuiesceSignal {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl QuiesceSignal {
+    pub fn new() -> Self {
+        let (sender, _receiver) = watch::channel(false);
+        Self { sender }
+    }
+
+    /// Creates a signal together with a dedicated receiver.
+    pub fn channel() -> (Self, QuiesceReceiver) {
+        let signal = Self::new();
+        let receiver = signal.receiver();
+        (signal, receiver)
+    }
+
+    /// Requests that the worker stops accepting new inputs and drains.
+    pub fn quiesce(&self) {
+        self.sender.send_replace(true);
+    }
+
+    /// Alias for [`Self::quiesce`].
+    pub fn request_quiesce(&self) {
+        self.quiesce();
+    }
+
+    /// Alias for [`Self::quiesce`].
+    pub fn request(&self) {
+        self.quiesce();
+    }
+
+    /// Alias for [`Self::quiesce`].
+    pub fn trigger(&self) {
+        self.quiesce();
+    }
+
+    pub fn is_quiesced(&self) -> bool {
+        *self.sender.borrow()
+    }
+
+    pub fn receiver(&self) -> QuiesceReceiver {
+        QuiesceReceiver {
+            receiver: self.sender.subscribe(),
+        }
+    }
+
+    /// Alias for [`Self::receiver`].
+    pub fn subscribe(&self) -> QuiesceReceiver {
+        self.receiver()
+    }
+
+    /// Resolves once quiescence has been requested.
+    pub async fn wait(&self) {
+        self.receiver().wait().await;
+    }
+}
+
+/// Receives a quiesce request from a [`QuiesceSignal`].
+#[derive(Debug, Clone)]
+pub struct QuiesceReceiver {
+    receiver: watch::Receiver<bool>,
+}
+
+impl QuiesceReceiver {
+    pub fn is_quiesced(&self) -> bool {
+        *self.receiver.borrow()
+    }
+
+    /// Resolves once quiescence has been requested.
+    pub async fn wait(&mut self) {
+        loop {
+            if self.is_quiesced() {
+                return;
+            }
+            if self.receiver.changed().await.is_err() {
+                return;
+            }
+        }
+    }
+}
+
+impl From<QuiesceSignal> for QuiesceReceiver {
+    fn from(signal: QuiesceSignal) -> Self {
+        signal.receiver()
+    }
+}
+
+impl From<&QuiesceSignal> for QuiesceReceiver {
+    fn from(signal: &QuiesceSignal) -> Self {
+        signal.receiver()
+    }
+}
+
+impl From<Arc<QuiesceSignal>> for QuiesceReceiver {
+    fn from(signal: Arc<QuiesceSignal>) -> Self {
+        signal.receiver()
+    }
+}
+
+impl From<watch::Receiver<bool>> for QuiesceReceiver {
+    fn from(receiver: watch::Receiver<bool>) -> Self {
+        Self { receiver }
+    }
+}
+
+impl From<watch::Sender<bool>> for QuiesceReceiver {
+    fn from(sender: watch::Sender<bool>) -> Self {
+        Self {
+            receiver: sender.subscribe(),
+        }
+    }
+}
+
+/// Alias used by rebalance coordinators.
+pub type RebalanceSignal = QuiesceSignal;
+/// Alias used by rebalance coordinators.
+pub type RebalanceReceiver = QuiesceReceiver;
 
 /// Processes one partition's ordered inputs.
 ///
@@ -31,10 +163,10 @@ use tracing::{error, info, warn};
 /// [`CandleProcessor`], publishes outputs, checkpoints the keyed state
 /// periodically and at shutdown, and only then acknowledges the source records.
 ///
-/// TODO: a rebalance coordinator should signal this worker to stop accepting
-/// new keys, drain the revoked key range through [`ProcessorRunner::commit`],
-/// and only then move the lease. Today the shutdown path already drains and
-/// checkpoints pending inputs, which the coordinator can use as that hook.
+/// A coordinator can install a [`QuiesceSignal`] with
+/// [`ProcessorRunner::with_quiesce_signal`]. The running worker then stops
+/// polling for new inputs, drains and checkpoints accepted records, and releases
+/// its lease before exiting so ownership can move to another writer.
 pub struct ProcessorRunner<S, K> {
     config: AggregatorConfig,
     source: S,
@@ -48,6 +180,7 @@ pub struct ProcessorRunner<S, K> {
     /// position.
     replay_watermark: Option<TimestampMilliseconds>,
     writer_id: Option<String>,
+    quiesce: Option<QuiesceReceiver>,
 }
 
 impl<S, K> ProcessorRunner<S, K>
@@ -66,6 +199,7 @@ where
             state: AggregatorState::new(),
             replay_watermark: None,
             writer_id: None,
+            quiesce: None,
         }
     }
 
@@ -87,6 +221,37 @@ where
     pub fn with_writer_id(mut self, writer_id: impl Into<String>) -> Self {
         self.writer_id = Some(writer_id.into());
         self
+    }
+
+    /// Installs the signal a rebalance coordinator uses to drain this worker.
+    pub fn with_quiesce_signal(mut self, signal: impl Into<QuiesceReceiver>) -> Self {
+        self.quiesce = Some(signal.into());
+        self
+    }
+
+    /// Alias for [`Self::with_quiesce_signal`].
+    pub fn with_quiesce(self, signal: impl Into<QuiesceReceiver>) -> Self {
+        self.with_quiesce_signal(signal)
+    }
+
+    /// Alias for [`Self::with_quiesce_signal`].
+    pub fn with_rebalance_signal(self, signal: impl Into<QuiesceReceiver>) -> Self {
+        self.with_quiesce_signal(signal)
+    }
+
+    /// Alias for [`Self::with_quiesce_signal`].
+    pub fn with_rebalance(self, signal: impl Into<QuiesceReceiver>) -> Self {
+        self.with_quiesce_signal(signal)
+    }
+
+    /// Installs an already-created quiesce receiver.
+    pub fn with_quiesce_receiver(self, receiver: QuiesceReceiver) -> Self {
+        self.with_quiesce_signal(receiver)
+    }
+
+    /// Alias for [`Self::with_quiesce_receiver`].
+    pub fn with_rebalance_receiver(self, receiver: QuiesceReceiver) -> Self {
+        self.with_quiesce_signal(receiver)
     }
 
     /// Restores keyed state, for example from a checkpoint or archive rebuild.
@@ -119,6 +284,7 @@ where
             state: AggregatorState::new(),
             replay_watermark: None,
             writer_id: None,
+            quiesce: None,
         }
     }
 
@@ -133,6 +299,7 @@ where
             state,
             replay_watermark,
             writer_id,
+            quiesce,
         } = self;
         let mut processor = CandleProcessor::from_state(config.processor_config(), state)?;
         let writer_id = writer_id.unwrap_or_else(new_writer_id);
@@ -171,6 +338,7 @@ where
             replay_watermark,
             &mut lease,
             &writer_id,
+            quiesce,
         )
         .await;
         let release_result = leases.release(&lease).await;
@@ -192,6 +360,7 @@ where
         replay_watermark: Option<TimestampMilliseconds>,
         lease: &mut WriterLease,
         writer_id: &str,
+        mut quiesce: Option<QuiesceReceiver>,
     ) -> BpResult<()> {
         let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
         let mut pending: Vec<SourceRecord> = Vec::new();
@@ -209,6 +378,34 @@ where
 
         loop {
             tokio::select! {
+                biased;
+                _ = Self::wait_for_quiesce(quiesce.as_mut()) => {
+                    AggregatorMetrics::record_rebalance(
+                        partition.get(),
+                        "quiesce_requested",
+                    );
+                    info!(
+                        partition = %partition,
+                        writer = %writer_id,
+                        "quiesce requested; draining and checkpointing aggregator partition"
+                    );
+                    Self::commit(
+                        config,
+                        source,
+                        checkpoints,
+                        leases,
+                        partition,
+                        processor,
+                        lease,
+                        writer_id,
+                        &mut pending,
+                        last_record.as_ref(),
+                        dirty,
+                        &mut last_checkpoint_at,
+                    )
+                    .await?;
+                    break;
+                }
                 maybe_record = source.next_input() => {
                     match maybe_record {
                         Ok(Some(record)) => {
@@ -337,6 +534,13 @@ where
             }
         }
         Ok(())
+    }
+
+    async fn wait_for_quiesce(quiesce: Option<&mut QuiesceReceiver>) {
+        match quiesce {
+            Some(receiver) => receiver.wait().await,
+            None => std::future::pending().await,
+        }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -508,6 +712,7 @@ mod tests {
     use platform_market_data::candle::{Candle, ClosedCandle};
     use platform_nats::Message;
     use std::sync::Mutex;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[derive(Default)]
     struct FakeSource {
@@ -636,6 +841,118 @@ mod tests {
                 ..Message::default()
             },
         )
+    }
+
+    struct SignalingSource {
+        records: Vec<SourceRecord>,
+        signal: QuiesceSignal,
+        polls: Arc<AtomicUsize>,
+        acked: Arc<Mutex<usize>>,
+    }
+
+    #[async_trait]
+    impl MarketSource for SignalingSource {
+        async fn next_input(&mut self) -> BpResult<Option<SourceRecord>> {
+            self.polls.fetch_add(1, Ordering::SeqCst);
+            if self.records.is_empty() {
+                return std::future::pending().await;
+            }
+            let record = self.records.remove(0);
+            self.signal.quiesce();
+            Ok(Some(record))
+        }
+
+        async fn ack(&mut self, _record: &SourceRecord) -> BpResult<()> {
+            *self.acked.lock().expect("acked lock") += 1;
+            Ok(())
+        }
+    }
+
+    #[tokio::test]
+    async fn quiesce_stops_new_inputs_and_drains_accepted_records() {
+        let sink = FakeSink::default();
+        let observed = sink.clone();
+        let signal = QuiesceSignal::new();
+        let polls = Arc::new(AtomicUsize::new(0));
+        let acked = Arc::new(Mutex::new(0));
+        let source = SignalingSource {
+            records: vec![
+                record(MarketInput::Event(trade_event(61_000)), 1),
+                record(MarketInput::Event(trade_event(62_000)), 2),
+            ],
+            signal: signal.clone(),
+            polls: polls.clone(),
+            acked: acked.clone(),
+        };
+        let checkpoints = Arc::new(InMemoryStateStore::new());
+        let leases = Arc::new(InMemoryLeaseStore::new());
+        let runner = ProcessorRunner::new(config(), source, sink)
+            .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
+            .with_lease_store(leases.clone())
+            .with_writer_id("quiescing-writer")
+            .with_quiesce_signal(signal);
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), runner.run())
+            .await
+            .expect("runner should stop after quiescing")
+            .unwrap();
+
+        assert_eq!(polls.load(Ordering::SeqCst), 1);
+        assert_eq!(observed.open_updates(), 1);
+        assert_eq!(*acked.lock().unwrap(), 1);
+        let checkpoint = checkpoints.get(PartitionId::new(0)).unwrap();
+        assert_eq!(checkpoint.next_sequence, 2);
+        assert_eq!(checkpoint.state.last_processed_sequence, Some(1));
+        let lease = leases.current(PartitionId::new(0)).await.unwrap().unwrap();
+        assert!(lease.is_expired(TimestampMilliseconds::now()));
+    }
+
+    #[tokio::test]
+    async fn an_already_quiesced_worker_does_not_poll_its_source() {
+        let signal = QuiesceSignal::new();
+        signal.quiesce();
+        let polls = Arc::new(AtomicUsize::new(0));
+        let acked = Arc::new(Mutex::new(0));
+        let source = SignalingSource {
+            records: vec![record(MarketInput::Event(trade_event(61_000)), 1)],
+            signal: signal.clone(),
+            polls: polls.clone(),
+            acked: acked.clone(),
+        };
+        let runner =
+            ProcessorRunner::new(config(), source, FakeSink::default()).with_quiesce_signal(signal);
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), runner.run())
+            .await
+            .expect("runner should stop immediately")
+            .unwrap();
+
+        assert_eq!(polls.load(Ordering::SeqCst), 0);
+        assert_eq!(*acked.lock().unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn a_watch_receiver_can_trigger_quiescence() {
+        let (sender, receiver) = watch::channel(false);
+        let polls = Arc::new(AtomicUsize::new(0));
+        let acked = Arc::new(Mutex::new(0));
+        let source = SignalingSource {
+            records: vec![record(MarketInput::Event(trade_event(61_000)), 1)],
+            signal: QuiesceSignal::new(),
+            polls: polls.clone(),
+            acked: acked.clone(),
+        };
+        let runner = ProcessorRunner::new(config(), source, FakeSink::default())
+            .with_rebalance_signal(receiver);
+        sender.send_replace(true);
+
+        tokio::time::timeout(std::time::Duration::from_secs(1), runner.run())
+            .await
+            .expect("runner should stop after quiescing")
+            .unwrap();
+
+        assert_eq!(polls.load(Ordering::SeqCst), 0);
+        assert_eq!(*acked.lock().unwrap(), 0);
     }
 
     #[tokio::test]

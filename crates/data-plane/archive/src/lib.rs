@@ -18,6 +18,9 @@ pub use iceberg::{
 pub use layout::{ArchiveBucket, ArchiveHour, ArchiveLayout, ArchivePath, ArchiveTimePartition};
 pub use parquet::{ArchiveParquet, ArchiveParquetBatches, ArchiveParquetWriter};
 pub use parquet_reader::ParquetReader;
-pub use record::{ArchiveKind, ArchivePartition, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey};
+pub use record::{
+    ArchiveKind, ArchivePartition, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey, ArchivedEvent,
+    ArchivedMarketEvent, STATE_EPOCH_HEADER,
+};
 pub use s3::{Bucket, ObjectKey, S3};
 pub use source::SourceBatch;

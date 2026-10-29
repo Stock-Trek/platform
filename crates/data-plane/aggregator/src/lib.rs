@@ -28,7 +28,9 @@ pub use restore::{
 pub use router::{
     HashRouter, NatsRouter, gap_partitions, partitions_for_event, partitions_for_gap,
 };
-pub use runner::ProcessorRunner;
+pub use runner::{
+    ProcessorRunner, QuiesceReceiver, QuiesceSignal, RebalanceReceiver, RebalanceSignal,
+};
 pub use sink::{ClosedCandlePublisher, NatsCandleSink, OpenCandleStore};
 pub use source::{MarketInput, MarketSource, NatsMarketSource, NatsPartitionSource, SourceRecord};
 pub use state::{

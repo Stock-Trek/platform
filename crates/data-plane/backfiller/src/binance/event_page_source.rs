@@ -27,13 +27,13 @@ const KLINES_PAGE_LIMIT: u32 = BinanceKlinesLimit::MAXIMUM;
 /// Reads Binance REST pages used to reconstruct market-data gaps.
 pub struct BinanceEventPageSource {
     connector: Arc<Connector<BinanceExchange, ReqwestHttpClient>>,
-    api_key: Option<String>,
+    api_key: String,
 }
 
 impl BinanceEventPageSource {
     pub fn from_arc(
         connector: Arc<Connector<BinanceExchange, ReqwestHttpClient>>,
-        api_key: Option<String>,
+        api_key: String,
     ) -> Self {
         Self { connector, api_key }
     }
@@ -129,13 +129,13 @@ impl BinanceEventPageSource {
         symbol: &str,
         from_sequence: u64,
         limit: u32,
-        api_key: String,
+        api_key: &str,
     ) -> BpResult<Vec<BinanceTradeResponse>> {
         let request = BinanceHistoricalTradesRequest::new(
             symbol.to_string(),
             from_sequence,
             limit,
-            Some(api_key),
+            Some(api_key.to_string()),
         );
         self.submit(request).await?.historical_trades()
     }
@@ -166,13 +166,8 @@ impl EventPageSource for BinanceEventPageSource {
         from_sequence: u64,
         limit: u32,
     ) -> BpResult<Vec<BackfilledEvent>> {
-        let Some(api_key) = self.api_key.clone() else {
-            // TODO: allow the API key to come from a secret manager instead of
-            // the process environment.
-            return Err(BpError::config_missing("BACKFILLER_EXCHANGE_API_KEY"));
-        };
         let trades = self
-            .fetch_trade_page(symbol, from_sequence, limit, api_key)
+            .fetch_trade_page(symbol, from_sequence, limit, &self.api_key)
             .await?;
         Ok(trades
             .iter()

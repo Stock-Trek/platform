@@ -153,7 +153,7 @@ mod tests {
         let schema = ArchiveIcebergTable::schema(ArchiveKind::Events).unwrap();
         let fields = schema.as_struct().fields();
 
-        assert_eq!(fields.len(), 6);
+        assert_eq!(fields.len(), 7);
         assert_eq!(fields[0].name, "exchange");
         assert_eq!(
             fields[0].field_type.as_ref(),
@@ -167,6 +167,8 @@ mod tests {
         assert!(!fields[2].required);
         assert_eq!(fields[4].name, "received_at");
         assert!(fields[4].required);
+        assert_eq!(fields[6].name, "state_epoch");
+        assert!(fields[6].required);
     }
 
     #[test]

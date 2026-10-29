@@ -1,6 +1,6 @@
 use crate::config::ArchiverConfig;
 use async_trait::async_trait;
-use platform_archive::{ArchiveRecord, ArchiveRecordKey};
+use platform_archive::{ArchiveRecord, ArchiveRecordKey, ArchivedMarketEvent, STATE_EPOCH_HEADER};
 use platform_errors::BpResult;
 use platform_market_data::{
     candle::ClosedCandle, envelope::EnvelopeCodec, event::MarketEvent, subject::MarketEventSubject,
@@ -103,7 +103,13 @@ impl ArchiveSource for NatsArchiveSource {
                     };
                     match MarketEvent::decode(&message.payload) {
                         Ok(event) => {
-                            let record = ArchiveRecord::MarketEvent(event);
+                            let state_epoch = message
+                                .header(STATE_EPOCH_HEADER)
+                                .and_then(|value| value.parse().ok())
+                                .unwrap_or_default();
+                            let record = ArchiveRecord::MarketEvent(ArchivedMarketEvent::new(
+                                event, state_epoch,
+                            ));
                             return Ok(Some(self.track(record, message, Consumer::Events)));
                         }
                         Err(error) => {

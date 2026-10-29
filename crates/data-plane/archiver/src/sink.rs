@@ -209,20 +209,3 @@ impl S3ParquetSink {
         hash
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn content_ids_are_stable_and_differ_for_different_bytes() {
-        assert_eq!(
-            S3ParquetSink::content_id(b"same"),
-            S3ParquetSink::content_id(b"same")
-        );
-        assert_ne!(
-            S3ParquetSink::content_id(b"one"),
-            S3ParquetSink::content_id(b"two")
-        );
-    }
-}

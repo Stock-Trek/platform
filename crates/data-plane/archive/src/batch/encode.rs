@@ -1,10 +1,10 @@
 use super::ArchiveBatch;
-use crate::record::{ArchiveKind, ArchiveRecord};
+use crate::record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent};
 use arrow_array::{
     ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
 use platform_errors::{BpError, BpResult};
-use platform_market_data::{candle::ClosedCandle, envelope::EnvelopeCodec, event::MarketEvent};
+use platform_market_data::{candle::ClosedCandle, envelope::EnvelopeCodec};
 use std::sync::Arc;
 
 impl ArchiveBatch {
@@ -17,18 +17,21 @@ impl ArchiveBatch {
             ArchiveKind::Events => {
                 let events = Self::events(records)?;
                 let columns: Vec<ArrayRef> = vec![
-                    Self::strings(events.iter().map(|event| event.exchange.to_string())),
-                    Self::strings(events.iter().map(|event| event.stream.clone())),
+                    Self::strings(events.iter().map(|event| event.event.exchange.to_string())),
+                    Self::strings(events.iter().map(|event| event.event.stream.clone())),
                     Arc::new(UInt64Array::from_iter(
-                        events.iter().map(|event| event.sequence),
+                        events.iter().map(|event| event.event.sequence),
                     )),
                     Arc::new(Int64Array::from_iter(events.iter().map(|event| {
-                        event.exchange_timestamp.map(|timestamp| timestamp.0)
+                        event.event.exchange_timestamp.map(|timestamp| timestamp.0)
                     }))),
                     Arc::new(Int64Array::from_iter_values(
-                        events.iter().map(|event| event.received_at.0),
+                        events.iter().map(|event| event.event.received_at.0),
                     )),
-                    Self::strings(events.iter().map(|event| event.payload.clone())),
+                    Self::strings(events.iter().map(|event| event.event.payload.clone())),
+                    Arc::new(UInt64Array::from_iter_values(
+                        events.iter().map(|event| event.state_epoch),
+                    )),
                 ];
                 Ok(RecordBatch::try_new(Self::schema(kind), columns)?)
             }
@@ -142,7 +145,7 @@ impl ArchiveBatch {
         }
     }
 
-    fn events(records: &[ArchiveRecord]) -> BpResult<Vec<&MarketEvent>> {
+    fn events(records: &[ArchiveRecord]) -> BpResult<Vec<&ArchivedMarketEvent>> {
         records
             .iter()
             .map(|record| match record {

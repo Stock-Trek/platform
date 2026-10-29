@@ -4,8 +4,11 @@ use platform_market_data::{
 };
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
-use std::cmp::Ordering;
+use std::{cmp::Ordering, ops::Deref};
 use stock_trek_types::cex::cex_id::CexId;
+
+/// Header used by event producers to tag raw events with their state epoch.
+pub const STATE_EPOCH_HEADER: &str = "Market-Data-State-Epoch";
 
 /// The kind of market data stored in an archive file.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -31,11 +34,55 @@ impl ArchiveKind {
     }
 }
 
+/// A raw market event together with the state epoch that processed it.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ArchivedMarketEvent {
+    pub event: MarketEvent,
+    pub state_epoch: u64,
+}
+
+impl ArchivedMarketEvent {
+    pub fn new(event: MarketEvent, state_epoch: u64) -> Self {
+        Self { event, state_epoch }
+    }
+
+    pub fn event(&self) -> &MarketEvent {
+        &self.event
+    }
+
+    pub fn state_epoch(&self) -> u64 {
+        self.state_epoch
+    }
+}
+
+impl From<(MarketEvent, u64)> for ArchivedMarketEvent {
+    fn from((event, state_epoch): (MarketEvent, u64)) -> Self {
+        Self::new(event, state_epoch)
+    }
+}
+
+impl From<MarketEvent> for ArchivedMarketEvent {
+    fn from(event: MarketEvent) -> Self {
+        Self::new(event, 0)
+    }
+}
+
+/// Alias for the archived raw-event record.
+pub type ArchivedEvent = ArchivedMarketEvent;
+
+impl Deref for ArchivedMarketEvent {
+    type Target = MarketEvent;
+
+    fn deref(&self) -> &Self::Target {
+        &self.event
+    }
+}
+
 /// A record waiting to be written to, or read from, the archive.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "record_type", rename_all = "snake_case")]
 pub enum ArchiveRecord {
-    MarketEvent(MarketEvent),
+    MarketEvent(ArchivedMarketEvent),
     ClosedCandle(ClosedCandle),
 }
 
@@ -66,6 +113,7 @@ impl ArchiveRecord {
             Self::MarketEvent(event) => ArchiveSortKey::MarketEvent {
                 timestamp: event.exchange_timestamp.unwrap_or(event.received_at).0,
                 sequence: event.sequence.unwrap_or_default(),
+                state_epoch: event.state_epoch,
             },
             Self::ClosedCandle(closed) => ArchiveSortKey::ClosedCandle {
                 start_time: closed.candle.start_time().0,
@@ -97,6 +145,7 @@ impl ArchiveRecord {
                 stream: event.stream.clone(),
                 sequence: event.sequence,
                 payload: event.payload.clone(),
+                state_epoch: event.state_epoch,
             },
             Self::ClosedCandle(closed) => ArchiveRecordKey::ClosedCandle {
                 revision_id: closed.message_id(),
@@ -111,6 +160,7 @@ pub enum ArchiveSortKey {
     MarketEvent {
         timestamp: i64,
         sequence: u64,
+        state_epoch: u64,
     },
     ClosedCandle {
         start_time: i64,
@@ -127,6 +177,7 @@ pub enum ArchiveRecordKey {
         stream: String,
         sequence: Option<u64>,
         payload: String,
+        state_epoch: u64,
     },
     /// Closed candles are de-duplicated by their deterministic revision id.
     ///
@@ -152,19 +203,22 @@ impl Ord for ArchiveRecordKey {
                     stream,
                     sequence,
                     payload,
+                    state_epoch,
                 },
                 Self::MarketEvent {
                     exchange: other_exchange,
                     stream: other_stream,
                     sequence: other_sequence,
                     payload: other_payload,
+                    state_epoch: other_state_epoch,
                 },
             ) => exchange
                 .to_string()
                 .cmp(&other_exchange.to_string())
                 .then_with(|| stream.cmp(other_stream))
                 .then_with(|| sequence.cmp(other_sequence))
-                .then_with(|| payload.cmp(other_payload)),
+                .then_with(|| payload.cmp(other_payload))
+                .then_with(|| state_epoch.cmp(other_state_epoch)),
             (
                 Self::ClosedCandle { revision_id },
                 Self::ClosedCandle {
@@ -220,14 +274,17 @@ mod tests {
     use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
     fn event() -> ArchiveRecord {
-        ArchiveRecord::MarketEvent(MarketEvent {
-            exchange: CexId::Binance,
-            stream: "btc/usdt@trade".to_string(),
-            sequence: Some(3),
-            exchange_timestamp: Some(TimestampMilliseconds(120_000)),
-            received_at: TimestampMilliseconds(130_000),
-            payload: "payload".to_string(),
-        })
+        ArchiveRecord::MarketEvent(
+            MarketEvent {
+                exchange: CexId::Binance,
+                stream: "btc/usdt@trade".to_string(),
+                sequence: Some(3),
+                exchange_timestamp: Some(TimestampMilliseconds(120_000)),
+                received_at: TimestampMilliseconds(130_000),
+                payload: "payload".to_string(),
+            }
+            .into(),
+        )
     }
 
     fn closed_candle() -> ArchiveRecord {
@@ -264,6 +321,7 @@ mod tests {
             ArchiveSortKey::MarketEvent {
                 timestamp: 120_000,
                 sequence: 3,
+                state_epoch: 0,
             }
         );
 
@@ -279,6 +337,21 @@ mod tests {
                 state_epoch: 0,
             }
         );
+    }
+
+    #[test]
+    fn event_state_epoch_is_part_of_its_archive_identity() {
+        let event = event();
+        let ArchiveRecord::MarketEvent(archived) = &event else {
+            panic!("expected a market event");
+        };
+        let later_epoch = ArchiveRecord::MarketEvent(ArchivedMarketEvent::new(
+            archived.event.clone(),
+            archived.state_epoch + 1,
+        ));
+
+        assert_ne!(event.key(), later_epoch.key());
+        assert!(event.sort_key() < later_epoch.sort_key());
     }
 
     #[test]

@@ -1,4 +1,4 @@
-use platform_archive::IcebergConfig;
+use platform_archive::{ArchiveTableLayer, IcebergConfig};
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::CandleInterval;
@@ -10,6 +10,7 @@ const REBUILDER_OUTPUT_PREFIX: &str = "REBUILDER_OUTPUT_PREFIX";
 const REBUILDER_INTERVALS: &str = "REBUILDER_INTERVALS";
 const REBUILDER_ALLOWED_LATENESS_MS: &str = "REBUILDER_ALLOWED_LATENESS_MS";
 const REBUILDER_SOURCE_LAYER: &str = "REBUILDER_SOURCE_LAYER";
+const REBUILDER_OUTPUT_LAYER: &str = "REBUILDER_OUTPUT_LAYER";
 const REBUILDER_STATE_EPOCH: &str = "REBUILDER_STATE_EPOCH";
 const REBUILDER_FINISH_OPEN_WINDOWS: &str = "REBUILDER_FINISH_OPEN_WINDOWS";
 const REBUILDER_BUCKET_MILLIS: &str = "REBUILDER_BUCKET_MILLIS";
@@ -20,6 +21,9 @@ const DEFAULT_INTERVALS: &str = "1s,1m,5m";
 const DEFAULT_ALLOWED_LATENESS_MS: i64 = 5_000;
 const DEFAULT_STATE_EPOCH: u64 = 1;
 const DEFAULT_BUCKET_MILLIS: usize = 3_600_000;
+
+/// Which Iceberg table the rebuilder writes regenerated candles to.
+pub type RebuildOutputLayer = ArchiveTableLayer;
 
 /// Which Iceberg table the rebuilder reads events from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,6 +65,7 @@ pub struct RebuildConfig {
     pub intervals: Vec<CandleInterval>,
     pub allowed_lateness: DurationMilliseconds,
     pub source_layer: RebuildSourceLayer,
+    pub output_layer: RebuildOutputLayer,
     pub state_epoch: u64,
     pub finish_open_windows: bool,
     pub bucket_millis: i64,
@@ -88,6 +93,7 @@ impl RebuildConfig {
                 .optional(REBUILDER_SOURCE_LAYER)?
                 .unwrap_or_else(|| "auto".to_string()),
         )?;
+        let output_layer = Self::output_layer(vars)?;
         let state_epoch = vars.optional_parsed_or(REBUILDER_STATE_EPOCH, DEFAULT_STATE_EPOCH)?;
         let finish_open_windows = vars.optional_parsed_or(REBUILDER_FINISH_OPEN_WINDOWS, true)?;
         let bucket_millis = i64::try_from(Config::optional_positive_usize(
@@ -106,12 +112,27 @@ impl RebuildConfig {
             intervals,
             allowed_lateness,
             source_layer,
+            output_layer,
             state_epoch,
             finish_open_windows,
             bucket_millis,
             dry_run,
             iceberg,
         })
+    }
+
+    fn output_layer(vars: &EnvVars) -> BpResult<RebuildOutputLayer> {
+        let value = vars
+            .optional(REBUILDER_OUTPUT_LAYER)?
+            .unwrap_or_else(|| "raw".to_string());
+        match value.as_str() {
+            "raw" => Ok(RebuildOutputLayer::Raw),
+            "compacted" => Ok(RebuildOutputLayer::Compacted),
+            other => Err(BpError::config_invalid(
+                REBUILDER_OUTPUT_LAYER,
+                format!("must be raw or compacted, got {other}"),
+            )),
+        }
     }
 
     fn intervals(vars: &EnvVars) -> BpResult<Vec<CandleInterval>> {
@@ -165,6 +186,7 @@ mod tests {
         assert_eq!(config.intervals[2].label(), "5m");
         assert_eq!(config.allowed_lateness, DurationMilliseconds(5_000));
         assert_eq!(config.source_layer, RebuildSourceLayer::Auto);
+        assert_eq!(config.output_layer, RebuildOutputLayer::Raw);
         assert_eq!(config.state_epoch, DEFAULT_STATE_EPOCH);
         assert!(config.finish_open_windows);
         assert_eq!(config.iceberg.warehouse, "s3://archive/iceberg".to_string());
@@ -177,12 +199,14 @@ mod tests {
             ("ICEBERG_CATALOG_URI", "http://catalog:8181"),
             (REBUILDER_S3_BUCKET, "archive"),
             (REBUILDER_SOURCE_LAYER, "compacted"),
+            (REBUILDER_OUTPUT_LAYER, "compacted"),
             (REBUILDER_STATE_EPOCH, "42"),
             (REBUILDER_INTERVALS, "1m, 1m, 15m"),
         ]))
         .unwrap();
 
         assert_eq!(config.source_layer, RebuildSourceLayer::Compacted);
+        assert_eq!(config.output_layer, RebuildOutputLayer::Compacted);
         assert_eq!(config.state_epoch, 42);
         assert_eq!(config.intervals.len(), 2);
         assert_eq!(config.intervals[1].label(), "15m");
@@ -196,6 +220,19 @@ mod tests {
                 ("ICEBERG_CATALOG_URI", "http://catalog:8181"),
                 (REBUILDER_S3_BUCKET, "archive"),
                 (REBUILDER_SOURCE_LAYER, "warehouse"),
+            ]))
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn invalid_output_layer_is_rejected() {
+        assert!(
+            RebuildConfig::from_vars(&vars(&[
+                ("RUST_LOG", "info"),
+                ("ICEBERG_CATALOG_URI", "http://catalog:8181"),
+                (REBUILDER_S3_BUCKET, "archive"),
+                (REBUILDER_OUTPUT_LAYER, "warehouse"),
             ]))
             .is_err()
         );

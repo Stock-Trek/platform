@@ -20,6 +20,7 @@ impl ArchiveBatch {
                 Self::field(4, "exchange_timestamp", DataType::Int64, true),
                 Self::field(5, "received_at", DataType::Int64, false),
                 Self::field(6, "payload", DataType::Utf8, false),
+                Self::field(7, "state_epoch", DataType::UInt64, false),
             ])),
             ArchiveKind::Candles => Arc::new(Schema::new(vec![
                 Self::field(1, "exchange", DataType::Utf8, false),
