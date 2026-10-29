@@ -11,6 +11,5 @@ platform-types = { workspace = true }
 rust_decimal = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 stock-trek-types = { workspace = true, features = ["serde"] }
-thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4", "fast-rng"] }

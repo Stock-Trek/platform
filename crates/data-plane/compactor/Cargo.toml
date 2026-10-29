@@ -7,7 +7,6 @@ edition.workspace = true
 async-trait = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 platform-archive = { workspace = true }
-platform-aws = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["storage"] }
 platform-runtime = { workspace = true }
