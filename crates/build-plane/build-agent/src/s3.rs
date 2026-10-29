@@ -249,6 +249,7 @@ impl SignedPost {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use platform_errors::ErrorType;
     use serde_json::json;
 
     fn signed_post(

@@ -28,10 +28,6 @@ impl SqsError {
         matches!(self, Self::PartialBatch { sent, .. } if *sent > 0)
     }
 
-    pub fn error_type(&self) -> &'static str {
-        self.into()
-    }
-
     pub fn retryability(&self) -> Retryability {
         match self {
             Self::PartialBatch { failures, .. }

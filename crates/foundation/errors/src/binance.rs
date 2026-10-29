@@ -1,4 +1,4 @@
-use crate::{exchange::ExchangeError, retryability::Retryability};
+use crate::{ErrorType, exchange::ExchangeError, retryability::Retryability};
 use platform_types::new_types::Seconds;
 use serde::Deserialize;
 
@@ -16,11 +16,13 @@ pub struct BinanceErrorData {
     pub retryAfter: Option<i64>,
 }
 
-impl BinanceError {
-    pub fn error_type(&self) -> &'static str {
+impl ErrorType for BinanceError {
+    fn error_type(&self) -> &'static str {
         "binance"
     }
+}
 
+impl BinanceError {
     pub fn retryability(&self) -> Retryability {
         Retryability::from_binance_code(self.code)
     }

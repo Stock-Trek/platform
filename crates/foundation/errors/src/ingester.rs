@@ -72,10 +72,6 @@ impl IngesterError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
-        self.into()
-    }
-
     pub fn retryability(&self) -> Retryability {
         Retryability::Permanent
     }

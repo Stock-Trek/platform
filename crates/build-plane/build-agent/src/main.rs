@@ -1,7 +1,7 @@
 use crate::{config::AgentConfig, handler::Handler, source::SourceLimits};
 use lambda_runtime::{LambdaEvent, service_fn};
 use metrics_cloudwatch_embedded::lambda::service::run;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BpError, BpResult, ErrorType};
 use platform_messages::build_request::{BuildOutcome, BuildRequest};
 use platform_metrics::build::BuildMetrics;
 use platform_runtime::Service;

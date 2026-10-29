@@ -102,10 +102,6 @@ impl ConnectorError {
         }
     }
 
-    pub fn error_type(&self) -> &'static str {
-        self.into()
-    }
-
     pub fn retryability(&self) -> Retryability {
         match self {
             Self::GatewayHttpStatus { status } => Retryability::from_http_status(*status),

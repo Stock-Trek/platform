@@ -2,7 +2,7 @@ use crate::{context::RsOrchestratorContext, tasks::task::Task};
 use aws_lambda_events::event::sqs::{SqsBatchResponse, SqsEvent, SqsMessage as SqsRecord};
 use futures::{StreamExt, stream};
 use lambda_runtime::LambdaEvent;
-use platform_errors::{BpError, BpResult, SqsError};
+use platform_errors::{BpError, BpResult, ErrorType, SqsError};
 use platform_messages::sqs_message::SqsMessage;
 use platform_metrics::{route::RouteMetrics, sqs::SqsMetrics};
 use platform_time::{deadline::Deadline, request_context::RequestContext};

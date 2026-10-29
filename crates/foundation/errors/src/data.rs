@@ -57,10 +57,6 @@ impl DataError {
         Self::Multiple { failures }
     }
 
-    pub fn error_type(&self) -> &'static str {
-        self.into()
-    }
-
     pub fn retryability(&self) -> Retryability {
         match self {
             Self::LockContention { .. } | Self::LockLost { .. } => Retryability::Retryable,

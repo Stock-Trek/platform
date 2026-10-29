@@ -250,6 +250,7 @@ impl Source {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use platform_errors::ErrorType;
     use std::io::Cursor;
     use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
