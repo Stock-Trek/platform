@@ -4,6 +4,7 @@ pub mod config;
 pub mod connector;
 pub mod data;
 pub mod decimal;
+mod error_type;
 pub mod exchange;
 #[cfg(feature = "github")]
 pub mod github;
@@ -29,6 +30,7 @@ pub use config::ConfigError;
 pub use connector::{ConnectorError, SendFailure};
 pub use data::DataError;
 pub use decimal::DecimalScaleError;
+pub use error_type::ErrorType;
 pub use exchange::ExchangeError;
 #[cfg(feature = "github")]
 pub use github::GitHubError;

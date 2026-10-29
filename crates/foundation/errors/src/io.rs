@@ -31,10 +31,6 @@ pub enum IoError {
 }
 
 impl IoError {
-    pub fn error_type(&self) -> &'static str {
-        self.into()
-    }
-
     pub fn retryability(&self) -> Retryability {
         match self {
             #[cfg(feature = "archive")]

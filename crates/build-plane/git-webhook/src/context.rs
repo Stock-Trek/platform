@@ -6,7 +6,7 @@ use crate::{
 };
 use aws_sdk_sqs::Client as SqsClient;
 use platform_aws::SdkConfig;
-use platform_errors::{BpError, BpResult, SecretsError};
+use platform_errors::{BpError, BpResult, ErrorType, SecretsError};
 use platform_github::host_allow_list::HostAllowlist;
 use platform_metrics::secret::SecretMetrics;
 use platform_sqs::sqs::{Sqs, SqsConfig};

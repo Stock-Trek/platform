@@ -85,10 +85,6 @@ impl fmt::Display for S3DeleteObjectFailure {
 }
 
 impl StorageError {
-    pub fn error_type(&self) -> &'static str {
-        self.into()
-    }
-
     pub fn retryability(&self) -> Retryability {
         match self {
             Self::S3 {

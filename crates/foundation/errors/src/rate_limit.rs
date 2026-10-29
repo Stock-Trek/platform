@@ -21,10 +21,6 @@ pub enum RateLimitError {
 }
 
 impl RateLimitError {
-    pub fn error_type(&self) -> &'static str {
-        self.into()
-    }
-
     pub fn retryability(&self) -> Retryability {
         match self {
             Self::RateLimited => Retryability::Retryable,

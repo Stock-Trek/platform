@@ -40,10 +40,6 @@ pub enum HttpError {
 }
 
 impl HttpError {
-    pub fn error_type(&self) -> &'static str {
-        self.into()
-    }
-
     pub fn retryability(&self) -> Retryability {
         match self {
             Self::Reqwest(error) => Retryability::from_reqwest(error),

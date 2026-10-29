@@ -1,4 +1,6 @@
-use platform_errors::{BinanceError, BinanceErrorData, BpError, ExchangeError, Retryability};
+use platform_errors::{
+    BinanceError, BinanceErrorData, BpError, ErrorType, ExchangeError, Retryability,
+};
 use platform_exchange_types::{
     binance::{
         klines::{BinanceKlineResponse, BinanceKlinesResponse},

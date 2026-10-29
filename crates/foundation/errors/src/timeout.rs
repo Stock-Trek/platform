@@ -15,10 +15,6 @@ pub enum TimeoutError {
 }
 
 impl TimeoutError {
-    pub fn error_type(&self) -> &'static str {
-        self.into()
-    }
-
     pub fn retryability(&self) -> Retryability {
         Retryability::Retryable
     }

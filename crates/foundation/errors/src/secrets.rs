@@ -11,10 +11,6 @@ pub enum SecretsError {
 }
 
 impl SecretsError {
-    pub fn error_type(&self) -> &'static str {
-        self.into()
-    }
-
     pub fn retryability(&self) -> Retryability {
         match self {
             Self::RefreshThrottled => Retryability::Permanent,
