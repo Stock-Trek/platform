@@ -141,44 +141,6 @@ impl CheckpointRecord {
     }
 }
 
-/// Position of a processed source message without keyed state.
-///
-/// This is kept as a small helper for callers that only need the source
-/// position. Recovery uses [`CheckpointRecord`].
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SourceCheckpoint {
-    pub stream: String,
-    pub stream_sequence: u64,
-    pub consumer_sequence: Option<u64>,
-    pub subject: String,
-}
-
-impl SourceCheckpoint {
-    pub fn from_message(message: &Message) -> BpResult<Option<Self>> {
-        let (Some(stream), Some(stream_sequence)) = (&message.stream, message.stream_sequence)
-        else {
-            return Ok(None);
-        };
-        if stream.is_empty() {
-            return Err(BpError::bad_value(
-                "checkpoint",
-                "stream",
-                "stream name must not be empty",
-            ));
-        }
-        Ok(Some(Self {
-            stream: stream.clone(),
-            stream_sequence,
-            consumer_sequence: message.consumer_sequence,
-            subject: message.subject.clone(),
-        }))
-    }
-
-    pub fn resume_sequence(&self) -> u64 {
-        self.stream_sequence.saturating_add(1)
-    }
-}
-
 /// Durable storage for complete partition checkpoints.
 #[async_trait]
 pub trait StateStore: Send + Sync {
@@ -410,7 +372,6 @@ mod tests {
             ..Message::default()
         };
 
-        assert_eq!(SourceCheckpoint::from_message(&message).unwrap(), None);
         assert_eq!(
             CheckpointRecord::from_message(&message, PartitionId::new(0), AggregatorState::new())
                 .unwrap(),
