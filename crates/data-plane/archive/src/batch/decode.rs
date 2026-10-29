@@ -78,10 +78,7 @@ impl ArchiveBatch {
         let state_epoch = Self::u64_column(batch, "state_epoch")?;
         let revision_id = Self::string_column(batch, "revision_id")?;
         let revision = Self::string_column(batch, "revision")?;
-        // Candle files written before completeness was propagated do not have
-        // this column. Treat those rows as complete rather than rejecting the
-        // archive.
-        let is_complete = Self::optional_boolean_column(batch, "is_complete")?;
+        let is_complete = Self::boolean_column(batch, "is_complete")?;
 
         (0..batch.num_rows())
             .map(|row| {
@@ -116,9 +113,7 @@ impl ArchiveBatch {
                 let candle = Candle {
                     key: CandleKey::new(exchange, TradingPair::new(base, quote), interval),
                     market_candle,
-                    is_complete: is_complete
-                        .filter(|column| !column.is_null(row))
-                        .is_none_or(|column| column.value(row)),
+                    is_complete: is_complete.value(row),
                 };
                 let mut decoded = CandleRevision::decode(revision.value(row).as_bytes())?;
                 if decoded.key != candle.key
@@ -192,21 +187,6 @@ impl ArchiveBatch {
             .as_any()
             .downcast_ref::<BooleanArray>()
             .ok_or_else(|| Self::column_error(name))
-    }
-
-    fn optional_boolean_column<'a>(
-        batch: &'a RecordBatch,
-        name: &str,
-    ) -> BpResult<Option<&'a BooleanArray>> {
-        batch
-            .column_by_name(name)
-            .map(|array| {
-                array
-                    .as_any()
-                    .downcast_ref::<BooleanArray>()
-                    .ok_or_else(|| Self::column_error(name))
-            })
-            .transpose()
     }
 
     fn parse<T>(value: &str, column: &str) -> BpResult<T>

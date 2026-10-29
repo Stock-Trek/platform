@@ -133,14 +133,8 @@ pub struct Candle {
     ///
     /// Candles start complete. A gap marker that covers the window marks it
     /// incomplete before it closes, and the flag is carried by the published
-    /// closed candle. Older payloads that do not contain the field are treated
-    /// as complete.
-    #[serde(default = "default_complete")]
+    /// closed candle.
     pub is_complete: bool,
-}
-
-fn default_complete() -> bool {
-    true
 }
 
 /// Deterministic revision of a closed candle.
@@ -427,18 +421,6 @@ mod tests {
 
         candle.mark_complete();
         assert!(candle.is_complete());
-    }
-
-    #[test]
-    fn legacy_candle_payloads_default_to_complete() {
-        let interval = CandleInterval::from_label("1m").unwrap();
-        let candle = Candle::open(&trade("100", "2", 61_000), interval);
-        let mut payload = serde_json::to_value(&candle).unwrap();
-        payload.as_object_mut().unwrap().remove("is_complete");
-
-        let decoded: Candle = serde_json::from_value(payload).unwrap();
-
-        assert!(decoded.is_complete());
     }
 
     #[test]
