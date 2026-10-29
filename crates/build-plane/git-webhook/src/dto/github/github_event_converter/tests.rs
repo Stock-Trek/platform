@@ -1,7 +1,5 @@
 use super::GitHubEventConverter;
-use crate::{
-    dto::event_converter::EventConverter, event_response::EventResponse,
-};
+use crate::{dto::event_converter::EventConverter, event_response::EventResponse};
 use hmac::{Hmac, KeyInit, Mac};
 use lambda_http::Body;
 use platform_errors::{BpError, BpResult, GitHubError};

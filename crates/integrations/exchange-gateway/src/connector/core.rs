@@ -144,7 +144,9 @@ impl Connector<(), ()> {
             max_retries,
         )
     }
-    pub(super) fn rate_limiters(default_capacity: HashMap<RateLimit, UsageCount>) -> BpResult<RateLimiters> {
+    pub(super) fn rate_limiters(
+        default_capacity: HashMap<RateLimit, UsageCount>,
+    ) -> BpResult<RateLimiters> {
         let mut limiter_states = HashMap::new();
         for (rate_limit, capacity) in default_capacity {
             let RateLimit {

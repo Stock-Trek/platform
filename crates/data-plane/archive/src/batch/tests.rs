@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
-    record::{ArchiveKind, ArchiveRecord},
     ArchiveParquet, ArchiveParquetWriter,
+    record::{ArchiveKind, ArchiveRecord},
 };
 use bytes::Bytes;
 use platform_market_data::{
