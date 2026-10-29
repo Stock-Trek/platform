@@ -26,7 +26,9 @@ pub use restore::{
     rebuild_state_from_archive, restore_partition,
 };
 pub use router::{HashRouter, NatsRouter, partitions_for_event};
-pub use runner::ProcessorRunner;
+pub use runner::{
+    ProcessorRunner, QuiesceReceiver, QuiesceSignal, RebalanceReceiver, RebalanceSignal,
+};
 pub use sink::{ClosedCandlePublisher, NatsCandleSink, OpenCandleStore};
 pub use source::{MarketInput, MarketSource, NatsMarketSource, NatsPartitionSource, SourceRecord};
 pub use state::{
