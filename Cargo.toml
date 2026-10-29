@@ -8,6 +8,7 @@ edition = "2024"
 
 [workspace.dependencies]
 platform-build-agent = { path = "crates/build-plane/build-agent" }
+platform-build-paths = { path = "crates/foundation/build-paths" }
 platform-build-orchestrator = { path = "crates/build-plane/build-orchestrator" }
 platform-git-webhook = { path = "crates/build-plane/git-webhook" }
 
@@ -59,6 +60,7 @@ base64 = "0.23"
 bimap = "0.6"
 bs58 = "0.5"
 bytes = "1"
+cargo_metadata = "0.23"
 chrono = "0.4"
 data-encoding = "2"
 ed25519-compact = "2"

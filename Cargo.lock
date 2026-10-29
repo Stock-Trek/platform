@@ -4330,6 +4330,7 @@ dependencies = [
  "lambda_runtime",
  "metrics",
  "metrics_cloudwatch_embedded",
+ "platform-build-paths",
  "platform-config",
  "platform-errors",
  "platform-messages",
@@ -4362,6 +4363,7 @@ dependencies = [
  "metrics",
  "metrics_cloudwatch_embedded",
  "platform-aws",
+ "platform-build-paths",
  "platform-config",
  "platform-errors",
  "platform-git",
@@ -4378,6 +4380,13 @@ dependencies = [
  "tokio",
  "tracing",
  "zip",
+]
+
+[[package]]
+name = "platform-build-paths"
+version = "0.2.0"
+dependencies = [
+ "cargo_metadata",
 ]
 
 [[package]]
@@ -4628,6 +4637,7 @@ dependencies = [
 name = "platform-proto-gen"
 version = "0.2.0"
 dependencies = [
+ "platform-build-paths",
  "prost-build",
  "protoc-bin-vendored",
 ]

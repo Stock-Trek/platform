@@ -3,13 +3,12 @@ use crate::{
     context::RsOrchestratorContext,
     tasks::{git_remote::GitRemote, s3_keys::S3Keys, source_archive::SourceArchive},
 };
+use platform_build_paths::USER_SOURCE_DIRECTORY;
 use platform_errors::BpResult;
 use platform_git::git_host::GitHost;
 use platform_messages::sqs_message::{GitSource, SqsDetail, SqsMessage, SqsRefType};
 use platform_time::request_context::RequestContext;
 use std::fmt::Display;
-
-const USER_GENERATED_DIRECTORY: &str = "src/algorithms";
 
 pub enum Task {
     AllReposAdd {
@@ -185,7 +184,7 @@ impl Task {
             .directory_files(
                 repo_id,
                 &commit_hash,
-                USER_GENERATED_DIRECTORY,
+                USER_SOURCE_DIRECTORY,
                 request_context.deadline,
             )
             .await?;

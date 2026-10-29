@@ -1,6 +1,6 @@
 use std::path::Path;
 
-pub const GENERATED_DIR: &str = "crates/sandbox-plane/runner/src/generated";
+pub const GENERATED_DIR: &str = platform_build_paths::runner::GENERATED_DIR;
 
 pub struct ProtoGen;
 
@@ -61,7 +61,7 @@ mod tests {
                 .unwrap_or_else(|error| panic!("failed to read generated {name}: {error}"));
             assert_eq!(
                 expected, actual,
-                "crates/sandbox-plane/runner/src/generated/{name} is out of date; run `cargo run -p platform-proto-gen`"
+                "{GENERATED_DIR}/{name} is out of date; run `cargo run -p platform-proto-gen`"
             );
         }
 

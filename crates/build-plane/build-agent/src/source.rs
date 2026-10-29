@@ -1,12 +1,12 @@
 //! Download and unpack the user's algorithm sources.
 //!
 //! The orchestrator uploads a zip archive of the repository's
-//! `src/algorithms` directory and passes the pre-signed download URL in the
-//! build request as `signed_get_url`. Archive paths are rooted at
-//! `crates/compute/runner/src/user_generated/` so extracting the archive over the
-//! working directory replaces the checked in algorithm stub with the user's
-//! source.
+//! `src/user_generated` directory and passes the pre-signed download URL in the
+//! build request as `signed_get_url`. Archive paths are rooted at the runner's
+//! user generated source directory so extracting the archive over the working
+//! directory replaces the checked in algorithm stub with the user's source.
 
+use platform_build_paths::runner::{USER_GENERATED_DIR, USER_GENERATED_PREFIX};
 use platform_errors::{BpError, BpResult, IoError, StorageError};
 use std::{
     io::{Cursor, Read, Write},
@@ -16,9 +16,6 @@ use std::{
 };
 use tracing::info;
 use zip::ZipArchive;
-
-const USER_GENERATED_DIR: &str = "crates/compute/runner/src/user_generated";
-const USER_GENERATED_PREFIX: &str = "crates/compute/runner/src/user_generated/";
 
 pub const DEFAULT_SOURCE_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 pub const DEFAULT_MAX_SOURCE_ARCHIVE_BYTES: NonZeroU64 =
@@ -267,11 +264,9 @@ mod tests {
     #[test]
     fn extracts_sources_within_the_limit() {
         let directory = tempfile::tempdir().unwrap();
+        let path = format!("{USER_GENERATED_PREFIX}algorithm.rs");
         let source = Source {
-            bytes: archive(&[(
-                "crates/compute/runner/src/user_generated/algorithm.rs",
-                b"pub struct Example;",
-            )]),
+            bytes: archive(&[(&path, b"pub struct Example;")]),
         };
 
         let files = source
@@ -285,11 +280,9 @@ mod tests {
     #[test]
     fn rejects_archives_whose_declared_extracted_size_exceeds_the_limit() {
         let directory = tempfile::tempdir().unwrap();
+        let path = format!("{USER_GENERATED_PREFIX}algorithm.rs");
         let source = Source {
-            bytes: archive(&[(
-                "crates/compute/runner/src/user_generated/algorithm.rs",
-                &[0u8; 256],
-            )]),
+            bytes: archive(&[(&path, &[0u8; 256])]),
         };
 
         let error = source
@@ -305,7 +298,7 @@ mod tests {
         assert!(
             !directory
                 .path()
-                .join("crates/compute/runner/src/user_generated/algorithm.rs")
+                .join(format!("{USER_GENERATED_PREFIX}algorithm.rs"))
                 .exists()
         );
     }
