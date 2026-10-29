@@ -352,7 +352,9 @@ mod tests {
             intervals: vec![
                 platform_market_data::candle::CandleInterval::from_label("1m").unwrap(),
             ],
-            flush_interval: std::time::Duration::from_secs(1),
+            allowed_lateness: std::time::Duration::from_millis(5_000),
+            checkpoint_interval: std::time::Duration::from_secs(5),
+            lease_ttl: std::time::Duration::from_secs(30),
         };
 
         NatsRouter::new(config, source, publisher)

@@ -1,7 +1,7 @@
 use platform_aggregator::{
-    AggregatorConfig, AggregatorRunner, ArchiveRecoveryConfig, ArchivedEventSource,
-    EmptyArchivedEventSource, NatsCandleSink, NatsMarketSource, NatsPartitionSource, NatsRouter,
-    NatsStateStore, S3ArchivedEventSource, StateStore, restore_partition,
+    AggregatorConfig, ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource,
+    LeaseStore, NatsCandleSink, NatsLeaseStore, NatsMarketSource, NatsPartitionSource, NatsRouter,
+    NatsStateStore, ProcessorRunner, S3ArchivedEventSource, StateStore, restore_partition,
 };
 use platform_errors::BpResult;
 use platform_nats::{JetStream, NatsPublisher};
@@ -36,7 +36,9 @@ async fn main() -> BpResult<()> {
     let router = NatsRouter::new(config.clone(), router_source, publisher);
 
     let checkpoints: Arc<dyn StateStore> = Arc::new(NatsStateStore::connect(&config).await?);
+    let leases: Arc<dyn LeaseStore> = Arc::new(NatsLeaseStore::connect(&config).await?);
     let sink = Arc::new(NatsCandleSink::connect(&config).await?);
+    let allowed_lateness = config.processor_config().allowed_lateness;
     let archive_config = ArchiveRecoveryConfig::from_env()?;
     let source_stream = JetStream::stream_name(&config.shard_subject_prefix);
 
@@ -58,18 +60,20 @@ async fn main() -> BpResult<()> {
             &source_stream,
             &config.intervals,
             config.shard_count,
+            allowed_lateness,
         )
         .await?;
         let start_sequence = restored.start_sequence;
         let replay_watermark = restored.replay_watermark();
         let source = NatsPartitionSource::connect(&config, partition, start_sequence).await?;
-        let runner = AggregatorRunner::new_partition(
+        let runner = ProcessorRunner::new_partition(
             config.clone(),
             source,
             sink.clone(),
             checkpoints.clone(),
             partition,
         )
+        .with_lease_store(leases.clone())
         .with_state(restored.state)
         .with_replay_watermark(replay_watermark);
         tasks.spawn(async move { runner.run().await });

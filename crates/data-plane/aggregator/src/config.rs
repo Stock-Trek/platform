@@ -1,9 +1,11 @@
 use crate::partition::{PartitionId, all_partitions};
+use crate::processor::ProcessorConfig;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::CandleInterval;
 use platform_nats::NatsSubject;
 use platform_runtime::Config;
+use platform_types::new_types::DurationMilliseconds;
 use std::time::Duration;
 
 pub const AGGREGATOR_NATS_URL: &str = "AGGREGATOR_NATS_URL";
@@ -12,13 +14,17 @@ pub const AGGREGATOR_GAP_SUBJECT_PREFIX: &str = "AGGREGATOR_GAP_SUBJECT_PREFIX";
 pub const AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX: &str = "AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX";
 pub const AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX: &str = "AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX";
 pub const AGGREGATOR_INTERVALS: &str = "AGGREGATOR_INTERVALS";
-pub const AGGREGATOR_FLUSH_INTERVAL_SECS: &str = "AGGREGATOR_FLUSH_INTERVAL_SECS";
+pub const AGGREGATOR_ALLOWED_LATENESS_MS: &str = "AGGREGATOR_ALLOWED_LATENESS_MS";
+pub const AGGREGATOR_CHECKPOINT_INTERVAL_SECS: &str = "AGGREGATOR_CHECKPOINT_INTERVAL_SECS";
+pub const AGGREGATOR_LEASE_TTL_SECS: &str = "AGGREGATOR_LEASE_TTL_SECS";
 pub const AGGREGATOR_SHARD_SUBJECT_PREFIX: &str = "AGGREGATOR_SHARD_SUBJECT_PREFIX";
 pub const AGGREGATOR_SHARD_COUNT: &str = "AGGREGATOR_SHARD_COUNT";
 pub const AGGREGATOR_SHARD_INDEX: &str = "AGGREGATOR_SHARD_INDEX";
 
 const DEFAULT_INTERVALS: &str = "1s,1m,5m";
-const DEFAULT_FLUSH_INTERVAL_SECS: u64 = 1;
+const DEFAULT_ALLOWED_LATENESS_MS: u64 = 5_000;
+const DEFAULT_CHECKPOINT_INTERVAL_SECS: u64 = 5;
+const DEFAULT_LEASE_TTL_SECS: u64 = 30;
 const DEFAULT_SHARD_SUBJECT_PREFIX: &str = "aggregator.shards";
 const DEFAULT_SHARD_COUNT: usize = 16;
 
@@ -42,7 +48,12 @@ pub struct AggregatorConfig {
     /// every partition (useful for local development and tests).
     pub shard_index: Option<usize>,
     pub intervals: Vec<CandleInterval>,
-    pub flush_interval: Duration,
+    /// How long after a candle window ends a late event may still update it.
+    pub allowed_lateness: Duration,
+    /// How often keyed state is checkpointed while processing.
+    pub checkpoint_interval: Duration,
+    /// Lifetime of the single-writer partition lease.
+    pub lease_ttl: Duration,
 }
 
 /// Derives the conventional gap prefix from the event prefix.
@@ -104,11 +115,24 @@ impl AggregatorConfig {
             ));
         }
 
-        let flush_interval = Config::optional_positive_duration_secs(
+        let checkpoint_interval = Config::optional_positive_duration_secs(
             vars,
-            AGGREGATOR_FLUSH_INTERVAL_SECS,
-            DEFAULT_FLUSH_INTERVAL_SECS,
+            AGGREGATOR_CHECKPOINT_INTERVAL_SECS,
+            DEFAULT_CHECKPOINT_INTERVAL_SECS,
         )?;
+        let lease_ttl = Config::optional_positive_duration_secs(
+            vars,
+            AGGREGATOR_LEASE_TTL_SECS,
+            DEFAULT_LEASE_TTL_SECS,
+        )?;
+        if checkpoint_interval >= lease_ttl {
+            return Err(BpError::config_invalid(
+                AGGREGATOR_CHECKPOINT_INTERVAL_SECS,
+                format!("must be lower than {AGGREGATOR_LEASE_TTL_SECS}"),
+            ));
+        }
+        let allowed_lateness_ms: u64 =
+            vars.optional_parsed_or(AGGREGATOR_ALLOWED_LATENESS_MS, DEFAULT_ALLOWED_LATENESS_MS)?;
 
         let shard_subject_prefix = match vars.optional(AGGREGATOR_SHARD_SUBJECT_PREFIX)? {
             Some(value) => {
@@ -144,13 +168,26 @@ impl AggregatorConfig {
             shard_count,
             shard_index,
             intervals,
-            flush_interval,
+            allowed_lateness: Duration::from_millis(allowed_lateness_ms),
+            checkpoint_interval,
+            lease_ttl,
         })
     }
 
     /// The KV bucket that stores source checkpoints for routed partitions.
     pub fn checkpoint_bucket(&self) -> String {
         crate::checkpoint::checkpoint_bucket(&self.shard_subject_prefix)
+    }
+
+    /// The deterministic processing configuration used by live processing and
+    /// archive rebuilds.
+    pub fn processor_config(&self) -> ProcessorConfig {
+        ProcessorConfig::new(
+            self.intervals.clone(),
+            DurationMilliseconds(
+                i64::try_from(self.allowed_lateness.as_millis()).unwrap_or(i64::MAX),
+            ),
+        )
     }
 
     /// The partitions this process is responsible for.
@@ -193,6 +230,9 @@ mod tests {
         assert_eq!(config.shard_index, None);
         assert_eq!(config.partitions().len(), DEFAULT_SHARD_COUNT);
         assert_eq!(config.checkpoint_bucket(), "aggregator_shards_checkpoints");
+        assert_eq!(config.allowed_lateness, Duration::from_millis(5_000));
+        assert_eq!(config.checkpoint_interval, Duration::from_secs(5));
+        assert_eq!(config.lease_ttl, Duration::from_secs(30));
     }
 
     #[test]
@@ -230,5 +270,32 @@ mod tests {
         values.extend([(AGGREGATOR_SHARD_COUNT, "8"), (AGGREGATOR_SHARD_INDEX, "8")]);
 
         assert!(AggregatorConfig::from_vars(&vars(&values)).is_err());
+    }
+
+    #[test]
+    fn checkpoint_interval_must_fit_inside_the_lease_ttl() {
+        let mut values = base_vars();
+        values.extend([
+            (AGGREGATOR_CHECKPOINT_INTERVAL_SECS, "30"),
+            (AGGREGATOR_LEASE_TTL_SECS, "30"),
+        ]);
+
+        assert!(AggregatorConfig::from_vars(&vars(&values)).is_err());
+    }
+
+    #[test]
+    fn lateness_and_lease_settings_are_configurable() {
+        let mut values = base_vars();
+        values.extend([
+            (AGGREGATOR_ALLOWED_LATENESS_MS, "1500"),
+            (AGGREGATOR_CHECKPOINT_INTERVAL_SECS, "2"),
+            (AGGREGATOR_LEASE_TTL_SECS, "20"),
+        ]);
+        let config = AggregatorConfig::from_vars(&vars(&values)).unwrap();
+
+        assert_eq!(config.allowed_lateness, Duration::from_millis(1_500));
+        assert_eq!(config.processor_config().allowed_lateness.0, 1_500);
+        assert_eq!(config.checkpoint_interval, Duration::from_secs(2));
+        assert_eq!(config.lease_ttl, Duration::from_secs(20));
     }
 }
