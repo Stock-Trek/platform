@@ -175,17 +175,4 @@ impl JetStreamConsumer {
             .await;
         messages.into_iter().next()
     }
-
-    /// Fetches the next message and acknowledges it once fetched.
-    ///
-    /// Returns `None` when the fetch window expired without a message or the
-    /// acknowledgement failed; callers should simply retry.
-    pub async fn next_message(&self, log_label: &str) -> Option<Message> {
-        let message = self.next_message_unacked().await?;
-        if let Err(error) = self.ack(&message).await {
-            tracing::warn!(%error, "failed to acknowledge {log_label}; waiting for redelivery");
-            return None;
-        }
-        Some(message)
-    }
 }

@@ -55,7 +55,8 @@ where
             &mut flush_ticker,
         ))
         .await;
-        let flush_result = Self::flush(&sink, &mut buffer, FLUSH_REASON_SHUTDOWN).await;
+        let flush_result =
+            Self::flush(&mut source, &sink, &mut buffer, FLUSH_REASON_SHUTDOWN).await;
         result?;
         flush_result
     }
@@ -71,14 +72,17 @@ where
                 record = source.next_record() => {
                     match record {
                         Ok(Some(record)) => {
-                            if !buffer.push(record) {
+                            if buffer.would_duplicate(&record) {
                                 MarketDataMetrics::record_dropped_event(
                                     STAGE_ARCHIVER,
                                     DROP_REASON_DUPLICATE,
                                 );
-                            }
-                            if buffer.should_flush() {
-                                Self::flush(sink, buffer, FLUSH_REASON_SIZE).await?;
+                                source.ack(&record).await?;
+                            } else {
+                                buffer.push(record);
+                                if buffer.should_flush() {
+                                    Self::flush(source, sink, buffer, FLUSH_REASON_SIZE).await?;
+                                }
                             }
                         }
                         Ok(None) => {
@@ -92,14 +96,19 @@ where
                     }
                 }
                 _ = flush_ticker.tick() => {
-                    Self::flush(sink, buffer, FLUSH_REASON_INTERVAL).await?;
+                    Self::flush(source, sink, buffer, FLUSH_REASON_INTERVAL).await?;
                 }
             }
         }
         Ok(())
     }
 
-    async fn flush(sink: &K, buffer: &mut ArchiveBuffer, reason: &'static str) -> BpResult<()> {
+    async fn flush(
+        source: &mut S,
+        sink: &K,
+        buffer: &mut ArchiveBuffer,
+        reason: &'static str,
+    ) -> BpResult<()> {
         if buffer.is_empty() {
             return Ok(());
         }
@@ -113,6 +122,9 @@ where
             started_at.elapsed(),
         );
         result?;
+        for record in buffer.records() {
+            source.ack(record).await?;
+        }
         buffer.clear_records();
         info!(
             records,
@@ -137,6 +149,7 @@ mod tests {
     struct FakeSource {
         records: Vec<ArchiveRecord>,
         fail: bool,
+        acked: Arc<Mutex<usize>>,
     }
 
     #[async_trait]
@@ -151,16 +164,29 @@ mod tests {
                 Ok(Some(self.records.remove(0)))
             }
         }
+
+        async fn ack(&mut self, _record: &ArchiveRecord) -> BpResult<()> {
+            *self.acked.lock().expect("acked lock") += 1;
+            Ok(())
+        }
     }
 
     #[derive(Default, Clone)]
     struct FakeSink {
         writes: Arc<Mutex<usize>>,
+        fail: bool,
     }
 
     #[async_trait]
     impl ArchiveSink for FakeSink {
         async fn write(&self, records: &mut [ArchiveRecord]) -> BpResult<()> {
+            if self.fail {
+                return Err(platform_errors::BpError::bad_value(
+                    "sink",
+                    "test",
+                    "write failed",
+                ));
+            }
             *self.writes.lock().expect("writes lock") += records.len();
             Ok(())
         }
@@ -202,9 +228,11 @@ mod tests {
     async fn runs_with_injected_source_and_sink() {
         let sink = FakeSink::default();
         let observed = sink.clone();
+        let acked = Arc::new(Mutex::new(0));
         let source = FakeSource {
             records: vec![record()],
-            fail: false,
+            acked: acked.clone(),
+            ..FakeSource::default()
         };
 
         ArchiverRunner::new(config(), source, sink)
@@ -213,6 +241,47 @@ mod tests {
             .unwrap();
 
         assert_eq!(*observed.writes.lock().unwrap(), 1);
+        assert_eq!(*acked.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn does_not_acknowledge_when_the_flush_fails() {
+        let acked = Arc::new(Mutex::new(0));
+        let source = FakeSource {
+            records: vec![record()],
+            acked: acked.clone(),
+            ..FakeSource::default()
+        };
+        let sink = FakeSink {
+            fail: true,
+            ..FakeSink::default()
+        };
+
+        assert!(
+            ArchiverRunner::new(config(), source, sink)
+                .run()
+                .await
+                .is_err()
+        );
+        assert_eq!(*acked.lock().unwrap(), 0);
+    }
+
+    #[tokio::test]
+    async fn acknowledges_duplicate_records() {
+        let sink = FakeSink::default();
+        let acked = Arc::new(Mutex::new(0));
+        let source = FakeSource {
+            records: vec![record(), record()],
+            acked: acked.clone(),
+            ..FakeSource::default()
+        };
+
+        ArchiverRunner::new(config(), source, sink)
+            .run()
+            .await
+            .unwrap();
+
+        assert_eq!(*acked.lock().unwrap(), 2);
     }
 
     #[tokio::test]
@@ -221,6 +290,7 @@ mod tests {
         let source = FakeSource {
             records: Vec::new(),
             fail: true,
+            ..FakeSource::default()
         };
 
         let error = ArchiverRunner::new(config(), source, sink)

@@ -16,15 +16,21 @@ const DURABLE_NAME: &str = "aggregator-events";
 pub trait MarketEventSource: Send {
     /// Returns `None` when the source has reached its end.
     async fn next_event(&mut self) -> BpResult<Option<MarketEvent>>;
+
+    /// Acknowledges the event returned by the previous call to
+    /// [`Self::next_event`].
+    async fn ack(&mut self, _event: &MarketEvent) -> BpResult<()> {
+        Ok(())
+    }
 }
 
 /// Reads ingester events from a durable JetStream consumer.
 ///
-/// Messages are explicitly acknowledged after delivery to the aggregator, so a
-/// restart resumes from the last acknowledged event instead of skipping
-/// everything published while the aggregator was down.
+/// Messages are acknowledged only after the aggregator has applied the event,
+/// so unprocessed events are redelivered after a restart instead of being lost.
 pub struct NatsMarketEventSource {
     events: JetStreamConsumer,
+    in_flight: Option<Message>,
 }
 
 impl NatsMarketEventSource {
@@ -37,7 +43,10 @@ impl NatsMarketEventSource {
             DURABLE_NAME,
         )
         .await?;
-        Ok(Self { events })
+        Ok(Self {
+            events,
+            in_flight: None,
+        })
     }
 }
 
@@ -45,15 +54,36 @@ impl NatsMarketEventSource {
 impl MarketEventSource for NatsMarketEventSource {
     async fn next_event(&mut self) -> BpResult<Option<MarketEvent>> {
         loop {
-            let message = self.events.next_message("market event").await;
-            if let Some(event) = Self::decode_event(message) {
-                return Ok(Some(event));
+            let Some(message) = self.events.next_message_unacked().await else {
+                continue;
+            };
+            match MarketEvent::decode(&message.payload) {
+                Ok(event) => {
+                    self.in_flight = Some(message);
+                    return Ok(Some(event));
+                }
+                Err(error) => {
+                    MarketDataMetrics::record_decode_failure(
+                        STAGE_AGGREGATOR,
+                        DECODE_KIND_MARKET_EVENT,
+                    );
+                    warn!(%error, "skipping malformed market event");
+                    self.events.ack(&message).await?;
+                }
             }
         }
+    }
+
+    async fn ack(&mut self, _event: &MarketEvent) -> BpResult<()> {
+        let Some(message) = self.in_flight.take() else {
+            return Ok(());
+        };
+        self.events.ack(&message).await
     }
 }
 
 impl NatsMarketEventSource {
+    #[cfg(test)]
     fn decode_event(message: Option<Message>) -> Option<MarketEvent> {
         let message = message?;
         match MarketEvent::decode(&message.payload) {
