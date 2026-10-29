@@ -21,6 +21,8 @@ use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 pub struct ProcessorConfig {
     pub intervals: Vec<CandleInterval>,
     pub allowed_lateness: DurationMilliseconds,
+    /// Schema version new state is stamped with and restored state must match.
+    pub state_schema_version: u32,
 }
 
 impl ProcessorConfig {
@@ -28,11 +30,17 @@ impl ProcessorConfig {
         Self {
             intervals,
             allowed_lateness,
+            state_schema_version: crate::state::STATE_SCHEMA_VERSION,
         }
     }
 
     pub fn with_intervals(intervals: Vec<CandleInterval>) -> Self {
         Self::new(intervals, DurationMilliseconds::ZERO)
+    }
+
+    pub fn with_state_schema_version(mut self, state_schema_version: u32) -> Self {
+        self.state_schema_version = state_schema_version;
+        self
     }
 }
 
@@ -76,14 +84,12 @@ impl CandleProcessor {
     }
 
     pub fn with_config(config: ProcessorConfig) -> Self {
-        Self {
-            config,
-            state: AggregatorState::new(),
-        }
+        let state = AggregatorState::new_with_schema_version(config.state_schema_version);
+        Self { config, state }
     }
 
     pub fn from_state(config: ProcessorConfig, state: AggregatorState) -> BpResult<Self> {
-        state.ensure_schema_compatible()?;
+        state.ensure_schema_compatible_with(config.state_schema_version)?;
         Ok(Self { config, state })
     }
 
@@ -558,6 +564,19 @@ mod tests {
             missing_to: 2,
             detected_at: TimestampMilliseconds(detected_at),
         }
+    }
+
+    #[test]
+    fn configured_schema_version_is_used_for_new_and_restored_state() {
+        let config = ProcessorConfig::new(vec![one_minute()], DurationMilliseconds::ZERO)
+            .with_state_schema_version(9);
+
+        let processor = CandleProcessor::with_config(config.clone());
+        assert_eq!(processor.state().schema_version, 9);
+
+        let restored = CandleProcessor::from_state(config.clone(), processor.into_state()).unwrap();
+        assert_eq!(restored.state().schema_version, 9);
+        assert!(CandleProcessor::from_state(config, AggregatorState::new()).is_err());
     }
 
     #[test]

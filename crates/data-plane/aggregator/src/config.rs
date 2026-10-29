@@ -122,7 +122,7 @@ pub struct AggregatorConfig {
     pub watermark_idle_timeout: Duration,
     /// What state a partition starts from.
     pub replay_start_policy: ReplayStartPolicy,
-    /// State schema version a checkpoint must carry to be restored.
+    /// State schema version written into new state and required in checkpoints.
     pub state_schema_version: u32,
     /// Prefix used for durable consumer names. The router uses
     /// `{prefix}-router` and each partition uses `{prefix}-shard-{n}`.
@@ -326,6 +326,7 @@ impl AggregatorConfig {
                 i64::try_from(self.allowed_lateness.as_millis()).unwrap_or(i64::MAX),
             ),
         )
+        .with_state_schema_version(self.state_schema_version)
     }
 
     /// The partitions this process is responsible for.
@@ -504,6 +505,7 @@ mod tests {
         assert_eq!(config.watermark_idle_timeout, Duration::from_secs(15));
         assert_eq!(config.replay_start_policy, ReplayStartPolicy::Latest);
         assert_eq!(config.state_schema_version, 9);
+        assert_eq!(config.processor_config().state_schema_version, 9);
     }
 
     #[test]

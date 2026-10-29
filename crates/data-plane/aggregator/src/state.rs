@@ -233,8 +233,13 @@ impl Default for AggregatorState {
 
 impl AggregatorState {
     pub fn new() -> Self {
+        Self::new_with_schema_version(STATE_SCHEMA_VERSION)
+    }
+
+    /// Creates empty state stamped with the schema version the caller expects.
+    pub fn new_with_schema_version(schema_version: u32) -> Self {
         Self {
-            schema_version: STATE_SCHEMA_VERSION,
+            schema_version,
             state_epoch: 0,
             open_candles: HashMap::new(),
             closed_candles: HashMap::new(),

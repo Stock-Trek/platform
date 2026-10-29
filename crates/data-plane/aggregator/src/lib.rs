@@ -23,7 +23,7 @@ pub use processor::{CandleProcessor, ProcessorConfig, ProcessorUpdate};
 pub use restore::{
     ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource, RestoreOptions,
     RestoreResult, RestoreSource, RestoredPartition, S3ArchivedEventSource,
-    rebuild_state_from_archive, restore_partition,
+    rebuild_state_from_archive, rebuild_state_from_archive_with_schema, restore_partition,
 };
 pub use router::{
     HashRouter, NatsRouter, gap_partitions, partitions_for_event, partitions_for_gap,
