@@ -1,38 +1,125 @@
-//! Source-position checkpoints for aggregator partitions.
+//! Durable checkpoints for aggregator partitions.
 //!
-//! A checkpoint records the last source message whose effects were committed by
-//! a partition writer. Consumers are acknowledged only after this record is
-//! durable, so a crash can replay work but cannot silently skip it.
+//! A checkpoint contains the source position *and* the serialized keyed state
+//! whose effects are included up to that position. The source message is
+//! acknowledged only after this record has been written, so a crash can replay
+//! work but cannot silently skip it.
 
 use crate::config::AggregatorConfig;
 use crate::partition::PartitionId;
+use crate::state::AggregatorState;
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
 use platform_nats::{JetStream, KeyValue, Message};
+use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
-use tokio::sync::Mutex as AsyncMutex;
 
-/// Position of the last message processed by a partition.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SourceCheckpoint {
-    /// JetStream stream that delivered the message.
-    pub stream: String,
-    /// Last processed sequence in that stream.
-    pub stream_sequence: u64,
-    /// Consumer sequence of the last processed message, when known.
-    pub consumer_sequence: Option<u64>,
-    /// Subject of the last processed message.
-    pub subject: String,
+/// A complete checkpoint for one aggregator partition.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct CheckpointRecord {
+    /// JetStream stream that delivered the source message.
+    pub source_stream: String,
+    /// First source sequence that must be delivered on resume.
+    pub next_sequence: u64,
+    /// Partition/shard that owns this state.
+    pub partition: PartitionId,
+    /// Event-time watermark captured with the state.
+    pub watermark: Option<TimestampMilliseconds>,
+    /// Serialized keyed aggregation state.
+    pub state: AggregatorState,
 }
 
-impl SourceCheckpoint {
-    /// Builds a checkpoint from a source message.
+/// Short alias for [`CheckpointRecord`].
+pub type Checkpoint = CheckpointRecord;
+/// Alias used by the recovery path.
+pub type StateCheckpoint = CheckpointRecord;
+
+impl CheckpointRecord {
+    pub fn new(
+        partition: PartitionId,
+        source_stream: impl Into<String>,
+        next_sequence: u64,
+        state: AggregatorState,
+    ) -> Self {
+        let watermark = state.watermark;
+        Self {
+            source_stream: source_stream.into(),
+            next_sequence,
+            partition,
+            watermark,
+            state,
+        }
+    }
+
+    /// Builds a checkpoint from a source message and the state after applying
+    /// that message.
     ///
     /// Returns `None` for messages that did not come from JetStream (for
     /// example messages created by an in-memory test source), because there is
     /// no source position to persist.
+    pub fn from_message(
+        message: &Message,
+        partition: PartitionId,
+        state: AggregatorState,
+    ) -> BpResult<Option<Self>> {
+        let (Some(stream), Some(stream_sequence)) = (&message.stream, message.stream_sequence)
+        else {
+            return Ok(None);
+        };
+        if stream.is_empty() {
+            return Err(BpError::bad_value(
+                "checkpoint",
+                "stream",
+                "stream name must not be empty",
+            ));
+        }
+        Ok(Some(Self::new(
+            partition,
+            stream.clone(),
+            stream_sequence.saturating_add(1),
+            state,
+        )))
+    }
+
+    /// The first stream sequence that must be delivered on resume.
+    pub fn resume_sequence(&self) -> u64 {
+        self.next_sequence
+    }
+
+    /// Alias for [`Self::resume_sequence`].
+    pub fn next_stream_sequence(&self) -> u64 {
+        self.resume_sequence()
+    }
+
+    /// Whether this record can be used to restore the given partition.
+    pub fn is_compatible(&self, partition: PartitionId, source_stream: &str) -> bool {
+        self.partition == partition
+            && self.source_stream == source_stream
+            && self.next_sequence > 0
+            && self.state.is_schema_compatible()
+    }
+
+    /// Last source sequence included in this checkpoint.
+    pub fn last_sequence(&self) -> u64 {
+        self.next_sequence.saturating_sub(1)
+    }
+}
+
+/// Position of a processed source message without keyed state.
+///
+/// This is kept as a small helper for callers that only need the source
+/// position. Recovery uses [`CheckpointRecord`].
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SourceCheckpoint {
+    pub stream: String,
+    pub stream_sequence: u64,
+    pub consumer_sequence: Option<u64>,
+    pub subject: String,
+}
+
+impl SourceCheckpoint {
     pub fn from_message(message: &Message) -> BpResult<Option<Self>> {
         let (Some(stream), Some(stream_sequence)) = (&message.stream, message.stream_sequence)
         else {
@@ -53,68 +140,79 @@ impl SourceCheckpoint {
         }))
     }
 
-    /// The first stream sequence that must be delivered on resume.
     pub fn resume_sequence(&self) -> u64 {
         self.stream_sequence.saturating_add(1)
     }
 
-    /// Alias for [`Self::resume_sequence`].
     pub fn next_stream_sequence(&self) -> u64 {
         self.resume_sequence()
     }
 }
 
-/// Durable storage for partition source checkpoints.
+/// Durable storage for complete partition checkpoints.
 #[async_trait]
-pub trait CheckpointStore: Send + Sync {
-    async fn load(&self, partition: PartitionId) -> BpResult<Option<SourceCheckpoint>>;
+pub trait StateStore: Send + Sync {
+    async fn load(&self, partition: PartitionId) -> BpResult<Option<CheckpointRecord>>;
 
-    async fn save(&self, partition: PartitionId, checkpoint: &SourceCheckpoint) -> BpResult<()>;
+    async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()>;
 }
 
-/// In-memory checkpoint store used by tests and single-process runs.
+/// Backwards-compatible name for the state store trait.
+pub use StateStore as CheckpointStore;
+
+/// In-memory state store used by tests and single-process runs.
 #[derive(Debug, Default)]
-pub struct InMemoryCheckpointStore {
-    checkpoints: Mutex<HashMap<PartitionId, SourceCheckpoint>>,
+pub struct InMemoryStateStore {
+    checkpoints: Mutex<HashMap<PartitionId, (u64, CheckpointRecord)>>,
 }
 
-impl InMemoryCheckpointStore {
+impl InMemoryStateStore {
     pub fn new() -> Self {
         Self::default()
     }
 
-    pub fn get(&self, partition: PartitionId) -> Option<SourceCheckpoint> {
+    pub fn get(&self, partition: PartitionId) -> Option<CheckpointRecord> {
+        self.load_with_revision(partition)
+            .map(|(checkpoint, _)| checkpoint)
+    }
+
+    pub fn load_with_revision(&self, partition: PartitionId) -> Option<(CheckpointRecord, u64)> {
         self.checkpoints
             .lock()
             .expect("checkpoint store lock")
             .get(&partition)
             .cloned()
+            .map(|(revision, checkpoint)| (checkpoint, revision))
     }
 }
 
 #[async_trait]
-impl CheckpointStore for InMemoryCheckpointStore {
-    async fn load(&self, partition: PartitionId) -> BpResult<Option<SourceCheckpoint>> {
+impl StateStore for InMemoryStateStore {
+    async fn load(&self, partition: PartitionId) -> BpResult<Option<CheckpointRecord>> {
         Ok(self.get(partition))
     }
 
-    async fn save(&self, partition: PartitionId, checkpoint: &SourceCheckpoint) -> BpResult<()> {
-        self.checkpoints
-            .lock()
-            .expect("checkpoint store lock")
-            .insert(partition, checkpoint.clone());
+    async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
+        let mut checkpoints = self.checkpoints.lock().expect("checkpoint store lock");
+        let next_revision = checkpoints
+            .get(&checkpoint.partition)
+            .map(|(revision, _)| revision.saturating_add(1))
+            .unwrap_or(1);
+        checkpoints.insert(checkpoint.partition, (next_revision, checkpoint.clone()));
         Ok(())
     }
 }
 
+/// Alias for the in-memory store's old name.
+pub type InMemoryCheckpointStore = InMemoryStateStore;
+
 /// Checkpoints stored in a NATS KV bucket owned by the aggregator.
-pub struct NatsCheckpointStore {
+pub struct NatsStateStore {
     values: KeyValue,
     key_prefix: String,
-    writes: AsyncMutex<()>,
 }
 
-impl NatsCheckpointStore {
+impl NatsStateStore {
     pub async fn connect(config: &AggregatorConfig) -> BpResult<Self> {
         let bucket = config.checkpoint_bucket();
         let values =
@@ -122,7 +220,6 @@ impl NatsCheckpointStore {
         Ok(Self {
             values,
             key_prefix: "partition".to_string(),
-            writes: AsyncMutex::new(()),
         })
     }
 
@@ -133,23 +230,58 @@ impl NatsCheckpointStore {
     fn key(&self, partition: PartitionId) -> String {
         format!("{}-{}", self.key_prefix, partition.get())
     }
-}
 
-#[async_trait]
-impl CheckpointStore for NatsCheckpointStore {
-    async fn load(&self, partition: PartitionId) -> BpResult<Option<SourceCheckpoint>> {
-        let Some(payload) = self.values.get_last(&self.key(partition)).await? else {
+    /// Loads a checkpoint and the KV revision it was read from.
+    pub async fn load_with_revision(
+        &self,
+        partition: PartitionId,
+    ) -> BpResult<Option<(CheckpointRecord, u64)>> {
+        let Some((payload, revision)) = self.values.get_with_revision(&self.key(partition)).await?
+        else {
             return Ok(None);
         };
-        Ok(Some(serde_json::from_slice(&payload)?))
+        let checkpoint = serde_json::from_slice(&payload)?;
+        Ok(Some((checkpoint, revision)))
     }
 
-    async fn save(&self, partition: PartitionId, checkpoint: &SourceCheckpoint) -> BpResult<()> {
-        // TODO: replace this process-local serialisation with a CAS write tied
-        // to partition ownership once the full keyed state is checkpointed.
-        let _guard = self.writes.lock().await;
+    /// Atomically writes a checkpoint if the current revision matches.
+    ///
+    /// Passing `None` as `expected_revision` creates the key. A concurrent
+    /// writer causes a revision conflict instead of silently overwriting state.
+    pub async fn compare_and_swap(
+        &self,
+        checkpoint: &CheckpointRecord,
+        expected_revision: Option<u64>,
+    ) -> BpResult<u64> {
         let payload = serde_json::to_vec(checkpoint)?;
-        self.values.put(&self.key(partition), &payload).await?;
+        let key = self.key(checkpoint.partition);
+        match expected_revision {
+            Some(revision) => self.values.update(&key, &payload, revision).await,
+            None => self.values.create(&key, &payload).await,
+        }
+    }
+}
+
+/// Alias for the NATS store's old name.
+pub type NatsCheckpointStore = NatsStateStore;
+
+#[async_trait]
+impl StateStore for NatsStateStore {
+    async fn load(&self, partition: PartitionId) -> BpResult<Option<CheckpointRecord>> {
+        Ok(self
+            .load_with_revision(partition)
+            .await?
+            .map(|(checkpoint, _)| checkpoint))
+    }
+
+    async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
+        // Read the current revision and conditionally update. If another writer
+        // wins the race, `update` fails rather than overwriting its state.
+        let expected_revision = self
+            .load_with_revision(checkpoint.partition)
+            .await?
+            .map(|(_, revision)| revision);
+        self.compare_and_swap(checkpoint, expected_revision).await?;
         Ok(())
     }
 }
@@ -162,6 +294,7 @@ pub fn checkpoint_bucket(shard_subject_prefix: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::state::STATE_SCHEMA_VERSION;
 
     fn message() -> Message {
         Message {
@@ -173,16 +306,40 @@ mod tests {
         }
     }
 
+    fn checkpoint() -> CheckpointRecord {
+        let mut state = AggregatorState::new();
+        state.mark_processed(41);
+        state.advance_watermark(TimestampMilliseconds(1_000));
+        CheckpointRecord::from_message(&message(), PartitionId::new(2), state)
+            .unwrap()
+            .unwrap()
+    }
+
     #[test]
     fn checkpoint_resumes_after_the_last_processed_message() {
-        let checkpoint = SourceCheckpoint::from_message(&message()).unwrap().unwrap();
+        let checkpoint = checkpoint();
 
-        assert_eq!(checkpoint.stream, "aggregator-shards");
-        assert_eq!(checkpoint.stream_sequence, 41);
-        assert_eq!(checkpoint.consumer_sequence, Some(9));
-        assert_eq!(checkpoint.subject, "aggregator.shards.3");
+        assert_eq!(checkpoint.source_stream, "aggregator-shards");
+        assert_eq!(checkpoint.next_sequence, 42);
+        assert_eq!(checkpoint.last_sequence(), 41);
         assert_eq!(checkpoint.resume_sequence(), 42);
         assert_eq!(checkpoint.next_stream_sequence(), 42);
+        assert_eq!(checkpoint.partition, PartitionId::new(2));
+        assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(1_000)));
+        assert_eq!(checkpoint.state.schema_version, STATE_SCHEMA_VERSION);
+        assert!(checkpoint.is_compatible(PartitionId::new(2), "aggregator-shards"));
+    }
+
+    #[test]
+    fn incompatible_checkpoints_are_not_used_for_recovery() {
+        let checkpoint = checkpoint();
+
+        assert!(!checkpoint.is_compatible(PartitionId::new(3), "aggregator-shards"));
+        assert!(!checkpoint.is_compatible(PartitionId::new(2), "another-stream"));
+
+        let mut invalid_sequence = checkpoint;
+        invalid_sequence.next_sequence = 0;
+        assert!(!invalid_sequence.is_compatible(PartitionId::new(2), "aggregator-shards"));
     }
 
     #[test]
@@ -193,18 +350,44 @@ mod tests {
         };
 
         assert_eq!(SourceCheckpoint::from_message(&message).unwrap(), None);
+        assert_eq!(
+            CheckpointRecord::from_message(&message, PartitionId::new(0), AggregatorState::new())
+                .unwrap(),
+            None
+        );
     }
 
     #[tokio::test]
     async fn in_memory_store_round_trips_checkpoints() {
-        let store = InMemoryCheckpointStore::new();
+        let store = InMemoryStateStore::new();
         let partition = PartitionId::new(2);
-        let checkpoint = SourceCheckpoint::from_message(&message()).unwrap().unwrap();
+        let checkpoint = checkpoint();
 
-        store.save(partition, &checkpoint).await.unwrap();
+        store.save(&checkpoint).await.unwrap();
 
-        assert_eq!(store.load(partition).await.unwrap(), Some(checkpoint));
+        let loaded = store.load(partition).await.unwrap().unwrap();
+        assert_eq!(loaded.next_sequence, 42);
+        assert_eq!(loaded.watermark, checkpoint.watermark);
         assert_eq!(store.load(PartitionId::new(3)).await.unwrap(), None);
+        assert_eq!(store.load_with_revision(partition).unwrap().1, 1);
+    }
+
+    #[tokio::test]
+    async fn in_memory_store_overwrites_are_atomic() {
+        let store = InMemoryStateStore::new();
+        let partition = PartitionId::new(1);
+        let mut checkpoint = checkpoint();
+        checkpoint.partition = partition;
+
+        store.save(&checkpoint).await.unwrap();
+        checkpoint.next_sequence = 50;
+        store.save(&checkpoint).await.unwrap();
+
+        assert_eq!(
+            store.load(partition).await.unwrap().unwrap().next_sequence,
+            50
+        );
+        assert_eq!(store.load_with_revision(partition).unwrap().1, 2);
     }
 
     #[test]

@@ -1,3 +1,5 @@
+use crate::state::AggregatorState;
+use platform_errors::BpResult;
 use platform_market_data::{
     candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
     decoders::trade::Trade,
@@ -6,7 +8,6 @@ use platform_market_data::{
 use platform_metrics::descriptions::{DROP_REASON_OUT_OF_ORDER, STAGE_AGGREGATOR};
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_types::new_types::TimestampMilliseconds;
-use std::collections::HashMap;
 
 /// Candles updated by a single trade.
 #[derive(Debug, Default, Clone)]
@@ -32,18 +33,37 @@ impl AggregationUpdate {
 #[derive(Debug)]
 pub struct CandleAggregator {
     intervals: Vec<CandleInterval>,
-    open: HashMap<CandleKey, Candle>,
+    state: AggregatorState,
 }
 
 impl CandleAggregator {
     pub fn new(intervals: Vec<CandleInterval>) -> Self {
         Self {
             intervals,
-            open: HashMap::new(),
+            state: AggregatorState::new(),
         }
     }
 
+    /// Restores an aggregator from a durable state snapshot.
+    pub fn from_state(intervals: Vec<CandleInterval>, state: AggregatorState) -> BpResult<Self> {
+        state.ensure_schema_compatible()?;
+        Ok(Self { intervals, state })
+    }
+
+    pub fn state(&self) -> &AggregatorState {
+        &self.state
+    }
+
+    pub fn state_mut(&mut self) -> &mut AggregatorState {
+        &mut self.state
+    }
+
+    pub fn into_state(self) -> AggregatorState {
+        self.state
+    }
+
     pub fn apply_trade(&mut self, trade: &Trade) -> AggregationUpdate {
+        self.state.advance_watermark(trade.timestamp);
         let mut update = AggregationUpdate {
             open: Vec::with_capacity(self.intervals.len()),
             closed: Vec::new(),
@@ -57,11 +77,11 @@ impl CandleAggregator {
             let interval = self.intervals[index];
             let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
             let candle_start = interval.start_for(trade.timestamp);
-            let current_start = self.open.get(&key).map(Candle::start_time);
+            let current_start = self.state.open_candles.get(&key).map(Candle::start_time);
 
             match current_start {
                 Some(start) if start == candle_start => {
-                    if let Some(candle) = self.open.get_mut(&key) {
+                    if let Some(candle) = self.state.open_candles.get_mut(&key) {
                         candle.apply_trade(trade);
                         update.open.push(candle.clone());
                     }
@@ -71,7 +91,7 @@ impl CandleAggregator {
                         update.closed.push(closed);
                     }
                     let candle = Candle::open(trade, interval);
-                    self.open.insert(key, candle.clone());
+                    self.state.open_candles.insert(key, candle.clone());
                     update.open.push(candle);
                 }
                 Some(_) => {
@@ -81,7 +101,7 @@ impl CandleAggregator {
                 }
                 None => {
                     let candle = Candle::open(trade, interval);
-                    self.open.insert(key, candle.clone());
+                    self.state.open_candles.insert(key, candle.clone());
                     update.open.push(candle);
                 }
             }
@@ -102,6 +122,8 @@ impl CandleAggregator {
     /// whose window finished before the observed event is complete even though
     /// its trades may never arrive; the current window is left open.
     pub fn apply_gap(&mut self, gap: &GapMarker) -> Vec<ClosedCandle> {
+        self.state.advance_watermark(gap.detected_at);
+        self.state.record_gap(gap);
         self.flush_closed_at_or_before(gap.detected_at)
     }
 
@@ -114,7 +136,8 @@ impl CandleAggregator {
         timestamp: TimestampMilliseconds,
     ) -> Vec<ClosedCandle> {
         let mut keys: Vec<CandleKey> = self
-            .open
+            .state
+            .open_candles
             .iter()
             .filter(|(_, candle)| candle.end_time() <= timestamp)
             .map(|(key, _)| key.clone())
@@ -127,7 +150,7 @@ impl CandleAggregator {
     }
 
     fn close_existing(&mut self, key: &CandleKey) -> Option<ClosedCandle> {
-        let mut candle = self.open.remove(key)?;
+        let mut candle = self.state.open_candles.remove(key)?;
         candle.close();
         Some(ClosedCandle {
             revision: 0,

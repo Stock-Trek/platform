@@ -5,7 +5,7 @@ use async_nats::{
     HeaderMap,
     jetstream::{
         self, Context,
-        kv::{self, Store},
+        kv::{self, Operation, Store},
     },
 };
 use futures::TryStreamExt;
@@ -86,12 +86,54 @@ impl KeyValue {
     /// Returns the latest value stored under `key`, or `None` when the key has
     /// never been written.
     pub async fn get_last(&self, key: &str) -> BpResult<Option<Vec<u8>>> {
+        Ok(self
+            .get_with_revision(key)
+            .await?
+            .map(|(value, _revision)| value))
+    }
+
+    /// Returns the latest value and its KV revision.
+    ///
+    /// The revision can be passed to [`Self::update`] for an atomic
+    /// compare-and-swap. Deleted or purged keys are reported as `None`.
+    pub async fn get_with_revision(&self, key: &str) -> BpResult<Option<(Vec<u8>, u64)>> {
+        NatsSubject::validate_named("KV key", key)?;
+        let entry = self
+            .store
+            .entry(key)
+            .await
+            .map_err(|error| JetStream::protocol_error("failed to read KV value", error))?;
+        Ok(match entry {
+            Some(entry) if entry.operation == Operation::Put => {
+                Some((entry.value.to_vec(), entry.revision))
+            }
+            _ => None,
+        })
+    }
+
+    /// Creates `key` only if it does not already exist.
+    ///
+    /// Unlike [`Self::put`], this is not idempotent: an existing key returns an
+    /// error, which makes it suitable for atomic checkpoint creation.
+    pub async fn create(&self, key: &str, value: &[u8]) -> BpResult<u64> {
         NatsSubject::validate_named("KV key", key)?;
         self.store
-            .get(key)
+            .create(key, value.to_vec().into())
             .await
-            .map(|value| value.map(|value| value.to_vec()))
-            .map_err(|error| JetStream::protocol_error("failed to read KV value", error))
+            .map_err(|error| JetStream::protocol_error("failed to create KV value", error))
+    }
+
+    /// Atomically updates `key` only if its current revision is
+    /// `expected_revision`.
+    ///
+    /// A concurrent writer causes a revision conflict instead of silently
+    /// overwriting the newer value.
+    pub async fn update(&self, key: &str, value: &[u8], expected_revision: u64) -> BpResult<u64> {
+        NatsSubject::validate_named("KV key", key)?;
+        self.store
+            .update(key, value.to_vec().into(), expected_revision)
+            .await
+            .map_err(|error| JetStream::protocol_error("failed to update KV value", error))
     }
 
     /// Deletes the value stored under `key`, if any. The deletion is a
