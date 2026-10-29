@@ -163,6 +163,26 @@ struct CheckpointPosition {
     next_sequence: u64,
 }
 
+struct CommitState {
+    pending: Vec<SourceRecord>,
+    last_record: Option<SourceRecord>,
+    dirty: bool,
+    last_checkpoint_at: Instant,
+    resume_position: Option<CheckpointPosition>,
+}
+
+impl CommitState {
+    fn new(resume_position: Option<CheckpointPosition>) -> Self {
+        Self {
+            pending: Vec::new(),
+            last_record: None,
+            dirty: false,
+            last_checkpoint_at: Instant::now(),
+            resume_position,
+        }
+    }
+}
+
 /// Processes one partition's ordered inputs.
 ///
 /// The worker acquires a fenced writer lease, applies inputs through the pure
@@ -333,7 +353,11 @@ where
             "aggregator partition processor started"
         );
 
-        let result = Self::process_inputs(
+        let resume_position =
+            Self::resume_position(&checkpoints, partition, replay_watermark, processor.state())
+                .await;
+        let mut commit_state = CommitState::new(resume_position);
+        let result = Runtime::run_until_shutdown(Self::process_inputs(
             &config,
             &mut source,
             &sink,
@@ -345,11 +369,29 @@ where
             &mut lease,
             &writer_id,
             quiesce,
-        )
+            &mut commit_state,
+        ))
         .await;
+        let commit_result = if result.is_ok() {
+            Self::commit(
+                &config,
+                &mut source,
+                &checkpoints,
+                &leases,
+                partition,
+                &processor,
+                &mut lease,
+                &writer_id,
+                &mut commit_state,
+            )
+            .await
+        } else {
+            Ok(())
+        };
         let release_result = leases.release(&lease).await;
 
         result?;
+        commit_result?;
         release_result?;
         Ok(())
     }
@@ -367,23 +409,15 @@ where
         lease: &mut WriterLease,
         writer_id: &str,
         mut quiesce: Option<QuiesceReceiver>,
+        state: &mut CommitState,
     ) -> BpResult<()> {
         let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
-        let mut pending: Vec<SourceRecord> = Vec::new();
-        let mut last_record: Option<SourceRecord> = None;
-        let mut dirty = false;
         let mut checkpoint_ticker = time::interval(config.checkpoint_interval);
         checkpoint_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         checkpoint_ticker.tick().await;
         let mut idle_ticker = time::interval(config.watermark_idle_timeout);
         idle_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         idle_ticker.tick().await;
-        let mut last_checkpoint_at = Instant::now();
-        let shutdown = Runtime::shutdown_signal();
-        tokio::pin!(shutdown);
-        let resume_position =
-            Self::resume_position(checkpoints, partition, replay_watermark, processor.state())
-                .await;
 
         loop {
             tokio::select! {
@@ -398,22 +432,6 @@ where
                         writer = %writer_id,
                         "quiesce requested; draining and checkpointing aggregator partition"
                     );
-                    Self::commit(
-                        config,
-                        source,
-                        checkpoints,
-                        leases,
-                        partition,
-                        processor,
-                        lease,
-                        writer_id,
-                        &mut pending,
-                        last_record.as_ref(),
-                        resume_position.as_ref(),
-                        dirty,
-                        &mut last_checkpoint_at,
-                    )
-                    .await?;
                     break;
                 }
                 maybe_record = source.next_input() => {
@@ -428,7 +446,7 @@ where
                             // them.
                             if let Some(sequence) = record.message.stream_sequence {
                                 processor.state_mut().mark_processed(sequence);
-                                dirty = true;
+                                state.dirty = true;
                             }
                             if !is_replay {
                                 let update = Self::process_input(
@@ -438,7 +456,7 @@ where
                                 );
                                 Self::record_update_metrics(&update);
                                 Self::publish_update(sink, &update).await?;
-                                dirty = true;
+                                state.dirty = true;
                             } else {
                                 AggregatorMetrics::record_replay_events(
                                     partition.get(),
@@ -448,27 +466,11 @@ where
                             }
                             Self::record_watermark_lag(partition, processor);
                             idle_ticker.reset();
-                            last_record = Some(record.clone());
-                            pending.push(record);
+                            state.last_record = Some(record.clone());
+                            state.pending.push(record);
                         }
                         Ok(None) => {
                             info!("aggregator input source ended; draining partition");
-                            Self::commit(
-                                config,
-                                source,
-                                checkpoints,
-                                leases,
-                                partition,
-                                processor,
-                                lease,
-                                writer_id,
-                                &mut pending,
-                                last_record.as_ref(),
-                                resume_position.as_ref(),
-                                dirty,
-                                &mut last_checkpoint_at,
-                            )
-                            .await?;
                             break;
                         }
                         Err(error) => {
@@ -487,14 +489,10 @@ where
                         processor,
                         lease,
                         writer_id,
-                        &mut pending,
-                        last_record.as_ref(),
-                        resume_position.as_ref(),
-                        dirty,
-                        &mut last_checkpoint_at,
+                        state,
                     )
                     .await?;
-                    dirty = false;
+                    state.dirty = false;
                 }
                 _ = idle_ticker.tick() => {
                     let previous_watermark = processor.state().watermark;
@@ -503,7 +501,7 @@ where
                     if !update.is_empty()
                         || processor.state().watermark != previous_watermark
                     {
-                        dirty = true;
+                        state.dirty = true;
                     }
                     Self::record_watermark_lag(partition, processor);
                     Self::commit(
@@ -515,35 +513,10 @@ where
                         processor,
                         lease,
                         writer_id,
-                        &mut pending,
-                        last_record.as_ref(),
-                        resume_position.as_ref(),
-                        dirty,
-                        &mut last_checkpoint_at,
+                        state,
                     )
                     .await?;
-                    dirty = false;
-                }
-                signal = &mut shutdown => {
-                    signal?;
-                    info!("shutdown requested; draining and checkpointing aggregator partition");
-                    Self::commit(
-                        config,
-                        source,
-                        checkpoints,
-                        leases,
-                        partition,
-                        processor,
-                        lease,
-                        writer_id,
-                        &mut pending,
-                        last_record.as_ref(),
-                        resume_position.as_ref(),
-                        dirty,
-                        &mut last_checkpoint_at,
-                    )
-                    .await?;
-                    break;
+                    state.dirty = false;
                 }
             }
         }
@@ -602,11 +575,7 @@ where
         processor: &CandleProcessor,
         lease: &mut WriterLease,
         writer_id: &str,
-        pending: &mut Vec<SourceRecord>,
-        last_record: Option<&SourceRecord>,
-        resume_position: Option<&CheckpointPosition>,
-        dirty: bool,
-        last_checkpoint_at: &mut Instant,
+        state: &mut CommitState,
     ) -> BpResult<()> {
         let Some(renewed) = leases.renew(lease, config.lease_ttl).await? else {
             return Err(BpError::bad_value(
@@ -617,12 +586,15 @@ where
         };
         *lease = renewed;
 
-        AggregatorMetrics::record_checkpoint_age(partition.get(), last_checkpoint_at.elapsed());
-        if !dirty && pending.is_empty() {
+        AggregatorMetrics::record_checkpoint_age(
+            partition.get(),
+            state.last_checkpoint_at.elapsed(),
+        );
+        if !state.dirty && state.pending.is_empty() {
             return Ok(());
         }
 
-        let checkpoint = match last_record {
+        let checkpoint = match state.last_record.as_ref() {
             Some(record) => {
                 let Some(checkpoint) = CheckpointRecord::from_message(
                     &record.message,
@@ -639,8 +611,8 @@ where
                 checkpoint
             }
             None => {
-                let Some(position) = resume_position else {
-                    if pending.is_empty() {
+                let Some(position) = state.resume_position.as_ref() else {
+                    if state.pending.is_empty() {
                         return Ok(());
                     }
                     return Err(BpError::bad_value(
@@ -661,10 +633,13 @@ where
             AggregatorMetrics::record_checkpoint_failure(partition.get(), error.error_type());
             return Err(error);
         }
-        *last_checkpoint_at = Instant::now();
-        AggregatorMetrics::record_checkpoint_age(partition.get(), last_checkpoint_at.elapsed());
+        state.last_checkpoint_at = Instant::now();
+        AggregatorMetrics::record_checkpoint_age(
+            partition.get(),
+            state.last_checkpoint_at.elapsed(),
+        );
 
-        for record in pending.drain(..) {
+        for record in state.pending.drain(..) {
             source.ack(&record).await?;
         }
         Ok(())
