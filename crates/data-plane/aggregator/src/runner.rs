@@ -1,7 +1,7 @@
 use crate::{
     checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore},
     config::AggregatorConfig,
-    lease::{InMemoryLeaseStore, LeaseStore, WriterLease, new_writer_id},
+    lease::{InMemoryLeaseStore, LeaseStore, WriterLease, new_writer_id, wait_for_lease},
     partition::PartitionId,
     processor::{CandleProcessor, ProcessorUpdate},
     sink::{ClosedCandlePublisher, OpenCandleStore},
@@ -207,6 +207,7 @@ pub struct ProcessorRunner<S, K> {
     /// position.
     replay_watermark: Option<TimestampMilliseconds>,
     writer_id: Option<String>,
+    initial_lease: Option<WriterLease>,
     quiesce: Option<QuiesceReceiver>,
 }
 
@@ -227,6 +228,7 @@ where
             state,
             replay_watermark: None,
             writer_id: None,
+            initial_lease: None,
             quiesce: None,
         }
     }
@@ -248,6 +250,12 @@ where
 
     pub fn with_writer_id(mut self, writer_id: impl Into<String>) -> Self {
         self.writer_id = Some(writer_id.into());
+        self
+    }
+
+    /// Uses a lease acquired by the caller instead of waiting for one here.
+    pub fn with_lease(mut self, lease: WriterLease) -> Self {
+        self.initial_lease = Some(lease);
         self
     }
 
@@ -313,6 +321,7 @@ where
             state,
             replay_watermark: None,
             writer_id: None,
+            initial_lease: None,
             quiesce: None,
         }
     }
@@ -328,19 +337,27 @@ where
             state,
             replay_watermark,
             writer_id,
+            initial_lease,
             quiesce,
         } = self;
         let mut processor = CandleProcessor::from_state(config.processor_config(), state)?;
-        let writer_id = writer_id.unwrap_or_else(new_writer_id);
-        let Some(mut lease) = leases
-            .acquire(partition, &writer_id, config.lease_ttl)
-            .await?
-        else {
-            return Err(BpError::bad_value(
-                "aggregator lease",
-                partition.to_string(),
-                "another writer already holds the partition lease",
-            ));
+        let writer_id = writer_id
+            .or_else(|| initial_lease.as_ref().map(|lease| lease.owner_id.clone()))
+            .unwrap_or_else(new_writer_id);
+        let mut lease = match initial_lease {
+            Some(lease) => lease,
+            None => tokio::select! {
+                result = wait_for_lease(
+                    leases.as_ref(),
+                    partition,
+                    &writer_id,
+                    config.lease_ttl,
+                ) => result?,
+                signal = Runtime::shutdown_signal() => {
+                    signal?;
+                    return Ok(());
+                }
+            },
         };
 
         AggregatorMetrics::record_rebalance(partition.get(), "lease_acquired");
@@ -1417,14 +1434,11 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn rejects_a_partition_that_already_has_an_active_writer() {
+    async fn waits_for_an_active_writer_then_takes_over_the_partition() {
         let leases = Arc::new(InMemoryLeaseStore::new());
+        let ttl = std::time::Duration::from_secs(30);
         let held = leases
-            .acquire(
-                PartitionId::new(0),
-                "other-writer",
-                std::time::Duration::from_secs(30),
-            )
+            .acquire(PartitionId::new(0), "other-writer", ttl)
             .await
             .unwrap()
             .unwrap();
@@ -1432,10 +1446,20 @@ mod tests {
             .with_lease_store(leases.clone())
             .with_writer_id("this-writer");
 
-        let error = runner.run().await.unwrap_err();
+        let handle = tokio::spawn(async move { runner.run().await });
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+        assert!(!handle.is_finished());
+        leases.release(&held).await.unwrap();
 
-        assert!(error.to_string().contains("another writer"));
-        assert_eq!(leases.current(held.partition).await.unwrap(), Some(held));
+        tokio::time::timeout(std::time::Duration::from_secs(2), handle)
+            .await
+            .expect("runner should acquire the released lease")
+            .expect("runner task should not panic")
+            .unwrap();
+
+        let lease = leases.current(held.partition).await.unwrap().unwrap();
+        assert_eq!(lease.owner_id, "this-writer");
+        assert_eq!(lease.fencing_token, held.fencing_token + 1);
     }
 
     #[tokio::test]

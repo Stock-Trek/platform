@@ -7,7 +7,7 @@ use async_nats::{
 };
 use async_trait::async_trait;
 use platform_errors::BpResult;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use tokio::sync::Mutex as AsyncMutex;
 
 /// Abstraction over event publication, allowing services to be tested with an
@@ -52,6 +52,16 @@ pub struct NatsPublisher {
 impl EventPublisher for NatsPublisher {
     async fn publish(&self, subject: &str, payload: &[u8]) -> BpResult<()> {
         NatsPublisher::publish(self, subject, payload).await
+    }
+}
+
+#[async_trait]
+impl<T> EventPublisher for Arc<T>
+where
+    T: EventPublisher + ?Sized,
+{
+    async fn publish(&self, subject: &str, payload: &[u8]) -> BpResult<()> {
+        (**self).publish(subject, payload).await
     }
 }
 
