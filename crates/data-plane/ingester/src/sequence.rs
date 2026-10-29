@@ -1,3 +1,9 @@
+use async_trait::async_trait;
+use platform_errors::BpResult;
+use platform_nats::{JetStream, KeyValue};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use std::{collections::HashMap, sync::Mutex};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SequenceObservation {
     First,
@@ -7,14 +13,111 @@ pub enum SequenceObservation {
     OutOfOrder,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SequenceTracker {
     /// First sequence that has not yet been published or covered by a gap
     /// marker.
     ///
     /// Stored as `u128` so the sequence immediately after `u64::MAX` is
     /// representable.
+    #[serde(default, with = "next_sequence")]
     next: Option<u128>,
+}
+
+/// Durable storage for per-stream sequence progress.
+#[async_trait]
+pub trait SequenceStore: Send + Sync {
+    async fn load(&self, key: &str) -> BpResult<Option<SequenceTracker>>;
+
+    async fn save(&self, key: &str, tracker: &SequenceTracker) -> BpResult<()>;
+}
+
+/// Sequence state kept in process memory.
+#[derive(Debug, Default)]
+pub struct InMemorySequenceStore {
+    trackers: Mutex<HashMap<String, SequenceTracker>>,
+}
+
+impl InMemorySequenceStore {
+    pub fn new() -> Self {
+        Self::default()
+    }
+}
+
+#[async_trait]
+impl SequenceStore for InMemorySequenceStore {
+    async fn load(&self, key: &str) -> BpResult<Option<SequenceTracker>> {
+        Ok(self
+            .trackers
+            .lock()
+            .expect("sequence store lock")
+            .get(key)
+            .cloned())
+    }
+
+    async fn save(&self, key: &str, tracker: &SequenceTracker) -> BpResult<()> {
+        self.trackers
+            .lock()
+            .expect("sequence store lock")
+            .insert(key.to_string(), tracker.clone());
+        Ok(())
+    }
+}
+
+/// Sequence state persisted in a NATS KV bucket.
+pub struct NatsSequenceStore {
+    values: KeyValue,
+}
+
+impl NatsSequenceStore {
+    pub async fn connect(nats_url: &str, subject_prefix: &str) -> BpResult<Self> {
+        let bucket = Self::bucket_name(subject_prefix);
+        let values = KeyValue::connect(nats_url, "platform-ingester-sequences", &bucket).await?;
+        Ok(Self { values })
+    }
+
+    pub fn bucket_name(subject_prefix: &str) -> String {
+        JetStream::kv_bucket_name(&format!("{subject_prefix}.ingester-sequences"))
+    }
+}
+
+#[async_trait]
+impl SequenceStore for NatsSequenceStore {
+    async fn load(&self, key: &str) -> BpResult<Option<SequenceTracker>> {
+        let Some(value) = self.values.get_last(key).await? else {
+            return Ok(None);
+        };
+        Ok(Some(serde_json::from_slice(&value)?))
+    }
+
+    async fn save(&self, key: &str, tracker: &SequenceTracker) -> BpResult<()> {
+        let value = serde_json::to_vec(tracker)?;
+        self.values.put(key, &value).await?;
+        Ok(())
+    }
+}
+
+mod next_sequence {
+    use super::*;
+
+    pub fn serialize<S>(next: &Option<u128>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match next {
+            Some(next) => serializer.serialize_some(&next.to_string()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<u128>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let next = Option::<String>::deserialize(deserializer)?;
+        next.map(|next| next.parse().map_err(serde::de::Error::custom))
+            .transpose()
+    }
 }
 
 impl SequenceTracker {
@@ -173,6 +276,43 @@ mod tests {
         assert_eq!(
             observe(&mut tracker, u64::MAX, u64::MAX),
             SequenceObservation::Duplicate
+        );
+    }
+
+    #[test]
+    fn serialized_state_preserves_the_sequence_after_u64_max() {
+        let mut tracker = SequenceTracker::default();
+        tracker.commit(u64::MAX);
+
+        let encoded = serde_json::to_string(&tracker).unwrap();
+        let decoded: SequenceTracker = serde_json::from_str(&encoded).unwrap();
+
+        assert_eq!(
+            decoded.observe_range(u64::MAX, u64::MAX),
+            SequenceObservation::Duplicate
+        );
+    }
+
+    #[tokio::test]
+    async fn in_memory_store_round_trips_trackers() {
+        let store = InMemorySequenceStore::new();
+        let mut tracker = SequenceTracker::default();
+        tracker.commit(41);
+
+        store.save("binance.btcusdt.trade", &tracker).await.unwrap();
+
+        assert_eq!(
+            store.load("binance.btcusdt.trade").await.unwrap(),
+            Some(tracker)
+        );
+        assert_eq!(store.load("binance.ethusdt.trade").await.unwrap(), None);
+    }
+
+    #[test]
+    fn sequence_bucket_is_derived_from_the_subject_prefix() {
+        assert_eq!(
+            NatsSequenceStore::bucket_name("market"),
+            "market_ingester-sequences"
         );
     }
 
