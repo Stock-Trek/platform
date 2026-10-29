@@ -215,6 +215,7 @@ where
     K: OpenCandleStore + ClosedCandlePublisher,
 {
     pub fn new(config: AggregatorConfig, source: S, sink: K) -> Self {
+        let state = AggregatorState::new_with_schema_version(config.state_schema_version);
         Self {
             config,
             source,
@@ -222,7 +223,7 @@ where
             checkpoints: Arc::new(InMemoryStateStore::new()),
             leases: Arc::new(InMemoryLeaseStore::new()),
             partition: PartitionId::new(0),
-            state: AggregatorState::new(),
+            state,
             replay_watermark: None,
             writer_id: None,
             quiesce: None,
@@ -300,6 +301,7 @@ where
         checkpoints: Arc<dyn StateStore>,
         partition: PartitionId,
     ) -> Self {
+        let state = AggregatorState::new_with_schema_version(config.state_schema_version);
         Self {
             config,
             source,
@@ -307,7 +309,7 @@ where
             checkpoints,
             leases: Arc::new(InMemoryLeaseStore::new()),
             partition,
-            state: AggregatorState::new(),
+            state,
             replay_watermark: None,
             writer_id: None,
             quiesce: None,

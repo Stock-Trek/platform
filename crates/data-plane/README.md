@@ -43,7 +43,7 @@ Archive rebuilds replay raw events through the same deterministic candle process
 | `AGGREGATOR_ALLOWED_LATENESS_MS` | `5000` | How late a trade may arrive and still update a candle. |
 | `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | `60` | Idle time before the wall clock advances the event-time watermark and closes expired windows. |
 | `AGGREGATOR_REPLAY_START_POLICY` | `checkpoint` | `checkpoint`, `archive`, `earliest`, or `latest`. |
-| `AGGREGATOR_STATE_SCHEMA_VERSION` | current code version | Checkpoint schema version required for restore. |
+| `AGGREGATOR_STATE_SCHEMA_VERSION` | current code version | State schema version written to new state and required for checkpoint restore. |
 | `AGGREGATOR_CONSUMER_PREFIX` / `AGGREGATOR_DURABLE_PREFIX` | `aggregator` | Durable consumer prefix. The router uses `{prefix}-router`; partitions use `{prefix}-shard-{n}`. |
 | `AGGREGATOR_LEASE_TTL_SECS` | `30` | Single-writer lease lifetime. |
 | `AGGREGATOR_ARCHIVE_S3_BUCKET` | unset | Enables raw-event archive recovery. |

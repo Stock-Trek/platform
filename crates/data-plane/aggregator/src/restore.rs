@@ -9,7 +9,7 @@ use crate::checkpoint::StateStore;
 use crate::config::{AggregatorConfig, ReplayStartPolicy};
 use crate::partition::{PartitionId, partition_for};
 use crate::processor::{CandleProcessor, ProcessorConfig};
-use crate::state::AggregatorState;
+use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
 use platform_archive::{
     ArchiveKind, ArchiveParquet, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey, S3,
@@ -204,7 +204,7 @@ async fn restore_partition_inner(
                 "starting aggregator partition with empty state"
             );
             return Ok(RestoredPartition {
-                state: AggregatorState::new(),
+                state: AggregatorState::new_with_schema_version(options.expected_schema_version),
                 start,
                 restored_from: RestoreSource::Empty,
                 rebuilt_from_archive: false,
@@ -270,12 +270,13 @@ async fn restore_partition_inner(
     }
 
     AggregatorMetrics::record_replay_progress(partition.get(), "archive", 0.0);
-    let state = rebuild_state_from_archive(
+    let state = rebuild_state_from_archive_with_schema(
         archive,
         partition,
         &options.intervals,
         options.partition_count,
         options.allowed_lateness,
+        options.expected_schema_version,
     )
     .await?;
     AggregatorMetrics::record_replay_progress(partition.get(), "archive", 1.0);
@@ -301,7 +302,29 @@ pub async fn rebuild_state_from_archive(
     partition_count: usize,
     allowed_lateness: DurationMilliseconds,
 ) -> BpResult<AggregatorState> {
-    let config = ProcessorConfig::new(intervals.to_vec(), allowed_lateness);
+    rebuild_state_from_archive_with_schema(
+        archive,
+        partition,
+        intervals,
+        partition_count,
+        allowed_lateness,
+        STATE_SCHEMA_VERSION,
+    )
+    .await
+}
+
+/// Replays all archived events for one partition into fresh keyed state with
+/// the configured schema version.
+pub async fn rebuild_state_from_archive_with_schema(
+    archive: &mut dyn ArchivedEventSource,
+    partition: PartitionId,
+    intervals: &[CandleInterval],
+    partition_count: usize,
+    allowed_lateness: DurationMilliseconds,
+    state_schema_version: u32,
+) -> BpResult<AggregatorState> {
+    let config = ProcessorConfig::new(intervals.to_vec(), allowed_lateness)
+        .with_state_schema_version(state_schema_version);
     let mut processor = CandleProcessor::with_config(config);
     let mut decoders = HashMap::new();
     let mut replayed = 0_u64;
@@ -720,6 +743,23 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn empty_state_uses_the_configured_schema_version() {
+        let store = InMemoryStateStore::new();
+        let partition = PartitionId::new(0);
+        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
+        let mut options = options(partition, 1);
+        options.replay_start_policy = ReplayStartPolicy::Earliest;
+        options.expected_schema_version = STATE_SCHEMA_VERSION + 2;
+
+        let restored = restore_partition(&store, &mut archive, &options)
+            .await
+            .unwrap();
+
+        assert_eq!(restored.restored_from, RestoreSource::Empty);
+        assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION + 2);
+    }
+
+    #[tokio::test]
     async fn latest_policy_starts_at_the_end_of_the_live_source() {
         let store = InMemoryStateStore::new();
         let partition = PartitionId::new(0);
@@ -761,6 +801,7 @@ mod tests {
 
         assert_eq!(restored.restored_from, RestoreSource::Archive);
         assert!(restored.rebuilt_from_archive);
+        assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION + 1);
     }
 
     #[test]
