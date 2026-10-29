@@ -4,7 +4,6 @@ use crate::{
     retry::{GapRetryStore, InMemoryGapRetryStore, PendingGap, retry_at},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use chrono::Utc;
 use platform_errors::BpResult;
 use platform_market_data::{
     envelope::EnvelopeCodec,
@@ -76,7 +75,7 @@ where
         let mut source_ended = false;
 
         loop {
-            let now = now();
+            let now = TimestampMilliseconds::now();
             if let Some(key) = next_due_key(&pending, now) {
                 if let Some(gap) = pending.remove(&key) {
                     let retry = gap.clone();
@@ -140,7 +139,7 @@ where
             return;
         }
 
-        let now = now();
+        let now = TimestampMilliseconds::now();
         let initial = PendingGap::from_gap(&gap, now);
         let key = initial.key();
         if let Err(error) = self.retries.save(&initial).await {
@@ -162,7 +161,7 @@ where
         pending: PendingGap,
         all_pending: &mut BTreeMap<String, PendingGap>,
     ) -> BpResult<()> {
-        let now = now();
+        let now = TimestampMilliseconds::now();
         let requested = pending.gap_marker(now);
         let fetch_gap = widened_gap(&requested, pending.attempts);
         let result = self
@@ -296,7 +295,7 @@ where
         ranges: Vec<(u64, u64)>,
         last_error: Option<String>,
     ) -> BpResult<()> {
-        let now = now();
+        let now = TimestampMilliseconds::now();
         let attempts = pending.attempts.saturating_add(1);
         let next_attempt_at = retry_at(now, attempts);
 
@@ -334,7 +333,7 @@ where
             stream: gap.stream.clone(),
             sequence: Some(event.sequence),
             exchange_timestamp: Some(event.exchange_timestamp),
-            received_at: TimestampMilliseconds(Utc::now().timestamp_millis()),
+            received_at: TimestampMilliseconds::now(),
             payload,
         };
         self.publisher
@@ -408,12 +407,8 @@ fn next_attempt_at(pending: &BTreeMap<String, PendingGap>) -> Option<TimestampMi
     pending.values().map(|gap| gap.next_attempt_at).min()
 }
 
-fn now() -> TimestampMilliseconds {
-    TimestampMilliseconds(Utc::now().timestamp_millis())
-}
-
 fn instant_at(timestamp: TimestampMilliseconds) -> Instant {
-    let now = Utc::now().timestamp_millis();
+    let now = TimestampMilliseconds::now().0;
     let delay = timestamp.0.saturating_sub(now).max(0) as u64;
     Instant::now() + Duration::from_millis(delay)
 }

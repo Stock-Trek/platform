@@ -356,6 +356,17 @@ numeric_ops!(UsageCount, u64);
 
 new_type!(TimestampMilliseconds, i64);
 
+impl TimestampMilliseconds {
+    /// Returns the current wall-clock time in milliseconds since the Unix epoch.
+    ///
+    /// This is the single place where the process reads the system clock for
+    /// timestamp values, so callers no longer need to hand-roll
+    /// `Utc::now().timestamp_millis()`.
+    pub fn now() -> Self {
+        Self(chrono::Utc::now().timestamp_millis())
+    }
+}
+
 impl std::ops::Add<DurationMilliseconds> for TimestampMilliseconds {
     type Output = TimestampMilliseconds;
 
