@@ -147,36 +147,44 @@ impl WebhookHandler {
         for converter in converters.iter() {
             match converter.event_response(event) {
                 Ok(EventResponse::Accept(messages)) => {
-                    let delivery_id = messages
+                    let mut delivery_guard = match messages
                         .first()
-                        .and_then(|message| message.source.delivery_id());
-                    if let Some(delivery_id) = delivery_id
-                        && request_context.context.dedup().is_duplicate(delivery_id)
+                        .and_then(|message| message.source.delivery_id())
                     {
-                        tracing::info!(delivery_id, "ignoring replayed webhook delivery");
-                        EventMetrics::record_duplicate_event();
-                        return Ok(EventResponse::Duplicate);
-                    }
+                        Some(delivery_id) => {
+                            match request_context.context.dedup().claim(delivery_id) {
+                                Some(guard) => Some(guard),
+                                None => {
+                                    tracing::info!(
+                                        delivery_id,
+                                        "ignoring replayed webhook delivery"
+                                    );
+                                    EventMetrics::record_duplicate_event();
+                                    return Ok(EventResponse::Duplicate);
+                                }
+                            }
+                        }
+                        None => None,
+                    };
                     let send_result = request_context
                         .context
                         .sqs
                         .send_batch(&messages, request_context.deadline)
                         .await;
                     match send_result {
-                        Ok(()) => return Ok(EventResponse::Accept(messages)),
+                        Ok(()) => {
+                            if let Some(guard) = delivery_guard.take() {
+                                guard.complete();
+                            }
+                            return Ok(EventResponse::Accept(messages));
+                        }
                         Err(error) if error.any_sent() => {
                             let Some((unsent_count, unsent)) =
                                 Self::unsent_failure_messages(&error)
                             else {
-                                if let Some(delivery_id) = delivery_id {
-                                    request_context.context.dedup().forget(delivery_id);
-                                }
                                 return Err(error);
                             };
                             if unsent.is_empty() || unsent.len() != unsent_count {
-                                if let Some(delivery_id) = delivery_id {
-                                    request_context.context.dedup().forget(delivery_id);
-                                }
                                 tracing::error!(
                                     "SQS partially sent a delivery but did not identify every unsent message: {error}"
                                 );
@@ -192,11 +200,13 @@ impl WebhookHandler {
                                 .send_individually(&unsent, request_context.deadline)
                                 .await
                             {
-                                Ok(()) => return Ok(EventResponse::Accept(messages)),
-                                Err(error) => {
-                                    if let Some(delivery_id) = delivery_id {
-                                        request_context.context.dedup().forget(delivery_id);
+                                Ok(()) => {
+                                    if let Some(guard) = delivery_guard.take() {
+                                        guard.complete();
                                     }
+                                    return Ok(EventResponse::Accept(messages));
+                                }
+                                Err(error) => {
                                     tracing::error!(
                                         "SQS could not deliver {} unsent message(s) from a partial batch: {error}",
                                         unsent.len()
@@ -206,16 +216,10 @@ impl WebhookHandler {
                             }
                         }
                         Err(error) if !error.retryability().is_retryable() => {
-                            if let Some(delivery_id) = delivery_id {
-                                request_context.context.dedup().forget(delivery_id);
-                            }
                             tracing::warn!("rejecting message that cannot be sent: {error}");
                             return Ok(EventResponse::Rejected);
                         }
                         Err(error) => {
-                            if let Some(delivery_id) = delivery_id {
-                                request_context.context.dedup().forget(delivery_id);
-                            }
                             return Err(error);
                         }
                     }
