@@ -1,7 +1,7 @@
 use super::codec::{
     BINANCE_BEST_BID_ASK_TEMPLATE_ID, BINANCE_DEPTH_DIFF_TEMPLATE_ID,
-    BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID, BINANCE_SBE_SCHEMA_ID, BINANCE_TRADES_TEMPLATE_ID,
-    BinanceSbeCodec,
+    BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID, BINANCE_SBE_SCHEMA_ID, BINANCE_SBE_VERSION,
+    BINANCE_TRADES_TEMPLATE_ID, BinanceSbeCodec,
 };
 use crate::event::ParsedMessage;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
@@ -12,11 +12,26 @@ use rust_decimal::Decimal;
 use tokio_websockets::Message;
 
 fn sbe_header(template_id: u16) -> Vec<u8> {
+    let block_length = match template_id {
+        BINANCE_BEST_BID_ASK_TEMPLATE_ID => 50,
+        BINANCE_DEPTH_DIFF_TEMPLATE_ID => 26,
+        BINANCE_TRADES_TEMPLATE_ID | BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID => 18,
+        _ => 18,
+    };
+    sbe_header_with(
+        template_id,
+        block_length,
+        BINANCE_SBE_SCHEMA_ID,
+        BINANCE_SBE_VERSION,
+    )
+}
+
+fn sbe_header_with(template_id: u16, block_length: u16, schema_id: u16, version: u16) -> Vec<u8> {
     let mut frame = Vec::new();
-    frame.extend_from_slice(&18u16.to_le_bytes());
+    frame.extend_from_slice(&block_length.to_le_bytes());
     frame.extend_from_slice(&template_id.to_le_bytes());
-    frame.extend_from_slice(&BINANCE_SBE_SCHEMA_ID.to_le_bytes());
-    frame.extend_from_slice(&0u16.to_le_bytes());
+    frame.extend_from_slice(&schema_id.to_le_bytes());
+    frame.extend_from_slice(&version.to_le_bytes());
     frame
 }
 
@@ -202,6 +217,69 @@ fn rejects_unknown_sbe_templates() {
         error,
         IngesterError::UnknownSbeTemplate { template_id: 1 }
     ));
+}
+
+#[test]
+fn rejects_unknown_sbe_schema_ids() {
+    let frame = sbe_header_with(
+        BINANCE_TRADES_TEMPLATE_ID,
+        18,
+        BINANCE_SBE_SCHEMA_ID + 1,
+        BINANCE_SBE_VERSION,
+    );
+
+    let error = decode(frame).unwrap_err();
+
+    assert!(matches!(error, IngesterError::MalformedSbeFrame { .. }));
+}
+
+#[test]
+fn rejects_unsupported_sbe_versions() {
+    let frame = sbe_header_with(
+        BINANCE_TRADES_TEMPLATE_ID,
+        18,
+        BINANCE_SBE_SCHEMA_ID,
+        BINANCE_SBE_VERSION + 1,
+    );
+
+    let error = decode(frame).unwrap_err();
+
+    assert!(matches!(error, IngesterError::MalformedSbeFrame { .. }));
+}
+
+#[test]
+fn rejects_mismatched_sbe_block_lengths() {
+    let frame = sbe_header_with(
+        BINANCE_BEST_BID_ASK_TEMPLATE_ID,
+        18,
+        BINANCE_SBE_SCHEMA_ID,
+        BINANCE_SBE_VERSION,
+    );
+
+    let error = decode(frame).unwrap_err();
+
+    assert!(matches!(error, IngesterError::MalformedSbeFrame { .. }));
+}
+
+#[test]
+fn rejects_truncated_sbe_headers() {
+    let error = decode(vec![0; 7]).unwrap_err();
+
+    assert!(matches!(error, IngesterError::MalformedSbeFrame { .. }));
+}
+
+#[test]
+fn identifies_only_matching_sbe_headers() {
+    assert!(BinanceSbeCodec::is_sbe_frame(&sbe_trades_frame()));
+    assert!(BinanceSbeCodec::is_sbe_frame(&sbe_best_bid_ask_frame()));
+    assert!(BinanceSbeCodec::is_sbe_frame(&sbe_depth_snapshot_frame()));
+    assert!(BinanceSbeCodec::is_sbe_frame(&sbe_depth_diff_frame()));
+    assert!(!BinanceSbeCodec::is_sbe_frame(b"{}"));
+    assert!(!BinanceSbeCodec::is_sbe_frame(&sbe_header(1)));
+
+    let mut frame = sbe_header(BINANCE_TRADES_TEMPLATE_ID);
+    frame[4..6].copy_from_slice(&(BINANCE_SBE_SCHEMA_ID + 1).to_le_bytes());
+    assert!(!BinanceSbeCodec::is_sbe_frame(&frame));
 }
 
 #[test]
