@@ -7,28 +7,42 @@ use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 pub struct TickerMapping {
     pub map: BiMap<AssetId, Ticker>,
     pub symbol_separator: Option<u8>,
-    /// Uppercase tickers paired with their asset, used to resolve symbols
-    /// without reallocating on every lookup.
-    tickers_by_upper: Vec<(String, AssetId)>,
-    assets_by_upper_ticker: HashMap<String, AssetId>,
+    /// Precomputed lookup from an uppercase exchange symbol to its trading pair.
+    symbol_to_pair: HashMap<String, TradingPair>,
 }
 
 impl TickerMapping {
     pub fn new(map: BiMap<AssetId, Ticker>, symbol_separator: Option<u8>) -> Self {
-        let tickers_by_upper = map
+        let mut tickers = map
             .iter()
             .map(|(asset_id, ticker)| (ticker.0.to_ascii_uppercase(), *asset_id))
             .collect::<Vec<_>>();
-        let assets_by_upper_ticker = tickers_by_upper
-            .iter()
-            .map(|(ticker, asset_id)| (ticker.clone(), *asset_id))
-            .collect();
+        // Consider longer base tickers first so ambiguous symbols resolve to the
+        // same pair as the previous longest-prefix search.
+        tickers.sort_by_key(|(ticker, _)| std::cmp::Reverse(ticker.len()));
+
+        let mut symbol_to_pair = HashMap::with_capacity(tickers.len() * tickers.len());
+        for (base_ticker, base) in &tickers {
+            for (quote_ticker, quote) in &tickers {
+                if base == quote {
+                    continue;
+                }
+                let symbol = match symbol_separator {
+                    Some(separator) => {
+                        format!("{base_ticker}{}{quote_ticker}", separator as char)
+                    }
+                    None => format!("{base_ticker}{quote_ticker}"),
+                };
+                symbol_to_pair
+                    .entry(symbol)
+                    .or_insert_with(|| TradingPair::new(*base, *quote));
+            }
+        }
 
         Self {
             map,
             symbol_separator,
-            tickers_by_upper,
-            assets_by_upper_ticker,
+            symbol_to_pair,
         }
     }
 
@@ -58,36 +72,9 @@ impl TickerMapping {
     /// Resolves an exchange symbol, such as `BTCUSDT`, into its base and quote
     /// assets. Returns `None` if either asset is not present in this mapping.
     pub fn trading_pair_from_symbol(&self, symbol: &str) -> Option<TradingPair> {
-        let symbol = symbol.trim().to_ascii_uppercase();
-        let mut resolved: Option<(usize, TradingPair)> = None;
-
-        for (base_ticker, base) in &self.tickers_by_upper {
-            let Some(remainder) = symbol.strip_prefix(base_ticker) else {
-                continue;
-            };
-            let remainder = match self.symbol_separator {
-                Some(separator) => match remainder.strip_prefix(separator as char) {
-                    Some(remainder) => remainder,
-                    None => continue,
-                },
-                None => remainder,
-            };
-            let Some(quote) = self.assets_by_upper_ticker.get(remainder) else {
-                continue;
-            };
-            if base == quote {
-                continue;
-            }
-
-            let should_replace = resolved
-                .as_ref()
-                .is_none_or(|(length, _)| base_ticker.len() > *length);
-            if should_replace {
-                resolved = Some((base_ticker.len(), TradingPair::new(*base, *quote)));
-            }
-        }
-
-        resolved.map(|(_, trading_pair)| trading_pair)
+        self.symbol_to_pair
+            .get(&symbol.trim().to_ascii_uppercase())
+            .copied()
     }
 }
 
@@ -121,7 +108,11 @@ mod tests {
 
     #[test]
     fn prefers_the_longest_matching_base_ticker() {
-        let mapping = mapping(None);
+        let mut map = BiHashMap::new();
+        map.insert(AssetId::Bitcoin, "B".into());
+        map.insert(AssetId::BitcoinCash, "BCH".into());
+        map.insert(AssetId::TetherUSD, "USDT".into());
+        let mapping = TickerMapping::new(map, None);
 
         assert_eq!(
             mapping.trading_pair_from_symbol("BCHUSDT"),
