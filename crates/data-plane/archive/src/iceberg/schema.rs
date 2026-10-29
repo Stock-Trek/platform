@@ -75,48 +75,48 @@ impl ArchiveIcebergTable {
             Self::CompactedCandles,
         ]
     }
-}
 
-pub(crate) fn schema(kind: ArchiveKind) -> BpResult<Schema> {
-    let arrow_schema = ArchiveBatch::schema(kind);
-    let fields = arrow_schema
-        .fields()
-        .iter()
-        .enumerate()
-        .map(|(index, field)| {
-            let id = i32::try_from(index + 1).map_err(|error| {
-                BpError::external(std::io::Error::other(format!(
-                    "archive schema has too many fields: {error}"
+    pub(crate) fn schema(kind: ArchiveKind) -> BpResult<Schema> {
+        let arrow_schema = ArchiveBatch::schema(kind);
+        let fields = arrow_schema
+            .fields()
+            .iter()
+            .enumerate()
+            .map(|(index, field)| {
+                let id = i32::try_from(index + 1).map_err(|error| {
+                    BpError::external(std::io::Error::other(format!(
+                        "archive schema has too many fields: {error}"
+                    )))
+                })?;
+                Ok(Arc::new(NestedField::new(
+                    id,
+                    field.name(),
+                    Self::iceberg_type(field.name(), field.data_type())?,
+                    !field.is_nullable(),
                 )))
-            })?;
-            Ok(Arc::new(NestedField::new(
-                id,
-                field.name(),
-                iceberg_type(field.name(), field.data_type())?,
-                !field.is_nullable(),
-            )))
-        })
-        .collect::<BpResult<Vec<_>>>()?;
+            })
+            .collect::<BpResult<Vec<_>>>()?;
 
-    Schema::builder()
-        .with_schema_id(0)
-        .with_fields(fields)
-        .build()
-        .map_err(BpError::external)
-}
+        Schema::builder()
+            .with_schema_id(0)
+            .with_fields(fields)
+            .build()
+            .map_err(BpError::external)
+    }
 
-fn iceberg_type(name: &str, data_type: &arrow_schema::DataType) -> BpResult<Type> {
-    use arrow_schema::DataType;
+    fn iceberg_type(name: &str, data_type: &arrow_schema::DataType) -> BpResult<Type> {
+        use arrow_schema::DataType;
 
-    match data_type {
-        DataType::Utf8 | DataType::LargeUtf8 => Ok(Type::Primitive(PrimitiveType::String)),
-        DataType::Int64 | DataType::UInt64 => Ok(Type::Primitive(PrimitiveType::Long)),
-        DataType::Boolean => Ok(Type::Primitive(PrimitiveType::Boolean)),
-        DataType::Float64 => Ok(Type::Primitive(PrimitiveType::Double)),
-        other => Err(BpError::external(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("archive column {name} has unsupported Iceberg type {other:?}"),
-        ))),
+        match data_type {
+            DataType::Utf8 | DataType::LargeUtf8 => Ok(Type::Primitive(PrimitiveType::String)),
+            DataType::Int64 | DataType::UInt64 => Ok(Type::Primitive(PrimitiveType::Long)),
+            DataType::Boolean => Ok(Type::Primitive(PrimitiveType::Boolean)),
+            DataType::Float64 => Ok(Type::Primitive(PrimitiveType::Double)),
+            other => Err(BpError::external(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("archive column {name} has unsupported Iceberg type {other:?}"),
+            ))),
+        }
     }
 }
 
@@ -150,7 +150,7 @@ mod tests {
 
     #[test]
     fn event_schema_matches_the_archive_columns() {
-        let schema = schema(ArchiveKind::Events).unwrap();
+        let schema = ArchiveIcebergTable::schema(ArchiveKind::Events).unwrap();
         let fields = schema.as_struct().fields();
 
         assert_eq!(fields.len(), 6);
@@ -171,7 +171,7 @@ mod tests {
 
     #[test]
     fn candle_schema_matches_the_archive_columns() {
-        let schema = schema(ArchiveKind::Candles).unwrap();
+        let schema = ArchiveIcebergTable::schema(ArchiveKind::Candles).unwrap();
         let fields = schema.as_struct().fields();
 
         assert_eq!(fields.len(), 17);

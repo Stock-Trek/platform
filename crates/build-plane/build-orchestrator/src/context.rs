@@ -25,7 +25,7 @@ pub struct RsOrchestratorContext {
 impl RsOrchestratorContext {
     pub async fn new(config: &OrchestratorConfig) -> BpResult<Self> {
         let aws_timeouts = config.aws_timeouts;
-        let sdk_config = platform_aws::load_sdk_config(aws_timeouts).await;
+        let sdk_config = platform_aws::Aws::load_sdk_config(aws_timeouts).await;
         let lambda = Lambda::new(
             LambdaClient::new(&sdk_config),
             aws_timeouts,

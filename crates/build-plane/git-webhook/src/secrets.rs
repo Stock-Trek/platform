@@ -20,7 +20,7 @@ impl Secrets {
         deadline: Deadline,
         config: &SsmConfig,
     ) -> BpResult<Self> {
-        let client = platform_aws::ssm_client(sdk_config);
+        let client = platform_aws::Aws::ssm_client(sdk_config);
         let secrets = Self::within_deadline(
             timeouts,
             deadline,

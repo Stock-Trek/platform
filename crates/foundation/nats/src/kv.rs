@@ -1,9 +1,6 @@
 //! NATS KV bucket access built on JetStream.
 
-use crate::{
-    NatsAddress, NatsSubject,
-    jetstream::{JetStream, protocol_error},
-};
+use crate::{NatsAddress, NatsSubject, jetstream::JetStream};
 use async_nats::{
     HeaderMap,
     jetstream::{
@@ -44,7 +41,7 @@ impl KeyValue {
                     Err(create_error) => match context.get_key_value(bucket).await {
                         Ok(store) => store,
                         Err(_) => {
-                            return Err(protocol_error(
+                            return Err(JetStream::protocol_error(
                                 "failed to ensure KV bucket",
                                 format!("get failed: {get_error}; create failed: {create_error}"),
                             ));
@@ -78,9 +75,11 @@ impl KeyValue {
             .context
             .publish_with_headers(subject, headers, value.to_vec().into())
             .await
-            .map_err(|error| protocol_error("failed to publish KV value", error))?
+            .map_err(|error| JetStream::protocol_error("failed to publish KV value", error))?
             .await
-            .map_err(|error| protocol_error("failed to receive KV publish ack", error))?;
+            .map_err(|error| {
+                JetStream::protocol_error("failed to receive KV publish ack", error)
+            })?;
         Ok(ack.sequence)
     }
 
@@ -92,7 +91,7 @@ impl KeyValue {
             .get(key)
             .await
             .map(|value| value.map(|value| value.to_vec()))
-            .map_err(|error| protocol_error("failed to read KV value", error))
+            .map_err(|error| JetStream::protocol_error("failed to read KV value", error))
     }
 
     /// Deletes the value stored under `key`, if any. The deletion is a
@@ -102,7 +101,7 @@ impl KeyValue {
         self.store
             .delete(key)
             .await
-            .map_err(|error| protocol_error("failed to delete KV value", error))
+            .map_err(|error| JetStream::protocol_error("failed to delete KV value", error))
     }
 
     /// Lists every key in the bucket.
@@ -110,10 +109,10 @@ impl KeyValue {
         self.store
             .keys()
             .await
-            .map_err(|error| protocol_error("failed to list KV keys", error))?
+            .map_err(|error| JetStream::protocol_error("failed to list KV keys", error))?
             .try_collect()
             .await
-            .map_err(|error| protocol_error("failed to read KV key", error))
+            .map_err(|error| JetStream::protocol_error("failed to read KV key", error))
     }
 
     fn validate_bucket(bucket: &str) -> BpResult<()> {

@@ -82,20 +82,19 @@ impl PendingGap {
     pub fn is_due(&self, now: TimestampMilliseconds) -> bool {
         self.next_attempt_at <= now
     }
-}
 
-pub fn retry_delay(attempts: u32) -> Duration {
-    let exponent = attempts.min(16);
-    RETRY_DELAY
-        .saturating_mul(1_u32 << exponent)
-        .min(MAX_RETRY_DELAY)
-}
+    pub fn retry_delay(attempts: u32) -> Duration {
+        let exponent = attempts.min(16);
+        RETRY_DELAY
+            .saturating_mul(1_u32 << exponent)
+            .min(MAX_RETRY_DELAY)
+    }
 
-pub fn retry_at(now: TimestampMilliseconds, attempts: u32) -> TimestampMilliseconds {
-    TimestampMilliseconds(
-        now.0
-            .saturating_add(i64::try_from(retry_delay(attempts).as_millis()).unwrap_or(i64::MAX)),
-    )
+    pub fn retry_at(now: TimestampMilliseconds, attempts: u32) -> TimestampMilliseconds {
+        TimestampMilliseconds(now.0.saturating_add(
+            i64::try_from(Self::retry_delay(attempts).as_millis()).unwrap_or(i64::MAX),
+        ))
+    }
 }
 
 #[async_trait]
@@ -182,7 +181,6 @@ impl GapRetryStore for NatsGapRetryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use platform_market_data::test_utils::gap;
 
     impl InMemoryGapRetryStore {
         pub(crate) async fn snapshot(&self) -> Vec<PendingGap> {
@@ -193,7 +191,7 @@ mod tests {
     #[tokio::test]
     async fn stores_and_removes_pending_ranges() {
         let store = InMemoryGapRetryStore::default();
-        let pending = PendingGap::from_gap(&gap(10, 12), TimestampMilliseconds(2_000));
+        let pending = PendingGap::from_gap(&GapMarker::gap(10, 12), TimestampMilliseconds(2_000));
 
         store.save(&pending).await.unwrap();
         assert_eq!(store.load().await.unwrap(), vec![pending.clone()]);
@@ -204,15 +202,15 @@ mod tests {
 
     #[test]
     fn retry_delay_backs_off_and_is_capped() {
-        assert_eq!(retry_delay(0), RETRY_DELAY);
-        assert_eq!(retry_delay(2), RETRY_DELAY * 4);
-        assert_eq!(retry_delay(100), MAX_RETRY_DELAY);
+        assert_eq!(PendingGap::retry_delay(0), RETRY_DELAY);
+        assert_eq!(PendingGap::retry_delay(2), RETRY_DELAY * 4);
+        assert_eq!(PendingGap::retry_delay(100), MAX_RETRY_DELAY);
     }
 
     #[test]
     fn pending_ranges_reconstruct_gap_markers() {
         let pending = PendingGap::from_range(
-            &gap(10, 12),
+            &GapMarker::gap(10, 12),
             11,
             12,
             3,

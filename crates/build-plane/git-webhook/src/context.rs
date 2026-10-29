@@ -50,7 +50,7 @@ pub struct RsWebhookContext {
 impl RsWebhookContext {
     pub async fn new(config: &WebhookConfig) -> BpResult<Self> {
         let aws_timeouts = config.aws_timeouts;
-        let sdk_config = platform_aws::load_sdk_config(aws_timeouts).await;
+        let sdk_config = platform_aws::Aws::load_sdk_config(aws_timeouts).await;
         let sqs = Sqs::new(
             SqsClient::new(&sdk_config),
             aws_timeouts,

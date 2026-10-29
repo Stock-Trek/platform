@@ -55,7 +55,7 @@ impl S3ParquetSink {
         partition
             .raw_key(
                 &self.prefix,
-                format!("{}-{:x}.parquet", content_id(bytes), bytes.len()),
+                format!("{}-{:x}.parquet", Self::content_id(bytes), bytes.len()),
             )
             .map(ObjectKey::new)
     }
@@ -199,13 +199,15 @@ impl ArchiveSink for S3ParquetSink {
     }
 }
 
-fn content_id(bytes: &[u8]) -> u64 {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    for byte in bytes {
-        hash ^= u64::from(*byte);
-        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+impl S3ParquetSink {
+    fn content_id(bytes: &[u8]) -> u64 {
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for byte in bytes {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+        }
+        hash
     }
-    hash
 }
 
 #[cfg(test)]
@@ -214,7 +216,13 @@ mod tests {
 
     #[test]
     fn content_ids_are_stable_and_differ_for_different_bytes() {
-        assert_eq!(content_id(b"same"), content_id(b"same"));
-        assert_ne!(content_id(b"one"), content_id(b"two"));
+        assert_eq!(
+            S3ParquetSink::content_id(b"same"),
+            S3ParquetSink::content_id(b"same")
+        );
+        assert_ne!(
+            S3ParquetSink::content_id(b"one"),
+            S3ParquetSink::content_id(b"two")
+        );
     }
 }

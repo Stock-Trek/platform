@@ -1,7 +1,7 @@
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3_transfer_manager::{Client as TransferClient, io::InputStream};
 use bytes::Bytes;
-use platform_aws::{load_default_sdk_config, s3_client, transfer_client};
+use platform_aws::Aws;
 use platform_errors::{BpError, BpResult};
 use std::fmt;
 use tracing::info;
@@ -98,16 +98,19 @@ pub struct S3;
 
 impl S3 {
     pub async fn clients() -> (S3Client, TransferClient) {
-        let sdk_config = load_default_sdk_config().await;
-        (s3_client(&sdk_config), transfer_client(&sdk_config))
+        let sdk_config = Aws::load_default_sdk_config().await;
+        (
+            Aws::s3_client(&sdk_config),
+            Aws::transfer_client(&sdk_config),
+        )
     }
 
     pub async fn s3_client() -> S3Client {
-        s3_client(&load_default_sdk_config().await)
+        Aws::s3_client(&Aws::load_default_sdk_config().await)
     }
 
     pub async fn transfer_client() -> TransferClient {
-        transfer_client(&load_default_sdk_config().await)
+        Aws::transfer_client(&Aws::load_default_sdk_config().await)
     }
 
     /// List objects together with the metadata needed to decide when a partition

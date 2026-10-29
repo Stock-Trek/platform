@@ -2,7 +2,7 @@
 
 use crate::{
     NatsAddress, NatsSubject,
-    jetstream::{ACK_WAIT, JetStream, protocol_error},
+    jetstream::{ACK_WAIT, JetStream},
     message::Message,
 };
 use async_nats::{
@@ -58,7 +58,9 @@ impl JetStreamConsumer {
                 ..Default::default()
             })
             .await
-            .map_err(|error| protocol_error("failed to ensure JetStream stream", error))?;
+            .map_err(|error| {
+                JetStream::protocol_error("failed to ensure JetStream stream", error)
+            })?;
         let consumer = stream_handle
             .get_or_create_consumer(
                 durable,
@@ -73,7 +75,9 @@ impl JetStreamConsumer {
                 },
             )
             .await
-            .map_err(|error| protocol_error("failed to ensure JetStream consumer", error))?;
+            .map_err(|error| {
+                JetStream::protocol_error("failed to ensure JetStream consumer", error)
+            })?;
         Ok(Self {
             client,
             consumer,
@@ -110,11 +114,14 @@ impl JetStreamConsumer {
             .expires(expires)
             .messages()
             .await
-            .map_err(|error| protocol_error("failed to fetch JetStream messages", error))?;
+            .map_err(|error| {
+                JetStream::protocol_error("failed to fetch JetStream messages", error)
+            })?;
         let mut messages = Vec::with_capacity(batch);
         while let Some(message) = stream.next().await {
-            let message = message
-                .map_err(|error| protocol_error("failed to read JetStream message", error))?;
+            let message = message.map_err(|error| {
+                JetStream::protocol_error("failed to read JetStream message", error)
+            })?;
             messages.push(Message::from(message.message));
         }
         Ok(messages)
@@ -129,11 +136,12 @@ impl JetStreamConsumer {
         self.client
             .publish(reply.clone(), Vec::new().into())
             .await
-            .map_err(|error| protocol_error("failed to acknowledge JetStream message", error))?;
-        self.client
-            .flush()
-            .await
-            .map_err(|error| protocol_error("failed to flush JetStream acknowledgement", error))
+            .map_err(|error| {
+                JetStream::protocol_error("failed to acknowledge JetStream message", error)
+            })?;
+        self.client.flush().await.map_err(|error| {
+            JetStream::protocol_error("failed to flush JetStream acknowledgement", error)
+        })
     }
 
     /// Fetches with retries so transient connection loss does not surface to

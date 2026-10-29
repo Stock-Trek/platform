@@ -68,9 +68,9 @@ impl S3 {
             .or_else(|| sdk_config.endpoint_url().map(str::to_string));
         let client = match endpoint_url.as_deref() {
             Some(endpoint_url) => {
-                platform_aws::s3_client_with_path_style_endpoint(sdk_config, endpoint_url)
+                platform_aws::Aws::s3_client_with_path_style_endpoint(sdk_config, endpoint_url)
             }
-            None => platform_aws::s3_client(sdk_config),
+            None => platform_aws::Aws::s3_client(sdk_config),
         };
         let signer = PresignedPostSigner::new(
             config.user_artifacts_bucket.clone(),

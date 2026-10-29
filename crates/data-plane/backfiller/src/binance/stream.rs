@@ -44,7 +44,7 @@ impl MarketStream {
         if lower == "bookticker" {
             return Ok(MarketStreamKind::BookTicker);
         }
-        if is_depth_suffix(&lower) {
+        if Self::is_depth_suffix(&lower) {
             return Ok(MarketStreamKind::Depth);
         }
         if let Some(interval) = lower.strip_prefix("kline_") {
@@ -64,24 +64,24 @@ impl MarketStream {
             "unsupported stream; expected trade, depth, bookTicker, or kline_<interval>",
         ))
     }
-}
 
-fn is_depth_suffix(suffix: &str) -> bool {
-    if suffix == "depth" || suffix.starts_with("depth@") {
-        return true;
+    fn is_depth_suffix(suffix: &str) -> bool {
+        if suffix == "depth" || suffix.starts_with("depth@") {
+            return true;
+        }
+        let Some(levels) = suffix.strip_prefix("depth") else {
+            return false;
+        };
+        let digits_len = levels
+            .chars()
+            .take_while(|character| character.is_ascii_digit())
+            .count();
+        if digits_len == 0 {
+            return false;
+        }
+        let rest = &levels[digits_len..];
+        rest.is_empty() || rest.starts_with('@')
     }
-    let Some(levels) = suffix.strip_prefix("depth") else {
-        return false;
-    };
-    let digits_len = levels
-        .chars()
-        .take_while(|character| character.is_ascii_digit())
-        .count();
-    if digits_len == 0 {
-        return false;
-    }
-    let rest = &levels[digits_len..];
-    rest.is_empty() || rest.starts_with('@')
 }
 
 #[cfg(test)]

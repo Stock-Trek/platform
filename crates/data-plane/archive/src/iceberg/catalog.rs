@@ -1,4 +1,4 @@
-use super::{ArchiveIcebergTable, IcebergConfig, schema::schema as table_schema};
+use super::{ArchiveIcebergTable, IcebergConfig};
 use async_trait::async_trait;
 use futures::TryStreamExt;
 use iceberg::{
@@ -85,7 +85,7 @@ impl IcebergCatalog {
             }))
             .load("platform_archive", props)
             .await
-            .map_err(|error| catalog_error("build Iceberg REST catalog", error))?;
+            .map_err(|error| Self::catalog_error("build Iceberg REST catalog", error))?;
 
         Ok(Self {
             catalog,
@@ -113,7 +113,7 @@ impl IcebergCatalog {
             .catalog
             .namespace_exists(&self.namespace)
             .await
-            .map_err(|error| catalog_error("check Iceberg namespace", error))?
+            .map_err(|error| Self::catalog_error("check Iceberg namespace", error))?
         {
             return Ok(());
         }
@@ -125,7 +125,7 @@ impl IcebergCatalog {
         {
             Ok(_) => Ok(()),
             Err(error) if error.kind() == ErrorKind::NamespaceAlreadyExists => Ok(()),
-            Err(error) => Err(catalog_error("create Iceberg namespace", error)),
+            Err(error) => Err(Self::catalog_error("create Iceberg namespace", error)),
         }
     }
 
@@ -134,14 +134,14 @@ impl IcebergCatalog {
         match self.catalog.load_table(&ident).await {
             Ok(table) => return Ok(table),
             Err(error) if error.kind() == ErrorKind::TableNotFound => {}
-            Err(error) => return Err(catalog_error("load Iceberg table", error)),
+            Err(error) => return Err(Self::catalog_error("load Iceberg table", error)),
         }
 
         self.ensure_namespace().await?;
         let creation = TableCreation::builder()
             .name(table.name().to_string())
             .location(self.table_location(table))
-            .schema(table_schema(table.kind())?)
+            .schema(ArchiveIcebergTable::schema(table.kind())?)
             .properties(HashMap::<String, String>::new())
             .format_version(FormatVersion::V2)
             .build();
@@ -152,8 +152,8 @@ impl IcebergCatalog {
                 .catalog
                 .load_table(&ident)
                 .await
-                .map_err(|error| catalog_error("reload Iceberg table", error)),
-            Err(error) => Err(catalog_error("create Iceberg table", error)),
+                .map_err(|error| Self::catalog_error("reload Iceberg table", error)),
+            Err(error) => Err(Self::catalog_error("create Iceberg table", error)),
         }
     }
 
@@ -161,16 +161,16 @@ impl IcebergCatalog {
         let scan = table
             .scan()
             .build()
-            .map_err(|error| catalog_error("build Iceberg table scan", error))?;
+            .map_err(|error| Self::catalog_error("build Iceberg table scan", error))?;
         let mut tasks = scan
             .plan_files()
             .await
-            .map_err(|error| catalog_error("plan Iceberg table scan", error))?;
+            .map_err(|error| Self::catalog_error("plan Iceberg table scan", error))?;
         let mut paths = HashSet::new();
         while let Some(task) = tasks
             .try_next()
             .await
-            .map_err(|error| catalog_error("read Iceberg table scan", error))?
+            .map_err(|error| Self::catalog_error("read Iceberg table scan", error))?
         {
             paths.insert(task.data_file_path().to_string());
         }
@@ -184,7 +184,7 @@ impl IcebergCatalog {
         source_files: Option<&[String]>,
     ) -> BpResult<bool> {
         if let Some(source_files) = source_files {
-            let processed = source_files_from_metadata(table);
+            let processed = Self::source_files_from_metadata(table);
             return Ok(source_files.iter().all(|file| processed.contains(file)));
         }
         if files.is_empty() {
@@ -229,6 +229,31 @@ impl IcebergCatalog {
                     "build Iceberg data file: {error}"
                 )))
             })
+    }
+
+    fn source_files_from_metadata(table: &Table) -> HashSet<String> {
+        table
+            .metadata()
+            .snapshots()
+            .flat_map(|snapshot| snapshot.summary().additional_properties.keys())
+            .filter_map(|key| key.strip_prefix(SOURCE_FILE_SUMMARY_PREFIX))
+            .map(str::to_string)
+            .collect()
+    }
+
+    fn batch_fingerprint(files: &[IcebergDataFile]) -> String {
+        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+        for file in files {
+            for byte in file.file_path.as_bytes().iter().chain(&[0]) {
+                hash ^= u64::from(*byte);
+                hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+            }
+        }
+        format!("{hash:016x}")
+    }
+
+    fn catalog_error(operation: &'static str, error: iceberg::Error) -> BpError {
+        BpError::external(std::io::Error::other(format!("{operation}: {error}")))
     }
 }
 
@@ -278,7 +303,7 @@ impl ArchiveCatalog for IcebergCatalog {
                 .collect::<BpResult<Vec<_>>>()?;
             let mut snapshot_properties = HashMap::from([(
                 ARCHIVE_BATCH_SUMMARY_KEY.to_string(),
-                batch_fingerprint(files),
+                Self::batch_fingerprint(files),
             )]);
             if let Some(source_files) = source_files {
                 snapshot_properties.extend(source_files.iter().map(|file| {
@@ -296,7 +321,7 @@ impl ArchiveCatalog for IcebergCatalog {
                 .set_snapshot_properties(snapshot_properties);
             let transaction = action
                 .apply(transaction)
-                .map_err(|error| catalog_error("prepare Iceberg commit", error))?;
+                .map_err(|error| Self::catalog_error("prepare Iceberg commit", error))?;
 
             match transaction.commit(&self.catalog).await {
                 Ok(_) => {
@@ -314,7 +339,7 @@ impl ArchiveCatalog for IcebergCatalog {
                         attempt,
                         "Iceberg commit failed"
                     );
-                    last_error = Some(catalog_error("commit Iceberg table", error));
+                    last_error = Some(Self::catalog_error("commit Iceberg table", error));
                 }
             }
 
@@ -349,33 +374,8 @@ impl ArchiveCatalog for IcebergCatalog {
         table: ArchiveIcebergTable,
     ) -> BpResult<HashSet<String>> {
         let table = self.ensure_table(table).await?;
-        Ok(source_files_from_metadata(&table))
+        Ok(Self::source_files_from_metadata(&table))
     }
-}
-
-fn source_files_from_metadata(table: &Table) -> HashSet<String> {
-    table
-        .metadata()
-        .snapshots()
-        .flat_map(|snapshot| snapshot.summary().additional_properties.keys())
-        .filter_map(|key| key.strip_prefix(SOURCE_FILE_SUMMARY_PREFIX))
-        .map(str::to_string)
-        .collect()
-}
-
-fn batch_fingerprint(files: &[IcebergDataFile]) -> String {
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    for file in files {
-        for byte in file.file_path.as_bytes().iter().chain(&[0]) {
-            hash ^= u64::from(*byte);
-            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-        }
-    }
-    format!("{hash:016x}")
-}
-
-fn catalog_error(operation: &'static str, error: iceberg::Error) -> BpError {
-    BpError::external(std::io::Error::other(format!("{operation}: {error}")))
 }
 
 #[cfg(test)]
@@ -388,12 +388,12 @@ mod tests {
         let second = IcebergDataFile::new("s3://archive/b.parquet", 3, 4);
 
         assert_eq!(
-            batch_fingerprint(&[first.clone(), second.clone()]),
-            batch_fingerprint(&[first.clone(), second.clone()])
+            IcebergCatalog::batch_fingerprint(&[first.clone(), second.clone()]),
+            IcebergCatalog::batch_fingerprint(&[first.clone(), second.clone()])
         );
         assert_ne!(
-            batch_fingerprint(&[first.clone(), second.clone()]),
-            batch_fingerprint(&[second, first])
+            IcebergCatalog::batch_fingerprint(&[first.clone(), second.clone()]),
+            IcebergCatalog::batch_fingerprint(&[second, first])
         );
     }
 }
