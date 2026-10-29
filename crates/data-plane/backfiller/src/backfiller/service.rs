@@ -1,11 +1,7 @@
-use super::{
-    ranges::{missing_ranges, widened_gap},
-    schedule::{instant_at, next_attempt_at, next_due_key, sleep_until_optional},
-};
 use crate::{
     fetcher::{BackfilledEvent, MissingEventFetcher},
     gap_marker_source::GapMarkerSource,
-    retry::{GapRetryStore, InMemoryGapRetryStore, PendingGap, retry_at},
+    retry::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::{BpError, BpResult};
@@ -151,7 +147,7 @@ where
 
         loop {
             let now = TimestampMilliseconds::now();
-            if let Some(key) = next_due_key(&pending, now) {
+            if let Some(key) = PendingGap::next_due_key(&pending, now) {
                 if let Some(gap) = pending.remove(&key) {
                     let retry = gap.clone();
                     if let Err(error) = self.attempt(gap, &mut pending).await {
@@ -176,8 +172,8 @@ where
                 return Ok(());
             }
 
-            let next_attempt = next_attempt_at(&pending);
-            let next_wake = next_attempt.map(instant_at);
+            let next_attempt = PendingGap::next_attempt_at(&pending);
+            let next_wake = next_attempt.map(PendingGap::instant_at);
             tokio::select! {
                 gap = self.source.next_gap() => {
                     match gap? {
@@ -187,7 +183,7 @@ where
                         }
                     }
                 }
-                _ = sleep_until_optional(next_wake), if next_wake.is_some() => {}
+                _ = PendingGap::sleep_until_optional(next_wake), if next_wake.is_some() => {}
             }
         }
     }
@@ -245,7 +241,7 @@ where
     ) -> BpResult<()> {
         let now = TimestampMilliseconds::now();
         let requested = pending.gap_marker(now);
-        let fetch_gap = widened_gap(&requested, pending.attempts);
+        let fetch_gap = PendingGap::widened_gap(&requested, pending.attempts);
         let result = self
             .fetcher
             .fetch_with_attempt(&fetch_gap, pending.attempts)
@@ -274,7 +270,7 @@ where
 
         let expected = pending.missing_to.saturating_sub(pending.missing_from) + 1;
         let covered = events.len() as u64;
-        let unresolved = missing_ranges(
+        let unresolved = PendingGap::missing_ranges(
             pending.missing_from,
             pending.missing_to,
             events.iter().map(|event| event.sequence),
@@ -351,7 +347,7 @@ where
     ) -> BpResult<()> {
         let now = TimestampMilliseconds::now();
         let attempts = pending.attempts.saturating_add(1);
-        let next_attempt_at = retry_at(now, attempts);
+        let next_attempt_at = PendingGap::retry_at(now, attempts);
 
         let parent_key = pending.key();
         let mut child_keys = HashSet::new();

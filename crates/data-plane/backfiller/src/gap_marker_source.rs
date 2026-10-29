@@ -87,11 +87,10 @@ impl GapMarkerSource for NatsGapMarkerSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use platform_market_data::test_utils::gap;
 
     #[test]
     fn decodes_valid_gap_markers() {
-        let expected = gap(7, 7);
+        let expected = GapMarker::gap(7, 7);
         let message = Message {
             payload: expected.encode().unwrap(),
             ..Message::default()

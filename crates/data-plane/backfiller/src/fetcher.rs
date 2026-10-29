@@ -96,6 +96,12 @@ impl FetcherRegistry {
     pub fn contains(&self, exchange: CexId) -> bool {
         self.fetchers.contains_key(&exchange)
     }
+
+    fn unsupported_exchange(exchange: CexId) -> BpError {
+        BpError::Exchange(ExchangeError::UnsupportedExchange {
+            exchange: exchange.to_string(),
+        })
+    }
 }
 
 #[async_trait]
@@ -106,7 +112,7 @@ impl MissingEventFetcher for FetcherRegistry {
 
     async fn fetch(&self, gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>> {
         self.fetcher(gap.exchange)
-            .ok_or_else(|| unsupported_exchange(gap.exchange))?
+            .ok_or_else(|| Self::unsupported_exchange(gap.exchange))?
             .fetch(gap)
             .await
     }
@@ -117,16 +123,10 @@ impl MissingEventFetcher for FetcherRegistry {
         attempt: u32,
     ) -> BpResult<Vec<BackfilledEvent>> {
         self.fetcher(gap.exchange)
-            .ok_or_else(|| unsupported_exchange(gap.exchange))?
+            .ok_or_else(|| Self::unsupported_exchange(gap.exchange))?
             .fetch_with_attempt(gap, attempt)
             .await
     }
-}
-
-fn unsupported_exchange(exchange: CexId) -> BpError {
-    BpError::Exchange(ExchangeError::UnsupportedExchange {
-        exchange: exchange.to_string(),
-    })
 }
 
 /// Shared pagination structure for exchange-specific REST fetchers.
@@ -188,7 +188,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use platform_market_data::test_utils::gap;
     use std::sync::Mutex;
 
     struct StubFetcher {
@@ -238,7 +237,7 @@ mod tests {
             },
         );
 
-        let events = registry.fetch(&gap(2, 2)).await.unwrap();
+        let events = registry.fetch(&GapMarker::gap(2, 2)).await.unwrap();
 
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].sequence, 2);
@@ -257,7 +256,10 @@ mod tests {
             },
         );
 
-        registry.fetch_with_attempt(&gap(2, 2), 3).await.unwrap();
+        registry
+            .fetch_with_attempt(&GapMarker::gap(2, 2), 3)
+            .await
+            .unwrap();
 
         assert_eq!(*attempts.lock().unwrap(), vec![3]);
     }
@@ -267,6 +269,6 @@ mod tests {
         let registry = FetcherRegistry::new();
 
         assert!(!registry.supports(CexId::Binance));
-        assert!(registry.fetch(&gap(2, 2)).await.is_err());
+        assert!(registry.fetch(&GapMarker::gap(2, 2)).await.is_err());
     }
 }

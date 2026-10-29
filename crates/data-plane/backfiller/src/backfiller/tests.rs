@@ -1,4 +1,3 @@
-use super::ranges::{missing_ranges, widened_gap};
 use super::*;
 use crate::{
     fetcher::{BackfilledEvent, MissingEventFetcher},
@@ -8,7 +7,6 @@ use crate::{
 use async_trait::async_trait;
 use platform_errors::BpResult;
 use platform_market_data::event::{GapMarker, MarketEvent};
-use platform_market_data::test_utils::gap;
 use platform_nats::EventPublisher;
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::json;
@@ -83,7 +81,7 @@ async fn acknowledges_after_processing_a_covered_gap() {
     let acked = Arc::new(Mutex::new(Vec::new()));
     let service = BackfillService::new(
         OneGapSource {
-            gap: Some(gap(2, 3)),
+            gap: Some(GapMarker::gap(2, 3)),
             acked: acked.clone(),
         },
         OnceFetcher {
@@ -103,7 +101,7 @@ async fn persists_partial_ranges_instead_of_forgetting_them() {
     let store = Arc::new(InMemoryGapRetryStore::new());
     let mut service = BackfillService::new(
         OneGapSource {
-            gap: Some(gap(2, 5)),
+            gap: Some(GapMarker::gap(2, 5)),
             acked: Arc::new(Mutex::new(Vec::new())),
         },
         OnceFetcher {
@@ -118,7 +116,7 @@ async fn persists_partial_ranges_instead_of_forgetting_them() {
     assert!(pending.is_empty());
 
     let mut pending = BTreeMap::new();
-    service.accept(gap(2, 5), &mut pending).await;
+    service.accept(GapMarker::gap(2, 5), &mut pending).await;
 
     let mut gaps = store.snapshot().await;
     gaps.sort_by_key(|gap| (gap.missing_from, gap.missing_to));
@@ -133,7 +131,14 @@ async fn persists_partial_ranges_instead_of_forgetting_them() {
 #[tokio::test]
 async fn retries_pending_ranges_after_the_source_ends() {
     let store = Arc::new(InMemoryGapRetryStore::new());
-    let pending = PendingGap::from_range(&gap(2, 3), 2, 3, 0, TimestampMilliseconds(0), None);
+    let pending = PendingGap::from_range(
+        &GapMarker::gap(2, 3),
+        2,
+        3,
+        0,
+        TimestampMilliseconds(0),
+        None,
+    );
     store.save(&pending).await.unwrap();
 
     let service = BackfillService::new(
@@ -156,18 +161,21 @@ async fn retries_pending_ranges_after_the_source_ends() {
 
 #[test]
 fn finds_contiguous_unresolved_ranges() {
-    assert_eq!(missing_ranges(10, 15, [10, 11, 12, 13, 14, 15]), vec![]);
     assert_eq!(
-        missing_ranges(10, 15, [10, 12, 15]),
+        PendingGap::missing_ranges(10, 15, [10, 11, 12, 13, 14, 15]),
+        vec![]
+    );
+    assert_eq!(
+        PendingGap::missing_ranges(10, 15, [10, 12, 15]),
         vec![(11, 11), (13, 14)]
     );
-    assert_eq!(missing_ranges(10, 15, []), vec![(10, 15)]);
-    assert_eq!(missing_ranges(10, 10, [10]), vec![]);
+    assert_eq!(PendingGap::missing_ranges(10, 15, []), vec![(10, 15)]);
+    assert_eq!(PendingGap::missing_ranges(10, 10, [10]), vec![]);
 }
 
 #[test]
 fn retry_attempts_widen_the_rest_window() {
-    let widened = widened_gap(&gap(10_000, 20_000), 2);
+    let widened = PendingGap::widened_gap(&GapMarker::gap(10_000, 20_000), 2);
 
     assert_eq!(widened.missing_from, 8_000);
     assert_eq!(widened.missing_to, 22_000);

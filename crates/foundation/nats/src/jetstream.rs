@@ -51,10 +51,10 @@ impl JetStream {
         hasher.update(payload);
         hex::encode(hasher.finalize())
     }
-}
 
-pub(crate) fn protocol_error(context: &str, error: impl Display) -> BpError {
-    BpError::Ingester(IngesterError::protocol(format!("{context}: {error}")))
+    pub(crate) fn protocol_error(context: &str, error: impl Display) -> BpError {
+        BpError::Ingester(IngesterError::protocol(format!("{context}: {error}")))
+    }
 }
 
 #[cfg(test)]

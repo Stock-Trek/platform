@@ -1,9 +1,6 @@
 //! JetStream-backed publisher with acknowledgements and idempotent message ids.
 
-use crate::{
-    NatsAddress, NatsSubject,
-    jetstream::{JetStream, protocol_error},
-};
+use crate::{NatsAddress, NatsSubject, jetstream::JetStream};
 use async_nats::{
     HeaderMap,
     jetstream::{self, Context, stream},
@@ -93,7 +90,7 @@ impl NatsPublisher {
             })
             .await
             .map(|_| ())
-            .map_err(|error| protocol_error("failed to ensure JetStream stream", error));
+            .map_err(|error| JetStream::protocol_error("failed to ensure JetStream stream", error));
         match result {
             Ok(()) => {
                 self.streams
@@ -133,10 +130,12 @@ impl NatsPublisher {
             let ack = context
                 .publish_with_headers(subject.to_string(), headers, payload.to_vec().into())
                 .await
-                .map_err(|error| protocol_error("failed to publish to JetStream", error))?
+                .map_err(|error| {
+                    JetStream::protocol_error("failed to publish to JetStream", error)
+                })?
                 .await
                 .map_err(|error| {
-                    protocol_error("failed to receive JetStream publish ack", error)
+                    JetStream::protocol_error("failed to receive JetStream publish ack", error)
                 })?;
             Ok(PublishAck::from(ack))
         }

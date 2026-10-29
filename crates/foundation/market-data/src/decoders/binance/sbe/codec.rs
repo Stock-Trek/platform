@@ -1,4 +1,4 @@
-use super::{decimal::decimal_from_mantissa, groups::SbeGroupExt};
+use super::groups::SbeGroupExt;
 use crate::{
     decoders::{
         binary::BinaryCursor,
@@ -138,8 +138,8 @@ impl BinanceSbeCodec {
         for index in 0..trades.count {
             cursor.seek(trades.entry(index)?)?;
             let _id = cursor.read_i64()?;
-            let price = decimal_from_mantissa(cursor.read_i64()?, price_exponent)?;
-            let quantity = decimal_from_mantissa(cursor.read_i64()?, qty_exponent)?;
+            let price = Self::decimal_from_mantissa(cursor.read_i64()?, price_exponent)?;
+            let quantity = Self::decimal_from_mantissa(cursor.read_i64()?, qty_exponent)?;
             values.push((price, quantity));
         }
         cursor.seek(trades.end()?)?;
@@ -200,10 +200,10 @@ impl BinanceSbeCodec {
         let sequence = cursor.read_sequence()?;
         let price_exponent = cursor.read_i8()?;
         let qty_exponent = cursor.read_i8()?;
-        let bid_price = decimal_from_mantissa(cursor.read_i64()?, price_exponent)?;
-        let bid_quantity = decimal_from_mantissa(cursor.read_i64()?, qty_exponent)?;
-        let ask_price = decimal_from_mantissa(cursor.read_i64()?, price_exponent)?;
-        let ask_quantity = decimal_from_mantissa(cursor.read_i64()?, qty_exponent)?;
+        let bid_price = Self::decimal_from_mantissa(cursor.read_i64()?, price_exponent)?;
+        let bid_quantity = Self::decimal_from_mantissa(cursor.read_i64()?, qty_exponent)?;
+        let ask_price = Self::decimal_from_mantissa(cursor.read_i64()?, price_exponent)?;
+        let ask_quantity = Self::decimal_from_mantissa(cursor.read_i64()?, qty_exponent)?;
         let symbol = cursor.read_var_string()?;
         Ok((
             sequence,

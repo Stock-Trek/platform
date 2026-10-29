@@ -105,7 +105,7 @@ impl BinanceEventPageSource {
             request.endTime = Some(TimestampMilliseconds(end));
             request.limit = Some(BinanceKlinesLimit::try_new(KLINES_PAGE_LIMIT)?);
             let response = self.submit(request).await?;
-            let klines = raw_klines(response)?;
+            let klines = Self::raw_klines(response)?;
             if klines.is_empty() {
                 break;
             }
@@ -139,6 +139,23 @@ impl BinanceEventPageSource {
         );
         self.submit(request).await?.historical_trades()
     }
+
+    fn raw_klines(
+        response: BinanceResponse<Vec<BinanceKlineResponse>>,
+    ) -> BpResult<Vec<BinanceKlineResponse>> {
+        match response.payload {
+            BinanceResponsePayload::Success(payload) => Ok(payload),
+            BinanceResponsePayload::Failure(error) => {
+                let retry_after = response
+                    .metadata
+                    .retry_after
+                    .or_else(|| error.retry_after());
+                Err(BpError::Exchange(
+                    error.exchange_error(response.metadata.status, retry_after),
+                ))
+            }
+        }
+    }
 }
 
 #[async_trait]
@@ -161,22 +178,5 @@ impl EventPageSource for BinanceEventPageSource {
             .iter()
             .map(|trade| BinanceEventParser::trade(symbol, trade))
             .collect())
-    }
-}
-
-fn raw_klines(
-    response: BinanceResponse<Vec<BinanceKlineResponse>>,
-) -> BpResult<Vec<BinanceKlineResponse>> {
-    match response.payload {
-        BinanceResponsePayload::Success(payload) => Ok(payload),
-        BinanceResponsePayload::Failure(error) => {
-            let retry_after = response
-                .metadata
-                .retry_after
-                .or_else(|| error.retry_after());
-            Err(BpError::Exchange(
-                error.exchange_error(response.metadata.status, retry_after),
-            ))
-        }
     }
 }

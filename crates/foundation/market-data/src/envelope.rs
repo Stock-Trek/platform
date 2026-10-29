@@ -62,7 +62,6 @@ pub type ClosedCandleEnvelope = Envelope<ClosedCandle>;
 mod tests {
     use super::*;
     use crate::candle::{Candle, CandleInterval, CandleKey};
-    use crate::test_utils::gap;
     use platform_types::new_types::TimestampMilliseconds;
     use stock_trek::markets::{MarketCandle, MarketOhlcv};
     use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
@@ -110,7 +109,7 @@ mod tests {
 
     #[test]
     fn gap_marker_round_trips_through_the_envelope() {
-        let expected = gap(7, 7);
+        let expected = GapMarker::gap(7, 7);
         let encoded = expected.encode().unwrap();
         let decoded = GapMarker::decode(&encoded).unwrap();
 

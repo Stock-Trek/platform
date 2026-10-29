@@ -21,7 +21,10 @@ impl NatsSubscriber {
             .subscribe(subject.to_string())
             .await
             .map_err(|error| {
-                crate::jetstream::protocol_error("failed to subscribe to NATS subject", error)
+                crate::jetstream::JetStream::protocol_error(
+                    "failed to subscribe to NATS subject",
+                    error,
+                )
             })?;
         Ok(Self {
             _client: client,
