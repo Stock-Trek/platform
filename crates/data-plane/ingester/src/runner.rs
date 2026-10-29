@@ -1,6 +1,7 @@
 use crate::{
     config::IngesterConfig,
     ingester::{IngestOptions, Ingester},
+    sequence::SequenceStore,
     source::MarketMessageSource,
 };
 use platform_errors::BpResult;
@@ -17,6 +18,7 @@ pub struct IngesterRunner<S, P> {
     config: IngesterConfig,
     source: S,
     publisher: Arc<P>,
+    sequences: Option<Arc<dyn SequenceStore>>,
 }
 
 impl<S, P> IngesterRunner<S, P>
@@ -29,7 +31,13 @@ where
             config,
             source,
             publisher,
+            sequences: None,
         }
+    }
+
+    pub fn with_sequence_store(mut self, sequences: Arc<dyn SequenceStore>) -> Self {
+        self.sequences = Some(sequences);
+        self
     }
 
     pub async fn run(self) -> BpResult<()> {
@@ -37,19 +45,23 @@ where
             config,
             source,
             publisher,
+            sequences,
         } = self;
         info!("connected to NATS");
 
         let (sender, mut receiver) = mpsc::channel(MESSAGE_CHANNEL_CAPACITY);
         let source_task = tokio::spawn(async move { source.run(sender).await });
 
-        let mut ingester = Ingester::new(
-            publisher,
-            IngestOptions {
+        let mut ingester = {
+            let options = IngestOptions {
                 exchange: config.exchange,
                 subject_prefix: config.nats_subject_prefix.clone(),
-            },
-        );
+            };
+            match sequences {
+                Some(sequences) => Ingester::with_sequence_store(publisher, options, sequences),
+                None => Ingester::new(publisher, options),
+            }
+        };
 
         let result = Runtime::run_until_shutdown(Self::process_messages(
             &config,

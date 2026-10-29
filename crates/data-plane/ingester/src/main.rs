@@ -4,7 +4,10 @@ mod runner;
 mod sequence;
 mod source;
 
-use crate::{config::IngesterConfig, runner::IngesterRunner, source::WebsocketSource};
+use crate::{
+    config::IngesterConfig, runner::IngesterRunner, sequence::NatsSequenceStore,
+    source::WebsocketSource,
+};
 use platform_errors::BpResult;
 use platform_nats::NatsPublisher;
 use platform_runtime::Service;
@@ -18,6 +21,11 @@ async fn main() -> BpResult<()> {
     SERVICE.init_logging(&config.log_filter)?;
     let publisher = Arc::new(NatsPublisher::connect(&config.nats_url, SERVICE.name()).await?);
     publisher.ensure_stream(&config.nats_subject_prefix).await?;
+    let sequences =
+        Arc::new(NatsSequenceStore::connect(&config.nats_url, &config.nats_subject_prefix).await?);
     let source = WebsocketSource::from_config(&config);
-    IngesterRunner::new(config, source, publisher).run().await
+    IngesterRunner::new(config, source, publisher)
+        .with_sequence_store(sequences)
+        .run()
+        .await
 }

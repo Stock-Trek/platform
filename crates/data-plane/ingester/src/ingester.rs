@@ -1,4 +1,4 @@
-use crate::sequence::{SequenceObservation, SequenceTracker};
+use crate::sequence::{InMemorySequenceStore, SequenceObservation, SequenceStore, SequenceTracker};
 use platform_errors::BpResult;
 use platform_market_data::{
     envelope::EnvelopeCodec,
@@ -9,9 +9,12 @@ use platform_metrics::descriptions::{
     DROP_REASON_DUPLICATE, DROP_REASON_OUT_OF_ORDER, STAGE_INGESTER,
 };
 use platform_metrics::market_data::MarketDataMetrics;
-use platform_nats::EventPublisher;
+use platform_nats::{EventPublisher, NatsSubject};
 use platform_types::new_types::TimestampMilliseconds;
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use stock_trek_types::cex::cex_id::CexId;
 use tracing::debug;
 
@@ -35,14 +38,26 @@ pub struct Ingester<P> {
     publisher: Arc<P>,
     options: IngestOptions,
     sequences: HashMap<String, SequenceTracker>,
+    loaded_streams: HashSet<String>,
+    store: Arc<dyn SequenceStore>,
 }
 
 impl<P: EventPublisher> Ingester<P> {
     pub fn new(publisher: Arc<P>, options: IngestOptions) -> Self {
+        Self::with_sequence_store(publisher, options, Arc::new(InMemorySequenceStore::new()))
+    }
+
+    pub fn with_sequence_store(
+        publisher: Arc<P>,
+        options: IngestOptions,
+        store: Arc<dyn SequenceStore>,
+    ) -> Self {
         Self {
             publisher,
             options,
             sequences: HashMap::new(),
+            loaded_streams: HashSet::new(),
+            store,
         }
     }
 
@@ -83,7 +98,7 @@ impl<P: EventPublisher> Ingester<P> {
             .min(sequence);
 
         let observation = {
-            let tracker = self.sequences.entry(event.stream.clone()).or_default();
+            let tracker = self.sequence_tracker(&event.stream).await?;
             tracker.observe_range(first_sequence, sequence)
         };
 
@@ -110,10 +125,10 @@ impl<P: EventPublisher> Ingester<P> {
 
                 // The gap marker covers this missing range even if publishing
                 // the current event then fails.
-                self.sequences
-                    .entry(event.stream.clone())
-                    .or_default()
+                self.sequence_tracker(&event.stream)
+                    .await?
                     .commit(missing_to);
+                self.persist_sequence(&event.stream).await?;
 
                 self.publish_event(&event_subject, &event, first_sequence, sequence)
                     .await
@@ -143,12 +158,49 @@ impl<P: EventPublisher> Ingester<P> {
         sequence: u64,
     ) -> BpResult<()> {
         let result = self.publisher.publish(subject, &event.encode()?).await;
-        let tracker = self.sequences.entry(event.stream.clone()).or_default();
+        let tracker = self
+            .sequences
+            .get_mut(&event.stream)
+            .expect("sequence tracker is loaded before publishing");
         match &result {
             Ok(()) => tracker.commit(sequence),
             Err(_) => tracker.record_failure(first_sequence),
         }
+
+        // Persist the post-publish boundary before the result is returned. If
+        // this was the final publish before shutdown, the next process must
+        // still know which range was not reliably published.
+        self.persist_sequence(&event.stream).await?;
         result
+    }
+
+    async fn sequence_tracker(&mut self, stream: &str) -> BpResult<&mut SequenceTracker> {
+        if !self.loaded_streams.contains(stream) {
+            let key = self.sequence_key(stream);
+            let tracker = self.store.load(&key).await?.unwrap_or_default();
+            self.sequences.insert(stream.to_string(), tracker);
+            self.loaded_streams.insert(stream.to_string());
+        }
+        Ok(self
+            .sequences
+            .get_mut(stream)
+            .expect("sequence tracker is loaded"))
+    }
+
+    async fn persist_sequence(&self, stream: &str) -> BpResult<()> {
+        let tracker = self
+            .sequences
+            .get(stream)
+            .expect("sequence tracker is loaded before persistence");
+        self.store.save(&self.sequence_key(stream), tracker).await
+    }
+
+    fn sequence_key(&self, stream: &str) -> String {
+        format!(
+            "{}.{}",
+            self.options.exchange,
+            NatsSubject::normalize_segment(stream)
+        )
     }
 }
 
@@ -232,13 +284,21 @@ mod tests {
     }
 
     fn ingester(publisher: Arc<RecordingPublisher>) -> Ingester<RecordingPublisher> {
-        Ingester::new(
-            publisher,
-            IngestOptions {
-                exchange: CexId::Binance,
-                subject_prefix: "market".to_string(),
-            },
-        )
+        Ingester::new(publisher, options())
+    }
+
+    fn ingester_with_store(
+        publisher: Arc<RecordingPublisher>,
+        store: Arc<InMemorySequenceStore>,
+    ) -> Ingester<RecordingPublisher> {
+        Ingester::with_sequence_store(publisher, options(), store)
+    }
+
+    fn options() -> IngestOptions {
+        IngestOptions {
+            exchange: CexId::Binance,
+            subject_prefix: "market".to_string(),
+        }
     }
 
     #[tokio::test]
@@ -327,6 +387,74 @@ mod tests {
         assert_eq!(messages[2].1["missing_from"], 13);
         assert_eq!(messages[2].1["missing_to"], 13);
         assert_eq!(messages[3].1["sequence"], 14);
+    }
+
+    #[tokio::test]
+    async fn restart_detects_gaps_that_happened_while_the_ingester_was_down() {
+        let publisher = Arc::new(RecordingPublisher::default());
+        let store = Arc::new(InMemorySequenceStore::new());
+
+        {
+            let mut ingester = ingester_with_store(publisher.clone(), store.clone());
+            ingester.ingest(message(Some(10))).await.unwrap();
+        }
+
+        let mut restarted = ingester_with_store(publisher.clone(), store);
+        restarted.ingest(message(Some(13))).await.unwrap();
+
+        let messages = publisher.messages();
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[1].0, "market.gaps.binance.btcusdt.trade");
+        assert_eq!(messages[1].1["missing_from"], 11);
+        assert_eq!(messages[1].1["missing_to"], 12);
+        assert_eq!(messages[1].1["observed_sequence"], 13);
+        assert_eq!(messages[2].1["sequence"], 13);
+    }
+
+    #[tokio::test]
+    async fn restart_after_a_failed_final_publish_detects_the_gap() {
+        let publisher = Arc::new(RecordingPublisher::default());
+        let store = Arc::new(InMemorySequenceStore::new());
+
+        {
+            let mut ingester = ingester_with_store(publisher.clone(), store.clone());
+            ingester.ingest(message(Some(10))).await.unwrap();
+            publisher.fail_sequence(11);
+            assert!(ingester.ingest(message(Some(11))).await.is_err());
+        }
+
+        let mut restarted = ingester_with_store(publisher.clone(), store);
+        restarted.ingest(message(Some(12))).await.unwrap();
+
+        let messages = publisher.messages();
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[1].0, "market.gaps.binance.btcusdt.trade");
+        assert_eq!(messages[1].1["missing_from"], 11);
+        assert_eq!(messages[1].1["missing_to"], 11);
+        assert_eq!(messages[1].1["observed_sequence"], 12);
+        assert_eq!(messages[2].1["sequence"], 12);
+    }
+
+    #[tokio::test]
+    async fn restart_after_a_failed_first_publish_detects_the_gap() {
+        let publisher = Arc::new(RecordingPublisher::default());
+        let store = Arc::new(InMemorySequenceStore::new());
+
+        {
+            let mut ingester = ingester_with_store(publisher.clone(), store.clone());
+            publisher.fail_sequence(10);
+            assert!(ingester.ingest(message(Some(10))).await.is_err());
+        }
+
+        let mut restarted = ingester_with_store(publisher.clone(), store);
+        restarted.ingest(message(Some(11))).await.unwrap();
+
+        let messages = publisher.messages();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].0, "market.gaps.binance.btcusdt.trade");
+        assert_eq!(messages[0].1["missing_from"], 10);
+        assert_eq!(messages[0].1["missing_to"], 10);
+        assert_eq!(messages[1].1["sequence"], 11);
     }
 
     #[tokio::test]

@@ -4,6 +4,8 @@
 
 Data will be ingested via websocket by Ingester and sent to a NATS Jetstream instance. It stores sequence numbers with the events. It also detects missing events and adds gap markers for the Backfiller.
 
+Sequence progress is persisted per stream in a NATS KV bucket derived from the configured subject prefix (for example, `market_ingester-sequences` for `INGESTER_NATS_SUBJECT_PREFIX=market`). On restart the ingester resumes from the last durable boundary, so events missed while it was down, or while its final publish was failing, still produce gap markers for the Backfiller.
+
 The websocket URL must not subscribe to both `@trade` and `@aggTrade` for the same symbol. They carry the same economic trades with independent sequence numbers, so the ingester rejects overlapping subscriptions at startup to avoid double-counting in candles and trade counts.
 
 ## Backfiller
