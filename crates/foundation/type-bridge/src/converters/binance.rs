@@ -27,6 +27,7 @@ use platform_exchange_types::{
     new_types::Milliseconds,
 };
 use std::collections::HashMap;
+use std::sync::LazyLock;
 use stock_trek_types::cex::{
     activation::Activation, asset_id::AssetId, capability::CexCapability,
     order_request::OrderRequest, order_response::OrderResponse, order_status::OrderStatus,
@@ -36,14 +37,14 @@ use stock_trek_types::cex::{
 
 pub struct BinanceConverter {
     capabilities: Vec<CexCapability>,
-    ticker_mapping: TickerMapping,
+    ticker_mapping: &'static TickerMapping,
 }
 
 impl Default for BinanceConverter {
     fn default() -> Self {
         Self {
             capabilities: vec![],
-            ticker_mapping: Self::ticker_mapping(),
+            ticker_mapping: Self::ticker_mapping_static(),
         }
     }
 }
@@ -61,7 +62,7 @@ impl Converter for BinanceConverter {
         &self.capabilities
     }
     fn ticker_mapping(&self) -> &TickerMapping {
-        &self.ticker_mapping
+        self.ticker_mapping
     }
     fn asset_limits_request(
         &self,
@@ -342,7 +343,14 @@ impl BinanceConverter {
         }
     }
 
-    fn ticker_mapping() -> TickerMapping {
+    /// Returns the shared Binance ticker mapping, building it only once.
+    pub fn ticker_mapping_static() -> &'static TickerMapping {
+        static TICKER_MAPPING: LazyLock<TickerMapping> =
+            LazyLock::new(BinanceConverter::build_ticker_mapping);
+        &TICKER_MAPPING
+    }
+
+    fn build_ticker_mapping() -> TickerMapping {
         let mut map = BiHashMap::new();
         map.insert(AssetId::Aave, "AAVE".into());
         map.insert(AssetId::Arbitrum, "ARB".into());
@@ -372,10 +380,7 @@ impl BinanceConverter {
         map.insert(AssetId::Uniswap, "UNI".into());
         map.insert(AssetId::WrappedBitcoin, "WBTC".into());
         map.insert(AssetId::WrappedEthereum, "WETH".into());
-        TickerMapping {
-            map,
-            symbol_separator: None,
-        }
+        TickerMapping::new(map, None)
     }
     fn binance_base_limit(filters: &Vec<BinanceSymbolFilter>) -> BpResult<MinMaxStep> {
         for filter in filters {

@@ -10,7 +10,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_errors::{BpError, BpResult, IngesterError};
 use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
 use platform_metrics::market_data::MarketDataMetrics;
-use platform_type_bridge::{BinanceConverter, Converter};
+use platform_type_bridge::BinanceConverter;
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use serde_json::{Map, Value};
@@ -127,9 +127,7 @@ impl BinanceTradeDecoder {
     }
 
     fn trading_pair(&self, symbol: &str) -> Option<TradingPair> {
-        BinanceConverter::default()
-            .ticker_mapping()
-            .trading_pair_from_symbol(symbol)
+        BinanceConverter::ticker_mapping_static().trading_pair_from_symbol(symbol)
     }
 
     fn decimal_field(&self, data: &Map<String, Value>, field: &'static str) -> BpResult<Decimal> {
