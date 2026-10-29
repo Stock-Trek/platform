@@ -87,24 +87,11 @@ impl GapMarkerSource for NatsGapMarkerSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use platform_types::new_types::TimestampMilliseconds;
-    use stock_trek_types::cex::cex_id::CexId;
-
-    fn gap() -> GapMarker {
-        GapMarker {
-            exchange: CexId::Binance,
-            stream: "btcusdt@trade".to_string(),
-            previous_sequence: 6,
-            observed_sequence: 8,
-            missing_from: 7,
-            missing_to: 7,
-            detected_at: TimestampMilliseconds(1_700_000_000_002),
-        }
-    }
+    use platform_market_data::test_utils::gap;
 
     #[test]
     fn decodes_valid_gap_markers() {
-        let expected = gap();
+        let expected = gap(7, 7);
         let message = Message {
             payload: expected.encode().unwrap(),
             ..Message::default()

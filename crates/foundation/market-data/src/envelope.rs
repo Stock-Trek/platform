@@ -62,6 +62,7 @@ pub type ClosedCandleEnvelope = Envelope<ClosedCandle>;
 mod tests {
     use super::*;
     use crate::candle::{Candle, CandleInterval, CandleKey};
+    use crate::test_utils::gap;
     use platform_types::new_types::TimestampMilliseconds;
     use stock_trek::markets::{MarketCandle, MarketOhlcv};
     use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
@@ -74,18 +75,6 @@ mod tests {
             exchange_timestamp: Some(TimestampMilliseconds(1_700_000_000_000)),
             received_at: TimestampMilliseconds(1_700_000_000_001),
             payload: "eyJlIjoidHJhZGUifQ==".to_string(),
-        }
-    }
-
-    fn gap() -> GapMarker {
-        GapMarker {
-            exchange: CexId::Binance,
-            stream: "btcusdt@trade".to_string(),
-            previous_sequence: 6,
-            observed_sequence: 8,
-            missing_from: 7,
-            missing_to: 7,
-            detected_at: TimestampMilliseconds(1_700_000_000_002),
         }
     }
 
@@ -121,7 +110,7 @@ mod tests {
 
     #[test]
     fn gap_marker_round_trips_through_the_envelope() {
-        let expected = gap();
+        let expected = gap(7, 7);
         let encoded = expected.encode().unwrap();
         let decoded = GapMarker::decode(&encoded).unwrap();
 

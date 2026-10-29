@@ -3,6 +3,9 @@ name = "platform-market-data"
 version.workspace = true
 edition.workspace = true
 
+[features]
+test-utils = []
+
 [dependencies]
 base64 = { workspace = true }
 iris = { workspace = true }
@@ -21,3 +24,4 @@ tokio-websockets = { workspace = true, default-features = false }
 
 [dev-dependencies]
 metrics = { workspace = true }
+platform-metrics = { workspace = true, features = ["test-utils"] }
