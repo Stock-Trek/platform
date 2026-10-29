@@ -9,6 +9,7 @@ use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_nats::{NatsAddress, NatsSubject};
 use std::{num::NonZeroUsize, time::Duration};
+use stock_trek_types::cex::cex_id::CexId;
 
 /// Common configuration validation and parsing helpers.
 pub struct Config;
@@ -34,6 +35,13 @@ impl Config {
         NatsSubject::validate_named(name, &value)
             .map_err(|error| BpError::config_invalid(name, error.to_string()))?;
         Ok(value)
+    }
+
+    /// Reads a required exchange identifier and converts it to a [`CexId`].
+    pub fn required_exchange(vars: &EnvVars, name: &str) -> BpResult<CexId> {
+        let value = vars.required(name)?;
+        CexId::try_from(value.as_str())
+            .map_err(|_| BpError::config_invalid(name, format!("unsupported exchange {value}")))
     }
 
     /// Reads a required duration expressed as a positive number of seconds.
@@ -137,6 +145,30 @@ mod tests {
         }
         assert!(
             Config::required_nats_subject(&vars([("SERVICE_SUBJECT", "")]), "SERVICE_SUBJECT")
+                .is_err()
+        );
+    }
+
+    #[test]
+    fn exchanges_must_be_required_and_supported() {
+        assert_eq!(
+            Config::required_exchange(&vars([("SERVICE_EXCHANGE", "binance")]), "SERVICE_EXCHANGE")
+                .unwrap(),
+            CexId::Binance
+        );
+        for value in ["kraken", "not an exchange"] {
+            assert!(matches!(
+                Config::required_exchange(&vars([("SERVICE_EXCHANGE", value)]), "SERVICE_EXCHANGE")
+                    .unwrap_err(),
+                BpError::Config(ConfigError::Invalid { name, .. }) if name == "SERVICE_EXCHANGE"
+            ));
+        }
+        assert!(
+            Config::required_exchange(&vars([("SERVICE_EXCHANGE", "")]), "SERVICE_EXCHANGE")
+                .is_err()
+        );
+        assert!(
+            Config::required_exchange(&vars(Vec::<(String, String)>::new()), "SERVICE_EXCHANGE")
                 .is_err()
         );
     }

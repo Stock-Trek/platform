@@ -29,13 +29,7 @@ impl IngesterConfig {
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         let log_filter = Config::log_filter(vars)?;
-        let exchange_value = vars.required(INGESTER_EXCHANGE)?;
-        let exchange = CexId::try_from(exchange_value.as_str()).map_err(|_| {
-            BpError::config_invalid(
-                INGESTER_EXCHANGE,
-                format!("unsupported exchange {exchange_value}"),
-            )
-        })?;
+        let exchange = Config::required_exchange(vars, INGESTER_EXCHANGE)?;
         let websocket_url = vars.required_url(INGESTER_WEBSOCKET_URL, &["ws", "wss"])?;
         let websocket_api_key = vars.optional(INGESTER_WEBSOCKET_API_KEY)?;
         let stream_format =

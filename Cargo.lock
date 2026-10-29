@@ -4651,6 +4651,7 @@ dependencies = [
  "platform-errors",
  "platform-metrics",
  "platform-nats",
+ "stock-trek-types",
  "tokio",
  "tracing",
 ]

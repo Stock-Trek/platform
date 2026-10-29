@@ -9,5 +9,6 @@ platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-metrics = { workspace = true }
 platform-nats = { workspace = true }
+stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["macros", "signal"] }
 tracing = { workspace = true }
