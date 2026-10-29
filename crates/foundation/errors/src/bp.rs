@@ -100,6 +100,18 @@ impl BpError {
         })
     }
 
+    pub fn bad_value(
+        name: impl Into<String>,
+        value: impl Into<String>,
+        reason: impl Into<String>,
+    ) -> Self {
+        Self::Exchange(ExchangeError::BadValue {
+            name: name.into(),
+            value: value.into(),
+            reason: reason.into(),
+        })
+    }
+
     pub fn io<E>(operation: &'static str, path: impl Into<String>, source: E) -> Self
     where
         E: Into<Box<dyn std::error::Error + Send + Sync>>,
@@ -425,24 +437,20 @@ impl From<ProtocolError> for BpError {
                 name,
                 value,
                 source,
-            } => Self::Exchange(ExchangeError::BadValue {
-                name,
-                value,
-                reason: source.to_string(),
-            }),
+            } => Self::bad_value(name, value, source.to_string()),
             ProtocolError::UnsupportedScheme {
                 name,
                 value,
                 allowed,
                 scheme,
-            } => Self::Exchange(ExchangeError::BadValue {
+            } => Self::bad_value(
                 name,
                 value,
-                reason: format!(
+                format!(
                     "URL scheme must be one of {}, got {scheme}",
                     allowed.join(", ")
                 ),
-            }),
+            ),
         }
     }
 }

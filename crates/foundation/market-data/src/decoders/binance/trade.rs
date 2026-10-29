@@ -7,7 +7,7 @@ use crate::{
     event::MarketEvent,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use platform_errors::{BpError, BpResult, ExchangeError, IngesterError};
+use platform_errors::{BpError, BpResult, IngesterError};
 use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_type_bridge::{BinanceConverter, Converter};
@@ -56,11 +56,7 @@ impl TradeDecoder for BinanceTradeDecoder {
             .or_else(|| stream.split_once('@').map(|(symbol, _)| symbol))
             .ok_or(IngesterError::MissingField("s"))?;
         let trading_pair = self.trading_pair(symbol).ok_or_else(|| {
-            BpError::Exchange(ExchangeError::BadValue {
-                name: "symbol".to_string(),
-                value: symbol.to_string(),
-                reason: "could not resolve base and quote assets".to_string(),
-            })
+            BpError::bad_value("symbol", symbol, "could not resolve base and quote assets")
         })?;
         let price = self.decimal_field(&data, "p")?;
         let quantity = self.decimal_field(&data, "q")?;
@@ -94,11 +90,11 @@ impl BinanceTradeDecoder {
             return Ok(Vec::new());
         };
         let trading_pair = self.trading_pair(&first.symbol).ok_or_else(|| {
-            BpError::Exchange(ExchangeError::BadValue {
-                name: "symbol".to_string(),
-                value: first.symbol.clone(),
-                reason: "could not resolve base and quote assets".to_string(),
-            })
+            BpError::bad_value(
+                "symbol",
+                first.symbol.clone(),
+                "could not resolve base and quote assets",
+            )
         })?;
 
         let mut trades = Vec::with_capacity(sbe_trades.len());
@@ -141,13 +137,8 @@ impl BinanceTradeDecoder {
             .get(field)
             .and_then(Value::as_str)
             .ok_or(IngesterError::MissingField(field))?;
-        Decimal::from_str_exact(value).map_err(|error| {
-            BpError::Exchange(ExchangeError::BadValue {
-                name: field.to_string(),
-                value: value.to_string(),
-                reason: error.to_string(),
-            })
-        })
+        Decimal::from_str_exact(value)
+            .map_err(|error| BpError::bad_value(field, value, error.to_string()))
     }
 }
 

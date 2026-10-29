@@ -13,7 +13,7 @@ use crate::{
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
-use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_errors::{BpError, BpResult};
 use query_params::QueryParams;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -121,11 +121,11 @@ impl TryFrom<&str> for BinanceKlinesInterval {
             "3d" => Ok(Self::THREE_DAY),
             "1w" => Ok(Self::ONE_WEEK),
             "1M" => Ok(Self::ONE_MONTH),
-            other => Err(BpError::Exchange(ExchangeError::BadValue {
-                name: "interval".to_string(),
-                value: other.to_string(),
-                reason: "unsupported kline interval".to_string(),
-            })),
+            other => Err(BpError::bad_value(
+                "interval",
+                other,
+                "unsupported kline interval",
+            )),
         }
     }
 }
@@ -247,13 +247,8 @@ impl BinanceKlineResponse {
     }
 
     fn str_to_decimal(name: &str, value: &str) -> BpResult<Decimal> {
-        Decimal::from_str_exact(value).map_err(|e| {
-            BpError::Exchange(ExchangeError::BadValue {
-                name: name.into(),
-                value: value.into(),
-                reason: e.to_string(),
-            })
-        })
+        Decimal::from_str_exact(value)
+            .map_err(|error| BpError::bad_value(name, value, error.to_string()))
     }
 }
 
