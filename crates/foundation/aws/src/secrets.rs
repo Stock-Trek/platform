@@ -1,34 +1,49 @@
+use crate::{Aws, SdkConfig};
 use aws_sdk_ssm::{
     error::ProvideErrorMetadata,
     operation::get_parameters_by_path::{GetParametersByPathError, GetParametersByPathOutput},
 };
-use platform_aws::SdkConfig;
 use platform_errors::{BpError, BpResult, Retryability, SecretsError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 use std::collections::HashMap;
 
+/// Environment variable containing the SSM parameter path to load secrets from.
 pub const SSM_PATH_ENV: &str = "SECRETS_SSM_PATH";
+
+/// Environment variable controlling whether SSM parameters are decrypted.
+pub const SSM_DECRYPT_ENV: &str = "SECRETS_SSM_DECRYPT";
+
 const SSM_OPERATION: &str = "SSM GetParametersByPath";
 
-#[derive(Clone)]
+/// A snapshot of the secrets under an SSM parameter path.
+#[derive(Clone, Default)]
 pub struct Secrets(HashMap<String, String>);
 
 impl Secrets {
+    /// Loads every parameter under `config.path`, bounded by the supplied
+    /// operation timeout and deadline.
     pub async fn load(
         sdk_config: &SdkConfig,
         timeouts: Timeouts,
         deadline: Deadline,
         config: &SsmConfig,
     ) -> BpResult<Self> {
-        let client = platform_aws::Aws::ssm_client(sdk_config);
-        let secrets = Self::within_deadline(
+        let client = Aws::ssm_client(sdk_config);
+        Self::within_deadline(
             timeouts,
             deadline,
             SSM_OPERATION,
-            Self::fetch(&client, config),
+            Self::load_with_client(&client, config),
         )
-        .await?;
-        Ok(Self(secrets))
+        .await
+    }
+
+    /// Loads every parameter under `config.path` using an existing SSM client.
+    pub async fn load_with_client(
+        client: &aws_sdk_ssm::Client,
+        config: &SsmConfig,
+    ) -> BpResult<Self> {
+        Self::fetch(client, config).await.map(Self)
     }
 
     async fn fetch(
@@ -115,7 +130,8 @@ impl Secrets {
             .map_err(|_| BpError::Timeout(TimeoutError::Operation { operation }))?
     }
 
-    pub(crate) fn get(&self, name: &str) -> BpResult<String> {
+    /// Returns the named secret, or a configuration error when it is absent.
+    pub fn get(&self, name: &str) -> BpResult<String> {
         self.0
             .get(name)
             .cloned()
@@ -123,6 +139,7 @@ impl Secrets {
     }
 }
 
+/// The SSM parameter path and decryption mode used to load secrets.
 #[derive(Debug, Clone)]
 pub struct SsmConfig {
     pub path: String,
@@ -221,5 +238,15 @@ mod tests {
             Some("")
         );
         assert!(!secrets.contains_key(""));
+    }
+
+    #[test]
+    fn missing_secrets_are_a_configuration_error() {
+        let secrets = Secrets::default();
+
+        assert!(matches!(
+            secrets.get("BACKFILLER_EXCHANGE_API_KEY"),
+            Err(BpError::Config(_))
+        ));
     }
 }

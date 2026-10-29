@@ -23,11 +23,11 @@ const MAX_RETRIES: u8 = 3;
 /// Reconstructs Binance gaps from REST snapshots.
 pub struct BinanceGapFetcher {
     connector: Arc<Connector<BinanceExchange, ReqwestHttpClient>>,
-    api_key: Option<String>,
+    api_key: String,
 }
 
 impl BinanceGapFetcher {
-    pub fn try_new(config: &BackfillerConfig) -> BpResult<Self> {
+    pub fn try_new(config: &BackfillerConfig, api_key: String) -> BpResult<Self> {
         if config.exchange != CexId::Binance {
             return Err(BpError::Exchange(ExchangeError::UnsupportedExchange {
                 exchange: config.exchange.to_string(),
@@ -45,7 +45,7 @@ impl BinanceGapFetcher {
         .map_err(|error| BpError::exchange("create Binance backfill connector", error))?;
         Ok(Self {
             connector: Arc::new(connector),
-            api_key: config.exchange_api_key.clone(),
+            api_key,
         })
     }
 

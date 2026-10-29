@@ -1,4 +1,4 @@
-use crate::secrets::{SSM_PATH_ENV, SsmConfig};
+use platform_aws::secrets::{SSM_DECRYPT_ENV, SSM_PATH_ENV, SsmConfig};
 use platform_config::env_names::{
     AWS_CONNECT_TIMEOUT_SECS, AWS_LAMBDA_FUNCTION_NAME, AWS_OPERATION_TIMEOUT_SECS,
     DEADLINE_BUFFER_SECS, GITHUB_ENTERPRISE_ALLOWED_HOSTS, RUST_LOG, SQS_QUEUE_URL,
@@ -9,7 +9,6 @@ use platform_github::host_allow_list::HostAllowlist;
 use platform_time::timeouts::Timeouts;
 use std::{num::NonZeroUsize, time::Duration};
 
-const SECRETS_SSM_DECRYPT: &str = "SECRETS_SSM_DECRYPT";
 const WEBHOOK_COLD_START_REFRESH_TIMEOUT_SECS: &str = "WEBHOOK_COLD_START_REFRESH_TIMEOUT_SECS";
 const WEBHOOK_DEDUP_MAX_DELIVERIES: &str = "WEBHOOK_DEDUP_MAX_DELIVERIES";
 const WEBHOOK_DEDUP_TTL_SECS: &str = "WEBHOOK_DEDUP_TTL_SECS";
@@ -50,7 +49,7 @@ impl WebhookConfig {
             sqs_queue_url: vars.required(SQS_QUEUE_URL)?,
             ssm: SsmConfig::new(
                 vars.required(SSM_PATH_ENV)?,
-                vars.optional_parsed_or(SECRETS_SSM_DECRYPT, true)?,
+                vars.optional_parsed_or(SSM_DECRYPT_ENV, true)?,
             )?,
             github_allowed_hosts: HostAllowlist::from_hosts(
                 vars.required_csv(GITHUB_ENTERPRISE_ALLOWED_HOSTS)?,
@@ -109,7 +108,7 @@ mod tests {
             .position(|(required, _)| *required == SSM_PATH_ENV)
             .unwrap();
         values[index] = (SSM_PATH_ENV, "platform/git-webhook/production");
-        values.push((SECRETS_SSM_DECRYPT, "false"));
+        values.push((SSM_DECRYPT_ENV, "false"));
 
         let config = WebhookConfig::from_vars(&vars(&values)).unwrap();
 
@@ -138,7 +137,7 @@ mod tests {
         for (name, value) in [
             (WEBHOOK_DEDUP_MAX_DELIVERIES, "0"),
             (SSM_PATH_ENV, "/platform/git-webhook/production/"),
-            (SECRETS_SSM_DECRYPT, "not a bool"),
+            (SSM_DECRYPT_ENV, "not a bool"),
             (GITHUB_ENTERPRISE_ALLOWED_HOSTS, "not a host!"),
             (RUST_LOG, "not a valid [directive"),
         ] {
