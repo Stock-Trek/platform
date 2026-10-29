@@ -8,14 +8,11 @@ use platform_market_data::{candle::ClosedCandle, event::MarketEvent};
 use std::sync::Arc;
 
 impl ArchiveBatch {
-    pub(crate) fn to_record_batch(&self) -> BpResult<RecordBatch> {
+    pub fn to_record_batch(&self) -> BpResult<RecordBatch> {
         Self::record_batch(self.kind, &self.records)
     }
 
-    pub(crate) fn record_batch(
-        kind: ArchiveKind,
-        records: &[ArchiveRecord],
-    ) -> BpResult<RecordBatch> {
+    pub fn record_batch(kind: ArchiveKind, records: &[ArchiveRecord]) -> BpResult<RecordBatch> {
         match kind {
             ArchiveKind::Events => {
                 let events = Self::events(records)?;

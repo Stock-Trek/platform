@@ -14,7 +14,7 @@ use stock_trek::markets::{MarketCandle, MarketOhlcv};
 use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
 impl ArchiveBatch {
-    pub(crate) fn from_record_batch(kind: ArchiveKind, batch: &RecordBatch) -> BpResult<Self> {
+    pub fn from_record_batch(kind: ArchiveKind, batch: &RecordBatch) -> BpResult<Self> {
         let records = match kind {
             ArchiveKind::Events => Self::decode_events(batch)?
                 .into_iter()

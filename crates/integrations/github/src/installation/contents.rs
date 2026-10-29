@@ -8,7 +8,7 @@ use platform_git::git_host::GitFile;
 use std::path::Path;
 
 impl GitHubInstallation {
-    pub(crate) async fn collect_directory_files(
+    pub async fn collect_directory_files(
         &self,
         repo_id: u64,
         ref_name: &str,

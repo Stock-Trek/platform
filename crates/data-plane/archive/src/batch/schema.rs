@@ -11,7 +11,7 @@ fn field(id: i32, name: &str, data_type: DataType, nullable: bool) -> Field {
 }
 
 impl ArchiveBatch {
-    pub(crate) fn schema(kind: ArchiveKind) -> SchemaRef {
+    pub fn schema(kind: ArchiveKind) -> SchemaRef {
         match kind {
             ArchiveKind::Events => Arc::new(Schema::new(vec![
                 field(1, "exchange", DataType::Utf8, false),

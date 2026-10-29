@@ -4,8 +4,8 @@ use std::io::ErrorKind;
 
 #[derive(Debug, Clone)]
 pub struct ArchiveBatch {
-    pub(crate) kind: ArchiveKind,
-    pub(crate) records: Vec<ArchiveRecord>,
+    pub kind: ArchiveKind,
+    pub records: Vec<ArchiveRecord>,
 }
 
 impl ArchiveBatch {
@@ -48,7 +48,7 @@ impl ArchiveBatch {
         self.records.is_empty()
     }
 
-    pub(crate) fn kind_mismatch(expected: ArchiveKind, record: &ArchiveRecord) -> BpError {
+    pub fn kind_mismatch(expected: ArchiveKind, record: &ArchiveRecord) -> BpError {
         BpError::io(
             "encode archived parquet",
             expected.label(),

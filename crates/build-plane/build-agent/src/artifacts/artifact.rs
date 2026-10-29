@@ -7,33 +7,33 @@ use std::{
 };
 use tempfile::TempDir;
 
-pub(crate) const WASM_MANIFEST: &str = "crates/compute/runner/Cargo.toml";
-pub(crate) const WASM_TARGET: &str = "wasm32-wasip1";
-pub(crate) const WASM_ARTIFACT_FILE: &str = "runner.wasm";
-pub(crate) const CWASM_ARTIFACT_FILE: &str = "runner.cwasm";
-pub(crate) const SOURCE_TARGET_DIR: &str = "target";
-pub(crate) const USER_GENERATED_DIR: &str = "crates/compute/runner/src/user_generated";
-pub(crate) const USER_GENERATED_ARCHIVE: &str = "sources.zip";
-pub(crate) const COMPILE_OUTPUT_FILE: &str = "compile-output.txt";
-pub(crate) const WORKSPACE_ENTRIES: &[&str] = &[
+pub const WASM_MANIFEST: &str = "crates/compute/runner/Cargo.toml";
+pub const WASM_TARGET: &str = "wasm32-wasip1";
+pub const WASM_ARTIFACT_FILE: &str = "runner.wasm";
+pub const CWASM_ARTIFACT_FILE: &str = "runner.cwasm";
+pub const SOURCE_TARGET_DIR: &str = "target";
+pub const USER_GENERATED_DIR: &str = "crates/compute/runner/src/user_generated";
+pub const USER_GENERATED_ARCHIVE: &str = "sources.zip";
+pub const COMPILE_OUTPUT_FILE: &str = "compile-output.txt";
+pub const WORKSPACE_ENTRIES: &[&str] = &[
     "Cargo.toml",
     "Cargo.lock",
     "crates",
     ".cargo",
     "rust-toolchain.toml",
 ];
-pub(crate) const CARGO: &str = "cargo";
-pub(crate) const WASMTIME: &str = "wasmtime";
+pub const CARGO: &str = "cargo";
+pub const WASMTIME: &str = "wasmtime";
 
 #[derive(Clone)]
 pub struct Artifacts {
-    pub(crate) signed_post: SignedPost,
-    pub(crate) source_get_url: String,
-    pub(crate) source_dir: PathBuf,
-    pub(crate) build_cache_dir: PathBuf,
-    pub(crate) build_dir: Arc<TempDir>,
-    pub(crate) source_limits: SourceLimits,
-    pub(crate) compile_output: Arc<Mutex<Option<Vec<u8>>>>,
+    pub signed_post: SignedPost,
+    pub source_get_url: String,
+    pub source_dir: PathBuf,
+    pub build_cache_dir: PathBuf,
+    pub build_dir: Arc<TempDir>,
+    pub source_limits: SourceLimits,
+    pub compile_output: Arc<Mutex<Option<Vec<u8>>>>,
 }
 
 impl Artifacts {
@@ -87,7 +87,7 @@ impl Artifacts {
         self.compile_wasm(&wasm).await
     }
 
-    pub(crate) fn command_output(command: &str, output: &std::process::Output) -> Vec<u8> {
+    pub fn command_output(command: &str, output: &std::process::Output) -> Vec<u8> {
         let mut captured = Vec::new();
         let _ = write!(
             captured,
@@ -106,13 +106,13 @@ impl Artifacts {
         captured
     }
 
-    pub(crate) fn set_compile_output(&self, output: Vec<u8>) {
+    pub fn set_compile_output(&self, output: Vec<u8>) {
         if let Ok(mut current) = self.compile_output.lock() {
             *current = Some(output);
         }
     }
 
-    pub(crate) fn take_compile_output(&self) -> Option<Vec<u8>> {
+    pub fn take_compile_output(&self) -> Option<Vec<u8>> {
         self.compile_output
             .lock()
             .ok()

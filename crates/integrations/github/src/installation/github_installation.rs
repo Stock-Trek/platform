@@ -10,10 +10,10 @@ const PROVIDER: &str = "github";
 
 #[derive(Clone)]
 pub struct GitHubInstallation {
-    pub(crate) client: Arc<Octocrab>,
-    pub(crate) host: String,
-    pub(crate) timeouts: Timeouts,
-    pub(crate) directory_limits: DirectoryLimits,
+    pub client: Arc<Octocrab>,
+    pub host: String,
+    pub timeouts: Timeouts,
+    pub directory_limits: DirectoryLimits,
 }
 
 impl GitHost<u64> for GitHubInstallation {

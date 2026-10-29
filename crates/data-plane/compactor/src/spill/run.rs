@@ -2,10 +2,10 @@ use platform_archive::{ArchiveBatch, ArchiveParquetWriter};
 use platform_errors::{BpError, BpResult};
 use std::{fs::File, path::Path};
 
-pub(crate) struct SpillRun;
+pub struct SpillRun;
 
 impl SpillRun {
-    pub(crate) fn write(path: &Path, batch: &ArchiveBatch) -> BpResult<()> {
+    pub fn write(path: &Path, batch: &ArchiveBatch) -> BpResult<()> {
         let file = File::create(path).map_err(|error| {
             BpError::io(
                 "create compaction spill run",

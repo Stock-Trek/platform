@@ -13,7 +13,7 @@ use tokio::process::Command;
 use tracing::info;
 
 impl Artifacts {
-    pub(crate) fn prepare_workspace(&self) -> BpResult<()> {
+    pub fn prepare_workspace(&self) -> BpResult<()> {
         let workspace = self.build_dir.path();
         if !self.source_dir.join("Cargo.toml").is_file() {
             return Err(BpError::Config(ConfigError::Build(format!(
@@ -46,7 +46,7 @@ impl Artifacts {
         Ok(())
     }
 
-    pub(crate) async fn unpack_source(&self) -> BpResult<Vec<PathBuf>> {
+    pub async fn unpack_source(&self) -> BpResult<Vec<PathBuf>> {
         let source = Source::download(&self.source_get_url, self.source_limits).await?;
         source.extract(
             self.build_dir.path(),
@@ -54,7 +54,7 @@ impl Artifacts {
         )
     }
 
-    pub(crate) fn validate_user_generated(sources: &[PathBuf]) -> BpResult<()> {
+    pub fn validate_user_generated(sources: &[PathBuf]) -> BpResult<()> {
         for path in sources {
             stock_trek_check::verify::verify(path.display().to_string()).map_err(|error| {
                 BpError::Validation(ValidationError::InvalidValue {
@@ -67,7 +67,7 @@ impl Artifacts {
         Ok(())
     }
 
-    pub(crate) async fn build_wasm(&self, target_dir: &Path) -> BpResult<PathBuf> {
+    pub async fn build_wasm(&self, target_dir: &Path) -> BpResult<PathBuf> {
         let workspace = self.build_dir.path();
         let manifest = workspace.join(WASM_MANIFEST);
         let module = target_dir
@@ -116,7 +116,7 @@ impl Artifacts {
     /// The prebuilt target directory baked into the image is copied into a
     /// fresh temporary directory every time, so cargo never sees artifacts
     /// produced by user code from an earlier invocation.
-    pub(crate) async fn prepare_target_dir(&self) -> BpResult<TempDir> {
+    pub async fn prepare_target_dir(&self) -> BpResult<TempDir> {
         let cache_root = self.build_cache_dir.clone();
         std_fs::create_dir_all(&cache_root).map_err(|source| {
             BpError::io(
@@ -159,7 +159,7 @@ impl Artifacts {
         Ok(target_dir)
     }
 
-    pub(crate) async fn compile_wasm(&self, module: &Path) -> BpResult<PathBuf> {
+    pub async fn compile_wasm(&self, module: &Path) -> BpResult<PathBuf> {
         let output = self.build_dir.path().join(CWASM_ARTIFACT_FILE);
         let command_output = Command::new(WASMTIME)
             .arg("compile")
