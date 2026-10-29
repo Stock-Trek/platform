@@ -12,18 +12,17 @@ aws-sdk-s3-transfer-manager = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+iceberg = { workspace = true }
+iceberg-catalog-rest = { workspace = true }
+iceberg-storage-opendal = { workspace = true }
 parquet = { workspace = true, features = ["async"] }
 platform-aws = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http", "storage"] }
 platform-market-data = { workspace = true }
 platform-types = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
 serde = { workspace = true, features = ["derive"] }
-serde_json = { workspace = true }
 stock-trek = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["fs", "macros", "rt", "rt-multi-thread", "sync", "time"] }
 tracing = { workspace = true }
-urlencoding = { workspace = true }
-uuid = { workspace = true, features = ["v4"] }

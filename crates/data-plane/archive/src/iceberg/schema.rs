@@ -1,6 +1,7 @@
 use crate::{ArchiveBatch, ArchiveKind};
+use iceberg::spec::{NestedField, PrimitiveType, Schema, Type};
 use platform_errors::{BpError, BpResult};
-use serde_json::{Value, json};
+use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ArchiveTableLayer {
@@ -76,7 +77,7 @@ impl ArchiveIcebergTable {
     }
 }
 
-pub(crate) fn schema(kind: ArchiveKind) -> BpResult<Value> {
+pub(crate) fn schema(kind: ArchiveKind) -> BpResult<Schema> {
     let arrow_schema = ArchiveBatch::schema(kind);
     let fields = arrow_schema
         .fields()
@@ -88,30 +89,30 @@ pub(crate) fn schema(kind: ArchiveKind) -> BpResult<Value> {
                     "archive schema has too many fields: {error}"
                 )))
             })?;
-            Ok(json!({
-                "id": id,
-                "name": field.name(),
-                "required": !field.is_nullable(),
-                "type": iceberg_type(field.name(), field.data_type())?,
-            }))
+            Ok(Arc::new(NestedField::new(
+                id,
+                field.name(),
+                iceberg_type(field.name(), field.data_type())?,
+                !field.is_nullable(),
+            )))
         })
         .collect::<BpResult<Vec<_>>>()?;
 
-    Ok(json!({
-        "type": "struct",
-        "schema-id": 0,
-        "fields": fields,
-    }))
+    Schema::builder()
+        .with_schema_id(0)
+        .with_fields(fields)
+        .build()
+        .map_err(BpError::external)
 }
 
-fn iceberg_type(name: &str, data_type: &arrow_schema::DataType) -> BpResult<&'static str> {
+fn iceberg_type(name: &str, data_type: &arrow_schema::DataType) -> BpResult<Type> {
     use arrow_schema::DataType;
 
     match data_type {
-        DataType::Utf8 | DataType::LargeUtf8 => Ok("string"),
-        DataType::Int64 | DataType::UInt64 => Ok("long"),
-        DataType::Boolean => Ok("boolean"),
-        DataType::Float64 => Ok("double"),
+        DataType::Utf8 | DataType::LargeUtf8 => Ok(Type::Primitive(PrimitiveType::String)),
+        DataType::Int64 | DataType::UInt64 => Ok(Type::Primitive(PrimitiveType::Long)),
+        DataType::Boolean => Ok(Type::Primitive(PrimitiveType::Boolean)),
+        DataType::Float64 => Ok(Type::Primitive(PrimitiveType::Double)),
         other => Err(BpError::external(std::io::Error::new(
             std::io::ErrorKind::InvalidData,
             format!("archive column {name} has unsupported Iceberg type {other:?}"),
@@ -150,24 +151,35 @@ mod tests {
     #[test]
     fn event_schema_matches_the_archive_columns() {
         let schema = schema(ArchiveKind::Events).unwrap();
-        let fields = schema["fields"].as_array().unwrap();
+        let fields = schema.as_struct().fields();
 
         assert_eq!(fields.len(), 6);
-        assert_eq!(fields[0]["name"], "exchange");
-        assert_eq!(fields[0]["type"], "string");
-        assert_eq!(fields[2]["name"], "sequence");
-        assert_eq!(fields[2]["type"], "long");
-        assert_eq!(fields[2]["required"], false);
+        assert_eq!(fields[0].name, "exchange");
+        assert_eq!(
+            fields[0].field_type.as_ref(),
+            &Type::Primitive(PrimitiveType::String)
+        );
+        assert_eq!(fields[2].name, "sequence");
+        assert_eq!(
+            fields[2].field_type.as_ref(),
+            &Type::Primitive(PrimitiveType::Long)
+        );
+        assert!(!fields[2].required);
+        assert_eq!(fields[4].name, "received_at");
+        assert!(fields[4].required);
     }
 
     #[test]
     fn candle_schema_matches_the_archive_columns() {
         let schema = schema(ArchiveKind::Candles).unwrap();
-        let fields = schema["fields"].as_array().unwrap();
+        let fields = schema.as_struct().fields();
 
         assert_eq!(fields.len(), 17);
-        assert_eq!(fields[8]["name"], "open");
-        assert_eq!(fields[8]["type"], "double");
-        assert_eq!(fields[16]["name"], "revision");
+        assert_eq!(fields[8].name, "open");
+        assert_eq!(
+            fields[8].field_type.as_ref(),
+            &Type::Primitive(PrimitiveType::Double)
+        );
+        assert_eq!(fields[16].name, "revision");
     }
 }

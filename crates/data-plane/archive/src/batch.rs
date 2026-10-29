@@ -9,7 +9,7 @@ use platform_market_data::{
     event::MarketEvent,
 };
 use platform_types::new_types::TimestampMilliseconds;
-use std::{fmt::Display, io::ErrorKind, str::FromStr, sync::Arc};
+use std::{collections::HashMap, fmt::Display, io::ErrorKind, str::FromStr, sync::Arc};
 use stock_trek::markets::{MarketCandle, MarketOhlcv};
 use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
@@ -17,6 +17,13 @@ use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 pub struct ArchiveBatch {
     kind: ArchiveKind,
     records: Vec<ArchiveRecord>,
+}
+
+fn field(id: i32, name: &str, data_type: DataType, nullable: bool) -> Field {
+    Field::new(name, data_type, nullable).with_metadata(HashMap::from([(
+        parquet::arrow::PARQUET_FIELD_ID_META_KEY.to_string(),
+        id.to_string(),
+    )]))
 }
 
 impl ArchiveBatch {
@@ -62,31 +69,31 @@ impl ArchiveBatch {
     pub(crate) fn schema(kind: ArchiveKind) -> SchemaRef {
         match kind {
             ArchiveKind::Events => Arc::new(Schema::new(vec![
-                Field::new("exchange", DataType::Utf8, false),
-                Field::new("stream", DataType::Utf8, false),
-                Field::new("sequence", DataType::UInt64, true),
-                Field::new("exchange_timestamp", DataType::Int64, true),
-                Field::new("received_at", DataType::Int64, false),
-                Field::new("payload", DataType::Utf8, false),
+                field(1, "exchange", DataType::Utf8, false),
+                field(2, "stream", DataType::Utf8, false),
+                field(3, "sequence", DataType::UInt64, true),
+                field(4, "exchange_timestamp", DataType::Int64, true),
+                field(5, "received_at", DataType::Int64, false),
+                field(6, "payload", DataType::Utf8, false),
             ])),
             ArchiveKind::Candles => Arc::new(Schema::new(vec![
-                Field::new("exchange", DataType::Utf8, false),
-                Field::new("base", DataType::Utf8, false),
-                Field::new("quote", DataType::Utf8, false),
-                Field::new("interval", DataType::Utf8, false),
-                Field::new("start_time_millis_inc", DataType::Int64, false),
-                Field::new("end_time_millis_exc", DataType::Int64, false),
-                Field::new("duration_millis", DataType::Int64, false),
-                Field::new("is_candle_closed", DataType::Boolean, false),
-                Field::new("open", DataType::Float64, false),
-                Field::new("high", DataType::Float64, false),
-                Field::new("low", DataType::Float64, false),
-                Field::new("close", DataType::Float64, false),
-                Field::new("volume", DataType::Float64, false),
-                Field::new("quote_volume", DataType::Float64, false),
-                Field::new("vwap", DataType::Float64, false),
-                Field::new("trade_count", DataType::UInt64, false),
-                Field::new("revision", DataType::UInt64, false),
+                field(1, "exchange", DataType::Utf8, false),
+                field(2, "base", DataType::Utf8, false),
+                field(3, "quote", DataType::Utf8, false),
+                field(4, "interval", DataType::Utf8, false),
+                field(5, "start_time_millis_inc", DataType::Int64, false),
+                field(6, "end_time_millis_exc", DataType::Int64, false),
+                field(7, "duration_millis", DataType::Int64, false),
+                field(8, "is_candle_closed", DataType::Boolean, false),
+                field(9, "open", DataType::Float64, false),
+                field(10, "high", DataType::Float64, false),
+                field(11, "low", DataType::Float64, false),
+                field(12, "close", DataType::Float64, false),
+                field(13, "volume", DataType::Float64, false),
+                field(14, "quote_volume", DataType::Float64, false),
+                field(15, "vwap", DataType::Float64, false),
+                field(16, "trade_count", DataType::UInt64, false),
+                field(17, "revision", DataType::UInt64, false),
             ])),
         }
     }
@@ -494,6 +501,43 @@ mod tests {
             panic!("expected a market event");
         };
         assert_eq!(actual, &event(42));
+    }
+
+    #[test]
+    fn parquet_files_carry_iceberg_field_ids() {
+        let batch = ArchiveBatch::new(
+            ArchiveKind::Events,
+            vec![ArchiveRecord::MarketEvent(event(42))],
+        )
+        .unwrap();
+        let encoded = ArchiveParquet::encode(&batch).unwrap();
+        let reader = parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder::try_new(
+            Bytes::from(encoded),
+        )
+        .unwrap();
+        let field_ids = reader
+            .schema()
+            .fields()
+            .iter()
+            .map(|field| {
+                field
+                    .metadata()
+                    .get(parquet::arrow::PARQUET_FIELD_ID_META_KEY)
+                    .map(String::as_str)
+            })
+            .collect::<Vec<_>>();
+
+        assert_eq!(
+            field_ids,
+            vec![
+                Some("1"),
+                Some("2"),
+                Some("3"),
+                Some("4"),
+                Some("5"),
+                Some("6")
+            ]
+        );
     }
 
     #[test]
