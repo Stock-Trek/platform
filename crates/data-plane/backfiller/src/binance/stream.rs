@@ -40,14 +40,6 @@ impl MarketStream {
         })
     }
 
-    #[allow(dead_code)]
-    pub fn interval(&self) -> Option<BinanceKlinesInterval> {
-        match &self.kind {
-            MarketStreamKind::Kline(interval) => Some(interval.clone()),
-            _ => None,
-        }
-    }
-
     fn kind(stream: &str, suffix: &str) -> BpResult<MarketStreamKind> {
         let lower = suffix.to_ascii_lowercase();
         if lower == "trade" {
@@ -141,7 +133,6 @@ mod tests {
             stream.kind,
             MarketStreamKind::Kline(BinanceKlinesInterval::ONE_MINUTE)
         );
-        assert_eq!(stream.interval(), Some(BinanceKlinesInterval::ONE_MINUTE));
     }
 
     #[test]
