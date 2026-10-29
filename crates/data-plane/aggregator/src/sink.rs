@@ -2,7 +2,7 @@ use crate::config::AggregatorConfig;
 use async_trait::async_trait;
 use platform_errors::BpResult;
 use platform_market_data::{
-    candle::{Candle, ClosedCandle},
+    candle::{Candle, CandleKey, ClosedCandle},
     envelope::EnvelopeCodec,
 };
 use platform_nats::{JetStream, KeyValue, NatsPublisher};
@@ -15,6 +15,13 @@ use std::sync::Arc;
 #[async_trait]
 pub trait OpenCandleStore: Send + Sync {
     async fn update_open(&self, candles: &[Candle]) -> BpResult<()>;
+
+    /// Removes open-candle entries whose windows have closed and that no longer
+    /// have a newer open window for the same candle key.
+    async fn delete_open(&self, keys: &[CandleKey]) -> BpResult<()> {
+        let _ = keys;
+        Ok(())
+    }
 }
 
 /// Publishes candles after they close.
@@ -27,8 +34,10 @@ pub trait ClosedCandlePublisher: Send + Sync {
 /// JetStream.
 ///
 /// Open candles are written per key only so clients can serve the current
-/// partial candle. They are a derived projection of the checkpointed keyed
-/// state; recovery never reads this bucket back into the aggregator.
+/// partial candle. When the last open window for a key closes, that key is
+/// tombstoned in the bucket so consumers cannot serve a stale partial candle.
+/// They are a derived projection of the checkpointed keyed state; recovery
+/// never reads this bucket back into the aggregator.
 ///
 /// Closed candles already carry a deterministic revision derived from the
 /// candle identity, window, close watermark, source offset, and partition state
@@ -75,6 +84,10 @@ where
     async fn update_open(&self, candles: &[Candle]) -> BpResult<()> {
         (**self).update_open(candles).await
     }
+
+    async fn delete_open(&self, keys: &[CandleKey]) -> BpResult<()> {
+        (**self).delete_open(keys).await
+    }
 }
 
 #[async_trait]
@@ -94,6 +107,13 @@ impl OpenCandleStore for NatsCandleSink {
             let key = candle.key.subject_suffix();
             let payload = candle.encode()?;
             self.open_candles.put(&key, &payload).await?;
+        }
+        Ok(())
+    }
+
+    async fn delete_open(&self, keys: &[CandleKey]) -> BpResult<()> {
+        for key in keys {
+            self.open_candles.delete(&key.subject_suffix()).await?;
         }
         Ok(())
     }
