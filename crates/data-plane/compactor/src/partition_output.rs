@@ -1,16 +1,15 @@
-use crate::spill::{PartitionItem, PartitionRecords};
+use crate::{
+    content_id::ContentId,
+    spill::{PartitionItem, PartitionRecords},
+};
 use platform_archive::{ArchiveBatch, ArchiveKind, ArchiveParquetWriter};
 use platform_errors::{BpError, BpResult};
 use std::{
     fs::File,
-    io::{self, Write},
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
 };
 
 const OUTPUT_BATCH_SIZE: usize = 8_192;
-const CONTENT_ID_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
-const CONTENT_ID_PRIME: u64 = 0x0000_0100_0000_01b3;
 
 pub(crate) struct PartitionOutput {
     pub(crate) partition: String,
@@ -18,68 +17,22 @@ pub(crate) struct PartitionOutput {
     pub(crate) records: usize,
     pub(crate) content_id: u64,
     pub(crate) length: u64,
-    content: Arc<Mutex<ContentId>>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-struct ContentId {
-    hash: u64,
-    length: u64,
-}
-
-impl ContentId {
-    fn new() -> Self {
-        Self {
-            hash: CONTENT_ID_OFFSET_BASIS,
-            length: 0,
-        }
-    }
-
-    fn update(&mut self, bytes: &[u8]) {
-        self.length = self.length.saturating_add(bytes.len() as u64);
-        for byte in bytes {
-            self.hash ^= u64::from(*byte);
-            self.hash = self.hash.wrapping_mul(CONTENT_ID_PRIME);
-        }
-    }
-}
-
-struct HashingFile {
-    file: File,
-    content: Arc<Mutex<ContentId>>,
-}
-
-impl Write for HashingFile {
-    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
-        let written = self.file.write(buffer)?;
-        let mut content = self
-            .content
-            .lock()
-            .map_err(|_| io::Error::other("content id lock poisoned"))?;
-        content.update(&buffer[..written]);
-        Ok(written)
-    }
-
-    fn flush(&mut self) -> io::Result<()> {
-        self.file.flush()
-    }
+    content: ContentId,
 }
 
 impl PartitionOutput {
-    fn finish(mut self, writer: ArchiveParquetWriter<HashingFile>) -> BpResult<Self> {
+    fn finish(mut self, writer: ArchiveParquetWriter<File>) -> BpResult<Self> {
         writer.close()?;
-        let content = {
-            let content = self.content.lock().map_err(|_| {
+        self.content_id = self.content.value();
+        self.length = std::fs::metadata(&self.path)
+            .map_err(|error| {
                 BpError::io(
-                    "read compacted parquet content id",
+                    "read compacted parquet file size",
                     self.path.display().to_string(),
-                    io::Error::other("content id lock poisoned"),
+                    error,
                 )
-            })?;
-            *content
-        };
-        self.content_id = content.hash;
-        self.length = content.length;
+            })?
+            .len();
         Ok(self)
     }
 
@@ -89,7 +42,7 @@ impl PartitionOutput {
         directory: &Path,
     ) -> BpResult<Vec<Self>> {
         let mut outputs = Vec::new();
-        let mut current: Option<(Self, ArchiveParquetWriter<HashingFile>)> = None;
+        let mut current: Option<(Self, ArchiveParquetWriter<File>)> = None;
         let mut buffer = ArchiveBatch::new(kind, Vec::with_capacity(OUTPUT_BATCH_SIZE))?;
 
         while let Some(PartitionItem {
@@ -116,14 +69,6 @@ impl PartitionOutput {
                         error,
                     )
                 })?;
-                let content = Arc::new(Mutex::new(ContentId::new()));
-                let writer = ArchiveParquetWriter::try_new(
-                    kind,
-                    HashingFile {
-                        file,
-                        content: Arc::clone(&content),
-                    },
-                )?;
                 current = Some((
                     Self {
                         partition,
@@ -131,15 +76,16 @@ impl PartitionOutput {
                         records: 0,
                         content_id: 0,
                         length: 0,
-                        content,
+                        content: ContentId::new(),
                     },
-                    writer,
+                    ArchiveParquetWriter::try_new(kind, file)?,
                 ));
             }
 
-            buffer.push(record)?;
             if let Some((output, writer)) = current.as_mut() {
+                output.content.update(&record)?;
                 output.records += 1;
+                buffer.push(record)?;
                 if buffer.len() >= OUTPUT_BATCH_SIZE {
                     writer.write(&buffer)?;
                     buffer.clear();
@@ -155,35 +101,5 @@ impl PartitionOutput {
         }
 
         Ok(outputs)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn content_id_for(path: PathBuf, bytes: &[u8]) -> ContentId {
-        let file = File::create(path).unwrap();
-        let content = Arc::new(Mutex::new(ContentId::new()));
-        let mut file = HashingFile {
-            file,
-            content: Arc::clone(&content),
-        };
-        file.write_all(bytes).unwrap();
-        file.flush().unwrap();
-        *content.lock().unwrap()
-    }
-
-    #[test]
-    fn hashing_file_produces_stable_content_ids() {
-        let dir = tempfile::tempdir().unwrap();
-        let first = content_id_for(dir.path().join("first.parquet"), b"same bytes");
-        let second = content_id_for(dir.path().join("second.parquet"), b"same bytes");
-        let different = content_id_for(dir.path().join("different.parquet"), b"other bytes");
-
-        assert_eq!(first, second);
-        assert_eq!(first.length, 10);
-        assert_eq!(first.hash, 0x12ce_fa2c_7d8e_00f8);
-        assert_ne!(first, different);
     }
 }
