@@ -67,9 +67,6 @@ impl From<MarketEvent> for ArchivedMarketEvent {
     }
 }
 
-/// Alias for the archived raw-event record.
-pub type ArchivedEvent = ArchivedMarketEvent;
-
 impl Deref for ArchivedMarketEvent {
     type Target = MarketEvent;
 

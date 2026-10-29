@@ -22,9 +22,6 @@ use stock_trek_types::cex::cex_id::CexId;
 /// partition is rebuilt from archived raw events.
 pub const STATE_SCHEMA_VERSION: u32 = 4;
 
-/// Alias used by callers that describe the constant by its shorter name.
-pub const SCHEMA_VERSION: u32 = STATE_SCHEMA_VERSION;
-
 /// An inclusive range of source sequences.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct SequenceRange {
@@ -49,9 +46,6 @@ impl SequenceRange {
             && other.from_sequence <= self.to_sequence.saturating_add(1)
     }
 }
-
-/// Alias for a known gap in the source stream.
-pub type IncompleteRange = SequenceRange;
 
 /// Identity of an element in an exchange stream.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]

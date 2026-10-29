@@ -6,7 +6,7 @@ use crate::{
     websocket_id::ETWebsocketId,
 };
 use platform_errors::{BinanceError, BpError, BpResult, ExchangeError};
-use platform_types::new_types::{Nanoseconds, Seconds, UsageCount};
+use platform_types::new_types::{DurationNanoseconds, DurationSeconds, UsageCount};
 use serde::{Deserialize, de::DeserializeOwned};
 use std::{collections::HashMap, fmt::Debug};
 
@@ -18,7 +18,7 @@ pub struct BinanceResponse<R> {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct BinanceMetadata {
-    pub retry_after: Option<Seconds>,
+    pub retry_after: Option<DurationSeconds>,
     pub status: u16,
     pub usage: HashMap<RateLimit, RateUsage>,
     pub websocket_id: Option<ETWebsocketId>,
@@ -70,7 +70,7 @@ where
                 let num = num_str.parse::<u64>().ok();
                 let interval_nanos = BinanceRateLimitInterval::try_from(letter)
                     .ok()
-                    .and_then(|i| Nanoseconds::try_from(i).ok());
+                    .and_then(|i| DurationNanoseconds::try_from(i).ok());
                 if let Some(num) = num
                     && let Some(interval_nanos) = interval_nanos
                     && let Some(total_nanos) = i64::try_from(num)
@@ -81,7 +81,7 @@ where
                     usage.insert(
                         RateLimit {
                             restriction,
-                            interval_nanos: Nanoseconds(total_nanos),
+                            interval_nanos: DurationNanoseconds(total_nanos),
                         },
                         RateUsage {
                             limit: None,
@@ -96,7 +96,7 @@ where
     fn parse_usage(rate_limits: &Vec<BinanceRateLimit>) -> HashMap<RateLimit, RateUsage> {
         let mut usage = HashMap::new();
         for rate_limit in rate_limits {
-            let nanoseconds: Nanoseconds = match rate_limit.interval.try_into() {
+            let nanoseconds: DurationNanoseconds = match rate_limit.interval.try_into() {
                 Err(_) => continue,
                 Ok(nanos) => nanos,
             };
@@ -149,7 +149,7 @@ impl<R> ETResponse for BinanceResponse<R>
 where
     R: Clone + Debug,
 {
-    fn retry_after(&self) -> Option<Seconds> {
+    fn retry_after(&self) -> Option<DurationSeconds> {
         self.metadata.retry_after
     }
     fn rate_limit_usage(&self) -> Option<&HashMap<RateLimit, RateUsage>> {
@@ -162,7 +162,7 @@ where
     R: Clone + Debug + DeserializeOwned,
 {
     fn try_from_http(response: HttpResponse) -> BpResult<Self> {
-        let mut retry_after: Option<Seconds> = match response
+        let mut retry_after: Option<DurationSeconds> = match response
             .headers
             .iter()
             .find(|tuple| tuple.0.eq_ignore_ascii_case("Retry-After"))
@@ -174,7 +174,7 @@ where
                         "Retry-After".into(),
                     )));
                 }
-                Ok(parsed) => Some(Seconds(i64::try_from(parsed).unwrap_or(i64::MAX))),
+                Ok(parsed) => Some(DurationSeconds(i64::try_from(parsed).unwrap_or(i64::MAX))),
             },
         };
         let mut usage = Self::parse_usage_from_headers(&response.headers);

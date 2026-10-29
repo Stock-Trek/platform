@@ -2,7 +2,7 @@ use crate::rate_limit::rate_limiter_state::RateLimiterState;
 use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult, RateLimitError};
 use platform_exchange_types::rate_limited::RateUsage;
-use platform_types::new_types::{Nanoseconds, UsageCount};
+use platform_types::new_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 
 #[derive(Debug, Clone)]
@@ -43,7 +43,7 @@ impl RateLimiter {
         }
         Ok(())
     }
-    pub fn remaining_capacity(&self) -> BpResult<HashMap<Nanoseconds, UsageCount>> {
+    pub fn remaining_capacity(&self) -> BpResult<HashMap<DurationNanoseconds, UsageCount>> {
         let mut limiters_guard = self.rate_limiters.lock();
         let mut capacities = HashMap::new();
         for limiter in limiters_guard.iter_mut() {
@@ -58,7 +58,10 @@ impl RateLimiter {
         }
         Ok(())
     }
-    pub fn set_usage(&self, interval_usage: &HashMap<Nanoseconds, RateUsage>) -> BpResult<()> {
+    pub fn set_usage(
+        &self,
+        interval_usage: &HashMap<DurationNanoseconds, RateUsage>,
+    ) -> BpResult<()> {
         let mut limiters_guard = self.rate_limiters.lock();
         for (interval_nanos, rate_usage) in interval_usage {
             let mut matched_existing = false;

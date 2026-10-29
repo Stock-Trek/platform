@@ -199,27 +199,6 @@ impl JetStreamConsumer {
         }
     }
 
-    /// Alias for [`Self::connect_from`] used by services that describe the
-    /// argument as a resume sequence.
-    pub async fn connect_with_start_sequence(
-        url: &str,
-        name: &str,
-        stream_subject_prefix: &str,
-        filter_subject: &str,
-        durable: &str,
-        start_sequence: Option<u64>,
-    ) -> BpResult<Self> {
-        Self::connect_from(
-            url,
-            name,
-            stream_subject_prefix,
-            filter_subject,
-            durable,
-            start_sequence,
-        )
-        .await
-    }
-
     pub fn stream(&self) -> &str {
         &self.stream
     }

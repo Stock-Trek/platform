@@ -20,7 +20,7 @@ use platform_exchange_types::binance::{
         BinanceTimeInForce,
     },
 };
-use platform_types::new_types::Milliseconds;
+use platform_types::new_types::DurationMilliseconds;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use stock_trek_types::cex::{
@@ -74,7 +74,7 @@ impl Converter for BinanceConverter {
             Some(symbol) => symbol,
         };
         let mut request = BinanceAssetLimitsRequest::new(symbol);
-        request.recvWindow = BinanceRecvWindow::try_new(Milliseconds(
+        request.recvWindow = BinanceRecvWindow::try_new(DurationMilliseconds(
             cex_preferences.max_network_delay_millis as i64,
         ))
         .ok();
@@ -210,7 +210,7 @@ impl Converter for BinanceConverter {
             } => Some(i64::from(callback_rate_bps)),
             _ => None,
         };
-        let recv_window = BinanceRecvWindow::try_new(Milliseconds(i64::from(
+        let recv_window = BinanceRecvWindow::try_new(DurationMilliseconds(i64::from(
             cex_preferences.max_network_delay_millis,
         )))
         .ok();

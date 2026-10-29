@@ -2,7 +2,7 @@ use crate::rate_limit::rate_limiter::RateLimiter;
 use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult, RateLimitError};
 use platform_exchange_types::rate_limited::{RateLimit, RateLimitRestriction, RateUsage};
-use platform_types::new_types::{Nanoseconds, UsageCount};
+use platform_types::new_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use strum::IntoEnumIterator;
 use tracing::{debug, warn};
@@ -83,7 +83,7 @@ impl RateLimiters {
                 .iter()
                 .filter(|(rate_limit, _)| rate_limit.restriction == *restriction)
                 .map(|(rate_limit, rate_usage)| (rate_limit.interval_nanos, *rate_usage))
-                .collect::<HashMap<Nanoseconds, RateUsage>>();
+                .collect::<HashMap<DurationNanoseconds, RateUsage>>();
             limiter.set_usage(&restriction_usage)?;
         }
         Ok(())
@@ -138,7 +138,7 @@ mod tests {
     use crate::rate_limit::rate_limiter_state::RateLimiterState;
 
     fn rate_limiters() -> RateLimiters {
-        let state = RateLimiterState::try_new(Nanoseconds(60_000_000_000), UsageCount(10))
+        let state = RateLimiterState::try_new(DurationNanoseconds(60_000_000_000), UsageCount(10))
             .expect("valid rate limiter state");
         RateLimiters::new(HashMap::from([(
             RateLimitRestriction::RawRequests,
@@ -221,9 +221,10 @@ mod tests {
 
     #[test]
     fn partial_acquisition_failure_refunds_without_deadlock() {
-        let raw_requests = RateLimiterState::try_new(Nanoseconds(60_000_000_000), UsageCount(10))
-            .expect("valid rate limiter state");
-        let weight = RateLimiterState::try_new(Nanoseconds(60_000_000_000), UsageCount(2))
+        let raw_requests =
+            RateLimiterState::try_new(DurationNanoseconds(60_000_000_000), UsageCount(10))
+                .expect("valid rate limiter state");
+        let weight = RateLimiterState::try_new(DurationNanoseconds(60_000_000_000), UsageCount(2))
             .expect("valid rate limiter state");
         let rate_limiters = RateLimiters::new(HashMap::from([
             (

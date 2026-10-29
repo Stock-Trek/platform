@@ -1,5 +1,5 @@
 use crate::{bp::BpError, retryability::Retryability};
-use platform_types::{new_types::Seconds, protocol::Protocol};
+use platform_types::{new_types::DurationSeconds, protocol::Protocol};
 
 #[derive(Debug, thiserror::Error, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
@@ -36,7 +36,7 @@ pub enum ExchangeError {
         code: i64,
         message: String,
         status: u16,
-        retry_after: Option<Seconds>,
+        retry_after: Option<DurationSeconds>,
         retryability: Retryability,
     },
     #[error("Serialize request error: {0}")]

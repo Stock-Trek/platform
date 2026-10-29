@@ -50,11 +50,6 @@ impl HashRouter {
         }
     }
 
-    /// Alias for [`Self::partitions`].
-    pub fn route(&self, input: &MarketInput, partition_count: usize) -> BpResult<Vec<PartitionId>> {
-        self.partitions(input, partition_count)
-    }
-
     fn event_partitions(
         &self,
         event: &MarketEvent,

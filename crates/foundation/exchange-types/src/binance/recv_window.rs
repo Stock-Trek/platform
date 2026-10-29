@@ -1,30 +1,34 @@
 use platform_errors::{BpError, BpResult};
-use platform_types::new_types::Milliseconds;
+use platform_types::new_types::DurationMilliseconds;
 use serde::Serialize;
 use std::fmt;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize)]
 #[serde(transparent)]
-pub struct BinanceRecvWindow(Milliseconds);
+pub struct BinanceRecvWindow(DurationMilliseconds);
 
 impl BinanceRecvWindow {
-    pub const DEFAULT: Self = Self(Milliseconds(5000));
-    pub const MAXIMUM: Milliseconds = Milliseconds(60_000);
+    pub const DEFAULT: Self = Self(DurationMilliseconds(5000));
+    pub const MAXIMUM: DurationMilliseconds = DurationMilliseconds(60_000);
 
-    pub fn try_new(recv_window: Milliseconds) -> BpResult<Self> {
+    pub fn try_new(recv_window: DurationMilliseconds) -> BpResult<Self> {
         if Self::is_valid(recv_window) {
             Ok(Self(recv_window))
         } else {
             Err(BpError::bad_value(
                 "recv_window",
                 recv_window.to_string(),
-                format!("Out of bounds >{} <={}", Milliseconds::ZERO, Self::MAXIMUM),
+                format!(
+                    "Out of bounds >{} <={}",
+                    DurationMilliseconds::ZERO,
+                    Self::MAXIMUM
+                ),
             ))
         }
     }
 
-    pub fn is_valid(recv_window: Milliseconds) -> bool {
-        recv_window > Milliseconds::ZERO && recv_window <= Self::MAXIMUM
+    pub fn is_valid(recv_window: DurationMilliseconds) -> bool {
+        recv_window > DurationMilliseconds::ZERO && recv_window <= Self::MAXIMUM
     }
 }
 

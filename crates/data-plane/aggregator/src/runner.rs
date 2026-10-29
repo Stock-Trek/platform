@@ -61,21 +61,6 @@ impl QuiesceSignal {
         self.sender.send_replace(true);
     }
 
-    /// Alias for [`Self::quiesce`].
-    pub fn request_quiesce(&self) {
-        self.quiesce();
-    }
-
-    /// Alias for [`Self::quiesce`].
-    pub fn request(&self) {
-        self.quiesce();
-    }
-
-    /// Alias for [`Self::quiesce`].
-    pub fn trigger(&self) {
-        self.quiesce();
-    }
-
     pub fn is_quiesced(&self) -> bool {
         *self.sender.borrow()
     }
@@ -84,11 +69,6 @@ impl QuiesceSignal {
         QuiesceReceiver {
             receiver: self.sender.subscribe(),
         }
-    }
-
-    /// Alias for [`Self::receiver`].
-    pub fn subscribe(&self) -> QuiesceReceiver {
-        self.receiver()
     }
 
     /// Resolves once quiescence has been requested.
@@ -152,11 +132,6 @@ impl From<watch::Sender<bool>> for QuiesceReceiver {
         }
     }
 }
-
-/// Alias used by rebalance coordinators.
-pub type RebalanceSignal = QuiesceSignal;
-/// Alias used by rebalance coordinators.
-pub type RebalanceReceiver = QuiesceReceiver;
 
 #[derive(Debug, Clone)]
 struct CheckpointPosition {
@@ -265,28 +240,8 @@ where
         self
     }
 
-    /// Alias for [`Self::with_quiesce_signal`].
-    pub fn with_quiesce(self, signal: impl Into<QuiesceReceiver>) -> Self {
-        self.with_quiesce_signal(signal)
-    }
-
-    /// Alias for [`Self::with_quiesce_signal`].
-    pub fn with_rebalance_signal(self, signal: impl Into<QuiesceReceiver>) -> Self {
-        self.with_quiesce_signal(signal)
-    }
-
-    /// Alias for [`Self::with_quiesce_signal`].
-    pub fn with_rebalance(self, signal: impl Into<QuiesceReceiver>) -> Self {
-        self.with_quiesce_signal(signal)
-    }
-
     /// Installs an already-created quiesce receiver.
     pub fn with_quiesce_receiver(self, receiver: QuiesceReceiver) -> Self {
-        self.with_quiesce_signal(receiver)
-    }
-
-    /// Alias for [`Self::with_quiesce_receiver`].
-    pub fn with_rebalance_receiver(self, receiver: QuiesceReceiver) -> Self {
         self.with_quiesce_signal(receiver)
     }
 
@@ -1069,7 +1024,7 @@ mod tests {
             acked: acked.clone(),
         };
         let runner = ProcessorRunner::new(config(), source, FakeSink::default())
-            .with_rebalance_signal(receiver);
+            .with_quiesce_signal(receiver);
         sender.send_replace(true);
 
         tokio::time::timeout(std::time::Duration::from_secs(1), runner.run())

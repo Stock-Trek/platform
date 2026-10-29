@@ -39,11 +39,6 @@ pub struct CheckpointRecord {
     pub created_at: TimestampMilliseconds,
 }
 
-/// Short alias for [`CheckpointRecord`].
-pub type Checkpoint = CheckpointRecord;
-/// Alias used by the recovery path.
-pub type StateCheckpoint = CheckpointRecord;
-
 impl CheckpointRecord {
     pub fn new(
         partition: PartitionId,
@@ -104,11 +99,6 @@ impl CheckpointRecord {
     /// The first stream sequence that must be delivered on resume.
     pub fn resume_sequence(&self) -> u64 {
         self.next_sequence
-    }
-
-    /// Alias for [`Self::resume_sequence`].
-    pub fn next_stream_sequence(&self) -> u64 {
-        self.resume_sequence()
     }
 
     /// Whether this record can be used to restore the given partition.
@@ -187,10 +177,6 @@ impl SourceCheckpoint {
     pub fn resume_sequence(&self) -> u64 {
         self.stream_sequence.saturating_add(1)
     }
-
-    pub fn next_stream_sequence(&self) -> u64 {
-        self.resume_sequence()
-    }
 }
 
 /// Durable storage for complete partition checkpoints.
@@ -200,9 +186,6 @@ pub trait StateStore: Send + Sync {
 
     async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()>;
 }
-
-/// Backwards-compatible name for the state store trait.
-pub use StateStore as CheckpointStore;
 
 /// In-memory state store used by tests and single-process runs.
 #[derive(Debug, Default)]
@@ -258,9 +241,6 @@ impl StateStore for InMemoryStateStore {
         Ok(())
     }
 }
-
-/// Alias for the in-memory store's old name.
-pub type InMemoryCheckpointStore = InMemoryStateStore;
 
 /// Checkpoints stored in a NATS KV bucket owned by the aggregator.
 pub struct NatsStateStore {
@@ -346,9 +326,6 @@ impl NatsStateStore {
     }
 }
 
-/// Alias for the NATS store's old name.
-pub type NatsCheckpointStore = NatsStateStore;
-
 #[async_trait]
 impl StateStore for NatsStateStore {
     async fn load(&self, partition: PartitionId) -> BpResult<Option<CheckpointRecord>> {
@@ -408,7 +385,6 @@ mod tests {
         assert_eq!(checkpoint.next_sequence, 42);
         assert_eq!(checkpoint.last_sequence(), 41);
         assert_eq!(checkpoint.resume_sequence(), 42);
-        assert_eq!(checkpoint.next_stream_sequence(), 42);
         assert_eq!(checkpoint.partition, PartitionId::new(2));
         assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(1_000)));
         assert_eq!(checkpoint.state.schema_version, STATE_SCHEMA_VERSION);

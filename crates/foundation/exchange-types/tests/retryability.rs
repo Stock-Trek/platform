@@ -8,11 +8,11 @@ use platform_exchange_types::{
     },
     klines::KlinesResponse,
 };
-use platform_types::new_types::Seconds;
+use platform_types::new_types::DurationSeconds;
 
 fn response(
     status: u16,
-    retry_after: Option<Seconds>,
+    retry_after: Option<DurationSeconds>,
     error: BinanceError,
 ) -> BinanceResponse<BinanceKlinesResponse> {
     BinanceResponse {
@@ -57,7 +57,7 @@ fn binance_permanent_codes_are_permanent() {
 
 #[test]
 fn exchange_failure_preserves_code_message_status_and_retry_after() {
-    let failure = response(429, Some(Seconds(7)), error(-1003, None))
+    let failure = response(429, Some(DurationSeconds(7)), error(-1003, None))
         .klines()
         .unwrap_err();
     let BpError::Exchange(ExchangeError::Response {
@@ -73,7 +73,7 @@ fn exchange_failure_preserves_code_message_status_and_retry_after() {
     assert_eq!(code, -1003);
     assert_eq!(message, "exchange failure");
     assert_eq!(status, 429);
-    assert_eq!(retry_after, Some(Seconds(7)));
+    assert_eq!(retry_after, Some(DurationSeconds(7)));
     assert_eq!(retryability, Retryability::Retryable);
 }
 
@@ -101,7 +101,7 @@ fn exchange_failure_computes_retry_after_from_error_data() {
     let BpError::Exchange(ExchangeError::Response { retry_after, .. }) = failure else {
         panic!("expected exchange response failure");
     };
-    assert_eq!(retry_after, Some(Seconds(3)));
+    assert_eq!(retry_after, Some(DurationSeconds(3)));
 }
 
 #[test]

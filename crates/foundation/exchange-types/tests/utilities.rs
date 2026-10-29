@@ -2,7 +2,7 @@ use platform_exchange_types::{
     binance::{klines_limit::BinanceKlinesLimit, recv_window::BinanceRecvWindow},
     encode::ByteEncoder,
 };
-use platform_types::new_types::{Milliseconds, NonZero, UsageCount};
+use platform_types::new_types::{DurationMilliseconds, NonZero, UsageCount};
 
 #[test]
 fn percent_encoding_preserves_unreserved_bytes() {
@@ -25,10 +25,10 @@ fn klines_limit_accepts_only_one_to_maximum() {
 
 #[test]
 fn recv_window_accepts_only_one_to_maximum_milliseconds() {
-    assert!(BinanceRecvWindow::try_new(Milliseconds::ZERO).is_err());
-    assert!(BinanceRecvWindow::try_new(Milliseconds::ONE).is_ok());
-    assert!(BinanceRecvWindow::try_new(Milliseconds(60_000)).is_ok());
-    assert!(BinanceRecvWindow::try_new(Milliseconds(60_001)).is_err());
+    assert!(BinanceRecvWindow::try_new(DurationMilliseconds::ZERO).is_err());
+    assert!(BinanceRecvWindow::try_new(DurationMilliseconds::ONE).is_ok());
+    assert!(BinanceRecvWindow::try_new(DurationMilliseconds(60_000)).is_ok());
+    assert!(BinanceRecvWindow::try_new(DurationMilliseconds(60_001)).is_err());
 }
 
 #[test]

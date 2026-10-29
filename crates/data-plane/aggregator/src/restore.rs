@@ -94,9 +94,6 @@ pub struct RestoredPartition {
     pub rebuilt_from_archive: bool,
 }
 
-/// Alias used by startup code.
-pub type RestoreResult = RestoredPartition;
-
 /// Recovery path that produced a partition's starting state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RestoreSource {

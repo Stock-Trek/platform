@@ -14,7 +14,7 @@ use crate::{
     urls::Urls,
 };
 use platform_errors::BpResult;
-use platform_types::new_types::{Nanoseconds, UsageCount};
+use platform_types::new_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, time::Duration};
 
 pub struct BinanceExchange;
@@ -38,21 +38,21 @@ impl ETExchange for BinanceExchange {
         map.insert(
             RateLimit {
                 restriction: RateLimitRestriction::Weight,
-                interval_nanos: Nanoseconds(Duration::from_mins(1).as_nanos() as i64),
+                interval_nanos: DurationNanoseconds(Duration::from_mins(1).as_nanos() as i64),
             },
             UsageCount(6_000),
         );
         map.insert(
             RateLimit {
                 restriction: RateLimitRestriction::OrderCount,
-                interval_nanos: Nanoseconds(Duration::from_secs(10).as_nanos() as i64),
+                interval_nanos: DurationNanoseconds(Duration::from_secs(10).as_nanos() as i64),
             },
             UsageCount(50),
         );
         map.insert(
             RateLimit {
                 restriction: RateLimitRestriction::OrderCount,
-                interval_nanos: Nanoseconds(Duration::from_hours(24).as_nanos() as i64),
+                interval_nanos: DurationNanoseconds(Duration::from_hours(24).as_nanos() as i64),
             },
             UsageCount(160_000),
         );
