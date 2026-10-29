@@ -1,5 +1,6 @@
 use crate::{compactor::BatchCompactor, config::CompactorConfig, source::ArchiveBatchSource};
 use platform_errors::BpResult;
+use platform_runtime::Runtime;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{info, warn};
 
@@ -38,20 +39,16 @@ where
             "compactor started"
         );
 
+        Runtime::run_until_shutdown(Self::run_cycles(&source, &compactor, &mut ticker)).await
+    }
+
+    async fn run_cycles(source: &S, compactor: &C, ticker: &mut time::Interval) -> BpResult<()> {
         loop {
-            tokio::select! {
-                _ = ticker.tick() => {
-                    if let Err(error) = Self::run_cycle(&source, &compactor).await {
-                        warn!(%error, "compaction cycle failed");
-                    }
-                }
-                signal = platform_runtime::Runtime::shutdown_signal() => {
-                    signal?;
-                    break;
-                }
+            ticker.tick().await;
+            if let Err(error) = Self::run_cycle(source, compactor).await {
+                warn!(%error, "compaction cycle failed");
             }
         }
-        Ok(())
     }
 
     async fn run_cycle(source: &S, compactor: &C) -> BpResult<()> {

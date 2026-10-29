@@ -9,5 +9,5 @@ platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-metrics = { workspace = true }
 platform-nats = { workspace = true }
-tokio = { workspace = true, features = ["signal"] }
+tokio = { workspace = true, features = ["macros", "signal"] }
 tracing = { workspace = true }

@@ -2,6 +2,7 @@
 
 use platform_config::tracing_setup::TracingSetup;
 use platform_errors::BpResult;
+use std::future::Future;
 use tracing::info;
 
 /// Process-level lifecycle helpers shared by the data-plane services.
@@ -21,5 +22,23 @@ impl Runtime {
         tokio::signal::ctrl_c().await?;
         info!("shutdown requested");
         Ok(())
+    }
+
+    /// Runs `work` until it completes or the process receives a shutdown signal.
+    ///
+    /// Service loops pass their main work here instead of repeating the same
+    /// `tokio::select!` shutdown arm. When shutdown wins, the work future is
+    /// dropped and `Ok(())` is returned so callers can run finalisation steps.
+    pub async fn run_until_shutdown<F>(work: F) -> BpResult<()>
+    where
+        F: Future<Output = BpResult<()>>,
+    {
+        tokio::select! {
+            result = work => result,
+            signal = Self::shutdown_signal() => {
+                signal?;
+                Ok(())
+            }
+        }
     }
 }

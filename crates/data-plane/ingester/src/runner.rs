@@ -6,6 +6,7 @@ use crate::{
 use platform_errors::BpResult;
 use platform_market_data::event::ParsedMessage;
 use platform_nats::EventPublisher;
+use platform_runtime::Runtime;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tracing::{error, info, warn};
@@ -54,12 +55,17 @@ where
             },
         );
 
-        let result = Self::run_until_shutdown(&config, &mut receiver, &mut ingester).await;
+        let result = Runtime::run_until_shutdown(Self::process_messages(
+            &config,
+            &mut receiver,
+            &mut ingester,
+        ))
+        .await;
         source_task.abort();
         result
     }
 
-    async fn run_until_shutdown(
+    async fn process_messages(
         config: &IngesterConfig,
         receiver: &mut mpsc::Receiver<ParsedMessage>,
         ingester: &mut Ingester<P>,
@@ -74,10 +80,6 @@ where
                     if let Err(error) = ingester.ingest(message).await {
                         error!(%error, "failed to ingest market event");
                     }
-                }
-                signal = platform_runtime::Runtime::shutdown_signal() => {
-                    signal?;
-                    break;
                 }
             }
         }
