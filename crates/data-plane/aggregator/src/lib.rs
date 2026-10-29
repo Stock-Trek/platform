@@ -17,7 +17,9 @@ pub use checkpoint::{
     NatsCheckpointStore, NatsStateStore, SourceCheckpoint, StateCheckpoint, StateStore,
 };
 pub use config::{AggregatorConfig, ReplayStartPolicy};
-pub use lease::{InMemoryLeaseStore, LeaseStore, NatsLeaseStore, WriterLease, new_writer_id};
+pub use lease::{
+    InMemoryLeaseStore, LeaseStore, NatsLeaseStore, WriterLease, new_writer_id, wait_for_lease,
+};
 pub use partition::{PartitionId, all_partitions, partition_for, partition_for_candle_key};
 pub use processor::{CandleProcessor, ProcessorConfig, ProcessorUpdate};
 pub use restore::{

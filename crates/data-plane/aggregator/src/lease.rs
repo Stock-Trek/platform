@@ -4,6 +4,7 @@ use crate::config::AggregatorConfig;
 use crate::partition::PartitionId;
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
+use platform_metrics::AggregatorMetrics;
 use platform_nats::KeyValue;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
@@ -11,8 +12,10 @@ use std::collections::HashMap;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
+use tracing::info;
 
 const LEASE_KEY_PREFIX: &str = "lease";
+const LEASE_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 
 /// A lease held by the only writer allowed to commit a partition.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -52,6 +55,36 @@ pub trait LeaseStore: Send + Sync {
 
 pub fn lease_key(partition: PartitionId) -> String {
     format!("{LEASE_KEY_PREFIX}-{}", partition.get())
+}
+
+/// Waits until this owner can acquire `partition`'s lease.
+///
+/// A replica that starts while another writer owns the partition becomes a
+/// standby instead of failing. It keeps polling until the active writer
+/// releases the lease or lets it expire, at which point the next fencing token
+/// is issued.
+pub async fn wait_for_lease(
+    leases: &dyn LeaseStore,
+    partition: PartitionId,
+    owner_id: &str,
+    ttl: Duration,
+) -> BpResult<WriterLease> {
+    let mut waiting = false;
+    loop {
+        if let Some(lease) = leases.acquire(partition, owner_id, ttl).await? {
+            return Ok(lease);
+        }
+        if !waiting {
+            waiting = true;
+            AggregatorMetrics::record_rebalance(partition.get(), "lease_waiting");
+            info!(
+                partition = %partition,
+                writer = %owner_id,
+                "partition lease is held by another writer; standing by"
+            );
+        }
+        tokio::time::sleep(LEASE_RETRY_INTERVAL).await;
+    }
 }
 
 /// Generates an owner identity that is unique to one process incarnation.
