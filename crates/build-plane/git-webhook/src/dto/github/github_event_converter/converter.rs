@@ -1,7 +1,7 @@
 use crate::{
     dto::{event_converter::EventConverter, github::github_event_type::GitHubEventType},
     event_response::EventResponse,
-    infisical::secrets::Secrets,
+    secrets::Secrets,
 };
 use platform_errors::{BpError, BpResult};
 use platform_github::host_allow_list::HostAllowlist;

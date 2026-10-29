@@ -7,4 +7,5 @@ edition.workspace = true
 aws-config = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-s3-transfer-manager = { workspace = true }
+aws-sdk-ssm = { workspace = true }
 platform-time = { workspace = true }

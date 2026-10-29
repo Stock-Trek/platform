@@ -59,6 +59,23 @@ impl Retryability {
         }
     }
 
+    pub fn from_ssm_error_code(code: &str) -> Retryability {
+        if code.starts_with("Invalid")
+            || code.ends_with("NotFound")
+            || matches!(
+                code,
+                "AccessDenied"
+                    | "AccessDeniedException"
+                    | "ParameterNotFound"
+                    | "ValidationException"
+            )
+        {
+            Retryability::Permanent
+        } else {
+            Retryability::Retryable
+        }
+    }
+
     pub fn from_io_error(error: impl Borrow<std::io::Error>) -> Retryability {
         let error = error.borrow();
         match error.kind() {
@@ -287,6 +304,41 @@ mod tests {
             assert_eq!(
                 Retryability::from_s3_error_code(code),
                 Retryability::Permanent,
+                "{code}"
+            );
+        }
+    }
+
+    #[test]
+    fn permanent_ssm_error_codes_are_not_retried() {
+        for code in [
+            "AccessDenied",
+            "AccessDeniedException",
+            "InvalidFilterKey",
+            "InvalidKeyId",
+            "InvalidNextToken",
+            "ParameterNotFound",
+            "ValidationException",
+        ] {
+            assert_eq!(
+                Retryability::from_ssm_error_code(code),
+                Retryability::Permanent,
+                "{code}"
+            );
+        }
+    }
+
+    #[test]
+    fn transient_ssm_error_codes_are_retried() {
+        for code in [
+            "InternalServerError",
+            "RequestTimeout",
+            "ServiceUnavailable",
+            "ThrottlingException",
+        ] {
+            assert_eq!(
+                Retryability::from_ssm_error_code(code),
+                Retryability::Retryable,
                 "{code}"
             );
         }
