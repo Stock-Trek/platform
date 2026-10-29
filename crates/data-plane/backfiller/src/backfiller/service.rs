@@ -1,3 +1,7 @@
+use super::{
+    ranges::{missing_ranges, widened_gap},
+    schedule::{instant_at, next_attempt_at, next_due_key, sleep_until_optional},
+};
 use crate::{
     fetcher::{BackfilledEvent, MissingEventFetcher},
     gap_marker_source::GapMarkerSource,
@@ -24,10 +28,8 @@ use std::{
     sync::Arc,
 };
 use stock_trek_types::cex::cex_id::CexId;
-use tokio::time::{Duration, Instant, sleep_until};
+use tokio::time::Duration;
 use tracing::{info, warn};
-
-const FALLBACK_WINDOW_STEP: u64 = 1_000;
 
 #[derive(Clone, Copy)]
 enum GapOutcome<'a> {
@@ -201,7 +203,7 @@ where
         pending.entry(gap.key()).or_insert(gap);
     }
 
-    async fn load_pending(&self) -> BpResult<BTreeMap<String, PendingGap>> {
+    pub(super) async fn load_pending(&self) -> BpResult<BTreeMap<String, PendingGap>> {
         let mut pending = BTreeMap::new();
         for gap in self.retries.load().await? {
             pending.insert(gap.key(), gap);
@@ -209,7 +211,11 @@ where
         Ok(pending)
     }
 
-    async fn accept(&mut self, gap: GapMarker, pending: &mut BTreeMap<String, PendingGap>) {
+    pub(super) async fn accept(
+        &mut self,
+        gap: GapMarker,
+        pending: &mut BTreeMap<String, PendingGap>,
+    ) {
         if !self.fetcher.supports(gap.exchange) {
             let _ = self.source.ack(&gap).await;
             return;
@@ -390,266 +396,5 @@ where
                 &market_event.encode()?,
             )
             .await
-    }
-}
-
-pub fn missing_ranges(
-    missing_from: u64,
-    missing_to: u64,
-    sequences: impl IntoIterator<Item = u64>,
-) -> Vec<(u64, u64)> {
-    if missing_from > missing_to {
-        return Vec::new();
-    }
-    let mut sequences: Vec<u64> = sequences
-        .into_iter()
-        .filter(|sequence| *sequence >= missing_from && *sequence <= missing_to)
-        .collect();
-    sequences.sort_unstable();
-    sequences.dedup();
-
-    let mut ranges = Vec::new();
-    let mut cursor = missing_from;
-    for sequence in sequences {
-        if sequence > cursor {
-            ranges.push((cursor, sequence - 1));
-        }
-        if sequence == u64::MAX {
-            return ranges;
-        }
-        cursor = sequence + 1;
-        if cursor > missing_to {
-            return ranges;
-        }
-    }
-    if cursor <= missing_to {
-        ranges.push((cursor, missing_to));
-    }
-    ranges
-}
-
-fn widened_gap(gap: &GapMarker, attempts: u32) -> GapMarker {
-    if attempts == 0 {
-        return gap.clone();
-    }
-    let padding = FALLBACK_WINDOW_STEP.saturating_mul(u64::from(attempts.min(32)));
-    let mut widened = gap.clone();
-    widened.previous_sequence = gap.missing_from.saturating_sub(padding).saturating_sub(1);
-    widened.missing_from = gap.missing_from.saturating_sub(padding);
-    widened.missing_to = gap.missing_to.saturating_add(padding);
-    widened.observed_sequence = gap.missing_to.saturating_add(padding).saturating_add(1);
-    widened
-}
-
-fn next_due_key(
-    pending: &BTreeMap<String, PendingGap>,
-    now: TimestampMilliseconds,
-) -> Option<String> {
-    pending
-        .iter()
-        .find(|(_, gap)| gap.is_due(now))
-        .map(|(key, _)| key.clone())
-}
-
-fn next_attempt_at(pending: &BTreeMap<String, PendingGap>) -> Option<TimestampMilliseconds> {
-    pending.values().map(|gap| gap.next_attempt_at).min()
-}
-
-fn instant_at(timestamp: TimestampMilliseconds) -> Instant {
-    let now = TimestampMilliseconds::now().0;
-    let delay = timestamp.0.saturating_sub(now).max(0) as u64;
-    Instant::now() + Duration::from_millis(delay)
-}
-
-async fn sleep_until_optional(deadline: Option<Instant>) {
-    match deadline {
-        Some(deadline) => sleep_until(deadline).await,
-        None => std::future::pending::<()>().await,
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{gap_marker_source::GapMarkerSource, retry::GapRetryStore};
-    use async_trait::async_trait;
-    use platform_errors::BpResult;
-    use platform_market_data::event::GapMarker;
-    use platform_market_data::test_utils::gap;
-    use std::sync::Mutex;
-
-    struct OneGapSource {
-        gap: Option<GapMarker>,
-        acked: Arc<Mutex<Vec<GapMarker>>>,
-    }
-
-    #[async_trait]
-    impl GapMarkerSource for OneGapSource {
-        async fn next_gap(&mut self) -> BpResult<Option<GapMarker>> {
-            Ok(self.gap.take())
-        }
-
-        async fn ack(&mut self, gap: &GapMarker) -> BpResult<()> {
-            self.acked.lock().expect("acked lock").push(gap.clone());
-            Ok(())
-        }
-    }
-
-    struct OnceFetcher {
-        events: Mutex<Vec<BackfilledEvent>>,
-    }
-
-    #[async_trait]
-    impl MissingEventFetcher for OnceFetcher {
-        async fn fetch(&self, _gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>> {
-            Ok(std::mem::take(
-                &mut *self.events.lock().expect("events lock"),
-            ))
-        }
-    }
-
-    #[derive(Default)]
-    struct RecordingPublisher {
-        sequences: Mutex<Vec<u64>>,
-    }
-
-    #[async_trait]
-    impl EventPublisher for RecordingPublisher {
-        async fn publish(&self, _subject: &str, payload: &[u8]) -> BpResult<()> {
-            let event: MarketEvent = serde_json::from_slice(payload)?;
-            self.sequences
-                .lock()
-                .expect("sequences lock")
-                .push(event.sequence.unwrap_or_default());
-            Ok(())
-        }
-    }
-
-    fn event(sequence: u64) -> BackfilledEvent {
-        BackfilledEvent {
-            sequence,
-            exchange_timestamp: TimestampMilliseconds(sequence as i64),
-            data: json!({ "t": sequence }),
-        }
-    }
-
-    fn options() -> BackfillOptions {
-        BackfillOptions {
-            event_subject_prefix: "market.events".to_string(),
-        }
-    }
-
-    #[tokio::test]
-    async fn acknowledges_after_processing_a_covered_gap() {
-        let acked = Arc::new(Mutex::new(Vec::new()));
-        let service = BackfillService::new(
-            OneGapSource {
-                gap: Some(gap(2, 3)),
-                acked: acked.clone(),
-            },
-            OnceFetcher {
-                events: Mutex::new(vec![event(2), event(3)]),
-            },
-            RecordingPublisher::default(),
-            options(),
-        );
-
-        service.run().await.unwrap();
-
-        assert_eq!(acked.lock().unwrap().len(), 1);
-    }
-
-    #[tokio::test]
-    async fn persists_partial_ranges_instead_of_forgetting_them() {
-        let store = Arc::new(InMemoryGapRetryStore::new());
-        let mut service = BackfillService::new(
-            OneGapSource {
-                gap: Some(gap(2, 5)),
-                acked: Arc::new(Mutex::new(Vec::new())),
-            },
-            OnceFetcher {
-                events: Mutex::new(vec![event(2), event(4)]),
-            },
-            RecordingPublisher::default(),
-            options(),
-        )
-        .with_retry_store_arc(Arc::new(SharedStore(store.clone())));
-
-        let pending = service.load_pending().await.unwrap();
-        assert!(pending.is_empty());
-
-        let mut pending = BTreeMap::new();
-        service.accept(gap(2, 5), &mut pending).await;
-
-        let mut gaps = store.snapshot().await;
-        gaps.sort_by_key(|gap| (gap.missing_from, gap.missing_to));
-        assert_eq!(
-            gaps.iter()
-                .map(|gap| (gap.missing_from, gap.missing_to))
-                .collect::<Vec<_>>(),
-            vec![(3, 3), (5, 5)]
-        );
-    }
-
-    #[tokio::test]
-    async fn retries_pending_ranges_after_the_source_ends() {
-        let store = Arc::new(InMemoryGapRetryStore::new());
-        let pending = PendingGap::from_range(&gap(2, 3), 2, 3, 0, TimestampMilliseconds(0), None);
-        store.save(&pending).await.unwrap();
-
-        let service = BackfillService::new(
-            OneGapSource {
-                gap: None,
-                acked: Arc::new(Mutex::new(Vec::new())),
-            },
-            OnceFetcher {
-                events: Mutex::new(vec![event(2), event(3)]),
-            },
-            RecordingPublisher::default(),
-            options(),
-        )
-        .with_retry_store_arc(Arc::new(SharedStore(store.clone())));
-
-        service.run().await.unwrap();
-
-        assert!(store.snapshot().await.is_empty());
-    }
-
-    #[test]
-    fn finds_contiguous_unresolved_ranges() {
-        assert_eq!(missing_ranges(10, 15, [10, 11, 12, 13, 14, 15]), vec![]);
-        assert_eq!(
-            missing_ranges(10, 15, [10, 12, 15]),
-            vec![(11, 11), (13, 14)]
-        );
-        assert_eq!(missing_ranges(10, 15, []), vec![(10, 15)]);
-        assert_eq!(missing_ranges(10, 10, [10]), vec![]);
-    }
-
-    #[test]
-    fn retry_attempts_widen_the_rest_window() {
-        let widened = widened_gap(&gap(10_000, 20_000), 2);
-
-        assert_eq!(widened.missing_from, 8_000);
-        assert_eq!(widened.missing_to, 22_000);
-        assert_eq!(widened.previous_sequence, 7_999);
-        assert_eq!(widened.observed_sequence, 22_001);
-    }
-
-    struct SharedStore(Arc<InMemoryGapRetryStore>);
-
-    #[async_trait]
-    impl GapRetryStore for SharedStore {
-        async fn load(&self) -> BpResult<Vec<PendingGap>> {
-            self.0.load().await
-        }
-
-        async fn save(&self, pending: &PendingGap) -> BpResult<()> {
-            self.0.save(pending).await
-        }
-
-        async fn remove(&self, key: &str) -> BpResult<()> {
-            self.0.remove(key).await
-        }
     }
 }
