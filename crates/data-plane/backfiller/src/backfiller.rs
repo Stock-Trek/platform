@@ -29,6 +29,74 @@ use tracing::{info, warn};
 
 const FALLBACK_WINDOW_STEP: u64 = 1_000;
 
+#[derive(Clone, Copy)]
+enum GapOutcome<'a> {
+    Error {
+        error: &'a str,
+        message: &'static str,
+    },
+    Empty,
+    Partial {
+        expected: u64,
+        published: u64,
+    },
+    Covered {
+        published: u64,
+    },
+}
+
+impl GapOutcome<'_> {
+    fn record(self, pending: &PendingGap) {
+        MarketDataMetrics::record_backfill_gap_outcome(self.metric());
+        match self {
+            Self::Error { error, message } => warn!(
+                exchange = %pending.exchange,
+                stream = %pending.stream,
+                missing_from = pending.missing_from,
+                missing_to = pending.missing_to,
+                %error,
+                "{message}"
+            ),
+            Self::Empty => warn!(
+                exchange = %pending.exchange,
+                stream = %pending.stream,
+                missing_from = pending.missing_from,
+                missing_to = pending.missing_to,
+                "exchange returned no events for gap"
+            ),
+            Self::Partial {
+                expected,
+                published,
+            } => warn!(
+                exchange = %pending.exchange,
+                stream = %pending.stream,
+                missing_from = pending.missing_from,
+                missing_to = pending.missing_to,
+                expected,
+                published,
+                "backfill did not cover the whole gap"
+            ),
+            Self::Covered { published } => info!(
+                exchange = %pending.exchange,
+                stream = %pending.stream,
+                missing_from = pending.missing_from,
+                missing_to = pending.missing_to,
+                published,
+                "backfilled gap"
+            ),
+        }
+    }
+
+    fn metric(self) -> &'static str {
+        match self {
+            Self::Error { .. } => BACKFILL_OUTCOME_ERROR,
+            Self::Empty => BACKFILL_OUTCOME_EMPTY,
+            Self::Partial { .. } => BACKFILL_OUTCOME_PARTIAL,
+            Self::Covered { .. } => BACKFILL_OUTCOME_COVERED,
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct BackfillOptions {
     pub event_subject_prefix: String,
@@ -185,22 +253,15 @@ where
         let events = match events {
             Ok(events) => events,
             Err(error) => {
-                MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_ERROR);
-                warn!(
-                    exchange = %pending.exchange,
-                    stream = %pending.stream,
-                    %error,
-                    "failed to publish backfilled events"
-                );
+                let error = error.to_string();
+                GapOutcome::Error {
+                    error: &error,
+                    message: "failed to publish backfilled events",
+                }
+                .record(&pending);
                 let ranges = vec![(pending.missing_from, pending.missing_to)];
                 return self
-                    .schedule(
-                        requested,
-                        pending,
-                        all_pending,
-                        ranges,
-                        Some(error.to_string()),
-                    )
+                    .schedule(requested, pending, all_pending, ranges, Some(error))
                     .await;
             }
         };
@@ -216,43 +277,22 @@ where
         if expected > 0 {
             MarketDataMetrics::record_backfill_gap_coverage(expected, covered);
         }
-        if let Some(error) = &error {
-            MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_ERROR);
-            warn!(
-                exchange = %pending.exchange,
-                stream = %pending.stream,
-                %error,
-                "failed to fetch gap from exchange"
-            );
+        let outcome = if let Some(error) = &error {
+            GapOutcome::Error {
+                error,
+                message: "failed to fetch gap from exchange",
+            }
         } else if events.is_empty() {
-            MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_EMPTY);
-            warn!(
-                exchange = %pending.exchange,
-                stream = %pending.stream,
-                missing_from = pending.missing_from,
-                missing_to = pending.missing_to,
-                "exchange returned no events for gap"
-            );
+            GapOutcome::Empty
         } else if !unresolved.is_empty() {
-            MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_PARTIAL);
-            warn!(
-                exchange = %pending.exchange,
-                stream = %pending.stream,
+            GapOutcome::Partial {
                 expected,
-                published = covered,
-                "backfill did not cover the whole gap"
-            );
+                published: covered,
+            }
         } else {
-            MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_COVERED);
-            info!(
-                exchange = %pending.exchange,
-                stream = %pending.stream,
-                missing_from = pending.missing_from,
-                missing_to = pending.missing_to,
-                published = covered,
-                "backfilled gap"
-            );
-        }
+            GapOutcome::Covered { published: covered }
+        };
+        outcome.record(&pending);
 
         if unresolved.is_empty() && error.is_none() {
             self.remove(&pending, all_pending).await
