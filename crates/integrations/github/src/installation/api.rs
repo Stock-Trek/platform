@@ -7,7 +7,7 @@ use platform_errors::{BpError, BpResult, GitHubError};
 const REPOS_PER_PAGE: u32 = 100;
 
 impl GitHubInstallation {
-    pub(super) async fn repos(&self) -> BpResult<Vec<GitHubRepo>> {
+    pub(crate) async fn repos(&self) -> BpResult<Vec<GitHubRepo>> {
         let mut repos = Vec::new();
         let mut page = 1;
         loop {
@@ -33,7 +33,7 @@ impl GitHubInstallation {
         Ok(repos)
     }
 
-    pub(super) async fn repo(&self, repo_id: u64) -> BpResult<GitHubRepo> {
+    pub(crate) async fn repo(&self, repo_id: u64) -> BpResult<GitHubRepo> {
         self.client
             .get::<GitHubRepo, _, _>(format!("/repositories/{repo_id}"), None::<&()>)
             .await

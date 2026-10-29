@@ -1,62 +1,62 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
-pub(super) struct RepositoriesParams {
-    pub(super) per_page: u32,
-    pub(super) page: u32,
+pub(crate) struct RepositoriesParams {
+    pub(crate) per_page: u32,
+    pub(crate) page: u32,
 }
 
 #[derive(Debug, Serialize)]
-pub(super) struct CommitsParams<'a> {
-    pub(super) sha: &'a str,
-    pub(super) per_page: u32,
+pub(crate) struct CommitsParams<'a> {
+    pub(crate) sha: &'a str,
+    pub(crate) per_page: u32,
 }
 
 #[derive(Debug, Serialize)]
-pub(super) struct TreeParams {
-    pub(super) recursive: u8,
+pub(crate) struct TreeParams {
+    pub(crate) recursive: u8,
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct GitHubCommit {
-    pub(super) sha: String,
+pub(crate) struct GitHubCommit {
+    pub(crate) sha: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct GitHubTree {
+pub(crate) struct GitHubTree {
     #[serde(default)]
-    pub(super) tree: Vec<GitHubTreeEntry>,
+    pub(crate) tree: Vec<GitHubTreeEntry>,
     #[serde(default)]
-    pub(super) truncated: bool,
+    pub(crate) truncated: bool,
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct GitHubTreeEntry {
-    pub(super) path: String,
+pub(crate) struct GitHubTreeEntry {
+    pub(crate) path: String,
     #[serde(default)]
-    pub(super) mode: String,
+    pub(crate) mode: String,
     #[serde(rename = "type")]
-    pub(super) kind: String,
-    pub(super) sha: String,
+    pub(crate) kind: String,
+    pub(crate) sha: String,
     #[serde(default)]
-    pub(super) size: Option<u64>,
+    pub(crate) size: Option<u64>,
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct GitHubBlob {
+pub(crate) struct GitHubBlob {
     #[serde(default)]
-    pub(super) content: Option<String>,
+    pub(crate) content: Option<String>,
     #[serde(default)]
-    pub(super) encoding: Option<String>,
+    pub(crate) encoding: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
-pub(super) struct InstallationRepositoriesResponse {
-    pub(super) repositories: Vec<GitHubRepo>,
+pub(crate) struct InstallationRepositoriesResponse {
+    pub(crate) repositories: Vec<GitHubRepo>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
-pub(super) struct GitHubRepo {
-    pub(super) id: u64,
-    pub(super) default_branch: String,
+pub(crate) struct GitHubRepo {
+    pub(crate) id: u64,
+    pub(crate) default_branch: String,
 }

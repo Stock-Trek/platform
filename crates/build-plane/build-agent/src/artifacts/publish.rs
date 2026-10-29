@@ -86,7 +86,7 @@ impl Artifacts {
         Ok(())
     }
 
-    pub(super) fn source_archive(root: &Path, files: &[PathBuf]) -> BpResult<Vec<u8>> {
+    pub(crate) fn source_archive(root: &Path, files: &[PathBuf]) -> BpResult<Vec<u8>> {
         let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
         for file in files {

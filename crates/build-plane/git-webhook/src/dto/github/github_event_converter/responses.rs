@@ -20,7 +20,7 @@ use platform_messages::sqs_message::SqsDetail;
 use platform_metrics::event::EventMetrics;
 
 impl GitHubEventConverter {
-    pub(super) fn installation_response(
+    pub(crate) fn installation_response(
         &self,
         request: &lambda_http::Request,
         delivery_id: Option<String>,
@@ -59,7 +59,7 @@ impl GitHubEventConverter {
         }
     }
 
-    pub(super) fn installation_repositories_response(
+    pub(crate) fn installation_repositories_response(
         &self,
         request: &lambda_http::Request,
         delivery_id: Option<String>,
@@ -89,7 +89,7 @@ impl GitHubEventConverter {
         Self::accept(host, delivery_id, event.installation.id, detail)
     }
 
-    pub(super) fn repository_response(
+    pub(crate) fn repository_response(
         &self,
         request: &lambda_http::Request,
         delivery_id: Option<String>,
@@ -116,7 +116,7 @@ impl GitHubEventConverter {
         }
     }
 
-    pub(super) fn ref_response(
+    pub(crate) fn ref_response(
         &self,
         request: &lambda_http::Request,
         delivery_id: Option<String>,
@@ -136,11 +136,11 @@ impl GitHubEventConverter {
         Self::accept(host, delivery_id, event.installation.id, detail)
     }
 
-    pub(super) fn ping_response(&self) -> BpResult<EventResponse> {
+    pub(crate) fn ping_response(&self) -> BpResult<EventResponse> {
         Ok(EventResponse::Pong)
     }
 
-    pub(super) fn push_response(
+    pub(crate) fn push_response(
         &self,
         request: &lambda_http::Request,
         delivery_id: Option<String>,
