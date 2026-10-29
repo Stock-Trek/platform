@@ -175,17 +175,10 @@ impl Task {
                     .await?
             }
         };
-        let artifact_prefix =
-            S3Keys::artifact_prefix(remote, repo_id.clone(), ref_name, ref_type, &commit_hash)?;
-        let source_key =
-            S3Keys::source_key(remote, repo_id.clone(), ref_name, ref_type, &commit_hash)?;
-        let artifact_key =
-            S3Keys::artifact_key(remote, repo_id.clone(), ref_name, ref_type, &commit_hash)?;
-        let compile_output_key =
-            S3Keys::compile_output_key(remote, repo_id.clone(), ref_name, ref_type, &commit_hash)?;
+        let keys = S3Keys::new(remote, repo_id.clone(), ref_name, ref_type, &commit_hash)?;
         tracing::debug!(
-            artifact = %artifact_key,
-            compile_output = %compile_output_key,
+            artifact = %keys.artifact_key(),
+            compile_output = %keys.compile_output_key(),
             "dispatching build"
         );
         let files = remote
@@ -200,12 +193,12 @@ impl Task {
         let uploaded = request_context
             .context
             .s3
-            .put_object(&source_key, archive, request_context.deadline)
+            .put_object(&keys.source_key(), archive, request_context.deadline)
             .await?;
         let signed_post = request_context
             .context
             .s3
-            .signed_post(&artifact_prefix, request_context.deadline)
+            .signed_post(&keys.artifact_prefix(), request_context.deadline)
             .await?;
         request_context
             .context
