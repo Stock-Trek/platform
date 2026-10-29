@@ -1,7 +1,8 @@
 use platform_aggregator::{
     AggregatorConfig, ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource,
     LeaseStore, NatsCandleSink, NatsLeaseStore, NatsMarketSource, NatsPartitionSource, NatsRouter,
-    NatsStateStore, ProcessorRunner, S3ArchivedEventSource, StateStore, restore_partition,
+    NatsStateStore, ProcessorRunner, RestoreOptions, S3ArchivedEventSource, StateStore,
+    restore_partition,
 };
 use platform_errors::BpResult;
 use platform_nats::{JetStream, NatsPublisher};
@@ -38,7 +39,6 @@ async fn main() -> BpResult<()> {
     let checkpoints: Arc<dyn StateStore> = Arc::new(NatsStateStore::connect(&config).await?);
     let leases: Arc<dyn LeaseStore> = Arc::new(NatsLeaseStore::connect(&config).await?);
     let sink = Arc::new(NatsCandleSink::connect(&config).await?);
-    let allowed_lateness = config.processor_config().allowed_lateness;
     let archive_config = ArchiveRecoveryConfig::from_env()?;
     let source_stream = JetStream::stream_name(&config.shard_subject_prefix);
 
@@ -53,19 +53,11 @@ async fn main() -> BpResult<()> {
             ),
             None => Box::new(EmptyArchivedEventSource),
         };
-        let restored = restore_partition(
-            checkpoints.as_ref(),
-            archive.as_mut(),
-            partition,
-            &source_stream,
-            &config.intervals,
-            config.shard_count,
-            allowed_lateness,
-        )
-        .await?;
-        let start_sequence = restored.start_sequence;
+        let options = RestoreOptions::from_config(&config, partition, &source_stream);
+        let restored = restore_partition(checkpoints.as_ref(), archive.as_mut(), &options).await?;
+        let start = restored.start;
         let replay_watermark = restored.replay_watermark();
-        let source = NatsPartitionSource::connect(&config, partition, start_sequence).await?;
+        let source = NatsPartitionSource::connect(&config, partition, start).await?;
         let runner = ProcessorRunner::new_partition(
             config.clone(),
             source,

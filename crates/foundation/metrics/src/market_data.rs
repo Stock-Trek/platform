@@ -1,5 +1,5 @@
 use crate::descriptions::*;
-use metrics::{counter, histogram};
+use metrics::{counter, gauge, histogram};
 use std::time::Duration;
 
 pub struct MarketDataMetrics;
@@ -184,5 +184,90 @@ impl MarketDataMetrics {
 
     pub fn record_s3_retry(operation: &'static str) {
         counter!(MARKET_DATA_S3_RETRIES_TOTAL, "operation" => operation).increment(1);
+    }
+}
+
+/// Metrics specific to partitioned candle aggregation.
+pub struct AggregatorMetrics;
+
+impl AggregatorMetrics {
+    /// Records the age of the most recent successful checkpoint for a
+    /// partition.
+    pub fn record_checkpoint_age(partition: u32, age: Duration) {
+        gauge!(
+            MARKET_DATA_AGGREGATOR_CHECKPOINT_AGE_SECONDS,
+            "partition" => partition.to_string(),
+        )
+        .set(age.as_secs_f64());
+    }
+
+    pub fn record_checkpoint_failure(partition: u32, error_type: &'static str) {
+        counter!(
+            MARKET_DATA_AGGREGATOR_CHECKPOINT_FAILURES_TOTAL,
+            "partition" => partition.to_string(),
+            "error_type" => error_type,
+        )
+        .increment(1);
+    }
+
+    /// Records how far the processor's event-time watermark trails the wall
+    /// clock.
+    pub fn record_watermark_lag(partition: u32, lag_seconds: f64) {
+        gauge!(
+            MARKET_DATA_AGGREGATOR_WATERMARK_LAG_SECONDS,
+            "partition" => partition.to_string(),
+        )
+        .set(lag_seconds.max(0.0));
+    }
+
+    pub fn record_replay_events(partition: u32, source: &'static str, events: u64) {
+        if events == 0 {
+            return;
+        }
+        counter!(
+            MARKET_DATA_AGGREGATOR_REPLAY_EVENTS_TOTAL,
+            "partition" => partition.to_string(),
+            "source" => source,
+        )
+        .increment(events);
+    }
+
+    pub fn record_replay_progress(partition: u32, source: &'static str, ratio: f64) {
+        gauge!(
+            MARKET_DATA_AGGREGATOR_REPLAY_PROGRESS_RATIO,
+            "partition" => partition.to_string(),
+            "source" => source,
+        )
+        .set(ratio.clamp(0.0, 1.0));
+    }
+
+    pub fn record_state_restore(partition: u32, outcome: &'static str, duration: Duration) {
+        histogram!(
+            MARKET_DATA_AGGREGATOR_STATE_RESTORE_SECONDS,
+            "partition" => partition.to_string(),
+            "outcome" => outcome,
+        )
+        .record(duration.as_secs_f64());
+    }
+
+    pub fn record_rebalance(partition: u32, reason: &'static str) {
+        counter!(
+            MARKET_DATA_AGGREGATOR_REBALANCES_TOTAL,
+            "partition" => partition.to_string(),
+            "reason" => reason,
+        )
+        .increment(1);
+    }
+
+    pub fn record_duplicate_events(events: u64) {
+        if events > 0 {
+            counter!(MARKET_DATA_AGGREGATOR_DUPLICATE_EVENTS_TOTAL).increment(events);
+        }
+    }
+
+    pub fn record_incomplete_windows(windows: u64) {
+        if windows > 0 {
+            counter!(MARKET_DATA_AGGREGATOR_INCOMPLETE_WINDOWS_TOTAL).increment(windows);
+        }
     }
 }

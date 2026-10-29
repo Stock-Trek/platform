@@ -6,20 +6,24 @@
 //! rebuilt from the raw event archive instead.
 
 use crate::checkpoint::StateStore;
+use crate::config::{AggregatorConfig, ReplayStartPolicy};
 use crate::partition::{PartitionId, partition_for};
 use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::state::AggregatorState;
 use async_trait::async_trait;
 use platform_archive::{ArchiveKind, ArchiveParquet, ArchivePath, Bucket, ObjectKey, S3};
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BpError, BpResult, ErrorType};
 use platform_market_data::{
     candle::CandleInterval,
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
     event::MarketEvent,
 };
+use platform_metrics::AggregatorMetrics;
+use platform_nats::ConsumerStart;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::collections::{HashMap, VecDeque};
+use std::time::{Duration, Instant};
 use stock_trek_types::cex::cex_id::CexId;
 use tracing::{info, warn};
 
@@ -80,15 +84,34 @@ impl ArchivedEventSource for EmptyArchivedEventSource {
 #[derive(Debug, Clone)]
 pub struct RestoredPartition {
     pub state: AggregatorState,
-    /// Source sequence to start from, or `None` when the source must replay
-    /// from the beginning (the archive-backed rebuild case).
-    pub start_sequence: Option<u64>,
+    /// Where the live source should begin after recovery.
+    pub start: ConsumerStart,
+    /// Which recovery path produced the state.
+    pub restored_from: RestoreSource,
     /// Whether the state was rebuilt by replaying archived raw events.
     pub rebuilt_from_archive: bool,
 }
 
 /// Alias used by startup code.
 pub type RestoreResult = RestoredPartition;
+
+/// Recovery path that produced a partition's starting state.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RestoreSource {
+    Checkpoint,
+    Archive,
+    Empty,
+}
+
+impl RestoreSource {
+    pub const fn label(self) -> &'static str {
+        match self {
+            Self::Checkpoint => "checkpoint",
+            Self::Archive => "archive",
+            Self::Empty => "empty",
+        }
+    }
+}
 
 impl RestoredPartition {
     pub fn replay_watermark(&self) -> Option<TimestampMilliseconds> {
@@ -98,71 +121,162 @@ impl RestoredPartition {
             None
         }
     }
+
+    pub fn start_sequence(&self) -> Option<u64> {
+        match self.start {
+            ConsumerStart::Sequence(sequence) => Some(sequence),
+            ConsumerStart::Earliest | ConsumerStart::Latest => None,
+        }
+    }
 }
 
-/// Restores a partition from its latest checkpoint or rebuilds it from archived
-/// raw events.
+/// Inputs that control checkpoint restore and archive rebuild for one writer.
+#[derive(Debug, Clone)]
+pub struct RestoreOptions {
+    pub partition: PartitionId,
+    pub source_stream: String,
+    pub intervals: Vec<CandleInterval>,
+    pub partition_count: usize,
+    pub allowed_lateness: DurationMilliseconds,
+    pub replay_start_policy: ReplayStartPolicy,
+    pub expected_schema_version: u32,
+}
+
+impl RestoreOptions {
+    pub fn from_config(
+        config: &AggregatorConfig,
+        partition: PartitionId,
+        source_stream: impl Into<String>,
+    ) -> Self {
+        Self {
+            partition,
+            source_stream: source_stream.into(),
+            intervals: config.intervals.clone(),
+            partition_count: config.shard_count,
+            allowed_lateness: config.processor_config().allowed_lateness,
+            replay_start_policy: config.replay_start_policy,
+            expected_schema_version: config.state_schema_version,
+        }
+    }
+}
+
+/// Restores a partition from its latest checkpoint, rebuilds it from archived
+/// raw events, or starts with empty state according to the configured policy.
 ///
 /// A checkpoint is accepted only when it belongs to this partition, names the
-/// same source stream, and has a compatible state schema. Otherwise the archive
-/// is replayed from the beginning and the caller starts the live source from
-/// the beginning as well. Events at or before the rebuilt watermark are then
-/// ignored by [`crate::runner::ProcessorRunner`] to avoid applying state twice.
+/// same source stream, and carries the expected state schema. Otherwise the
+/// archive is replayed from the beginning and the caller starts the live source
+/// from the beginning as well. Events at or before the rebuilt watermark are
+/// then ignored by [`crate::runner::ProcessorRunner`] to avoid applying state
+/// twice.
 pub async fn restore_partition(
     store: &dyn StateStore,
     archive: &mut dyn ArchivedEventSource,
-    partition: PartitionId,
-    source_stream: &str,
-    intervals: &[CandleInterval],
-    partition_count: usize,
-    allowed_lateness: DurationMilliseconds,
+    options: &RestoreOptions,
 ) -> BpResult<RestoredPartition> {
-    match store.load(partition).await {
-        Ok(Some(checkpoint)) if checkpoint.is_compatible(partition, source_stream) => {
+    let started = Instant::now();
+    let result = restore_partition_inner(store, archive, options).await;
+    let outcome = match &result {
+        Ok(restored) => restored.restored_from.label(),
+        Err(_) => "error",
+    };
+    AggregatorMetrics::record_state_restore(options.partition.get(), outcome, started.elapsed());
+    result
+}
+
+async fn restore_partition_inner(
+    store: &dyn StateStore,
+    archive: &mut dyn ArchivedEventSource,
+    options: &RestoreOptions,
+) -> BpResult<RestoredPartition> {
+    let partition = options.partition;
+    match options.replay_start_policy {
+        ReplayStartPolicy::Earliest | ReplayStartPolicy::Latest => {
+            let start = match options.replay_start_policy {
+                ReplayStartPolicy::Latest => ConsumerStart::Latest,
+                _ => ConsumerStart::Earliest,
+            };
             info!(
                 partition = %partition,
-                next_sequence = checkpoint.next_sequence,
-                watermark = ?checkpoint.watermark,
-                open_candles = checkpoint.state.open_candles_len(),
-                "restored aggregator partition from checkpoint"
+                policy = options.replay_start_policy.label(),
+                "starting aggregator partition with empty state"
             );
             return Ok(RestoredPartition {
-                state: checkpoint.state,
-                start_sequence: Some(checkpoint.next_sequence),
+                state: AggregatorState::new(),
+                start,
+                restored_from: RestoreSource::Empty,
                 rebuilt_from_archive: false,
             });
         }
-        Ok(Some(checkpoint)) => {
-            warn!(
-                partition = %partition,
-                source_stream = %checkpoint.source_stream,
-                schema_version = checkpoint.state.schema_version,
-                "ignoring stale or incompatible checkpoint; rebuilding from archive"
-            );
-        }
-        Ok(None) => {
+        ReplayStartPolicy::Archive => {
             info!(
                 partition = %partition,
-                "no checkpoint found; rebuilding from archive"
+                "archive replay policy selected; ignoring checkpoint"
             );
         }
-        Err(error) => {
-            warn!(
-                partition = %partition,
-                error = %error,
-                "failed to load checkpoint; rebuilding from archive"
-            );
-        }
+        ReplayStartPolicy::Checkpoint => match store.load(partition).await {
+            Ok(Some(checkpoint))
+                if checkpoint.is_compatible_with_schema(
+                    partition,
+                    &options.source_stream,
+                    options.expected_schema_version,
+                ) =>
+            {
+                let age = checkpoint.age(TimestampMilliseconds::now());
+                AggregatorMetrics::record_checkpoint_age(
+                    partition.get(),
+                    Duration::from_millis(age.0.max(0) as u64),
+                );
+                info!(
+                    partition = %partition,
+                    next_sequence = checkpoint.next_sequence,
+                    watermark = ?checkpoint.watermark,
+                    open_candles = checkpoint.state.open_candles_len(),
+                    "restored aggregator partition from checkpoint"
+                );
+                return Ok(RestoredPartition {
+                    state: checkpoint.state,
+                    start: ConsumerStart::Sequence(checkpoint.next_sequence),
+                    restored_from: RestoreSource::Checkpoint,
+                    rebuilt_from_archive: false,
+                });
+            }
+            Ok(Some(checkpoint)) => {
+                warn!(
+                    partition = %partition,
+                    source_stream = %checkpoint.source_stream,
+                    schema_version = checkpoint.state.schema_version,
+                    expected_schema_version = options.expected_schema_version,
+                    "ignoring stale or incompatible checkpoint; rebuilding from archive"
+                );
+            }
+            Ok(None) => {
+                info!(
+                    partition = %partition,
+                    "no checkpoint found; rebuilding from archive"
+                );
+            }
+            Err(error) => {
+                AggregatorMetrics::record_checkpoint_failure(partition.get(), error.error_type());
+                warn!(
+                    partition = %partition,
+                    error = %error,
+                    "failed to load checkpoint; rebuilding from archive"
+                );
+            }
+        },
     }
 
+    AggregatorMetrics::record_replay_progress(partition.get(), "archive", 0.0);
     let state = rebuild_state_from_archive(
         archive,
         partition,
-        intervals,
-        partition_count,
-        allowed_lateness,
+        &options.intervals,
+        options.partition_count,
+        options.allowed_lateness,
     )
     .await?;
+    AggregatorMetrics::record_replay_progress(partition.get(), "archive", 1.0);
     info!(
         partition = %partition,
         watermark = ?state.watermark,
@@ -171,7 +285,8 @@ pub async fn restore_partition(
     );
     Ok(RestoredPartition {
         state,
-        start_sequence: None,
+        start: ConsumerStart::Earliest,
+        restored_from: RestoreSource::Archive,
         rebuilt_from_archive: true,
     })
 }
@@ -187,11 +302,16 @@ pub async fn rebuild_state_from_archive(
     let config = ProcessorConfig::new(intervals.to_vec(), allowed_lateness);
     let mut processor = CandleProcessor::with_config(config);
     let mut decoders = HashMap::new();
+    let mut replayed = 0_u64;
 
     // TODO(#157): archived raw events do not yet carry the state epoch that
     // produced their closed-candle revisions. Once they do, continue that epoch
     // here instead of starting a new lineage at the default epoch.
     while let Some(event) = archive.next_event().await? {
+        replayed = replayed.saturating_add(1);
+        if replayed.is_multiple_of(1_000) {
+            AggregatorMetrics::record_replay_events(partition.get(), "archive", 1_000);
+        }
         let decoder = decoder_for(&mut decoders, event.exchange)?;
         let trades = match decoder.decode(&event) {
             Ok(trades) => trades
@@ -213,6 +333,7 @@ pub async fn rebuild_state_from_archive(
             let _ = processor.apply_event(&event, &trades);
         }
     }
+    AggregatorMetrics::record_replay_events(partition.get(), "archive", replayed % 1_000);
 
     Ok(processor.into_state())
 }
@@ -389,6 +510,18 @@ mod tests {
         CandleInterval::from_label("1m").unwrap()
     }
 
+    fn options(partition: PartitionId, partition_count: usize) -> RestoreOptions {
+        RestoreOptions {
+            partition,
+            source_stream: "aggregator-shards".to_string(),
+            intervals: vec![interval()],
+            partition_count,
+            allowed_lateness: DurationMilliseconds::ZERO,
+            replay_start_policy: ReplayStartPolicy::Checkpoint,
+            expected_schema_version: STATE_SCHEMA_VERSION,
+        }
+    }
+
     #[tokio::test]
     async fn a_compatible_checkpoint_is_restored_without_replaying_the_archive() {
         let store = InMemoryStateStore::new();
@@ -400,19 +533,12 @@ mod tests {
         store.save(&checkpoint).await.unwrap();
 
         let mut archive = VecArchive::new(vec![event(1, 1_000)]);
-        let restored = restore_partition(
-            &store,
-            &mut archive,
-            partition,
-            "aggregator-shards",
-            &[interval()],
-            1,
-            DurationMilliseconds::ZERO,
-        )
-        .await
-        .unwrap();
+        let restored = restore_partition(&store, &mut archive, &options(partition, 1))
+            .await
+            .unwrap();
 
-        assert_eq!(restored.start_sequence, Some(11));
+        assert_eq!(restored.start_sequence(), Some(11));
+        assert_eq!(restored.start, ConsumerStart::Sequence(11));
         assert!(!restored.rebuilt_from_archive);
         assert_eq!(
             restored.state.watermark,
@@ -427,19 +553,12 @@ mod tests {
         let partition = PartitionId::new(0);
         let mut archive = VecArchive::new(vec![event(1, 61_000), event(2, 62_000)]);
 
-        let restored = restore_partition(
-            &store,
-            &mut archive,
-            partition,
-            "aggregator-shards",
-            &[interval()],
-            1,
-            DurationMilliseconds::ZERO,
-        )
-        .await
-        .unwrap();
+        let restored = restore_partition(&store, &mut archive, &options(partition, 1))
+            .await
+            .unwrap();
 
-        assert_eq!(restored.start_sequence, None);
+        assert_eq!(restored.start_sequence(), None);
+        assert_eq!(restored.start, ConsumerStart::Earliest);
         assert!(restored.rebuilt_from_archive);
         assert_eq!(
             restored.replay_watermark(),
@@ -469,20 +588,12 @@ mod tests {
         store.save(&checkpoint).await.unwrap();
 
         let mut archive = VecArchive::new(vec![event(1, 61_000)]);
-        let restored = restore_partition(
-            &store,
-            &mut archive,
-            partition,
-            "aggregator-shards",
-            &[interval()],
-            1,
-            DurationMilliseconds::ZERO,
-        )
-        .await
-        .unwrap();
+        let restored = restore_partition(&store, &mut archive, &options(partition, 1))
+            .await
+            .unwrap();
 
         assert!(restored.rebuilt_from_archive);
-        assert_eq!(restored.start_sequence, None);
+        assert_eq!(restored.start_sequence(), None);
         assert_eq!(restored.state.open_candles_len(), 1);
         assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION);
     }
@@ -498,11 +609,7 @@ mod tests {
         let restored = restore_partition(
             &store,
             &mut archive,
-            other_partition,
-            "aggregator-shards",
-            &[interval()],
-            partition_count,
-            DurationMilliseconds::ZERO,
+            &options(other_partition, partition_count),
         )
         .await
         .unwrap();
@@ -522,17 +629,140 @@ mod tests {
         let restored = restore_partition(
             &store,
             &mut archive,
-            other_partition,
-            "aggregator-shards",
-            &[interval()],
-            partition_count,
-            DurationMilliseconds::ZERO,
+            &options(other_partition, partition_count),
         )
         .await
         .unwrap();
 
         assert_eq!(restored.state.watermark, None);
         assert_eq!(restored.replay_watermark(), None);
+    }
+
+    #[tokio::test]
+    async fn archive_policy_ignores_a_compatible_checkpoint() {
+        let store = InMemoryStateStore::new();
+        let partition = PartitionId::new(0);
+        let mut state = AggregatorState::new();
+        state.mark_processed(10);
+        store
+            .save(&CheckpointRecord::new(
+                partition,
+                "aggregator-shards",
+                11,
+                state,
+            ))
+            .await
+            .unwrap();
+
+        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
+        let mut options = options(partition, 1);
+        options.replay_start_policy = ReplayStartPolicy::Archive;
+        let restored = restore_partition(&store, &mut archive, &options)
+            .await
+            .unwrap();
+
+        assert_eq!(restored.restored_from, RestoreSource::Archive);
+        assert!(restored.rebuilt_from_archive);
+        assert_eq!(restored.start, ConsumerStart::Earliest);
+        assert_eq!(restored.state.open_candles_len(), 1);
+    }
+
+    #[tokio::test]
+    async fn earliest_policy_skips_checkpoint_and_archive() {
+        let store = InMemoryStateStore::new();
+        let partition = PartitionId::new(0);
+        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
+        let mut options = options(partition, 1);
+        options.replay_start_policy = ReplayStartPolicy::Earliest;
+
+        let restored = restore_partition(&store, &mut archive, &options)
+            .await
+            .unwrap();
+
+        assert_eq!(restored.restored_from, RestoreSource::Empty);
+        assert!(!restored.rebuilt_from_archive);
+        assert_eq!(restored.start, ConsumerStart::Earliest);
+        assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION);
+        assert_eq!(restored.state.open_candles_len(), 0);
+        assert_eq!(archive.events.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn latest_policy_starts_at_the_end_of_the_live_source() {
+        let store = InMemoryStateStore::new();
+        let partition = PartitionId::new(0);
+        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
+        let mut options = options(partition, 1);
+        options.replay_start_policy = ReplayStartPolicy::Latest;
+
+        let restored = restore_partition(&store, &mut archive, &options)
+            .await
+            .unwrap();
+
+        assert_eq!(restored.restored_from, RestoreSource::Empty);
+        assert_eq!(restored.start, ConsumerStart::Latest);
+        assert_eq!(restored.state.open_candles_len(), 0);
+    }
+
+    #[tokio::test]
+    async fn configured_schema_mismatch_forces_archive_rebuild() {
+        let store = InMemoryStateStore::new();
+        let partition = PartitionId::new(0);
+        let mut state = AggregatorState::new();
+        state.mark_processed(10);
+        store
+            .save(&CheckpointRecord::new(
+                partition,
+                "aggregator-shards",
+                11,
+                state,
+            ))
+            .await
+            .unwrap();
+
+        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
+        let mut options = options(partition, 1);
+        options.expected_schema_version = STATE_SCHEMA_VERSION + 1;
+        let restored = restore_partition(&store, &mut archive, &options)
+            .await
+            .unwrap();
+
+        assert_eq!(restored.restored_from, RestoreSource::Archive);
+        assert!(restored.rebuilt_from_archive);
+    }
+
+    #[test]
+    fn restore_options_come_from_the_aggregator_configuration() {
+        use crate::config::AggregatorConfig;
+        use platform_config::env_vars::EnvVars;
+
+        let config = AggregatorConfig::from_vars(&EnvVars::from_map(vec![
+            ("RUST_LOG", "info"),
+            ("AGGREGATOR_NATS_URL", "nats://localhost:4222"),
+            ("AGGREGATOR_EVENT_SUBJECT_PREFIX", "market.events"),
+            (
+                "AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX",
+                "market.candles.open",
+            ),
+            (
+                "AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX",
+                "market.candles.closed",
+            ),
+            ("AGGREGATOR_STATE_SCHEMA_VERSION", "4"),
+            ("AGGREGATOR_REPLAY_START_POLICY", "archive"),
+            ("AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS", "12"),
+        ]))
+        .unwrap();
+        let options =
+            RestoreOptions::from_config(&config, PartitionId::new(2), "aggregator-shards");
+
+        assert_eq!(options.partition, PartitionId::new(2));
+        assert_eq!(options.expected_schema_version, 4);
+        assert_eq!(options.replay_start_policy, ReplayStartPolicy::Archive);
+        assert_eq!(
+            config.watermark_idle_timeout,
+            std::time::Duration::from_secs(12)
+        );
     }
 
     #[test]

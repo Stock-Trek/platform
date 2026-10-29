@@ -44,6 +44,23 @@ pub const MARKET_DATA_ARCHIVE_FLUSH_RECORDS_TOTAL: &str = "market_data_archive_f
 pub const MARKET_DATA_ARCHIVE_FLUSH_DURATION_SECONDS: &str =
     "market_data_archive_flush_duration_seconds";
 pub const MARKET_DATA_S3_RETRIES_TOTAL: &str = "market_data_s3_retries_total";
+pub const MARKET_DATA_AGGREGATOR_CHECKPOINT_AGE_SECONDS: &str =
+    "market_data_aggregator_checkpoint_age_seconds";
+pub const MARKET_DATA_AGGREGATOR_CHECKPOINT_FAILURES_TOTAL: &str =
+    "market_data_aggregator_checkpoint_failures_total";
+pub const MARKET_DATA_AGGREGATOR_WATERMARK_LAG_SECONDS: &str =
+    "market_data_aggregator_watermark_lag_seconds";
+pub const MARKET_DATA_AGGREGATOR_REPLAY_EVENTS_TOTAL: &str =
+    "market_data_aggregator_replay_events_total";
+pub const MARKET_DATA_AGGREGATOR_REPLAY_PROGRESS_RATIO: &str =
+    "market_data_aggregator_replay_progress_ratio";
+pub const MARKET_DATA_AGGREGATOR_STATE_RESTORE_SECONDS: &str =
+    "market_data_aggregator_state_restore_seconds";
+pub const MARKET_DATA_AGGREGATOR_REBALANCES_TOTAL: &str = "market_data_aggregator_rebalances_total";
+pub const MARKET_DATA_AGGREGATOR_DUPLICATE_EVENTS_TOTAL: &str =
+    "market_data_aggregator_duplicate_events_total";
+pub const MARKET_DATA_AGGREGATOR_INCOMPLETE_WINDOWS_TOTAL: &str =
+    "market_data_aggregator_incomplete_windows_total";
 
 pub const STATUS_SUCCESS: &str = "success";
 pub const STATUS_ERROR: &str = "error";
@@ -241,6 +258,42 @@ impl DescriptionsMetrics {
         describe_counter!(
             MARKET_DATA_S3_RETRIES_TOTAL,
             "Total number of S3 upload retries, labelled by operation"
+        );
+        describe_gauge!(
+            MARKET_DATA_AGGREGATOR_CHECKPOINT_AGE_SECONDS,
+            "Age in seconds of the last successful aggregator partition checkpoint, labelled by partition"
+        );
+        describe_counter!(
+            MARKET_DATA_AGGREGATOR_CHECKPOINT_FAILURES_TOTAL,
+            "Total number of failed aggregator checkpoints, labelled by partition and error type"
+        );
+        describe_gauge!(
+            MARKET_DATA_AGGREGATOR_WATERMARK_LAG_SECONDS,
+            "Wall-clock lag behind the aggregator event-time watermark in seconds, labelled by partition"
+        );
+        describe_counter!(
+            MARKET_DATA_AGGREGATOR_REPLAY_EVENTS_TOTAL,
+            "Total number of aggregator events replayed, labelled by partition and replay source"
+        );
+        describe_gauge!(
+            MARKET_DATA_AGGREGATOR_REPLAY_PROGRESS_RATIO,
+            "Fraction of an aggregator replay that has completed, labelled by partition and replay source"
+        );
+        describe_histogram!(
+            MARKET_DATA_AGGREGATOR_STATE_RESTORE_SECONDS,
+            "Duration in seconds to restore aggregator partition state, labelled by partition and outcome"
+        );
+        describe_counter!(
+            MARKET_DATA_AGGREGATOR_REBALANCES_TOTAL,
+            "Total number of aggregator partition ownership changes, labelled by partition and reason"
+        );
+        describe_counter!(
+            MARKET_DATA_AGGREGATOR_DUPLICATE_EVENTS_TOTAL,
+            "Total number of duplicate exchange events observed by the aggregator"
+        );
+        describe_counter!(
+            MARKET_DATA_AGGREGATOR_INCOMPLETE_WINDOWS_TOTAL,
+            "Total number of candle windows marked incomplete by aggregator gap markers"
         );
     }
 }

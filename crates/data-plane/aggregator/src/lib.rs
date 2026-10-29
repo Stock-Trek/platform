@@ -16,13 +16,14 @@ pub use checkpoint::{
     Checkpoint, CheckpointRecord, CheckpointStore, InMemoryCheckpointStore, InMemoryStateStore,
     NatsCheckpointStore, NatsStateStore, SourceCheckpoint, StateCheckpoint, StateStore,
 };
-pub use config::AggregatorConfig;
+pub use config::{AggregatorConfig, ReplayStartPolicy};
 pub use lease::{InMemoryLeaseStore, LeaseStore, NatsLeaseStore, WriterLease, new_writer_id};
 pub use partition::{PartitionId, all_partitions, partition_for, partition_for_candle_key};
 pub use processor::{CandleProcessor, ProcessorConfig, ProcessorUpdate};
 pub use restore::{
-    ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource, RestoreResult,
-    RestoredPartition, S3ArchivedEventSource, rebuild_state_from_archive, restore_partition,
+    ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource, RestoreOptions,
+    RestoreResult, RestoreSource, RestoredPartition, S3ArchivedEventSource,
+    rebuild_state_from_archive, restore_partition,
 };
 pub use router::{HashRouter, NatsRouter, partitions_for_event};
 pub use runner::ProcessorRunner;
