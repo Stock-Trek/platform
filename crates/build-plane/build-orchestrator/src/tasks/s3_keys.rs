@@ -6,16 +6,18 @@ use std::fmt::Display;
 const SOURCE_PREFIX: &str = "source/";
 const ARTIFACT_PREFIX: &str = "artifact/";
 
-pub struct S3Keys;
+pub struct S3Keys {
+    ref_key: String,
+}
 
 impl S3Keys {
-    pub fn ref_key<RepoId, Remote>(
+    pub fn new<RepoId, Remote>(
         git_remote: &Remote,
         repo_id: RepoId,
         ref_name: &str,
         ref_type: SqsRefType,
         commit_hash: &str,
-    ) -> BpResult<String>
+    ) -> BpResult<Self>
     where
         RepoId: Display,
         Remote: GitHost<RepoId>,
@@ -27,104 +29,43 @@ impl S3Keys {
             SqsRefType::Branch => "heads",
             SqsRefType::Tag => "tags",
         };
-        Ok(format!(
-            "{}/{}/{}/{}/{}/{}/",
-            git_remote.provider(),
-            git_remote.host(),
-            repo,
-            ref_type_name,
-            ref_name,
-            commit_hash
-        ))
+        Ok(Self {
+            ref_key: format!(
+                "{}/{}/{}/{}/{}/{}/",
+                git_remote.provider(),
+                git_remote.host(),
+                repo,
+                ref_type_name,
+                ref_name,
+                commit_hash
+            ),
+        })
     }
 
-    pub fn source_prefix<RepoId, Remote>(
-        git_remote: &Remote,
-        repo_id: RepoId,
-        ref_name: &str,
-        ref_type: SqsRefType,
-        commit_hash: &str,
-    ) -> BpResult<String>
-    where
-        RepoId: Display,
-        Remote: GitHost<RepoId>,
-    {
-        Ok(format!(
-            "{}{SOURCE_PREFIX}",
-            Self::ref_key(git_remote, repo_id, ref_name, ref_type, commit_hash)?
-        ))
+    pub fn ref_key(&self) -> &str {
+        &self.ref_key
     }
 
-    pub fn source_key<RepoId, Remote>(
-        git_remote: &Remote,
-        repo_id: RepoId,
-        ref_name: &str,
-        ref_type: SqsRefType,
-        commit_hash: &str,
-    ) -> BpResult<String>
-    where
-        RepoId: Display,
-        Remote: GitHost<RepoId>,
-    {
-        Ok(format!(
-            "{}algorithms.zip",
-            Self::source_prefix(git_remote, repo_id, ref_name, ref_type, commit_hash)?
-        ))
+    pub fn source_prefix(&self) -> String {
+        format!("{}{SOURCE_PREFIX}", self.ref_key())
     }
 
-    pub fn artifact_prefix<RepoId, Remote>(
-        git_remote: &Remote,
-        repo_id: RepoId,
-        ref_name: &str,
-        ref_type: SqsRefType,
-        commit_hash: &str,
-    ) -> BpResult<String>
-    where
-        RepoId: Display,
-        Remote: GitHost<RepoId>,
-    {
-        Ok(format!(
-            "{}{ARTIFACT_PREFIX}",
-            Self::ref_key(git_remote, repo_id, ref_name, ref_type, commit_hash)?
-        ))
+    pub fn source_key(&self) -> String {
+        format!("{}algorithms.zip", self.source_prefix())
     }
 
-    pub fn artifact_key<RepoId, Remote>(
-        git_remote: &Remote,
-        repo_id: RepoId,
-        ref_name: &str,
-        ref_type: SqsRefType,
-        commit_hash: &str,
-    ) -> BpResult<String>
-    where
-        RepoId: Display,
-        Remote: GitHost<RepoId>,
-    {
-        Ok(format!(
-            "{}runner.cwasm",
-            Self::artifact_prefix(git_remote, repo_id, ref_name, ref_type, commit_hash)?
-        ))
+    pub fn artifact_prefix(&self) -> String {
+        format!("{}{ARTIFACT_PREFIX}", self.ref_key())
     }
 
-    pub fn compile_output_key<RepoId, Remote>(
-        git_remote: &Remote,
-        repo_id: RepoId,
-        ref_name: &str,
-        ref_type: SqsRefType,
-        commit_hash: &str,
-    ) -> BpResult<String>
-    where
-        RepoId: Display,
-        Remote: GitHost<RepoId>,
-    {
-        Ok(format!(
-            "{}compile-output.txt",
-            Self::artifact_prefix(git_remote, repo_id, ref_name, ref_type, commit_hash)?
-        ))
+    pub fn artifact_key(&self) -> String {
+        format!("{}runner.cwasm", self.artifact_prefix())
     }
-}
 
-impl S3Keys {
+    pub fn compile_output_key(&self) -> String {
+        format!("{}compile-output.txt", self.artifact_prefix())
+    }
+
     fn sanitize_path(value: &str) -> BpResult<String> {
         if Self::is_valid_ref_name(value) {
             Ok(value.to_string())
