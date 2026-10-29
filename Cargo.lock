@@ -729,6 +729,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-ssm"
+version = "1.128.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e1bc206dc421520fb6284710537bd2b021f6f6d3dda17a5b478de9cbafd7bed8"
+dependencies = [
+ "arc-swap",
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-observability",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-schema 0.2.1",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand",
+ "http 1.5.0",
+ "regex-lite",
+ "tracing",
+]
+
+[[package]]
 name = "aws-sdk-sso"
 version = "1.114.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4271,6 +4296,7 @@ dependencies = [
  "aws-config",
  "aws-sdk-s3",
  "aws-sdk-s3-transfer-manager",
+ "aws-sdk-ssm",
  "platform-time",
 ]
 
@@ -4477,11 +4503,8 @@ dependencies = [
 name = "platform-git-webhook"
 version = "0.2.0"
 dependencies = [
- "aws-credential-types",
  "aws-sdk-sqs",
- "aws-sigv4",
- "aws-smithy-runtime-api",
- "base64 0.23.1",
+ "aws-sdk-ssm",
  "hex",
  "hmac 0.13.0",
  "http 1.5.0",
@@ -4499,7 +4522,6 @@ dependencies = [
  "platform-runtime",
  "platform-sqs",
  "platform-time",
- "reqwest 0.12.28",
  "serde",
  "serde_json",
  "sha2 0.11.1",
@@ -4508,7 +4530,6 @@ dependencies = [
  "thiserror",
  "tokio",
  "tracing",
- "urlencoding",
 ]
 
 [[package]]

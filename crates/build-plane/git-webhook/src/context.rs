@@ -2,7 +2,7 @@ use crate::{
     config::WebhookConfig,
     dedup::DeliveryDedup,
     dto::event_converter::{EventConverter, EventConverters},
-    infisical::secrets::{InfisicalConfig, Secrets},
+    secrets::{Secrets, SsmConfig},
 };
 use aws_sdk_sqs::Client as SqsClient;
 use platform_aws::SdkConfig;
@@ -43,7 +43,7 @@ pub struct RsWebhookContext {
     refresh_cooldown: Duration,
     failure_backoff: Duration,
     deadline_buffer: Duration,
-    infisical: InfisicalConfig,
+    ssm: SsmConfig,
     allowed_hosts: HostAllowlist,
 }
 
@@ -69,10 +69,10 @@ impl RsWebhookContext {
             refresh_cooldown: config.refresh_cooldown,
             failure_backoff: config.secret_failure_backoff,
             deadline_buffer: config.deadline_buffer,
-            infisical: config.infisical.clone(),
+            ssm: config.ssm.clone(),
             allowed_hosts: config.github_allowed_hosts.clone(),
         };
-        // Warm the cache eagerly, but tolerate a transient Infisical outage:
+        // Warm the cache eagerly, but tolerate a transient SSM outage:
         // startup must not fail, and the first request will retry once the
         // failure backoff expires.
         let cold_start_refresh_timeout = config.cold_start_refresh_timeout;
@@ -99,7 +99,7 @@ impl RsWebhookContext {
 
     /// Returns the current converters, loading secrets on first use. Failed
     /// loads are throttled by a jittered backoff so a flood of unauthenticated
-    /// webhooks cannot amplify into unbounded Infisical and STS traffic.
+    /// webhooks cannot amplify into unbounded SSM traffic.
     pub async fn converters(&self, deadline: Deadline) -> BpResult<Converters> {
         if let Some(converters) = self.converters.read().await.clone() {
             return Ok(converters);
@@ -108,7 +108,7 @@ impl RsWebhookContext {
         self.load_converters(deadline, LoadReason::CacheMiss).await
     }
 
-    /// Reloads secrets from Infisical and rebuilds the converters, returning
+    /// Reloads secrets from SSM and rebuilds the converters, returning
     /// `None` when a refresh happened too recently. Serialising refreshes and
     /// rate limiting them stops forged webhooks from amplifying into a stream
     /// of outbound auth calls; callers should fall back to the cached
@@ -167,8 +167,7 @@ impl RsWebhookContext {
     }
 
     async fn try_load(&self, deadline: Deadline) -> BpResult<Converters> {
-        let secrets =
-            Secrets::load(&self.sdk_config, self.timeouts, deadline, &self.infisical).await?;
+        let secrets = Secrets::load(&self.sdk_config, self.timeouts, deadline, &self.ssm).await?;
         Ok(Arc::new(EventConverters::all(
             &secrets,
             self.allowed_hosts.clone(),

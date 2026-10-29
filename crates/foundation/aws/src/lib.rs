@@ -9,6 +9,7 @@ pub use aws_config::{Region, SdkConfig};
 use aws_config::{BehaviorVersion, timeout::TimeoutConfig};
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
+use aws_sdk_ssm::Client as SsmClient;
 use platform_time::timeouts::Timeouts;
 
 /// Loads the default AWS SDK configuration with the supplied connect and
@@ -53,4 +54,9 @@ pub fn transfer_client(sdk_config: &SdkConfig) -> TransferClient {
             .s3_config(sdk_config)
             .build(),
     )
+}
+
+/// Builds an SSM client from shared SDK configuration.
+pub fn ssm_client(sdk_config: &SdkConfig) -> SsmClient {
+    SsmClient::new(sdk_config)
 }

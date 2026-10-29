@@ -10,8 +10,8 @@ mod context;
 mod dedup;
 mod dto;
 mod event_response;
-mod infisical;
 mod responses;
+mod secrets;
 mod webhook_handler;
 
 const SERVICE: Service = Service::new("platform-git-webhook");
