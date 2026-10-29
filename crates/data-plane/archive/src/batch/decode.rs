@@ -78,6 +78,7 @@ impl ArchiveBatch {
         let state_epoch = Self::u64_column(batch, "state_epoch")?;
         let revision_id = Self::string_column(batch, "revision_id")?;
         let revision = Self::string_column(batch, "revision")?;
+        let is_complete = Self::boolean_column(batch, "is_complete")?;
 
         (0..batch.num_rows())
             .map(|row| {
@@ -112,6 +113,7 @@ impl ArchiveBatch {
                 let candle = Candle {
                     key: CandleKey::new(exchange, TradingPair::new(base, quote), interval),
                     market_candle,
+                    is_complete: is_complete.value(row),
                 };
                 let mut decoded = CandleRevision::decode(revision.value(row).as_bytes())?;
                 if decoded.key != candle.key

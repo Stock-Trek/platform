@@ -1128,7 +1128,9 @@ mod tests {
             .await
             .unwrap();
 
-        assert_eq!(observed.open_updates(), 1);
+        // The trade publishes the open candle, then the gap republishes it
+        // with the completeness flag cleared before the window closes.
+        assert_eq!(observed.open_updates(), 2);
         assert_eq!(observed.closed_updates(), 1);
         assert_eq!(*acked.lock().unwrap(), 2);
     }

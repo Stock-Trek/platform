@@ -17,7 +17,7 @@ The event log is also archived as raw Parquet objects. The archive is ordered by
 
 ### Keyed state
 
-Candle state is keyed by exchange, trading pair, and interval. The partition function maps every key to exactly one shard, so all intervals for a pair live together and no two writers own the same candle. State includes open candles, closed candles retained for late corrections, deduplication sequence ranges, known gaps, incomplete windows, and event-time watermarks.
+Candle state is keyed by exchange, trading pair, and interval. The partition function maps every key to exactly one shard, so all intervals for a pair live together and no two writers own the same candle. State includes open candles, closed candles retained for late corrections, deduplication sequence ranges, known gaps, incomplete windows, and event-time watermarks. Gap bookkeeping marks affected candles incomplete, and that flag is carried through to published and archived closed candles. Bookkeeping for windows that have already closed is pruned from checkpoints.
 
 ### Checkpoint contract
 
