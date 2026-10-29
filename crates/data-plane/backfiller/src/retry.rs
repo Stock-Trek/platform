@@ -116,11 +116,6 @@ impl InMemoryGapRetryStore {
     pub fn new() -> Self {
         Self::default()
     }
-
-    #[cfg(test)]
-    pub async fn snapshot(&self) -> Vec<PendingGap> {
-        self.pending.lock().await.values().cloned().collect()
-    }
 }
 
 #[async_trait]
@@ -188,6 +183,12 @@ impl GapRetryStore for NatsGapRetryStore {
 mod tests {
     use super::*;
     use platform_market_data::test_utils::gap;
+
+    impl InMemoryGapRetryStore {
+        pub(crate) async fn snapshot(&self) -> Vec<PendingGap> {
+            self.pending.lock().await.values().cloned().collect()
+        }
+    }
 
     #[tokio::test]
     async fn stores_and_removes_pending_ranges() {
