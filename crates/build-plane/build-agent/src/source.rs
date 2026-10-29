@@ -3,7 +3,7 @@
 //! The orchestrator uploads a zip archive of the repository's
 //! `src/algorithms` directory and passes the pre-signed download URL in the
 //! build request as `signed_get_url`. Archive paths are rooted at
-//! `crates/compute/runner/src/user_generated/` so extracting the archive over the
+//! `crates/sandbox-plane/runner/src/user_generated/` so extracting the archive over the
 //! working directory replaces the checked in algorithm stub with the user's
 //! source.
 
@@ -17,8 +17,8 @@ use std::{
 use tracing::info;
 use zip::ZipArchive;
 
-const USER_GENERATED_DIR: &str = "crates/compute/runner/src/user_generated";
-const USER_GENERATED_PREFIX: &str = "crates/compute/runner/src/user_generated/";
+const USER_GENERATED_DIR: &str = "crates/sandbox-plane/runner/src/user_generated";
+const USER_GENERATED_PREFIX: &str = "crates/sandbox-plane/runner/src/user_generated/";
 
 pub const DEFAULT_SOURCE_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 pub const DEFAULT_MAX_SOURCE_ARCHIVE_BYTES: NonZeroU64 =
@@ -269,7 +269,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let source = Source {
             bytes: archive(&[(
-                "crates/compute/runner/src/user_generated/algorithm.rs",
+                "crates/sandbox-plane/runner/src/user_generated/algorithm.rs",
                 b"pub struct Example;",
             )]),
         };
@@ -287,7 +287,7 @@ mod tests {
         let directory = tempfile::tempdir().unwrap();
         let source = Source {
             bytes: archive(&[(
-                "crates/compute/runner/src/user_generated/algorithm.rs",
+                "crates/sandbox-plane/runner/src/user_generated/algorithm.rs",
                 &[0u8; 256],
             )]),
         };
@@ -305,7 +305,7 @@ mod tests {
         assert!(
             !directory
                 .path()
-                .join("crates/compute/runner/src/user_generated/algorithm.rs")
+                .join("crates/sandbox-plane/runner/src/user_generated/algorithm.rs")
                 .exists()
         );
     }
