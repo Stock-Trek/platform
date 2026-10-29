@@ -22,6 +22,31 @@ const FETCH_BATCH: usize = 1;
 const FETCH_WINDOW: Duration = Duration::from_secs(30);
 const RETRY_BACKOFF: Duration = Duration::from_secs(1);
 
+/// Where a durable consumer starts when it is first created.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ConsumerStart {
+    /// Replay every message retained by the stream.
+    #[default]
+    Earliest,
+    /// Start at the next message published after the consumer is created.
+    Latest,
+    /// Start at an inclusive stream sequence.
+    Sequence(u64),
+}
+
+impl ConsumerStart {
+    /// Converts an optional resume sequence into a start policy.
+    ///
+    /// A missing or zero sequence means "from the beginning", matching the
+    /// checkpoint-free startup path.
+    pub fn from_sequence(start_sequence: Option<u64>) -> Self {
+        match start_sequence {
+            Some(sequence) if sequence > 0 => Self::Sequence(sequence),
+            _ => Self::Earliest,
+        }
+    }
+}
+
 /// A durable pull consumer over a JetStream stream.
 ///
 /// Messages are fetched in batches and explicitly acknowledged, so a restart
@@ -72,6 +97,30 @@ impl JetStreamConsumer {
         durable: &str,
         start_sequence: Option<u64>,
     ) -> BpResult<Self> {
+        Self::connect_with_start(
+            url,
+            name,
+            stream_subject_prefix,
+            filter_subject,
+            durable,
+            ConsumerStart::from_sequence(start_sequence),
+        )
+        .await
+    }
+
+    /// Connects a durable consumer at an explicit [`ConsumerStart`] position.
+    ///
+    /// The consumer config is part of the durable's identity in JetStream;
+    /// changing the start policy recreates the consumer at the requested
+    /// position.
+    pub async fn connect_with_start(
+        url: &str,
+        name: &str,
+        stream_subject_prefix: &str,
+        filter_subject: &str,
+        durable: &str,
+        start: ConsumerStart,
+    ) -> BpResult<Self> {
         let address = NatsAddress::parse(url)?;
         NatsSubject::validate_named("filter subject", filter_subject)?;
         let stream = JetStream::stream_name(stream_subject_prefix);
@@ -88,23 +137,40 @@ impl JetStreamConsumer {
             .map_err(|error| {
                 JetStream::protocol_error("failed to ensure JetStream stream", error)
             })?;
-        let consumer = stream_handle
-            .get_or_create_consumer(
-                durable,
-                pull::Config {
-                    durable_name: Some(durable.to_string()),
-                    filter_subject: filter_subject.to_string(),
-                    deliver_policy: Self::deliver_policy(start_sequence),
-                    ack_policy: AckPolicy::Explicit,
-                    ack_wait: ACK_WAIT,
-                    max_deliver: -1,
-                    ..Default::default()
-                },
-            )
+        let consumer_config = pull::Config {
+            durable_name: Some(durable.to_string()),
+            filter_subject: filter_subject.to_string(),
+            deliver_policy: Self::deliver_policy_for_start(start),
+            ack_policy: AckPolicy::Explicit,
+            ack_wait: ACK_WAIT,
+            max_deliver: -1,
+            ..Default::default()
+        };
+        let mut consumer = stream_handle
+            .get_or_create_consumer(durable, consumer_config.clone())
             .await
             .map_err(|error| {
                 JetStream::protocol_error("failed to ensure JetStream consumer", error)
             })?;
+        let info = consumer.info().await.map_err(|error| {
+            JetStream::protocol_error("failed to read JetStream consumer", error)
+        })?;
+        if info.config.deliver_policy != consumer_config.deliver_policy
+            || info.config.filter_subject != consumer_config.filter_subject
+        {
+            stream_handle
+                .delete_consumer(durable)
+                .await
+                .map_err(|error| {
+                    JetStream::protocol_error("failed to recreate JetStream consumer", error)
+                })?;
+            consumer = stream_handle
+                .get_or_create_consumer(durable, consumer_config)
+                .await
+                .map_err(|error| {
+                    JetStream::protocol_error("failed to recreate JetStream consumer", error)
+                })?;
+        }
         Ok(Self {
             client,
             consumer,
@@ -119,11 +185,17 @@ impl JetStreamConsumer {
     /// Checkpoints store the last processed sequence, while JetStream's
     /// `ByStartSequence` policy is inclusive, so callers pass the next sequence.
     pub fn deliver_policy(start_sequence: Option<u64>) -> DeliverPolicy {
-        match start_sequence {
-            Some(start_sequence) if start_sequence > 0 => {
+        Self::deliver_policy_for_start(ConsumerStart::from_sequence(start_sequence))
+    }
+
+    /// Builds the JetStream delivery policy for an explicit start position.
+    pub fn deliver_policy_for_start(start: ConsumerStart) -> DeliverPolicy {
+        match start {
+            ConsumerStart::Earliest => DeliverPolicy::All,
+            ConsumerStart::Latest => DeliverPolicy::New,
+            ConsumerStart::Sequence(start_sequence) => {
                 DeliverPolicy::ByStartSequence { start_sequence }
             }
-            _ => DeliverPolicy::All,
         }
     }
 
@@ -256,6 +328,22 @@ mod tests {
         assert_eq!(
             JetStreamConsumer::deliver_policy(Some(0)),
             DeliverPolicy::All
+        );
+    }
+
+    #[test]
+    fn explicit_start_positions_map_to_delivery_policies() {
+        assert_eq!(
+            JetStreamConsumer::deliver_policy_for_start(ConsumerStart::Earliest),
+            DeliverPolicy::All
+        );
+        assert_eq!(
+            JetStreamConsumer::deliver_policy_for_start(ConsumerStart::Latest),
+            DeliverPolicy::New
+        );
+        assert_eq!(
+            JetStreamConsumer::deliver_policy_for_start(ConsumerStart::Sequence(9)),
+            DeliverPolicy::ByStartSequence { start_sequence: 9 }
         );
     }
 }

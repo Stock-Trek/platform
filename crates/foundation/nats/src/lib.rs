@@ -13,7 +13,7 @@ mod subject;
 mod subscriber;
 
 pub use address::NatsAddress;
-pub use consumer::JetStreamConsumer;
+pub use consumer::{ConsumerStart, JetStreamConsumer};
 pub use jetstream::JetStream;
 pub use kv::KeyValue;
 pub use message::Message;

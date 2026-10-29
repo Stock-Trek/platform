@@ -354,6 +354,12 @@ mod tests {
             ],
             allowed_lateness: std::time::Duration::from_millis(5_000),
             checkpoint_interval: std::time::Duration::from_secs(5),
+            checkpoint_bucket: None,
+            checkpoint_key_prefix: "partition".to_string(),
+            watermark_idle_timeout: std::time::Duration::from_secs(60),
+            replay_start_policy: crate::config::ReplayStartPolicy::Checkpoint,
+            state_schema_version: crate::state::STATE_SCHEMA_VERSION,
+            consumer_prefix: "aggregator".to_string(),
             lease_ttl: std::time::Duration::from_secs(30),
         };
 

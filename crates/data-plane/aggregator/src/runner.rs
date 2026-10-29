@@ -8,17 +8,19 @@ use crate::{
     source::{MarketInput, MarketSource, SourceRecord},
     state::AggregatorState,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BpError, BpResult, ErrorType};
 use platform_market_data::{
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
     event::{GapMarker, MarketEvent},
 };
+use platform_metrics::AggregatorMetrics;
 use platform_metrics::descriptions::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_runtime::Runtime;
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::{HashMap, hash_map::Entry};
 use std::sync::Arc;
+use std::time::Instant;
 use stock_trek_types::cex::cex_id::CexId;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{error, info, warn};
@@ -145,6 +147,7 @@ where
             ));
         };
 
+        AggregatorMetrics::record_rebalance(partition.get(), "lease_acquired");
         info!(
             partition = %partition,
             writer = %writer_id,
@@ -197,6 +200,10 @@ where
         let mut checkpoint_ticker = time::interval(config.checkpoint_interval);
         checkpoint_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         checkpoint_ticker.tick().await;
+        let mut idle_ticker = time::interval(config.watermark_idle_timeout);
+        idle_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        idle_ticker.tick().await;
+        let mut last_checkpoint_at = Instant::now();
         let shutdown = Runtime::shutdown_signal();
         tokio::pin!(shutdown);
 
@@ -222,9 +229,18 @@ where
                                     &mut decoders,
                                     &record.input,
                                 );
+                                Self::record_update_metrics(&update);
                                 Self::publish_update(sink, &update).await?;
                                 dirty = true;
+                            } else {
+                                AggregatorMetrics::record_replay_events(
+                                    partition.get(),
+                                    "live",
+                                    1,
+                                );
                             }
+                            Self::record_watermark_lag(partition, processor);
+                            idle_ticker.reset();
                             last_record = Some(record.clone());
                             pending.push(record);
                         }
@@ -242,6 +258,7 @@ where
                                 &mut pending,
                                 last_record.as_ref(),
                                 dirty,
+                                &mut last_checkpoint_at,
                             )
                             .await?;
                             break;
@@ -265,6 +282,34 @@ where
                         &mut pending,
                         last_record.as_ref(),
                         dirty,
+                        &mut last_checkpoint_at,
+                    )
+                    .await?;
+                    dirty = false;
+                }
+                _ = idle_ticker.tick() => {
+                    let previous_watermark = processor.state().watermark;
+                    let update = Self::flush_idle(processor);
+                    Self::publish_update(sink, &update).await?;
+                    if !update.is_empty()
+                        || processor.state().watermark != previous_watermark
+                    {
+                        dirty = true;
+                    }
+                    Self::record_watermark_lag(partition, processor);
+                    Self::commit(
+                        config,
+                        source,
+                        checkpoints,
+                        leases,
+                        partition,
+                        processor,
+                        lease,
+                        writer_id,
+                        &mut pending,
+                        last_record.as_ref(),
+                        dirty,
+                        &mut last_checkpoint_at,
                     )
                     .await?;
                     dirty = false;
@@ -284,6 +329,7 @@ where
                         &mut pending,
                         last_record.as_ref(),
                         dirty,
+                        &mut last_checkpoint_at,
                     )
                     .await?;
                     break;
@@ -306,6 +352,7 @@ where
         pending: &mut Vec<SourceRecord>,
         last_record: Option<&SourceRecord>,
         dirty: bool,
+        last_checkpoint_at: &mut Instant,
     ) -> BpResult<()> {
         let Some(renewed) = leases.renew(lease, config.lease_ttl).await? else {
             return Err(BpError::bad_value(
@@ -316,6 +363,7 @@ where
         };
         *lease = renewed;
 
+        AggregatorMetrics::record_checkpoint_age(partition.get(), last_checkpoint_at.elapsed());
         if !dirty && pending.is_empty() {
             return Ok(());
         }
@@ -336,7 +384,12 @@ where
                 "source record has no JetStream sequence to checkpoint",
             ));
         };
-        checkpoints.save(&checkpoint.with_lease(lease)).await?;
+        if let Err(error) = checkpoints.save(&checkpoint.with_lease(lease)).await {
+            AggregatorMetrics::record_checkpoint_failure(partition.get(), error.error_type());
+            return Err(error);
+        }
+        *last_checkpoint_at = Instant::now();
+        AggregatorMetrics::record_checkpoint_age(partition.get(), last_checkpoint_at.elapsed());
 
         for record in pending.drain(..) {
             source.ack(&record).await?;
@@ -353,6 +406,31 @@ where
             MarketInput::Event(event) => Self::process_event(processor, decoders, event),
             MarketInput::Gap(gap) => Self::process_gap(processor, gap),
         }
+    }
+
+    fn record_update_metrics(update: &ProcessorUpdate) {
+        AggregatorMetrics::record_duplicate_events(update.duplicates as u64);
+        AggregatorMetrics::record_incomplete_windows(update.incomplete_windows.len() as u64);
+    }
+
+    fn record_watermark_lag(partition: PartitionId, processor: &CandleProcessor) {
+        let Some(watermark) = processor.state().watermark else {
+            return;
+        };
+        let lag = TimestampMilliseconds::now() - watermark;
+        AggregatorMetrics::record_watermark_lag(partition.get(), lag.0.max(0) as f64 / 1_000.0);
+    }
+
+    fn flush_idle(processor: &mut CandleProcessor) -> ProcessorUpdate {
+        if processor.state().watermark.is_none() {
+            return ProcessorUpdate::default();
+        }
+        let update = ProcessorUpdate {
+            closed: processor.flush_closed_at_or_before(TimestampMilliseconds::now()),
+            ..ProcessorUpdate::default()
+        };
+        Self::record_update_metrics(&update);
+        update
     }
 
     fn process_gap(processor: &mut CandleProcessor, gap: &GapMarker) -> ProcessorUpdate {
@@ -523,6 +601,12 @@ mod tests {
             intervals: vec![CandleInterval::from_label("1m").unwrap()],
             allowed_lateness: std::time::Duration::from_millis(5_000),
             checkpoint_interval: std::time::Duration::from_secs(1),
+            checkpoint_bucket: None,
+            checkpoint_key_prefix: "partition".to_string(),
+            watermark_idle_timeout: std::time::Duration::from_secs(60),
+            replay_start_policy: crate::config::ReplayStartPolicy::Checkpoint,
+            state_schema_version: crate::state::STATE_SCHEMA_VERSION,
+            consumer_prefix: "aggregator".to_string(),
             lease_ttl: std::time::Duration::from_secs(30),
         }
     }

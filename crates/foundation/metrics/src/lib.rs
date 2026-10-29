@@ -6,5 +6,7 @@ pub mod route;
 pub mod secret;
 pub mod sqs;
 
+pub use market_data::AggregatorMetrics;
+
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;

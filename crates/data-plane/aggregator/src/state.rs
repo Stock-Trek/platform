@@ -243,17 +243,26 @@ impl AggregatorState {
     }
 
     pub fn is_schema_compatible(&self) -> bool {
-        self.schema_version == STATE_SCHEMA_VERSION
+        self.is_schema_compatible_with(STATE_SCHEMA_VERSION)
+    }
+
+    /// Whether this state carries the schema version the process expects.
+    pub fn is_schema_compatible_with(&self, expected_version: u32) -> bool {
+        self.schema_version == expected_version
     }
 
     pub fn ensure_schema_compatible(&self) -> BpResult<()> {
-        if self.is_schema_compatible() {
+        self.ensure_schema_compatible_with(STATE_SCHEMA_VERSION)
+    }
+
+    pub fn ensure_schema_compatible_with(&self, expected_version: u32) -> BpResult<()> {
+        if self.is_schema_compatible_with(expected_version) {
             return Ok(());
         }
         Err(BpError::bad_value(
             "aggregator state",
             self.schema_version.to_string(),
-            format!("expected schema version {STATE_SCHEMA_VERSION}"),
+            format!("expected schema version {expected_version}"),
         ))
     }
 
@@ -636,5 +645,23 @@ mod tests {
 
         assert!(!state.is_schema_compatible());
         assert!(state.ensure_schema_compatible().is_err());
+    }
+
+    #[test]
+    fn schema_compatibility_can_be_checked_against_a_configured_version() {
+        let state = AggregatorState::new();
+
+        assert!(state.is_schema_compatible_with(STATE_SCHEMA_VERSION));
+        assert!(
+            state
+                .ensure_schema_compatible_with(STATE_SCHEMA_VERSION)
+                .is_ok()
+        );
+        assert!(!state.is_schema_compatible_with(STATE_SCHEMA_VERSION + 1));
+        assert!(
+            state
+                .ensure_schema_compatible_with(STATE_SCHEMA_VERSION + 1)
+                .is_err()
+        );
     }
 }

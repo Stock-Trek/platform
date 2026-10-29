@@ -17,11 +17,9 @@ use platform_metrics::descriptions::{
     DECODE_KIND_GAP_MARKER, DECODE_KIND_MARKET_EVENT, STAGE_AGGREGATOR,
 };
 use platform_metrics::market_data::MarketDataMetrics;
-use platform_nats::{JetStreamConsumer, Message};
+use platform_nats::{ConsumerStart, JetStreamConsumer, Message};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
-
-const ROUTER_DURABLE: &str = "aggregator-router";
 
 /// One input record consumed by the router or a partition writer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -145,7 +143,7 @@ impl NatsMarketSource {
             "platform-aggregator-router",
             &root,
             &filter,
-            ROUTER_DURABLE,
+            &config.router_durable_name(),
         )
         .await?;
         Ok(Self {
@@ -203,23 +201,23 @@ pub struct NatsPartitionSource {
 }
 
 impl NatsPartitionSource {
-    /// Connects the partition durable consumer and resumes at
-    /// `start_sequence` when a checkpoint exists.
+    /// Connects the partition durable consumer at the configured start
+    /// position.
     pub async fn connect(
         config: &AggregatorConfig,
         partition: PartitionId,
-        start_sequence: Option<u64>,
+        start: ConsumerStart,
     ) -> BpResult<Self> {
         let partition_subject = partition.subject(&config.shard_subject_prefix);
         let filter = format!("{partition_subject}.>");
-        let durable = format!("aggregator-shard-{}", partition.get());
-        let consumer = JetStreamConsumer::connect_from(
+        let durable = config.partition_durable_name(partition);
+        let consumer = JetStreamConsumer::connect_with_start(
             &config.nats_url,
             "platform-aggregator-partition",
             &config.shard_subject_prefix,
             &filter,
             &durable,
-            start_sequence,
+            start,
         )
         .await?;
         Ok(Self {

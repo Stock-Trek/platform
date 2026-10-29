@@ -12,7 +12,7 @@ use crate::state::AggregatorState;
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
 use platform_nats::{JetStream, KeyValue, Message};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
@@ -34,6 +34,9 @@ pub struct CheckpointRecord {
     pub writer_id: String,
     /// Serialized keyed aggregation state.
     pub state: AggregatorState,
+    /// Wall-clock time at which the checkpoint was written.
+    #[serde(default)]
+    pub created_at: TimestampMilliseconds,
 }
 
 /// Short alias for [`CheckpointRecord`].
@@ -57,6 +60,7 @@ impl CheckpointRecord {
             fencing_token: 0,
             writer_id: String::new(),
             state,
+            created_at: TimestampMilliseconds::now(),
         }
     }
 
@@ -109,10 +113,28 @@ impl CheckpointRecord {
 
     /// Whether this record can be used to restore the given partition.
     pub fn is_compatible(&self, partition: PartitionId, source_stream: &str) -> bool {
+        self.is_compatible_with_schema(partition, source_stream, crate::state::STATE_SCHEMA_VERSION)
+    }
+
+    /// Whether this record matches the partition, stream, position, and state
+    /// schema version expected by the reader.
+    pub fn is_compatible_with_schema(
+        &self,
+        partition: PartitionId,
+        source_stream: &str,
+        expected_schema_version: u32,
+    ) -> bool {
         self.partition == partition
             && self.source_stream == source_stream
             && self.next_sequence > 0
-            && self.state.is_schema_compatible()
+            && self
+                .state
+                .is_schema_compatible_with(expected_schema_version)
+    }
+
+    /// Age of this checkpoint relative to `now`.
+    pub fn age(&self, now: TimestampMilliseconds) -> DurationMilliseconds {
+        now - self.created_at
     }
 
     /// Whether a writer with `writer_id` and `fencing_token` may overwrite
@@ -253,7 +275,7 @@ impl NatsStateStore {
             KeyValue::connect(&config.nats_url, "platform-aggregator-checkpoints", &bucket).await?;
         Ok(Self {
             values,
-            key_prefix: "partition".to_string(),
+            key_prefix: config.checkpoint_key_prefix.clone(),
         })
     }
 
