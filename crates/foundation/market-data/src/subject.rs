@@ -41,29 +41,9 @@ impl MarketEventSubject {
         self.subject(EVENT_CATEGORY, stream)
     }
 
-    /// Alias for [`Self::event`].
-    pub fn events(&self, stream: &str) -> String {
-        self.event(stream)
-    }
-
-    /// Alias for [`Self::event`].
-    pub fn event_subject(&self, stream: &str) -> String {
-        self.event(stream)
-    }
-
     /// The subject for a gap marker on `stream`.
     pub fn gap(&self, stream: &str) -> String {
         self.subject(GAP_CATEGORY, stream)
-    }
-
-    /// Alias for [`Self::gap`].
-    pub fn gaps(&self, stream: &str) -> String {
-        self.gap(stream)
-    }
-
-    /// Alias for [`Self::gap`].
-    pub fn gap_subject(&self, stream: &str) -> String {
-        self.gap(stream)
     }
 
     /// A wildcard covering every market event and gap subject under this
