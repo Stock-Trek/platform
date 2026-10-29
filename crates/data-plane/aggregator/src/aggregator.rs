@@ -2,6 +2,8 @@ use platform_market_data::{
     candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
     decoders::trade::Trade,
 };
+use platform_metrics::descriptions::{DROP_REASON_OUT_OF_ORDER, STAGE_AGGREGATOR};
+use platform_metrics::market_data::MarketDataMetrics;
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::HashMap;
 
@@ -12,11 +14,13 @@ pub struct AggregationUpdate {
     pub open: Vec<Candle>,
     /// Candles that just closed and need to be published.
     pub closed: Vec<ClosedCandle>,
+    /// Trades ignored because they predate the currently open candle.
+    pub late_trades: usize,
 }
 
 impl AggregationUpdate {
     pub fn is_empty(&self) -> bool {
-        self.open.is_empty() && self.closed.is_empty()
+        self.open.is_empty() && self.closed.is_empty() && self.late_trades == 0
     }
 }
 
@@ -42,7 +46,9 @@ impl CandleAggregator {
         let mut update = AggregationUpdate {
             open: Vec::with_capacity(self.intervals.len()),
             closed: Vec::new(),
+            late_trades: 0,
         };
+        let mut is_late = false;
 
         // Iterate by index instead of cloning the interval list on every trade.
         // `CandleInterval` is `Copy`, so reading the configured interval is cheap.
@@ -70,8 +76,7 @@ impl CandleAggregator {
                 Some(_) => {
                     // A late trade cannot change a closed candle. Keep the
                     // current open candle untouched.
-                    // TODO: reject or count out-of-order trades once sequence
-                    // tracking is available.
+                    is_late = true;
                 }
                 None => {
                     let candle = Candle::open(trade, interval);
@@ -79,6 +84,11 @@ impl CandleAggregator {
                     update.open.push(candle);
                 }
             }
+        }
+
+        if is_late {
+            update.late_trades += 1;
+            MarketDataMetrics::record_dropped_event(STAGE_AGGREGATOR, DROP_REASON_OUT_OF_ORDER);
         }
 
         update
@@ -202,6 +212,21 @@ mod tests {
         aggregator.apply_trade(&trade("100", 121_000));
         let update = aggregator.apply_trade(&trade("90", 61_000));
 
-        assert!(update.is_empty());
+        assert!(!update.is_empty());
+        assert!(update.open.is_empty());
+        assert!(update.closed.is_empty());
+        assert_eq!(update.late_trades, 1);
+    }
+
+    #[test]
+    fn a_late_trade_is_counted_once_across_all_intervals() {
+        let mut aggregator = CandleAggregator::new(vec![
+            CandleInterval::from_label("1m").unwrap(),
+            CandleInterval::from_label("5m").unwrap(),
+        ]);
+        aggregator.apply_trade(&trade("100", 301_000));
+        let update = aggregator.apply_trade(&trade("90", 61_000));
+
+        assert_eq!(update.late_trades, 1);
     }
 }
