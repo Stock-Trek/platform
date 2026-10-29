@@ -7,6 +7,12 @@ use crate::sqs_message::SqsRefType;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, num::NonZeroU64};
 
+/// The form field in an S3 pre-signed POST that selects the object key.
+pub const KEY_FIELD: &str = "key";
+
+/// The S3 variable that a pre-signed POST replaces with the uploaded file name.
+pub const FILENAME_VARIABLE: &str = "${filename}";
+
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct BuildRequest {
     pub git_host: String,
@@ -26,6 +32,31 @@ pub struct BuildRequestSignedPost {
     pub fields: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_artifact_size_bytes: Option<NonZeroU64>,
+}
+
+impl BuildRequestSignedPost {
+    /// Builds the object key template for `key_prefix`.
+    ///
+    /// S3 replaces the trailing [`FILENAME_VARIABLE`] with the uploaded file's
+    /// name, allowing one signed POST to upload several artifacts without them
+    /// overwriting each other.
+    pub fn key_template(key_prefix: &str) -> String {
+        format!("{key_prefix}{FILENAME_VARIABLE}")
+    }
+
+    /// Returns the key prefix from the signed POST's key field.
+    ///
+    /// Returns `None` when the fields do not include a key or the key does not
+    /// contain [`FILENAME_VARIABLE`].
+    pub fn key_prefix(&self) -> Option<&str> {
+        let key = self.fields.get(KEY_FIELD)?;
+        key.find(FILENAME_VARIABLE).map(|position| &key[..position])
+    }
+
+    /// Replaces [`FILENAME_VARIABLE`] in a form field value with `filename`.
+    pub fn field_value(value: &str, filename: &str) -> String {
+        value.replace(FILENAME_VARIABLE, filename)
+    }
 }
 
 /// The outcome of a build agent invocation.
@@ -112,7 +143,7 @@ mod tests {
             signed_post: BuildRequestSignedPost {
                 url: "https://example.com/upload".to_string(),
                 fields: BTreeMap::from([
-                    ("key".to_string(), "artifacts/${filename}".to_string()),
+                    (KEY_FIELD.to_string(), "artifacts/${filename}".to_string()),
                     ("policy".to_string(), "policy".to_string()),
                 ]),
                 max_artifact_size_bytes: Some(NonZeroU64::new(1024).unwrap()),
@@ -144,6 +175,27 @@ mod tests {
         );
         assert_eq!(payload["signed_post"]["max_artifact_size_bytes"], 1024);
         assert!(payload.get("SIGNED_GET_URL").is_none());
+    }
+
+    #[test]
+    fn shares_the_signed_post_filename_contract() {
+        let signed_post = request().signed_post;
+
+        assert_eq!(signed_post.key_prefix(), Some("artifacts/"));
+        assert_eq!(
+            BuildRequestSignedPost::key_template("artifacts/"),
+            signed_post.fields[KEY_FIELD]
+        );
+        assert_eq!(
+            BuildRequestSignedPost::field_value(&signed_post.fields[KEY_FIELD], "runner.cwasm"),
+            "artifacts/runner.cwasm"
+        );
+
+        let without_filename = BuildRequestSignedPost {
+            fields: BTreeMap::from([(KEY_FIELD.to_string(), "artifacts/runner.cwasm".to_string())]),
+            ..signed_post
+        };
+        assert_eq!(without_filename.key_prefix(), None);
     }
 
     #[test]

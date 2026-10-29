@@ -9,6 +9,7 @@ use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use hmac::{Hmac, KeyInit, Mac};
 use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BpError, BpResult};
+use platform_messages::build_request::{BuildRequestSignedPost, KEY_FIELD};
 use serde_json::json;
 use sha2::Sha256;
 use std::{
@@ -105,7 +106,10 @@ impl PresignedPostSigner {
         let signing_key = Self::signing_key(credentials.secret_access_key(), &date, &self.region);
         let signature = hex::encode(Self::hmac_sha256(&signing_key, policy_base64.as_bytes()));
         let mut fields = BTreeMap::from([
-            ("key".to_string(), format!("{key_prefix}${{filename}}")),
+            (
+                KEY_FIELD.to_string(),
+                BuildRequestSignedPost::key_template(key_prefix),
+            ),
             ("policy".to_string(), policy_base64),
             ("x-amz-algorithm".to_string(), ALGORITHM.to_string()),
             ("x-amz-credential".to_string(), credential),

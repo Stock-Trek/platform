@@ -17,7 +17,7 @@ platform-archiver = { path = "crates/data-plane/archiver" }
 platform-backfiller = { path = "crates/data-plane/backfiller" }
 platform-compactor = { path = "crates/data-plane/compactor" }
 platform-ingester = { path = "crates/data-plane/ingester" }
-platform-runtime = { path = "crates/data-plane/runtime" }
+platform-runtime = { path = "crates/foundation/runtime" }
 
 platform-aws = { path = "crates/foundation/aws" }
 platform-config = { path = "crates/foundation/config" }

@@ -13,7 +13,7 @@
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::{BpError, BpResult, ConfigError, StorageError};
-use platform_messages::build_request::BuildRequestSignedPost;
+use platform_messages::build_request::{BuildRequestSignedPost, FILENAME_VARIABLE, KEY_FIELD};
 use std::{
     collections::BTreeMap,
     num::NonZeroU64,
@@ -24,12 +24,6 @@ use tracing::info;
 
 /// The form field that holds the object body in an S3 pre-signed POST.
 pub const FILE_FIELD: &str = "file";
-
-/// The S3 variable replaced with the uploaded file's name.
-const FILENAME_VARIABLE: &str = "${filename}";
-
-/// The form field that selects the S3 object key.
-const KEY_FIELD: &str = "key";
 
 /// The form field holding the base64-encoded POST policy.
 const POLICY_FIELD: &str = "policy";
@@ -141,7 +135,10 @@ impl SignedPost {
         // S3 requires the file to be the last field in the multipart body.
         let mut form = reqwest::multipart::Form::new();
         for (name, value) in &self.fields {
-            form = form.text(name.clone(), Self::field_value(value, &file_name));
+            form = form.text(
+                name.clone(),
+                BuildRequestSignedPost::field_value(value, &file_name),
+            );
         }
         form = form.part(FILE_FIELD, file);
 
@@ -200,10 +197,6 @@ impl SignedPost {
 
     fn is_entity_too_large(body: &str) -> bool {
         body.contains("EntityTooLarge") || body.contains("content-length-range")
-    }
-
-    fn field_value(value: &str, file_name: &str) -> String {
-        value.replace(FILENAME_VARIABLE, file_name)
     }
 
     fn file_name(path: &Path) -> BpResult<String> {
