@@ -8,7 +8,7 @@ mod retry;
 mod runner;
 
 use crate::{
-    binance::fetcher::BinanceGapFetcher, config::BackfillerConfig,
+    binance::fetcher::BinanceGapFetcher, config::BackfillerConfig, fetcher::FetcherRegistry,
     gap_marker_source::NatsGapMarkerSource, retry::NatsGapRetryStore, runner::BackfillerRunner,
 };
 use platform_errors::BpResult;
@@ -23,13 +23,14 @@ async fn main() -> BpResult<()> {
     let config = BackfillerConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let source = NatsGapMarkerSource::connect(&config).await?;
-    let fetcher = BinanceGapFetcher::try_new(&config)?;
+    let mut fetchers = FetcherRegistry::new();
+    fetchers.register(config.exchange, BinanceGapFetcher::try_new(&config)?);
     let retries = NatsGapRetryStore::connect(&config).await?;
     let publisher = NatsPublisher::connect(&config.nats_url, NATS_CLIENT_NAME).await?;
     publisher
         .ensure_stream(&config.event_subject_prefix)
         .await?;
-    BackfillerRunner::new(config, source, fetcher, publisher)
+    BackfillerRunner::new(config, source, fetchers, publisher)
         .run_with_retry_store(retries)
         .await
 }
