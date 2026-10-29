@@ -4,13 +4,27 @@
 pub type Headers = Vec<(String, String)>;
 
 /// A message delivered by a NATS subscription.
+///
+/// Messages read through JetStream also carry the source position metadata
+/// required by checkpointed consumers. Core NATS messages, and messages created
+/// directly in tests, leave the JetStream fields unset.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Message {
+    /// The subject the message was published to.
     pub subject: String,
     pub reply_to: Option<String>,
     pub status: Option<u16>,
     pub headers: Headers,
     pub payload: Vec<u8>,
+    /// Name of the JetStream stream that stored the message.
+    pub stream: Option<String>,
+    /// Monotonic sequence assigned by the source stream.
+    ///
+    /// This is the position checkpointed by consumers so they can resume from
+    /// the first unprocessed message after a restart.
+    pub stream_sequence: Option<u64>,
+    /// Sequence assigned by the durable consumer that delivered the message.
+    pub consumer_sequence: Option<u64>,
 }
 
 impl Message {
@@ -49,7 +63,29 @@ impl From<async_nats::Message> for Message {
             status: message.status.map(u16::from),
             headers,
             payload: message.payload.to_vec(),
+            stream: None,
+            stream_sequence: None,
+            consumer_sequence: None,
         }
+    }
+}
+
+impl From<async_nats::jetstream::Message> for Message {
+    fn from(message: async_nats::jetstream::Message) -> Self {
+        let metadata = message.info().ok().map(|info| {
+            (
+                info.stream.to_string(),
+                info.stream_sequence,
+                info.consumer_sequence,
+            )
+        });
+        let mut message = Message::from(message.message);
+        if let Some((stream, stream_sequence, consumer_sequence)) = metadata {
+            message.stream = Some(stream);
+            message.stream_sequence = Some(stream_sequence);
+            message.consumer_sequence = Some(consumer_sequence);
+        }
+        message
     }
 }
 
@@ -78,5 +114,23 @@ mod tests {
         assert_eq!(message.status, Some(404));
         assert_eq!(message.header("nats-msg-id"), Some("market-events.1"));
         assert_eq!(message.payload, b"payload");
+        assert_eq!(message.stream, None);
+        assert_eq!(message.stream_sequence, None);
+        assert_eq!(message.consumer_sequence, None);
+    }
+
+    #[test]
+    fn preserves_jetstream_metadata_fields() {
+        let message = Message {
+            subject: "market.events.binance.btcusdt.trade".to_string(),
+            stream: Some("market".to_string()),
+            stream_sequence: Some(42),
+            consumer_sequence: Some(7),
+            ..Message::default()
+        };
+
+        assert_eq!(message.stream.as_deref(), Some("market"));
+        assert_eq!(message.stream_sequence, Some(42));
+        assert_eq!(message.consumer_sequence, Some(7));
     }
 }

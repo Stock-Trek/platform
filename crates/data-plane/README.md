@@ -10,7 +10,9 @@ It listens for gap markers, fetches the missing data and pushes data into the sa
 
 ## Aggregator
 
-Aggregator will watch for all data coming in via NATS and keep the open candles up to date, sending updated open candles to NATS KV. When a candle is closed it gets a revision number and is sent to a Jetstream stream.
+Aggregator consumes both market events and gap markers from NATS. A router hashes each exchange and trading pair onto a shard subject, and one partition writer owns every candle key on that shard. Gap markers close candle windows that ended before the gap was observed.
+
+Each partition writer keeps the open candles up to date, sends updated open candles to NATS KV, and publishes closed candles to a Jetstream stream with a revision number. Source positions are checkpointed before a message is acknowledged, so a restarted partition resumes from the first unprocessed message.
 
 ## Archiver
 

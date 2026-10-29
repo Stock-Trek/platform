@@ -6,6 +6,7 @@ use platform_market_data::{
     envelope::EnvelopeCodec,
 };
 use platform_nats::{JetStream, KeyValue, NatsPublisher};
+use std::sync::Arc;
 use tokio::sync::Mutex;
 
 const NEXT_REVISION_KEY: &str = "next_closed_revision";
@@ -136,6 +137,26 @@ impl NatsCandleSink {
             .ok()
             .and_then(|value| value.trim().parse().ok())
             .filter(|revision| *revision > 0)
+    }
+}
+
+#[async_trait]
+impl<T> OpenCandleStore for Arc<T>
+where
+    T: OpenCandleStore + ?Sized,
+{
+    async fn update_open(&self, candles: &[Candle]) -> BpResult<()> {
+        (**self).update_open(candles).await
+    }
+}
+
+#[async_trait]
+impl<T> ClosedCandlePublisher for Arc<T>
+where
+    T: ClosedCandlePublisher + ?Sized,
+{
+    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BpResult<()> {
+        (**self).publish_closed(candles).await
     }
 }
 
