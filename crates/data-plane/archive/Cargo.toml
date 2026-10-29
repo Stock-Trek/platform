@@ -6,14 +6,19 @@ edition.workspace = true
 [dependencies]
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
+async-trait = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-s3-transfer-manager = { workspace = true }
 bytes = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+iceberg = { workspace = true }
+iceberg-catalog-rest = { workspace = true }
+iceberg-storage-opendal = { workspace = true }
 parquet = { workspace = true, features = ["async"] }
 platform-aws = { workspace = true }
-platform-errors = { workspace = true, features = ["storage"] }
+platform-config = { workspace = true }
+platform-errors = { workspace = true, features = ["http", "storage"] }
 platform-market-data = { workspace = true }
 platform-types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

@@ -1,3 +1,4 @@
+use platform_archive::IcebergConfig;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_runtime::Config;
@@ -31,6 +32,7 @@ pub struct ArchiverConfig {
     pub bucket_millis: i64,
     pub max_records: usize,
     pub dedupe_capacity: usize,
+    pub iceberg: IcebergConfig,
 }
 
 impl ArchiverConfig {
@@ -73,6 +75,7 @@ impl ArchiverConfig {
             ARCHIVER_DEDUPE_CAPACITY,
             DEFAULT_DEDUPE_CAPACITY,
         )?;
+        let iceberg = IcebergConfig::from_vars(vars, &format!("s3://{s3_bucket}/iceberg"))?;
 
         Ok(Self {
             log_filter,
@@ -85,6 +88,7 @@ impl ArchiverConfig {
             bucket_millis,
             max_records,
             dedupe_capacity,
+            iceberg,
         })
     }
 }

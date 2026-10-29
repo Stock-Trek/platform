@@ -172,6 +172,12 @@ mod tests {
             bucket_millis: 3_600_000,
             max_records: 100,
             dedupe_capacity: 100,
+            iceberg: platform_archive::IcebergConfig {
+                catalog_uri: "http://localhost:8181".to_string(),
+                warehouse: "s3://archive/iceberg".to_string(),
+                token: None,
+                namespace: "market_data".to_string(),
+            },
         }
     }
 

@@ -1,10 +1,15 @@
 use crate::config::CompactorConfig;
 use async_trait::async_trait;
-use aws_sdk_s3::primitives::ByteStream;
-use platform_archive::{ArchiveKind, ArchivePath, Bucket, ObjectKey, S3, SourceBatch};
-use platform_errors::{BpError, BpResult};
+use platform_archive::{
+    ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchivePath, Bucket, ObjectKey, S3,
+    SourceBatch,
+};
+use platform_errors::BpResult;
 use platform_types::new_types::TimestampMilliseconds;
-use std::collections::HashMap;
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 use tracing::warn;
 
 /// Finds raw archive files that are ready to be compacted.
@@ -13,47 +18,61 @@ pub trait ArchiveBatchSource: Send + Sync {
     async fn pending_batches(&self) -> BpResult<Vec<SourceBatch>>;
 }
 
-/// Tracks which raw archive files have already been compacted.
-#[async_trait]
-pub trait ProcessedManifest: Send + Sync {
-    /// The raw archive keys that were already compacted.
-    async fn processed_files(&self) -> BpResult<std::collections::HashSet<String>>;
-
-    /// Records a compacted batch so its files are never compacted again.
-    async fn mark_processed(&self, files: &[String]) -> BpResult<()>;
-}
-
-/// Lists raw archive Parquet files from S3, skipping files already recorded in
-/// the processed manifest, and groups the remainder by their source folder.
+/// Lists raw archive Parquet files from S3 and groups them by source folder.
+///
+/// A raw object is only compactable after the archiver has committed it to the
+/// raw Iceberg table. Similarly, a raw object is skipped once a compacted table
+/// snapshot records it as a processed source file.
 pub struct S3ArchiveSource {
     client: aws_sdk_s3::Client,
+    catalog: Arc<dyn ArchiveCatalog>,
     bucket: Bucket,
     prefix: String,
-    processed_prefix: String,
     settle_millis: i64,
     min_source_files: usize,
 }
 
 impl S3ArchiveSource {
-    pub async fn connect(config: &CompactorConfig) -> BpResult<Self> {
+    pub async fn connect(
+        config: &CompactorConfig,
+        catalog: Arc<dyn ArchiveCatalog>,
+    ) -> BpResult<Self> {
         let (client, _) = S3::clients().await;
         let settle_millis = i64::try_from(config.settle.as_millis()).unwrap_or(i64::MAX);
         Ok(Self {
             client,
+            catalog,
             bucket: Bucket::new(config.s3_bucket.clone()),
             prefix: config.s3_prefix.trim_matches('/').to_string(),
-            processed_prefix: config.processed_prefix.trim_matches('/').to_string(),
             settle_millis,
             min_source_files: config.min_source_files,
         })
     }
 
-    fn marker_key(&self, file: &str) -> String {
-        if self.processed_prefix.is_empty() {
-            file.to_string()
-        } else {
-            format!("{}/{}", self.processed_prefix, file)
+    async fn registered_raw_files(&self) -> BpResult<HashMap<ArchiveKind, HashSet<String>>> {
+        let mut files = HashMap::new();
+        for kind in [ArchiveKind::Events, ArchiveKind::Candles] {
+            files.insert(
+                kind,
+                self.catalog
+                    .registered_data_files(ArchiveIcebergTable::raw(kind))
+                    .await?,
+            );
         }
+        Ok(files)
+    }
+
+    async fn processed_source_files(&self) -> BpResult<HashMap<ArchiveKind, HashSet<String>>> {
+        let mut files = HashMap::new();
+        for kind in [ArchiveKind::Events, ArchiveKind::Candles] {
+            files.insert(
+                kind,
+                self.catalog
+                    .processed_source_files(ArchiveIcebergTable::compacted(kind))
+                    .await?,
+            );
+        }
+        Ok(files)
     }
 }
 
@@ -65,7 +84,8 @@ impl ArchiveBatchSource for S3ArchiveSource {
         } else {
             format!("{}/", self.prefix)
         };
-        let processed = Self::processed_files(self).await?;
+        let registered_raw = self.registered_raw_files().await?;
+        let processed = self.processed_source_files().await?;
         let objects = S3::list_objects(
             &self.client,
             &self.bucket,
@@ -77,9 +97,6 @@ impl ArchiveBatchSource for S3ArchiveSource {
         for object in objects {
             let key = object.key.as_str();
             if !key.ends_with(".parquet") {
-                continue;
-            }
-            if processed.contains(key) {
                 continue;
             }
             let Some(relative) = ArchivePath::relative_key(key, &list_prefix) else {
@@ -96,6 +113,21 @@ impl ArchiveBatchSource for S3ArchiveSource {
             let Some((parent, _)) = key.rsplit_once('/') else {
                 continue;
             };
+
+            let s3_uri = format!("s3://{}/{key}", self.bucket);
+            if !registered_raw
+                .get(&kind)
+                .is_some_and(|files| files.contains(&s3_uri))
+            {
+                continue;
+            }
+            if processed
+                .get(&kind)
+                .is_some_and(|files| files.contains(key))
+            {
+                continue;
+            }
+
             let modified_at = object.last_modified_millis().unwrap_or(bucket_start.0);
             let group = groups
                 .entry(parent.to_string())
@@ -126,51 +158,6 @@ impl ArchiveBatchSource for S3ArchiveSource {
             .collect::<Vec<_>>();
         batches.sort_by_key(|batch| (batch.bucket_start.0, batch.prefix.clone()));
         Ok(batches)
-    }
-}
-
-#[async_trait]
-impl ProcessedManifest for S3ArchiveSource {
-    async fn processed_files(&self) -> BpResult<std::collections::HashSet<String>> {
-        let list_prefix = if self.processed_prefix.is_empty() {
-            String::new()
-        } else {
-            format!("{}/", self.processed_prefix)
-        };
-        let markers = S3::list_objects(
-            &self.client,
-            &self.bucket,
-            &ObjectKey::new(list_prefix.clone()),
-        )
-        .await?;
-        Ok(markers
-            .into_iter()
-            .filter_map(|object| {
-                let key = object.key.as_str().to_string();
-                key.strip_prefix(&list_prefix).map(str::to_string)
-            })
-            .collect())
-    }
-
-    async fn mark_processed(&self, files: &[String]) -> BpResult<()> {
-        for file in files {
-            let key = ObjectKey::new(self.marker_key(file));
-            self.client
-                .put_object()
-                .bucket(self.bucket.as_str())
-                .key(key.as_str())
-                .body(ByteStream::from(Vec::new()))
-                .send()
-                .await
-                .map_err(|error| {
-                    BpError::s3(
-                        "record processed archive file",
-                        S3::object_target(&self.bucket, &key),
-                        error,
-                    )
-                })?;
-        }
-        Ok(())
     }
 }
 
