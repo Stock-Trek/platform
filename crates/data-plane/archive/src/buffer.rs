@@ -42,6 +42,11 @@ impl ArchiveBuffer {
         true
     }
 
+    /// Returns `true` when [`Self::push`] would suppress the record.
+    pub fn would_duplicate(&self, record: &ArchiveRecord) -> bool {
+        self.seen.contains(&record.key())
+    }
+
     pub fn should_flush(&self) -> bool {
         self.records.len() >= self.max_records
     }

@@ -1,6 +1,6 @@
 use crate::config::ArchiverConfig;
 use async_trait::async_trait;
-use platform_archive::ArchiveRecord;
+use platform_archive::{ArchiveRecord, ArchiveRecordKey};
 use platform_errors::BpResult;
 use platform_market_data::{
     candle::ClosedCandle, envelope::EnvelopeCodec, event::MarketEvent, subject::MarketEventSubject,
@@ -10,6 +10,7 @@ use platform_metrics::descriptions::{
 };
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_nats::{JetStreamConsumer, Message};
+use std::collections::VecDeque;
 use tracing::warn;
 
 const EVENTS_DURABLE_NAME: &str = "archiver-events";
@@ -20,16 +21,35 @@ const CANDLES_DURABLE_NAME: &str = "archiver-candles";
 pub trait ArchiveSource: Send {
     /// Returns `None` when the source has reached its end.
     async fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>>;
+
+    /// Acknowledges the record returned by the previous call to
+    /// [`Self::next_record`].
+    async fn ack(&mut self, _record: &ArchiveRecord) -> BpResult<()> {
+        Ok(())
+    }
 }
 
 /// Reads market events and closed candles from durable JetStream consumers.
 ///
-/// Messages are explicitly acknowledged after delivery to the archiver, so a
-/// restart resumes from the last acknowledged record instead of skipping
-/// everything published while the archiver was down.
+/// Messages are acknowledged only after the archiver has flushed the record to
+/// durable storage, so records buffered for a later flush are redelivered after
+/// a restart instead of being lost.
 pub struct NatsArchiveSource {
     events: JetStreamConsumer,
     candles: JetStreamConsumer,
+    in_flight: VecDeque<InFlight>,
+}
+
+struct InFlight {
+    key: ArchiveRecordKey,
+    message: Message,
+    consumer: Consumer,
+}
+
+#[derive(Clone, Copy)]
+enum Consumer {
+    Events,
+    Candles,
 }
 
 impl NatsArchiveSource {
@@ -50,7 +70,25 @@ impl NatsArchiveSource {
             CANDLES_DURABLE_NAME,
         )
         .await?;
-        Ok(Self { events, candles })
+        Ok(Self {
+            events,
+            candles,
+            in_flight: VecDeque::new(),
+        })
+    }
+
+    fn track(
+        &mut self,
+        record: ArchiveRecord,
+        message: Message,
+        consumer: Consumer,
+    ) -> ArchiveRecord {
+        self.in_flight.push_back(InFlight {
+            key: record.key(),
+            message,
+            consumer,
+        });
+        record
     }
 }
 
@@ -59,43 +97,59 @@ impl ArchiveSource for NatsArchiveSource {
     async fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>> {
         loop {
             tokio::select! {
-                message = self.events.next_message("market event") => {
-                    if let Some(record) = Self::decode_event(message) {
-                        return Ok(Some(record));
+                message = self.events.next_message_unacked() => {
+                    let Some(message) = message else {
+                        continue;
+                    };
+                    match MarketEvent::decode(&message.payload) {
+                        Ok(event) => {
+                            let record = ArchiveRecord::MarketEvent(event);
+                            return Ok(Some(self.track(record, message, Consumer::Events)));
+                        }
+                        Err(error) => {
+                            MarketDataMetrics::record_decode_failure(
+                                STAGE_ARCHIVER,
+                                DECODE_KIND_MARKET_EVENT,
+                            );
+                            warn!(%error, "skipping malformed market event");
+                            self.events.ack(&message).await?;
+                        }
                     }
                 }
-                message = self.candles.next_message("closed candle") => {
-                    if let Some(record) = Self::decode_candle(message) {
-                        return Ok(Some(record));
+                message = self.candles.next_message_unacked() => {
+                    let Some(message) = message else {
+                        continue;
+                    };
+                    match ClosedCandle::decode(&message.payload) {
+                        Ok(candle) => {
+                            let record = ArchiveRecord::ClosedCandle(candle);
+                            return Ok(Some(self.track(record, message, Consumer::Candles)));
+                        }
+                        Err(error) => {
+                            MarketDataMetrics::record_decode_failure(
+                                STAGE_ARCHIVER,
+                                DECODE_KIND_CLOSED_CANDLE,
+                            );
+                            warn!(%error, "skipping malformed closed candle");
+                            self.candles.ack(&message).await?;
+                        }
                     }
                 }
             }
         }
     }
-}
 
-impl NatsArchiveSource {
-    fn decode_event(message: Option<Message>) -> Option<ArchiveRecord> {
-        let message = message?;
-        match MarketEvent::decode(&message.payload) {
-            Ok(event) => Some(ArchiveRecord::MarketEvent(event)),
-            Err(error) => {
-                MarketDataMetrics::record_decode_failure(STAGE_ARCHIVER, DECODE_KIND_MARKET_EVENT);
-                warn!(%error, "skipping malformed market event");
-                None
-            }
-        }
-    }
-
-    fn decode_candle(message: Option<Message>) -> Option<ArchiveRecord> {
-        let message = message?;
-        match ClosedCandle::decode(&message.payload) {
-            Ok(candle) => Some(ArchiveRecord::ClosedCandle(candle)),
-            Err(error) => {
-                MarketDataMetrics::record_decode_failure(STAGE_ARCHIVER, DECODE_KIND_CLOSED_CANDLE);
-                warn!(%error, "skipping malformed closed candle");
-                None
-            }
+    async fn ack(&mut self, record: &ArchiveRecord) -> BpResult<()> {
+        let key = record.key();
+        let Some(index) = self.in_flight.iter().position(|pending| pending.key == key) else {
+            return Ok(());
+        };
+        let Some(pending) = self.in_flight.remove(index) else {
+            return Ok(());
+        };
+        match pending.consumer {
+            Consumer::Events => self.events.ack(&pending.message).await,
+            Consumer::Candles => self.candles.ack(&pending.message).await,
         }
     }
 }
