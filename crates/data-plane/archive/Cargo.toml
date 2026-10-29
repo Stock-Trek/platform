@@ -6,6 +6,7 @@ edition.workspace = true
 [dependencies]
 arrow-array = { workspace = true }
 arrow-schema = { workspace = true }
+async-trait = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-s3-transfer-manager = { workspace = true }
 bytes = { workspace = true }
@@ -13,11 +14,16 @@ chrono = { workspace = true }
 futures = { workspace = true }
 parquet = { workspace = true, features = ["async"] }
 platform-aws = { workspace = true }
-platform-errors = { workspace = true, features = ["storage"] }
+platform-config = { workspace = true }
+platform-errors = { workspace = true, features = ["http", "storage"] }
 platform-market-data = { workspace = true }
 platform-types = { workspace = true }
+reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 stock-trek = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["fs", "macros", "rt", "rt-multi-thread", "sync", "time"] }
 tracing = { workspace = true }
+urlencoding = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }

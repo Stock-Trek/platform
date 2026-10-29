@@ -3236,6 +3236,7 @@ version = "0.2.0"
 dependencies = [
  "arrow-array",
  "arrow-schema",
+ "async-trait",
  "aws-sdk-s3",
  "aws-sdk-s3-transfer-manager",
  "bytes",
@@ -3243,14 +3244,19 @@ dependencies = [
  "futures",
  "parquet",
  "platform-aws",
+ "platform-config",
  "platform-errors",
  "platform-market-data",
  "platform-types",
+ "reqwest 0.12.28",
  "serde",
+ "serde_json",
  "stock-trek",
  "stock-trek-types",
  "tokio",
  "tracing",
+ "urlencoding",
+ "uuid",
 ]
 
 [[package]]
@@ -3272,7 +3278,6 @@ dependencies = [
  "stock-trek-types",
  "tokio",
  "tracing",
- "uuid",
 ]
 
 [[package]]

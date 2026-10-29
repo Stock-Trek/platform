@@ -6,8 +6,10 @@ mod source;
 use crate::{
     config::ArchiverConfig, runner::ArchiverRunner, sink::S3ParquetSink, source::NatsArchiveSource,
 };
+use platform_archive::IcebergCatalog;
 use platform_errors::BpResult;
 use platform_runtime::Service;
+use std::sync::Arc;
 
 const SERVICE: Service = Service::new("platform-archiver");
 
@@ -16,6 +18,8 @@ async fn main() -> BpResult<()> {
     let config = ArchiverConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let source = NatsArchiveSource::connect(&config).await?;
-    let sink = S3ParquetSink::connect(&config).await?;
+    let catalog = Arc::new(IcebergCatalog::connect(&config.iceberg).await?);
+    let sink = S3ParquetSink::connect(&config, catalog).await?;
+    sink.recover_uncommitted().await?;
     ArchiverRunner::new(config, source, sink).run().await
 }

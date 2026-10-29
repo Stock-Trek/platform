@@ -1,5 +1,6 @@
 pub mod batch;
 pub mod buffer;
+pub mod iceberg;
 pub mod layout;
 pub mod parquet;
 pub mod parquet_reader;
@@ -10,6 +11,10 @@ pub mod source;
 
 pub use batch::ArchiveBatch;
 pub use buffer::ArchiveBuffer;
+pub use iceberg::{
+    ArchiveCatalog, ArchiveIcebergTable, ArchiveTableLayer, IcebergCatalog, IcebergConfig,
+    IcebergDataFile,
+};
 pub use layout::{ArchiveBucket, ArchiveHour, ArchiveLayout, ArchivePath, ArchiveTimePartition};
 pub use parquet::{ArchiveParquet, ArchiveParquetBatches, ArchiveParquetWriter};
 pub use parquet_reader::ParquetReader;

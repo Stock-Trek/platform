@@ -7,7 +7,7 @@ use parquet::{
     errors::{ParquetError, Result as ParquetResult},
     file::metadata::{ParquetMetaData, ParquetMetaDataReader},
 };
-use platform_errors::BpError;
+use platform_errors::{BpError, BpResult};
 use std::{ops::Range, sync::Arc};
 
 #[derive(Clone)]
@@ -31,6 +31,11 @@ impl ParquetReader {
             key: key.clone(),
             file_size,
         }
+    }
+
+    pub async fn row_count(mut self) -> BpResult<i64> {
+        let metadata = self.get_metadata(None).await?;
+        Ok(metadata.file_metadata().num_rows())
     }
 
     async fn fetch_range(&self, range: Range<u64>) -> ParquetResult<Bytes> {

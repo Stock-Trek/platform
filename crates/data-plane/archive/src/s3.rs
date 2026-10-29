@@ -85,6 +85,7 @@ impl From<String> for ObjectKey {
 pub struct S3Object {
     pub key: ObjectKey,
     pub last_modified_millis: Option<i64>,
+    pub size: i64,
 }
 
 impl S3Object {
@@ -133,6 +134,7 @@ impl S3 {
                     files.push(S3Object {
                         key: ObjectKey::new(key),
                         last_modified_millis: object.last_modified().map(Self::modified_millis),
+                        size: object.size().unwrap_or_default(),
                     });
                 }
             }
@@ -160,6 +162,27 @@ impl S3 {
             .await
             .map_err(|error| BpError::s3("upload object", target, error))?;
         Ok(())
+    }
+
+    pub async fn download_bytes(
+        s3_client: &S3Client,
+        bucket: &Bucket,
+        key: &ObjectKey,
+    ) -> BpResult<Bytes> {
+        let target = Self::object_target(bucket, key);
+        let output = s3_client
+            .get_object()
+            .bucket(bucket.as_str())
+            .key(key.as_str())
+            .send()
+            .await
+            .map_err(|error| BpError::s3("get object", target.clone(), error))?;
+        output
+            .body
+            .collect()
+            .await
+            .map(|data| data.into_bytes())
+            .map_err(|error| BpError::s3("read object body", target, error))
     }
 
     pub fn object_target(bucket: &Bucket, key: &ObjectKey) -> String {
