@@ -10,6 +10,7 @@ use crate::{
 };
 use platform_errors::{BpError, BpResult, ErrorType};
 use platform_market_data::{
+    candle::CandleKey,
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
     event::{GapMarker, MarketEvent},
 };
@@ -456,7 +457,7 @@ where
                                     &record.input,
                                 );
                                 Self::record_update_metrics(&update);
-                                Self::publish_update(sink, &update).await?;
+                                Self::publish_update(sink, &update, processor.state()).await?;
                                 state.dirty = true;
                             } else {
                                 AggregatorMetrics::record_replay_events(
@@ -498,7 +499,7 @@ where
                 _ = idle_ticker.tick() => {
                     let previous_watermark = processor.state().watermark;
                     let update = Self::flush_idle(processor);
-                    Self::publish_update(sink, &update).await?;
+                    Self::publish_update(sink, &update, processor.state()).await?;
                     if !update.is_empty()
                         || processor.state().watermark != previous_watermark
                     {
@@ -752,14 +753,35 @@ where
         }
     }
 
-    async fn publish_update(sink: &K, update: &ProcessorUpdate) -> BpResult<()> {
+    async fn publish_update(
+        sink: &K,
+        update: &ProcessorUpdate,
+        state: &AggregatorState,
+    ) -> BpResult<()> {
         if !update.closed.is_empty() {
             sink.publish_closed(&update.closed).await?;
+        }
+        let closed_open_keys = Self::closed_open_keys(update, state);
+        if !closed_open_keys.is_empty() {
+            sink.delete_open(&closed_open_keys).await?;
         }
         if !update.open.is_empty() {
             sink.update_open(&update.open).await?;
         }
         Ok(())
+    }
+
+    fn closed_open_keys(update: &ProcessorUpdate, state: &AggregatorState) -> Vec<CandleKey> {
+        let mut keys = update
+            .closed
+            .iter()
+            .map(|closed| &closed.candle.key)
+            .filter(|key| state.open_candle(key).is_none())
+            .cloned()
+            .collect::<Vec<_>>();
+        keys.sort_by_key(CandleKey::subject_suffix);
+        keys.dedup();
+        keys
     }
 }
 
@@ -812,6 +834,7 @@ mod tests {
     struct FakeSink {
         open_updates: Arc<Mutex<usize>>,
         closed_updates: Arc<Mutex<usize>>,
+        deleted_open_updates: Arc<Mutex<usize>>,
         fail: bool,
     }
 
@@ -823,6 +846,13 @@ mod tests {
         fn closed_updates(&self) -> usize {
             *self.closed_updates.lock().expect("closed updates lock")
         }
+
+        fn deleted_open_updates(&self) -> usize {
+            *self
+                .deleted_open_updates
+                .lock()
+                .expect("deleted open updates lock")
+        }
     }
 
     #[async_trait]
@@ -832,6 +862,17 @@ mod tests {
                 return Err(BpError::bad_value("sink", "test", "write failed"));
             }
             *self.open_updates.lock().expect("open updates lock") += candles.len();
+            Ok(())
+        }
+
+        async fn delete_open(&self, keys: &[CandleKey]) -> BpResult<()> {
+            if self.fail {
+                return Err(BpError::bad_value("sink", "test", "write failed"));
+            }
+            *self
+                .deleted_open_updates
+                .lock()
+                .expect("deleted open updates lock") += keys.len();
             Ok(())
         }
     }
@@ -1134,7 +1175,50 @@ mod tests {
         // with the completeness flag cleared before the window closes.
         assert_eq!(observed.open_updates(), 2);
         assert_eq!(observed.closed_updates(), 1);
+        assert_eq!(observed.deleted_open_updates(), 1);
         assert_eq!(*acked.lock().unwrap(), 2);
+    }
+
+    #[test]
+    fn closed_open_keys_keep_a_newer_open_window() {
+        use platform_market_data::{candle::CandleInterval, decoders::trade::Trade};
+        use rust_decimal::Decimal;
+        use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
+
+        let interval = CandleInterval::from_label("1m").unwrap();
+        let pair = TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD);
+        let key = CandleKey::new(CexId::Binance, pair, interval);
+        let trade_at = |timestamp| Trade {
+            exchange: CexId::Binance,
+            trading_pair: pair,
+            price: Decimal::ONE,
+            quantity: Decimal::ONE,
+            timestamp: TimestampMilliseconds(timestamp),
+        };
+
+        let mut closed = Candle::open(&trade_at(61_000), interval);
+        closed.close();
+        let newer_open = Candle::open(&trade_at(121_000), interval);
+        let update = ProcessorUpdate {
+            closed: vec![ClosedCandle::new(
+                closed.clone(),
+                TimestampMilliseconds(126_000),
+                1,
+                0,
+            )],
+            ..ProcessorUpdate::default()
+        };
+
+        let mut state = AggregatorState::new();
+        assert_eq!(
+            ProcessorRunner::<FakeSource, FakeSink>::closed_open_keys(&update, &state),
+            vec![key.clone()]
+        );
+
+        state.open_candles.entry(key).or_default().push(newer_open);
+        assert!(
+            ProcessorRunner::<FakeSource, FakeSink>::closed_open_keys(&update, &state).is_empty()
+        );
     }
 
     #[tokio::test]
