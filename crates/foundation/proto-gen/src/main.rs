@@ -1,4 +1,4 @@
-use platform_proto_gen::ProtoGen;
+use platform_proto_gen::{GENERATED_DIR, ProtoGen};
 use std::path::Path;
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -6,9 +6,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ancestors()
         .nth(3)
         .ok_or("proto-gen lives under the workspace root")?;
-    ProtoGen::generate(
-        &root.join("proto"),
-        &root.join("crates/compute/runner/src/generated"),
-    )?;
+    ProtoGen::generate(&root.join("proto"), &root.join(GENERATED_DIR))?;
     Ok(())
 }

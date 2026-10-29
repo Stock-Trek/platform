@@ -1,3 +1,3 @@
 mod generator;
 
-pub use generator::ProtoGen;
+pub use generator::{GENERATED_DIR, ProtoGen};

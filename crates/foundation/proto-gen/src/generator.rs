@@ -1,5 +1,7 @@
 use std::path::Path;
 
+pub const GENERATED_DIR: &str = "crates/sandbox-plane/runner/src/generated";
+
 pub struct ProtoGen;
 
 impl ProtoGen {
@@ -53,11 +55,8 @@ mod tests {
         ProtoGen::generate(&root.join("proto"), &out_dir).expect("failed to generate DTOs");
 
         for name in ["dto.rs", "mod.rs"] {
-            let expected = std::fs::read_to_string(
-                root.join("crates/sandbox-plane/runner/src/generated")
-                    .join(name),
-            )
-            .unwrap_or_else(|error| panic!("failed to read checked-in {name}: {error}"));
+            let expected = std::fs::read_to_string(root.join(GENERATED_DIR).join(name))
+                .unwrap_or_else(|error| panic!("failed to read checked-in {name}: {error}"));
             let actual = std::fs::read_to_string(out_dir.join(name))
                 .unwrap_or_else(|error| panic!("failed to read generated {name}: {error}"));
             assert_eq!(
