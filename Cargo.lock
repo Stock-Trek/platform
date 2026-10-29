@@ -4564,6 +4564,7 @@ dependencies = [
  "stock-trek-types",
  "tokio",
  "tracing",
+ "url",
 ]
 
 [[package]]

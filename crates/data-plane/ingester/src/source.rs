@@ -103,6 +103,7 @@ impl WebsocketSource {
     }
 
     pub async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BpResult<()> {
+        IngesterConfig::validate_trade_streams(self.exchange, &self.url)?;
         let codec = match &self.stream_format {
             StreamFormat::Json(codec) | StreamFormat::Binary(codec) => codec.clone(),
         };
@@ -246,5 +247,18 @@ mod tests {
             WebsocketSource::api_key_header(CexId::Binance).unwrap(),
             "X-MBX-APIKEY"
         );
+    }
+
+    #[tokio::test]
+    async fn rejects_overlapping_trade_streams_before_connecting() {
+        let source = WebsocketSource::new(
+            CexId::Binance,
+            "wss://example.invalid/stream?streams=btcusdt@trade/btcusdt@aggTrade",
+            None,
+            StreamFormat::for_exchange("json", CexId::Binance).unwrap(),
+        );
+        let (sender, _receiver) = mpsc::channel(1);
+
+        assert!(source.run(sender).await.is_err());
     }
 }
