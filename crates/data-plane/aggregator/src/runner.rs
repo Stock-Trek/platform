@@ -6,7 +6,7 @@ use crate::{
     processor::{CandleProcessor, ProcessorUpdate},
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::{MarketInput, MarketSource, SourceRecord},
-    state::AggregatorState,
+    state::{AggregatorState, DeduplicationKey},
 };
 use platform_errors::{BpError, BpResult, ErrorType};
 use platform_market_data::{
@@ -419,9 +419,8 @@ where
                 maybe_record = source.next_input() => {
                     match maybe_record {
                         Ok(Some(record)) => {
-                            let is_replay = replay_watermark.is_some_and(|watermark| {
-                                input_timestamp(&record.input) <= watermark
-                            });
+                            let is_replay =
+                                Self::is_replay(processor, replay_watermark, &record.input);
                             // Mark the offset before folding the input so any
                             // candles closed by this record derive their
                             // revision from the source offset that produced
@@ -668,6 +667,29 @@ where
             source.ack(&record).await?;
         }
         Ok(())
+    }
+
+    fn is_replay(
+        processor: &CandleProcessor,
+        replay_watermark: Option<TimestampMilliseconds>,
+        input: &MarketInput,
+    ) -> bool {
+        let Some(watermark) = replay_watermark else {
+            return false;
+        };
+        if input_timestamp(input) > watermark {
+            return false;
+        }
+        match input {
+            MarketInput::Event(event) => event.sequence.is_none_or(|sequence| {
+                processor.state().is_duplicate(&DeduplicationKey::new(
+                    event.exchange,
+                    &event.stream,
+                    sequence,
+                ))
+            }),
+            MarketInput::Gap(_) => true,
+        }
     }
 
     fn process_input(
@@ -1172,6 +1194,7 @@ mod tests {
         let checkpoints = Arc::new(InMemoryStateStore::new());
         let mut restored_state = AggregatorState::new();
         restored_state.advance_watermark(TimestampMilliseconds(61_000));
+        restored_state.observe_sequence(&DeduplicationKey::new(CexId::Binance, "btcusdt@trade", 1));
 
         ProcessorRunner::new(config(), source, sink)
             .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
@@ -1299,6 +1322,35 @@ mod tests {
             .unwrap();
 
         assert_eq!(checkpoints.get(partition).unwrap(), stale_checkpoint);
+    }
+
+    #[tokio::test]
+    async fn restored_partitions_apply_new_backfills_older_than_the_replay_watermark() {
+        let sink = FakeSink::default();
+        let observed = sink.clone();
+        let acked = Arc::new(Mutex::new(0));
+        let mut backfill = trade_event(61_000);
+        backfill.sequence = Some(2);
+        let source = FakeSource {
+            records: vec![record(MarketInput::Event(backfill), 2)],
+            acked: acked.clone(),
+            ..FakeSource::default()
+        };
+        let checkpoints = Arc::new(InMemoryStateStore::new());
+        let mut restored_state = AggregatorState::new();
+        restored_state.advance_watermark(TimestampMilliseconds(121_000));
+        restored_state.observe_sequence(&DeduplicationKey::new(CexId::Binance, "btcusdt@trade", 1));
+
+        ProcessorRunner::new(config(), source, sink)
+            .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
+            .with_state(restored_state)
+            .with_replay_watermark(Some(TimestampMilliseconds(121_000)))
+            .run()
+            .await
+            .unwrap();
+
+        assert_eq!(observed.open_updates(), 1);
+        assert_eq!(*acked.lock().unwrap(), 1);
     }
 
     #[tokio::test]

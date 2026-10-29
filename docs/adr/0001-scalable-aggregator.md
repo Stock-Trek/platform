@@ -17,7 +17,7 @@ The event log is also archived as raw Parquet objects. The archive is ordered by
 
 ### Keyed state
 
-Candle state is keyed by exchange, trading pair, and interval. The partition function maps every key to exactly one shard, so all intervals for a pair live together and no two writers own the same candle. State includes open candles, deduplication sequence ranges, known gaps, incomplete windows, and the event-time watermark.
+Candle state is keyed by exchange, trading pair, and interval. The partition function maps every key to exactly one shard, so all intervals for a pair live together and no two writers own the same candle. State includes open candles, closed candles retained for late corrections, deduplication sequence ranges, known gaps, incomplete windows, and event-time watermarks.
 
 ### Checkpoint contract
 
@@ -43,7 +43,7 @@ Recovery follows the configured replay policy:
 - `earliest` starts with empty state at the beginning of the live log.
 - `latest` starts with empty state at the end of the live log.
 
-An archive rebuild records its event-time watermark. The live source is then consumed from the beginning, but inputs at or before that watermark only advance the source position and are not applied to candle state. This makes the archive-plus-log handoff idempotent. Closed-candle revisions are derived from source offsets and state epoch, not from process-local counters.
+An archive rebuild records its event-time watermark. The live source is then consumed from the beginning. Inputs at or before that watermark are skipped only when they are already represented in the rebuilt deduplication state (or carry no sequence); new backfills with unseen sequences still pass through the candle fold and revise retained closed candles. This makes the archive-plus-log handoff idempotent without dropping late data. Closed-candle revisions are derived from source offsets and state epoch, not from process-local counters.
 
 When the shard count or key mapping changes, operators select `archive` (or `earliest` with an empty live stream) or run the Rebuilder. There is no mixed old/new partition mapping rollout.
 
@@ -53,7 +53,7 @@ When the shard count or key mapping changes, operators select `archive` (or `ear
 - Any replica can take over by reading the checkpoint and fencing the previous writer.
 - A missing or incompatible checkpoint is recoverable from archived events.
 - Operators must choose a new consumer prefix or shard mapping deliberately when changing topology; durable names intentionally preserve ownership history.
-- Wall-clock idle time advances the watermark only after the configured idle timeout, so quiet markets can close candles without waiting for a synthetic event.
+- Wall-clock idle time closes quiet windows only after the configured idle timeout but does not advance per-stream event-time watermarks; inputs for already-closed windows are folded into retained closed candles instead of being dropped.
 
 ## Observability
 

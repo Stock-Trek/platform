@@ -20,7 +20,7 @@ use stock_trek_types::cex::cex_id::CexId;
 /// Bump this whenever the persisted shape changes in a way that cannot be read
 /// as the current state. Checkpoints with another version are ignored and the
 /// partition is rebuilt from archived raw events.
-pub const STATE_SCHEMA_VERSION: u32 = 3;
+pub const STATE_SCHEMA_VERSION: u32 = 4;
 
 /// Alias used by callers that describe the constant by its shorter name.
 pub const SCHEMA_VERSION: u32 = STATE_SCHEMA_VERSION;
@@ -210,6 +210,9 @@ pub struct AggregatorState {
     /// reopening a closed one.
     #[serde(with = "open_candles")]
     pub open_candles: HashMap<CandleKey, Vec<Candle>>,
+    /// Closed candles retained so late or backfilled trades can revise them.
+    #[serde(default, with = "open_candles")]
+    pub closed_candles: HashMap<CandleKey, Vec<Candle>>,
     /// Last routed source sequence whose effects are included in this state.
     pub last_processed_sequence: Option<u64>,
     /// Global event-time watermark observed by this partition.
@@ -234,6 +237,7 @@ impl AggregatorState {
             schema_version: STATE_SCHEMA_VERSION,
             state_epoch: 0,
             open_candles: HashMap::new(),
+            closed_candles: HashMap::new(),
             last_processed_sequence: None,
             watermark: None,
             streams: BTreeMap::new(),
@@ -280,6 +284,33 @@ impl AggregatorState {
 
     pub fn open_candles_len(&self) -> usize {
         self.open_candles.values().map(Vec::len).sum()
+    }
+
+    pub fn closed_candle(
+        &self,
+        key: &CandleKey,
+        window_start: TimestampMilliseconds,
+    ) -> Option<&Candle> {
+        self.closed_candles.get(key).and_then(|candles| {
+            candles
+                .binary_search_by_key(&window_start.0, |candle| candle.start_time().0)
+                .ok()
+                .and_then(|position| candles.get(position))
+        })
+    }
+
+    pub fn closed_candles_len(&self) -> usize {
+        self.closed_candles.values().map(Vec::len).sum()
+    }
+
+    pub fn retain_closed_candle(&mut self, candle: Candle) {
+        let candles = self.closed_candles.entry(candle.key.clone()).or_default();
+        match candles
+            .binary_search_by_key(&candle.start_time().0, |candidate| candidate.start_time().0)
+        {
+            Ok(position) => candles[position] = candle,
+            Err(position) => candles.insert(position, candle),
+        }
     }
 
     /// Advances the global event-time watermark. Returns whether it moved.
@@ -423,17 +454,25 @@ impl PartialEq for AggregatorState {
             && self.streams == other.streams
             && self.known_gaps == other.known_gaps
             && self.incomplete_windows == other.incomplete_windows
-            && self.open_candles.len() == other.open_candles.len()
-            && self.open_candles.iter().all(|(key, candles)| {
-                other.open_candles.get(key).is_some_and(|other_candles| {
-                    candles.len() == other_candles.len()
-                        && candles
-                            .iter()
-                            .zip(other_candles)
-                            .all(|(candle, other_candle)| candle_eq(candle, other_candle))
-                })
-            })
+            && candle_maps_eq(&self.open_candles, &other.open_candles)
+            && candle_maps_eq(&self.closed_candles, &other.closed_candles)
     }
+}
+
+fn candle_maps_eq(
+    left: &HashMap<CandleKey, Vec<Candle>>,
+    right: &HashMap<CandleKey, Vec<Candle>>,
+) -> bool {
+    left.len() == right.len()
+        && left.iter().all(|(key, candles)| {
+            right.get(key).is_some_and(|other| {
+                candles.len() == other.len()
+                    && candles
+                        .iter()
+                        .zip(other)
+                        .all(|(candle, other)| candle_eq(candle, other))
+            })
+        })
 }
 
 fn candle_eq(left: &Candle, right: &Candle) -> bool {
@@ -521,6 +560,7 @@ mod tests {
         assert!(state.is_schema_compatible());
         assert_eq!(state.state_epoch, 0);
         assert!(state.open_candles.is_empty());
+        assert!(state.closed_candles.is_empty());
         assert_eq!(state.last_processed_sequence, None);
         assert_eq!(state.watermark, None);
         assert!(state.streams.is_empty());
@@ -612,6 +652,9 @@ mod tests {
             .entry(candle.key.clone())
             .or_default()
             .push(candle.clone());
+        let mut closed = candle.clone();
+        closed.close();
+        state.retain_closed_candle(closed);
         state.mark_processed(42);
         state.advance_watermark(TimestampMilliseconds(61_000));
         state.observe_sequence(&DeduplicationKey::new(CexId::Binance, "btcusdt@trade", 9));
@@ -621,6 +664,7 @@ mod tests {
 
         assert!(decoded.is_schema_compatible());
         assert_eq!(decoded.open_candles_len(), 1);
+        assert_eq!(decoded.closed_candles_len(), 1);
         let decoded_candle = decoded
             .open_candles
             .values()
@@ -631,6 +675,13 @@ mod tests {
         assert_eq!(
             decoded_candle.key.subject_suffix(),
             candle.key.subject_suffix()
+        );
+        assert!(
+            decoded
+                .closed_candle(&candle.key, candle.start_time())
+                .unwrap()
+                .market_candle
+                .is_candle_closed
         );
         assert_eq!(decoded.last_processed_sequence, Some(42));
         assert_eq!(decoded.watermark, Some(TimestampMilliseconds(61_000)));
