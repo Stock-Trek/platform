@@ -3,7 +3,8 @@
 //! The rebuilder reads compacted event partitions when they are available and
 //! falls back to raw partitions otherwise. Events are grouped by exchange
 //! stream and replayed through the aggregator's pure candle processor, so the
-//! same archived input always produces the same candle revisions.
+//! same archived input always produces the same candle revisions. Regenerated
+//! candles can be written to either the raw or the compacted candle layer.
 
 pub mod config;
 pub mod events;
@@ -22,7 +23,7 @@ use platform_errors::BpResult;
 use std::sync::Arc;
 use tracing::info;
 
-pub use crate::config::RebuildSourceLayer;
+pub use crate::config::{RebuildOutputLayer, RebuildSourceLayer};
 
 /// Runs one rebuild from the configured Iceberg source to the output archive.
 pub async fn run(config: RebuildConfig) -> BpResult<()> {
@@ -59,6 +60,7 @@ pub async fn run(config: RebuildConfig) -> BpResult<()> {
         &config.output_prefix,
         config.bucket_millis,
         catalog,
+        config.output_layer,
     )
     .await?;
     sink.write(&result.candles).await?;
