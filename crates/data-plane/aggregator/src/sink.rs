@@ -7,10 +7,6 @@ use platform_market_data::{
 };
 use platform_nats::{JetStream, KeyValue, NatsPublisher};
 use std::sync::Arc;
-use tokio::sync::Mutex;
-
-const NEXT_REVISION_KEY: &str = "next_closed_revision";
-const PENDING_REVISION_KEY: &str = "pending_closed_revision";
 
 /// Stores the latest version of candles that are still open.
 ///
@@ -22,9 +18,6 @@ pub trait OpenCandleStore: Send + Sync {
 }
 
 /// Publishes candles after they close.
-///
-/// Implementations assign the authoritative, restart-stable revision to each
-/// closed candle.
 #[async_trait]
 pub trait ClosedCandlePublisher: Send + Sync {
     async fn publish_closed(&self, candles: &[ClosedCandle]) -> BpResult<()>;
@@ -36,17 +29,15 @@ pub trait ClosedCandlePublisher: Send + Sync {
 /// Open candles are written per key only so clients can serve the current
 /// partial candle. They are a derived projection of the checkpointed keyed
 /// state; recovery never reads this bucket back into the aggregator.
-/// Before a closed candle is published, it is stored as a pending revision in a
-/// KV bucket. The revision counter is advanced only after JetStream acknowledges
-/// the publish, and any pending revision is replayed on startup. This means a
-/// crash at any point can neither duplicate nor skip a candle revision: an
-/// acknowledged publish is committed, while an unacknowledged one is retried
-/// with the same deterministic message id.
+///
+/// Closed candles already carry a deterministic revision derived from the
+/// candle identity, window, close watermark, source offset, and partition state
+/// epoch. Publishing therefore needs no global revision counter or pending
+/// marker: every replay publishes the same `Nats-Msg-Id`, which JetStream
+/// de-duplicates while the partition checkpoint still fences redelivery.
 pub struct NatsCandleSink {
     publisher: NatsPublisher,
     open_candles: KeyValue,
-    revisions: KeyValue,
-    next_revision: Mutex<u64>,
     closed_subject_prefix: String,
 }
 
@@ -63,85 +54,16 @@ impl NatsCandleSink {
             &JetStream::kv_bucket_name(&config.open_candle_subject_prefix),
         )
         .await?;
-        let revisions = KeyValue::connect(
-            &config.nats_url,
-            "platform-aggregator-candles",
-            &JetStream::kv_bucket_name(&config.closed_candle_subject_prefix),
-        )
-        .await?;
-        let next_revision = revisions
-            .get_last(NEXT_REVISION_KEY)
-            .await?
-            .and_then(|value| Self::parse_revision(&value))
-            .unwrap_or(1);
-        let sink = Self {
+        Ok(Self {
             publisher,
             open_candles,
-            revisions,
-            next_revision: Mutex::new(next_revision),
             closed_subject_prefix: config.closed_candle_subject_prefix.clone(),
-        };
-        sink.recover_pending().await?;
-        Ok(sink)
+        })
     }
 
-    async fn persist_next_revision(&self, next_revision: u64) -> BpResult<()> {
-        self.revisions
-            .put(NEXT_REVISION_KEY, next_revision.to_string().as_bytes())
-            .await
-            .map(|_| ())
-    }
-
-    /// Republishes a revision that was persisted but not fully committed before
-    /// the previous process stopped, then advances the revision counter.
-    async fn recover_pending(&self) -> BpResult<()> {
-        let mut next_revision = self.next_revision.lock().await;
-        self.recover_pending_locked(&mut next_revision).await
-    }
-
-    async fn recover_pending_locked(&self, next_revision: &mut u64) -> BpResult<()> {
-        let Some(payload) = self.revisions.get_last(PENDING_REVISION_KEY).await? else {
-            return Ok(());
-        };
-        let pending = ClosedCandle::decode(&payload)?;
-        let (next_revision_value, already_committed) =
-            Self::next_after_pending(*next_revision, pending.revision);
-
-        // A counter above the pending revision means the publish was already
-        // acknowledged before the pending marker could be removed. Only replay
-        // truly uncommitted revisions.
-        if !already_committed {
-            let (subject, message_id) = self.publish_target(&pending);
-            self.publisher
-                .publish_with_message_id(&subject, &message_id, &payload)
-                .await?;
-            self.persist_next_revision(next_revision_value).await?;
-            *next_revision = next_revision_value;
-        }
-        self.revisions.delete(PENDING_REVISION_KEY).await
-    }
-
-    fn next_after_pending(persisted_next: u64, pending_revision: u64) -> (u64, bool) {
-        let already_committed = persisted_next > pending_revision;
-        let next_revision = persisted_next.max(pending_revision.saturating_add(1));
-        (next_revision, already_committed)
-    }
-
-    fn publish_target(&self, closed: &ClosedCandle) -> (String, String) {
-        let subject = format!(
-            "{}.{}",
-            self.closed_subject_prefix,
-            closed.candle.key.subject_suffix()
-        );
-        let message_id = format!("{subject}@{}", closed.candle.start_time().0);
-        (subject, message_id)
-    }
-
-    fn parse_revision(value: &[u8]) -> Option<u64> {
-        std::str::from_utf8(value)
-            .ok()
-            .and_then(|value| value.trim().parse().ok())
-            .filter(|revision| *revision > 0)
+    fn publish_target(prefix: &str, closed: &ClosedCandle) -> (String, String) {
+        let subject = format!("{}.{}", prefix, closed.candle.key.subject_suffix());
+        (subject, closed.message_id())
     }
 }
 
@@ -180,25 +102,12 @@ impl OpenCandleStore for NatsCandleSink {
 #[async_trait]
 impl ClosedCandlePublisher for NatsCandleSink {
     async fn publish_closed(&self, candles: &[ClosedCandle]) -> BpResult<()> {
-        let mut next_revision = self.next_revision.lock().await;
-        self.recover_pending_locked(&mut next_revision).await?;
         for closed in candles {
-            let revision = *next_revision;
-            let pending = ClosedCandle {
-                revision,
-                candle: closed.candle.clone(),
-            };
-            let (subject, message_id) = self.publish_target(&pending);
-            let payload = pending.encode()?;
-
-            self.revisions.put(PENDING_REVISION_KEY, &payload).await?;
+            let (subject, message_id) = Self::publish_target(&self.closed_subject_prefix, closed);
+            let payload = closed.encode()?;
             self.publisher
                 .publish_with_message_id(&subject, &message_id, &payload)
                 .await?;
-            self.persist_next_revision(revision.saturating_add(1))
-                .await?;
-            *next_revision = revision.saturating_add(1);
-            self.revisions.delete(PENDING_REVISION_KEY).await?;
         }
         Ok(())
     }
@@ -207,36 +116,53 @@ impl ClosedCandlePublisher for NatsCandleSink {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use platform_market_data::{candle::CandleInterval, decoders::trade::Trade};
+    use platform_types::new_types::TimestampMilliseconds;
+    use rust_decimal::Decimal;
+    use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
-    #[test]
-    fn parses_positive_revisions() {
-        assert_eq!(NatsCandleSink::parse_revision(b"1"), Some(1));
-        assert_eq!(NatsCandleSink::parse_revision(b" 42 "), Some(42));
-        assert_eq!(NatsCandleSink::parse_revision(b"0"), None);
-        assert_eq!(NatsCandleSink::parse_revision(b"not-a-number"), None);
+    fn closed_candle(source_offset: u64, state_epoch: u64) -> ClosedCandle {
+        let trade = Trade {
+            exchange: CexId::Binance,
+            trading_pair: TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+            price: Decimal::from_str_exact("100").unwrap(),
+            quantity: Decimal::ONE,
+            timestamp: TimestampMilliseconds(61_000),
+        };
+        let mut candle = Candle::open(&trade, CandleInterval::from_label("1m").unwrap());
+        candle.close();
+        ClosedCandle::new(
+            candle,
+            TimestampMilliseconds(121_000),
+            source_offset,
+            state_epoch,
+        )
     }
 
     #[test]
-    fn an_uncommitted_pending_revision_is_advanced_and_replayed() {
-        let (next_revision, already_committed) = NatsCandleSink::next_after_pending(7, 7);
+    fn closed_candle_targets_are_deterministic_and_key_scoped() {
+        let first = closed_candle(7, 0);
+        let replay = closed_candle(7, 0);
 
-        assert_eq!(next_revision, 8);
-        assert!(!already_committed);
+        let first_target = NatsCandleSink::publish_target("market.candles", &first);
+        let replay_target = NatsCandleSink::publish_target("market.candles", &replay);
+
+        assert_eq!(first_target, replay_target);
+        assert_eq!(
+            first_target.0,
+            "market.candles.binance.bitcoin.tether_usd.1m"
+        );
+        assert!(first_target.1.contains("binance.bitcoin.tether_usd.1m"));
+        assert!(first_target.1.contains("epoch=0"));
     }
 
     #[test]
-    fn a_committed_pending_revision_is_not_replayed() {
-        let (next_revision, already_committed) = NatsCandleSink::next_after_pending(8, 7);
+    fn closed_candle_targets_change_with_revision_and_epoch() {
+        let base = NatsCandleSink::publish_target("market.candles", &closed_candle(7, 0));
+        let other_offset = NatsCandleSink::publish_target("market.candles", &closed_candle(8, 0));
+        let other_epoch = NatsCandleSink::publish_target("market.candles", &closed_candle(7, 1));
 
-        assert_eq!(next_revision, 8);
-        assert!(already_committed);
-    }
-
-    #[test]
-    fn recovery_never_rewinds_the_revision_counter() {
-        let (next_revision, already_committed) = NatsCandleSink::next_after_pending(12, 7);
-
-        assert_eq!(next_revision, 12);
-        assert!(already_committed);
+        assert_ne!(base.1, other_offset.1);
+        assert_ne!(base.1, other_epoch.1);
     }
 }

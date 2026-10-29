@@ -208,6 +208,14 @@ where
                             let is_replay = replay_watermark.is_some_and(|watermark| {
                                 input_timestamp(&record.input) <= watermark
                             });
+                            // Mark the offset before folding the input so any
+                            // candles closed by this record derive their
+                            // revision from the source offset that produced
+                            // them.
+                            if let Some(sequence) = record.message.stream_sequence {
+                                processor.state_mut().mark_processed(sequence);
+                                dirty = true;
+                            }
                             if !is_replay {
                                 let update = Self::process_input(
                                     processor,
@@ -215,10 +223,6 @@ where
                                     &record.input,
                                 );
                                 Self::publish_update(sink, &update).await?;
-                                dirty = true;
-                            }
-                            if let Some(sequence) = record.message.stream_sequence {
-                                processor.state_mut().mark_processed(sequence);
                                 dirty = true;
                             }
                             last_record = Some(record.clone());

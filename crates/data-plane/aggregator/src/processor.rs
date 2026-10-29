@@ -219,6 +219,8 @@ impl CandleProcessor {
             return;
         };
         let cutoff = watermark - self.config.allowed_lateness;
+        let source_offset = self.state.last_processed_offset().unwrap_or_default();
+        let state_epoch = self.state.state_epoch;
         let mut expired = Vec::new();
         for (key, candles) in &self.state.open_candles {
             for candle in candles {
@@ -244,10 +246,12 @@ impl CandleProcessor {
             };
             let mut candle = candles.remove(position);
             candle.close();
-            update.closed.push(ClosedCandle {
-                revision: 0,
+            update.closed.push(ClosedCandle::new(
                 candle,
-            });
+                watermark,
+                source_offset,
+                state_epoch,
+            ));
             if candles.is_empty() {
                 self.state.open_candles.remove(&key);
             }
@@ -369,7 +373,12 @@ mod tests {
         let update = processor.apply_trade(&trade("101", 121_000));
 
         assert_eq!(update.closed.len(), 1);
-        assert_eq!(update.closed[0].revision, 0);
+        assert_eq!(
+            update.closed[0].revision.close_watermark,
+            TimestampMilliseconds(121_000)
+        );
+        assert_eq!(update.closed[0].revision.source_offset, 0);
+        assert_eq!(update.closed[0].revision.state_epoch, 0);
         assert!(update.closed[0].candle.market_candle.is_candle_closed);
         assert_eq!(
             update.closed[0].candle.start_time(),
@@ -377,6 +386,29 @@ mod tests {
         );
         assert_eq!(update.open.len(), 1);
         assert_eq!(update.open[0].start_time(), TimestampMilliseconds(120_000));
+    }
+
+    #[test]
+    fn closed_candle_revisions_are_reproducible_from_state() {
+        let mut first = CandleProcessor::new(vec![one_minute()]);
+        first.state_mut().mark_processed(42);
+        first.apply_trade(&trade("100", 61_000));
+        let first_update = first.apply_trade(&trade("101", 121_000));
+
+        let mut replay = CandleProcessor::new(vec![one_minute()]);
+        replay.state_mut().mark_processed(42);
+        replay.apply_trade(&trade("100", 61_000));
+        let replay_update = replay.apply_trade(&trade("101", 121_000));
+
+        assert_eq!(
+            first_update.closed[0].revision,
+            replay_update.closed[0].revision
+        );
+        assert_eq!(
+            first_update.closed[0].message_id(),
+            replay_update.closed[0].message_id()
+        );
+        assert_eq!(first_update.closed[0].revision.source_offset, 42);
     }
 
     #[test]
