@@ -1,4 +1,4 @@
-use crate::infisical::secrets::InfisicalConfig;
+use crate::secrets::SecretsConfig;
 use platform_config::env_names::{
     AWS_CONNECT_TIMEOUT_SECS, AWS_LAMBDA_FUNCTION_NAME, AWS_OPERATION_TIMEOUT_SECS,
     DEADLINE_BUFFER_SECS, GITHUB_ENTERPRISE_ALLOWED_HOSTS, RUST_LOG, SQS_QUEUE_URL,
@@ -9,14 +9,11 @@ use platform_github::host_allow_list::HostAllowlist;
 use platform_time::timeouts::Timeouts;
 use std::{num::NonZeroUsize, time::Duration};
 
-const INFISICAL_BASE_URL: &str = "INFISICAL_BASE_URL";
-const INFISICAL_ENVIRONMENT: &str = "INFISICAL_ENVIRONMENT";
-const INFISICAL_IDENTITY_ID: &str = "INFISICAL_IDENTITY_ID";
-const INFISICAL_PROJECT_ID: &str = "INFISICAL_PROJECT_ID";
 const WEBHOOK_COLD_START_REFRESH_TIMEOUT_SECS: &str = "WEBHOOK_COLD_START_REFRESH_TIMEOUT_SECS";
 const WEBHOOK_DEDUP_MAX_DELIVERIES: &str = "WEBHOOK_DEDUP_MAX_DELIVERIES";
 const WEBHOOK_DEDUP_TTL_SECS: &str = "WEBHOOK_DEDUP_TTL_SECS";
 const WEBHOOK_REFRESH_COOLDOWN_SECS: &str = "WEBHOOK_REFRESH_COOLDOWN_SECS";
+const WEBHOOK_SECRET_ARN: &str = "WEBHOOK_SECRET_ARN";
 const WEBHOOK_SECRET_FAILURE_BACKOFF_SECS: &str = "WEBHOOK_SECRET_FAILURE_BACKOFF_SECS";
 
 /// Configuration required by the webhook process.
@@ -27,7 +24,7 @@ pub struct WebhookConfig {
     pub deadline_buffer: Duration,
     pub aws_timeouts: Timeouts,
     pub sqs_queue_url: String,
-    pub infisical: InfisicalConfig,
+    pub secrets: SecretsConfig,
     pub github_allowed_hosts: HostAllowlist,
     pub dedup_max_deliveries: NonZeroUsize,
     pub dedup_ttl: Duration,
@@ -51,12 +48,7 @@ impl WebhookConfig {
                 vars.required_duration_secs(AWS_OPERATION_TIMEOUT_SECS)?,
             ),
             sqs_queue_url: vars.required(SQS_QUEUE_URL)?,
-            infisical: InfisicalConfig::new(
-                vars.required(INFISICAL_IDENTITY_ID)?,
-                vars.required(INFISICAL_PROJECT_ID)?,
-                vars.required(INFISICAL_ENVIRONMENT)?,
-                vars.required_url(INFISICAL_BASE_URL, &["http", "https"])?,
-            ),
+            secrets: SecretsConfig::new(vars.required(WEBHOOK_SECRET_ARN)?),
             github_allowed_hosts: HostAllowlist::from_hosts(
                 vars.required_csv(GITHUB_ENTERPRISE_ALLOWED_HOSTS)?,
             )?,
@@ -75,17 +67,17 @@ impl WebhookConfig {
 mod tests {
     use super::*;
 
-    const REQUIRED: [(&str, &str); 16] = [
+    const REQUIRED: [(&str, &str); 13] = [
         (RUST_LOG, "info"),
         (AWS_LAMBDA_FUNCTION_NAME, "platform-git-webhook"),
         (DEADLINE_BUFFER_SECS, "5"),
         (AWS_CONNECT_TIMEOUT_SECS, "10"),
         (AWS_OPERATION_TIMEOUT_SECS, "120"),
         (SQS_QUEUE_URL, "https://sqs.test/queue"),
-        (INFISICAL_IDENTITY_ID, "identity"),
-        (INFISICAL_PROJECT_ID, "project"),
-        (INFISICAL_ENVIRONMENT, "production"),
-        (INFISICAL_BASE_URL, "https://infisical.test"),
+        (
+            WEBHOOK_SECRET_ARN,
+            "arn:aws:secretsmanager:eu-west-1:123456789012:secret:webhook",
+        ),
         (GITHUB_ENTERPRISE_ALLOWED_HOSTS, "github.com"),
         (WEBHOOK_DEDUP_MAX_DELIVERIES, "4096"),
         (WEBHOOK_DEDUP_TTL_SECS, "3600"),
@@ -105,7 +97,10 @@ mod tests {
         assert_eq!(config.lambda_function_name, "platform-git-webhook");
         assert_eq!(config.sqs_queue_url, "https://sqs.test/queue");
         assert_eq!(config.dedup_max_deliveries.get(), 4096);
-        assert_eq!(config.infisical.environment, "production");
+        assert_eq!(
+            config.secrets.secret_id,
+            "arn:aws:secretsmanager:eu-west-1:123456789012:secret:webhook"
+        );
     }
 
     #[test]
@@ -128,7 +123,6 @@ mod tests {
     fn rejects_invalid_values() {
         for (name, value) in [
             (WEBHOOK_DEDUP_MAX_DELIVERIES, "0"),
-            (INFISICAL_BASE_URL, "not a url"),
             (GITHUB_ENTERPRISE_ALLOWED_HOSTS, "not a host!"),
             (RUST_LOG, "not a valid [directive"),
         ] {

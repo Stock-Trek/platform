@@ -1,6 +1,6 @@
 use crate::{
     dto::github::github_event_converter::GitHubEventConverter, event_response::EventResponse,
-    infisical::secrets::Secrets,
+    secrets::Secrets,
 };
 use lambda_http::Request;
 use platform_errors::BpResult;
