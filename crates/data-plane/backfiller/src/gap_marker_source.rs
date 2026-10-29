@@ -14,7 +14,9 @@ const DURABLE_NAME: &str = "backfiller-gaps";
 /// Source of gap markers emitted by the ingester.
 #[async_trait]
 pub trait GapMarkerSource: Send {
-    /// Returns `None` when the source has reached its end.
+    /// Returns `None` when the source has reached its end. Sources that wait
+    /// indefinitely for new gaps must keep waiting through idle periods instead
+    /// of reporting `None`.
     async fn next_gap(&mut self) -> BpResult<Option<GapMarker>>;
 
     /// Acknowledges the gap returned by the previous call to [`Self::next_gap`].
@@ -56,8 +58,11 @@ impl NatsGapMarkerSource {
 impl GapMarkerSource for NatsGapMarkerSource {
     async fn next_gap(&mut self) -> BpResult<Option<GapMarker>> {
         loop {
+            // An expired fetch window means the gap marker stream is idle, not
+            // that it has ended. Keep polling until a marker arrives or the
+            // process is shut down.
             let Some(message) = self.gaps.next_message_unacked().await else {
-                return Ok(None);
+                continue;
             };
             match GapMarker::decode(&message.payload) {
                 Ok(gap) => {
