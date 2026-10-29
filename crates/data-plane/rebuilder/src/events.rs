@@ -82,7 +82,7 @@ impl IcebergEventReader {
                     .into_records()
                     .into_iter()
                     .filter_map(|record| match record {
-                        ArchiveRecord::MarketEvent(event) => Some(event),
+                        ArchiveRecord::MarketEvent(event) => Some(event.event),
                         ArchiveRecord::ClosedCandle(_) => None,
                     }),
             );

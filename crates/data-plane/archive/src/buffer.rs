@@ -86,14 +86,17 @@ mod tests {
     use stock_trek_types::cex::cex_id::CexId;
 
     fn event(sequence: u64) -> ArchiveRecord {
-        ArchiveRecord::MarketEvent(MarketEvent {
-            exchange: CexId::Binance,
-            stream: "btcusdt@trade".to_string(),
-            sequence: Some(sequence),
-            exchange_timestamp: Some(TimestampMilliseconds(1_700_000_000_000)),
-            received_at: TimestampMilliseconds(1_700_000_000_123),
-            payload: format!("payload-{sequence}"),
-        })
+        ArchiveRecord::MarketEvent(
+            MarketEvent {
+                exchange: CexId::Binance,
+                stream: "btcusdt@trade".to_string(),
+                sequence: Some(sequence),
+                exchange_timestamp: Some(TimestampMilliseconds(1_700_000_000_000)),
+                received_at: TimestampMilliseconds(1_700_000_000_123),
+                payload: format!("payload-{sequence}"),
+            }
+            .into(),
+        )
     }
 
     #[test]

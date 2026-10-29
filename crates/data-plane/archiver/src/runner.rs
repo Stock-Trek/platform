@@ -214,14 +214,17 @@ mod tests {
     }
 
     fn record() -> ArchiveRecord {
-        ArchiveRecord::MarketEvent(MarketEvent {
-            exchange: CexId::Binance,
-            stream: "btcusdt@trade".to_string(),
-            sequence: Some(1),
-            exchange_timestamp: Some(TimestampMilliseconds(1_000)),
-            received_at: TimestampMilliseconds(1_000),
-            payload: "payload".to_string(),
-        })
+        ArchiveRecord::MarketEvent(
+            MarketEvent {
+                exchange: CexId::Binance,
+                stream: "btcusdt@trade".to_string(),
+                sequence: Some(1),
+                exchange_timestamp: Some(TimestampMilliseconds(1_000)),
+                received_at: TimestampMilliseconds(1_000),
+                payload: "payload".to_string(),
+            }
+            .into(),
+        )
     }
 
     #[tokio::test]

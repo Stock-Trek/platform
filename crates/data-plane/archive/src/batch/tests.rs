@@ -1,7 +1,7 @@
 use super::*;
 use crate::{
     ArchiveParquet, ArchiveParquetWriter,
-    record::{ArchiveKind, ArchiveRecord},
+    record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent},
 };
 use bytes::Bytes;
 use platform_market_data::{
@@ -48,14 +48,18 @@ fn batches_reject_records_of_a_different_kind() {
     let mixed = ArchiveBatch::new(
         ArchiveKind::Events,
         vec![
-            ArchiveRecord::MarketEvent(event(1)),
+            ArchiveRecord::MarketEvent(event(1).into()),
             ArchiveRecord::ClosedCandle(closed_candle(1)),
         ],
     );
     assert!(mixed.is_err());
 
     let mut buffer = ArchiveBatch::new(ArchiveKind::Candles, Vec::new()).unwrap();
-    assert!(buffer.push(ArchiveRecord::MarketEvent(event(1))).is_err());
+    assert!(
+        buffer
+            .push(ArchiveRecord::MarketEvent(event(1).into()))
+            .is_err()
+    );
     assert!(buffer.is_empty());
 }
 
@@ -63,7 +67,7 @@ fn batches_reject_records_of_a_different_kind() {
 fn decoded_batches_resolve_columns_by_name() {
     let batch = ArchiveBatch::new(
         ArchiveKind::Events,
-        vec![ArchiveRecord::MarketEvent(event(42))],
+        vec![ArchiveRecord::MarketEvent(event(42).into())],
     )
     .unwrap();
     let encoded = ArchiveParquet::encode(&batch).unwrap();
@@ -74,14 +78,32 @@ fn decoded_batches_resolve_columns_by_name() {
     let ArchiveRecord::MarketEvent(actual) = &records[0] else {
         panic!("expected a market event");
     };
-    assert_eq!(actual, &event(42));
+    assert_eq!(actual.event, event(42));
+}
+
+#[test]
+fn events_round_trip_with_state_epoch() {
+    let event = ArchivedMarketEvent::new(event(42), 9);
+    let batch = ArchiveBatch::new(
+        ArchiveKind::Events,
+        vec![ArchiveRecord::MarketEvent(event.clone())],
+    )
+    .unwrap();
+    let encoded = ArchiveParquet::encode(&batch).unwrap();
+    let decoded = ArchiveParquet::decode(ArchiveKind::Events, Bytes::from(encoded)).unwrap();
+
+    let ArchiveRecord::MarketEvent(actual) = &decoded.records()[0] else {
+        panic!("expected a market event");
+    };
+    assert_eq!(actual.event, event.event);
+    assert_eq!(actual.state_epoch, 9);
 }
 
 #[test]
 fn parquet_files_carry_iceberg_field_ids() {
     let batch = ArchiveBatch::new(
         ArchiveKind::Events,
-        vec![ArchiveRecord::MarketEvent(event(42))],
+        vec![ArchiveRecord::MarketEvent(event(42).into())],
     )
     .unwrap();
     let encoded = ArchiveParquet::encode(&batch).unwrap();
@@ -109,7 +131,8 @@ fn parquet_files_carry_iceberg_field_ids() {
             Some("3"),
             Some("4"),
             Some("5"),
-            Some("6")
+            Some("6"),
+            Some("7")
         ]
     );
 }
