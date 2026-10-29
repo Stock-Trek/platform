@@ -1,5 +1,5 @@
 use crate::urls::Protocol;
-use platform_types::new_types::{Nanoseconds, UsageCount};
+use platform_types::new_types::{DurationNanoseconds, UsageCount};
 use serde::Deserialize;
 use strum::{Display, EnumIter};
 
@@ -10,7 +10,7 @@ pub trait RateLimited {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
 pub struct RateLimit {
     pub restriction: RateLimitRestriction,
-    pub interval_nanos: Nanoseconds,
+    pub interval_nanos: DurationNanoseconds,
 }
 
 #[derive(Debug, Clone, Copy, Display, EnumIter, PartialEq, Eq, Hash, Deserialize)]

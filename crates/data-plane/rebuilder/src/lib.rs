@@ -24,7 +24,7 @@ use platform_errors::BpResult;
 use std::sync::Arc;
 use tracing::info;
 
-pub use crate::config::{RebuildOutputLayer, RebuildSourceLayer};
+pub use crate::config::RebuildSourceLayer;
 
 /// Runs one rebuild from the configured Iceberg source to the output archive.
 pub async fn run(config: RebuildConfig) -> BpResult<()> {

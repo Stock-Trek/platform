@@ -3,12 +3,12 @@ use crate::{
     rate_limited::{RateLimit, RateUsage},
 };
 use platform_errors::BpResult;
-use platform_types::new_types::Seconds;
+use platform_types::new_types::DurationSeconds;
 use std::{collections::HashMap, fmt::Debug};
 
 pub trait ETResponse: Clone + Debug {
     fn rate_limit_usage(&self) -> Option<&HashMap<RateLimit, RateUsage>>;
-    fn retry_after(&self) -> Option<Seconds>;
+    fn retry_after(&self) -> Option<DurationSeconds>;
 }
 
 pub trait ETHttpResponse: ETResponse

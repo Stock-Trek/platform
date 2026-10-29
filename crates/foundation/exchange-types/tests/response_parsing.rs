@@ -8,7 +8,7 @@ use platform_exchange_types::{
     response::{ETHttpResponse, ETResponse, ETWebsocketResponse},
     websocket_id::ETWebsocketId,
 };
-use platform_types::new_types::{Nanoseconds, Seconds, UsageCount};
+use platform_types::new_types::{DurationNanoseconds, DurationSeconds, UsageCount};
 use serde_json::json;
 
 #[test]
@@ -44,13 +44,13 @@ fn http_response_records_usage_retry_after_and_success_payload() {
     let parsed = BinanceResponse::<BinanceTimeResponse>::try_from_http(response).unwrap();
     assert!(matches!(parsed.payload, BinanceResponsePayload::Success(_)));
     assert_eq!(parsed.metadata.status, 200);
-    assert_eq!(parsed.retry_after(), Some(Seconds(7)));
+    assert_eq!(parsed.retry_after(), Some(DurationSeconds(7)));
     let usage = parsed.rate_limit_usage().unwrap();
     assert_eq!(
         usage
             .get(&RateLimit {
                 restriction: RateLimitRestriction::Weight,
-                interval_nanos: Nanoseconds(60_000_000_000),
+                interval_nanos: DurationNanoseconds(60_000_000_000),
             })
             .and_then(|usage| usage.used),
         Some(UsageCount(12))
@@ -59,7 +59,7 @@ fn http_response_records_usage_retry_after_and_success_payload() {
         usage
             .get(&RateLimit {
                 restriction: RateLimitRestriction::OrderCount,
-                interval_nanos: Nanoseconds(10_000_000_000),
+                interval_nanos: DurationNanoseconds(10_000_000_000),
             })
             .and_then(|usage| usage.used),
         Some(UsageCount(1))
@@ -135,7 +135,7 @@ fn websocket_response_computes_retry_after_from_error_data() {
         panic!("expected failure payload");
     };
     assert_eq!(error.code, -1003);
-    assert_eq!(parsed.retry_after(), Some(Seconds(3)));
+    assert_eq!(parsed.retry_after(), Some(DurationSeconds(3)));
     assert_eq!(parsed.metadata.websocket_id, Some(ETWebsocketId::Int(1)));
 }
 
@@ -160,7 +160,7 @@ fn websocket_response_records_frame_rate_limits() {
     let rate_usage = usage
         .get(&RateLimit {
             restriction: RateLimitRestriction::Weight,
-            interval_nanos: Nanoseconds(60_000_000_000),
+            interval_nanos: DurationNanoseconds(60_000_000_000),
         })
         .unwrap();
     assert_eq!(rate_usage.limit, Some(UsageCount(6000)));
@@ -175,7 +175,7 @@ fn http_response_saturates_large_retry_after() {
         body: br#"{"serverTime":123}"#.to_vec(),
     };
     let parsed = BinanceResponse::<BinanceTimeResponse>::try_from_http(response).unwrap();
-    assert_eq!(parsed.retry_after(), Some(Seconds(i64::MAX)));
+    assert_eq!(parsed.retry_after(), Some(DurationSeconds(i64::MAX)));
 }
 
 #[test]
@@ -199,7 +199,7 @@ fn websocket_response_saturates_rate_limit_values() {
     let rate_usage = usage
         .get(&RateLimit {
             restriction: RateLimitRestriction::Weight,
-            interval_nanos: Nanoseconds(i64::MAX),
+            interval_nanos: DurationNanoseconds(i64::MAX),
         })
         .unwrap();
     assert_eq!(rate_usage.limit, Some(UsageCount(0)));

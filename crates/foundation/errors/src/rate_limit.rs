@@ -1,5 +1,5 @@
 use crate::retryability::Retryability;
-use platform_types::new_types::{Nanoseconds, UsageCount};
+use platform_types::new_types::{DurationNanoseconds, UsageCount};
 
 #[derive(Debug, thiserror::Error, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]
@@ -16,7 +16,7 @@ pub enum RateLimitError {
     RequestExceedsRateLimit {
         cost: UsageCount,
         capacity: UsageCount,
-        interval_nanos: Nanoseconds,
+        interval_nanos: DurationNanoseconds,
     },
 }
 

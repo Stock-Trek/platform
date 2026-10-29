@@ -1,5 +1,5 @@
 use platform_errors::{BpError, BpResult, RateLimitError};
-use platform_types::new_types::{Nanoseconds, NonZero, UsageCount};
+use platform_types::new_types::{DurationNanoseconds, NonZero, UsageCount};
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -9,18 +9,18 @@ const MAX_THROTTLE_AFTER: Duration = Duration::from_secs(5 * 60);
 
 #[derive(Clone)]
 pub struct RateLimiterState {
-    interval_nanos: NonZero<Nanoseconds>,
+    interval_nanos: NonZero<DurationNanoseconds>,
     capacity_per_interval: UsageCount,
     current_capacity: UsageCount,
     last_calculation: Instant,
-    excess_interval_nanos: Nanoseconds,
+    excess_interval_nanos: DurationNanoseconds,
     throttled_until: Option<Instant>,
     now: Arc<dyn Fn() -> Instant + Send + Sync>,
 }
 
 impl RateLimiterState {
     pub fn try_new(
-        interval_nanos: Nanoseconds,
+        interval_nanos: DurationNanoseconds,
         capacity_per_interval: UsageCount,
     ) -> BpResult<Self> {
         Self::with_clock(
@@ -30,7 +30,7 @@ impl RateLimiterState {
         )
     }
     pub(crate) fn with_clock(
-        interval_nanos: Nanoseconds,
+        interval_nanos: DurationNanoseconds,
         capacity_per_interval: UsageCount,
         now: Arc<dyn Fn() -> Instant + Send + Sync>,
     ) -> BpResult<Self> {
@@ -44,12 +44,12 @@ impl RateLimiterState {
             capacity_per_interval,
             current_capacity: capacity_per_interval,
             last_calculation: now(),
-            excess_interval_nanos: Nanoseconds::ZERO,
+            excess_interval_nanos: DurationNanoseconds::ZERO,
             throttled_until: None,
             now,
         })
     }
-    pub fn interval_nanos(&self) -> Nanoseconds {
+    pub fn interval_nanos(&self) -> DurationNanoseconds {
         self.interval_nanos.get()
     }
     pub fn capacity_per_interval(&self) -> UsageCount {
@@ -135,7 +135,7 @@ impl RateLimiterState {
             (None, None) => {}
         }
         self.last_calculation = self.now();
-        self.excess_interval_nanos = Nanoseconds::ZERO;
+        self.excess_interval_nanos = DurationNanoseconds::ZERO;
     }
 
     fn now(&self) -> Instant {
@@ -166,10 +166,10 @@ impl RateLimiterState {
             // The bucket is empty at `throttled_until` and time starts counting
             // from that deadline, so any interval progress banked before the
             // throttle would be counted twice and refill the bucket early.
-            self.excess_interval_nanos = Nanoseconds::ZERO;
+            self.excess_interval_nanos = DurationNanoseconds::ZERO;
         }
         let elapsed_nanos =
-            Nanoseconds(now.duration_since(self.last_calculation).as_nanos() as i64);
+            DurationNanoseconds(now.duration_since(self.last_calculation).as_nanos() as i64);
         let total_nanos = self.excess_interval_nanos + elapsed_nanos;
         let complete_intervals = total_nanos.checked_div(self.interval_nanos)? as u64;
         if complete_intervals > 0 {
@@ -203,7 +203,7 @@ mod tests {
 
     fn state_with_clock(now: Instant) -> RateLimiterState {
         RateLimiterState::with_clock(
-            Nanoseconds(60_000_000_000),
+            DurationNanoseconds(60_000_000_000),
             UsageCount(10),
             Arc::new(move || now),
         )
@@ -256,9 +256,12 @@ mod tests {
             Arc::new(move || *now.lock().expect("clock lock"))
                 as Arc<dyn Fn() -> Instant + Send + Sync>
         };
-        let mut state =
-            RateLimiterState::with_clock(Nanoseconds(60_000_000_000), UsageCount(10), clock)
-                .expect("valid rate limiter state");
+        let mut state = RateLimiterState::with_clock(
+            DurationNanoseconds(60_000_000_000),
+            UsageCount(10),
+            clock,
+        )
+        .expect("valid rate limiter state");
 
         // Bank 30s of progress towards the next interval.
         *now.lock().expect("clock lock") = base + Duration::from_secs(90);

@@ -15,11 +15,11 @@ pub use iceberg::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveTableLayer, IcebergCatalog, IcebergConfig,
     IcebergDataFile,
 };
-pub use layout::{ArchiveBucket, ArchiveHour, ArchiveLayout, ArchivePath, ArchiveTimePartition};
+pub use layout::{ArchiveBucket, ArchiveHour, ArchivePath};
 pub use parquet::{ArchiveParquet, ArchiveParquetBatches, ArchiveParquetWriter};
 pub use parquet_reader::ParquetReader;
 pub use record::{
-    ArchiveKind, ArchivePartition, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey, ArchivedEvent,
+    ArchiveKind, ArchivePartition, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey,
     ArchivedMarketEvent, STATE_EPOCH_HEADER,
 };
 pub use s3::{Bucket, ObjectKey, S3};

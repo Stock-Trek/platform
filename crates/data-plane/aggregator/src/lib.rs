@@ -13,8 +13,7 @@ pub mod source;
 pub mod state;
 
 pub use checkpoint::{
-    Checkpoint, CheckpointRecord, CheckpointStore, InMemoryCheckpointStore, InMemoryStateStore,
-    NatsCheckpointStore, NatsStateStore, SourceCheckpoint, StateCheckpoint, StateStore,
+    CheckpointRecord, InMemoryStateStore, NatsStateStore, SourceCheckpoint, StateStore,
 };
 pub use config::{AggregatorConfig, ReplayStartPolicy};
 pub use lease::{
@@ -24,18 +23,16 @@ pub use partition::{PartitionId, all_partitions, partition_for, partition_for_ca
 pub use processor::{CandleProcessor, ProcessorConfig, ProcessorUpdate};
 pub use restore::{
     ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource, RestoreOptions,
-    RestoreResult, RestoreSource, RestoredPartition, S3ArchivedEventSource,
-    rebuild_state_from_archive, rebuild_state_from_archive_with_schema, restore_partition,
+    RestoreSource, RestoredPartition, S3ArchivedEventSource, rebuild_state_from_archive,
+    rebuild_state_from_archive_with_schema, restore_partition,
 };
 pub use router::{
     HashRouter, NatsRouter, gap_partitions, partitions_for_event, partitions_for_gap,
 };
-pub use runner::{
-    ProcessorRunner, QuiesceReceiver, QuiesceSignal, RebalanceReceiver, RebalanceSignal,
-};
+pub use runner::{ProcessorRunner, QuiesceReceiver, QuiesceSignal};
 pub use sink::{ClosedCandlePublisher, NatsCandleSink, OpenCandleStore};
 pub use source::{MarketInput, MarketSource, NatsMarketSource, NatsPartitionSource, SourceRecord};
 pub use state::{
-    AggregatorState, DeduplicationKey, IncompleteRange, IncompleteWindow, KnownGap, SCHEMA_VERSION,
-    STATE_SCHEMA_VERSION, SequenceRange, StreamProgress,
+    AggregatorState, DeduplicationKey, IncompleteWindow, KnownGap, STATE_SCHEMA_VERSION,
+    SequenceRange, StreamProgress,
 };

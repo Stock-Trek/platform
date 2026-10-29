@@ -22,9 +22,6 @@ const DEFAULT_ALLOWED_LATENESS_MS: i64 = 5_000;
 const DEFAULT_STATE_EPOCH: u64 = 1;
 const DEFAULT_BUCKET_MILLIS: usize = 3_600_000;
 
-/// Which Iceberg table the rebuilder writes regenerated candles to.
-pub type RebuildOutputLayer = ArchiveTableLayer;
-
 /// Which Iceberg table the rebuilder reads events from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RebuildSourceLayer {
@@ -65,7 +62,7 @@ pub struct RebuildConfig {
     pub intervals: Vec<CandleInterval>,
     pub allowed_lateness: DurationMilliseconds,
     pub source_layer: RebuildSourceLayer,
-    pub output_layer: RebuildOutputLayer,
+    pub output_layer: ArchiveTableLayer,
     pub state_epoch: u64,
     pub finish_open_windows: bool,
     pub bucket_millis: i64,
@@ -121,13 +118,13 @@ impl RebuildConfig {
         })
     }
 
-    fn output_layer(vars: &EnvVars) -> BpResult<RebuildOutputLayer> {
+    fn output_layer(vars: &EnvVars) -> BpResult<ArchiveTableLayer> {
         let value = vars
             .optional(REBUILDER_OUTPUT_LAYER)?
             .unwrap_or_else(|| "raw".to_string());
         match value.as_str() {
-            "raw" => Ok(RebuildOutputLayer::Raw),
-            "compacted" => Ok(RebuildOutputLayer::Compacted),
+            "raw" => Ok(ArchiveTableLayer::Raw),
+            "compacted" => Ok(ArchiveTableLayer::Compacted),
             other => Err(BpError::config_invalid(
                 REBUILDER_OUTPUT_LAYER,
                 format!("must be raw or compacted, got {other}"),
@@ -186,7 +183,7 @@ mod tests {
         assert_eq!(config.intervals[2].label(), "5m");
         assert_eq!(config.allowed_lateness, DurationMilliseconds(5_000));
         assert_eq!(config.source_layer, RebuildSourceLayer::Auto);
-        assert_eq!(config.output_layer, RebuildOutputLayer::Raw);
+        assert_eq!(config.output_layer, ArchiveTableLayer::Raw);
         assert_eq!(config.state_epoch, DEFAULT_STATE_EPOCH);
         assert!(config.finish_open_windows);
         assert_eq!(config.iceberg.warehouse, "s3://archive/iceberg".to_string());
@@ -206,7 +203,7 @@ mod tests {
         .unwrap();
 
         assert_eq!(config.source_layer, RebuildSourceLayer::Compacted);
-        assert_eq!(config.output_layer, RebuildOutputLayer::Compacted);
+        assert_eq!(config.output_layer, ArchiveTableLayer::Compacted);
         assert_eq!(config.state_epoch, 42);
         assert_eq!(config.intervals.len(), 2);
         assert_eq!(config.intervals[1].label(), "15m");

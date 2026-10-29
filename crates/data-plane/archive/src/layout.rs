@@ -181,9 +181,6 @@ impl ArchivePath {
     }
 }
 
-/// Alias describing the same shared layout builder.
-pub type ArchiveLayout = ArchivePath;
-
 /// The hourly folders shared by raw and compacted archive objects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct ArchiveHour {
@@ -260,9 +257,6 @@ impl ArchiveHour {
         segment.strip_prefix(name)?.parse().ok()
     }
 }
-
-/// Alias describing the hourly partition exported by the layout module.
-pub type ArchiveTimePartition = ArchiveHour;
 
 /// A record kind and the hourly bucket it belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

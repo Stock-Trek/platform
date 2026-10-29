@@ -1,6 +1,6 @@
 use crate::rate_limited::RateLimitRestriction;
 use platform_errors::{BpError, ExchangeError};
-use platform_types::new_types::Nanoseconds;
+use platform_types::new_types::DurationNanoseconds;
 use serde::Deserialize;
 use strum::Display;
 
@@ -54,15 +54,15 @@ impl TryFrom<char> for BinanceRateLimitInterval {
     }
 }
 
-impl TryFrom<BinanceRateLimitInterval> for Nanoseconds {
+impl TryFrom<BinanceRateLimitInterval> for DurationNanoseconds {
     type Error = BpError;
 
     fn try_from(value: BinanceRateLimitInterval) -> Result<Self, Self::Error> {
         match value {
-            BinanceRateLimitInterval::DAY => Ok(Nanoseconds(24 * 60 * 60 * 1_000_000_000)),
-            BinanceRateLimitInterval::HOUR => Ok(Nanoseconds(60 * 60 * 1_000_000_000)),
-            BinanceRateLimitInterval::MINUTE => Ok(Nanoseconds(60 * 1_000_000_000)),
-            BinanceRateLimitInterval::SECOND => Ok(Nanoseconds(1_000_000_000)),
+            BinanceRateLimitInterval::DAY => Ok(DurationNanoseconds(24 * 60 * 60 * 1_000_000_000)),
+            BinanceRateLimitInterval::HOUR => Ok(DurationNanoseconds(60 * 60 * 1_000_000_000)),
+            BinanceRateLimitInterval::MINUTE => Ok(DurationNanoseconds(60 * 1_000_000_000)),
+            BinanceRateLimitInterval::SECOND => Ok(DurationNanoseconds(1_000_000_000)),
             BinanceRateLimitInterval::Unknown => Err(BpError::Exchange(
                 ExchangeError::UnknownValue("BinanceRateLimitInterval".into()),
             )),
