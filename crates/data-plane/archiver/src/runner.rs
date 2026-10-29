@@ -6,6 +6,7 @@ use platform_metrics::descriptions::{
     STAGE_ARCHIVER,
 };
 use platform_metrics::market_data::MarketDataMetrics;
+use platform_runtime::Runtime;
 use std::time::Instant;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{info, warn};
@@ -47,14 +48,19 @@ where
             "archiver started"
         );
 
-        let result =
-            Self::run_until_shutdown(&mut source, &sink, &mut buffer, &mut flush_ticker).await;
+        let result = Runtime::run_until_shutdown(Self::process_records(
+            &mut source,
+            &sink,
+            &mut buffer,
+            &mut flush_ticker,
+        ))
+        .await;
         let flush_result = Self::flush(&sink, &mut buffer, FLUSH_REASON_SHUTDOWN).await;
         result?;
         flush_result
     }
 
-    async fn run_until_shutdown(
+    async fn process_records(
         source: &mut S,
         sink: &K,
         buffer: &mut ArchiveBuffer,
@@ -87,10 +93,6 @@ where
                 }
                 _ = flush_ticker.tick() => {
                     Self::flush(sink, buffer, FLUSH_REASON_INTERVAL).await?;
-                }
-                signal = platform_runtime::Runtime::shutdown_signal() => {
-                    signal?;
-                    break;
                 }
             }
         }

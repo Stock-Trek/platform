@@ -16,6 +16,7 @@ use platform_metrics::descriptions::{
 };
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_nats::EventPublisher;
+use platform_runtime::Runtime;
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::json;
 use std::{
@@ -70,8 +71,12 @@ where
         self
     }
 
-    pub async fn run(mut self) -> BpResult<()> {
-        let mut pending = self.load_pending().await?;
+    pub async fn run(self) -> BpResult<()> {
+        let pending = self.load_pending().await?;
+        Runtime::run_until_shutdown(self.process_gaps(pending)).await
+    }
+
+    async fn process_gaps(mut self, mut pending: BTreeMap<String, PendingGap>) -> BpResult<()> {
         let mut source_ended = false;
 
         loop {
@@ -113,10 +118,6 @@ where
                     }
                 }
                 _ = sleep_until_optional(next_wake), if next_wake.is_some() => {}
-                signal = platform_runtime::Runtime::shutdown_signal() => {
-                    signal?;
-                    return Ok(());
-                }
             }
         }
     }

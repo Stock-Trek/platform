@@ -11,6 +11,7 @@ use platform_market_data::{
 };
 use platform_metrics::descriptions::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
 use platform_metrics::market_data::MarketDataMetrics;
+use platform_runtime::Runtime;
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::{HashMap, hash_map::Entry};
 use stock_trek_types::cex::cex_id::CexId;
@@ -77,12 +78,24 @@ where
             "aggregator started"
         );
 
-        let result = Self::run_until_shutdown(&config, &mut receiver, &sink, &mut aggregator).await;
+        let result = Runtime::run_until_shutdown(Self::process_events(
+            &config,
+            &mut receiver,
+            &sink,
+            &mut aggregator,
+        ))
+        .await;
         source_task.abort();
-        result
+        result?;
+
+        let closed = aggregator.flush_closed_at_or_before(TimestampMilliseconds::now());
+        if !closed.is_empty() {
+            sink.publish_closed(&closed).await?;
+        }
+        Ok(())
     }
 
-    async fn run_until_shutdown(
+    async fn process_events(
         config: &AggregatorConfig,
         receiver: &mut mpsc::Receiver<MarketEvent>,
         sink: &K,
@@ -147,16 +160,7 @@ where
                         sink.publish_closed(&closed).await?;
                     }
                 }
-                signal = platform_runtime::Runtime::shutdown_signal() => {
-                    signal?;
-                    break;
-                }
             }
-        }
-
-        let closed = aggregator.flush_closed_at_or_before(TimestampMilliseconds::now());
-        if !closed.is_empty() {
-            sink.publish_closed(&closed).await?;
         }
         Ok(())
     }
