@@ -78,15 +78,6 @@ impl FetcherRegistry {
         self
     }
 
-    #[allow(dead_code)]
-    pub fn with_fetcher<F>(mut self, exchange: CexId, fetcher: F) -> Self
-    where
-        F: MissingEventFetcher + 'static,
-    {
-        self.insert(exchange, fetcher);
-        self
-    }
-
     pub fn insert<F>(&mut self, exchange: CexId, fetcher: F) -> Option<Arc<dyn MissingEventFetcher>>
     where
         F: MissingEventFetcher + 'static,
@@ -231,21 +222,21 @@ mod tests {
 
     #[tokio::test]
     async fn dispatches_to_the_fetcher_registered_for_the_gap_exchange() {
-        let registry = FetcherRegistry::new()
-            .with_fetcher(
-                CexId::Binance,
-                StubFetcher {
-                    event: event(1),
-                    attempts: Arc::new(Mutex::new(Vec::new())),
-                },
-            )
-            .with_fetcher(
-                CexId::Binance,
-                StubFetcher {
-                    event: event(2),
-                    attempts: Arc::new(Mutex::new(Vec::new())),
-                },
-            );
+        let mut registry = FetcherRegistry::new();
+        registry.register(
+            CexId::Binance,
+            StubFetcher {
+                event: event(1),
+                attempts: Arc::new(Mutex::new(Vec::new())),
+            },
+        );
+        registry.register(
+            CexId::Binance,
+            StubFetcher {
+                event: event(2),
+                attempts: Arc::new(Mutex::new(Vec::new())),
+            },
+        );
 
         let events = registry.fetch(&gap(2, 2)).await.unwrap();
 
@@ -257,7 +248,8 @@ mod tests {
     #[tokio::test]
     async fn forwards_retry_attempts_to_the_selected_fetcher() {
         let attempts = Arc::new(Mutex::new(Vec::new()));
-        let registry = FetcherRegistry::new().with_fetcher(
+        let mut registry = FetcherRegistry::new();
+        registry.register(
             CexId::Binance,
             StubFetcher {
                 event: event(2),

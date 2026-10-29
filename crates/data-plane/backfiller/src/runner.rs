@@ -32,19 +32,14 @@ where
         }
     }
 
-    #[allow(dead_code)]
-    pub async fn run(self) -> BpResult<()> {
-        self.run_inner(None).await
-    }
-
     pub async fn run_with_retry_store<R>(self, retries: R) -> BpResult<()>
     where
         R: GapRetryStore + 'static,
     {
-        self.run_inner(Some(Arc::new(retries))).await
+        self.run_inner(Arc::new(retries)).await
     }
 
-    async fn run_inner(self, retries: Option<Arc<dyn GapRetryStore>>) -> BpResult<()> {
+    async fn run_inner(self, retries: Arc<dyn GapRetryStore>) -> BpResult<()> {
         let Self {
             config,
             source,
@@ -61,11 +56,10 @@ where
             event_subject_prefix = %config.event_subject_prefix,
             "backfiller started"
         );
-        let service = BackfillService::new(source, fetcher, publisher, options);
-        match retries {
-            Some(retries) => service.with_retry_store_arc(retries).run().await,
-            None => service.run().await,
-        }
+        BackfillService::new(source, fetcher, publisher, options)
+            .with_retry_store_arc(retries)
+            .run()
+            .await
     }
 }
 
@@ -119,14 +113,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runs_with_injected_source_fetcher_and_publisher() {
-        let runner = BackfillerRunner::new(config(), FakeSource, FakeFetcher, FakePublisher);
-
-        runner.run().await.unwrap();
-    }
-
-    #[tokio::test]
-    async fn accepts_a_durable_retry_store() {
+    async fn runs_with_injected_source_fetcher_publisher_and_retry_store() {
         let runner = BackfillerRunner::new(config(), FakeSource, FakeFetcher, FakePublisher);
 
         runner

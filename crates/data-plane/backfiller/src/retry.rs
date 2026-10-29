@@ -117,7 +117,7 @@ impl InMemoryGapRetryStore {
         Self::default()
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub async fn snapshot(&self) -> Vec<PendingGap> {
         self.pending.lock().await.values().cloned().collect()
     }

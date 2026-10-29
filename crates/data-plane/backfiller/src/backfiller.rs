@@ -432,7 +432,7 @@ mod tests {
     use super::*;
     use crate::{gap_marker_source::GapMarkerSource, retry::GapRetryStore};
     use async_trait::async_trait;
-    use platform_errors::{BpError, BpResult};
+    use platform_errors::BpResult;
     use platform_market_data::event::GapMarker;
     use platform_market_data::test_utils::gap;
     use std::sync::Mutex;
@@ -610,11 +610,5 @@ mod tests {
         async fn remove(&self, key: &str) -> BpResult<()> {
             self.0.remove(key).await
         }
-    }
-
-    #[allow(dead_code)]
-    fn _assert_error_is_send_sync() {
-        fn assert<T: Send + Sync>() {}
-        assert::<BpError>();
     }
 }
