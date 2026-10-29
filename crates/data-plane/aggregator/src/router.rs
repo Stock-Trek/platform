@@ -6,7 +6,7 @@
 
 use crate::{
     config::AggregatorConfig,
-    partition::{PartitionId, all_partitions, partition_for},
+    partition::{PartitionId, partition_for},
     source::{MarketInput, MarketSource, SourceRecord},
 };
 use platform_errors::BpResult;
@@ -229,11 +229,11 @@ where
 
 /// Convenience for callers that only have a gap marker.
 ///
-/// Resolution failures fall back to broadcasting because this helper cannot
-/// report an error. Callers that can handle failures should use
-/// [`partitions_for_gap`].
+/// A gap whose exchange stream cannot be resolved produces no partitions, just
+/// as [`NatsRouter`] drops such a gap instead of broadcasting it. Callers that
+/// need to handle resolution failures should use [`partitions_for_gap`].
 pub fn gap_partitions(partition_count: usize, gap: &GapMarker) -> Vec<PartitionId> {
-    partitions_for_gap(gap, partition_count).unwrap_or_else(|_| all_partitions(partition_count))
+    partitions_for_gap(gap, partition_count).unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -309,7 +309,13 @@ mod tests {
         let mut gap = gap();
         gap.stream = "unknown@trade".to_string();
 
-        assert!(router.partitions(&MarketInput::Gap(gap), 4).is_err());
+        assert!(
+            router
+                .partitions(&MarketInput::Gap(gap.clone()), 4)
+                .is_err()
+        );
+        assert!(partitions_for_gap(&gap, 4).is_err());
+        assert!(gap_partitions(4, &gap).is_empty());
     }
 
     #[test]
