@@ -70,4 +70,19 @@ Compactor will run regularly converting the raw archived S3 files into clean and
 
 ## Rebuilder
 
-Rebuilder replays archived market events from Iceberg to deterministically regenerate candles after an aggregator configuration or code change. It prefers compacted event partitions, which are already de-duplicated and sorted by exchange stream, timestamp, and sequence, and falls back to raw partitions when no compacted table exists. Events are grouped by stream and replayed through the aggregator's pure candle processor using a new state epoch, then written as raw candle Parquet objects and registered in the raw candle Iceberg table.
+Rebuilder replays archived market events from Iceberg to deterministically regenerate candles after an aggregator configuration or code change. It prefers compacted event partitions, which are already de-duplicated and sorted by exchange stream, timestamp, and sequence, and falls back to raw partitions when no compacted table exists. Events are grouped by stream and replayed through the aggregator's pure candle processor using a new state epoch. Regenerated candles can be written either as raw hourly objects in the raw candle table or as candle-key partitions in the compacted candle table.
+
+### Configuration
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `REBUILDER_S3_BUCKET` | required | Archive bucket for rebuilt candle output. |
+| `REBUILDER_OUTPUT_PREFIX` | `market-data/rebuilt` | Prefix for rebuilt candle objects. |
+| `REBUILDER_SOURCE_LAYER` | `auto` | Event source layer: `auto`, `raw`, or `compacted`. |
+| `REBUILDER_OUTPUT_LAYER` | `raw` | Candle output layer: `raw` or `compacted`. |
+| `REBUILDER_INTERVALS` | `1s,1m,5m` | Comma-separated candle intervals to regenerate. |
+| `REBUILDER_ALLOWED_LATENESS_MS` | `5000` | How late a trade may arrive and still update a candle. |
+| `REBUILDER_STATE_EPOCH` | `1` | State epoch assigned to regenerated candle revisions. |
+| `REBUILDER_FINISH_OPEN_WINDOWS` | `true` | Close candles that are still open when archived input ends. |
+| `REBUILDER_BUCKET_MILLIS` | `3600000` | Output bucket size in milliseconds. |
+| `REBUILDER_DRY_RUN` | `false` | Rebuild without writing output. |
