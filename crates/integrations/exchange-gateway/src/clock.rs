@@ -1,5 +1,5 @@
 use platform_errors::{BpError, BpResult, ConnectorError, SystemError};
-use platform_exchange_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::{
     sync::{
         Mutex,

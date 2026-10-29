@@ -9,12 +9,12 @@ use crate::{
     encode::ByteEncoder,
     encrypt::EncryptionAlgorithm,
     exchange::ETExchange,
-    new_types::{Nanoseconds, UsageCount},
     rate_limited::{RateLimit, RateLimitRestriction},
     signer::Signer,
     urls::Urls,
 };
 use platform_errors::BpResult;
+use platform_types::new_types::{Nanoseconds, UsageCount};
 use std::{collections::HashMap, time::Duration};
 
 pub struct BinanceExchange;

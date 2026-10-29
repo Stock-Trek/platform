@@ -1,5 +1,5 @@
-use crate::new_types::Milliseconds;
 use platform_errors::{BpError, BpResult};
+use platform_types::new_types::Milliseconds;
 use serde::Serialize;
 use std::fmt;
 

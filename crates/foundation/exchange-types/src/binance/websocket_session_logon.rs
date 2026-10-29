@@ -3,13 +3,13 @@ use crate::{
         exchange::BinanceExchange, recv_window::BinanceRecvWindow, request::BinanceRequestFactory,
         response::BinanceResponse, supporting_types::BinanceWebsocketSessionResponse,
     },
-    new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::RateLimitRestriction,
     request::{ETRequest, ETWebsocketRequest, WebsocketResponseMatcher},
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
 use platform_errors::BpResult;
+use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use serde::Serialize;
 use serde_with::skip_serializing_none;

@@ -1,13 +1,13 @@
 use crate::{
     exchange::ETExchange,
     http::{HttpMethod, HttpRequest},
-    new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::RateLimitRestriction,
     response::{ETHttpResponse, ETWebsocketResponse},
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
 use platform_errors::BpResult;
+use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
 

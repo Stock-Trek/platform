@@ -4,13 +4,13 @@ use crate::{
         response::BinanceResponse, supporting_types::BinanceOrderStatusResponse,
     },
     http::{HttpMethod, HttpRequest},
-    new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::RateLimitRestriction,
     request::{ETHttpRequest, ETRequest, ETWebsocketRequest, WebsocketResponseMatcher},
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
 use platform_errors::BpResult;
+use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use serde::Serialize;
 use serde_with::skip_serializing_none;

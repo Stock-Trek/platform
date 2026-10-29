@@ -1,9 +1,9 @@
 use crate::{
-    new_types::TimestampMilliseconds,
     request::{ETHttpRequest, ETWebsocketRequest},
     response::{ETHttpResponse, ETWebsocketResponse},
 };
 use platform_errors::BpResult;
+use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 
 pub trait KlinesHttpRequest<Response>: ETHttpRequest<Response = Response>

@@ -1,5 +1,6 @@
-use crate::{new_types::Nanoseconds, rate_limited::RateLimitRestriction};
+use crate::rate_limited::RateLimitRestriction;
 use platform_errors::{BpError, ExchangeError};
+use platform_types::new_types::Nanoseconds;
 use serde::Deserialize;
 use strum::Display;
 

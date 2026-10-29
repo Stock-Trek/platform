@@ -9,7 +9,6 @@ use crate::{
     },
     encode::ByteEncoder,
     http::{HttpMethod, HttpRequest},
-    new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::RateLimitRestriction,
     request::{ETHttpRequest, ETRequest, ETWebsocketRequest, WebsocketResponseMatcher},
     signer::Signer,
@@ -17,6 +16,7 @@ use crate::{
     websocket_id::ETWebsocketId,
 };
 use platform_errors::BpResult;
+use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 

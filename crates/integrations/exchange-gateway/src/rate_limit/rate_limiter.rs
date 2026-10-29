@@ -1,9 +1,7 @@
 use crate::rate_limit::rate_limiter_state::RateLimiterState;
 use platform_errors::{BpError, BpResult, RateLimitError, SystemError};
-use platform_exchange_types::{
-    new_types::{Nanoseconds, UsageCount},
-    rate_limited::RateUsage,
-};
+use platform_exchange_types::rate_limited::RateUsage;
+use platform_types::new_types::{Nanoseconds, UsageCount};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},

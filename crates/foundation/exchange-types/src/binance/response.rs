@@ -1,12 +1,12 @@
 use crate::{
     binance::rate_limits::{BinanceRateLimit, BinanceRateLimitInterval, BinanceRateLimitType},
     http::HttpResponse,
-    new_types::{Nanoseconds, Seconds, UsageCount},
     rate_limited::{RateLimit, RateLimitRestriction, RateUsage},
     response::{ETHttpResponse, ETResponse, ETWebsocketResponse},
     websocket_id::ETWebsocketId,
 };
 use platform_errors::{BinanceError, BpError, BpResult, ExchangeError};
+use platform_types::new_types::{Nanoseconds, Seconds, UsageCount};
 use serde::{Deserialize, de::DeserializeOwned};
 use std::{collections::HashMap, fmt::Debug};
 
