@@ -5,14 +5,17 @@ use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
 fn event(stream: &str, sequence: u64, timestamp: i64, received_at: i64) -> ArchiveRecord {
-    ArchiveRecord::MarketEvent(MarketEvent {
-        exchange: CexId::Binance,
-        stream: stream.to_string(),
-        sequence: Some(sequence),
-        exchange_timestamp: Some(TimestampMilliseconds(timestamp)),
-        received_at: TimestampMilliseconds(received_at),
-        payload: format!("payload-{sequence}"),
-    })
+    ArchiveRecord::MarketEvent(
+        MarketEvent {
+            exchange: CexId::Binance,
+            stream: stream.to_string(),
+            sequence: Some(sequence),
+            exchange_timestamp: Some(TimestampMilliseconds(timestamp)),
+            received_at: TimestampMilliseconds(received_at),
+            payload: format!("payload-{sequence}"),
+        }
+        .into(),
+    )
 }
 
 #[test]

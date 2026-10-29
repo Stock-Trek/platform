@@ -1,5 +1,5 @@
 use super::ArchiveBatch;
-use crate::record::{ArchiveKind, ArchiveRecord};
+use crate::record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent};
 use arrow_array::{
     Array, ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
@@ -29,24 +29,28 @@ impl ArchiveBatch {
         Ok(Self { kind, records })
     }
 
-    fn decode_events(batch: &RecordBatch) -> BpResult<Vec<MarketEvent>> {
+    fn decode_events(batch: &RecordBatch) -> BpResult<Vec<ArchivedMarketEvent>> {
         let exchange = Self::string_column(batch, "exchange")?;
         let stream = Self::string_column(batch, "stream")?;
         let sequence = Self::u64_column(batch, "sequence")?;
         let exchange_timestamp = Self::i64_column(batch, "exchange_timestamp")?;
         let received_at = Self::i64_column(batch, "received_at")?;
         let payload = Self::string_column(batch, "payload")?;
+        let state_epoch = Self::u64_column(batch, "state_epoch")?;
 
         (0..batch.num_rows())
             .map(|row| {
-                Ok(MarketEvent {
-                    exchange: Self::parse(exchange.value(row), "exchange")?,
-                    stream: stream.value(row).to_string(),
-                    sequence: (!sequence.is_null(row)).then(|| sequence.value(row)),
-                    exchange_timestamp: (!exchange_timestamp.is_null(row))
-                        .then(|| TimestampMilliseconds(exchange_timestamp.value(row))),
-                    received_at: TimestampMilliseconds(received_at.value(row)),
-                    payload: payload.value(row).to_string(),
+                Ok(ArchivedMarketEvent {
+                    event: MarketEvent {
+                        exchange: Self::parse(exchange.value(row), "exchange")?,
+                        stream: stream.value(row).to_string(),
+                        sequence: (!sequence.is_null(row)).then(|| sequence.value(row)),
+                        exchange_timestamp: (!exchange_timestamp.is_null(row))
+                            .then(|| TimestampMilliseconds(exchange_timestamp.value(row))),
+                        received_at: TimestampMilliseconds(received_at.value(row)),
+                        payload: payload.value(row).to_string(),
+                    },
+                    state_epoch: state_epoch.value(row),
                 })
             })
             .collect()

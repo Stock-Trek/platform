@@ -11,7 +11,9 @@ use crate::partition::{PartitionId, partition_for};
 use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::state::AggregatorState;
 use async_trait::async_trait;
-use platform_archive::{ArchiveKind, ArchiveParquet, ArchivePath, Bucket, ObjectKey, S3};
+use platform_archive::{
+    ArchiveKind, ArchiveParquet, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey, S3,
+};
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult, ErrorType};
 use platform_market_data::{
@@ -67,7 +69,7 @@ impl ArchiveRecoveryConfig {
 /// A stream of raw market events from the archive.
 #[async_trait]
 pub trait ArchivedEventSource: Send {
-    async fn next_event(&mut self) -> BpResult<Option<MarketEvent>>;
+    async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>>;
 }
 
 /// Archive source used when recovery from archived events is not configured.
@@ -75,7 +77,7 @@ pub struct EmptyArchivedEventSource;
 
 #[async_trait]
 impl ArchivedEventSource for EmptyArchivedEventSource {
-    async fn next_event(&mut self) -> BpResult<Option<MarketEvent>> {
+    async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>> {
         Ok(None)
     }
 }
@@ -304,16 +306,14 @@ pub async fn rebuild_state_from_archive(
     let mut decoders = HashMap::new();
     let mut replayed = 0_u64;
 
-    // TODO(#157): archived raw events do not yet carry the state epoch that
-    // produced their closed-candle revisions. Once they do, continue that epoch
-    // here instead of starting a new lineage at the default epoch.
-    while let Some(event) = archive.next_event().await? {
+    while let Some(archived) = archive.next_event().await? {
         replayed = replayed.saturating_add(1);
         if replayed.is_multiple_of(1_000) {
             AggregatorMetrics::record_replay_events(partition.get(), "archive", 1_000);
         }
+        let event = &archived.event;
         let decoder = decoder_for(&mut decoders, event.exchange)?;
-        let trades = match decoder.decode(&event) {
+        let trades = match decoder.decode(event) {
             Ok(trades) => trades
                 .into_iter()
                 .filter(|trade| {
@@ -330,7 +330,9 @@ pub async fn rebuild_state_from_archive(
         // state, deduplication ranges, gaps, and event-time watermarks. Events
         // with no trades for this partition must not move its watermark.
         if !trades.is_empty() {
-            let _ = processor.apply_event(&event, &trades);
+            let state = processor.state_mut();
+            state.state_epoch = state.state_epoch.max(archived.state_epoch);
+            let _ = processor.apply_event(event, &trades);
         }
     }
     AggregatorMetrics::record_replay_events(partition.get(), "archive", replayed % 1_000);
@@ -365,7 +367,7 @@ pub struct S3ArchivedEventSource {
     partition: PartitionId,
     partition_count: usize,
     objects: VecDeque<ObjectKey>,
-    events: VecDeque<MarketEvent>,
+    events: VecDeque<ArchivedMarketEvent>,
     decoders: HashMap<CexId, SharedTradeDecoder>,
 }
 
@@ -427,7 +429,13 @@ impl S3ArchivedEventSource {
                 platform_archive::ArchiveRecord::ClosedCandle(_) => None,
             })
             .collect::<Vec<_>>();
-        events.sort_by_key(|event| (event_timestamp(event).0, event.sequence.unwrap_or_default()));
+        events.sort_by_key(|event| {
+            (
+                event_timestamp(&event.event).0,
+                event.event.sequence.unwrap_or_default(),
+                event.state_epoch,
+            )
+        });
         self.events.extend(events);
         info!(
             key = %key,
@@ -440,11 +448,11 @@ impl S3ArchivedEventSource {
 
 #[async_trait]
 impl ArchivedEventSource for S3ArchivedEventSource {
-    async fn next_event(&mut self) -> BpResult<Option<MarketEvent>> {
+    async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>> {
         loop {
             if let Some(event) = self.events.pop_front() {
                 let decoder = decoder_for(&mut self.decoders, event.exchange)?;
-                let trades = decoder.decode(&event)?;
+                let trades = decoder.decode(&event.event)?;
                 if trades.iter().any(|trade| {
                     partition_for(trade.exchange, trade.trading_pair, self.partition_count)
                         == self.partition
@@ -488,20 +496,29 @@ mod tests {
     }
 
     struct VecArchive {
-        events: VecDeque<MarketEvent>,
+        events: VecDeque<ArchivedMarketEvent>,
     }
 
     impl VecArchive {
         fn new(events: Vec<MarketEvent>) -> Self {
             Self {
-                events: events.into(),
+                events: events.into_iter().map(ArchivedMarketEvent::from).collect(),
+            }
+        }
+
+        fn with_epochs(events: Vec<(MarketEvent, u64)>) -> Self {
+            Self {
+                events: events
+                    .into_iter()
+                    .map(|(event, epoch)| ArchivedMarketEvent::new(event, epoch))
+                    .collect(),
             }
         }
     }
 
     #[async_trait]
     impl ArchivedEventSource for VecArchive {
-        async fn next_event(&mut self) -> BpResult<Option<MarketEvent>> {
+        async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>> {
             Ok(self.events.pop_front())
         }
     }
@@ -576,6 +593,21 @@ mod tests {
         assert_eq!(candle.market_candle.ohlcv.open, 100.0);
         assert_eq!(candle.market_candle.ohlcv.volume, 2.0);
         assert_eq!(candle.market_candle.trade_count, 2);
+    }
+
+    #[tokio::test]
+    async fn a_rebuild_continues_the_latest_archived_state_epoch() {
+        let store = InMemoryStateStore::new();
+        let partition = PartitionId::new(0);
+        let mut archive =
+            VecArchive::with_epochs(vec![(event(1, 61_000), 7), (event(2, 62_000), 3)]);
+
+        let restored = restore_partition(&store, &mut archive, &options(partition, 1))
+            .await
+            .unwrap();
+
+        assert!(restored.rebuilt_from_archive);
+        assert_eq!(restored.state.state_epoch, 7);
     }
 
     #[tokio::test]
