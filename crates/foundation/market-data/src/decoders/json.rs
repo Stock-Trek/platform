@@ -76,9 +76,6 @@ impl JsonFrame {
     }
 }
 
-/// Minimal mapping for exchanges that only expose the common stream envelope.
-///
-/// TODO: add exchange-specific mappings for sequences and timestamps.
 #[derive(Debug, Default, Clone, Copy)]
 pub struct EnvelopeJsonMapping;
 
