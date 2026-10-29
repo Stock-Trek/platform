@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 platform-aws = { workspace = true }
+platform-build-paths = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http", "lambda", "storage"] }
 platform-github = { workspace = true }

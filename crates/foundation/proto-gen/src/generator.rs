@@ -54,15 +54,17 @@ mod tests {
 
         for name in ["dto.rs", "mod.rs"] {
             let expected = std::fs::read_to_string(
-                root.join("crates/sandbox-plane/runner/src/generated")
+                root.join(platform_build_paths::runner::GENERATED_DIR)
                     .join(name),
             )
             .unwrap_or_else(|error| panic!("failed to read checked-in {name}: {error}"));
             let actual = std::fs::read_to_string(out_dir.join(name))
                 .unwrap_or_else(|error| panic!("failed to read generated {name}: {error}"));
             assert_eq!(
-                expected, actual,
-                "crates/sandbox-plane/runner/src/generated/{name} is out of date; run `cargo run -p platform-proto-gen`"
+                expected,
+                actual,
+                "{}/{name} is out of date; run `cargo run -p platform-proto-gen`",
+                platform_build_paths::runner::GENERATED_DIR
             );
         }
 

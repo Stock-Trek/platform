@@ -8,7 +8,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .ok_or("proto-gen lives under the workspace root")?;
     ProtoGen::generate(
         &root.join("proto"),
-        &root.join("crates/compute/runner/src/generated"),
+        &root.join(platform_build_paths::runner::GENERATED_DIR),
     )?;
     Ok(())
 }

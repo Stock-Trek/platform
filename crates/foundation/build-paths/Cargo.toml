@@ -1,0 +1,7 @@
+[package]
+name = "platform-build-paths"
+version.workspace = true
+edition.workspace = true
+
+[build-dependencies]
+cargo_metadata = { workspace = true }
