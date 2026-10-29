@@ -19,19 +19,15 @@ pub const AGGREGATOR_INTERVALS: &str = "AGGREGATOR_INTERVALS";
 pub const AGGREGATOR_ALLOWED_LATENESS_MS: &str = "AGGREGATOR_ALLOWED_LATENESS_MS";
 pub const AGGREGATOR_CHECKPOINT_INTERVAL_SECS: &str = "AGGREGATOR_CHECKPOINT_INTERVAL_SECS";
 pub const AGGREGATOR_CHECKPOINT_BUCKET: &str = "AGGREGATOR_CHECKPOINT_BUCKET";
-pub const AGGREGATOR_CHECKPOINT_KEY_PREFIX: &str = "AGGREGATOR_CHECKPOINT_KEY_PREFIX";
 pub const AGGREGATOR_CHECKPOINT_PREFIX: &str = "AGGREGATOR_CHECKPOINT_PREFIX";
 pub const AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS: &str = "AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS";
 pub const AGGREGATOR_REPLAY_START_POLICY: &str = "AGGREGATOR_REPLAY_START_POLICY";
 pub const AGGREGATOR_STATE_SCHEMA_VERSION: &str = "AGGREGATOR_STATE_SCHEMA_VERSION";
-pub const AGGREGATOR_CONSUMER_PREFIX: &str = "AGGREGATOR_CONSUMER_PREFIX";
 pub const AGGREGATOR_DURABLE_PREFIX: &str = "AGGREGATOR_DURABLE_PREFIX";
 pub const AGGREGATOR_LEASE_TTL_SECS: &str = "AGGREGATOR_LEASE_TTL_SECS";
 pub const AGGREGATOR_SHARD_SUBJECT_PREFIX: &str = "AGGREGATOR_SHARD_SUBJECT_PREFIX";
 pub const AGGREGATOR_SHARD_COUNT: &str = "AGGREGATOR_SHARD_COUNT";
 pub const AGGREGATOR_SHARD_INDEX: &str = "AGGREGATOR_SHARD_INDEX";
-pub const AGGREGATOR_PARTITION_COUNT: &str = "AGGREGATOR_PARTITION_COUNT";
-pub const AGGREGATOR_PARTITION_INDEX: &str = "AGGREGATOR_PARTITION_INDEX";
 
 const DEFAULT_INTERVALS: &str = "1s,1m,5m";
 const DEFAULT_ALLOWED_LATENESS_MS: u64 = 5_000;
@@ -200,11 +196,10 @@ impl AggregatorConfig {
             validate_kv_bucket(AGGREGATOR_CHECKPOINT_BUCKET, bucket)?;
         }
         let checkpoint_key_prefix = vars
-            .optional(AGGREGATOR_CHECKPOINT_KEY_PREFIX)?
-            .or(vars.optional(AGGREGATOR_CHECKPOINT_PREFIX)?)
+            .optional(AGGREGATOR_CHECKPOINT_PREFIX)?
             .unwrap_or_else(|| DEFAULT_CHECKPOINT_KEY_PREFIX.to_string());
         NatsSubject::validate_named(
-            AGGREGATOR_CHECKPOINT_KEY_PREFIX,
+            AGGREGATOR_CHECKPOINT_PREFIX,
             &format!("{checkpoint_key_prefix}-0"),
         )?;
         let watermark_idle_timeout = Config::optional_positive_duration_secs(
@@ -224,10 +219,9 @@ impl AggregatorConfig {
         let state_schema_version =
             vars.optional_parsed_or(AGGREGATOR_STATE_SCHEMA_VERSION, STATE_SCHEMA_VERSION)?;
         let consumer_prefix = vars
-            .optional(AGGREGATOR_CONSUMER_PREFIX)?
-            .or(vars.optional(AGGREGATOR_DURABLE_PREFIX)?)
+            .optional(AGGREGATOR_DURABLE_PREFIX)?
             .unwrap_or_else(|| DEFAULT_CONSUMER_PREFIX.to_string());
-        NatsSubject::validate_named(AGGREGATOR_CONSUMER_PREFIX, &consumer_prefix)?;
+        NatsSubject::validate_named(AGGREGATOR_DURABLE_PREFIX, &consumer_prefix)?;
         let lease_ttl = Config::optional_positive_duration_secs(
             vars,
             AGGREGATOR_LEASE_TTL_SECS,
@@ -253,21 +247,9 @@ impl AggregatorConfig {
             }
             None => DEFAULT_SHARD_SUBJECT_PREFIX.to_string(),
         };
-        let shard_count = match vars.optional_parsed(AGGREGATOR_PARTITION_COUNT)? {
-            Some(0) => {
-                return Err(BpError::config_invalid(
-                    AGGREGATOR_PARTITION_COUNT,
-                    "must be greater than zero",
-                ));
-            }
-            Some(count) => count,
-            None => {
-                Config::optional_positive_usize(vars, AGGREGATOR_SHARD_COUNT, DEFAULT_SHARD_COUNT)?
-            }
-        };
-        let shard_index = vars
-            .optional_parsed(AGGREGATOR_PARTITION_INDEX)?
-            .or(vars.optional_parsed(AGGREGATOR_SHARD_INDEX)?);
+        let shard_count =
+            Config::optional_positive_usize(vars, AGGREGATOR_SHARD_COUNT, DEFAULT_SHARD_COUNT)?;
+        let shard_index = vars.optional_parsed(AGGREGATOR_SHARD_INDEX)?;
         if let Some(shard_index) = shard_index
             && shard_index >= shard_count
         {
@@ -465,12 +447,12 @@ mod tests {
     }
 
     #[test]
-    fn checkpoint_and_consumer_namespaces_are_configurable() {
+    fn checkpoint_and_durable_prefixes_are_configurable() {
         let mut values = base_vars();
         values.extend([
             (AGGREGATOR_CHECKPOINT_BUCKET, "shared_checkpoints"),
-            (AGGREGATOR_CHECKPOINT_KEY_PREFIX, "production.partition"),
-            (AGGREGATOR_CONSUMER_PREFIX, "market-aggregator"),
+            (AGGREGATOR_CHECKPOINT_PREFIX, "production.partition"),
+            (AGGREGATOR_DURABLE_PREFIX, "market-aggregator"),
         ]);
         let config = AggregatorConfig::from_vars(&vars(&values)).unwrap();
 
@@ -481,15 +463,6 @@ mod tests {
             config.partition_durable_name(PartitionId::new(7)),
             "market-aggregator-shard-7"
         );
-    }
-
-    #[test]
-    fn durable_prefix_is_an_alias_for_the_consumer_prefix() {
-        let mut values = base_vars();
-        values.push((AGGREGATOR_DURABLE_PREFIX, "legacy-name"));
-        let config = AggregatorConfig::from_vars(&vars(&values)).unwrap();
-
-        assert_eq!(config.consumer_prefix, "legacy-name");
     }
 
     #[test]
@@ -506,29 +479,6 @@ mod tests {
         assert_eq!(config.replay_start_policy, ReplayStartPolicy::Latest);
         assert_eq!(config.state_schema_version, 9);
         assert_eq!(config.processor_config().state_schema_version, 9);
-    }
-
-    #[test]
-    fn partition_identity_aliases_are_supported() {
-        let mut values = base_vars();
-        values.extend([
-            (AGGREGATOR_PARTITION_COUNT, "8"),
-            (AGGREGATOR_PARTITION_INDEX, "3"),
-        ]);
-        let config = AggregatorConfig::from_vars(&vars(&values)).unwrap();
-
-        assert_eq!(config.shard_count, 8);
-        assert_eq!(config.shard_index, Some(3));
-        assert_eq!(config.partitions(), vec![PartitionId::new(3)]);
-    }
-
-    #[test]
-    fn checkpoint_prefix_alias_is_supported() {
-        let mut values = base_vars();
-        values.push((AGGREGATOR_CHECKPOINT_PREFIX, "alias"));
-        let config = AggregatorConfig::from_vars(&vars(&values)).unwrap();
-
-        assert_eq!(config.checkpoint_key_prefix, "alias");
     }
 
     #[test]

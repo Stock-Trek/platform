@@ -39,16 +39,16 @@ Archive rebuilds replay raw events through the same deterministic candle process
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AGGREGATOR_SHARD_COUNT` / `AGGREGATOR_PARTITION_COUNT` | `16` | Number of keyed partitions. |
-| `AGGREGATOR_SHARD_INDEX` / `AGGREGATOR_PARTITION_INDEX` | all partitions | Run only one partition in this process. |
+| `AGGREGATOR_SHARD_COUNT` | `16` | Number of keyed partitions. |
+| `AGGREGATOR_SHARD_INDEX` | all partitions | Run only one partition in this process. |
 | `AGGREGATOR_CHECKPOINT_INTERVAL_SECS` | `5` | Checkpoint cadence. Must be lower than the lease TTL. |
 | `AGGREGATOR_CHECKPOINT_BUCKET` | derived from the shard prefix | NATS KV bucket for checkpoints and leases. |
-| `AGGREGATOR_CHECKPOINT_KEY_PREFIX` / `AGGREGATOR_CHECKPOINT_PREFIX` | `partition` | Key prefix inside the checkpoint bucket. |
+| `AGGREGATOR_CHECKPOINT_PREFIX` | `partition` | Key prefix inside the checkpoint bucket. |
 | `AGGREGATOR_ALLOWED_LATENESS_MS` | `5000` | How late a trade may arrive and still update a candle. |
 | `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | `60` | Idle time before the wall clock advances the event-time watermark and closes expired windows. |
 | `AGGREGATOR_REPLAY_START_POLICY` | `checkpoint` | `checkpoint`, `archive`, `earliest`, or `latest`. |
 | `AGGREGATOR_STATE_SCHEMA_VERSION` | current code version | State schema version written to new state and required for checkpoint restore. |
-| `AGGREGATOR_CONSUMER_PREFIX` / `AGGREGATOR_DURABLE_PREFIX` | `aggregator` | Durable consumer prefix. The router uses `{prefix}-router`; partitions use `{prefix}-shard-{n}`. |
+| `AGGREGATOR_DURABLE_PREFIX` | `aggregator` | Durable consumer prefix. The router uses `{prefix}-router`; partitions use `{prefix}-shard-{n}`. |
 | `AGGREGATOR_LEASE_TTL_SECS` | `30` | Single-writer lease lifetime. |
 | `AGGREGATOR_ARCHIVE_S3_BUCKET` | unset | Enables raw-event archive recovery. |
 | `AGGREGATOR_ARCHIVE_S3_PREFIX` | `market-data/raw` | Archive prefix used for rebuilds. |
