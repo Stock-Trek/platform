@@ -43,6 +43,10 @@ impl ArchiveBatch {
                             .to_string())
                     })
                     .collect::<BpResult<Vec<_>>>()?;
+                let revision_ids = candles
+                    .iter()
+                    .map(|closed| closed.message_id())
+                    .collect::<Vec<_>>();
                 let columns: Vec<ArrayRef> = vec![
                     Self::strings(
                         candles
@@ -119,6 +123,18 @@ impl ArchiveBatch {
                             .iter()
                             .map(|closed| closed.candle.market_candle.trade_count),
                     )),
+                    Arc::new(Int64Array::from_iter_values(
+                        candles
+                            .iter()
+                            .map(|closed| closed.revision.close_watermark.0),
+                    )),
+                    Arc::new(UInt64Array::from_iter_values(
+                        candles.iter().map(|closed| closed.revision.source_offset),
+                    )),
+                    Arc::new(UInt64Array::from_iter_values(
+                        candles.iter().map(|closed| closed.revision.state_epoch),
+                    )),
+                    Self::strings(revision_ids),
                     Self::strings(revisions),
                 ];
                 Ok(RecordBatch::try_new(Self::schema(kind), columns)?)

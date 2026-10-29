@@ -174,12 +174,16 @@ mod tests {
         let schema = ArchiveIcebergTable::schema(ArchiveKind::Candles).unwrap();
         let fields = schema.as_struct().fields();
 
-        assert_eq!(fields.len(), 17);
+        assert_eq!(fields.len(), 21);
         assert_eq!(fields[8].name, "open");
         assert_eq!(
             fields[8].field_type.as_ref(),
             &Type::Primitive(PrimitiveType::Double)
         );
-        assert_eq!(fields[16].name, "revision");
+        assert_eq!(fields[16].name, "close_watermark");
+        assert_eq!(fields[17].name, "source_offset");
+        assert_eq!(fields[18].name, "state_epoch");
+        assert_eq!(fields[19].name, "revision_id");
+        assert_eq!(fields[20].name, "revision");
     }
 }

@@ -53,6 +53,20 @@ pub trait ArchiveCatalog: Send + Sync {
 
     async fn registered_data_files(&self, table: ArchiveIcebergTable) -> BpResult<HashSet<String>>;
 
+    /// Lists the live data files in a table.
+    ///
+    /// Rebuild tooling needs file sizes as well as paths so it can construct a
+    /// bounded S3 reader without issuing an extra HEAD request per object.
+    async fn data_files(&self, table: ArchiveIcebergTable) -> BpResult<Vec<IcebergDataFile>> {
+        Err(BpError::external(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            format!(
+                "archive catalog does not expose data files for {}",
+                table.name()
+            ),
+        )))
+    }
+
     async fn processed_source_files(&self, table: ArchiveIcebergTable)
     -> BpResult<HashSet<String>>;
 }
@@ -367,6 +381,32 @@ impl ArchiveCatalog for IcebergCatalog {
     async fn registered_data_files(&self, table: ArchiveIcebergTable) -> BpResult<HashSet<String>> {
         let table = self.ensure_table(table).await?;
         self.registered_paths(&table).await
+    }
+
+    async fn data_files(&self, table: ArchiveIcebergTable) -> BpResult<Vec<IcebergDataFile>> {
+        let table = self.ensure_table(table).await?;
+        let scan = table
+            .scan()
+            .build()
+            .map_err(|error| Self::catalog_error("build Iceberg table scan", error))?;
+        let mut tasks = scan
+            .plan_files()
+            .await
+            .map_err(|error| Self::catalog_error("plan Iceberg table scan", error))?;
+        let mut files = Vec::new();
+        while let Some(task) = tasks
+            .try_next()
+            .await
+            .map_err(|error| Self::catalog_error("read Iceberg table scan", error))?
+        {
+            files.push(IcebergDataFile::new(
+                task.data_file_path().to_string(),
+                i64::try_from(task.file_size_in_bytes).unwrap_or(i64::MAX),
+                i64::try_from(task.record_count.unwrap_or_default()).unwrap_or(i64::MAX),
+            ));
+        }
+        files.sort_by(|left, right| left.file_path.cmp(&right.file_path));
+        Ok(files)
     }
 
     async fn processed_source_files(
