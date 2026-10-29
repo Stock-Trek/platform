@@ -5,9 +5,9 @@
 //! missing, stale, or from an incompatible schema, the partition state is
 //! rebuilt from the raw event archive instead.
 
-use crate::aggregator::CandleAggregator;
 use crate::checkpoint::StateStore;
 use crate::partition::{PartitionId, partition_for};
+use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::state::AggregatorState;
 use async_trait::async_trait;
 use platform_archive::{ArchiveKind, ArchiveParquet, ArchivePath, Bucket, ObjectKey, S3};
@@ -18,7 +18,7 @@ use platform_market_data::{
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
     event::MarketEvent,
 };
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::collections::{HashMap, VecDeque};
 use stock_trek_types::cex::cex_id::CexId;
 use tracing::{info, warn};
@@ -107,7 +107,7 @@ impl RestoredPartition {
 /// same source stream, and has a compatible state schema. Otherwise the archive
 /// is replayed from the beginning and the caller starts the live source from
 /// the beginning as well. Events at or before the rebuilt watermark are then
-/// ignored by [`crate::runner::AggregatorRunner`] to avoid applying state twice.
+/// ignored by [`crate::runner::ProcessorRunner`] to avoid applying state twice.
 pub async fn restore_partition(
     store: &dyn StateStore,
     archive: &mut dyn ArchivedEventSource,
@@ -115,6 +115,7 @@ pub async fn restore_partition(
     source_stream: &str,
     intervals: &[CandleInterval],
     partition_count: usize,
+    allowed_lateness: DurationMilliseconds,
 ) -> BpResult<RestoredPartition> {
     match store.load(partition).await {
         Ok(Some(checkpoint)) if checkpoint.is_compatible(partition, source_stream) => {
@@ -154,7 +155,14 @@ pub async fn restore_partition(
         }
     }
 
-    let state = rebuild_state_from_archive(archive, partition, intervals, partition_count).await?;
+    let state = rebuild_state_from_archive(
+        archive,
+        partition,
+        intervals,
+        partition_count,
+        allowed_lateness,
+    )
+    .await?;
     info!(
         partition = %partition,
         watermark = ?state.watermark,
@@ -174,24 +182,36 @@ pub async fn rebuild_state_from_archive(
     partition: PartitionId,
     intervals: &[CandleInterval],
     partition_count: usize,
+    allowed_lateness: DurationMilliseconds,
 ) -> BpResult<AggregatorState> {
-    let mut aggregator = CandleAggregator::new(intervals.to_vec());
+    let config = ProcessorConfig::new(intervals.to_vec(), allowed_lateness);
+    let mut processor = CandleProcessor::with_config(config);
     let mut decoders = HashMap::new();
 
     while let Some(event) = archive.next_event().await? {
         let decoder = decoder_for(&mut decoders, event.exchange)?;
-        let trades = decoder.decode(&event)?;
-        for trade in trades {
-            if partition_for(trade.exchange, trade.trading_pair, partition_count) == partition {
-                // Closed candles produced during rebuild are already represented
-                // by the archive's archived candle records; only the open-candle
-                // state is needed here.
-                let _ = aggregator.apply_trade(&trade);
+        let trades = match decoder.decode(&event) {
+            Ok(trades) => trades
+                .into_iter()
+                .filter(|trade| {
+                    partition_for(trade.exchange, trade.trading_pair, partition_count) == partition
+                })
+                .collect::<Vec<_>>(),
+            Err(error) => {
+                warn!(%error, stream = %event.stream, "skipping unreadable archived event");
+                Vec::new()
             }
+        };
+        // Closed candles produced during rebuild are already represented by
+        // the archive's candle records; the fold reconstructs the same keyed
+        // state, deduplication ranges, gaps, and event-time watermarks. Events
+        // with no trades for this partition must not move its watermark.
+        if !trades.is_empty() {
+            let _ = processor.apply_event(&event, &trades);
         }
     }
 
-    Ok(aggregator.into_state())
+    Ok(processor.into_state())
 }
 
 fn event_timestamp(event: &MarketEvent) -> TimestampMilliseconds {
@@ -384,6 +404,7 @@ mod tests {
             "aggregator-shards",
             &[interval()],
             1,
+            DurationMilliseconds::ZERO,
         )
         .await
         .unwrap();
@@ -410,6 +431,7 @@ mod tests {
             "aggregator-shards",
             &[interval()],
             1,
+            DurationMilliseconds::ZERO,
         )
         .await
         .unwrap();
@@ -421,7 +443,14 @@ mod tests {
             Some(TimestampMilliseconds(62_000))
         );
         assert_eq!(restored.state.open_candles_len(), 1);
-        let candle = restored.state.open_candles.values().next().unwrap();
+        let candle = restored
+            .state
+            .open_candles
+            .values()
+            .next()
+            .unwrap()
+            .last()
+            .unwrap();
         assert_eq!(candle.market_candle.ohlcv.open, 100.0);
         assert_eq!(candle.market_candle.ohlcv.volume, 2.0);
         assert_eq!(candle.market_candle.trade_count, 2);
@@ -444,6 +473,7 @@ mod tests {
             "aggregator-shards",
             &[interval()],
             1,
+            DurationMilliseconds::ZERO,
         )
         .await
         .unwrap();
@@ -469,6 +499,7 @@ mod tests {
             "aggregator-shards",
             &[interval()],
             partition_count,
+            DurationMilliseconds::ZERO,
         )
         .await
         .unwrap();
@@ -492,6 +523,7 @@ mod tests {
             "aggregator-shards",
             &[interval()],
             partition_count,
+            DurationMilliseconds::ZERO,
         )
         .await
         .unwrap();

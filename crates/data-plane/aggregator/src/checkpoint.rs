@@ -6,6 +6,7 @@
 //! work but cannot silently skip it.
 
 use crate::config::AggregatorConfig;
+use crate::lease::{WriterLease, lease_key};
 use crate::partition::PartitionId;
 use crate::state::AggregatorState;
 use async_trait::async_trait;
@@ -27,6 +28,10 @@ pub struct CheckpointRecord {
     pub partition: PartitionId,
     /// Event-time watermark captured with the state.
     pub watermark: Option<TimestampMilliseconds>,
+    /// Fencing token of the writer that produced this checkpoint.
+    pub fencing_token: u64,
+    /// Identity of the writer that produced this checkpoint.
+    pub writer_id: String,
     /// Serialized keyed aggregation state.
     pub state: AggregatorState,
 }
@@ -49,8 +54,17 @@ impl CheckpointRecord {
             next_sequence,
             partition,
             watermark,
+            fencing_token: 0,
+            writer_id: String::new(),
             state,
         }
+    }
+
+    /// Binds the checkpoint to the lease that is allowed to write it.
+    pub fn with_lease(mut self, lease: &WriterLease) -> Self {
+        self.fencing_token = lease.fencing_token;
+        self.writer_id = lease.owner_id.clone();
+        self
     }
 
     /// Builds a checkpoint from a source message and the state after applying
@@ -99,6 +113,14 @@ impl CheckpointRecord {
             && self.source_stream == source_stream
             && self.next_sequence > 0
             && self.state.is_schema_compatible()
+    }
+
+    /// Whether a writer with `writer_id` and `fencing_token` may overwrite
+    /// this checkpoint. Tokens only move forward, so a stalled writer cannot
+    /// commit after a newer writer took the lease.
+    pub fn is_writable_by(&self, writer_id: &str, fencing_token: u64) -> bool {
+        fencing_token > self.fencing_token
+            || (fencing_token == self.fencing_token && writer_id == self.writer_id)
     }
 
     /// Last source sequence included in this checkpoint.
@@ -194,6 +216,18 @@ impl StateStore for InMemoryStateStore {
 
     async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
         let mut checkpoints = self.checkpoints.lock().expect("checkpoint store lock");
+        if let Some((_, existing)) = checkpoints.get(&checkpoint.partition)
+            && !existing.is_writable_by(&checkpoint.writer_id, checkpoint.fencing_token)
+        {
+            return Err(BpError::bad_value(
+                "checkpoint fencing token",
+                checkpoint.fencing_token.to_string(),
+                format!(
+                    "writer {} is fenced by token {}",
+                    checkpoint.writer_id, existing.fencing_token
+                ),
+            ));
+        }
         let next_revision = checkpoints
             .get(&checkpoint.partition)
             .map(|(revision, _)| revision.saturating_add(1))
@@ -260,6 +294,34 @@ impl NatsStateStore {
             None => self.values.create(&key, &payload).await,
         }
     }
+
+    async fn ensure_lease_holder(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
+        let Some((payload, _)) = self
+            .values
+            .get_with_revision(&lease_key(checkpoint.partition))
+            .await?
+        else {
+            return Err(BpError::bad_value(
+                "checkpoint lease",
+                checkpoint.partition.to_string(),
+                "no active writer lease",
+            ));
+        };
+        let lease: WriterLease = serde_json::from_slice(&payload)?;
+        if !lease.is_held_by(&checkpoint.writer_id, checkpoint.fencing_token)
+            || lease.is_expired(TimestampMilliseconds::now())
+        {
+            return Err(BpError::bad_value(
+                "checkpoint lease",
+                checkpoint.fencing_token.to_string(),
+                format!(
+                    "lease is held by {} with token {}",
+                    lease.owner_id, lease.fencing_token
+                ),
+            ));
+        }
+        Ok(())
+    }
 }
 
 /// Alias for the NATS store's old name.
@@ -275,6 +337,7 @@ impl StateStore for NatsStateStore {
     }
 
     async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
+        self.ensure_lease_holder(checkpoint).await?;
         // Read the current revision and conditionally update. If another writer
         // wins the race, `update` fails rather than overwriting its state.
         let expected_revision = self
@@ -388,6 +451,38 @@ mod tests {
             50
         );
         assert_eq!(store.load_with_revision(partition).unwrap().1, 2);
+    }
+
+    #[tokio::test]
+    async fn an_older_fencing_token_cannot_overwrite_a_newer_checkpoint() {
+        let store = InMemoryStateStore::new();
+        let partition = PartitionId::new(1);
+        let lease = WriterLease {
+            partition,
+            owner_id: "writer-b".to_string(),
+            fencing_token: 2,
+            expires_at: TimestampMilliseconds::now(),
+        };
+        let mut checkpoint = checkpoint();
+        checkpoint.partition = partition;
+        store
+            .save(&checkpoint.clone().with_lease(&lease))
+            .await
+            .unwrap();
+
+        let stale_lease = WriterLease {
+            partition,
+            owner_id: "writer-a".to_string(),
+            fencing_token: 1,
+            expires_at: TimestampMilliseconds::now(),
+        };
+        let stale = checkpoint.with_lease(&stale_lease);
+
+        assert!(store.save(&stale).await.is_err());
+        assert_eq!(
+            store.load(partition).await.unwrap().unwrap().writer_id,
+            "writer-b"
+        );
     }
 
     #[test]
