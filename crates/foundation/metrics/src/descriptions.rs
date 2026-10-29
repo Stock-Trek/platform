@@ -66,6 +66,7 @@ pub const DROP_REASON_DUPLICATE: &str = "duplicate";
 pub const DROP_REASON_OUT_OF_ORDER: &str = "out_of_order";
 pub const DROP_REASON_NO_DECODER: &str = "no_decoder";
 pub const DROP_REASON_CHANNEL_CLOSED: &str = "channel_closed";
+pub const DROP_REASON_INVALID_TRADE: &str = "invalid_trade";
 
 pub const DECODE_KIND_FRAME: &str = "frame";
 pub const DECODE_KIND_MARKET_EVENT: &str = "market_event";

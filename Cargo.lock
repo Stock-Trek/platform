@@ -3567,7 +3567,9 @@ version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
  "iris",
+ "metrics",
  "platform-errors",
+ "platform-metrics",
  "platform-nats",
  "platform-type-bridge",
  "platform-types",
