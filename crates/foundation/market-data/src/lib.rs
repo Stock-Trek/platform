@@ -12,3 +12,6 @@ pub mod decoders;
 pub mod envelope;
 pub mod event;
 pub mod subject;
+
+#[cfg(any(test, feature = "test-utils"))]
+pub mod test_utils;

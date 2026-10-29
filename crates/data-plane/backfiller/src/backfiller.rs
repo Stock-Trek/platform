@@ -432,6 +432,7 @@ mod tests {
     use async_trait::async_trait;
     use platform_errors::{BpError, BpResult};
     use platform_market_data::event::GapMarker;
+    use platform_market_data::test_utils::gap;
     use std::sync::Mutex;
 
     struct OneGapSource {
@@ -478,18 +479,6 @@ mod tests {
                 .expect("sequences lock")
                 .push(event.sequence.unwrap_or_default());
             Ok(())
-        }
-    }
-
-    fn gap(from: u64, to: u64) -> GapMarker {
-        GapMarker {
-            exchange: CexId::Binance,
-            stream: "btcusdt@trade".to_string(),
-            previous_sequence: from.saturating_sub(1),
-            observed_sequence: to.saturating_add(1),
-            missing_from: from,
-            missing_to: to,
-            detected_at: TimestampMilliseconds(1),
         }
     }
 

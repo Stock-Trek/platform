@@ -21,3 +21,6 @@ serde_json = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+platform-market-data = { workspace = true, features = ["test-utils"] }

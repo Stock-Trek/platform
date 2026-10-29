@@ -197,6 +197,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+    use platform_market_data::test_utils::gap;
     use std::sync::Mutex;
 
     struct StubFetcher {
@@ -217,18 +218,6 @@ mod tests {
         ) -> BpResult<Vec<BackfilledEvent>> {
             self.attempts.lock().expect("attempts lock").push(attempt);
             Ok(vec![self.event.clone()])
-        }
-    }
-
-    fn gap() -> GapMarker {
-        GapMarker {
-            exchange: CexId::Binance,
-            stream: "btcusdt@trade".to_string(),
-            previous_sequence: 1,
-            observed_sequence: 3,
-            missing_from: 2,
-            missing_to: 2,
-            detected_at: TimestampMilliseconds(1),
         }
     }
 
@@ -258,7 +247,7 @@ mod tests {
                 },
             );
 
-        let events = registry.fetch(&gap()).await.unwrap();
+        let events = registry.fetch(&gap(2, 2)).await.unwrap();
 
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].sequence, 2);
@@ -276,7 +265,7 @@ mod tests {
             },
         );
 
-        registry.fetch_with_attempt(&gap(), 3).await.unwrap();
+        registry.fetch_with_attempt(&gap(2, 2), 3).await.unwrap();
 
         assert_eq!(*attempts.lock().unwrap(), vec![3]);
     }
@@ -286,6 +275,6 @@ mod tests {
         let registry = FetcherRegistry::new();
 
         assert!(!registry.supports(CexId::Binance));
-        assert!(registry.fetch(&gap()).await.is_err());
+        assert!(registry.fetch(&gap(2, 2)).await.is_err());
     }
 }

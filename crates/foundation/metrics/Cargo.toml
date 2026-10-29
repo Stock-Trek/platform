@@ -3,5 +3,8 @@ name = "platform-metrics"
 version.workspace = true
 edition.workspace = true
 
+[features]
+test-utils = []
+
 [dependencies]
 metrics = { workspace = true }

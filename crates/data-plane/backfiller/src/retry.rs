@@ -187,23 +187,12 @@ impl GapRetryStore for NatsGapRetryStore {
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn gap() -> GapMarker {
-        GapMarker {
-            exchange: CexId::Binance,
-            stream: "btcusdt@trade".to_string(),
-            previous_sequence: 9,
-            observed_sequence: 13,
-            missing_from: 10,
-            missing_to: 12,
-            detected_at: TimestampMilliseconds(1_000),
-        }
-    }
+    use platform_market_data::test_utils::gap;
 
     #[tokio::test]
     async fn stores_and_removes_pending_ranges() {
         let store = InMemoryGapRetryStore::default();
-        let pending = PendingGap::from_gap(&gap(), TimestampMilliseconds(2_000));
+        let pending = PendingGap::from_gap(&gap(10, 12), TimestampMilliseconds(2_000));
 
         store.save(&pending).await.unwrap();
         assert_eq!(store.load().await.unwrap(), vec![pending.clone()]);
@@ -222,7 +211,7 @@ mod tests {
     #[test]
     fn pending_ranges_reconstruct_gap_markers() {
         let pending = PendingGap::from_range(
-            &gap(),
+            &gap(10, 12),
             11,
             12,
             3,
