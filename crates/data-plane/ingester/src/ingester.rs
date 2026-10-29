@@ -66,7 +66,10 @@ impl<P: EventPublisher> Ingester<P> {
         let event_subject = self.options.event_subject(&event.stream);
 
         let Some(sequence) = event.sequence else {
-            return self.publish_event(&event_subject, &event).await;
+            return self
+                .publisher
+                .publish(&event_subject, &event.encode()?)
+                .await;
         };
 
         // `pu` is the final update ID of the preceding event. Checking it,
@@ -76,7 +79,8 @@ impl<P: EventPublisher> Ingester<P> {
         let first_sequence = previous_sequence
             .and_then(|previous| previous.checked_add(1))
             .or(first_sequence)
-            .unwrap_or(sequence);
+            .unwrap_or(sequence)
+            .min(sequence);
 
         let observation = {
             let tracker = self.sequences.entry(event.stream.clone()).or_default();
@@ -85,7 +89,8 @@ impl<P: EventPublisher> Ingester<P> {
 
         match observation {
             SequenceObservation::First | SequenceObservation::InOrder => {
-                self.publish_event(&event_subject, &event).await
+                self.publish_event(&event_subject, &event, first_sequence, sequence)
+                    .await
             }
             SequenceObservation::Gap {
                 missing_from,
@@ -102,7 +107,16 @@ impl<P: EventPublisher> Ingester<P> {
                 };
                 let gap_subject = self.options.gap_subject(&event.stream);
                 self.publisher.publish(&gap_subject, &gap.encode()?).await?;
-                self.publish_event(&event_subject, &event).await
+
+                // The gap marker covers this missing range even if publishing
+                // the current event then fails.
+                self.sequences
+                    .entry(event.stream.clone())
+                    .or_default()
+                    .commit(missing_to);
+
+                self.publish_event(&event_subject, &event, first_sequence, sequence)
+                    .await
             }
             SequenceObservation::Duplicate | SequenceObservation::OutOfOrder => {
                 let reason = match observation {
@@ -121,8 +135,20 @@ impl<P: EventPublisher> Ingester<P> {
         }
     }
 
-    async fn publish_event(&self, subject: &str, event: &MarketEvent) -> BpResult<()> {
-        self.publisher.publish(subject, &event.encode()?).await
+    async fn publish_event(
+        &mut self,
+        subject: &str,
+        event: &MarketEvent,
+        first_sequence: u64,
+        sequence: u64,
+    ) -> BpResult<()> {
+        let result = self.publisher.publish(subject, &event.encode()?).await;
+        let tracker = self.sequences.entry(event.stream.clone()).or_default();
+        match &result {
+            Ok(()) => tracker.commit(sequence),
+            Err(_) => tracker.record_failure(first_sequence),
+        }
+        result
     }
 }
 
@@ -137,18 +163,47 @@ mod tests {
     #[derive(Default)]
     struct RecordingPublisher {
         messages: Mutex<Vec<(String, Value)>>,
+        fail_sequences: Mutex<Vec<u64>>,
     }
 
     impl RecordingPublisher {
         fn messages(&self) -> Vec<(String, Value)> {
             self.messages.lock().expect("messages lock").clone()
         }
+
+        fn fail_sequence(&self, sequence: u64) {
+            self.fail_sequences
+                .lock()
+                .expect("fail sequences lock")
+                .push(sequence);
+        }
     }
 
     #[async_trait]
     impl EventPublisher for RecordingPublisher {
         async fn publish(&self, subject: &str, payload: &[u8]) -> BpResult<()> {
-            let value = serde_json::from_slice(payload)?;
+            let value: Value = serde_json::from_slice(payload)?;
+            let should_fail =
+                value
+                    .get("sequence")
+                    .and_then(Value::as_u64)
+                    .is_some_and(|sequence| {
+                        let mut failures = self.fail_sequences.lock().expect("fail sequences lock");
+                        if let Some(index) = failures.iter().position(|failed| *failed == sequence)
+                        {
+                            failures.remove(index);
+                            true
+                        } else {
+                            false
+                        }
+                    });
+            if should_fail {
+                return Err(platform_errors::BpError::bad_value(
+                    "publish",
+                    subject,
+                    "injected publish failure",
+                ));
+            }
             self.messages
                 .lock()
                 .expect("messages lock")
@@ -215,6 +270,63 @@ mod tests {
         assert_eq!(messages[1].1["missing_to"], 12);
         assert_eq!(messages[1].1["observed_sequence"], 13);
         assert_eq!(messages[2].0, "market.events.binance.btcusdt.trade");
+    }
+
+    #[tokio::test]
+    async fn a_failed_publish_creates_a_gap_for_the_next_event() {
+        let publisher = Arc::new(RecordingPublisher::default());
+        let mut ingester = ingester(publisher.clone());
+
+        ingester.ingest(message(Some(10))).await.unwrap();
+        publisher.fail_sequence(11);
+        assert!(ingester.ingest(message(Some(11))).await.is_err());
+        ingester.ingest(message(Some(12))).await.unwrap();
+
+        let messages = publisher.messages();
+        assert_eq!(messages.len(), 3);
+        assert_eq!(messages[1].0, "market.gaps.binance.btcusdt.trade");
+        assert_eq!(messages[1].1["missing_from"], 11);
+        assert_eq!(messages[1].1["missing_to"], 11);
+        assert_eq!(messages[1].1["observed_sequence"], 12);
+        assert_eq!(messages[2].0, "market.events.binance.btcusdt.trade");
+        assert_eq!(messages[2].1["sequence"], 12);
+    }
+
+    #[tokio::test]
+    async fn a_failed_first_publish_creates_a_gap_for_the_next_event() {
+        let publisher = Arc::new(RecordingPublisher::default());
+        let mut ingester = ingester(publisher.clone());
+
+        publisher.fail_sequence(10);
+        assert!(ingester.ingest(message(Some(10))).await.is_err());
+        ingester.ingest(message(Some(11))).await.unwrap();
+
+        let messages = publisher.messages();
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].0, "market.gaps.binance.btcusdt.trade");
+        assert_eq!(messages[0].1["missing_from"], 10);
+        assert_eq!(messages[0].1["missing_to"], 10);
+        assert_eq!(messages[1].1["sequence"], 11);
+    }
+
+    #[tokio::test]
+    async fn a_failed_event_after_a_gap_is_not_suppressed() {
+        let publisher = Arc::new(RecordingPublisher::default());
+        let mut ingester = ingester(publisher.clone());
+
+        ingester.ingest(message(Some(10))).await.unwrap();
+        publisher.fail_sequence(13);
+        assert!(ingester.ingest(message(Some(13))).await.is_err());
+        ingester.ingest(message(Some(14))).await.unwrap();
+
+        let messages = publisher.messages();
+        assert_eq!(messages.len(), 4);
+        assert_eq!(messages[1].1["missing_from"], 11);
+        assert_eq!(messages[1].1["missing_to"], 12);
+        assert_eq!(messages[2].0, "market.gaps.binance.btcusdt.trade");
+        assert_eq!(messages[2].1["missing_from"], 13);
+        assert_eq!(messages[2].1["missing_to"], 13);
+        assert_eq!(messages[3].1["sequence"], 14);
     }
 
     #[tokio::test]

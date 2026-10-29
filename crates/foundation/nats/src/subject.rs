@@ -3,18 +3,34 @@ use platform_errors::{BpError, BpResult, ValidationError};
 pub struct NatsSubject;
 
 impl NatsSubject {
-    /// Converts an arbitrary value into a safe single-token subject segment.
+    /// Converts an arbitrary value into a safe subject segment.
+    ///
+    /// Illegal characters and runs of dots collapse into a single separator so
+    /// normalization can never create empty subject tokens. A value with no
+    /// usable characters becomes `unknown`.
     pub fn normalize_segment(value: &str) -> String {
-        value
-            .chars()
-            .map(|character| {
-                if character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.') {
-                    character.to_ascii_lowercase()
-                } else {
-                    '.'
+        let mut normalized = String::with_capacity(value.len());
+        for character in value.chars() {
+            let character = if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                character.to_ascii_lowercase()
+            } else {
+                '.'
+            };
+            if character == '.' {
+                if !normalized.is_empty() && !normalized.ends_with('.') {
+                    normalized.push(character);
                 }
-            })
-            .collect()
+            } else {
+                normalized.push(character);
+            }
+        }
+        if normalized.ends_with('.') {
+            normalized.pop();
+        }
+        if normalized.is_empty() {
+            normalized.push_str("unknown");
+        }
+        normalized
     }
 
     pub fn validate(subject: &str) -> BpResult<()> {
@@ -52,5 +68,15 @@ mod tests {
         assert!(NatsSubject::validate("market.*").is_err());
         assert!(NatsSubject::validate("market.>").is_err());
         assert!(NatsSubject::validate("market trade").is_err());
+    }
+
+    #[test]
+    fn normalizes_without_creating_empty_tokens() {
+        assert_eq!(
+            NatsSubject::normalize_segment("BTC/USDT @ Trade"),
+            "btc.usdt.trade"
+        );
+        assert_eq!(NatsSubject::normalize_segment("..BTC..USDT.."), "btc.usdt");
+        assert_eq!(NatsSubject::normalize_segment("!!!"), "unknown");
     }
 }
