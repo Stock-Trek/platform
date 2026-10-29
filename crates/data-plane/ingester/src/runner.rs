@@ -41,11 +41,7 @@ where
         info!("connected to NATS");
 
         let (sender, mut receiver) = mpsc::channel(MESSAGE_CHANNEL_CAPACITY);
-        let source_task = tokio::spawn(async move {
-            if let Err(error) = source.run(sender).await {
-                error!(%error, "market data source stopped");
-            }
-        });
+        let source_task = tokio::spawn(async move { source.run(sender).await });
 
         let mut ingester = Ingester::new(
             publisher,
@@ -62,7 +58,13 @@ where
         ))
         .await;
         source_task.abort();
-        result
+        let source_result = source_task.await;
+        result?;
+        match source_result {
+            Ok(result) => result,
+            Err(error) if error.is_cancelled() => Ok(()),
+            Err(error) => Err(error.into()),
+        }
     }
 
     async fn process_messages(
@@ -96,12 +98,18 @@ mod tests {
     use platform_market_data::event::ParsedMessage;
     use stock_trek_types::cex::cex_id::CexId;
 
-    struct FakeSource;
+    struct FakeSource {
+        fail: bool,
+    }
 
     #[async_trait]
     impl MarketMessageSource for FakeSource {
         async fn run(&self, _sender: mpsc::Sender<ParsedMessage>) -> BpResult<()> {
-            Ok(())
+            if self.fail {
+                Err(platform_errors::BpError::external("source failed"))
+            } else {
+                Ok(())
+            }
         }
     }
 
@@ -129,8 +137,22 @@ mod tests {
 
     #[tokio::test]
     async fn runs_with_injected_source_and_publisher() {
-        let runner = IngesterRunner::new(config(), FakeSource, Arc::new(FakePublisher));
+        let runner = IngesterRunner::new(
+            config(),
+            FakeSource { fail: false },
+            Arc::new(FakePublisher),
+        );
 
         runner.run().await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn propagates_source_error() {
+        let runner =
+            IngesterRunner::new(config(), FakeSource { fail: true }, Arc::new(FakePublisher));
+
+        let error = runner.run().await.unwrap_err();
+
+        assert_eq!(error.to_string(), "source failed");
     }
 }

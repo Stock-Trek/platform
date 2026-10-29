@@ -87,7 +87,7 @@ where
                         }
                         Err(error) => {
                             warn!(%error, "archive source stopped");
-                            break;
+                            return Err(error);
                         }
                     }
                 }
@@ -136,11 +136,15 @@ mod tests {
     #[derive(Default)]
     struct FakeSource {
         records: Vec<ArchiveRecord>,
+        fail: bool,
     }
 
     #[async_trait]
     impl ArchiveSource for FakeSource {
         async fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>> {
+            if self.fail {
+                return Err(platform_errors::BpError::external("source failed"));
+            }
             if self.records.is_empty() {
                 Ok(None)
             } else {
@@ -200,6 +204,7 @@ mod tests {
         let observed = sink.clone();
         let source = FakeSource {
             records: vec![record()],
+            fail: false,
         };
 
         ArchiverRunner::new(config(), source, sink)
@@ -208,5 +213,21 @@ mod tests {
             .unwrap();
 
         assert_eq!(*observed.writes.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn propagates_source_error() {
+        let sink = FakeSink::default();
+        let source = FakeSource {
+            records: Vec::new(),
+            fail: true,
+        };
+
+        let error = ArchiverRunner::new(config(), source, sink)
+            .run()
+            .await
+            .unwrap_err();
+
+        assert_eq!(error.to_string(), "source failed");
     }
 }
