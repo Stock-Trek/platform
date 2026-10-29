@@ -2,9 +2,10 @@
 //!
 //! The rebuilder reads compacted event partitions when they are available and
 //! falls back to raw partitions otherwise. Events are grouped by exchange
-//! stream and replayed through the aggregator's pure candle processor, so the
-//! same archived input always produces the same candle revisions. Regenerated
-//! candles can be written to either the raw or the compacted candle layer.
+//! trading pair and replayed through the aggregator's pure candle processor, so
+//! all streams for a pair update the same candles and the same archived input
+//! always produces the same candle revisions. Regenerated candles can be
+//! written to either the raw or the compacted candle layer.
 
 pub mod config;
 pub mod events;

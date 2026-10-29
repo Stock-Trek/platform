@@ -70,7 +70,7 @@ Compactor will run regularly converting the raw archived S3 files into clean and
 
 ## Rebuilder
 
-Rebuilder replays archived market events from Iceberg to deterministically regenerate candles after an aggregator configuration or code change. It prefers compacted event partitions, which are already de-duplicated and sorted by exchange stream, timestamp, and sequence, and falls back to raw partitions when no compacted table exists. Events are grouped by stream and replayed through the aggregator's pure candle processor using a new state epoch. Regenerated candles can be written either as raw hourly objects in the raw candle table or as candle-key partitions in the compacted candle table.
+Rebuilder replays archived market events from Iceberg to deterministically regenerate candles after an aggregator configuration or code change. It prefers compacted event partitions, which are already de-duplicated and sorted by exchange stream, timestamp, and sequence, and falls back to raw partitions when no compacted table exists. Events are grouped by their decoded exchange and trading pair and replayed through the aggregator's pure candle processor using a new state epoch, so all streams for a pair (such as `@trade` and `@aggTrade`) update the same candles. Regenerated candles can be written either as raw hourly objects in the raw candle table or as candle-key partitions in the compacted candle table.
 
 ### Configuration
 
