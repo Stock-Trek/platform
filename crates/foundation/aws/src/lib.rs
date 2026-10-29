@@ -6,6 +6,10 @@
 
 pub use aws_config::{Region, SdkConfig};
 
+pub mod secrets;
+
+pub use secrets::{SSM_DECRYPT_ENV, SSM_PATH_ENV, Secrets, SsmConfig};
+
 use aws_config::{BehaviorVersion, timeout::TimeoutConfig};
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;

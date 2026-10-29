@@ -14,7 +14,6 @@ platform-runtime = { workspace = true }
 platform-sqs = { workspace = true }
 platform-time = { workspace = true }
 aws-sdk-sqs = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
-aws-sdk-ssm = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
 hex = { workspace = true }
 hmac = { workspace = true }
 http = { workspace = true }
