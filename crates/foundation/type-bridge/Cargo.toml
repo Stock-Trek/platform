@@ -7,6 +7,7 @@ edition.workspace = true
 bimap = { workspace = true }
 platform-errors = { workspace = true }
 platform-exchange-types = { workspace = true }
+platform-types = { workspace = true }
 rust_decimal = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 stock-trek-types = { workspace = true, features = ["serde"] }

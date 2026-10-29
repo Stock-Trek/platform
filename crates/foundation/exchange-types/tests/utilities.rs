@@ -1,8 +1,8 @@
 use platform_exchange_types::{
     binance::{klines_limit::BinanceKlinesLimit, recv_window::BinanceRecvWindow},
     encode::ByteEncoder,
-    new_types::{Milliseconds, NonZero, UsageCount},
 };
+use platform_types::new_types::{Milliseconds, NonZero, UsageCount};
 
 #[test]
 fn percent_encoding_preserves_unreserved_bytes() {

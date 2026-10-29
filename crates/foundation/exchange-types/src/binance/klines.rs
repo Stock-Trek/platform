@@ -7,13 +7,13 @@ use crate::{
     },
     http::{HttpMethod, HttpRequest},
     klines::{Kline, KlinesHttpRequest, KlinesResponse, KlinesWebsocketRequest},
-    new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::RateLimitRestriction,
     request::{ETHttpRequest, ETRequest, ETWebsocketRequest, WebsocketResponseMatcher},
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
 use platform_errors::{BpError, BpResult};
+use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};

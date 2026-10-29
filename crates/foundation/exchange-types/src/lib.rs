@@ -5,7 +5,6 @@ pub mod encrypt;
 pub mod exchange;
 pub mod http;
 pub mod klines;
-pub mod new_types;
 pub mod rate_limited;
 pub mod request;
 pub mod response;

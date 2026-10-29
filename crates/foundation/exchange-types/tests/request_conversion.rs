@@ -10,11 +10,11 @@ use platform_exchange_types::{
         websocket_session_logout::BinanceSessionLogoutRequest,
     },
     http::HttpMethod,
-    new_types::TimestampMilliseconds,
     request::{ETHttpRequest, ETRequest, ETWebsocketRequest},
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
+use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use secrecy::SecretString;
 use serde_json::{Value, json};

@@ -7,10 +7,10 @@ use crate::{
 use platform_errors::{BpError, BpResult, ConnectorError, SystemError};
 use platform_exchange_types::{
     exchange::ETExchange,
-    new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::RateLimit,
     request::{ETHttpRequest, ETWebsocketRequest},
 };
+use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},

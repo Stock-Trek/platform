@@ -7,10 +7,10 @@ use crate::{
 use futures_timer::Delay;
 use platform_errors::{BpError, BpResult, ConnectorError, SendFailure, TimeoutError};
 use platform_exchange_types::{
-    exchange::ETExchange, new_types::UsageCount, rate_limited::RateLimitRestriction,
-    request::ETWebsocketRequest, response::ETWebsocketResponse, server_time::ServerTimeResponse,
-    websocket_id::ETWebsocketId,
+    exchange::ETExchange, rate_limited::RateLimitRestriction, request::ETWebsocketRequest,
+    response::ETWebsocketResponse, server_time::ServerTimeResponse, websocket_id::ETWebsocketId,
 };
+use platform_types::new_types::UsageCount;
 use std::{
     future::{Future, poll_fn},
     sync::Arc,

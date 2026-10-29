@@ -1,9 +1,9 @@
 use crate::{
-    new_types::TimestampMilliseconds,
     request::{ETHttpRequest, ETWebsocketRequest},
     response::{ETHttpResponse, ETWebsocketResponse},
 };
 use platform_errors::BpResult;
+use platform_types::new_types::TimestampMilliseconds;
 
 pub trait ServerTimeHttpRequest<Response>: ETHttpRequest<Response = Response>
 where

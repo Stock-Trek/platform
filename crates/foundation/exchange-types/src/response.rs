@@ -1,9 +1,9 @@
 use crate::{
     http::HttpResponse,
-    new_types::Seconds,
     rate_limited::{RateLimit, RateUsage},
 };
 use platform_errors::BpResult;
+use platform_types::new_types::Seconds;
 use std::{collections::HashMap, fmt::Debug};
 
 pub trait ETResponse: Clone + Debug {

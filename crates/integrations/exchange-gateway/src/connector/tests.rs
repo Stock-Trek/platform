@@ -9,10 +9,10 @@ use platform_exchange_types::{
     encode::ByteEncoder,
     exchange::ETExchange,
     http::{HttpRequest, HttpResponse},
-    new_types::UsageCount,
     rate_limited::RateLimitRestriction,
     signer::Signer,
 };
+use platform_types::new_types::UsageCount;
 use std::{future::poll_fn, task::Poll, time::Duration};
 
 struct UnknownOutcomeClient;

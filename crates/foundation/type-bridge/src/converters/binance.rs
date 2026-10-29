@@ -4,28 +4,23 @@ use crate::{
 };
 use bimap::BiHashMap;
 use platform_errors::{ExchangeError, ValidationError};
-use platform_exchange_types::{
-    binance::{
-        asset_limits::{BinanceAssetLimitsRequest, BinanceAssetLimitsResponse},
-        exchange::BinanceExchange,
-        exchange_info::{
-            BinanceExchangeInfoPermission, BinanceExchangeInfoPermissions,
-            BinanceExchangeInfoRequest, BinanceExchangeInfoResponse, BinanceExchangeInfoSymbol,
-            BinanceExchangeInfoSymbolStatus,
-        },
-        filters::{BinanceAssetFilter, BinanceSymbolFilter},
-        recv_window::BinanceRecvWindow,
-        response::{BinanceResponse, BinanceResponsePayload},
-        spot_order::{
-            BinanceNewOrderResponseType, BinanceSpotOrderRequest, BinanceSpotOrderResponse,
-        },
-        supporting_types::{
-            BinanceOrderStatus, BinanceOrderType, BinanceSelfTradeProtection, BinanceSide,
-            BinanceTimeInForce,
-        },
+use platform_exchange_types::binance::{
+    asset_limits::{BinanceAssetLimitsRequest, BinanceAssetLimitsResponse},
+    exchange::BinanceExchange,
+    exchange_info::{
+        BinanceExchangeInfoPermission, BinanceExchangeInfoPermissions, BinanceExchangeInfoRequest,
+        BinanceExchangeInfoResponse, BinanceExchangeInfoSymbol, BinanceExchangeInfoSymbolStatus,
     },
-    new_types::Milliseconds,
+    filters::{BinanceAssetFilter, BinanceSymbolFilter},
+    recv_window::BinanceRecvWindow,
+    response::{BinanceResponse, BinanceResponsePayload},
+    spot_order::{BinanceNewOrderResponseType, BinanceSpotOrderRequest, BinanceSpotOrderResponse},
+    supporting_types::{
+        BinanceOrderStatus, BinanceOrderType, BinanceSelfTradeProtection, BinanceSide,
+        BinanceTimeInForce,
+    },
 };
+use platform_types::new_types::Milliseconds;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use stock_trek_types::cex::{

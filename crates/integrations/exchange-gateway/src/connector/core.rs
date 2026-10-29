@@ -13,13 +13,13 @@ use iris::{Config as IrisConfig, DisconnectedBehavior, ServerCloseBehavior};
 use platform_errors::{BpError, BpResult, SendFailure};
 use platform_exchange_types::{
     exchange::ETExchange,
-    new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::{RateLimit, RateLimitRestriction},
     request::ETRequest,
     response::ETResponse,
     signer::Signer,
     urls::Protocol,
 };
+use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use strum::IntoEnumIterator;
 

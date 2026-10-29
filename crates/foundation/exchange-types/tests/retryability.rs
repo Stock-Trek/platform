@@ -7,8 +7,8 @@ use platform_exchange_types::{
         response::{BinanceMetadata, BinanceResponse, BinanceResponsePayload},
     },
     klines::KlinesResponse,
-    new_types::Seconds,
 };
+use platform_types::new_types::Seconds;
 
 fn response(
     status: u16,

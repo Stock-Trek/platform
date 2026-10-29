@@ -5,7 +5,6 @@ use crate::{
         response::{BinanceResponse, BinanceResponsePayload},
     },
     http::{HttpMethod, HttpRequest},
-    new_types::{TimestampMilliseconds, UsageCount},
     rate_limited::RateLimitRestriction,
     request::{ETHttpRequest, ETRequest, ETWebsocketRequest, WebsocketResponseMatcher},
     server_time::{ServerTimeHttpRequest, ServerTimeResponse, ServerTimeWebsocketRequest},
@@ -13,6 +12,7 @@ use crate::{
     websocket_id::ETWebsocketId,
 };
 use platform_errors::{BpError, BpResult};
+use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use serde::{Deserialize, Serialize};
 

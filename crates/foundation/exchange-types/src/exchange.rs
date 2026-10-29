@@ -1,11 +1,11 @@
 use crate::{
     klines::{KlinesHttpRequest, KlinesResponse, KlinesWebsocketRequest},
-    new_types::UsageCount,
     rate_limited::RateLimit,
     response::{ETHttpResponse, ETWebsocketResponse},
     server_time::{ServerTimeHttpRequest, ServerTimeResponse, ServerTimeWebsocketRequest},
     urls::Urls,
 };
+use platform_types::new_types::UsageCount;
 use std::collections::HashMap;
 
 pub trait ETExchange {

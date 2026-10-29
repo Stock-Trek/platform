@@ -1,7 +1,5 @@
-use crate::{
-    new_types::{Nanoseconds, UsageCount},
-    urls::Protocol,
-};
+use crate::urls::Protocol;
+use platform_types::new_types::{Nanoseconds, UsageCount};
 use serde::Deserialize;
 use strum::{Display, EnumIter};
 

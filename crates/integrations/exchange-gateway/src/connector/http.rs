@@ -7,10 +7,10 @@ use crate::{
 };
 use platform_errors::{BpError, BpResult, ConnectorError, RateLimitError, SendFailure};
 use platform_exchange_types::{
-    exchange::ETExchange, http::HttpResponse, new_types::UsageCount,
-    rate_limited::RateLimitRestriction, request::ETHttpRequest, response::ETHttpResponse,
-    server_time::ServerTimeResponse,
+    exchange::ETExchange, http::HttpResponse, rate_limited::RateLimitRestriction,
+    request::ETHttpRequest, response::ETHttpResponse, server_time::ServerTimeResponse,
 };
+use platform_types::new_types::UsageCount;
 use std::time::Instant;
 use tracing::{debug, warn};
 

@@ -4,11 +4,11 @@ use platform_exchange_types::{
         time::BinanceTimeResponse,
     },
     http::HttpResponse,
-    new_types::{Nanoseconds, Seconds, UsageCount},
     rate_limited::{RateLimit, RateLimitRestriction},
     response::{ETHttpResponse, ETResponse, ETWebsocketResponse},
     websocket_id::ETWebsocketId,
 };
+use platform_types::new_types::{Nanoseconds, Seconds, UsageCount};
 use serde_json::json;
 
 #[test]
