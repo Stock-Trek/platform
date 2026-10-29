@@ -59,10 +59,10 @@ impl ArchiveIcebergTable {
 
     pub fn name(self) -> &'static str {
         match self {
-            Self::RawEvents => "raw_events",
-            Self::RawCandles => "raw_candles",
-            Self::CompactedEvents => "compacted_events",
-            Self::CompactedCandles => "compacted_candles",
+            Self::RawEvents => "raw/events",
+            Self::RawCandles => "raw/candles",
+            Self::CompactedEvents => "compacted/events",
+            Self::CompactedCandles => "compacted/candles",
         }
     }
 
@@ -127,19 +127,19 @@ mod tests {
     fn tables_are_named_per_layer_and_kind() {
         assert_eq!(
             ArchiveIcebergTable::raw(ArchiveKind::Events).name(),
-            "raw_events"
+            "raw/events"
         );
         assert_eq!(
             ArchiveIcebergTable::raw(ArchiveKind::Candles).name(),
-            "raw_candles"
+            "raw/candles"
         );
         assert_eq!(
             ArchiveIcebergTable::compacted(ArchiveKind::Events).name(),
-            "compacted_events"
+            "compacted/events"
         );
         assert_eq!(
             ArchiveIcebergTable::compacted(ArchiveKind::Candles).name(),
-            "compacted_candles"
+            "compacted/candles"
         );
         assert_eq!(
             ArchiveIcebergTable::new(ArchiveTableLayer::Compacted, ArchiveKind::Candles).kind(),

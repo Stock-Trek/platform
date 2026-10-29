@@ -355,7 +355,7 @@ mod tests {
     #[test]
     fn manifest_lists_round_trip_manifest_paths() {
         let encoded = manifest_list(&[ManifestListEntry::added(
-            "s3://archive/warehouse/market_data/raw_events/metadata/manifest.avro".to_string(),
+            "s3://archive/warehouse/market_data/raw/events/metadata/manifest.avro".to_string(),
             123,
             7,
             3,
@@ -367,7 +367,7 @@ mod tests {
         assert_eq!(entries.len(), 1);
         assert_eq!(
             entries[0].manifest_path,
-            "s3://archive/warehouse/market_data/raw_events/metadata/manifest.avro"
+            "s3://archive/warehouse/market_data/raw/events/metadata/manifest.avro"
         );
         assert_eq!(entries[0].added_files_count, 2);
         assert_eq!(entries[0].added_rows_count, 30);

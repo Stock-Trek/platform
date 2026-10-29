@@ -614,11 +614,11 @@ mod tests {
     #[test]
     fn parses_s3_metadata_locations() {
         let (bucket, key) =
-            parse_s3_uri("s3://archive/warehouse/market_data/raw_events/metadata/a.avro").unwrap();
+            parse_s3_uri("s3://archive/warehouse/market_data/raw/events/metadata/a.avro").unwrap();
         assert_eq!(bucket.as_str(), "archive");
         assert_eq!(
             key.as_str(),
-            "warehouse/market_data/raw_events/metadata/a.avro"
+            "warehouse/market_data/raw/events/metadata/a.avro"
         );
         assert!(parse_s3_uri("file:///tmp/metadata.json").is_err());
     }
