@@ -105,21 +105,6 @@ impl FetcherRegistry {
     pub fn contains(&self, exchange: CexId) -> bool {
         self.fetchers.contains_key(&exchange)
     }
-
-    #[allow(dead_code)]
-    pub fn exchanges(&self) -> impl Iterator<Item = CexId> + '_ {
-        self.fetchers.keys().copied()
-    }
-
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.fetchers.len()
-    }
-
-    #[allow(dead_code)]
-    pub fn is_empty(&self) -> bool {
-        self.fetchers.is_empty()
-    }
 }
 
 #[async_trait]
