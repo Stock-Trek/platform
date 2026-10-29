@@ -31,13 +31,19 @@ const FALLBACK_WINDOW_STEP: u64 = 1_000;
 
 #[derive(Debug, Clone)]
 pub struct BackfillOptions {
+    #[allow(dead_code)]
     pub exchange: CexId,
     pub event_subject_prefix: String,
 }
 
 impl BackfillOptions {
+    #[allow(dead_code)]
     pub fn subject(&self, stream: &str) -> String {
-        MarketEventSubject::new(&self.event_subject_prefix, self.exchange).event(stream)
+        self.subject_for(self.exchange, stream)
+    }
+
+    pub fn subject_for(&self, exchange: CexId, stream: &str) -> String {
+        MarketEventSubject::new(&self.event_subject_prefix, exchange).event(stream)
     }
 }
 
@@ -136,7 +142,7 @@ where
     }
 
     async fn accept(&mut self, gap: GapMarker, pending: &mut BTreeMap<String, PendingGap>) {
-        if gap.exchange != self.options.exchange {
+        if !self.fetcher.supports(gap.exchange) {
             let _ = self.source.ack(&gap).await;
             return;
         }
@@ -339,7 +345,10 @@ where
             payload,
         };
         self.publisher
-            .publish(&self.options.subject(&gap.stream), &market_event.encode()?)
+            .publish(
+                &self.options.subject_for(gap.exchange, &gap.stream),
+                &market_event.encode()?,
+            )
             .await
     }
 }
