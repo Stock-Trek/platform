@@ -4,7 +4,7 @@ use iris::{
     Client as IrisClient, Config as IrisConfig, ConnectionError as IrisConnectionError,
     Listener as IrisListener, ServerCloseBehavior,
 };
-use platform_errors::{BpError, BpResult, IngesterError};
+use platform_errors::{BpError, BpResult, ExchangeError, IngesterError};
 use platform_market_data::{
     decoders::{
         codec::{CodecFactory, CodecHandle, SharedCodec},
@@ -22,7 +22,6 @@ use tokio::sync::mpsc;
 use tracing::{debug, info, warn};
 
 const BINANCE_API_KEY_HEADER: &str = "X-MBX-APIKEY";
-const DEFAULT_API_KEY_HEADER: &str = "X-API-KEY";
 
 /// Wire format used by an exchange websocket.
 ///
@@ -135,16 +134,21 @@ impl WebsocketSource {
         let mut config =
             IrisConfig::new().with_server_close_behavior(ServerCloseBehavior::Reconnect);
         if let Some(api_key) = &self.api_key {
-            // TODO: map authentication headers to each exchange explicitly.
-            let header = match self.exchange {
-                CexId::Binance => BINANCE_API_KEY_HEADER,
-                _ => DEFAULT_API_KEY_HEADER,
-            };
+            let header = Self::api_key_header(self.exchange)?;
             config = config
                 .with_header_str(header, api_key)
                 .map_err(BpError::external)?;
         }
         Ok(config)
+    }
+
+    fn api_key_header(exchange: CexId) -> BpResult<&'static str> {
+        match exchange {
+            CexId::Binance => Ok(BINANCE_API_KEY_HEADER),
+            exchange => Err(BpError::Exchange(ExchangeError::UnsupportedExchange {
+                exchange: exchange.to_string(),
+            })),
+        }
     }
 }
 
@@ -234,5 +238,13 @@ mod tests {
             "protobuf".parse::<StreamFormat>(),
             Err(IngesterError::UnsupportedStreamFormat { .. })
         ));
+    }
+
+    #[test]
+    fn maps_binance_api_key_header() {
+        assert_eq!(
+            WebsocketSource::api_key_header(CexId::Binance).unwrap(),
+            "X-MBX-APIKEY"
+        );
     }
 }
