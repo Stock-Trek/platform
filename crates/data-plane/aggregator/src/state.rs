@@ -367,7 +367,29 @@ impl AggregatorState {
     /// Records a gap, merging overlapping or adjacent ranges for the same
     /// exchange stream.
     pub fn record_gap(&mut self, gap: &GapMarker) {
-        let mut merged = KnownGap::new(gap);
+        self.record_incomplete_range(
+            gap.exchange,
+            &gap.stream,
+            SequenceRange::new(gap.missing_from, gap.missing_to),
+            gap.detected_at,
+        );
+    }
+
+    /// Records an incomplete range directly.
+    pub fn record_incomplete_range(
+        &mut self,
+        exchange: CexId,
+        stream: impl Into<String>,
+        range: SequenceRange,
+        detected_at: TimestampMilliseconds,
+    ) {
+        let mut merged = KnownGap {
+            exchange,
+            stream: stream.into(),
+            from_sequence: range.from_sequence,
+            to_sequence: range.to_sequence,
+            detected_at,
+        };
         self.known_gaps.retain(|existing| {
             if existing.exchange == merged.exchange
                 && existing.stream == merged.stream
@@ -387,26 +409,6 @@ impl AggregatorState {
                 .then_with(|| left.stream.cmp(&right.stream))
                 .then_with(|| left.from_sequence.cmp(&right.from_sequence))
         });
-    }
-
-    /// Records an incomplete range directly.
-    pub fn record_incomplete_range(
-        &mut self,
-        exchange: CexId,
-        stream: impl Into<String>,
-        range: SequenceRange,
-        detected_at: TimestampMilliseconds,
-    ) {
-        let gap = GapMarker {
-            exchange,
-            stream: stream.into(),
-            previous_sequence: range.from_sequence.saturating_sub(1),
-            observed_sequence: range.to_sequence.saturating_add(1),
-            missing_from: range.from_sequence,
-            missing_to: range.to_sequence,
-            detected_at,
-        };
-        self.record_gap(&gap);
     }
 
     pub fn record_incomplete_window(&mut self, window: IncompleteWindow) {
@@ -443,6 +445,24 @@ impl AggregatorState {
             .iter()
             .any(|window| window.key == *key && window.window_start == window_start)
     }
+
+    /// Drops gap bookkeeping that can no longer affect an open candle.
+    ///
+    /// `cutoff` is the newest window end that has been closed. Candle
+    /// completeness is copied onto the candle before this is called, so the
+    /// records are no longer needed by live processing. Keeping only currently
+    /// relevant entries prevents checkpoints from growing forever.
+    pub fn prune_closed_windows(&mut self, cutoff: TimestampMilliseconds) {
+        self.incomplete_windows.retain(|window| {
+            window.window_end > cutoff
+                || self.open_candles.get(&window.key).is_some_and(|candles| {
+                    candles
+                        .iter()
+                        .any(|candle| candle.start_time() == window.window_start)
+                })
+        });
+        self.known_gaps.retain(|gap| gap.detected_at > cutoff);
+    }
 }
 
 impl PartialEq for AggregatorState {
@@ -477,6 +497,7 @@ fn candle_maps_eq(
 
 fn candle_eq(left: &Candle, right: &Candle) -> bool {
     left.key == right.key
+        && left.is_complete == right.is_complete
         && left.market_candle.start_time_millis_inc == right.market_candle.start_time_millis_inc
         && left.market_candle.end_time_millis_exc == right.market_candle.end_time_millis_exc
         && left.market_candle.duration_millis == right.market_candle.duration_millis
@@ -641,6 +662,58 @@ mod tests {
         assert_eq!(state.known_gaps[0].detected_at, TimestampMilliseconds(20));
         assert!(state.has_gap(CexId::Binance, "btcusdt@trade", 3));
         assert!(!state.has_gap(CexId::Binance, "btcusdt@trade", 6));
+    }
+
+    #[test]
+    fn pruning_drops_bookkeeping_for_closed_windows_only() {
+        let mut state = AggregatorState::new();
+        let candle = candle();
+        state.record_incomplete_window(IncompleteWindow {
+            key: candle.key.clone(),
+            window_start: candle.start_time(),
+            window_end: candle.end_time(),
+            stream: "btcusdt@trade".to_string(),
+            from_sequence: 2,
+            to_sequence: 2,
+            detected_at: TimestampMilliseconds(61_000),
+        });
+        state.record_incomplete_range(
+            CexId::Binance,
+            "btcusdt@trade",
+            SequenceRange::new(3, 3),
+            TimestampMilliseconds(61_000),
+        );
+
+        state.prune_closed_windows(TimestampMilliseconds(120_000));
+
+        assert!(state.incomplete_windows.is_empty());
+        assert!(state.known_gaps.is_empty());
+    }
+
+    #[test]
+    fn pruning_keeps_bookkeeping_for_windows_at_or_after_the_cutoff() {
+        let mut state = AggregatorState::new();
+        let candle = candle();
+        state.record_incomplete_window(IncompleteWindow {
+            key: candle.key.clone(),
+            window_start: candle.start_time(),
+            window_end: candle.end_time(),
+            stream: "btcusdt@trade".to_string(),
+            from_sequence: 2,
+            to_sequence: 2,
+            detected_at: TimestampMilliseconds(61_000),
+        });
+        state.record_incomplete_range(
+            CexId::Binance,
+            "btcusdt@trade",
+            SequenceRange::new(3, 3),
+            TimestampMilliseconds(61_000),
+        );
+
+        state.prune_closed_windows(TimestampMilliseconds(60_000));
+
+        assert_eq!(state.incomplete_windows.len(), 1);
+        assert_eq!(state.known_gaps.len(), 1);
     }
 
     #[test]

@@ -129,6 +129,18 @@ impl fmt::Display for CandleKey {
 pub struct Candle {
     pub key: CandleKey,
     pub market_candle: MarketCandle,
+    /// Whether every source event that belongs to this window was observed.
+    ///
+    /// Candles start complete. A gap marker that covers the window marks it
+    /// incomplete before it closes, and the flag is carried by the published
+    /// closed candle. Older payloads that do not contain the field are treated
+    /// as complete.
+    #[serde(default = "default_complete")]
+    pub is_complete: bool,
+}
+
+fn default_complete() -> bool {
+    true
 }
 
 /// Deterministic revision of a closed candle.
@@ -236,6 +248,35 @@ impl ClosedCandle {
     pub fn message_id(&self) -> String {
         self.revision.message_id()
     }
+
+    /// Whether every source event that belongs to this candle was observed.
+    pub fn is_complete(&self) -> bool {
+        self.candle.is_complete
+    }
+
+    /// Whether a source gap affected this candle.
+    pub fn is_incomplete(&self) -> bool {
+        !self.is_complete()
+    }
+
+    /// Marks this candle as affected by a source gap.
+    pub fn mark_incomplete(&mut self) {
+        self.candle.mark_incomplete();
+    }
+}
+
+impl std::ops::Deref for ClosedCandle {
+    type Target = Candle;
+
+    fn deref(&self) -> &Self::Target {
+        &self.candle
+    }
+}
+
+impl std::ops::DerefMut for ClosedCandle {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.candle
+    }
 }
 
 impl Candle {
@@ -256,7 +297,28 @@ impl Candle {
                 MarketOhlcv::new(price, price, price, price, quantity, quote_volume, price),
                 1,
             ),
+            is_complete: true,
         }
+    }
+
+    /// Whether every source event that belongs to this candle was observed.
+    pub fn is_complete(&self) -> bool {
+        self.is_complete
+    }
+
+    /// Whether a source gap affected this candle.
+    pub fn is_incomplete(&self) -> bool {
+        !self.is_complete
+    }
+
+    /// Marks this candle as affected by a source gap.
+    pub fn mark_incomplete(&mut self) {
+        self.is_complete = false;
+    }
+
+    /// Restores the completeness flag after a gap has been fully resolved.
+    pub fn mark_complete(&mut self) {
+        self.is_complete = true;
     }
 
     pub fn apply_trade(&mut self, trade: &Trade) {
@@ -351,6 +413,32 @@ mod tests {
         assert_eq!(ohlcv.quote_volume, 580.0);
         assert!((ohlcv.vwap - 96.666_666_666_666_67).abs() < f64::EPSILON);
         assert_eq!(candle.market_candle.trade_count, 3);
+    }
+
+    #[test]
+    fn candles_start_complete_and_can_be_marked_incomplete() {
+        let interval = CandleInterval::from_label("1m").unwrap();
+        let mut candle = Candle::open(&trade("100", "2", 61_000), interval);
+        assert!(candle.is_complete());
+        assert!(!candle.is_incomplete());
+
+        candle.mark_incomplete();
+        assert!(candle.is_incomplete());
+
+        candle.mark_complete();
+        assert!(candle.is_complete());
+    }
+
+    #[test]
+    fn legacy_candle_payloads_default_to_complete() {
+        let interval = CandleInterval::from_label("1m").unwrap();
+        let candle = Candle::open(&trade("100", "2", 61_000), interval);
+        let mut payload = serde_json::to_value(&candle).unwrap();
+        payload.as_object_mut().unwrap().remove("is_complete");
+
+        let decoded: Candle = serde_json::from_value(payload).unwrap();
+
+        assert!(decoded.is_complete());
     }
 
     #[test]

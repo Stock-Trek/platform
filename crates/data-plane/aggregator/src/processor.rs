@@ -204,6 +204,7 @@ impl CandleProcessor {
                 continue;
             }
 
+            let incomplete = self.state.is_window_incomplete(&key, candle_start);
             let candles = self.state.open_candles.entry(key).or_default();
             let position = match candles
                 .binary_search_by_key(&candle_start.0, |candle| candle.start_time().0)
@@ -211,11 +212,18 @@ impl CandleProcessor {
                 Ok(position) => {
                     if let Some(candle) = candles.get_mut(position) {
                         candle.apply_trade(trade);
+                        if incomplete {
+                            candle.mark_incomplete();
+                        }
                     }
                     position
                 }
                 Err(position) => {
-                    candles.insert(position, Candle::open(trade, interval));
+                    let mut candle = Candle::open(trade, interval);
+                    if incomplete {
+                        candle.mark_incomplete();
+                    }
+                    candles.insert(position, candle);
                     position
                 }
             };
@@ -356,6 +364,9 @@ impl CandleProcessor {
         });
 
         for (key, start, watermark) in expired {
+            let incomplete = self
+                .state
+                .is_window_incomplete(&key, TimestampMilliseconds(start));
             let (mut candle, empty) = {
                 let Some(candles) = self.state.open_candles.get_mut(&key) else {
                     continue;
@@ -372,6 +383,9 @@ impl CandleProcessor {
             if empty {
                 self.state.open_candles.remove(&key);
             }
+            if incomplete {
+                candle.mark_incomplete();
+            }
             candle.close();
             self.state.retain_closed_candle(candle.clone());
             update.closed.push(ClosedCandle::new(
@@ -380,6 +394,10 @@ impl CandleProcessor {
                 source_offset,
                 state_epoch,
             ));
+        }
+        if let Some(watermark) = self.state.watermark {
+            let cutoff = watermark - self.config.allowed_lateness;
+            self.state.prune_closed_windows(cutoff);
         }
     }
 
@@ -421,6 +439,19 @@ impl CandleProcessor {
             .collect::<Vec<_>>();
 
         for window in affected {
+            if let Some(candle) = self
+                .state
+                .open_candles
+                .get_mut(&window.key)
+                .and_then(|candles| {
+                    candles
+                        .iter_mut()
+                        .find(|candle| candle.start_time() == window.window_start)
+                })
+            {
+                candle.mark_incomplete();
+                update.open.push(candle.clone());
+            }
             self.state.record_incomplete_window(window.clone());
             update.incomplete_windows.push(window);
         }
@@ -770,6 +801,7 @@ mod tests {
 
         assert_eq!(update.closed.len(), 1);
         assert!(update.closed[0].candle.market_candle.is_candle_closed);
+        assert!(update.closed[0].is_incomplete());
         assert_eq!(update.incomplete_windows.len(), 1);
         assert_eq!(
             update.incomplete_windows[0].window_start,
@@ -777,7 +809,42 @@ mod tests {
         );
         assert_eq!(update.incomplete_windows[0].from_sequence, 2);
         assert_eq!(update.incomplete_windows[0].to_sequence, 2);
-        assert!(processor.state().incomplete_windows.len() == 1);
+        // The closed window no longer needs to be tracked once the flag has
+        // been carried onto the candle.
+        assert!(processor.state().incomplete_windows.is_empty());
+    }
+
+    #[test]
+    fn a_gap_marks_the_open_candle_and_republishes_it() {
+        let mut processor = CandleProcessor::new(vec![one_minute()]);
+        processor.apply_trade(&trade("100", 61_000));
+
+        let update = processor.apply_gap(&GapMarker {
+            detected_at: TimestampMilliseconds(65_000),
+            ..gap(65_000)
+        });
+
+        assert_eq!(update.open.len(), 1);
+        assert!(update.open[0].is_incomplete());
+        let candle = processor
+            .state()
+            .open_candle(&CandleKey::new(
+                CexId::Binance,
+                TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+                one_minute(),
+            ))
+            .unwrap();
+        assert!(candle.is_incomplete());
+    }
+
+    #[test]
+    fn pruned_gap_bookkeeping_does_not_grow_without_bound() {
+        let mut processor = CandleProcessor::new(vec![one_minute()]);
+        processor.apply_trade(&trade("100", 61_000));
+        processor.apply_gap(&gap(120_000));
+
+        assert!(processor.state().known_gaps.is_empty());
+        assert!(processor.state().incomplete_windows.is_empty());
     }
 
     #[test]

@@ -39,6 +39,7 @@ fn closed_candle(revision: u64) -> ClosedCandle {
             MarketOhlcv::new(100.0, 110.0, 90.0, 105.0, 6.0, 580.0, 96.666_666_666_666_67),
             3,
         ),
+        is_complete: true,
     };
     ClosedCandle::new(candle, TimestampMilliseconds(121_000), revision, 0)
 }
@@ -161,6 +162,24 @@ fn candles_round_trip_with_named_columns() {
 }
 
 #[test]
+fn incomplete_candles_round_trip_completeness() {
+    let mut candle = closed_candle(7);
+    candle.mark_incomplete();
+    let batch = ArchiveBatch::new(
+        ArchiveKind::Candles,
+        vec![ArchiveRecord::ClosedCandle(candle)],
+    )
+    .unwrap();
+    let encoded = ArchiveParquet::encode(&batch).unwrap();
+    let decoded = ArchiveParquet::decode(ArchiveKind::Candles, Bytes::from(encoded)).unwrap();
+
+    let ArchiveRecord::ClosedCandle(actual) = &decoded.records()[0] else {
+        panic!("expected a closed candle");
+    };
+    assert!(actual.is_incomplete());
+}
+
+#[test]
 fn writers_reject_batches_of_a_different_kind() {
     let batch = ArchiveBatch::new(
         ArchiveKind::Candles,
@@ -195,6 +214,7 @@ fn candle_schema_exposes_revision_provenance() {
             ("state_epoch", "19".to_string()),
             ("revision_id", "20".to_string()),
             ("revision", "21".to_string()),
+            ("is_complete", "22".to_string()),
         ]
     );
 }

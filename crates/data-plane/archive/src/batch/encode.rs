@@ -139,6 +139,9 @@ impl ArchiveBatch {
                     )),
                     Self::strings(revision_ids),
                     Self::strings(revisions),
+                    Arc::new(BooleanArray::from_iter(
+                        candles.iter().map(|closed| Some(closed.candle.is_complete)),
+                    )),
                 ];
                 Ok(RecordBatch::try_new(Self::schema(kind), columns)?)
             }

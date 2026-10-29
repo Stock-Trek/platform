@@ -92,6 +92,7 @@ mod tests {
                 MarketOhlcv::new(1.0, 2.0, 0.5, 1.5, 10.0, 15.0, 1.5),
                 5,
             ),
+            is_complete: true,
         };
         ClosedCandle::new(candle, TimestampMilliseconds(121_000), 3, 0)
     }

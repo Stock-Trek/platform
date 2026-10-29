@@ -47,6 +47,9 @@ impl ArchiveBatch {
                 Self::field(19, "state_epoch", DataType::UInt64, false),
                 Self::field(20, "revision_id", DataType::Utf8, false),
                 Self::field(21, "revision", DataType::Utf8, false),
+                // Completeness is carried all the way to consumers so a gap-
+                // affected candle remains distinguishable from a complete one.
+                Self::field(22, "is_complete", DataType::Boolean, false),
             ])),
         }
     }
