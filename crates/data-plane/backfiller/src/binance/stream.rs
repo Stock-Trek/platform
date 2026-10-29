@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_errors::{BpError, BpResult};
 use platform_exchange_types::binance::klines::BinanceKlinesInterval;
 
 /// The market data stream behind a Binance stream name.
@@ -20,18 +20,14 @@ pub struct MarketStream {
 impl MarketStream {
     pub fn parse(stream: &str) -> BpResult<Self> {
         let Some((symbol, suffix)) = stream.split_once('@') else {
-            return Err(BpError::Exchange(ExchangeError::BadValue {
-                name: "stream".to_string(),
-                value: stream.to_string(),
-                reason: "expected <symbol>@<stream>".to_string(),
-            }));
+            return Err(BpError::bad_value(
+                "stream",
+                stream,
+                "expected <symbol>@<stream>",
+            ));
         };
         if symbol.is_empty() {
-            return Err(BpError::Exchange(ExchangeError::BadValue {
-                name: "stream".to_string(),
-                value: stream.to_string(),
-                reason: "symbol is empty".to_string(),
-            }));
+            return Err(BpError::bad_value("stream", stream, "symbol is empty"));
         }
         let kind = Self::kind(stream, suffix)?;
         Ok(Self {
@@ -55,19 +51,18 @@ impl MarketStream {
             return BinanceKlinesInterval::try_from(interval)
                 .map(MarketStreamKind::Kline)
                 .map_err(|_| {
-                    BpError::Exchange(ExchangeError::BadValue {
-                        name: "stream".to_string(),
-                        value: stream.to_string(),
-                        reason: format!("unsupported kline interval {interval}"),
-                    })
+                    BpError::bad_value(
+                        "stream",
+                        stream,
+                        format!("unsupported kline interval {interval}"),
+                    )
                 });
         }
-        Err(BpError::Exchange(ExchangeError::BadValue {
-            name: "stream".to_string(),
-            value: stream.to_string(),
-            reason: "unsupported stream; expected trade, depth, bookTicker, or kline_<interval>"
-                .to_string(),
-        }))
+        Err(BpError::bad_value(
+            "stream",
+            stream,
+            "unsupported stream; expected trade, depth, bookTicker, or kline_<interval>",
+        ))
     }
 }
 

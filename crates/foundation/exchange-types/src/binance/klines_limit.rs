@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_errors::{BpError, BpResult};
 use serde::Serialize;
 use std::fmt;
 
@@ -14,11 +14,11 @@ impl BinanceKlinesLimit {
         if Self::is_valid(klines_limit) {
             Ok(Self(klines_limit))
         } else {
-            Err(BpError::Exchange(ExchangeError::BadValue {
-                name: "klines_limit".into(),
-                value: klines_limit.to_string(),
-                reason: format!("Out of bounds >={} <={}", Self::MINIMUM, Self::MAXIMUM),
-            }))
+            Err(BpError::bad_value(
+                "klines_limit",
+                klines_limit.to_string(),
+                format!("Out of bounds >={} <={}", Self::MINIMUM, Self::MAXIMUM),
+            ))
         }
     }
 
