@@ -1,4 +1,7 @@
-use super::{GitHubEventConverter, NO_ACTION, UNKNOWN_ACTION};
+use super::{
+    GitHubEventConverter,
+    converter::{NO_ACTION, UNKNOWN_ACTION},
+};
 use crate::{
     dto::github::{
         github_event_installation::{GitHubEventInstallation, GitHubEventInstallationAction},

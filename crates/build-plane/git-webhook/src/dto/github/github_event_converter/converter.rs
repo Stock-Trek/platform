@@ -1,8 +1,3 @@
-mod helpers;
-mod responses;
-#[cfg(test)]
-mod tests;
-
 use crate::{
     dto::{event_converter::EventConverter, github::github_event_type::GitHubEventType},
     event_response::EventResponse,
@@ -13,12 +8,12 @@ use platform_github::host_allow_list::HostAllowlist;
 use platform_metrics::event::EventMetrics;
 
 const GITHUB_WEBHOOK_SECRET: &str = "GITHUB_WEBHOOK_SECRET";
-const UNKNOWN_ACTION: &str = "unknown";
-const NO_ACTION: &str = "none";
+pub(super) const UNKNOWN_ACTION: &str = "unknown";
+pub(super) const NO_ACTION: &str = "none";
 
 pub struct GitHubEventConverter {
-    secret: String,
-    allowed_hosts: HostAllowlist,
+    pub(super) secret: String,
+    pub(super) allowed_hosts: HostAllowlist,
 }
 
 impl GitHubEventConverter {

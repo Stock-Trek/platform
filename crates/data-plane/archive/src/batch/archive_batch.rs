@@ -1,17 +1,11 @@
-mod decode;
-mod encode;
-mod schema;
-#[cfg(test)]
-mod tests;
-
 use crate::record::{ArchiveKind, ArchiveRecord};
 use platform_errors::{BpError, BpResult};
 use std::io::ErrorKind;
 
 #[derive(Debug, Clone)]
 pub struct ArchiveBatch {
-    kind: ArchiveKind,
-    records: Vec<ArchiveRecord>,
+    pub(super) kind: ArchiveKind,
+    pub(super) records: Vec<ArchiveRecord>,
 }
 
 impl ArchiveBatch {
@@ -54,7 +48,7 @@ impl ArchiveBatch {
         self.records.is_empty()
     }
 
-    fn kind_mismatch(expected: ArchiveKind, record: &ArchiveRecord) -> BpError {
+    pub(super) fn kind_mismatch(expected: ArchiveKind, record: &ArchiveRecord) -> BpError {
         BpError::io(
             "encode archived parquet",
             expected.label(),

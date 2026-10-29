@@ -1,8 +1,3 @@
-mod http;
-#[cfg(test)]
-mod tests;
-mod websocket;
-
 use crate::{
     auto_resync_connector::AutoResyncConnector,
     clients::client::{HttpClient, WebsocketClient},
@@ -29,14 +24,14 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use strum::IntoEnumIterator;
 
 pub struct Connector<Exchange, Client> {
-    exchange: Exchange,
-    rate_limiters: RateLimiters,
-    clock: Clock,
-    signer: Signer,
-    client: Client,
-    request_timeout: Duration,
-    max_retries: u8,
-    websocket_listener: Option<Arc<WebsocketListener>>,
+    pub(super) exchange: Exchange,
+    pub(super) rate_limiters: RateLimiters,
+    pub(super) clock: Clock,
+    pub(super) signer: Signer,
+    pub(super) client: Client,
+    pub(super) request_timeout: Duration,
+    pub(super) max_retries: u8,
+    pub(super) websocket_listener: Option<Arc<WebsocketListener>>,
 }
 
 impl Connector<(), ()> {
@@ -149,7 +144,7 @@ impl Connector<(), ()> {
             max_retries,
         )
     }
-    fn rate_limiters(default_capacity: HashMap<RateLimit, UsageCount>) -> BpResult<RateLimiters> {
+    pub(super) fn rate_limiters(default_capacity: HashMap<RateLimit, UsageCount>) -> BpResult<RateLimiters> {
         let mut limiter_states = HashMap::new();
         for (rate_limit, capacity) in default_capacity {
             let RateLimit {
@@ -188,7 +183,7 @@ where
     pub fn server_time_estimate(&self) -> BpResult<TimestampMilliseconds> {
         self.clock.server_time_estimate()
     }
-    fn validate_rate_limits<Request>(
+    pub(super) fn validate_rate_limits<Request>(
         &self,
         request: &Request,
     ) -> BpResult<Vec<(RateLimitRestriction, UsageCount)>>
@@ -204,7 +199,7 @@ where
         self.rate_limiters.did_acquire(&costs)?;
         Ok(costs)
     }
-    fn refund_if_not_sent(
+    pub(super) fn refund_if_not_sent(
         &self,
         error: &BpError,
         costs: &mut Vec<(RateLimitRestriction, UsageCount)>,
@@ -214,13 +209,13 @@ where
         }
         Ok(())
     }
-    fn refund(&self, costs: Vec<(RateLimitRestriction, UsageCount)>) -> BpResult<()> {
+    pub(super) fn refund(&self, costs: Vec<(RateLimitRestriction, UsageCount)>) -> BpResult<()> {
         for (restriction, cost) in costs {
             self.rate_limiters.refund(restriction, cost)?;
         }
         Ok(())
     }
-    fn on_send_failure<T>(
+    pub(super) fn on_send_failure<T>(
         &self,
         error: BpError,
         costs: Vec<(RateLimitRestriction, UsageCount)>,
@@ -230,7 +225,7 @@ where
         }
         Err(error)
     }
-    fn set_rate_limits(&self, response: &impl ETResponse) -> BpResult<()> {
+    pub(super) fn set_rate_limits(&self, response: &impl ETResponse) -> BpResult<()> {
         if let Some(usage) = response.rate_limit_usage() {
             self.rate_limiters.set_usage(usage)?;
         }

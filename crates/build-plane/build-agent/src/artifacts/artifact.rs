@@ -1,8 +1,3 @@
-mod build;
-mod publish;
-#[cfg(test)]
-mod tests;
-
 use crate::{s3::SignedPost, source::SourceLimits};
 use platform_errors::{BpError, BpResult};
 use std::{
@@ -12,33 +7,33 @@ use std::{
 };
 use tempfile::TempDir;
 
-const WASM_MANIFEST: &str = "crates/compute/runner/Cargo.toml";
-const WASM_TARGET: &str = "wasm32-wasip1";
-const WASM_ARTIFACT_FILE: &str = "runner.wasm";
-const CWASM_ARTIFACT_FILE: &str = "runner.cwasm";
-const SOURCE_TARGET_DIR: &str = "target";
-const USER_GENERATED_DIR: &str = "crates/compute/runner/src/user_generated";
-const USER_GENERATED_ARCHIVE: &str = "sources.zip";
-pub const COMPILE_OUTPUT_FILE: &str = "compile-output.txt";
-const WORKSPACE_ENTRIES: &[&str] = &[
+pub(super) const WASM_MANIFEST: &str = "crates/compute/runner/Cargo.toml";
+pub(super) const WASM_TARGET: &str = "wasm32-wasip1";
+pub(super) const WASM_ARTIFACT_FILE: &str = "runner.wasm";
+pub(super) const CWASM_ARTIFACT_FILE: &str = "runner.cwasm";
+pub(super) const SOURCE_TARGET_DIR: &str = "target";
+pub(super) const USER_GENERATED_DIR: &str = "crates/compute/runner/src/user_generated";
+pub(super) const USER_GENERATED_ARCHIVE: &str = "sources.zip";
+pub(super) const COMPILE_OUTPUT_FILE: &str = "compile-output.txt";
+pub(super) const WORKSPACE_ENTRIES: &[&str] = &[
     "Cargo.toml",
     "Cargo.lock",
     "crates",
     ".cargo",
     "rust-toolchain.toml",
 ];
-const CARGO: &str = "cargo";
-const WASMTIME: &str = "wasmtime";
+pub(super) const CARGO: &str = "cargo";
+pub(super) const WASMTIME: &str = "wasmtime";
 
 #[derive(Clone)]
 pub struct Artifacts {
-    signed_post: SignedPost,
-    source_get_url: String,
-    source_dir: PathBuf,
-    build_cache_dir: PathBuf,
-    build_dir: Arc<TempDir>,
-    source_limits: SourceLimits,
-    compile_output: Arc<Mutex<Option<Vec<u8>>>>,
+    pub(super) signed_post: SignedPost,
+    pub(super) source_get_url: String,
+    pub(super) source_dir: PathBuf,
+    pub(super) build_cache_dir: PathBuf,
+    pub(super) build_dir: Arc<TempDir>,
+    pub(super) source_limits: SourceLimits,
+    pub(super) compile_output: Arc<Mutex<Option<Vec<u8>>>>,
 }
 
 impl Artifacts {
@@ -92,7 +87,7 @@ impl Artifacts {
         self.compile_wasm(&wasm).await
     }
 
-    fn command_output(command: &str, output: &std::process::Output) -> Vec<u8> {
+    pub(super) fn command_output(command: &str, output: &std::process::Output) -> Vec<u8> {
         let mut captured = Vec::new();
         let _ = write!(
             captured,
@@ -111,13 +106,13 @@ impl Artifacts {
         captured
     }
 
-    fn set_compile_output(&self, output: Vec<u8>) {
+    pub(super) fn set_compile_output(&self, output: Vec<u8>) {
         if let Ok(mut current) = self.compile_output.lock() {
             *current = Some(output);
         }
     }
 
-    fn take_compile_output(&self) -> Option<Vec<u8>> {
+    pub(super) fn take_compile_output(&self) -> Option<Vec<u8>> {
         self.compile_output
             .lock()
             .ok()

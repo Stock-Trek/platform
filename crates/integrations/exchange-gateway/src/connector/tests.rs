@@ -1,15 +1,19 @@
 use super::*;
-use crate::submission::SubmissionOutcome;
-use platform_errors::{ConnectorError, RateLimitError};
+use crate::{clients::client::HttpClient, clock::Clock, submission::SubmissionOutcome};
+use platform_errors::{BpError, BpResult, ConnectorError, RateLimitError, SendFailure};
 use platform_exchange_types::{
     binance::{
         exchange::BinanceExchange,
         klines::{BinanceKlinesInterval, BinanceKlinesRequest},
     },
     encode::ByteEncoder,
+    exchange::ETExchange,
     http::{HttpRequest, HttpResponse},
+    new_types::UsageCount,
+    rate_limited::RateLimitRestriction,
+    signer::Signer,
 };
-use std::{future::poll_fn, task::Poll};
+use std::{future::poll_fn, task::Poll, time::Duration};
 
 struct UnknownOutcomeClient;
 

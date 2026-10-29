@@ -1,23 +1,19 @@
-mod api;
-mod contents;
-mod types;
-
+use super::types::{CommitsParams, GitHubCommit};
 use octocrab::{Octocrab, models::InstallationId};
 use platform_config::git::DirectoryLimits;
 use platform_errors::{BpError, BpResult, GitHubError, TimeoutError};
 use platform_git::git_host::{GitFile, GitHost};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 use std::sync::Arc;
-use types::{CommitsParams, GitHubCommit};
 
 const PROVIDER: &str = "github";
 
 #[derive(Clone)]
 pub struct GitHubInstallation {
-    client: Arc<Octocrab>,
-    host: String,
-    timeouts: Timeouts,
-    directory_limits: DirectoryLimits,
+    pub(super) client: Arc<Octocrab>,
+    pub(super) host: String,
+    pub(super) timeouts: Timeouts,
+    pub(super) directory_limits: DirectoryLimits,
 }
 
 impl GitHost<u64> for GitHubInstallation {

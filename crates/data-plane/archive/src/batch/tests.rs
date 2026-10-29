@@ -1,5 +1,8 @@
 use super::*;
-use crate::{ArchiveParquet, ArchiveParquetWriter};
+use crate::{
+    record::{ArchiveKind, ArchiveRecord},
+    ArchiveParquet, ArchiveParquetWriter,
+};
 use bytes::Bytes;
 use platform_market_data::{
     candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
