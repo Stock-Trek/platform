@@ -1,5 +1,5 @@
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::BpResult;
 use platform_runtime::Config;
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -28,13 +28,7 @@ impl BackfillerConfig {
 
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         let log_filter = Config::log_filter(vars)?;
-        let exchange_value = vars.required(BACKFILLER_EXCHANGE)?;
-        let exchange = CexId::try_from(exchange_value.as_str()).map_err(|_| {
-            BpError::config_invalid(
-                BACKFILLER_EXCHANGE,
-                format!("unsupported exchange {exchange_value}"),
-            )
-        })?;
+        let exchange = Config::required_exchange(vars, BACKFILLER_EXCHANGE)?;
         let nats_url = Config::required_nats_url(vars, BACKFILLER_NATS_URL)?;
         let gap_subject_prefix =
             Config::required_nats_subject(vars, BACKFILLER_GAP_SUBJECT_PREFIX)?;
