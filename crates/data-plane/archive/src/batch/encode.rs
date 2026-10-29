@@ -1,0 +1,152 @@
+use super::ArchiveBatch;
+use crate::record::{ArchiveKind, ArchiveRecord};
+use arrow_array::{
+    ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
+};
+use platform_errors::BpResult;
+use platform_market_data::{candle::ClosedCandle, event::MarketEvent};
+use std::sync::Arc;
+
+impl ArchiveBatch {
+    pub(crate) fn to_record_batch(&self) -> BpResult<RecordBatch> {
+        Self::record_batch(self.kind, &self.records)
+    }
+
+    pub(crate) fn record_batch(
+        kind: ArchiveKind,
+        records: &[ArchiveRecord],
+    ) -> BpResult<RecordBatch> {
+        match kind {
+            ArchiveKind::Events => {
+                let events = Self::events(records)?;
+                let columns: Vec<ArrayRef> = vec![
+                    Self::strings(events.iter().map(|event| event.exchange.to_string())),
+                    Self::strings(events.iter().map(|event| event.stream.clone())),
+                    Arc::new(UInt64Array::from_iter(
+                        events.iter().map(|event| event.sequence),
+                    )),
+                    Arc::new(Int64Array::from_iter(events.iter().map(|event| {
+                        event.exchange_timestamp.map(|timestamp| timestamp.0)
+                    }))),
+                    Arc::new(Int64Array::from_iter_values(
+                        events.iter().map(|event| event.received_at.0),
+                    )),
+                    Self::strings(events.iter().map(|event| event.payload.clone())),
+                ];
+                Ok(RecordBatch::try_new(Self::schema(kind), columns)?)
+            }
+            ArchiveKind::Candles => {
+                let candles = Self::candles(records)?;
+                let columns: Vec<ArrayRef> = vec![
+                    Self::strings(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.key.exchange.to_string()),
+                    ),
+                    Self::strings(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.key.trading_pair.base.to_string()),
+                    ),
+                    Self::strings(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.key.trading_pair.quote.to_string()),
+                    ),
+                    Self::strings(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.key.interval.label()),
+                    ),
+                    Arc::new(Int64Array::from_iter_values(candles.iter().map(|closed| {
+                        i64::try_from(closed.candle.market_candle.start_time_millis_inc)
+                            .unwrap_or(i64::MAX)
+                    }))),
+                    Arc::new(Int64Array::from_iter_values(candles.iter().map(|closed| {
+                        i64::try_from(closed.candle.market_candle.end_time_millis_exc)
+                            .unwrap_or(i64::MAX)
+                    }))),
+                    Arc::new(Int64Array::from_iter_values(candles.iter().map(|closed| {
+                        i64::try_from(closed.candle.market_candle.duration_millis)
+                            .unwrap_or(i64::MAX)
+                    }))),
+                    Arc::new(BooleanArray::from_iter(candles.iter().map(|closed| {
+                        Some(closed.candle.market_candle.is_candle_closed)
+                    }))),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.market_candle.ohlcv.open),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.market_candle.ohlcv.high),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.market_candle.ohlcv.low),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.market_candle.ohlcv.close),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.market_candle.ohlcv.volume),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.market_candle.ohlcv.quote_volume),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.market_candle.ohlcv.vwap),
+                    )),
+                    Arc::new(UInt64Array::from_iter_values(
+                        candles
+                            .iter()
+                            .map(|closed| closed.candle.market_candle.trade_count),
+                    )),
+                    Arc::new(UInt64Array::from_iter_values(
+                        candles.iter().map(|closed| closed.revision),
+                    )),
+                ];
+                Ok(RecordBatch::try_new(Self::schema(kind), columns)?)
+            }
+        }
+    }
+
+    fn events(records: &[ArchiveRecord]) -> BpResult<Vec<&MarketEvent>> {
+        records
+            .iter()
+            .map(|record| match record {
+                ArchiveRecord::MarketEvent(event) => Ok(event),
+                ArchiveRecord::ClosedCandle(_) => {
+                    Err(Self::kind_mismatch(ArchiveKind::Events, record))
+                }
+            })
+            .collect()
+    }
+
+    fn candles(records: &[ArchiveRecord]) -> BpResult<Vec<&ClosedCandle>> {
+        records
+            .iter()
+            .map(|record| match record {
+                ArchiveRecord::ClosedCandle(closed) => Ok(closed),
+                ArchiveRecord::MarketEvent(_) => {
+                    Err(Self::kind_mismatch(ArchiveKind::Candles, record))
+                }
+            })
+            .collect()
+    }
+
+    fn strings(values: impl IntoIterator<Item = String>) -> ArrayRef {
+        Arc::new(StringArray::from_iter_values(values))
+    }
+}
