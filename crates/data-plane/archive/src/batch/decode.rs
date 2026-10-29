@@ -69,6 +69,10 @@ impl ArchiveBatch {
         let quote_volume = Self::f64_column(batch, "quote_volume")?;
         let vwap = Self::f64_column(batch, "vwap")?;
         let trade_count = Self::u64_column(batch, "trade_count")?;
+        let close_watermark = Self::i64_column(batch, "close_watermark")?;
+        let source_offset = Self::u64_column(batch, "source_offset")?;
+        let state_epoch = Self::u64_column(batch, "state_epoch")?;
+        let revision_id = Self::string_column(batch, "revision_id")?;
         let revision = Self::string_column(batch, "revision")?;
 
         (0..batch.num_rows())
@@ -101,13 +105,39 @@ impl ArchiveBatch {
                     ),
                     trade_count.value(row),
                 );
-                Ok(ClosedCandle {
-                    revision: CandleRevision::decode(revision.value(row).as_bytes())?,
-                    candle: Candle {
-                        key: CandleKey::new(exchange, TradingPair::new(base, quote), interval),
-                        market_candle,
-                    },
-                })
+                let candle = Candle {
+                    key: CandleKey::new(exchange, TradingPair::new(base, quote), interval),
+                    market_candle,
+                };
+                let mut decoded = CandleRevision::decode(revision.value(row).as_bytes())?;
+                if decoded.key != candle.key
+                    || decoded.window_start != candle.start_time()
+                    || decoded.window_end != candle.end_time()
+                {
+                    return Err(Self::invalid_value(
+                        "revision",
+                        revision.value(row),
+                        "revision identity does not match the candle row",
+                    ));
+                }
+                // The explicit columns are the canonical provenance. The JSON
+                // revision may be retained for readers that need the full key,
+                // but it must agree with those columns before the row is used.
+                decoded.close_watermark = TimestampMilliseconds(close_watermark.value(row));
+                decoded.source_offset = source_offset.value(row);
+                decoded.state_epoch = state_epoch.value(row);
+                let decoded = ClosedCandle {
+                    revision: decoded,
+                    candle,
+                };
+                if decoded.message_id() != revision_id.value(row) {
+                    return Err(Self::invalid_value(
+                        "revision_id",
+                        revision_id.value(row),
+                        format!("does not match candle revision {}", decoded.message_id()),
+                    ));
+                }
+                Ok(decoded)
             })
             .collect()
     }

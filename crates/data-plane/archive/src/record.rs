@@ -1,5 +1,5 @@
 use platform_market_data::{
-    candle::{CandleKey, CandleRevision, ClosedCandle},
+    candle::{CandleKey, ClosedCandle},
     event::MarketEvent,
 };
 use platform_types::new_types::TimestampMilliseconds;
@@ -56,15 +56,23 @@ impl ArchiveRecord {
     }
 
     /// Orders records within a compacted partition.
-    pub fn sort_key(&self) -> (i64, u64) {
+    ///
+    /// Closed candles are ordered by their window and then by every field of
+    /// their deterministic revision. Compaction therefore keeps revisions of
+    /// the same candle in a stable order instead of collapsing them just because
+    /// they share a start time and source offset.
+    pub fn sort_key(&self) -> ArchiveSortKey {
         match self {
-            Self::MarketEvent(event) => (
-                event.exchange_timestamp.unwrap_or(event.received_at).0,
-                event.sequence.unwrap_or_default(),
-            ),
-            Self::ClosedCandle(closed) => {
-                (closed.candle.start_time().0, closed.revision.source_offset)
-            }
+            Self::MarketEvent(event) => ArchiveSortKey::MarketEvent {
+                timestamp: event.exchange_timestamp.unwrap_or(event.received_at).0,
+                sequence: event.sequence.unwrap_or_default(),
+            },
+            Self::ClosedCandle(closed) => ArchiveSortKey::ClosedCandle {
+                start_time: closed.candle.start_time().0,
+                close_watermark: closed.revision.close_watermark.0,
+                source_offset: closed.revision.source_offset,
+                state_epoch: closed.revision.state_epoch,
+            },
         }
     }
 
@@ -91,12 +99,25 @@ impl ArchiveRecord {
                 payload: event.payload.clone(),
             },
             Self::ClosedCandle(closed) => ArchiveRecordKey::ClosedCandle {
-                candle: closed.candle.key.clone(),
-                start_time: closed.candle.start_time(),
-                revision: closed.revision.clone(),
+                revision_id: closed.message_id(),
             },
         }
     }
+}
+
+/// Stable ordering for archive records inside one compacted partition.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum ArchiveSortKey {
+    MarketEvent {
+        timestamp: i64,
+        sequence: u64,
+    },
+    ClosedCandle {
+        start_time: i64,
+        close_watermark: i64,
+        source_offset: u64,
+        state_epoch: u64,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -107,11 +128,13 @@ pub enum ArchiveRecordKey {
         sequence: Option<u64>,
         payload: String,
     },
-    ClosedCandle {
-        candle: CandleKey,
-        start_time: TimestampMilliseconds,
-        revision: CandleRevision,
-    },
+    /// Closed candles are de-duplicated by their deterministic revision id.
+    ///
+    /// The id covers the candle identity, window, state epoch, close watermark,
+    /// and source offset. Keeping the revision id rather than a copied candle
+    /// body also means a redelivered message cannot create a second archive row
+    /// merely because its decoded body was materialized twice.
+    ClosedCandle { revision_id: String },
 }
 
 impl PartialOrd for ArchiveRecordKey {
@@ -143,37 +166,11 @@ impl Ord for ArchiveRecordKey {
                 .then_with(|| sequence.cmp(other_sequence))
                 .then_with(|| payload.cmp(other_payload)),
             (
+                Self::ClosedCandle { revision_id },
                 Self::ClosedCandle {
-                    candle,
-                    start_time,
-                    revision,
+                    revision_id: other_revision_id,
                 },
-                Self::ClosedCandle {
-                    candle: other_candle,
-                    start_time: other_start_time,
-                    revision: other_revision,
-                },
-            ) => candle
-                .exchange
-                .to_string()
-                .cmp(&other_candle.exchange.to_string())
-                .then_with(|| {
-                    candle
-                        .trading_pair
-                        .base
-                        .to_string()
-                        .cmp(&other_candle.trading_pair.base.to_string())
-                })
-                .then_with(|| {
-                    candle
-                        .trading_pair
-                        .quote
-                        .to_string()
-                        .cmp(&other_candle.trading_pair.quote.to_string())
-                })
-                .then_with(|| candle.interval.cmp(&other_candle.interval))
-                .then_with(|| start_time.cmp(other_start_time))
-                .then_with(|| revision.cmp(other_revision)),
+            ) => revision_id.cmp(other_revision_id),
             (Self::MarketEvent { .. }, Self::ClosedCandle { .. }) => Ordering::Less,
             (Self::ClosedCandle { .. }, Self::MarketEvent { .. }) => Ordering::Greater,
         }
@@ -262,12 +259,65 @@ mod tests {
         let event = event();
         assert_eq!(event.kind(), ArchiveKind::Events);
         assert_eq!(event.timestamp(), TimestampMilliseconds(120_000));
-        assert_eq!(event.sort_key(), (120_000, 3));
+        assert_eq!(
+            event.sort_key(),
+            ArchiveSortKey::MarketEvent {
+                timestamp: 120_000,
+                sequence: 3,
+            }
+        );
 
         let candle = closed_candle();
         assert_eq!(candle.kind(), ArchiveKind::Candles);
         assert_eq!(candle.timestamp(), TimestampMilliseconds(60_000));
-        assert_eq!(candle.sort_key(), (60_000, 4));
+        assert_eq!(
+            candle.sort_key(),
+            ArchiveSortKey::ClosedCandle {
+                start_time: 60_000,
+                close_watermark: 121_000,
+                source_offset: 4,
+                state_epoch: 0,
+            }
+        );
+    }
+
+    #[test]
+    fn closed_candle_keys_use_the_deterministic_revision_id() {
+        let candle = closed_candle();
+        let ArchiveRecord::ClosedCandle(closed) = &candle else {
+            panic!("expected a closed candle");
+        };
+
+        assert_eq!(
+            candle.key(),
+            ArchiveRecordKey::ClosedCandle {
+                revision_id: closed.message_id(),
+            }
+        );
+    }
+
+    #[test]
+    fn candle_sort_keys_order_revision_provenance() {
+        let candle = closed_candle();
+        let ArchiveRecord::ClosedCandle(closed) = &candle else {
+            panic!("expected a closed candle");
+        };
+
+        let later_watermark = ArchiveRecord::ClosedCandle(ClosedCandle::new(
+            closed.candle.clone(),
+            TimestampMilliseconds(122_000),
+            closed.revision.source_offset,
+            closed.revision.state_epoch,
+        ));
+        assert!(candle.sort_key() < later_watermark.sort_key());
+
+        let later_epoch = ArchiveRecord::ClosedCandle(ClosedCandle::new(
+            closed.candle.clone(),
+            closed.revision.close_watermark,
+            closed.revision.source_offset,
+            1,
+        ));
+        assert!(candle.sort_key() < later_epoch.sort_key());
     }
 
     #[test]

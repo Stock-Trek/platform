@@ -1,5 +1,5 @@
 use super::*;
-use platform_archive::{ArchiveKind, ArchiveRecord};
+use platform_archive::{ArchiveKind, ArchiveRecord, ArchiveSortKey};
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
@@ -54,7 +54,10 @@ fn partition_spill_merges_runs_in_partition_and_sort_order() {
     let mut timestamps = Vec::new();
     while let Some(item) = records.next_item().unwrap() {
         partitions.push(item.partition);
-        timestamps.push(item.sort_key.0);
+        let ArchiveSortKey::MarketEvent { timestamp, .. } = item.sort_key else {
+            panic!("expected an event sort key");
+        };
+        timestamps.push(timestamp);
     }
 
     assert_eq!(

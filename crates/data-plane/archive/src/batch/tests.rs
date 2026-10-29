@@ -147,3 +147,56 @@ fn writers_reject_batches_of_a_different_kind() {
     let mut writer = ArchiveParquetWriter::try_new(ArchiveKind::Events, Vec::new()).unwrap();
     assert!(writer.write(&batch).is_err());
 }
+
+#[test]
+fn candle_schema_exposes_revision_provenance() {
+    let schema = ArchiveBatch::schema(ArchiveKind::Candles);
+    let fields = schema
+        .fields()
+        .iter()
+        .map(|field| {
+            let id = field
+                .metadata()
+                .get(parquet::arrow::PARQUET_FIELD_ID_META_KEY)
+                .cloned()
+                .unwrap();
+            (field.name().as_str(), id)
+        })
+        .collect::<Vec<_>>();
+
+    assert_eq!(
+        &fields[16..],
+        &[
+            ("close_watermark", "17".to_string()),
+            ("source_offset", "18".to_string()),
+            ("state_epoch", "19".to_string()),
+            ("revision_id", "20".to_string()),
+            ("revision", "21".to_string()),
+        ]
+    );
+}
+
+#[test]
+fn candles_round_trip_revision_provenance() {
+    let candle = closed_candle(7);
+    let candle = ClosedCandle::new(candle.candle, TimestampMilliseconds(222_000), 9, 4);
+    let expected_id = candle.message_id();
+    let batch = ArchiveBatch::new(
+        ArchiveKind::Candles,
+        vec![ArchiveRecord::ClosedCandle(candle)],
+    )
+    .unwrap();
+    let encoded = ArchiveParquet::encode(&batch).unwrap();
+    let decoded = ArchiveParquet::decode(ArchiveKind::Candles, Bytes::from(encoded)).unwrap();
+
+    let ArchiveRecord::ClosedCandle(actual) = &decoded.records()[0] else {
+        panic!("expected a closed candle");
+    };
+    assert_eq!(
+        actual.revision.close_watermark,
+        TimestampMilliseconds(222_000)
+    );
+    assert_eq!(actual.revision.source_offset, 9);
+    assert_eq!(actual.revision.state_epoch, 4);
+    assert_eq!(actual.message_id(), expected_id);
+}

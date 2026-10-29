@@ -1,0 +1,22 @@
+[package]
+name = "platform-rebuilder"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+aws-sdk-s3-transfer-manager = { workspace = true }
+bytes = { workspace = true }
+platform-aggregator = { workspace = true }
+platform-archive = { workspace = true }
+platform-config = { workspace = true }
+platform-errors = { workspace = true }
+platform-market-data = { workspace = true }
+platform-runtime = { workspace = true }
+platform-types = { workspace = true }
+stock-trek-types = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+base64 = { workspace = true }

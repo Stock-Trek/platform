@@ -1,6 +1,6 @@
 use super::run::SpillRun;
 use platform_archive::{
-    ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetBatches, ArchiveRecord,
+    ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetBatches, ArchiveRecord, ArchiveSortKey,
 };
 use platform_errors::{BpError, BpResult};
 use std::{
@@ -14,7 +14,7 @@ use std::{
 /// A record plus the cached values used to order its compaction output.
 pub struct PartitionItem {
     pub partition: String,
-    pub sort_key: (i64, u64),
+    pub sort_key: ArchiveSortKey,
     pub record: ArchiveRecord,
 }
 

@@ -38,7 +38,14 @@ impl ArchiveBatch {
                 Self::field(14, "quote_volume", DataType::Float64, false),
                 Self::field(15, "vwap", DataType::Float64, false),
                 Self::field(16, "trade_count", DataType::UInt64, false),
-                Self::field(17, "revision", DataType::Utf8, false),
+                // Revision provenance is stored in queryable columns as well as
+                // the canonical JSON revision. The columns let compaction and
+                // rebuild tooling order revisions without decoding a payload.
+                Self::field(17, "close_watermark", DataType::Int64, false),
+                Self::field(18, "source_offset", DataType::UInt64, false),
+                Self::field(19, "state_epoch", DataType::UInt64, false),
+                Self::field(20, "revision_id", DataType::Utf8, false),
+                Self::field(21, "revision", DataType::Utf8, false),
             ])),
         }
     }
