@@ -11,8 +11,8 @@ use std::{
 /// Lambda reuses a warm execution environment between invocations, so a replayed
 /// delivery is dropped here before it is forwarded to SQS. The cache is bounded
 /// and entries expire, so a long-lived environment cannot grow without limit.
-/// Redeliveries handled by another environment are still deduped downstream by
-/// the ECS client token.
+/// Redeliveries handled by another environment are still deduped downstream
+/// when the build orchestrator consumes them from SQS.
 #[derive(Clone)]
 pub struct DeliveryDedup {
     seen: Arc<Mutex<LruCache<String, Instant>>>,
