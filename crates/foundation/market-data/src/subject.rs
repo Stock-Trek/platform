@@ -124,10 +124,10 @@ mod tests {
     fn normalizes_stream_segments() {
         let subject = MarketEventSubject::new("market", CexId::Binance);
 
-        assert_eq!(
-            subject.event("BTC/USDT @ Trade"),
-            "market.events.binance.btc.usdt...trade"
-        );
+        let event_subject = subject.event("BTC/USDT @ Trade");
+        assert_eq!(event_subject, "market.events.binance.btc.usdt.trade");
+        assert!(NatsSubject::validate(&event_subject).is_ok());
+        assert!(NatsSubject::validate(&subject.gap("BTC/USDT @ Trade")).is_ok());
     }
 
     #[test]
