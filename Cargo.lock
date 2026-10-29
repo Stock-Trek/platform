@@ -4447,6 +4447,7 @@ dependencies = [
  "futures-timer",
  "httpdate",
  "iris",
+ "parking_lot",
  "platform-errors",
  "platform-exchange-types",
  "platform-types",

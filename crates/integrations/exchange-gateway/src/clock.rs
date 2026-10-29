@@ -1,10 +1,8 @@
+use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult, ConnectorError, SystemError};
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::{
-    sync::{
-        Mutex,
-        atomic::{AtomicI64, Ordering},
-    },
+    sync::atomic::{AtomicI64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
@@ -29,17 +27,13 @@ impl Clock {
     }
 
     pub fn duration_since_last_sync(&self) -> BpResult<Option<Duration>> {
-        let result = self.last_sync.lock();
-        let mutex = result.map_err(|_| BpError::System(SystemError::PoisonedLock))?;
+        let mutex = self.last_sync.lock();
         let last_sync = *mutex;
         Ok(last_sync.map(|i| i.elapsed()))
     }
 
     pub fn is_synced(&self) -> BpResult<bool> {
-        let last_sync = self
-            .last_sync
-            .lock()
-            .map_err(|_| BpError::System(SystemError::PoisonedLock))?;
+        let last_sync = self.last_sync.lock();
         Ok(last_sync.is_some())
     }
     pub fn sync(
@@ -54,10 +48,7 @@ impl Clock {
         let offset_estimate = system_time_estimate - server_time;
         self.server_offset_millis
             .store(offset_estimate.0, Ordering::Relaxed);
-        let mut last_sync = self
-            .last_sync
-            .lock()
-            .map_err(|_| BpError::System(SystemError::PoisonedLock))?;
+        let mut last_sync = self.last_sync.lock();
         *last_sync = Some(Instant::now());
         Ok(())
     }

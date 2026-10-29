@@ -1,8 +1,9 @@
 use crate::panic_guard::PanicUtils;
-use platform_errors::{BpError, BpResult, ConnectorError, SystemError};
+use parking_lot::Mutex;
+use platform_errors::{BpError, BpResult, ConnectorError};
 use std::{
     pin::Pin,
-    sync::{Arc, Mutex},
+    sync::Arc,
     task::{Context, Poll, Waker},
 };
 
@@ -20,16 +21,11 @@ impl WebsocketListener {
         }
     }
     pub async fn on_message(&self, message: serde_json::Value) -> BpResult<()> {
-        let handlers = self
-            .handlers
-            .lock()
-            .map_err(|_| BpError::System(SystemError::PoisonedLock))?
-            .clone();
+        let handlers = self.handlers.lock().clone();
         for handler in handlers {
             if handler.handle(&message)? {
                 self.handlers
                     .lock()
-                    .map_err(|_| BpError::System(SystemError::PoisonedLock))?
                     .retain(|existing| !Arc::ptr_eq(&existing.state, &handler.state));
                 break;
             }
@@ -45,10 +41,7 @@ impl WebsocketListener {
             state: state.clone(),
             filter,
         };
-        self.handlers
-            .lock()
-            .map_err(|_| BpError::System(SystemError::PoisonedLock))?
-            .push(handler);
+        self.handlers.lock().push(handler);
         Ok(WaiterForResponse {
             state,
             handlers: self.handlers.clone(),
@@ -64,7 +57,7 @@ impl Default for WebsocketListener {
 
 impl std::fmt::Debug for WebsocketListener {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let handlers = self.handlers.lock().map_or(0, |handlers| handlers.len());
+        let handlers = self.handlers.lock().len();
         f.debug_struct("WebsocketListener")
             .field("handlers", &handlers)
             .finish()
@@ -80,10 +73,7 @@ impl Future for WaiterForResponse {
     type Output = BpResult<serde_json::Value>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
-        let mut state = match self.state.lock() {
-            Ok(state) => state,
-            Err(_) => return Poll::Ready(Err(BpError::System(SystemError::PoisonedLock))),
-        };
+        let mut state = self.state.lock();
         if let Some(msg) = state.filtered_response.take() {
             Poll::Ready(Ok(msg))
         } else if let Some(error) = state.error.take() {
@@ -97,9 +87,9 @@ impl Future for WaiterForResponse {
 
 impl Drop for WaiterForResponse {
     fn drop(&mut self) {
-        if let Ok(mut handlers) = self.handlers.lock() {
-            handlers.retain(|handler| !Arc::ptr_eq(&handler.state, &self.state));
-        }
+        self.handlers
+            .lock()
+            .retain(|handler| !Arc::ptr_eq(&handler.state, &self.state));
     }
 }
 
@@ -119,10 +109,7 @@ impl ResponseHandler {
                 let error = BpError::Connector(ConnectorError::CallbackPanicked(
                     panic.message().to_string(),
                 ));
-                let mut state = self
-                    .state
-                    .lock()
-                    .map_err(|_| BpError::System(SystemError::PoisonedLock))?;
+                let mut state = self.state.lock();
                 state.error = Some(error);
                 if let Some(waker) = state.waker.take() {
                     waker.wake();
@@ -131,10 +118,7 @@ impl ResponseHandler {
             }
         };
         if is_handled {
-            let mut state = self
-                .state
-                .lock()
-                .map_err(|_| BpError::System(SystemError::PoisonedLock))?;
+            let mut state = self.state.lock();
             state.filtered_response = Some(response.clone());
             if let Some(waker) = state.waker.take() {
                 waker.wake();
@@ -175,9 +159,9 @@ mod tests {
         let waiter = listener
             .waiter_for_filtered_response(Arc::new(|_| true))
             .unwrap();
-        assert_eq!(listener.handlers.lock().unwrap().len(), 1);
+        assert_eq!(listener.handlers.lock().len(), 1);
         drop(waiter);
-        assert_eq!(listener.handlers.lock().unwrap().len(), 0);
+        assert_eq!(listener.handlers.lock().len(), 0);
     }
 
     #[test]
@@ -202,11 +186,11 @@ mod tests {
         let probe = listener.clone();
         let _waiter = listener
             .waiter_for_filtered_response(Arc::new(move |_| {
-                *lock_was_free_in_filter.lock().unwrap() = Some(probe.handlers.try_lock().is_ok());
+                *lock_was_free_in_filter.lock() = Some(probe.handlers.try_lock().is_some());
                 true
             }))
             .unwrap();
         block_on(listener.on_message(serde_json::json!({ "value": 42 }))).unwrap();
-        assert_eq!(*lock_was_free.lock().unwrap(), Some(true));
+        assert_eq!(*lock_was_free.lock(), Some(true));
     }
 }

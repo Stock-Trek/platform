@@ -9,8 +9,6 @@ pub enum SystemError {
     Arithmetic(#[from] ArithmeticError),
     #[error(transparent)]
     External(#[from] Box<dyn StdError + Send + Sync + 'static>),
-    #[error("Poisoned Lock")]
-    PoisonedLock,
     #[error("Concurrency semaphore was closed while waiting for a permit")]
     SemaphoreClosed,
     #[error("System Time was before epoch")]
@@ -28,7 +26,6 @@ impl SystemError {
             Self::Task(error) => Retryability::from_join_error(error),
             Self::Arithmetic(_)
             | Self::Tracing(_)
-            | Self::PoisonedLock
             | Self::SystemTimeBeforeEpoch
             | Self::SemaphoreClosed => Retryability::Permanent,
         }

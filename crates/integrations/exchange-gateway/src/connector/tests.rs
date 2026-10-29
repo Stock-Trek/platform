@@ -21,7 +21,7 @@ struct UnknownOutcomeClient;
 impl HttpClient for UnknownOutcomeClient {
     async fn send(&self, _request: HttpRequest, _timeout: Duration) -> BpResult<HttpResponse> {
         Err(BpError::send_unknown(BpError::System(
-            platform_errors::SystemError::PoisonedLock,
+            platform_errors::SystemError::SemaphoreClosed,
         )))
     }
 }
