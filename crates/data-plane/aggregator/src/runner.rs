@@ -63,10 +63,11 @@ where
                     }
                     Err(error) => {
                         error!(%error, "market event source stopped");
-                        break;
+                        return Err(error);
                     }
                 }
             }
+            Ok(())
         });
 
         info!(
@@ -86,7 +87,13 @@ where
         ))
         .await;
         source_task.abort();
+        let source_result = source_task.await;
         result?;
+        match source_result {
+            Ok(result) => result?,
+            Err(error) if error.is_cancelled() => {}
+            Err(error) => return Err(error.into()),
+        }
 
         let closed = aggregator.flush_closed_at_or_before(TimestampMilliseconds::now());
         if !closed.is_empty() {
@@ -176,11 +183,15 @@ mod tests {
     #[derive(Default)]
     struct FakeSource {
         events: Vec<MarketEvent>,
+        fail: bool,
     }
 
     #[async_trait]
     impl MarketEventSource for FakeSource {
         async fn next_event(&mut self) -> BpResult<Option<MarketEvent>> {
+            if self.fail {
+                return Err(platform_errors::BpError::external("source failed"));
+            }
             if self.events.is_empty() {
                 Ok(None)
             } else {
@@ -245,5 +256,22 @@ mod tests {
 
         assert_eq!(observed.open_updates(), 0);
         assert_eq!(observed.closed_updates(), 0);
+    }
+
+    #[tokio::test]
+    async fn propagates_source_error() {
+        let sink = FakeSink::default();
+        let runner = AggregatorRunner::new(
+            config(),
+            FakeSource {
+                events: Vec::new(),
+                fail: true,
+            },
+            sink,
+        );
+
+        let error = runner.run().await.unwrap_err();
+
+        assert_eq!(error.to_string(), "source failed");
     }
 }
