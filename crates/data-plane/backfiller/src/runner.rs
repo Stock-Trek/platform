@@ -52,7 +52,6 @@ where
             publisher,
         } = self;
         let options = BackfillOptions {
-            exchange: config.exchange,
             event_subject_prefix: config.event_subject_prefix.clone(),
         };
 

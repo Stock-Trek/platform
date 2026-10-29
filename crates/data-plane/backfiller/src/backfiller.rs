@@ -31,17 +31,10 @@ const FALLBACK_WINDOW_STEP: u64 = 1_000;
 
 #[derive(Debug, Clone)]
 pub struct BackfillOptions {
-    #[allow(dead_code)]
-    pub exchange: CexId,
     pub event_subject_prefix: String,
 }
 
 impl BackfillOptions {
-    #[allow(dead_code)]
-    pub fn subject(&self, stream: &str) -> String {
-        self.subject_for(self.exchange, stream)
-    }
-
     pub fn subject_for(&self, exchange: CexId, stream: &str) -> String {
         MarketEventSubject::new(&self.event_subject_prefix, exchange).event(stream)
     }
@@ -510,7 +503,6 @@ mod tests {
 
     fn options() -> BackfillOptions {
         BackfillOptions {
-            exchange: CexId::Binance,
             event_subject_prefix: "market.events".to_string(),
         }
     }

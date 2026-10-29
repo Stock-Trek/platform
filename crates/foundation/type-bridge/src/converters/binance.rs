@@ -241,116 +241,107 @@ impl Converter for BinanceConverter {
         &self,
         response: BinanceResponse<BinanceAssetLimitsResponse>,
     ) -> BpResult<TBAssetLimits> {
-        if let BinanceResponsePayload::Success(payload) = response.payload {
-            let ticker_mapping = self.ticker_mapping();
-            let mut asset_limits = HashMap::new();
-            for asset_filter in payload.assetFilters {
-                match asset_filter {
-                    BinanceAssetFilter::MAX_ASSET { asset, limit } => {
-                        if let Some(asset_id) = ticker_mapping.asset_id(&asset) {
-                            asset_limits.insert(*asset_id, limit);
-                        }
-                    }
-                    unknown => {
-                        tracing::warn!(
-                            ?unknown,
-                            "ignoring unsupported asset filter; asset limits may be incomplete"
-                        );
+        let payload = Self::success_payload(response)?;
+        let ticker_mapping = self.ticker_mapping();
+        let mut asset_limits = HashMap::new();
+        for asset_filter in payload.assetFilters {
+            match asset_filter {
+                BinanceAssetFilter::MAX_ASSET { asset, limit } => {
+                    if let Some(asset_id) = ticker_mapping.asset_id(&asset) {
+                        asset_limits.insert(*asset_id, limit);
                     }
                 }
+                unknown => {
+                    tracing::warn!(
+                        ?unknown,
+                        "ignoring unsupported asset filter; asset limits may be incomplete"
+                    );
+                }
             }
-            Ok(TBAssetLimits { asset_limits })
-        } else {
-            Err(BpError::Exchange(ExchangeError::BadResponse(format!(
-                "{:?}",
-                response
-            ))))
         }
+        Ok(TBAssetLimits { asset_limits })
     }
     fn exchange_info_response(
         &self,
         response: Self::ExchangeInfoResponse,
     ) -> BpResult<TBExchangeInfo> {
-        if let BinanceResponsePayload::Success(payload) = response.payload {
-            let asset_tickers = self.ticker_mapping();
-            let mut trading_precisions = HashMap::new();
-            for symbol in payload.symbols {
-                let BinanceExchangeInfoSymbol {
-                    baseAsset,
-                    filters,
-                    quoteAsset,
-                    ..
-                } = symbol;
-                let base_option = asset_tickers.asset_id(&baseAsset);
-                let quote_option = asset_tickers.asset_id(&quoteAsset);
-                if let Some(base) = base_option
-                    && let Some(quote) = quote_option
-                {
-                    let trading_pair = TradingPair::new(*base, *quote);
-                    let base_limit = Self::binance_base_limit(&filters)?;
-                    let base_market = Self::binance_base_market(&filters, base_limit);
-                    let quote = Self::binance_quote(&filters)?;
-                    let trading_precision = TradingPrecision::new(base_limit, base_market, quote);
-                    trading_precisions.insert(trading_pair, trading_precision);
-                }
+        let payload = Self::success_payload(response)?;
+        let asset_tickers = self.ticker_mapping();
+        let mut trading_precisions = HashMap::new();
+        for symbol in payload.symbols {
+            let BinanceExchangeInfoSymbol {
+                baseAsset,
+                filters,
+                quoteAsset,
+                ..
+            } = symbol;
+            let base_option = asset_tickers.asset_id(&baseAsset);
+            let quote_option = asset_tickers.asset_id(&quoteAsset);
+            if let Some(base) = base_option
+                && let Some(quote) = quote_option
+            {
+                let trading_pair = TradingPair::new(*base, *quote);
+                let base_limit = Self::binance_base_limit(&filters)?;
+                let base_market = Self::binance_base_market(&filters, base_limit);
+                let quote = Self::binance_quote(&filters)?;
+                let trading_precision = TradingPrecision::new(base_limit, base_market, quote);
+                trading_precisions.insert(trading_pair, trading_precision);
             }
-            Ok(TBExchangeInfo { trading_precisions })
-        } else {
-            Err(BpError::Exchange(ExchangeError::BadResponse(format!(
-                "{:?}",
-                response
-            ))))
         }
+        Ok(TBExchangeInfo { trading_precisions })
     }
     fn order_response(&self, response: Self::OrderResponse) -> BpResult<OrderResponse> {
-        if let BinanceResponsePayload::Success(payload) = response.payload {
-            let BinanceSpotOrderResponse {
-                clientOrderId,
-                cummulativeQuoteQty,
-                executedQty,
-                orderId,
-                status,
-                ..
-            } = payload;
-            let status = match status {
-                Some(BinanceOrderStatus::CANCELED) => OrderStatus::Canceled,
-                Some(BinanceOrderStatus::EXPIRED) => OrderStatus::Canceled,
-                Some(BinanceOrderStatus::EXPIRED_IN_MATCH) => OrderStatus::Expired,
-                Some(BinanceOrderStatus::FILLED) => OrderStatus::Filled,
-                Some(BinanceOrderStatus::NEW) => OrderStatus::New,
-                Some(BinanceOrderStatus::PARTIALLY_FILLED) => OrderStatus::PartiallyFilled,
-                Some(BinanceOrderStatus::PENDING_CANCEL) => OrderStatus::PendingCancel,
-                Some(BinanceOrderStatus::PENDING_NEW) => OrderStatus::New,
-                Some(BinanceOrderStatus::REJECTED) => OrderStatus::Rejected,
-                Some(other) => {
-                    return Err(BpError::Validation(ValidationError::Unsupported {
-                        name: "status".into(),
-                        value: other.to_string(),
-                    }));
-                }
-                None => {
-                    return Err(BpError::Validation(ValidationError::MissingValue(
-                        "status".into(),
-                    )));
-                }
-            };
-            Ok(OrderResponse {
-                client_order_id: clientOrderId,
-                filled_base_quantity: executedQty.unwrap_or_default(),
-                filled_quote_quantity: cummulativeQuoteQty.unwrap_or_default(),
-                order_id: orderId.to_string(),
-                status,
-            })
-        } else {
-            Err(BpError::Exchange(ExchangeError::BadResponse(format!(
-                "{:?}",
-                response
-            ))))
-        }
+        let payload = Self::success_payload(response)?;
+        let BinanceSpotOrderResponse {
+            clientOrderId,
+            cummulativeQuoteQty,
+            executedQty,
+            orderId,
+            status,
+            ..
+        } = payload;
+        let status = match status {
+            Some(BinanceOrderStatus::CANCELED) => OrderStatus::Canceled,
+            Some(BinanceOrderStatus::EXPIRED) => OrderStatus::Canceled,
+            Some(BinanceOrderStatus::EXPIRED_IN_MATCH) => OrderStatus::Expired,
+            Some(BinanceOrderStatus::FILLED) => OrderStatus::Filled,
+            Some(BinanceOrderStatus::NEW) => OrderStatus::New,
+            Some(BinanceOrderStatus::PARTIALLY_FILLED) => OrderStatus::PartiallyFilled,
+            Some(BinanceOrderStatus::PENDING_CANCEL) => OrderStatus::PendingCancel,
+            Some(BinanceOrderStatus::PENDING_NEW) => OrderStatus::New,
+            Some(BinanceOrderStatus::REJECTED) => OrderStatus::Rejected,
+            Some(other) => {
+                return Err(BpError::Validation(ValidationError::Unsupported {
+                    name: "status".into(),
+                    value: other.to_string(),
+                }));
+            }
+            None => {
+                return Err(BpError::Validation(ValidationError::MissingValue(
+                    "status".into(),
+                )));
+            }
+        };
+        Ok(OrderResponse {
+            client_order_id: clientOrderId,
+            filled_base_quantity: executedQty.unwrap_or_default(),
+            filled_quote_quantity: cummulativeQuoteQty.unwrap_or_default(),
+            order_id: orderId.to_string(),
+            status,
+        })
     }
 }
 
 impl BinanceConverter {
+    fn success_payload<R>(response: BinanceResponse<R>) -> BpResult<R> {
+        match response.payload {
+            BinanceResponsePayload::Success(payload) => Ok(payload),
+            BinanceResponsePayload::Failure(error) => Err(BpError::Exchange(
+                ExchangeError::BadResponse(error.to_string()),
+            )),
+        }
+    }
+
     fn ticker_mapping() -> TickerMapping {
         let mut map = BiHashMap::new();
         map.insert(AssetId::Aave, "AAVE".into());

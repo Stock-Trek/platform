@@ -31,14 +31,6 @@ pub struct BinanceEventPageSource {
 }
 
 impl BinanceEventPageSource {
-    #[allow(dead_code)]
-    pub fn new(
-        connector: Connector<BinanceExchange, ReqwestHttpClient>,
-        api_key: Option<String>,
-    ) -> Self {
-        Self::from_arc(Arc::new(connector), api_key)
-    }
-
     pub fn from_arc(
         connector: Arc<Connector<BinanceExchange, ReqwestHttpClient>>,
         api_key: Option<String>,
