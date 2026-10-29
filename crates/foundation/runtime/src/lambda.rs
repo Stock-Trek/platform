@@ -1,4 +1,4 @@
-//! Lambda-specific bootstrap shared by the build-plane functions.
+//! Lambda-specific bootstrap shared by the Lambda services.
 
 use metrics_cloudwatch_embedded::Collector;
 use platform_errors::BpResult;

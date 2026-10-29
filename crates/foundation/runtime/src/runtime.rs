@@ -1,11 +1,11 @@
-//! Process-level runtime helpers shared by the data-plane services.
+//! Process-level runtime helpers shared by services across the workspace.
 
 use platform_config::tracing_setup::TracingSetup;
 use platform_errors::BpResult;
 use std::future::Future;
 use tracing::info;
 
-/// Process-level lifecycle helpers shared by the data-plane services.
+/// Process-level lifecycle helpers shared by services across the workspace.
 pub struct Runtime;
 
 impl Runtime {

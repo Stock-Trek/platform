@@ -1,4 +1,4 @@
-//! Configuration helpers shared by the data-plane services.
+//! Configuration helpers shared by services across the workspace.
 //!
 //! Service-specific configuration types still describe their own environment
 //! variables, but the common validation rules live here so every service
