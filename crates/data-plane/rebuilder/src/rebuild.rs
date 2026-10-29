@@ -5,7 +5,7 @@ use platform_aggregator::{
 use platform_errors::BpResult;
 use platform_market_data::{
     candle::ClosedCandle,
-    decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
+    decoders::trade::{SharedTradeDecoder, Trade, TradeDecoderFactory},
     event::MarketEvent,
 };
 use platform_types::new_types::TimestampMilliseconds;
@@ -47,13 +47,22 @@ pub struct RebuildResult {
     pub stats: RebuildStats,
 }
 
+type PairKey = (String, String, String);
+
+struct ReplayEvent {
+    event: MarketEvent,
+    trades: Vec<Trade>,
+}
+
 /// Replays archived events through the same pure fold used by the live
 /// aggregator.
 ///
-/// Events are grouped by exchange stream before replay. Compacted event files
-/// are already sorted by stream, timestamp, and sequence, but grouping also
-/// makes raw files deterministic without allowing one stream's high watermark
-/// to make another stream's earlier events late.
+/// Events are grouped by their decoded `(exchange, trading pair)` before
+/// replay. The live router sends every stream carrying a pair to the same
+/// partition, so `@trade` and `@aggTrade` events must update the same candles.
+/// Grouping by pair also keeps one stream's high watermark from making another
+/// pair's earlier events late, while still supporting raw files that are not
+/// globally ordered.
 pub fn rebuild_candles(
     events: Vec<MarketEvent>,
     options: &RebuildOptions,
@@ -62,12 +71,60 @@ pub fn rebuild_candles(
         events_read: events.len(),
         ..RebuildStats::default()
     };
-    let mut groups: BTreeMap<(String, String), Vec<MarketEvent>> = BTreeMap::new();
+    let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
+    let mut groups: BTreeMap<PairKey, Vec<ReplayEvent>> = BTreeMap::new();
+
     for event in events {
-        groups
-            .entry((event.exchange.to_string(), event.stream.clone()))
-            .or_default()
-            .push(event);
+        let decoder = match decoders.get(&event.exchange) {
+            Some(decoder) => decoder.clone(),
+            None => match TradeDecoderFactory::for_exchange(event.exchange) {
+                Ok(decoder) => {
+                    decoders.insert(event.exchange, decoder.clone());
+                    decoder
+                }
+                Err(error) => {
+                    stats.decode_failures += 1;
+                    warn!(
+                        exchange = %event.exchange,
+                        %error,
+                        "skipping archived event for unsupported exchange"
+                    );
+                    continue;
+                }
+            },
+        };
+
+        let trades = match decoder.decode(&event) {
+            Ok(trades) => trades,
+            Err(error) => {
+                stats.decode_failures += 1;
+                warn!(
+                    stream = %event.stream,
+                    sequence = ?event.sequence,
+                    %error,
+                    "skipping undecodable archived event"
+                );
+                continue;
+            }
+        };
+
+        // A single event can theoretically decode to more than one pair. Give
+        // each pair only its own trades so the replay mirrors routing.
+        let mut trades_by_pair: BTreeMap<PairKey, Vec<Trade>> = BTreeMap::new();
+        for trade in trades {
+            let key = (
+                trade.exchange.to_string(),
+                trade.trading_pair.base.to_string(),
+                trade.trading_pair.quote.to_string(),
+            );
+            trades_by_pair.entry(key).or_default().push(trade);
+        }
+        for (key, trades) in trades_by_pair {
+            groups.entry(key).or_default().push(ReplayEvent {
+                event: event.clone(),
+                trades,
+            });
+        }
     }
     stats.trade_stream_groups = groups.len();
 
@@ -79,20 +136,21 @@ pub fn rebuild_candles(
         .max()
         .unwrap_or_default();
     let allowed_lateness = options.processor.allowed_lateness.0;
-    let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
     let mut regenerated = Vec::new();
 
     for (_, mut group) in groups {
         group.sort_by(|left, right| {
-            event_timestamp(left)
+            event_timestamp(&left.event)
                 .0
-                .cmp(&event_timestamp(right).0)
+                .cmp(&event_timestamp(&right.event).0)
                 .then_with(|| {
-                    left.sequence
+                    left.event
+                        .sequence
                         .unwrap_or_default()
-                        .cmp(&right.sequence.unwrap_or_default())
+                        .cmp(&right.event.sequence.unwrap_or_default())
                 })
-                .then_with(|| left.payload.cmp(&right.payload))
+                .then_with(|| left.event.stream.cmp(&right.event.stream))
+                .then_with(|| left.event.payload.cmp(&right.event.payload))
         });
 
         let mut processor = CandleProcessor::with_config(options.processor.clone());
@@ -101,13 +159,15 @@ pub fn rebuild_candles(
 
         // Raw archive files can contain the same event more than once. Drop
         // duplicates before assigning replay offsets so redundant rows do not
-        // shift the provenance of later candle revisions.
+        // shift the provenance of later candle revisions. Sequence numbers are
+        // scoped to a stream; `@trade` and `@aggTrade` may both use sequence 1.
         let mut seen_sequences = HashSet::new();
         let mut offset = 0_u64;
         let mut last_timestamp = None;
-        for event in &group {
+        for replay in &group {
+            let event = &replay.event;
             if let Some(sequence) = event.sequence
-                && !seen_sequences.insert(sequence)
+                && !seen_sequences.insert((event.stream.as_str(), sequence))
             {
                 stats.duplicate_events += 1;
                 continue;
@@ -116,44 +176,11 @@ pub fn rebuild_candles(
             offset = offset.saturating_add(1);
             last_timestamp = Some(event_timestamp(event));
 
-            let decoder = match decoders.get(&event.exchange) {
-                Some(decoder) => decoder.clone(),
-                None => match TradeDecoderFactory::for_exchange(event.exchange) {
-                    Ok(decoder) => {
-                        decoders.insert(event.exchange, decoder.clone());
-                        decoder
-                    }
-                    Err(error) => {
-                        stats.decode_failures += 1;
-                        warn!(
-                            exchange = %event.exchange,
-                            %error,
-                            "skipping archived event for unsupported exchange"
-                        );
-                        continue;
-                    }
-                },
-            };
-
-            let trades = match decoder.decode(event) {
-                Ok(trades) => trades,
-                Err(error) => {
-                    stats.decode_failures += 1;
-                    warn!(
-                        exchange = %event.exchange,
-                        stream = %event.stream,
-                        sequence = ?event.sequence,
-                        %error,
-                        "skipping undecodable archived event"
-                    );
-                    continue;
-                }
-            };
             // Match the live runner by marking the offset before folding the
             // event, so candles closed by this event carry its provenance.
             processor.state_mut().mark_processed(event_offset);
-            let update = processor.apply_event(event, &trades);
-            stats.trades_applied += trades.len();
+            let update = processor.apply_event(event, &replay.trades);
+            stats.trades_applied += replay.trades.len();
             stats.duplicate_events += update.duplicates;
             stats.late_trades += update.late_trades;
             regenerated.extend(update.closed);
@@ -195,14 +222,33 @@ mod tests {
     use platform_types::new_types::DurationMilliseconds;
 
     fn event(sequence: u64, timestamp: i64) -> MarketEvent {
+        stream_event("btcusdt@trade", sequence, timestamp, "100", "1")
+    }
+
+    fn stream_event(
+        stream: &str,
+        sequence: u64,
+        timestamp: i64,
+        price: &str,
+        quantity: &str,
+    ) -> MarketEvent {
+        let symbol = stream
+            .split_once('@')
+            .map_or(stream, |(symbol, _)| symbol)
+            .to_ascii_uppercase();
+        let event_type = if stream.to_ascii_lowercase().ends_with("@aggtrade") {
+            "aggTrade"
+        } else {
+            "trade"
+        };
         MarketEvent {
             exchange: CexId::Binance,
-            stream: "btcusdt@trade".to_string(),
+            stream: stream.to_string(),
             sequence: Some(sequence),
             exchange_timestamp: Some(TimestampMilliseconds(timestamp)),
             received_at: TimestampMilliseconds(timestamp),
             payload: STANDARD.encode(format!(
-                r#"{{"e":"trade","E":{timestamp},"s":"BTCUSDT","t":{sequence},"p":"100","q":"1","T":{timestamp}}}"#
+                r#"{{"e":"{event_type}","E":{timestamp},"s":"{symbol}","p":"{price}","q":"{quantity}","T":{timestamp}}}"#
             )),
         }
     }
@@ -289,11 +335,54 @@ mod tests {
     }
 
     #[test]
-    fn streams_are_replayed_independently() {
-        let mut other = event(1, 1_000);
-        other.stream = "ethusdt@trade".to_string();
-        other.payload = STANDARD
-            .encode(r#"{"e":"trade","E":1000,"s":"ETHUSDT","t":1,"p":"10","q":"2","T":1000}"#);
+    fn multi_stream_pairs_share_one_processor_and_candle() {
+        // @trade and @aggTrade use independent sequence spaces, so equal
+        // sequence numbers must not be mistaken for duplicate events.
+        let events = vec![
+            stream_event("btcusdt@trade", 1, 1_000, "100", "1"),
+            stream_event("btcusdt@aggTrade", 1, 1_000, "200", "2"),
+        ];
+
+        let result = rebuild_candles(events, &options()).unwrap();
+
+        assert_eq!(result.stats.trade_stream_groups, 1);
+        assert_eq!(result.stats.trades_applied, 2);
+        assert_eq!(result.stats.duplicate_events, 0);
+        assert_eq!(result.stats.unique_candles, 1);
+        let candle = &result.candles[0].candle;
+        assert_eq!(candle.market_candle.trade_count, 2);
+        assert_eq!(candle.market_candle.ohlcv.high, 200.0);
+        assert_eq!(candle.market_candle.ohlcv.low, 100.0);
+        assert_eq!(candle.market_candle.ohlcv.volume, 3.0);
+    }
+
+    #[test]
+    fn multi_stream_pair_revisions_do_not_collide() {
+        let events = vec![
+            stream_event("btcusdt@trade", 1, 1_000, "100", "1"),
+            stream_event("btcusdt@aggTrade", 1, 1_000, "200", "2"),
+            stream_event("btcusdt@trade", 2, 61_000, "100", "1"),
+            stream_event("btcusdt@aggTrade", 2, 61_000, "200", "2"),
+        ];
+
+        let result = rebuild_candles(events, &options()).unwrap();
+
+        assert_eq!(result.stats.trade_stream_groups, 1);
+        assert_eq!(result.stats.unique_candles, 2);
+        assert_eq!(
+            result
+                .candles
+                .iter()
+                .map(ClosedCandle::message_id)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            2
+        );
+    }
+
+    #[test]
+    fn pairs_are_replayed_independently() {
+        let other = stream_event("ethusdt@trade", 1, 1_000, "10", "2");
         let events = vec![event(1, 1_000), event(2, 61_000), other];
 
         let result = rebuild_candles(events, &options()).unwrap();
