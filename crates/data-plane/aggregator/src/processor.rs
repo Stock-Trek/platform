@@ -210,7 +210,6 @@ impl CandleProcessor {
                 continue;
             }
 
-            let incomplete = self.state.is_window_incomplete(&key, candle_start);
             let candles = self.state.open_candles.entry(key).or_default();
             let position = match candles
                 .binary_search_by_key(&candle_start.0, |candle| candle.start_time().0)
@@ -218,18 +217,11 @@ impl CandleProcessor {
                 Ok(position) => {
                     if let Some(candle) = candles.get_mut(position) {
                         candle.apply_trade(trade);
-                        if incomplete {
-                            candle.mark_incomplete();
-                        }
                     }
                     position
                 }
                 Err(position) => {
-                    let mut candle = Candle::open(trade, interval);
-                    if incomplete {
-                        candle.mark_incomplete();
-                    }
-                    candles.insert(position, candle);
+                    candles.insert(position, Candle::open(trade, interval));
                     position
                 }
             };
@@ -248,7 +240,6 @@ impl CandleProcessor {
         candle_start: TimestampMilliseconds,
         update: &mut ProcessorUpdate,
     ) {
-        let incomplete = self.state.is_window_incomplete(key, candle_start);
         let close_watermark = self.state.watermark.unwrap_or(trade.timestamp);
         let source_offset = self.state.last_processed_offset().unwrap_or_default();
         let state_epoch = self.state.state_epoch;
@@ -264,9 +255,6 @@ impl CandleProcessor {
             return;
         };
         candle.apply_trade(trade);
-        if incomplete {
-            candle.mark_incomplete();
-        }
         candle.close();
         update.late_trades += 1;
         update.closed.push(ClosedCandle::new(
@@ -283,16 +271,10 @@ impl CandleProcessor {
         interval: CandleInterval,
         update: &mut ProcessorUpdate,
     ) {
-        let candle_start = interval.start_for(trade.timestamp);
-        let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
-        let incomplete = self.state.is_window_incomplete(&key, candle_start);
         let close_watermark = self.state.watermark.unwrap_or(trade.timestamp);
         let source_offset = self.state.last_processed_offset().unwrap_or_default();
         let state_epoch = self.state.state_epoch;
         let mut candle = Candle::open(trade, interval);
-        if incomplete {
-            candle.mark_incomplete();
-        }
         candle.close();
         self.state.retain_closed_candle(candle.clone());
         update.late_trades += 1;
@@ -380,9 +362,6 @@ impl CandleProcessor {
         });
 
         for (key, start, watermark) in expired {
-            let incomplete = self
-                .state
-                .is_window_incomplete(&key, TimestampMilliseconds(start));
             let (mut candle, empty) = {
                 let Some(candles) = self.state.open_candles.get_mut(&key) else {
                     continue;
@@ -398,9 +377,6 @@ impl CandleProcessor {
             };
             if empty {
                 self.state.open_candles.remove(&key);
-            }
-            if incomplete {
-                candle.mark_incomplete();
             }
             candle.close();
             self.state.retain_closed_candle(candle.clone());

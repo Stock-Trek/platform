@@ -93,34 +93,6 @@ impl HashRouter {
     }
 }
 
-/// Returns the partitions for one gap without retaining a decoder cache.
-pub fn partitions_for_gap(gap: &GapMarker, partition_count: usize) -> BpResult<Vec<PartitionId>> {
-    let trading_pair = TradeDecoderFactory::trading_pair_for_stream(gap.exchange, &gap.stream)?;
-    Ok(vec![partition_for(
-        gap.exchange,
-        trading_pair,
-        partition_count,
-    )])
-}
-
-/// Returns the partitions for one event without retaining a decoder cache.
-pub fn partitions_for_event(
-    event: &MarketEvent,
-    partition_count: usize,
-) -> BpResult<Vec<PartitionId>> {
-    let decoder = TradeDecoderFactory::for_exchange(event.exchange)?;
-    let trades = decoder.decode(event)?;
-    let mut partitions = BTreeSet::new();
-    for trade in trades {
-        partitions.insert(partition_for(
-            trade.exchange,
-            trade.trading_pair,
-            partition_count,
-        ));
-    }
-    Ok(partitions.into_iter().collect())
-}
-
 /// Publishes routed inputs to their partition subjects.
 pub struct NatsRouter<S, P> {
     config: AggregatorConfig,
@@ -222,15 +194,6 @@ where
     }
 }
 
-/// Convenience for callers that only have a gap marker.
-///
-/// A gap whose exchange stream cannot be resolved produces no partitions, just
-/// as [`NatsRouter`] drops such a gap instead of broadcasting it. Callers that
-/// need to handle resolution failures should use [`partitions_for_gap`].
-pub fn gap_partitions(partition_count: usize, gap: &GapMarker) -> Vec<PartitionId> {
-    partitions_for_gap(gap, partition_count).unwrap_or_default()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -274,7 +237,6 @@ mod tests {
 
         assert_eq!(partitions.len(), 1);
         assert!(partitions[0].get() < 8);
-        assert_eq!(partitions, partitions_for_event(&trade_event(), 8).unwrap());
     }
 
     #[test]
@@ -294,8 +256,6 @@ mod tests {
             .unwrap();
 
         assert_eq!(partitions, expected);
-        assert_eq!(gap_partitions(4, &gap), expected);
-        assert_eq!(partitions_for_gap(&gap, 4).unwrap(), expected);
     }
 
     #[test]
@@ -304,13 +264,7 @@ mod tests {
         let mut gap = gap();
         gap.stream = "unknown@trade".to_string();
 
-        assert!(
-            router
-                .partitions(&MarketInput::Gap(gap.clone()), 4)
-                .is_err()
-        );
-        assert!(partitions_for_gap(&gap, 4).is_err());
-        assert!(gap_partitions(4, &gap).is_empty());
+        assert!(router.partitions(&MarketInput::Gap(gap), 4).is_err());
     }
 
     #[test]

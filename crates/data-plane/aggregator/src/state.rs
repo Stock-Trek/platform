@@ -366,28 +366,12 @@ impl AggregatorState {
     /// Records a gap, merging overlapping or adjacent ranges for the same
     /// exchange stream.
     pub fn record_gap(&mut self, gap: &GapMarker) {
-        self.record_incomplete_range(
-            gap.exchange,
-            &gap.stream,
-            SequenceRange::new(gap.missing_from, gap.missing_to),
-            gap.detected_at,
-        );
-    }
-
-    /// Records an incomplete range directly.
-    pub fn record_incomplete_range(
-        &mut self,
-        exchange: CexId,
-        stream: impl Into<String>,
-        range: SequenceRange,
-        detected_at: TimestampMilliseconds,
-    ) {
         let mut merged = KnownGap {
-            exchange,
-            stream: stream.into(),
-            from_sequence: range.from_sequence,
-            to_sequence: range.to_sequence,
-            detected_at,
+            exchange: gap.exchange,
+            stream: gap.stream.clone(),
+            from_sequence: gap.missing_from,
+            to_sequence: gap.missing_to,
+            detected_at: gap.detected_at,
         };
         self.known_gaps.retain(|existing| {
             if existing.exchange == merged.exchange
@@ -427,22 +411,6 @@ impl AggregatorState {
                 .then_with(|| left.window_start.cmp(&right.window_start))
                 .then_with(|| left.from_sequence.cmp(&right.from_sequence))
         });
-    }
-
-    pub fn has_gap(&self, exchange: CexId, stream: &str, sequence: u64) -> bool {
-        self.known_gaps.iter().any(|gap| {
-            gap.exchange == exchange && gap.stream == stream && gap.range().contains(sequence)
-        })
-    }
-
-    pub fn is_window_incomplete(
-        &self,
-        key: &CandleKey,
-        window_start: TimestampMilliseconds,
-    ) -> bool {
-        self.incomplete_windows
-            .iter()
-            .any(|window| window.key == *key && window.window_start == window_start)
     }
 
     /// Drops gap bookkeeping that can no longer affect an open candle.
@@ -659,8 +627,6 @@ mod tests {
         assert_eq!(state.known_gaps[0].from_sequence, 2);
         assert_eq!(state.known_gaps[0].to_sequence, 5);
         assert_eq!(state.known_gaps[0].detected_at, TimestampMilliseconds(20));
-        assert!(state.has_gap(CexId::Binance, "btcusdt@trade", 3));
-        assert!(!state.has_gap(CexId::Binance, "btcusdt@trade", 6));
     }
 
     #[test]
@@ -676,12 +642,15 @@ mod tests {
             to_sequence: 2,
             detected_at: TimestampMilliseconds(61_000),
         });
-        state.record_incomplete_range(
-            CexId::Binance,
-            "btcusdt@trade",
-            SequenceRange::new(3, 3),
-            TimestampMilliseconds(61_000),
-        );
+        state.record_gap(&GapMarker {
+            exchange: CexId::Binance,
+            stream: "btcusdt@trade".to_string(),
+            previous_sequence: 2,
+            observed_sequence: 4,
+            missing_from: 3,
+            missing_to: 3,
+            detected_at: TimestampMilliseconds(61_000),
+        });
 
         state.prune_closed_windows(TimestampMilliseconds(120_000));
 
@@ -702,12 +671,15 @@ mod tests {
             to_sequence: 2,
             detected_at: TimestampMilliseconds(61_000),
         });
-        state.record_incomplete_range(
-            CexId::Binance,
-            "btcusdt@trade",
-            SequenceRange::new(3, 3),
-            TimestampMilliseconds(61_000),
-        );
+        state.record_gap(&GapMarker {
+            exchange: CexId::Binance,
+            stream: "btcusdt@trade".to_string(),
+            previous_sequence: 2,
+            observed_sequence: 4,
+            missing_from: 3,
+            missing_to: 3,
+            detected_at: TimestampMilliseconds(61_000),
+        });
 
         state.prune_closed_windows(TimestampMilliseconds(60_000));
 

@@ -12,9 +12,7 @@ pub mod sink;
 pub mod source;
 pub mod state;
 
-pub use checkpoint::{
-    CheckpointRecord, InMemoryStateStore, NatsStateStore, SourceCheckpoint, StateStore,
-};
+pub use checkpoint::{CheckpointRecord, InMemoryStateStore, NatsStateStore, StateStore};
 pub use config::{AggregatorConfig, ReplayStartPolicy};
 pub use lease::{
     InMemoryLeaseStore, LeaseStore, NatsLeaseStore, WriterLease, new_writer_id, wait_for_lease,
@@ -26,9 +24,7 @@ pub use restore::{
     RestoreSource, RestoredPartition, S3ArchivedEventSource, rebuild_state_from_archive,
     rebuild_state_from_archive_with_schema, restore_partition,
 };
-pub use router::{
-    HashRouter, NatsRouter, gap_partitions, partitions_for_event, partitions_for_gap,
-};
+pub use router::{HashRouter, NatsRouter};
 pub use runner::{ProcessorRunner, QuiesceReceiver, QuiesceSignal};
 pub use sink::{ClosedCandlePublisher, NatsCandleSink, OpenCandleStore};
 pub use source::{MarketInput, MarketSource, NatsMarketSource, NatsPartitionSource, SourceRecord};
