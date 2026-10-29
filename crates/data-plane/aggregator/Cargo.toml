@@ -5,6 +5,8 @@ edition.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+platform-archive = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-market-data = { workspace = true }
@@ -18,3 +20,6 @@ serde_json = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+base64 = { workspace = true }

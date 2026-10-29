@@ -1,9 +1,10 @@
 use platform_aggregator::{
-    AggregatorConfig, AggregatorRunner, CheckpointStore, NatsCandleSink, NatsCheckpointStore,
-    NatsMarketSource, NatsPartitionSource, NatsRouter,
+    AggregatorConfig, AggregatorRunner, ArchiveRecoveryConfig, ArchivedEventSource,
+    EmptyArchivedEventSource, NatsCandleSink, NatsMarketSource, NatsPartitionSource, NatsRouter,
+    NatsStateStore, S3ArchivedEventSource, StateStore, restore_partition,
 };
 use platform_errors::BpResult;
-use platform_nats::NatsPublisher;
+use platform_nats::{JetStream, NatsPublisher};
 use platform_runtime::Service;
 use std::sync::Arc;
 use tokio::task::JoinSet;
@@ -34,15 +35,33 @@ async fn main() -> BpResult<()> {
     let router_source = NatsMarketSource::connect(&config).await?;
     let router = NatsRouter::new(config.clone(), router_source, publisher);
 
-    let checkpoints = Arc::new(NatsCheckpointStore::connect(&config).await?);
+    let checkpoints: Arc<dyn StateStore> = Arc::new(NatsStateStore::connect(&config).await?);
     let sink = Arc::new(NatsCandleSink::connect(&config).await?);
+    let archive_config = ArchiveRecoveryConfig::from_env()?;
+    let source_stream = JetStream::stream_name(&config.shard_subject_prefix);
 
     let mut tasks = JoinSet::new();
     tasks.spawn(async move { router.run().await });
 
     for partition in partitions {
-        let checkpoint = checkpoints.load(partition).await?;
-        let start_sequence = checkpoint.map(|checkpoint| checkpoint.resume_sequence());
+        let mut archive: Box<dyn ArchivedEventSource> = match &archive_config {
+            Some(archive_config) => Box::new(
+                S3ArchivedEventSource::connect(archive_config, partition, config.shard_count)
+                    .await?,
+            ),
+            None => Box::new(EmptyArchivedEventSource),
+        };
+        let restored = restore_partition(
+            checkpoints.as_ref(),
+            archive.as_mut(),
+            partition,
+            &source_stream,
+            &config.intervals,
+            config.shard_count,
+        )
+        .await?;
+        let start_sequence = restored.start_sequence;
+        let replay_watermark = restored.replay_watermark();
         let source = NatsPartitionSource::connect(&config, partition, start_sequence).await?;
         let runner = AggregatorRunner::new_partition(
             config.clone(),
@@ -50,7 +69,9 @@ async fn main() -> BpResult<()> {
             sink.clone(),
             checkpoints.clone(),
             partition,
-        );
+        )
+        .with_state(restored.state)
+        .with_replay_watermark(replay_watermark);
         tasks.spawn(async move { runner.run().await });
     }
 

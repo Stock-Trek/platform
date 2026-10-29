@@ -1,6 +1,7 @@
 //! Stable key-to-partition assignment for the aggregator shard stream.
 
 use platform_market_data::candle::CandleKey;
+use serde::{Deserialize, Serialize};
 use std::fmt;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 
@@ -8,7 +9,10 @@ use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 ///
 /// A partition owns every candle key that hashes to it, so exactly one writer
 /// updates those candles at a time.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord)]
+#[derive(
+    Debug, Clone, Copy, Default, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize,
+)]
+#[serde(transparent)]
 pub struct PartitionId(u32);
 
 impl PartitionId {

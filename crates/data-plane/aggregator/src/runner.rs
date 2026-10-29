@@ -1,10 +1,11 @@
 use crate::{
     aggregator::CandleAggregator,
-    checkpoint::{CheckpointStore, InMemoryCheckpointStore, SourceCheckpoint},
+    checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore},
     config::AggregatorConfig,
     partition::PartitionId,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::{MarketInput, MarketSource, SourceRecord},
+    state::AggregatorState,
 };
 use platform_errors::BpResult;
 use platform_market_data::{
@@ -29,8 +30,13 @@ pub struct AggregatorRunner<S, K> {
     config: AggregatorConfig,
     source: S,
     sink: K,
-    checkpoints: Arc<dyn CheckpointStore>,
+    checkpoints: Arc<dyn StateStore>,
     partition: PartitionId,
+    state: AggregatorState,
+    /// When set, inputs at or before this watermark are already represented by
+    /// state rebuilt from the archive and are only used to advance the source
+    /// position.
+    replay_watermark: Option<TimestampMilliseconds>,
 }
 
 impl<S, K> AggregatorRunner<S, K>
@@ -47,14 +53,16 @@ where
             config,
             source,
             sink,
-            checkpoints: Arc::new(InMemoryCheckpointStore::new()),
+            checkpoints: Arc::new(InMemoryStateStore::new()),
             partition: PartitionId::new(0),
+            state: AggregatorState::new(),
+            replay_watermark: None,
         }
     }
 
     pub fn with_checkpoint_store(
         mut self,
-        checkpoints: Arc<dyn CheckpointStore>,
+        checkpoints: Arc<dyn StateStore>,
         partition: PartitionId,
     ) -> Self {
         self.checkpoints = checkpoints;
@@ -62,11 +70,24 @@ where
         self
     }
 
+    /// Restores keyed state, for example from a checkpoint or archive rebuild.
+    pub fn with_state(mut self, state: AggregatorState) -> Self {
+        self.state = state;
+        self
+    }
+
+    /// Ignores live inputs at or before `watermark` because their effects are
+    /// already present in restored state.
+    pub fn with_replay_watermark(mut self, watermark: Option<TimestampMilliseconds>) -> Self {
+        self.replay_watermark = watermark;
+        self
+    }
+
     pub fn new_partition(
         config: AggregatorConfig,
         source: S,
         sink: K,
-        checkpoints: Arc<dyn CheckpointStore>,
+        checkpoints: Arc<dyn StateStore>,
         partition: PartitionId,
     ) -> Self {
         Self {
@@ -75,6 +96,8 @@ where
             sink,
             checkpoints,
             partition,
+            state: AggregatorState::new(),
+            replay_watermark: None,
         }
     }
 
@@ -85,8 +108,10 @@ where
             sink,
             checkpoints,
             partition,
+            state,
+            replay_watermark,
         } = self;
-        let mut aggregator = CandleAggregator::new(config.intervals.clone());
+        let mut aggregator = CandleAggregator::from_state(config.intervals.clone(), state)?;
 
         info!(
             partition = %partition,
@@ -105,6 +130,7 @@ where
             &checkpoints,
             partition,
             &mut aggregator,
+            replay_watermark,
         ))
         .await;
         result?;
@@ -120,9 +146,10 @@ where
         config: &AggregatorConfig,
         source: &mut S,
         sink: &K,
-        checkpoints: &Arc<dyn CheckpointStore>,
+        checkpoints: &Arc<dyn StateStore>,
         partition: PartitionId,
         aggregator: &mut CandleAggregator,
+        replay_watermark: Option<TimestampMilliseconds>,
     ) -> BpResult<()> {
         let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
         let mut flush_ticker = time::interval(config.flush_interval);
@@ -133,14 +160,29 @@ where
                 maybe_record = source.next_input() => {
                     match maybe_record {
                         Ok(Some(record)) => {
-                            Self::process_input(
-                                sink,
-                                aggregator,
-                                &mut decoders,
-                                &record.input,
+                            let is_replay = replay_watermark.is_some_and(|watermark| {
+                                input_timestamp(&record.input) <= watermark
+                            });
+                            if !is_replay {
+                                Self::process_input(
+                                    sink,
+                                    aggregator,
+                                    &mut decoders,
+                                    &record.input,
+                                )
+                                .await?;
+                            }
+                            if let Some(sequence) = record.message.stream_sequence {
+                                aggregator.state_mut().mark_processed(sequence);
+                            }
+                            Self::checkpoint(
+                                source,
+                                checkpoints,
+                                partition,
+                                &record,
+                                aggregator.state(),
                             )
                             .await?;
-                            Self::checkpoint(source, checkpoints, partition, &record).await?;
                         }
                         Ok(None) => {
                             info!("aggregator input source ended");
@@ -170,12 +212,15 @@ where
     /// message is redelivered after a restart.
     async fn checkpoint(
         source: &mut S,
-        checkpoints: &Arc<dyn CheckpointStore>,
+        checkpoints: &Arc<dyn StateStore>,
         partition: PartitionId,
         record: &SourceRecord,
+        state: &AggregatorState,
     ) -> BpResult<()> {
-        if let Some(checkpoint) = SourceCheckpoint::from_message(&record.message)? {
-            checkpoints.save(partition, &checkpoint).await?;
+        if let Some(checkpoint) =
+            CheckpointRecord::from_message(&record.message, partition, state.clone())?
+        {
+            checkpoints.save(&checkpoint).await?;
         }
         source.ack(record).await
     }
@@ -220,6 +265,9 @@ where
         decoders: &mut HashMap<CexId, SharedTradeDecoder>,
         event: &MarketEvent,
     ) -> BpResult<()> {
+        aggregator
+            .state_mut()
+            .advance_watermark(event.exchange_timestamp.unwrap_or(event.received_at));
         let decoder = match decoders.entry(event.exchange) {
             Entry::Occupied(entry) => entry.into_mut(),
             Entry::Vacant(entry) => match TradeDecoderFactory::for_exchange(event.exchange) {
@@ -261,9 +309,18 @@ where
     }
 }
 
+fn input_timestamp(input: &MarketInput) -> TimestampMilliseconds {
+    match input {
+        MarketInput::Event(event) => event.exchange_timestamp.unwrap_or(event.received_at),
+        MarketInput::Gap(gap) => gap.detected_at,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::checkpoint::{CheckpointRecord, StateStore};
+    use crate::state::AggregatorState;
     use async_trait::async_trait;
     use platform_errors::BpError;
     use platform_market_data::candle::{Candle, ClosedCandle};
@@ -346,16 +403,12 @@ mod tests {
     struct FailingCheckpointStore;
 
     #[async_trait]
-    impl CheckpointStore for FailingCheckpointStore {
-        async fn load(&self, _partition: PartitionId) -> BpResult<Option<SourceCheckpoint>> {
+    impl StateStore for FailingCheckpointStore {
+        async fn load(&self, _partition: PartitionId) -> BpResult<Option<CheckpointRecord>> {
             Ok(None)
         }
 
-        async fn save(
-            &self,
-            _partition: PartitionId,
-            _checkpoint: &SourceCheckpoint,
-        ) -> BpResult<()> {
+        async fn save(&self, _checkpoint: &CheckpointRecord) -> BpResult<()> {
             Err(BpError::bad_value("checkpoint", "test", "write failed"))
         }
     }
@@ -425,7 +478,7 @@ mod tests {
             acked: acked.clone(),
             ..FakeSource::default()
         };
-        let checkpoints = Arc::new(InMemoryCheckpointStore::new());
+        let checkpoints = Arc::new(InMemoryStateStore::new());
         let runner = AggregatorRunner::new(config(), source, sink)
             .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0));
 
@@ -434,8 +487,13 @@ mod tests {
         assert_eq!(observed.open_updates(), 1);
         assert_eq!(*acked.lock().unwrap(), 1);
         let checkpoint = checkpoints.get(PartitionId::new(0)).unwrap();
-        assert_eq!(checkpoint.stream_sequence, 1);
+        assert_eq!(checkpoint.next_sequence, 2);
         assert_eq!(checkpoint.resume_sequence(), 2);
+        assert_eq!(checkpoint.source_stream, "aggregator-shards");
+        assert_eq!(checkpoint.partition, PartitionId::new(0));
+        assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(61_000)));
+        assert_eq!(checkpoint.state.last_processed_sequence, Some(1));
+        assert_eq!(checkpoint.state.open_candles_len(), 1);
     }
 
     #[tokio::test]
@@ -506,6 +564,36 @@ mod tests {
         assert_eq!(observed.open_updates(), 1);
         assert_eq!(observed.closed_updates(), 1);
         assert_eq!(*acked.lock().unwrap(), 2);
+    }
+
+    #[tokio::test]
+    async fn restores_state_and_skips_inputs_already_in_the_archive() {
+        let sink = FakeSink::default();
+        let observed = sink.clone();
+        let acked = Arc::new(Mutex::new(0));
+        let source = FakeSource {
+            records: vec![record(MarketInput::Event(trade_event(61_000)), 1)],
+            acked: acked.clone(),
+            ..FakeSource::default()
+        };
+        let checkpoints = Arc::new(InMemoryStateStore::new());
+        let mut restored_state = AggregatorState::new();
+        restored_state.advance_watermark(TimestampMilliseconds(61_000));
+
+        AggregatorRunner::new(config(), source, sink)
+            .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
+            .with_state(restored_state)
+            .with_replay_watermark(Some(TimestampMilliseconds(61_000)))
+            .run()
+            .await
+            .unwrap();
+
+        assert_eq!(observed.open_updates(), 0);
+        assert_eq!(*acked.lock().unwrap(), 1);
+        let checkpoint = checkpoints.get(PartitionId::new(0)).unwrap();
+        assert_eq!(checkpoint.next_sequence, 2);
+        assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(61_000)));
+        assert_eq!(checkpoint.state.open_candles_len(), 0);
     }
 
     #[tokio::test]

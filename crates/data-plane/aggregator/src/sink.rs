@@ -13,6 +13,9 @@ const NEXT_REVISION_KEY: &str = "next_closed_revision";
 const PENDING_REVISION_KEY: &str = "pending_closed_revision";
 
 /// Stores the latest version of candles that are still open.
+///
+/// This is a derived serving projection. Recovery uses the keyed state stored in
+/// partition checkpoints, not this bucket.
 #[async_trait]
 pub trait OpenCandleStore: Send + Sync {
     async fn update_open(&self, candles: &[Candle]) -> BpResult<()>;
@@ -30,7 +33,9 @@ pub trait ClosedCandlePublisher: Send + Sync {
 /// Stores open candles in a NATS KV bucket and publishes closed candles to
 /// JetStream.
 ///
-/// Open candles are written per key, so the latest state survives restarts.
+/// Open candles are written per key only so clients can serve the current
+/// partial candle. They are a derived projection of the checkpointed keyed
+/// state; recovery never reads this bucket back into the aggregator.
 /// Before a closed candle is published, it is stored as a pending revision in a
 /// KV bucket. The revision counter is advanced only after JetStream acknowledges
 /// the publish, and any pending revision is replayed on startup. This means a
