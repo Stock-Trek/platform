@@ -18,13 +18,6 @@ pub struct SequenceTracker {
 }
 
 impl SequenceTracker {
-    #[cfg(test)]
-    pub fn last(&self) -> Option<u64> {
-        self.next
-            .and_then(|next| next.checked_sub(1))
-            .and_then(|last| u64::try_from(last).ok())
-    }
-
     /// Observes an inclusive range of update IDs without advancing the tracker.
     ///
     /// Exchanges such as Binance can pack many update IDs into one depth
@@ -82,6 +75,18 @@ impl SequenceTracker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    trait SequenceTrackerTestExt {
+        fn last(&self) -> Option<u64>;
+    }
+
+    impl SequenceTrackerTestExt for SequenceTracker {
+        fn last(&self) -> Option<u64> {
+            self.next
+                .and_then(|next| next.checked_sub(1))
+                .and_then(|last| u64::try_from(last).ok())
+        }
+    }
 
     fn observe(tracker: &mut SequenceTracker, first: u64, last: u64) -> SequenceObservation {
         let observation = tracker.observe_range(first, last);
