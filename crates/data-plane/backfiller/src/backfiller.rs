@@ -4,7 +4,7 @@ use crate::{
     retry::{GapRetryStore, InMemoryGapRetryStore, PendingGap, retry_at},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use platform_errors::BpResult;
+use platform_errors::{BpError, BpResult};
 use platform_market_data::{
     envelope::EnvelopeCodec,
     event::{GapMarker, MarketEvent},
@@ -80,9 +80,7 @@ where
                 if let Some(gap) = pending.remove(&key) {
                     let retry = gap.clone();
                     if let Err(error) = self.attempt(gap, &mut pending).await {
-                        MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_ERROR);
-                        warn!(%error, "failed to retry pending backfill range");
-                        pending.entry(retry.key()).or_insert(retry);
+                        self.requeue_failed_retry(&error, retry, &mut pending);
                         tokio::time::sleep(Duration::from_secs(1)).await;
                     }
                 }
@@ -96,9 +94,7 @@ where
                     if let Some(gap) = pending.remove(&key) {
                         let retry = gap.clone();
                         if let Err(error) = self.attempt(gap, &mut pending).await {
-                            MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_ERROR);
-                            warn!(%error, "failed to retry pending backfill range");
-                            pending.entry(retry.key()).or_insert(retry);
+                            self.requeue_failed_retry(&error, retry, &mut pending);
                         }
                     }
                 }
@@ -123,6 +119,17 @@ where
                 }
             }
         }
+    }
+
+    fn requeue_failed_retry(
+        &self,
+        error: &BpError,
+        gap: PendingGap,
+        pending: &mut BTreeMap<String, PendingGap>,
+    ) {
+        MarketDataMetrics::record_backfill_gap_outcome(BACKFILL_OUTCOME_ERROR);
+        warn!(%error, "failed to retry pending backfill range");
+        pending.entry(gap.key()).or_insert(gap);
     }
 
     async fn load_pending(&self) -> BpResult<BTreeMap<String, PendingGap>> {
