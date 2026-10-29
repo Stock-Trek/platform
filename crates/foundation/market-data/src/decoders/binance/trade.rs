@@ -81,6 +81,19 @@ impl TradeDecoder for BinanceTradeDecoder {
             timestamp,
         }])
     }
+
+    fn trading_pair_for_stream(&self, stream: &str) -> BpResult<TradingPair> {
+        let symbol = stream
+            .split_once('@')
+            .map_or(stream, |(symbol, _)| symbol)
+            .trim();
+        if symbol.is_empty() {
+            return Err(BpError::bad_value("stream", stream, "symbol is empty"));
+        }
+        self.trading_pair(symbol).ok_or_else(|| {
+            BpError::bad_value("stream", stream, "could not resolve base and quote assets")
+        })
+    }
 }
 
 impl BinanceTradeDecoder {
@@ -223,6 +236,27 @@ mod tests {
             trades[0].timestamp,
             TimestampMilliseconds(1_700_000_000_123)
         );
+    }
+
+    #[test]
+    fn resolves_streams_to_trading_pairs() {
+        let decoder = BinanceTradeDecoder;
+        let expected = TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD);
+
+        assert_eq!(
+            decoder.trading_pair_for_stream("btcusdt@trade").unwrap(),
+            expected
+        );
+        assert_eq!(
+            decoder.trading_pair_for_stream("BTCUSDT@aggTrade").unwrap(),
+            expected
+        );
+        assert_eq!(
+            decoder.trading_pair_for_stream("btcusdt").unwrap(),
+            expected
+        );
+        assert!(decoder.trading_pair_for_stream("unknown@trade").is_err());
+        assert!(decoder.trading_pair_for_stream("@trade").is_err());
     }
 
     #[test]
