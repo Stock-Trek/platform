@@ -11,6 +11,7 @@ platform-types = { workspace = true }
 futures-timer = { workspace = true }
 httpdate = { workspace = true }
 iris = { workspace = true }
+parking_lot = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
 serde_json = { workspace = true }
 strum = { workspace = true, features = ["derive"] }

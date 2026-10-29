@@ -4,18 +4,15 @@ use crate::{
     panic_guard::PanicUtils,
     submission::Submission,
 };
-use platform_errors::{BpError, BpResult, ConnectorError, SystemError};
+use parking_lot::Mutex;
+use platform_errors::{BpError, BpResult, ConnectorError};
 use platform_exchange_types::{
     exchange::ETExchange,
     rate_limited::RateLimit,
     request::{ETHttpRequest, ETWebsocketRequest},
 };
 use platform_types::new_types::{TimestampMilliseconds, UsageCount};
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::{debug, warn};
 
@@ -104,10 +101,7 @@ impl<Exchange, Client> AutoResyncConnector<Exchange, Client> {
 
     fn report_failure(failure_callback: &SharedClockSyncFailureCallback, error: &BpError) {
         warn!(error = %error, "auto-resync clock sync failed");
-        let callback = match failure_callback.lock() {
-            Ok(callback) => callback.clone(),
-            Err(poisoned) => poisoned.into_inner().clone(),
-        };
+        let callback = failure_callback.lock().clone();
         if let Some(callback) = callback.as_ref() {
             // A panicking failure callback must not bring down the task silently.
             let _ = PanicUtils::catch_panic(|| callback(error));
@@ -140,18 +134,11 @@ where
     where
         F: Fn(&BpError) + Send + Sync + 'static,
     {
-        let mut guard = match self.failure_callback.lock() {
-            Ok(guard) => guard,
-            Err(poisoned) => poisoned.into_inner(),
-        };
+        let mut guard = self.failure_callback.lock();
         *guard = Some(Arc::new(callback));
     }
     pub async fn stop_clock_sync(&self) -> BpResult<()> {
-        let handle = self
-            .resync_handle
-            .lock()
-            .map_err(|_| BpError::System(SystemError::PoisonedLock))?
-            .take();
+        let handle = self.resync_handle.lock().take();
         let Some(handle) = handle else { return Ok(()) };
         debug!("stopping auto-resync clock sync");
         let _ = handle.sender.send(ClockSyncCommand::Stop);
@@ -178,10 +165,7 @@ where
         }
         let (first_sync_sender, first_sync_receiver) = tokio::sync::oneshot::channel();
         {
-            let mut resync_handle = self
-                .resync_handle
-                .lock()
-                .map_err(|_| BpError::System(SystemError::PoisonedLock))?;
+            let mut resync_handle = self.resync_handle.lock();
             if let Some(handle) = resync_handle.as_ref() {
                 if handle.join.is_finished()
                     || handle
@@ -215,10 +199,7 @@ where
 
 impl<Exchange, Client> Drop for AutoResyncConnector<Exchange, Client> {
     fn drop(&mut self) {
-        let handle = match self.resync_handle.get_mut() {
-            Ok(handle) => handle.take(),
-            Err(poisoned) => poisoned.into_inner().take(),
-        };
+        let handle = self.resync_handle.get_mut().take();
         if let Some(handle) = handle {
             let _ = handle.sender.send(ClockSyncCommand::Stop);
             handle.join.abort();

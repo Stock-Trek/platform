@@ -1,12 +1,9 @@
 use crate::rate_limit::rate_limiter::RateLimiter;
-use platform_errors::{BpError, BpResult, RateLimitError, SystemError};
+use parking_lot::Mutex;
+use platform_errors::{BpError, BpResult, RateLimitError};
 use platform_exchange_types::rate_limited::{RateLimit, RateLimitRestriction, RateUsage};
 use platform_types::new_types::{Nanoseconds, UsageCount};
-use std::{
-    collections::HashMap,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{collections::HashMap, sync::Arc, time::Duration};
 use strum::IntoEnumIterator;
 use tracing::{debug, warn};
 
@@ -44,10 +41,7 @@ impl RateLimiters {
         Ok(capacities)
     }
     pub fn did_acquire(&self, costs: &[(RateLimitRestriction, UsageCount)]) -> BpResult<()> {
-        let _guard = self
-            .acquisition_lock
-            .lock()
-            .map_err(|_| BpError::System(SystemError::PoisonedLock))?;
+        let _guard = self.acquisition_lock.lock();
         for limiter in self.limiters.values() {
             if limiter.is_throttled()? {
                 debug!("rate limiter is throttled, rejecting request");
@@ -73,10 +67,7 @@ impl RateLimiters {
         Ok(())
     }
     pub fn refund(&self, restriction: RateLimitRestriction, cost: UsageCount) -> BpResult<()> {
-        let _guard = self
-            .acquisition_lock
-            .lock()
-            .map_err(|_| BpError::System(SystemError::PoisonedLock))?;
+        let _guard = self.acquisition_lock.lock();
         self.refund_unlocked(restriction, cost)
     }
     fn refund_unlocked(&self, restriction: RateLimitRestriction, cost: UsageCount) -> BpResult<()> {
