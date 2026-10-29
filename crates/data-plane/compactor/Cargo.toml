@@ -6,7 +6,6 @@ edition.workspace = true
 [dependencies]
 async-trait = { workspace = true }
 aws-sdk-s3 = { workspace = true }
-chrono = { workspace = true }
 platform-archive = { workspace = true }
 platform-aws = { workspace = true }
 platform-config = { workspace = true }

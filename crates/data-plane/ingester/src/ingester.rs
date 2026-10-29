@@ -1,5 +1,4 @@
 use crate::sequence::{SequenceObservation, SequenceTracker};
-use chrono::Utc;
 use platform_errors::BpResult;
 use platform_market_data::{
     envelope::EnvelopeCodec,
@@ -61,7 +60,7 @@ impl<P: EventPublisher> Ingester<P> {
             stream,
             sequence,
             exchange_timestamp,
-            received_at: TimestampMilliseconds(Utc::now().timestamp_millis()),
+            received_at: TimestampMilliseconds::now(),
             payload,
         };
         let event_subject = self.options.event_subject(&event.stream);

@@ -66,7 +66,7 @@ impl BinanceEventPageSource {
         Ok(vec![BinanceEventParser::depth(
             symbol,
             &response,
-            TimestampMilliseconds(chrono::Utc::now().timestamp_millis()),
+            TimestampMilliseconds::now(),
         )])
     }
 
@@ -84,7 +84,7 @@ impl BinanceEventPageSource {
             &response.bidQty,
             &response.askPrice,
             &response.askQty,
-            TimestampMilliseconds(chrono::Utc::now().timestamp_millis()),
+            TimestampMilliseconds::now(),
         )])
     }
 

@@ -4,7 +4,6 @@ use crate::{
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::MarketEventSource,
 };
-use chrono::Utc;
 use platform_errors::BpResult;
 use platform_market_data::{
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
@@ -143,7 +142,7 @@ where
                 }
                 _ = flush_ticker.tick() => {
                     let closed = aggregator
-                        .flush_closed_at_or_before(TimestampMilliseconds(Utc::now().timestamp_millis()));
+                        .flush_closed_at_or_before(TimestampMilliseconds::now());
                     if !closed.is_empty() {
                         sink.publish_closed(&closed).await?;
                     }
@@ -155,8 +154,7 @@ where
             }
         }
 
-        let closed = aggregator
-            .flush_closed_at_or_before(TimestampMilliseconds(Utc::now().timestamp_millis()));
+        let closed = aggregator.flush_closed_at_or_before(TimestampMilliseconds::now());
         if !closed.is_empty() {
             sink.publish_closed(&closed).await?;
         }

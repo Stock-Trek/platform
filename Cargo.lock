@@ -4200,7 +4200,6 @@ name = "platform-aggregator"
 version = "0.2.0"
 dependencies = [
  "async-trait",
- "chrono",
  "platform-config",
  "platform-errors",
  "platform-market-data",
@@ -4281,7 +4280,6 @@ version = "0.2.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
- "chrono",
  "platform-config",
  "platform-errors",
  "platform-exchange-gateway",
@@ -4362,7 +4360,6 @@ version = "0.2.0"
 dependencies = [
  "async-trait",
  "aws-sdk-s3",
- "chrono",
  "platform-archive",
  "platform-aws",
  "platform-config",
@@ -4537,7 +4534,6 @@ name = "platform-ingester"
 version = "0.2.0"
 dependencies = [
  "async-trait",
- "chrono",
  "iris",
  "platform-config",
  "platform-errors",
@@ -4679,6 +4675,7 @@ dependencies = [
 name = "platform-types"
 version = "0.2.0"
 dependencies = [
+ "chrono",
  "serde",
  "strum 0.28.0",
  "thiserror",

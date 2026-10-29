@@ -141,8 +141,8 @@ impl ArchiveBatchSource for S3ArchiveSource {
             group.files.push(key.to_string());
         }
 
-        let cutoff = chrono::Utc::now()
-            .timestamp_millis()
+        let cutoff = TimestampMilliseconds::now()
+            .0
             .saturating_sub(self.settle_millis);
         let mut batches = groups
             .into_iter()
