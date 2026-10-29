@@ -188,6 +188,9 @@ pub async fn rebuild_state_from_archive(
     let mut processor = CandleProcessor::with_config(config);
     let mut decoders = HashMap::new();
 
+    // TODO(#157): archived raw events do not yet carry the state epoch that
+    // produced their closed-candle revisions. Once they do, continue that epoch
+    // here instead of starting a new lineage at the default epoch.
     while let Some(event) = archive.next_event().await? {
         let decoder = decoder_for(&mut decoders, event.exchange)?;
         let trades = match decoder.decode(&event) {

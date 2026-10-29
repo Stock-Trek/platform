@@ -5,7 +5,8 @@ use arrow_array::{
 };
 use platform_errors::{BpError, BpResult};
 use platform_market_data::{
-    candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
+    candle::{Candle, CandleInterval, CandleKey, CandleRevision, ClosedCandle},
+    envelope::EnvelopeCodec,
     event::MarketEvent,
 };
 use platform_types::new_types::TimestampMilliseconds;
@@ -68,7 +69,7 @@ impl ArchiveBatch {
         let quote_volume = Self::f64_column(batch, "quote_volume")?;
         let vwap = Self::f64_column(batch, "vwap")?;
         let trade_count = Self::u64_column(batch, "trade_count")?;
-        let revision = Self::u64_column(batch, "revision")?;
+        let revision = Self::string_column(batch, "revision")?;
 
         (0..batch.num_rows())
             .map(|row| {
@@ -101,7 +102,7 @@ impl ArchiveBatch {
                     trade_count.value(row),
                 );
                 Ok(ClosedCandle {
-                    revision: revision.value(row),
+                    revision: CandleRevision::decode(revision.value(row).as_bytes())?,
                     candle: Candle {
                         key: CandleKey::new(exchange, TradingPair::new(base, quote), interval),
                         market_candle,

@@ -78,24 +78,22 @@ mod tests {
     }
 
     fn closed_candle() -> ClosedCandle {
-        ClosedCandle {
-            revision: 3,
-            candle: Candle {
-                key: CandleKey::new(
-                    CexId::Binance,
-                    TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-                    CandleInterval::from_label("1m").unwrap(),
-                ),
-                market_candle: MarketCandle::new(
-                    60_000,
-                    120_000,
-                    60_000,
-                    true,
-                    MarketOhlcv::new(1.0, 2.0, 0.5, 1.5, 10.0, 15.0, 1.5),
-                    5,
-                ),
-            },
-        }
+        let candle = Candle {
+            key: CandleKey::new(
+                CexId::Binance,
+                TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+                CandleInterval::from_label("1m").unwrap(),
+            ),
+            market_candle: MarketCandle::new(
+                60_000,
+                120_000,
+                60_000,
+                true,
+                MarketOhlcv::new(1.0, 2.0, 0.5, 1.5, 10.0, 15.0, 1.5),
+                5,
+            ),
+        };
+        ClosedCandle::new(candle, TimestampMilliseconds(121_000), 3, 0)
     }
 
     #[test]

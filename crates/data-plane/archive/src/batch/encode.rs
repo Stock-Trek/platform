@@ -3,8 +3,8 @@ use crate::record::{ArchiveKind, ArchiveRecord};
 use arrow_array::{
     ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
-use platform_errors::BpResult;
-use platform_market_data::{candle::ClosedCandle, event::MarketEvent};
+use platform_errors::{BpError, BpResult};
+use platform_market_data::{candle::ClosedCandle, envelope::EnvelopeCodec, event::MarketEvent};
 use std::sync::Arc;
 
 impl ArchiveBatch {
@@ -34,6 +34,15 @@ impl ArchiveBatch {
             }
             ArchiveKind::Candles => {
                 let candles = Self::candles(records)?;
+                let revisions = candles
+                    .iter()
+                    .map(|closed| {
+                        let payload = closed.revision.encode()?;
+                        Ok(std::str::from_utf8(&payload)
+                            .map_err(BpError::external)?
+                            .to_string())
+                    })
+                    .collect::<BpResult<Vec<_>>>()?;
                 let columns: Vec<ArrayRef> = vec![
                     Self::strings(
                         candles
@@ -110,9 +119,7 @@ impl ArchiveBatch {
                             .iter()
                             .map(|closed| closed.candle.market_candle.trade_count),
                     )),
-                    Arc::new(UInt64Array::from_iter_values(
-                        candles.iter().map(|closed| closed.revision),
-                    )),
+                    Self::strings(revisions),
                 ];
                 Ok(RecordBatch::try_new(Self::schema(kind), columns)?)
             }

@@ -1,5 +1,5 @@
 use platform_market_data::{
-    candle::{CandleKey, ClosedCandle},
+    candle::{CandleKey, CandleRevision, ClosedCandle},
     event::MarketEvent,
 };
 use platform_types::new_types::TimestampMilliseconds;
@@ -62,7 +62,9 @@ impl ArchiveRecord {
                 event.exchange_timestamp.unwrap_or(event.received_at).0,
                 event.sequence.unwrap_or_default(),
             ),
-            Self::ClosedCandle(closed) => (closed.candle.start_time().0, closed.revision),
+            Self::ClosedCandle(closed) => {
+                (closed.candle.start_time().0, closed.revision.source_offset)
+            }
         }
     }
 
@@ -91,7 +93,7 @@ impl ArchiveRecord {
             Self::ClosedCandle(closed) => ArchiveRecordKey::ClosedCandle {
                 candle: closed.candle.key.clone(),
                 start_time: closed.candle.start_time(),
-                revision: closed.revision,
+                revision: closed.revision.clone(),
             },
         }
     }
@@ -108,7 +110,7 @@ pub enum ArchiveRecordKey {
     ClosedCandle {
         candle: CandleKey,
         start_time: TimestampMilliseconds,
-        revision: u64,
+        revision: CandleRevision,
     },
 }
 
@@ -232,24 +234,27 @@ mod tests {
     }
 
     fn closed_candle() -> ArchiveRecord {
-        ArchiveRecord::ClosedCandle(ClosedCandle {
-            revision: 4,
-            candle: platform_market_data::candle::Candle {
-                key: CandleKey::new(
-                    CexId::Binance,
-                    TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-                    CandleInterval::from_label("1m").unwrap(),
-                ),
-                market_candle: MarketCandle::new(
-                    60_000,
-                    120_000,
-                    60_000,
-                    true,
-                    MarketOhlcv::new(1.0, 2.0, 0.5, 1.5, 10.0, 15.0, 1.5),
-                    5,
-                ),
-            },
-        })
+        let candle = platform_market_data::candle::Candle {
+            key: CandleKey::new(
+                CexId::Binance,
+                TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+                CandleInterval::from_label("1m").unwrap(),
+            ),
+            market_candle: MarketCandle::new(
+                60_000,
+                120_000,
+                60_000,
+                true,
+                MarketOhlcv::new(1.0, 2.0, 0.5, 1.5, 10.0, 15.0, 1.5),
+                5,
+            ),
+        };
+        ArchiveRecord::ClosedCandle(ClosedCandle::new(
+            candle,
+            TimestampMilliseconds(121_000),
+            4,
+            0,
+        ))
     }
 
     #[test]

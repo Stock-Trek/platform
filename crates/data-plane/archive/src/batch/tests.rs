@@ -25,24 +25,22 @@ fn event(sequence: u64) -> MarketEvent {
 }
 
 fn closed_candle(revision: u64) -> ClosedCandle {
-    ClosedCandle {
-        revision,
-        candle: Candle {
-            key: CandleKey::new(
-                CexId::Binance,
-                TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-                CandleInterval::from_label("60s").unwrap(),
-            ),
-            market_candle: MarketCandle::new(
-                60_000,
-                120_000,
-                60_000,
-                true,
-                MarketOhlcv::new(100.0, 110.0, 90.0, 105.0, 6.0, 580.0, 96.666_666_666_666_67),
-                3,
-            ),
-        },
-    }
+    let candle = Candle {
+        key: CandleKey::new(
+            CexId::Binance,
+            TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+            CandleInterval::from_label("60s").unwrap(),
+        ),
+        market_candle: MarketCandle::new(
+            60_000,
+            120_000,
+            60_000,
+            true,
+            MarketOhlcv::new(100.0, 110.0, 90.0, 105.0, 6.0, 580.0, 96.666_666_666_666_67),
+            3,
+        ),
+    };
+    ClosedCandle::new(candle, TimestampMilliseconds(121_000), revision, 0)
 }
 
 #[test]
@@ -131,7 +129,11 @@ fn candles_round_trip_with_named_columns() {
     let ArchiveRecord::ClosedCandle(actual) = &records[0] else {
         panic!("expected a closed candle");
     };
-    assert_eq!(actual.revision, 7);
+    assert_eq!(actual.revision.source_offset, 7);
+    assert_eq!(
+        actual.revision.close_watermark,
+        TimestampMilliseconds(121_000)
+    );
     assert_eq!(actual.candle.key.trading_pair.base, AssetId::Bitcoin);
 }
 

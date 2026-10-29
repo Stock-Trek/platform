@@ -38,7 +38,7 @@ impl ArchiveBatch {
                 Self::field(14, "quote_volume", DataType::Float64, false),
                 Self::field(15, "vwap", DataType::Float64, false),
                 Self::field(16, "trade_count", DataType::UInt64, false),
-                Self::field(17, "revision", DataType::UInt64, false),
+                Self::field(17, "revision", DataType::Utf8, false),
             ])),
         }
     }

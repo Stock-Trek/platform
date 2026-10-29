@@ -131,11 +131,111 @@ pub struct Candle {
     pub market_candle: MarketCandle,
 }
 
+/// Deterministic revision of a closed candle.
+///
+/// A revision is a pure function of the candle identity and window, the source
+/// watermark that closed the candle, the source offset that advanced that
+/// watermark, and the partition state epoch. Replaying the same input log
+/// therefore recreates the same revision; there is no process-local or global
+/// revision counter to race across replicas.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct CandleRevision {
+    /// Candle identity this revision belongs to.
+    pub key: CandleKey,
+    /// Inclusive window start.
+    pub window_start: TimestampMilliseconds,
+    /// Exclusive window end.
+    pub window_end: TimestampMilliseconds,
+    /// Event-time watermark at which the candle was closed.
+    pub close_watermark: TimestampMilliseconds,
+    /// Source offset that advanced the watermark to `close_watermark`.
+    pub source_offset: u64,
+    /// State epoch that produced this revision.
+    pub state_epoch: u64,
+}
+
+impl PartialOrd for CandleRevision {
+    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl Ord for CandleRevision {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.key
+            .subject_suffix()
+            .cmp(&other.key.subject_suffix())
+            .then_with(|| self.window_start.cmp(&other.window_start))
+            .then_with(|| self.window_end.cmp(&other.window_end))
+            .then_with(|| self.close_watermark.cmp(&other.close_watermark))
+            .then_with(|| self.source_offset.cmp(&other.source_offset))
+            .then_with(|| self.state_epoch.cmp(&other.state_epoch))
+    }
+}
+
+impl CandleRevision {
+    /// Derives the revision for `candle` from the closing watermark and source
+    /// offset that are part of the partition state.
+    pub fn for_candle(
+        candle: &Candle,
+        close_watermark: TimestampMilliseconds,
+        source_offset: u64,
+        state_epoch: u64,
+    ) -> Self {
+        Self {
+            key: candle.key.clone(),
+            window_start: candle.start_time(),
+            window_end: candle.end_time(),
+            close_watermark,
+            source_offset,
+            state_epoch,
+        }
+    }
+
+    /// Stable id for the published closed-candle message.
+    ///
+    /// The id covers the candle key, its window, and the state epoch. Revision
+    /// provenance is included as well, so a replay of the same processing step
+    /// publishes the same id while a genuinely new revision is not hidden by
+    /// JetStream de-duplication.
+    pub fn message_id(&self) -> String {
+        format!(
+            "{}@{}:{}.epoch={}.watermark={}.offset={}",
+            self.key.subject_suffix(),
+            self.window_start.0,
+            self.window_end.0,
+            self.state_epoch,
+            self.close_watermark.0,
+            self.source_offset,
+        )
+    }
+}
+
 /// A candle that has left its aggregation window and is ready to be archived.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClosedCandle {
-    pub revision: u64,
+    /// Deterministic revision assigned when the candle closed.
+    pub revision: CandleRevision,
     pub candle: Candle,
+}
+
+impl ClosedCandle {
+    /// Builds a closed candle and derives its deterministic revision.
+    pub fn new(
+        candle: Candle,
+        close_watermark: TimestampMilliseconds,
+        source_offset: u64,
+        state_epoch: u64,
+    ) -> Self {
+        let revision =
+            CandleRevision::for_candle(&candle, close_watermark, source_offset, state_epoch);
+        Self { revision, candle }
+    }
+
+    /// Stable id used when publishing this candle.
+    pub fn message_id(&self) -> String {
+        self.revision.message_id()
+    }
 }
 
 impl Candle {
@@ -261,5 +361,43 @@ mod tests {
             CandleInterval::from_label("60s").unwrap(),
         );
         assert_eq!(key.subject_suffix(), "binance.bitcoin.tether_usd.1m");
+    }
+
+    fn closed_candle(offset: u64, epoch: u64) -> ClosedCandle {
+        let interval = CandleInterval::from_label("1m").unwrap();
+        let mut candle = Candle::open(&trade("100", "2", 61_000), interval);
+        candle.close();
+        ClosedCandle::new(candle, TimestampMilliseconds(121_000), offset, epoch)
+    }
+
+    #[test]
+    fn closed_candle_revisions_are_deterministic() {
+        let first = closed_candle(7, 0);
+        let replay = closed_candle(7, 0);
+
+        assert_eq!(first.revision, replay.revision);
+        assert_eq!(first.message_id(), replay.message_id());
+        assert_eq!(first.revision.window_start, TimestampMilliseconds(60_000));
+        assert_eq!(first.revision.window_end, TimestampMilliseconds(120_000));
+        assert_eq!(
+            first.revision.close_watermark,
+            TimestampMilliseconds(121_000)
+        );
+    }
+
+    #[test]
+    fn closed_candle_ids_cover_key_window_epoch_and_revision() {
+        let base = closed_candle(7, 0);
+
+        let other_offset = closed_candle(8, 0);
+        let other_epoch = closed_candle(7, 1);
+        let mut other_key = closed_candle(7, 0);
+        let other_interval = CandleInterval::from_label("5m").unwrap();
+        other_key.candle.key.interval = other_interval;
+        other_key.revision.key.interval = other_interval;
+
+        assert_ne!(base.message_id(), other_offset.message_id());
+        assert_ne!(base.message_id(), other_epoch.message_id());
+        assert_ne!(base.message_id(), other_key.message_id());
     }
 }

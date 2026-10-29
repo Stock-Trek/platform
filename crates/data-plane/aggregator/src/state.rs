@@ -20,7 +20,7 @@ use stock_trek_types::cex::cex_id::CexId;
 /// Bump this whenever the persisted shape changes in a way that cannot be read
 /// as the current state. Checkpoints with another version are ignored and the
 /// partition is rebuilt from archived raw events.
-pub const STATE_SCHEMA_VERSION: u32 = 2;
+pub const STATE_SCHEMA_VERSION: u32 = 3;
 
 /// Alias used by callers that describe the constant by its shorter name.
 pub const SCHEMA_VERSION: u32 = STATE_SCHEMA_VERSION;
@@ -197,6 +197,12 @@ impl IncompleteWindow {
 pub struct AggregatorState {
     /// Version of this serialized state.
     pub schema_version: u32,
+    /// Epoch of this state lineage.
+    ///
+    /// Every checkpoint restores the same epoch. A state rebuilt from archived
+    /// inputs must advance it so deterministic output ids from the previous
+    /// lineage cannot suppress the rebuilt outputs.
+    pub state_epoch: u64,
     /// Open candles keyed by exchange, trading pair, and interval.
     ///
     /// A key can hold more than one window while an allowed-lateness window is
@@ -226,6 +232,7 @@ impl AggregatorState {
     pub fn new() -> Self {
         Self {
             schema_version: STATE_SCHEMA_VERSION,
+            state_epoch: 0,
             open_candles: HashMap::new(),
             last_processed_sequence: None,
             watermark: None,
@@ -401,6 +408,7 @@ impl AggregatorState {
 impl PartialEq for AggregatorState {
     fn eq(&self, other: &Self) -> bool {
         self.schema_version == other.schema_version
+            && self.state_epoch == other.state_epoch
             && self.last_processed_sequence == other.last_processed_sequence
             && self.watermark == other.watermark
             && self.streams == other.streams
@@ -502,6 +510,7 @@ mod tests {
 
         assert_eq!(state.schema_version, STATE_SCHEMA_VERSION);
         assert!(state.is_schema_compatible());
+        assert_eq!(state.state_epoch, 0);
         assert!(state.open_candles.is_empty());
         assert_eq!(state.last_processed_sequence, None);
         assert_eq!(state.watermark, None);
