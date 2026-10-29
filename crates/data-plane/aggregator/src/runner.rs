@@ -157,6 +157,12 @@ pub type RebalanceSignal = QuiesceSignal;
 /// Alias used by rebalance coordinators.
 pub type RebalanceReceiver = QuiesceReceiver;
 
+#[derive(Debug, Clone)]
+struct CheckpointPosition {
+    source_stream: String,
+    next_sequence: u64,
+}
+
 /// Processes one partition's ordered inputs.
 ///
 /// The worker acquires a fenced writer lease, applies inputs through the pure
@@ -375,6 +381,9 @@ where
         let mut last_checkpoint_at = Instant::now();
         let shutdown = Runtime::shutdown_signal();
         tokio::pin!(shutdown);
+        let resume_position =
+            Self::resume_position(checkpoints, partition, replay_watermark, processor.state())
+                .await;
 
         loop {
             tokio::select! {
@@ -400,6 +409,7 @@ where
                         writer_id,
                         &mut pending,
                         last_record.as_ref(),
+                        resume_position.as_ref(),
                         dirty,
                         &mut last_checkpoint_at,
                     )
@@ -454,6 +464,7 @@ where
                                 writer_id,
                                 &mut pending,
                                 last_record.as_ref(),
+                                resume_position.as_ref(),
                                 dirty,
                                 &mut last_checkpoint_at,
                             )
@@ -478,6 +489,7 @@ where
                         writer_id,
                         &mut pending,
                         last_record.as_ref(),
+                        resume_position.as_ref(),
                         dirty,
                         &mut last_checkpoint_at,
                     )
@@ -505,6 +517,7 @@ where
                         writer_id,
                         &mut pending,
                         last_record.as_ref(),
+                        resume_position.as_ref(),
                         dirty,
                         &mut last_checkpoint_at,
                     )
@@ -525,6 +538,7 @@ where
                         writer_id,
                         &mut pending,
                         last_record.as_ref(),
+                        resume_position.as_ref(),
                         dirty,
                         &mut last_checkpoint_at,
                     )
@@ -534,6 +548,41 @@ where
             }
         }
         Ok(())
+    }
+
+    async fn resume_position(
+        checkpoints: &Arc<dyn StateStore>,
+        partition: PartitionId,
+        replay_watermark: Option<TimestampMilliseconds>,
+        state: &AggregatorState,
+    ) -> Option<CheckpointPosition> {
+        if replay_watermark.is_some() {
+            return None;
+        }
+        match checkpoints.load(partition).await {
+            Ok(Some(checkpoint))
+                if checkpoint.next_sequence > 0
+                    && !checkpoint.source_stream.is_empty()
+                    && checkpoint.state.last_processed_sequence
+                        == state.last_processed_sequence
+                    && checkpoint.state.watermark == state.watermark
+                    && checkpoint.state.state_epoch == state.state_epoch =>
+            {
+                Some(CheckpointPosition {
+                    source_stream: checkpoint.source_stream,
+                    next_sequence: checkpoint.next_sequence,
+                })
+            }
+            Ok(_) => None,
+            Err(error) => {
+                warn!(
+                    %error,
+                    partition = %partition,
+                    "failed to load checkpoint position for idle checkpoints"
+                );
+                None
+            }
+        }
     }
 
     async fn wait_for_quiesce(quiesce: Option<&mut QuiesceReceiver>) {
@@ -555,6 +604,7 @@ where
         writer_id: &str,
         pending: &mut Vec<SourceRecord>,
         last_record: Option<&SourceRecord>,
+        resume_position: Option<&CheckpointPosition>,
         dirty: bool,
         last_checkpoint_at: &mut Instant,
     ) -> BpResult<()> {
@@ -572,21 +622,40 @@ where
             return Ok(());
         }
 
-        let Some(record) = last_record else {
-            return Err(BpError::bad_value(
-                "aggregator checkpoint",
-                partition.to_string(),
-                "cannot checkpoint without a source record",
-            ));
-        };
-        let Some(checkpoint) =
-            CheckpointRecord::from_message(&record.message, partition, processor.state().clone())?
-        else {
-            return Err(BpError::bad_value(
-                "aggregator checkpoint",
-                partition.to_string(),
-                "source record has no JetStream sequence to checkpoint",
-            ));
+        let checkpoint = match last_record {
+            Some(record) => {
+                let Some(checkpoint) = CheckpointRecord::from_message(
+                    &record.message,
+                    partition,
+                    processor.state().clone(),
+                )?
+                else {
+                    return Err(BpError::bad_value(
+                        "aggregator checkpoint",
+                        partition.to_string(),
+                        "source record has no JetStream sequence to checkpoint",
+                    ));
+                };
+                checkpoint
+            }
+            None => {
+                let Some(position) = resume_position else {
+                    if pending.is_empty() {
+                        return Ok(());
+                    }
+                    return Err(BpError::bad_value(
+                        "aggregator checkpoint",
+                        partition.to_string(),
+                        "cannot checkpoint without a source record",
+                    ));
+                };
+                CheckpointRecord::new(
+                    partition,
+                    position.source_stream.clone(),
+                    position.next_sequence,
+                    processor.state().clone(),
+                )
+            }
         };
         if let Err(error) = checkpoints.save(&checkpoint.with_lease(lease)).await {
             AggregatorMetrics::record_checkpoint_failure(partition.get(), error.error_type());
@@ -1118,6 +1187,118 @@ mod tests {
         assert_eq!(checkpoint.next_sequence, 2);
         assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(61_000)));
         assert_eq!(checkpoint.state.open_candles_len(), 0);
+    }
+
+    #[tokio::test]
+    async fn idle_flush_after_restore_does_not_fail_without_a_source_record() {
+        let partition = PartitionId::new(0);
+        let signal = QuiesceSignal::new();
+        let trigger = signal.clone();
+        let source = SignalingSource {
+            records: Vec::new(),
+            signal: signal.clone(),
+            polls: Arc::new(AtomicUsize::new(0)),
+            acked: Arc::new(Mutex::new(0)),
+        };
+        let mut config = config();
+        config.watermark_idle_timeout = std::time::Duration::from_millis(10);
+        let mut restored_state = AggregatorState::new();
+        restored_state.advance_watermark(TimestampMilliseconds(61_000));
+        let checkpoints = Arc::new(InMemoryStateStore::new());
+        let runner = ProcessorRunner::new(config, source, FakeSink::default())
+            .with_checkpoint_store(checkpoints.clone(), partition)
+            .with_state(restored_state)
+            .with_quiesce_signal(signal);
+
+        let handle = tokio::spawn(async move { runner.run().await });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        trigger.quiesce();
+        tokio::time::timeout(std::time::Duration::from_secs(1), handle)
+            .await
+            .expect("idle flush should not stop the runner")
+            .expect("runner task should not panic")
+            .unwrap();
+
+        assert!(checkpoints.get(partition).is_none());
+    }
+
+    #[tokio::test]
+    async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
+        let partition = PartitionId::new(0);
+        let signal = QuiesceSignal::new();
+        let trigger = signal.clone();
+        let source = SignalingSource {
+            records: Vec::new(),
+            signal: signal.clone(),
+            polls: Arc::new(AtomicUsize::new(0)),
+            acked: Arc::new(Mutex::new(0)),
+        };
+        let mut restored_state = AggregatorState::new();
+        restored_state.advance_watermark(TimestampMilliseconds(61_000));
+        let checkpoints = Arc::new(InMemoryStateStore::new());
+        let restored_checkpoint =
+            CheckpointRecord::new(partition, "aggregator-shards", 42, restored_state.clone());
+        checkpoints.save(&restored_checkpoint).await.unwrap();
+        let mut config = config();
+        config.watermark_idle_timeout = std::time::Duration::from_millis(10);
+        let runner = ProcessorRunner::new(config, source, FakeSink::default())
+            .with_checkpoint_store(checkpoints.clone(), partition)
+            .with_state(restored_state)
+            .with_quiesce_signal(signal);
+
+        let handle = tokio::spawn(async move { runner.run().await });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        trigger.quiesce();
+        tokio::time::timeout(std::time::Duration::from_secs(1), handle)
+            .await
+            .expect("idle flush should not stop the runner")
+            .expect("runner task should not panic")
+            .unwrap();
+
+        let checkpoint = checkpoints.get(partition).unwrap();
+        assert_eq!(checkpoint.next_sequence, 42);
+        assert_eq!(checkpoint.source_stream, "aggregator-shards");
+        assert!(
+            checkpoint.watermark.unwrap() > TimestampMilliseconds(61_000),
+            "{checkpoint:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn idle_flush_after_archive_restore_does_not_reuse_a_stale_checkpoint_position() {
+        let partition = PartitionId::new(0);
+        let signal = QuiesceSignal::new();
+        let trigger = signal.clone();
+        let source = SignalingSource {
+            records: Vec::new(),
+            signal: signal.clone(),
+            polls: Arc::new(AtomicUsize::new(0)),
+            acked: Arc::new(Mutex::new(0)),
+        };
+        let mut restored_state = AggregatorState::new();
+        restored_state.advance_watermark(TimestampMilliseconds(61_000));
+        let checkpoints = Arc::new(InMemoryStateStore::new());
+        let stale_checkpoint =
+            CheckpointRecord::new(partition, "aggregator-shards", 99, AggregatorState::new());
+        checkpoints.save(&stale_checkpoint).await.unwrap();
+        let mut config = config();
+        config.watermark_idle_timeout = std::time::Duration::from_millis(10);
+        let runner = ProcessorRunner::new(config, source, FakeSink::default())
+            .with_checkpoint_store(checkpoints.clone(), partition)
+            .with_state(restored_state)
+            .with_replay_watermark(Some(TimestampMilliseconds(61_000)))
+            .with_quiesce_signal(signal);
+
+        let handle = tokio::spawn(async move { runner.run().await });
+        tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        trigger.quiesce();
+        tokio::time::timeout(std::time::Duration::from_secs(1), handle)
+            .await
+            .expect("idle flush should not stop the runner")
+            .expect("runner task should not panic")
+            .unwrap();
+
+        assert_eq!(checkpoints.get(partition).unwrap(), stale_checkpoint);
     }
 
     #[tokio::test]
