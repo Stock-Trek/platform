@@ -1,6 +1,7 @@
 use platform_market_data::{
     candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
     decoders::trade::Trade,
+    event::GapMarker,
 };
 use platform_metrics::descriptions::{DROP_REASON_OUT_OF_ORDER, STAGE_AGGREGATOR};
 use platform_metrics::market_data::MarketDataMetrics;
@@ -92,6 +93,16 @@ impl CandleAggregator {
         }
 
         update
+    }
+
+    /// Applies a gap marker by closing every candle window that ended before
+    /// the gap was observed.
+    ///
+    /// Gap markers prove that the ingester skipped a sequence range. Any candle
+    /// whose window finished before the observed event is complete even though
+    /// its trades may never arrive; the current window is left open.
+    pub fn apply_gap(&mut self, gap: &GapMarker) -> Vec<ClosedCandle> {
+        self.flush_closed_at_or_before(gap.detected_at)
     }
 
     /// Closes every open candle whose window ends at or before `timestamp`.
@@ -204,6 +215,26 @@ mod tests {
         assert_eq!(closed.len(), 1);
         assert!(closed[0].candle.market_candle.is_candle_closed);
         assert_eq!(closed[0].revision, 0);
+    }
+
+    #[test]
+    fn a_gap_closes_windows_that_ended_before_it_was_observed() {
+        let mut aggregator = CandleAggregator::new(vec![one_minute()]);
+        aggregator.apply_trade(&trade("100", 61_000));
+        let gap = GapMarker {
+            exchange: CexId::Binance,
+            stream: "btcusdt@trade".to_string(),
+            previous_sequence: 1,
+            observed_sequence: 3,
+            missing_from: 2,
+            missing_to: 2,
+            detected_at: TimestampMilliseconds(120_000),
+        };
+
+        let closed = aggregator.apply_gap(&gap);
+
+        assert_eq!(closed.len(), 1);
+        assert!(closed[0].candle.market_candle.is_candle_closed);
     }
 
     #[test]

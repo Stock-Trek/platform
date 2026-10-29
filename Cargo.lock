@@ -4233,6 +4233,8 @@ dependencies = [
  "platform-runtime",
  "platform-types",
  "rust_decimal",
+ "serde",
+ "serde_json",
  "stock-trek-types",
  "tokio",
  "tracing",

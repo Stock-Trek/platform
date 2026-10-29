@@ -45,6 +45,33 @@ impl JetStreamConsumer {
         filter_subject: &str,
         durable: &str,
     ) -> BpResult<Self> {
+        Self::connect_from(
+            url,
+            name,
+            stream_subject_prefix,
+            filter_subject,
+            durable,
+            None,
+        )
+        .await
+    }
+
+    /// Connects a durable consumer that resumes from `start_sequence` when it
+    /// is set.
+    ///
+    /// `DeliverPolicy::ByStartSequence` is inclusive, so callers normally pass
+    /// the sequence immediately after their last checkpointed message. Passing
+    /// `None` keeps the original `DeliverPolicy::All` behaviour. The consumer
+    /// config is part of the durable's identity in JetStream; changing the start
+    /// sequence recreates the consumer at the requested position.
+    pub async fn connect_from(
+        url: &str,
+        name: &str,
+        stream_subject_prefix: &str,
+        filter_subject: &str,
+        durable: &str,
+        start_sequence: Option<u64>,
+    ) -> BpResult<Self> {
         let address = NatsAddress::parse(url)?;
         NatsSubject::validate_named("filter subject", filter_subject)?;
         let stream = JetStream::stream_name(stream_subject_prefix);
@@ -67,7 +94,7 @@ impl JetStreamConsumer {
                 pull::Config {
                     durable_name: Some(durable.to_string()),
                     filter_subject: filter_subject.to_string(),
-                    deliver_policy: DeliverPolicy::All,
+                    deliver_policy: Self::deliver_policy(start_sequence),
                     ack_policy: AckPolicy::Explicit,
                     ack_wait: ACK_WAIT,
                     max_deliver: -1,
@@ -85,6 +112,40 @@ impl JetStreamConsumer {
             durable: durable.to_string(),
             filter: filter_subject.to_string(),
         })
+    }
+
+    /// Builds the delivery policy used when a consumer is created.
+    ///
+    /// Checkpoints store the last processed sequence, while JetStream's
+    /// `ByStartSequence` policy is inclusive, so callers pass the next sequence.
+    pub fn deliver_policy(start_sequence: Option<u64>) -> DeliverPolicy {
+        match start_sequence {
+            Some(start_sequence) if start_sequence > 0 => {
+                DeliverPolicy::ByStartSequence { start_sequence }
+            }
+            _ => DeliverPolicy::All,
+        }
+    }
+
+    /// Alias for [`Self::connect_from`] used by services that describe the
+    /// argument as a resume sequence.
+    pub async fn connect_with_start_sequence(
+        url: &str,
+        name: &str,
+        stream_subject_prefix: &str,
+        filter_subject: &str,
+        durable: &str,
+        start_sequence: Option<u64>,
+    ) -> BpResult<Self> {
+        Self::connect_from(
+            url,
+            name,
+            stream_subject_prefix,
+            filter_subject,
+            durable,
+            start_sequence,
+        )
+        .await
     }
 
     pub fn stream(&self) -> &str {
@@ -122,7 +183,7 @@ impl JetStreamConsumer {
             let message = message.map_err(|error| {
                 JetStream::protocol_error("failed to read JetStream message", error)
             })?;
-            messages.push(Message::from(message.message));
+            messages.push(Message::from(message));
         }
         Ok(messages)
     }
@@ -174,5 +235,27 @@ impl JetStreamConsumer {
             .fetch_retrying(FETCH_BATCH, FETCH_WINDOW, RETRY_BACKOFF)
             .await;
         messages.into_iter().next()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn resume_policy_starts_at_the_requested_sequence() {
+        assert_eq!(
+            JetStreamConsumer::deliver_policy(Some(42)),
+            DeliverPolicy::ByStartSequence { start_sequence: 42 }
+        );
+    }
+
+    #[test]
+    fn missing_sequence_starts_from_the_beginning() {
+        assert_eq!(JetStreamConsumer::deliver_policy(None), DeliverPolicy::All);
+        assert_eq!(
+            JetStreamConsumer::deliver_policy(Some(0)),
+            DeliverPolicy::All
+        );
     }
 }
