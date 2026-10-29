@@ -1,5 +1,6 @@
 mod compactor;
 mod config;
+mod content_id;
 mod partition_output;
 mod runner;
 mod source;

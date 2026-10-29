@@ -1,4 +1,7 @@
-use crate::spill::{PartitionItem, PartitionRecords};
+use crate::{
+    content_id::ContentId,
+    spill::{PartitionItem, PartitionRecords},
+};
 use platform_archive::{ArchiveBatch, ArchiveKind, ArchiveParquetWriter};
 use platform_errors::{BpError, BpResult};
 use std::{
@@ -12,9 +15,27 @@ pub(crate) struct PartitionOutput {
     pub(crate) partition: String,
     pub(crate) path: PathBuf,
     pub(crate) records: usize,
+    pub(crate) content_id: u64,
+    pub(crate) length: u64,
+    content: ContentId,
 }
 
 impl PartitionOutput {
+    fn finish(mut self, writer: ArchiveParquetWriter<File>) -> BpResult<Self> {
+        writer.close()?;
+        self.content_id = self.content.value();
+        self.length = std::fs::metadata(&self.path)
+            .map_err(|error| {
+                BpError::io(
+                    "read compacted parquet file size",
+                    self.path.display().to_string(),
+                    error,
+                )
+            })?
+            .len();
+        Ok(self)
+    }
+
     pub(crate) fn write_all(
         kind: ArchiveKind,
         mut records: PartitionRecords,
@@ -37,8 +58,7 @@ impl PartitionOutput {
                         writer.write(&buffer)?;
                         buffer.clear();
                     }
-                    writer.close()?;
-                    outputs.push(output);
+                    outputs.push(output.finish(writer)?);
                 }
 
                 let path = directory.join(format!("compacted-{}.parquet", outputs.len()));
@@ -54,14 +74,18 @@ impl PartitionOutput {
                         partition,
                         path,
                         records: 0,
+                        content_id: 0,
+                        length: 0,
+                        content: ContentId::new(),
                     },
                     ArchiveParquetWriter::try_new(kind, file)?,
                 ));
             }
 
-            buffer.push(record)?;
             if let Some((output, writer)) = current.as_mut() {
+                output.content.update(&record)?;
                 output.records += 1;
+                buffer.push(record)?;
                 if buffer.len() >= OUTPUT_BATCH_SIZE {
                     writer.write(&buffer)?;
                     buffer.clear();
@@ -73,8 +97,7 @@ impl PartitionOutput {
             if !buffer.is_empty() {
                 writer.write(&buffer)?;
             }
-            writer.close()?;
-            outputs.push(output);
+            outputs.push(output.finish(writer)?);
         }
 
         Ok(outputs)

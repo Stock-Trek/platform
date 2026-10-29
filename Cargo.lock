@@ -4370,6 +4370,7 @@ dependencies = [
  "platform-market-data",
  "platform-runtime",
  "platform-types",
+ "serde_json",
  "stock-trek-types",
  "tempfile",
  "tokio",
