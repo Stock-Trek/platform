@@ -11,7 +11,7 @@ use platform_archive::{
 };
 use platform_errors::{BpError, BpResult, DataError};
 use std::{fs::File, path::Path, sync::Arc};
-use tokio::io::{AsyncReadExt, AsyncWriteExt, copy};
+use tokio::io::{AsyncWriteExt, copy};
 use tracing::{info, warn};
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -118,20 +118,12 @@ impl Compactor {
         let table = ArchiveIcebergTable::compacted(batch.kind);
         let mut data_files = Vec::with_capacity(outputs.len());
         for output in outputs {
-            let key = self
-                .output_key(batch, &output.partition, &output.path)
-                .await?;
-            let size = tokio::fs::metadata(&output.path).await.map_err(|error| {
-                BpError::io(
-                    "read compacted parquet file size",
-                    output.path.display().to_string(),
-                    error,
-                )
-            })?;
+            let key =
+                self.output_key(batch, &output.partition, output.content_id, output.length)?;
             self.write_object_from_path(&key, &output.path).await?;
             data_files.push(IcebergDataFile::new(
                 format!("s3://{}/{key}", self.bucket),
-                i64::try_from(size.len()).unwrap_or(i64::MAX),
+                i64::try_from(output.length).unwrap_or(i64::MAX),
                 i64::try_from(output.records).unwrap_or(i64::MAX),
             ));
             info!(
@@ -202,18 +194,18 @@ impl Compactor {
         Ok(())
     }
 
-    async fn output_key(
+    fn output_key(
         &self,
         batch: &SourceBatch,
         partition: &str,
-        path: &Path,
+        content_id: u64,
+        length: u64,
     ) -> BpResult<String> {
         let hour = ArchiveHour::from_timestamp(batch.bucket_start).ok_or(BpError::Data(
             DataError::DateTimeOutOfRange {
                 operation: "build compacted object key",
             },
         ))?;
-        let (content_id, length) = file_content_id(path).await?;
         Ok(ArchivePath::join(
             &self.output_prefix,
             &format!(
@@ -224,61 +216,9 @@ impl Compactor {
     }
 }
 
-async fn file_content_id(path: &Path) -> BpResult<(u64, u64)> {
-    let mut file = tokio::fs::File::open(path).await.map_err(|error| {
-        BpError::io(
-            "open compacted parquet file",
-            path.display().to_string(),
-            error,
-        )
-    })?;
-    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-    let mut length = 0_u64;
-    let mut buffer = [0_u8; 64 * 1024];
-    loop {
-        let read = file.read(&mut buffer).await.map_err(|error| {
-            BpError::io(
-                "read compacted parquet file",
-                path.display().to_string(),
-                error,
-            )
-        })?;
-        if read == 0 {
-            break;
-        }
-        length = length.saturating_add(read as u64);
-        for byte in &buffer[..read] {
-            hash ^= u64::from(*byte);
-            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-        }
-    }
-    Ok((hash, length))
-}
-
 #[async_trait]
 impl BatchCompactor for Compactor {
     async fn compact(&self, batch: &SourceBatch) -> BpResult<CompactionStats> {
         Compactor::compact(self, batch).await
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[tokio::test]
-    async fn compacted_file_ids_are_stable() {
-        let dir = tempfile::tempdir().unwrap();
-        let first = dir.path().join("first.parquet");
-        let second = dir.path().join("second.parquet");
-        let different = dir.path().join("different.parquet");
-        tokio::fs::write(&first, b"same bytes").await.unwrap();
-        tokio::fs::write(&second, b"same bytes").await.unwrap();
-        tokio::fs::write(&different, b"other bytes").await.unwrap();
-
-        let id = file_content_id(&first).await.unwrap();
-        assert_eq!(id, file_content_id(&second).await.unwrap());
-        assert_eq!(id.1, 10);
-        assert_ne!(id, file_content_id(&different).await.unwrap());
     }
 }
