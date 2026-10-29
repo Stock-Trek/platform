@@ -17,9 +17,22 @@ impl Runtime {
     /// Resolves once the process receives a shutdown signal.
     ///
     /// Service loops select on this future so every service logs and handles
-    /// shutdown in the same way.
+    /// shutdown in the same way. On Unix this listens for both `SIGINT`
+    /// (Ctrl-C) and `SIGTERM`, the signal containers use to stop a process.
     pub async fn shutdown_signal() -> BpResult<()> {
-        tokio::signal::ctrl_c().await?;
+        #[cfg(unix)]
+        {
+            let mut terminate =
+                tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())?;
+            tokio::select! {
+                result = tokio::signal::ctrl_c() => result?,
+                _ = terminate.recv() => {}
+            }
+        }
+        #[cfg(not(unix))]
+        {
+            tokio::signal::ctrl_c().await?;
+        }
         info!("shutdown requested");
         Ok(())
     }
