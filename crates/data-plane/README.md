@@ -28,7 +28,71 @@ There is currently no retention horizon or eviction path for `AggregatorState::c
 
 This is not because an existing prune call is missing by mistake. `AGGREGATOR_ALLOWED_LATENESS_MS` controls when a window closes and how a gap affects it; it does not bound how late a later correction may be. The processor accepts corrections for any older window, and event time is never advanced to the wall clock, so the current semantics provide no safe age-based cutoff at which a closed candle can be removed. Retaining the full candle is intentional for correction correctness.
 
-The unbounded growth itself is an unresolved production limitation, not a deliberate steady-state policy. A future retention horizon must define the oldest window that can still be corrected, evict older candles deterministically, and apply the same rule during replay and archive rebuilds so state and output revisions remain reproducible. Until such a horizon exists, long-running shards will grow in memory, checkpoint payload size, restore time, and gap-scan cost with every candle ever produced.
+The unbounded growth itself is an unresolved production limitation, not a deliberate steady-state policy. Any bounded strategy must define the oldest window that can still be corrected, evict older candles deterministically, and apply the same rule during replay and archive rebuilds so state and output revisions remain reproducible. Until such a strategy is configured, long-running shards will grow in memory, checkpoint payload size, restore time, and gap-scan cost with every candle ever produced.
+
+### Bounded-memory retention options
+
+No bounded strategy can keep accepting corrections of arbitrary depth without retaining enough information somewhere to reconstruct the original full candle. Each option below therefore chooses what remains in hot shard state, what is kept elsewhere, and what happens when an input falls outside the retained range. Eviction must be driven by event time and input order, not wall-clock time or cache access order; otherwise live processing, checkpoint restore, and archive rebuilds will produce different revisions.
+
+#### Event-time retention horizon
+
+Retain a closed candle while its window is inside a configured event-time horizon of the shard watermark, for example until its end time is at or before `watermark - horizon`. Evict older candles in the same deterministic step that closes and prunes windows. The horizon must be much larger than `AGGREGATOR_ALLOWED_LATENESS_MS`, because allowed lateness controls when a window closes rather than how late a correction may arrive.
+
+- **Memory bound:** For a fixed set of candle keys, state is bounded by the number of keys, intervals, and windows inside the horizon. New trading pairs can still increase the key count, so this is not an absolute cap unless it is combined with a global item or byte limit. Evicted candles also leave the checkpoint and gap scan.
+- **Correction correctness and reach:** Full correction and gap propagation are preserved for every candle inside the horizon. Beyond it, a late trade becomes a partial correction and a gap cannot mark the published candle incomplete. Reach is exactly the configured event-time distance behind the watermark, independent of wall-clock time.
+- **Pros:** Predictable in time, simple to reason about, tunable to the longest expected backfill or gap delay, and directly reduces checkpoint size, restore time, and gap-scan cost.
+- **Cons:** A long horizon chosen to maximize correctness can still exhaust memory at high cardinality or throughput; it needs a companion policy for inputs beyond the horizon; and a stalled event-time watermark must not prevent old corrections from being evicted immediately.
+
+#### Per-key window count cap
+
+Retain only the newest N closed windows for each candle key and evict the lowest-start window when the cap is exceeded.
+
+- **Memory bound:** Bounded by the number of candle keys times N. It is a hard per-key bound but not a hard shard bound, because new keys can keep appearing. It controls a single busy key without allowing that key to consume the whole shard.
+- **Correction correctness and reach:** Full corrections and gap propagation are preserved for the newest N windows of each key. Coverage is N times the interval for that key, so the same N gives very different event-time reach for a 1-second and a daily candle. Older candles fall back to partial-correction or no-gap-propagation behaviour.
+- **Pros:** Simple, deterministic, robust against a single hot key, and requires no time-horizon decision.
+- **Cons:** Does not prevent OOM when the number of keys grows; coverage differs by interval; and cold keys retain more absolute history than necessary while hot keys can still be cut off inside a useful time range.
+
+#### Global count or byte cap
+
+Cap the total number of retained candles, or their serialized size, per shard. Evict the oldest candles by event-time end or start with a stable key tie-break when the cap is exceeded; optionally reserve a small per-key floor.
+
+- **Memory bound:** A hard shard-level bound independent of candle cardinality and traffic, provided the cap is enforced before the next checkpoint and the overhead per candle remains approximately constant.
+- **Correction correctness and reach:** Full correction and gap propagation apply only to candles still inside the cap. The event-time reach is variable: busy periods or many new keys cause older candles to be evicted sooner. Beyond the cap, corrections are partial or gaps cannot be propagated.
+- **Pros:** The most direct protection against OOM and oversized checkpoints; deterministic if eviction is ordered from the event log; works even when key cardinality is unknown.
+- **Cons:** The retained time range is not predictable and shrinks under load; a naive global order can starve quiet keys unless a per-key floor is added; and a floor weakens the hard bound when key cardinality grows.
+
+#### Hot state plus a durable cold store
+
+Keep only a bounded recent set of closed candles in the shard's hot state. Move older candles to a durable keyed store, such as an indexed database or object store, and fetch, update, and write back a candle when a late trade or gap refers to it. The checkpoint can contain the hot state plus a cold-store version or watermark rather than every historical candle.
+
+- **Memory bound:** The process heap and checkpoint are bounded by the hot tier and cache, not by total history. The cold store grows with its own retention policy; if it is local disk, this avoids OOM but can still exhaust disk, whereas an object store with a longer retention horizon avoids both heap and checkpoint growth.
+- **Correction correctness and reach:** Full correction and gap propagation are preserved for every candle still in the cold store. Reach is the cold store's retention, which can be much longer than the hot horizon, up to the archive or storage lifetime.
+- **Pros:** The best balance of bounded memory and long correction reach; keeps checkpoint and gap scans small; can reuse an existing durable candle index or archive.
+- **Cons:** Adds another consistency boundary: cold-store writes, checkpoint fencing, and publication must be ordered so a restored writer cannot publish from stale state. It also adds I/O latency, operational complexity, and storage cost, and replay or rebuild must reproduce the same tiering decisions.
+
+#### Reconstruct from the archive on demand
+
+Evict old candles completely. When a late trade or gap refers to a missing window, read the archived raw events for that window, replay them through the same processor to reconstruct the full candle, then apply the new input and publish the revision. This can be synchronous or done by a background repair worker.
+
+- **Memory bound:** The hot state remains bounded by the chosen horizon or cap; each reconstruction needs only one window's working set. The archive may be effectively unbounded without affecting process memory or checkpoint size.
+- **Correction correctness and reach:** Correction and gap propagation can be as complete as the archive, so reach is limited by raw history and the archive's retention rather than by shard memory. The archive must also contain the gap or incompleteness evidence needed to reconstruct the candle's completeness, not just its trade data.
+- **Pros:** No new long-lived candle store is required, reuses the existing archive, and can handle corrections arbitrarily far back while keeping hot-path memory bounded.
+- **Cons:** Random archive lookups and replay are expensive, so synchronous correction on the hot path may be too slow; an index is needed to find a window efficiently. Correctness under concurrent compaction, the compacted/raw handoff, repeated corrections, and deterministic revision ordering is complex.
+
+#### Hard maximum correction age
+
+Retain candles to a configured horizon or cap, and explicitly reject, quarantine, or annotate inputs older than the maximum correction age instead of publishing a partial correction. The rejected input is routed to a dead-letter stream or metric rather than being silently folded into a new candle containing only its own trades.
+
+- **Memory bound:** Same as the retention horizon or cap it accompanies; the difference is the defined behaviour beyond the limit rather than the bound itself.
+- **Correction correctness and reach:** Full within the configured maximum age. Beyond it, the system intentionally does not correct the older candle and reports the loss rather than claiming a complete revision. Reach is exactly the configured maximum age.
+- **Pros:** Makes the guarantee explicit, prevents misleading partial corrections, and gives operators a signal that backfill or source lag exceeded the contract.
+- **Cons:** Discards data that may still be valid, requires a quarantine or alerting path, and does not provide deep historical corrections on its own.
+
+#### Techniques that do not bound retention by themselves
+
+Compressing the serialized candle list or omitting `closed_candles` from checkpoints reduces payload size but does not stop in-memory growth; omitting it also means a restored shard must replay history to recover corrections. Increasing shard count divides the history but does not stop the aggregate or per-shard long-run growth. Those measures can complement a bound, but they are not substitutes for an eviction policy.
+
+A robust production combination is a deterministic event-time horizon or global byte cap for hot state, a durable cold tier or archive reconstruction for older corrections, and an explicit maximum correction age for anything beyond the deepest tier. That provides a hard OOM bound, full corrections within the hot horizon, and a defined, observable degradation outside it. If no cold tier is available, a horizon plus global cap plus explicit quarantine is safer than allowing unbounded state or silently publishing partial corrections.
 
 ### Scaling contract
 
