@@ -14,6 +14,7 @@ pub mod ingester;
 pub mod io;
 #[cfg(feature = "lambda")]
 pub mod lambda;
+pub mod nats;
 pub mod rate_limit;
 pub mod retryability;
 pub mod secrets;
@@ -40,6 +41,7 @@ pub use ingester::IngesterError;
 pub use io::IoError;
 #[cfg(feature = "lambda")]
 pub use lambda::LambdaError;
+pub use nats::NatsError;
 pub use rate_limit::RateLimitError;
 pub use retryability::Retryability;
 pub use secrets::SecretsError;

@@ -1,5 +1,5 @@
 use async_nats::{Client, ConnectOptions};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BpError, BpResult, NatsError};
 use url::Url;
 
 const DEFAULT_NATS_PORT: u16 = 4222;
@@ -58,7 +58,7 @@ impl NatsAddress {
                 .user_and_password(username.clone(), self.password.clone().unwrap_or_default());
         }
         options.connect(self.server_url()).await.map_err(|error| {
-            BpError::Ingester(platform_errors::IngesterError::protocol(format!(
+            BpError::Nats(NatsError::protocol(format!(
                 "failed to connect to NATS at {}: {error}",
                 self.server_url()
             )))

@@ -1,7 +1,7 @@
 //! JetStream naming and error helpers shared by the publisher, consumer, and KV store.
 
 use async_nats::jetstream::stream;
-use platform_errors::{BpError, IngesterError};
+use platform_errors::{BpError, NatsError};
 use std::fmt::Display;
 use std::time::Duration;
 
@@ -85,7 +85,7 @@ impl JetStream {
     }
 
     pub(crate) fn protocol_error(context: &str, error: impl Display) -> BpError {
-        BpError::Ingester(IngesterError::protocol(format!("{context}: {error}")))
+        BpError::Nats(NatsError::protocol(format!("{context}: {error}")))
     }
 }
 
@@ -121,6 +121,14 @@ mod tests {
             "market_candles_open"
         );
         assert_eq!(JetStream::kv_bucket_name("market-events"), "market-events");
+    }
+
+    #[test]
+    fn protocol_errors_are_retryable_nats_errors() {
+        let error = JetStream::protocol_error("test", "connection lost");
+
+        assert!(matches!(error, BpError::Nats(NatsError::Protocol { .. })));
+        assert!(error.retryability().is_retryable());
     }
 
     #[test]
