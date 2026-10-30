@@ -8,8 +8,8 @@ mod retry;
 mod runner;
 
 use crate::{
-    binance::{EXCHANGE_API_KEY_SECRET, fetcher::BinanceGapFetcher},
-    config::BackfillerConfig,
+    binance::fetcher::BinanceGapFetcher,
+    config::{BackfillerConfig, EXCHANGE_API_KEY_SECRET},
     fetcher::FetcherRegistry,
     gap_marker_source::NatsGapMarkerSource,
     retry::NatsGapRetryStore,
