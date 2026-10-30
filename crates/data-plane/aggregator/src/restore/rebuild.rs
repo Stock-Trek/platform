@@ -265,6 +265,12 @@ pub async fn rebuild_state_from_archive(
 
 /// Replays all archived events for one partition into fresh keyed state with
 /// the configured schema version.
+///
+/// Archive recovery continues the highest state epoch observed on the replayed
+/// events instead of starting a new output lineage. Replaying the same archived
+/// inputs therefore reproduces the same deterministic output ids; callers that
+/// intentionally regenerate outputs under a new lineage, such as the rebuilder,
+/// must assign a fresh epoch themselves.
 pub async fn rebuild_state_from_archive_with_schema(
     archive: &mut dyn ArchivedEventSource,
     partition: PartitionId,
@@ -303,6 +309,10 @@ pub async fn rebuild_state_from_archive_with_schema(
         // state, deduplication ranges, gaps, and event-time watermarks. Events
         // with no trades for this partition must not move its watermark.
         if !trades.is_empty() {
+            // Recovery continues the lineage that produced the archived inputs,
+            // so the same processing step produces the same deterministic
+            // revision ids. A new epoch is reserved for an explicit output
+            // rebuild rather than ordinary state recovery.
             let state = processor.state_mut();
             state.state_epoch = state.state_epoch.max(archived.state_epoch);
             let _ = processor.apply_event(event, &trades);
