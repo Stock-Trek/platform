@@ -3,7 +3,7 @@
 use crate::{NatsAddress, NatsSubject, jetstream::JetStream};
 use async_nats::{
     HeaderMap,
-    jetstream::{self, Context, stream},
+    jetstream::{self, Context},
 };
 use async_trait::async_trait;
 use platform_errors::BpResult;
@@ -92,12 +92,7 @@ impl NatsPublisher {
 
         let context = self.context().await?;
         let result = context
-            .get_or_create_stream(stream::Config {
-                name: stream.clone(),
-                subjects: vec![format!("{subject_prefix}.>")],
-                storage: stream::StorageType::File,
-                ..Default::default()
-            })
+            .get_or_create_stream(JetStream::stream_config(subject_prefix))
             .await
             .map(|_| ())
             .map_err(|error| JetStream::protocol_error("failed to ensure JetStream stream", error));

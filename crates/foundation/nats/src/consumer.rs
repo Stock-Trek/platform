@@ -10,7 +10,6 @@ use async_nats::{
     jetstream::{
         self,
         consumer::{AckPolicy, DeliverPolicy, pull},
-        stream,
     },
 };
 use futures::StreamExt;
@@ -127,12 +126,7 @@ impl JetStreamConsumer {
         let client = address.connect(name).await?;
         let context = jetstream::new(client.clone());
         let stream_handle = context
-            .get_or_create_stream(stream::Config {
-                name: stream.clone(),
-                subjects: vec![format!("{stream_subject_prefix}.>")],
-                storage: stream::StorageType::File,
-                ..Default::default()
-            })
+            .get_or_create_stream(JetStream::stream_config(stream_subject_prefix))
             .await
             .map_err(|error| {
                 JetStream::protocol_error("failed to ensure JetStream stream", error)
