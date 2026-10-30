@@ -1,6 +1,7 @@
 use crate::partition::{PartitionId, all_partitions};
 use crate::processor::ProcessorConfig;
 use crate::state::STATE_SCHEMA_VERSION;
+use platform_archive::RoutingBucket;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::CandleInterval;
@@ -249,6 +250,15 @@ impl AggregatorConfig {
         };
         let shard_count =
             Config::optional_positive_usize(vars, AGGREGATOR_SHARD_COUNT, DEFAULT_SHARD_COUNT)?;
+        if shard_count as u64 > RoutingBucket::COUNT {
+            return Err(BpError::config_invalid(
+                AGGREGATOR_SHARD_COUNT,
+                format!(
+                    "must not exceed the archive routing bucket count ({})",
+                    RoutingBucket::COUNT
+                ),
+            ));
+        }
         let shard_index = vars.optional_parsed(AGGREGATOR_SHARD_INDEX)?;
         if let Some(shard_index) = shard_index
             && shard_index >= shard_count
@@ -409,6 +419,20 @@ mod tests {
     fn gap_prefix_is_derived_from_root_and_category_prefixes() {
         assert_eq!(default_gap_subject_prefix("market.events"), "market.gaps");
         assert_eq!(default_gap_subject_prefix("market"), "market.gaps");
+    }
+
+    #[test]
+    fn shard_count_must_not_exceed_the_routing_bucket_count() {
+        let mut values = base_vars();
+        values.push((AGGREGATOR_SHARD_COUNT, "65537"));
+
+        assert!(AggregatorConfig::from_vars(&vars(&values)).is_err());
+
+        let mut values = base_vars();
+        values.push((AGGREGATOR_SHARD_COUNT, "65536"));
+        let config = AggregatorConfig::from_vars(&vars(&values)).unwrap();
+
+        assert_eq!(config.shard_count, 65_536);
     }
 
     #[test]
