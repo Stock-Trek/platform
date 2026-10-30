@@ -67,8 +67,12 @@ impl MissingEventFetcher for BinanceGapFetcher {
             }
             MarketStreamKind::Depth => source.fetch_depth(&stream.symbol).await,
             MarketStreamKind::BookTicker => {
+                // The REST book-ticker endpoint only returns the current
+                // snapshot and has no update id. Stamp it with the sequence
+                // that exposed the gap so it supersedes the whole missing
+                // range instead of being treated as one historical event.
                 source
-                    .fetch_book_ticker(&stream.symbol, gap.missing_to)
+                    .fetch_book_ticker(&stream.symbol, gap.observed_sequence)
                     .await
             }
             MarketStreamKind::Kline(interval) => {
