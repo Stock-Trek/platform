@@ -20,6 +20,16 @@ Each shard writer keeps the open candles up to date, sends updated open candles 
 
 Idle flushing only closes windows that are already expired at the current event-time watermark. It never advances event time to the wall clock, so backfilled trades for older windows still find and revise the retained full closed candle instead of creating a partial correction candle.
 
+### Closed-candle retention
+
+A closed candle is retained in shard state after it is published so that later inputs can still use the original full candle. A late or backfilled trade revises the retained candle and publishes a new deterministic revision, while a gap marker can mark it incomplete. If the candle had already been discarded, the same input would either create a partial correction candle with only the newly arrived trades or fail to propagate the gap's incompleteness to the published closed candle.
+
+There is currently no retention horizon or eviction path for `AggregatorState::closed_candles`. `retain_closed_candle` adds or replaces a candle, but `prune_closed_windows` intentionally prunes only `known_gaps` and `incomplete_windows`; it does not remove closed candles. Consequently every processed window remains in memory, is serialized into every checkpoint, participates in state equality, and is scanned when a gap looks for affected windows. Archive rebuilds replay the same processor and therefore accumulate every historical candle in the rebuilt state too.
+
+This is not because an existing prune call is missing by mistake. `AGGREGATOR_ALLOWED_LATENESS_MS` controls when a window closes and how a gap affects it; it does not bound how late a later correction may be. The processor accepts corrections for any older window, and event time is never advanced to the wall clock, so the current semantics provide no safe age-based cutoff at which a closed candle can be removed. Retaining the full candle is intentional for correction correctness.
+
+The unbounded growth itself is an unresolved production limitation, not a deliberate steady-state policy. A future retention horizon must define the oldest window that can still be corrected, evict older candles deterministically, and apply the same rule during replay and archive rebuilds so state and output revisions remain reproducible. Until such a horizon exists, long-running shards will grow in memory, checkpoint payload size, restore time, and gap-scan cost with every candle ever produced.
+
 ### Scaling contract
 
 The aggregator is horizontally scalable by shard, not by sharing a shard between writers. Candle ownership is determined by `(exchange, trading pair)`, so every candle key has exactly one writer for a given shard count. Changing `AGGREGATOR_SHARD_COUNT` changes that mapping and requires a rebuild rather than an in-place rolling change.
