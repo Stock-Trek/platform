@@ -1,5 +1,6 @@
 //! Stable key-to-partition assignment for the aggregator shard stream.
 
+use platform_archive::{RoutingBucket, RoutingKey};
 use platform_market_data::candle::CandleKey;
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -42,18 +43,22 @@ impl fmt::Display for PartitionId {
 
 /// Returns the partition that owns `(exchange, trading_pair)`.
 ///
-/// The hash is a small, dependency-free FNV-1a implementation over the stable
-/// display strings. It is deterministic across processes and releases, which is
-/// required for every replica to build the same routing table.
+/// The key is first assigned to a bucket in the archive's fixed virtual hash
+/// space, then that bucket is assigned to the active partition. Increasing the
+/// partition count only re-distributes whole archive buckets; it never splits
+/// one bucket across partitions.
 pub fn partition_for(
     exchange: CexId,
     trading_pair: TradingPair,
     partition_count: usize,
 ) -> PartitionId {
     debug_assert!(partition_count > 0, "partition count must be positive");
-    let partition_count = partition_count.max(1);
-    let key = format!("{exchange}.{}.{}", trading_pair.base, trading_pair.quote);
-    PartitionId::new((fnv1a_64(key.as_bytes()) % partition_count as u64) as u32)
+    debug_assert!(
+        partition_count as u64 <= RoutingBucket::COUNT,
+        "partition count must not exceed the fixed archive bucket count"
+    );
+    let bucket = RoutingKey::for_pair(exchange, &trading_pair).bucket();
+    PartitionId::new(bucket.partition_index(partition_count))
 }
 
 /// Returns the partition that owns `key`.
@@ -69,15 +74,6 @@ pub fn all_partitions(partition_count: usize) -> Vec<PartitionId> {
     (0..partition_count)
         .map(|id| PartitionId::new(id as u32))
         .collect()
-}
-
-fn fnv1a_64(bytes: &[u8]) -> u64 {
-    const OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0000_0100_0000_01b3;
-
-    bytes.iter().fold(OFFSET_BASIS, |hash, byte| {
-        (hash ^ u64::from(*byte)).wrapping_mul(PRIME)
-    })
 }
 
 #[cfg(test)]
@@ -109,6 +105,18 @@ mod tests {
 
         assert!(bitcoin.get() < 16);
         assert!(ethereum.get() < 16);
+    }
+
+    #[test]
+    fn partitions_follow_the_fixed_archive_buckets() {
+        let bucket = RoutingKey::for_pair(CexId::Binance, &pair()).bucket();
+
+        for partition_count in [1, 2, 8, 16, 100] {
+            assert_eq!(
+                partition_for(CexId::Binance, pair(), partition_count),
+                PartitionId::new(bucket.partition_index(partition_count))
+            );
+        }
     }
 
     #[test]

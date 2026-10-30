@@ -133,7 +133,8 @@ fn parquet_files_carry_iceberg_field_ids() {
             Some("4"),
             Some("5"),
             Some("6"),
-            Some("7")
+            Some("7"),
+            Some("8")
         ]
     );
 }
@@ -215,6 +216,7 @@ fn candle_schema_exposes_revision_provenance() {
             ("revision_id", "20".to_string()),
             ("revision", "21".to_string()),
             ("is_complete", "22".to_string()),
+            ("routing_key", "23".to_string()),
         ]
     );
 }

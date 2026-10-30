@@ -21,6 +21,7 @@ impl ArchiveBatch {
                 Self::field(5, "received_at", DataType::Int64, false),
                 Self::field(6, "payload", DataType::Utf8, false),
                 Self::field(7, "state_epoch", DataType::UInt64, false),
+                Self::field(8, "routing_key", DataType::UInt64, false),
             ])),
             ArchiveKind::Candles => Arc::new(Schema::new(vec![
                 Self::field(1, "exchange", DataType::Utf8, false),
@@ -50,6 +51,9 @@ impl ArchiveBatch {
                 // Completeness is carried all the way to consumers so a gap-
                 // affected candle remains distinguishable from a complete one.
                 Self::field(22, "is_complete", DataType::Boolean, false),
+                // The routing key maps the pair to a fixed archive bucket
+                // without depending on the current aggregator shard count.
+                Self::field(23, "routing_key", DataType::UInt64, false),
             ])),
         }
     }

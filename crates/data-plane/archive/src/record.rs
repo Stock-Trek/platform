@@ -1,3 +1,4 @@
+use crate::routing::{RoutingBucket, RoutingKey};
 use platform_market_data::{
     candle::{CandleKey, ClosedCandle},
     event::MarketEvent,
@@ -52,6 +53,11 @@ impl ArchivedMarketEvent {
 
     pub fn state_epoch(&self) -> u64 {
         self.state_epoch
+    }
+
+    /// The stable archive routing key for this event's trading pair.
+    pub fn routing_key(&self) -> RoutingKey {
+        RoutingKey::for_event(&self.event)
     }
 }
 
@@ -122,6 +128,21 @@ impl ArchiveRecord {
                 state_epoch: closed.revision.state_epoch,
             },
         }
+    }
+
+    /// The stable archive routing key for this record's trading pair.
+    pub fn routing_key(&self) -> RoutingKey {
+        match self {
+            Self::MarketEvent(event) => event.routing_key(),
+            Self::ClosedCandle(closed) => {
+                RoutingKey::for_pair(closed.candle.key.exchange, &closed.candle.key.trading_pair)
+            }
+        }
+    }
+
+    /// The virtual archive bucket that contains this record.
+    pub fn routing_bucket(&self) -> RoutingBucket {
+        self.routing_key().bucket()
     }
 
     /// The output partition for a compacted record.

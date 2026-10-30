@@ -63,12 +63,19 @@ fn partition_spill_merges_runs_in_partition_and_sort_order() {
         timestamps.push(timestamp);
     }
 
+    let partition_a = format!(
+        "kind=events/exchange=binance/stream=a/{}",
+        event("a", 0, 0, 0).routing_bucket().segment()
+    );
+    let partition_b = format!(
+        "kind=events/exchange=binance/stream=b/{}",
+        event("b", 0, 0, 0).routing_bucket().segment()
+    );
     assert_eq!(
         partitions,
-        vec!["kind=events/exchange=binance/stream=a"; 2]
+        vec![partition_a; 2]
             .into_iter()
-            .chain(std::iter::once("kind=events/exchange=binance/stream=b"))
-            .map(str::to_string)
+            .chain(std::iter::once(partition_b))
             .collect::<Vec<_>>()
     );
     assert_eq!(timestamps, vec![10_000, 30_000, 20_000]);

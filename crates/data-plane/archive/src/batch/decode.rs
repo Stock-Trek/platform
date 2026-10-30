@@ -37,10 +37,11 @@ impl ArchiveBatch {
         let received_at = Self::i64_column(batch, "received_at")?;
         let payload = Self::string_column(batch, "payload")?;
         let state_epoch = Self::u64_column(batch, "state_epoch")?;
+        let routing_key = Self::u64_column(batch, "routing_key")?;
 
         (0..batch.num_rows())
             .map(|row| {
-                Ok(ArchivedMarketEvent {
+                let decoded = ArchivedMarketEvent {
                     event: MarketEvent {
                         exchange: Self::parse(exchange.value(row), "exchange")?,
                         stream: stream.value(row).to_string(),
@@ -51,7 +52,15 @@ impl ArchiveBatch {
                         payload: payload.value(row).to_string(),
                     },
                     state_epoch: state_epoch.value(row),
-                })
+                };
+                if routing_key.value(row) != decoded.routing_key().value() {
+                    return Err(Self::invalid_value(
+                        "routing_key",
+                        routing_key.value(row),
+                        "does not match the event's trading pair",
+                    ));
+                }
+                Ok(decoded)
             })
             .collect()
     }
@@ -79,6 +88,7 @@ impl ArchiveBatch {
         let revision_id = Self::string_column(batch, "revision_id")?;
         let revision = Self::string_column(batch, "revision")?;
         let is_complete = Self::boolean_column(batch, "is_complete")?;
+        let routing_key = Self::u64_column(batch, "routing_key")?;
 
         (0..batch.num_rows())
             .map(|row| {
@@ -141,6 +151,17 @@ impl ArchiveBatch {
                         "revision_id",
                         revision_id.value(row),
                         format!("does not match candle revision {}", decoded.message_id()),
+                    ));
+                }
+                let expected_routing_key = crate::routing::RoutingKey::for_pair(
+                    decoded.candle.key.exchange,
+                    &decoded.candle.key.trading_pair,
+                );
+                if routing_key.value(row) != expected_routing_key.value() {
+                    return Err(Self::invalid_value(
+                        "routing_key",
+                        routing_key.value(row),
+                        "does not match the candle's trading pair",
                     ));
                 }
                 Ok(decoded)

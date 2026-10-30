@@ -6,6 +6,7 @@
 use crate::{
     ArchiveKind, ArchivePartition, ArchiveRecord,
     quantized_time::{Quantization, QuantizedTime, TopOfHour},
+    routing::RoutingBucket,
 };
 use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
 use platform_errors::{BpError, BpResult, DataError};
@@ -35,36 +36,61 @@ impl ArchivePath {
 
     /// Build a raw archive object key.
     ///
-    /// Raw files are grouped only by kind and hour:
-    /// `{prefix}/{kind}/year=.../month=.../day=.../hour=.../{file}`.
+    /// Raw files are grouped by kind, then by a fixed virtual routing bucket
+    /// and hour:
+    /// `{prefix}/{kind}/bucket=.../year=.../month=.../day=.../hour=.../{file}`.
     pub fn raw_key(
         prefix: &str,
         kind: ArchiveKind,
         bucket_start: TimestampMilliseconds,
+        routing_bucket: RoutingBucket,
         file_name: impl AsRef<str>,
     ) -> BpResult<String> {
         let hour = Self::hour(bucket_start, "build archive object key")?;
         Ok(Self::join(
             prefix,
-            &format!("{}/{}", kind.label(), hour.file_path(file_name)),
+            &format!(
+                "{}/{}",
+                Self::raw_partition(kind, routing_bucket),
+                hour.file_path(file_name)
+            ),
         ))
     }
 
     /// Build a compacted archive object key.
     ///
-    /// Compacted files keep the symbol partition and add the same hourly
-    /// folders: `{prefix}/{partition}/year=.../month=.../day=.../hour=.../{file}`.
+    /// Compacted files keep the symbol partition, add the same virtual routing
+    /// bucket, and then the hourly folders:
+    /// `{prefix}/{partition}/bucket=.../year=.../month=.../day=.../hour=.../{file}`.
     pub fn compacted_key(
         prefix: &str,
         partition: &ArchivePartition,
         bucket_start: TimestampMilliseconds,
+        routing_bucket: RoutingBucket,
         file_name: impl AsRef<str>,
     ) -> BpResult<String> {
         let hour = Self::hour(bucket_start, "build compacted object key")?;
         Ok(Self::join(
             prefix,
-            &format!("{}/{}", partition.path(), hour.file_path(file_name)),
+            &format!(
+                "{}/{}",
+                Self::compacted_partition(partition, routing_bucket),
+                hour.file_path(file_name)
+            ),
         ))
+    }
+
+    /// The routing-bucket prefix shared by all raw objects of a kind.
+    pub fn raw_partition(kind: ArchiveKind, routing_bucket: RoutingBucket) -> String {
+        format!("{}/{}", kind.label(), routing_bucket.segment())
+    }
+
+    /// The routing-bucket prefix shared by all compacted objects of a symbol.
+    pub fn compacted_partition(
+        partition: &ArchivePartition,
+        routing_bucket: RoutingBucket,
+    ) -> String {
+        format!("{}/{}", partition.path(), routing_bucket.segment())
     }
 
     /// Join a prefix and a relative path without duplicate separators.
@@ -165,6 +191,11 @@ impl ArchivePath {
     /// Parse the hourly bucket start from an object key or partition path.
     pub fn bucket_start_from_key(path: &str) -> Option<TimestampMilliseconds> {
         ArchiveHour::parse(path).map(|hour| hour.bucket_start())
+    }
+
+    /// Parse the virtual routing bucket from an object key or partition path.
+    pub fn routing_bucket_from_key(path: &str) -> Option<RoutingBucket> {
+        RoutingBucket::parse(path)
     }
 
     /// Parse both the kind and the hourly bucket from an object key.
@@ -283,17 +314,35 @@ impl ArchiveBucket {
         Self { kind, bucket_start }
     }
 
-    pub fn raw_key(&self, prefix: &str, file_name: impl AsRef<str>) -> BpResult<String> {
-        ArchivePath::raw_key(prefix, self.kind, self.bucket_start, file_name)
+    pub fn raw_key(
+        &self,
+        prefix: &str,
+        routing_bucket: RoutingBucket,
+        file_name: impl AsRef<str>,
+    ) -> BpResult<String> {
+        ArchivePath::raw_key(
+            prefix,
+            self.kind,
+            self.bucket_start,
+            routing_bucket,
+            file_name,
+        )
     }
 
     pub fn compacted_key(
         &self,
         prefix: &str,
         partition: &ArchivePartition,
+        routing_bucket: RoutingBucket,
         file_name: impl AsRef<str>,
     ) -> BpResult<String> {
-        ArchivePath::compacted_key(prefix, partition, self.bucket_start, file_name)
+        ArchivePath::compacted_key(
+            prefix,
+            partition,
+            self.bucket_start,
+            routing_bucket,
+            file_name,
+        )
     }
 
     pub fn parse(path: &str) -> Option<Self> {
@@ -364,40 +413,52 @@ mod tests {
     #[test]
     fn raw_and_compacted_keys_share_the_hourly_layout() {
         let bucket = TimestampMilliseconds(timestamp(2024, 1, 2, 3, 0));
+        let routing_bucket = RoutingBucket::from_index(7).unwrap();
 
         assert_eq!(
             ArchivePath::raw_key(
                 "market-data/raw/",
                 ArchiveKind::Events,
                 bucket,
+                routing_bucket,
                 "file.parquet"
             )
             .unwrap(),
-            "market-data/raw/events/year=2024/month=01/day=02/hour=03/file.parquet"
+            "market-data/raw/events/bucket=00007/year=2024/month=01/day=02/hour=03/file.parquet"
         );
         assert_eq!(
             ArchivePath::compacted_key(
                 "/market-data/compacted/",
                 &event_partition(),
                 bucket,
+                routing_bucket,
                 "/file.parquet"
             )
             .unwrap(),
-            "market-data/compacted/kind=events/exchange=binance/stream=btc_usdt@trade/year=2024/month=01/day=02/hour=03/file.parquet"
+            "market-data/compacted/kind=events/exchange=binance/stream=btc_usdt@trade/bucket=00007/year=2024/month=01/day=02/hour=03/file.parquet"
         );
         assert_eq!(
-            ArchivePath::compacted_key("/", &candle_partition(), bucket, "data.parquet").unwrap(),
-            "kind=candles/exchange=binance/base=bitcoin/quote=tether_usd/interval=1h/year=2024/month=01/day=02/hour=03/data.parquet"
+            ArchivePath::compacted_key(
+                "/",
+                &candle_partition(),
+                bucket,
+                routing_bucket,
+                "data.parquet"
+            )
+            .unwrap(),
+            "kind=candles/exchange=binance/base=bitcoin/quote=tether_usd/interval=1h/bucket=00007/year=2024/month=01/day=02/hour=03/data.parquet"
         );
     }
 
     #[test]
     fn keys_parse_back_to_the_same_bucket() {
         let bucket = TimestampMilliseconds(timestamp(2024, 1, 2, 3, 0));
+        let routing_bucket = RoutingBucket::from_index(42).unwrap();
         let raw = ArchivePath::raw_key(
             "market-data/raw",
             ArchiveKind::Candles,
             bucket,
+            routing_bucket,
             "file.parquet",
         )
         .unwrap();
@@ -405,6 +466,7 @@ mod tests {
             "market-data/compacted",
             &candle_partition(),
             bucket,
+            routing_bucket,
             "data.parquet",
         )
         .unwrap();
@@ -413,6 +475,10 @@ mod tests {
             let parsed = ArchivePath::parse_key(&key).unwrap();
             assert_eq!(parsed.kind, ArchiveKind::Candles);
             assert_eq!(parsed.bucket_start, bucket);
+            assert_eq!(
+                ArchivePath::routing_bucket_from_key(&key),
+                Some(routing_bucket)
+            );
             assert_eq!(
                 ArchiveHour::parse(&key).unwrap().path(),
                 "year=2024/month=01/day=02/hour=03"

@@ -2,7 +2,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveParquet,
-    ArchivePartition, ArchiveRecord, ArchiveTableLayer, Bucket, IcebergDataFile, ObjectKey, S3,
+    ArchivePartition, ArchiveRecord, ArchiveTableLayer, Bucket, IcebergDataFile, ObjectKey,
+    RoutingBucket, S3,
 };
 use platform_errors::BpResult;
 use platform_market_data::candle::ClosedCandle;
@@ -58,13 +59,14 @@ impl S3CandleSink {
         &self,
         bucket: ArchiveBucket,
         partition: &ArchivePartition,
+        routing_bucket: RoutingBucket,
         bytes: &[u8],
     ) -> BpResult<ObjectKey> {
         let file_name = format!("{}-{:x}.parquet", Self::content_id(bytes), bytes.len());
         let key = match self.layer {
-            ArchiveTableLayer::Raw => bucket.raw_key(&self.prefix, file_name),
+            ArchiveTableLayer::Raw => bucket.raw_key(&self.prefix, routing_bucket, file_name),
             ArchiveTableLayer::Compacted => {
-                bucket.compacted_key(&self.prefix, partition, file_name)
+                bucket.compacted_key(&self.prefix, partition, routing_bucket, file_name)
             }
         }?;
         Ok(ObjectKey::new(key))
@@ -99,6 +101,7 @@ impl CandleSink for S3CandleSink {
         records.sort_by(|left, right| {
             ArchiveBucket::new(left, self.bucket_millis)
                 .cmp(&ArchiveBucket::new(right, self.bucket_millis))
+                .then_with(|| left.routing_bucket().cmp(&right.routing_bucket()))
                 .then_with(|| match self.layer {
                     ArchiveTableLayer::Raw => std::cmp::Ordering::Equal,
                     ArchiveTableLayer::Compacted => {
@@ -115,9 +118,11 @@ impl CandleSink for S3CandleSink {
         while start < records.len() {
             let bucket = ArchiveBucket::new(&records[start], self.bucket_millis);
             let partition = records[start].partition();
+            let routing_bucket = records[start].routing_bucket();
             let mut end = start + 1;
             while end < records.len()
                 && ArchiveBucket::new(&records[end], self.bucket_millis) == bucket
+                && records[end].routing_bucket() == routing_bucket
                 && (self.layer == ArchiveTableLayer::Raw || records[end].partition() == partition)
             {
                 end += 1;
@@ -125,7 +130,7 @@ impl CandleSink for S3CandleSink {
 
             let batch = ArchiveBatch::new(ArchiveKind::Candles, records[start..end].to_vec())?;
             let bytes = ArchiveParquet::encode(&batch)?;
-            let key = self.object_key(bucket, &partition, &bytes)?;
+            let key = self.object_key(bucket, &partition, routing_bucket, &bytes)?;
             S3::upload_bytes(
                 &self.transfer_client,
                 &self.bucket,
