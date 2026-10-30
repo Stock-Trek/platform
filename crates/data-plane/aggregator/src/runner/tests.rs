@@ -416,9 +416,9 @@ fn closed_open_keys_keep_a_newer_open_window() {
         timestamp: TimestampMilliseconds(timestamp),
     };
 
-    let mut closed = Candle::open(&trade_at(61_000), interval);
+    let mut closed = Candle::open(&trade_at(61_000), interval).unwrap();
     closed.close();
-    let newer_open = Candle::open(&trade_at(121_000), interval);
+    let newer_open = Candle::open(&trade_at(121_000), interval).unwrap();
     let update = ProcessorUpdate {
         closed: vec![ClosedCandle::new(
             closed.clone(),

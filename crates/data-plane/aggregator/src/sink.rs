@@ -181,7 +181,7 @@ mod tests {
             quantity: Decimal::ONE,
             timestamp: TimestampMilliseconds(61_000),
         };
-        let mut candle = Candle::open(&trade, CandleInterval::from_label("1m").unwrap());
+        let mut candle = Candle::open(&trade, CandleInterval::from_label("1m").unwrap()).unwrap();
         candle.close();
         ClosedCandle::new(
             candle,

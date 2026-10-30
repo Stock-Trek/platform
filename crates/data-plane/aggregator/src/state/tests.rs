@@ -22,7 +22,7 @@ fn trade(timestamp: i64) -> Trade {
 }
 
 fn candle() -> Candle {
-    Candle::open(&trade(61_000), CandleInterval::from_label("1m").unwrap())
+    Candle::open(&trade(61_000), CandleInterval::from_label("1m").unwrap()).unwrap()
 }
 
 #[test]
