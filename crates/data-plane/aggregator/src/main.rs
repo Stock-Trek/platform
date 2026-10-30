@@ -1,8 +1,8 @@
 use platform_aggregator::{
     AggregatorConfig, ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource,
     LeaseStore, NatsCandleSink, NatsLeaseStore, NatsMarketSource, NatsPartitionSource, NatsRouter,
-    NatsStateStore, PartitionId, ProcessorRunner, RestoreOptions, S3ArchivedEventSource,
-    StateStore, WriterLease, new_writer_id, restore_partition, wait_for_lease,
+    NatsStateStore, PartitionId, ProcessorRunner, RestoreOptions, S3ArchiveRecovery, StateStore,
+    WriterLease, new_writer_id, restore_partition, wait_for_lease,
 };
 use platform_errors::{BpError, BpResult};
 use platform_nats::{JetStream, NatsPublisher};
@@ -42,7 +42,9 @@ async fn main() -> BpResult<()> {
     let checkpoints: Arc<dyn StateStore> = Arc::new(NatsStateStore::connect(&config).await?);
     let leases: Arc<dyn LeaseStore> = Arc::new(NatsLeaseStore::connect(&config).await?);
     let sink = Arc::new(NatsCandleSink::connect(&config).await?);
-    let archive_config = ArchiveRecoveryConfig::from_env()?;
+    let archive_recovery = ArchiveRecoveryConfig::from_env()?
+        .map(S3ArchiveRecovery::new)
+        .map(Arc::new);
 
     let mut tasks = JoinSet::new();
     let router_config = config.clone();
@@ -59,7 +61,7 @@ async fn main() -> BpResult<()> {
     for partition in partitions {
         tasks.spawn(run_partition(
             config.clone(),
-            archive_config.clone(),
+            archive_recovery.clone(),
             checkpoints.clone(),
             leases.clone(),
             sink.clone(),
@@ -123,7 +125,7 @@ async fn run_router(config: AggregatorConfig, publisher: Arc<NatsPublisher>) -> 
 
 async fn run_partition(
     config: AggregatorConfig,
-    archive_config: Option<ArchiveRecoveryConfig>,
+    archive_recovery: Option<Arc<S3ArchiveRecovery>>,
     checkpoints: Arc<dyn StateStore>,
     leases: Arc<dyn LeaseStore>,
     sink: Arc<NatsCandleSink>,
@@ -132,7 +134,7 @@ async fn run_partition(
     let source_stream = JetStream::stream_name(&config.shard_subject_prefix);
     supervise("partition", move || {
         let config = config.clone();
-        let archive_config = archive_config.clone();
+        let archive_recovery = archive_recovery.clone();
         let checkpoints = checkpoints.clone();
         let leases = leases.clone();
         let sink = sink.clone();
@@ -140,7 +142,7 @@ async fn run_partition(
         async move {
             run_partition_once(
                 config,
-                archive_config,
+                archive_recovery,
                 checkpoints,
                 leases,
                 sink,
@@ -156,7 +158,7 @@ async fn run_partition(
 #[allow(clippy::too_many_arguments)]
 async fn run_partition_once(
     config: AggregatorConfig,
-    archive_config: Option<ArchiveRecoveryConfig>,
+    archive_recovery: Option<Arc<S3ArchiveRecovery>>,
     checkpoints: Arc<dyn StateStore>,
     leases: Arc<dyn LeaseStore>,
     sink: Arc<NatsCandleSink>,
@@ -172,16 +174,25 @@ async fn run_partition_once(
 
     let result = async {
         let restore = async {
-            let mut archive: Box<dyn ArchivedEventSource> = match &archive_config {
-                Some(archive_config) => Box::new(
-                    S3ArchivedEventSource::connect(archive_config, partition, config.shard_count)
-                        .await?,
-                ),
-                None => Box::new(EmptyArchivedEventSource),
-            };
             let options = RestoreOptions::from_config(&config, partition, &source_stream);
-            let restored =
-                restore_partition(checkpoints.as_ref(), archive.as_mut(), &options).await?;
+            let restored = restore_partition(
+                checkpoints.as_ref(),
+                || async {
+                    match &archive_recovery {
+                        Some(archive_recovery) => Ok(Box::new(
+                            archive_recovery
+                                .connect(partition, config.shard_count)
+                                .await?,
+                        )
+                            as Box<dyn ArchivedEventSource>),
+                        None => {
+                            Ok(Box::new(EmptyArchivedEventSource) as Box<dyn ArchivedEventSource>)
+                        }
+                    }
+                },
+                &options,
+            )
+            .await?;
             let replay_watermark = restored.replay_watermark();
             let source = NatsPartitionSource::connect(&config, partition, restored.start).await?;
             Ok::<_, BpError>((restored.state, replay_watermark, source))

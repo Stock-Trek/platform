@@ -25,8 +25,10 @@ use platform_metrics::AggregatorMetrics;
 use platform_nats::ConsumerStart;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::collections::{HashMap, VecDeque};
+use std::future::Future;
 use std::time::{Duration, Instant};
 use stock_trek_types::cex::cex_id::CexId;
+use tokio::sync::OnceCell;
 use tracing::{info, warn};
 
 pub const AGGREGATOR_ARCHIVE_S3_BUCKET: &str = "AGGREGATOR_ARCHIVE_S3_BUCKET";
@@ -168,13 +170,20 @@ impl RestoreOptions {
 /// from the beginning as well. Events at or before the rebuilt watermark are
 /// then ignored by [`crate::runner::ProcessorRunner`] to avoid applying state
 /// twice.
-pub async fn restore_partition(
+///
+/// `connect_archive` is only invoked when archive replay is required, so a
+/// valid checkpoint or an `earliest`/`latest` start performs no archive I/O.
+pub async fn restore_partition<F, Fut>(
     store: &dyn StateStore,
-    archive: &mut dyn ArchivedEventSource,
+    connect_archive: F,
     options: &RestoreOptions,
-) -> BpResult<RestoredPartition> {
+) -> BpResult<RestoredPartition>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = BpResult<Box<dyn ArchivedEventSource>>>,
+{
     let started = Instant::now();
-    let result = restore_partition_inner(store, archive, options).await;
+    let result = restore_partition_inner(store, connect_archive, options).await;
     let outcome = match &result {
         Ok(restored) => restored.restored_from.label(),
         Err(_) => "error",
@@ -183,11 +192,15 @@ pub async fn restore_partition(
     result
 }
 
-async fn restore_partition_inner(
+async fn restore_partition_inner<F, Fut>(
     store: &dyn StateStore,
-    archive: &mut dyn ArchivedEventSource,
+    connect_archive: F,
     options: &RestoreOptions,
-) -> BpResult<RestoredPartition> {
+) -> BpResult<RestoredPartition>
+where
+    F: FnOnce() -> Fut,
+    Fut: Future<Output = BpResult<Box<dyn ArchivedEventSource>>>,
+{
     let partition = options.partition;
     match options.replay_start_policy {
         ReplayStartPolicy::Earliest | ReplayStartPolicy::Latest => {
@@ -267,8 +280,9 @@ async fn restore_partition_inner(
     }
 
     AggregatorMetrics::record_replay_progress(partition.get(), "archive", 0.0);
+    let mut archive = connect_archive().await?;
     let state = rebuild_state_from_archive_with_schema(
-        archive,
+        archive.as_mut(),
         partition,
         &options.intervals,
         options.partition_count,
@@ -376,6 +390,92 @@ fn decoder_for(
     Ok(decoder)
 }
 
+/// Lazily connects to the archive and shares its client and object listing
+/// across every partition recovery source in this process.
+///
+/// The snapshot is created on the first partition that actually needs archive
+/// replay, so checkpoints and live-only starts never touch S3. The listing is
+/// startup-scoped; archive growth during recovery is not observed by later
+/// partitions.
+pub struct S3ArchiveRecovery {
+    config: ArchiveRecoveryConfig,
+    snapshot: OnceCell<ArchiveSnapshot>,
+}
+
+struct ArchiveSnapshot {
+    client: aws_sdk_s3::Client,
+    bucket: Bucket,
+    prefix: String,
+    objects: Vec<S3Object>,
+}
+
+impl S3ArchiveRecovery {
+    pub fn new(config: ArchiveRecoveryConfig) -> Self {
+        Self {
+            config,
+            snapshot: OnceCell::new(),
+        }
+    }
+
+    /// Builds a partition-specific source from the shared archive snapshot.
+    ///
+    /// The first call performs the S3 client setup and listing; later calls
+    /// reuse both and only select the objects owned by their partition.
+    pub async fn connect(
+        &self,
+        partition: PartitionId,
+        partition_count: usize,
+    ) -> BpResult<S3ArchivedEventSource> {
+        let snapshot = self
+            .snapshot
+            .get_or_try_init(|| async {
+                let client = S3::s3_client().await;
+                let bucket = Bucket::new(self.config.bucket.clone());
+                let prefix = self.config.prefix.trim_matches('/').to_string();
+                let list_prefix = if prefix.is_empty() {
+                    String::new()
+                } else {
+                    format!("{prefix}/")
+                };
+                let objects =
+                    S3::list_objects(&client, &bucket, &ObjectKey::new(list_prefix)).await?;
+                Ok::<_, BpError>(ArchiveSnapshot {
+                    client,
+                    bucket,
+                    prefix,
+                    objects,
+                })
+            })
+            .await?;
+
+        let mut objects = select_event_objects(
+            snapshot.objects.clone(),
+            &snapshot.prefix,
+            partition,
+            partition_count,
+        );
+        objects.sort();
+
+        info!(
+            bucket = %snapshot.bucket,
+            prefix = %snapshot.prefix,
+            objects = objects.len(),
+            partition = %partition,
+            "connected archive recovery source"
+        );
+
+        Ok(S3ArchivedEventSource {
+            client: snapshot.client.clone(),
+            bucket: snapshot.bucket.clone(),
+            partition,
+            partition_count,
+            objects: objects.into(),
+            events: VecDeque::new(),
+            decoders: HashMap::new(),
+        })
+    }
+}
+
 /// Replays raw event objects from S3 for one partition.
 ///
 /// This first cut downloads one Parquet object at a time and decodes it in
@@ -397,39 +497,9 @@ impl S3ArchivedEventSource {
         partition: PartitionId,
         partition_count: usize,
     ) -> BpResult<Self> {
-        let client = S3::s3_client().await;
-        let bucket = Bucket::new(config.bucket.clone());
-        let prefix = config.prefix.trim_matches('/').to_string();
-        let list_prefix = if prefix.is_empty() {
-            String::new()
-        } else {
-            format!("{prefix}/")
-        };
-        let mut objects = select_event_objects(
-            S3::list_objects(&client, &bucket, &ObjectKey::new(list_prefix)).await?,
-            &prefix,
-            partition,
-            partition_count,
-        );
-        objects.sort();
-
-        info!(
-            bucket = %bucket,
-            prefix = %prefix,
-            objects = objects.len(),
-            partition = %partition,
-            "connected archive recovery source"
-        );
-
-        Ok(Self {
-            client,
-            bucket,
-            partition,
-            partition_count,
-            objects: objects.into(),
-            events: VecDeque::new(),
-            decoders: HashMap::new(),
-        })
+        S3ArchiveRecovery::new(config.clone())
+            .connect(partition, partition_count)
+            .await
     }
 
     async fn load_next_object(&mut self) -> BpResult<bool> {
@@ -521,6 +591,10 @@ mod tests {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     use platform_market_data::decoders::trade::Trade;
     use rust_decimal::Decimal;
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
     use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
     fn pair() -> TradingPair {
@@ -568,6 +642,24 @@ mod tests {
         }
     }
 
+    fn archive_source(
+        archive: VecArchive,
+    ) -> impl FnOnce() -> std::future::Ready<BpResult<Box<dyn ArchivedEventSource>>> {
+        || std::future::ready(Ok(Box::new(archive) as Box<dyn ArchivedEventSource>))
+    }
+
+    fn counting_archive(
+        events: Vec<MarketEvent>,
+        connects: Arc<AtomicUsize>,
+    ) -> impl FnOnce() -> std::future::Ready<BpResult<Box<dyn ArchivedEventSource>>> {
+        move || {
+            connects.fetch_add(1, Ordering::SeqCst);
+            std::future::ready(Ok(
+                Box::new(VecArchive::new(events)) as Box<dyn ArchivedEventSource>
+            ))
+        }
+    }
+
     fn interval() -> CandleInterval {
         CandleInterval::from_label("1m").unwrap()
     }
@@ -594,10 +686,14 @@ mod tests {
         let checkpoint = CheckpointRecord::new(partition, "aggregator-shards", 11, state);
         store.save(&checkpoint).await.unwrap();
 
-        let mut archive = VecArchive::new(vec![event(1, 1_000)]);
-        let restored = restore_partition(&store, &mut archive, &options(partition, 1))
-            .await
-            .unwrap();
+        let connects = Arc::new(AtomicUsize::new(0));
+        let restored = restore_partition(
+            &store,
+            counting_archive(vec![event(1, 1_000)], connects.clone()),
+            &options(partition, 1),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(restored.start_sequence(), Some(11));
         assert_eq!(restored.start, ConsumerStart::Sequence(11));
@@ -606,18 +702,20 @@ mod tests {
             restored.state.watermark,
             Some(TimestampMilliseconds(61_000))
         );
-        assert_eq!(archive.events.len(), 1);
+        assert_eq!(connects.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
     async fn a_missing_checkpoint_rebuilds_from_archived_events() {
         let store = InMemoryStateStore::new();
         let partition = PartitionId::new(0);
-        let mut archive = VecArchive::new(vec![event(1, 61_000), event(2, 62_000)]);
-
-        let restored = restore_partition(&store, &mut archive, &options(partition, 1))
-            .await
-            .unwrap();
+        let restored = restore_partition(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000), event(2, 62_000)])),
+            &options(partition, 1),
+        )
+        .await
+        .unwrap();
 
         assert_eq!(restored.start_sequence(), None);
         assert_eq!(restored.start, ConsumerStart::Earliest);
@@ -644,10 +742,9 @@ mod tests {
     async fn a_rebuild_continues_the_latest_archived_state_epoch() {
         let store = InMemoryStateStore::new();
         let partition = PartitionId::new(0);
-        let mut archive =
-            VecArchive::with_epochs(vec![(event(1, 61_000), 7), (event(2, 62_000), 3)]);
+        let archive = VecArchive::with_epochs(vec![(event(1, 61_000), 7), (event(2, 62_000), 3)]);
 
-        let restored = restore_partition(&store, &mut archive, &options(partition, 1))
+        let restored = restore_partition(&store, archive_source(archive), &options(partition, 1))
             .await
             .unwrap();
 
@@ -664,10 +761,13 @@ mod tests {
         let checkpoint = CheckpointRecord::new(partition, "aggregator-shards", 11, state);
         store.save(&checkpoint).await.unwrap();
 
-        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
-        let restored = restore_partition(&store, &mut archive, &options(partition, 1))
-            .await
-            .unwrap();
+        let restored = restore_partition(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
+            &options(partition, 1),
+        )
+        .await
+        .unwrap();
 
         assert!(restored.rebuilt_from_archive);
         assert_eq!(restored.start_sequence(), None);
@@ -681,11 +781,9 @@ mod tests {
         let partition_count = 2;
         let bitcoin_partition = partition_for(CexId::Binance, pair(), partition_count);
         let other_partition = PartitionId::new((bitcoin_partition.get() + 1) % 2);
-        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
-
         let restored = restore_partition(
             &store,
-            &mut archive,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
             &options(other_partition, partition_count),
         )
         .await
@@ -701,11 +799,9 @@ mod tests {
         let partition_count = 2;
         let bitcoin_partition = partition_for(CexId::Binance, pair(), partition_count);
         let other_partition = PartitionId::new((bitcoin_partition.get() + 1) % 2);
-        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
-
         let restored = restore_partition(
             &store,
-            &mut archive,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
             &options(other_partition, partition_count),
         )
         .await
@@ -731,51 +827,63 @@ mod tests {
             .await
             .unwrap();
 
-        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
+        let connects = Arc::new(AtomicUsize::new(0));
         let mut options = options(partition, 1);
         options.replay_start_policy = ReplayStartPolicy::Archive;
-        let restored = restore_partition(&store, &mut archive, &options)
-            .await
-            .unwrap();
+        let restored = restore_partition(
+            &store,
+            counting_archive(vec![event(1, 61_000)], connects.clone()),
+            &options,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(restored.restored_from, RestoreSource::Archive);
         assert!(restored.rebuilt_from_archive);
         assert_eq!(restored.start, ConsumerStart::Earliest);
         assert_eq!(restored.state.open_candles_len(), 1);
+        assert_eq!(connects.load(Ordering::SeqCst), 1);
     }
 
     #[tokio::test]
     async fn earliest_policy_skips_checkpoint_and_archive() {
         let store = InMemoryStateStore::new();
         let partition = PartitionId::new(0);
-        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
+        let connects = Arc::new(AtomicUsize::new(0));
         let mut options = options(partition, 1);
         options.replay_start_policy = ReplayStartPolicy::Earliest;
 
-        let restored = restore_partition(&store, &mut archive, &options)
-            .await
-            .unwrap();
+        let restored = restore_partition(
+            &store,
+            counting_archive(vec![event(1, 61_000)], connects.clone()),
+            &options,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(restored.restored_from, RestoreSource::Empty);
         assert!(!restored.rebuilt_from_archive);
         assert_eq!(restored.start, ConsumerStart::Earliest);
         assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION);
         assert_eq!(restored.state.open_candles_len(), 0);
-        assert_eq!(archive.events.len(), 1);
+        assert_eq!(connects.load(Ordering::SeqCst), 0);
     }
 
     #[tokio::test]
     async fn empty_state_uses_the_configured_schema_version() {
         let store = InMemoryStateStore::new();
         let partition = PartitionId::new(0);
-        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
         let mut options = options(partition, 1);
         options.replay_start_policy = ReplayStartPolicy::Earliest;
         options.expected_schema_version = STATE_SCHEMA_VERSION + 2;
 
-        let restored = restore_partition(&store, &mut archive, &options)
-            .await
-            .unwrap();
+        let restored = restore_partition(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
+            &options,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(restored.restored_from, RestoreSource::Empty);
         assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION + 2);
@@ -785,13 +893,16 @@ mod tests {
     async fn latest_policy_starts_at_the_end_of_the_live_source() {
         let store = InMemoryStateStore::new();
         let partition = PartitionId::new(0);
-        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
         let mut options = options(partition, 1);
         options.replay_start_policy = ReplayStartPolicy::Latest;
 
-        let restored = restore_partition(&store, &mut archive, &options)
-            .await
-            .unwrap();
+        let restored = restore_partition(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
+            &options,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(restored.restored_from, RestoreSource::Empty);
         assert_eq!(restored.start, ConsumerStart::Latest);
@@ -814,12 +925,15 @@ mod tests {
             .await
             .unwrap();
 
-        let mut archive = VecArchive::new(vec![event(1, 61_000)]);
         let mut options = options(partition, 1);
         options.expected_schema_version = STATE_SCHEMA_VERSION + 1;
-        let restored = restore_partition(&store, &mut archive, &options)
-            .await
-            .unwrap();
+        let restored = restore_partition(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
+            &options,
+        )
+        .await
+        .unwrap();
 
         assert_eq!(restored.restored_from, RestoreSource::Archive);
         assert!(restored.rebuilt_from_archive);
