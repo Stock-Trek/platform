@@ -11,7 +11,7 @@ use super::replay::{ArchivedEventSource, decoder_for};
 use crate::checkpoint::StateStore;
 use crate::config::{AggregatorConfig, ReplayStartPolicy};
 use crate::processor::{CandleProcessor, ProcessorConfig};
-use crate::shard::{ShardId, shard_for};
+use crate::shard::{ShardId, trades_for_shard};
 use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use platform_errors::{BpResult, ErrorType};
 use platform_market_data::candle::CandleInterval;
@@ -293,10 +293,7 @@ pub async fn rebuild_state_from_archive_with_schema(
         let event = &archived.event;
         let decoder = decoder_for(&mut decoders, event.exchange)?;
         let trades = match decoder.decode(event) {
-            Ok(trades) => trades
-                .into_iter()
-                .filter(|trade| shard_for(trade.exchange, trade.trading_pair, shard_count) == shard)
-                .collect::<Vec<_>>(),
+            Ok(trades) => trades_for_shard(trades, shard, shard_count),
             Err(error) => {
                 warn!(%error, stream = %event.stream, "skipping unreadable archived event");
                 Vec::new()

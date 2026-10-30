@@ -129,7 +129,7 @@ fn config() -> AggregatorConfig {
         open_candle_subject_prefix: "market.candles.open".to_string(),
         closed_candle_subject_prefix: "market.candles.closed".to_string(),
         shard_subject_prefix: "aggregator.shards".to_string(),
-        shard_count: 4,
+        shard_count: 1,
         shard_index: None,
         intervals: vec![CandleInterval::from_label("1m").unwrap()],
         allowed_lateness: std::time::Duration::from_millis(5_000),
@@ -437,6 +437,40 @@ fn closed_open_keys_keep_a_newer_open_window() {
 
     state.open_candles.entry(key).or_default().push(newer_open);
     assert!(ProcessorRunner::<FakeSource, FakeSink>::closed_open_keys(&update, &state).is_empty());
+}
+
+#[tokio::test]
+async fn live_processing_ignores_trades_owned_by_another_shard() {
+    use crate::shard::shard_for;
+    use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
+
+    let shard_count = 2;
+    let pair = TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD);
+    let owner = shard_for(CexId::Binance, pair, shard_count);
+    let other = ShardId::new((owner.get() + 1) % shard_count as u32);
+    let sink = FakeSink::default();
+    let observed = sink.clone();
+    let acked = Arc::new(Mutex::new(0));
+    let source = FakeSource {
+        records: vec![record(MarketInput::Event(trade_event(61_000)), 1)],
+        acked: acked.clone(),
+        ..FakeSource::default()
+    };
+    let checkpoints = Arc::new(InMemoryStateStore::new());
+    let mut config = config();
+    config.shard_count = shard_count;
+
+    ProcessorRunner::new(config, source, sink)
+        .with_checkpoint_store(checkpoints.clone(), other)
+        .run()
+        .await
+        .unwrap();
+
+    assert_eq!(observed.open_updates(), 0);
+    assert_eq!(*acked.lock().unwrap(), 1);
+    let checkpoint = checkpoints.get(other).unwrap();
+    assert_eq!(checkpoint.watermark, None);
+    assert_eq!(checkpoint.state.open_candles_len(), 0);
 }
 
 #[tokio::test]
