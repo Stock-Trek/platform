@@ -169,7 +169,9 @@ where
                         }
                     }
                 }
-                return Ok(());
+                return Err(BpError::external(
+                    "gap marker source ended before shutdown was requested",
+                ));
             }
 
             let next_attempt = PendingGap::next_attempt_at(&pending);

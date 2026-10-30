@@ -16,6 +16,7 @@ platform-metrics = { workspace = true }
 platform-nats = { workspace = true }
 platform-runtime = { workspace = true }
 platform-types = { workspace = true }
+rand = { workspace = true }
 rust_decimal = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

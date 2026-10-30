@@ -10,7 +10,7 @@ use platform_nats::EventPublisher;
 use platform_runtime::Runtime;
 use std::sync::Arc;
 use tokio::sync::mpsc;
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 const MESSAGE_CHANNEL_CAPACITY: usize = 1_024;
 
@@ -67,12 +67,15 @@ where
         ))
         .await;
         source_task.abort();
-        let source_result = source_task.await;
-        result?;
-        match source_result {
-            Ok(result) => result,
-            Err(error) if error.is_cancelled() => Ok(()),
-            Err(error) => Err(error.into()),
+        match source_task.await {
+            Ok(Err(error)) => Err(error),
+            Err(error) if error.is_cancelled() => result,
+            Err(error) => result.and_then(|()| Err(error.into())),
+            Ok(Ok(())) => result.and_then(|()| {
+                Err(platform_errors::BpError::external(
+                    "exchange websocket source ended before shutdown was requested",
+                ))
+            }),
         }
     }
 
@@ -85,8 +88,10 @@ where
             tokio::select! {
                 message = receiver.recv() => {
                     let Some(message) = message else {
-                        warn!(exchange = %config.exchange, "exchange websocket message channel closed");
-                        break;
+                        return Err(platform_errors::BpError::external(format!(
+                            "{} exchange websocket message channel closed before shutdown was requested",
+                            config.exchange
+                        )));
                     };
                     if let Err(error) = ingester.ingest(message).await {
                         error!(%error, "failed to ingest market event");
@@ -94,7 +99,6 @@ where
                 }
             }
         }
-        Ok(())
     }
 }
 
@@ -145,7 +149,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runs_with_injected_source_and_publisher() {
+    async fn source_completion_is_an_error() {
         let runner = IngesterRunner::new(
             config(),
             FakeSource { fail: false },
@@ -153,7 +157,9 @@ mod tests {
             Arc::new(InMemorySequenceStore::new()),
         );
 
-        runner.run().await.unwrap();
+        let error = runner.run().await.unwrap_err();
+
+        assert!(error.to_string().contains("before shutdown"));
     }
 
     #[tokio::test]

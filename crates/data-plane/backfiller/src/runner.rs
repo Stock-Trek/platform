@@ -117,12 +117,14 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runs_with_injected_source_fetcher_publisher_and_retry_store() {
+    async fn source_completion_is_an_error() {
         let runner = BackfillerRunner::new(config(), FakeSource, FakeFetcher, FakePublisher);
 
-        runner
+        let error = runner
             .run_with_retry_store(InMemoryGapRetryStore::new())
             .await
-            .unwrap();
+            .unwrap_err();
+
+        assert!(error.to_string().contains("before shutdown"));
     }
 }
