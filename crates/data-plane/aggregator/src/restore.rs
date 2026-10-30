@@ -12,7 +12,7 @@ use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
 use platform_archive::{
-    ArchiveKind, ArchiveParquet, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey, S3,
+    ArchiveKind, ArchiveParquet, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey, S3, S3Object,
 };
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult, ErrorType};
@@ -405,15 +405,12 @@ impl S3ArchivedEventSource {
         } else {
             format!("{prefix}/")
         };
-        let mut objects = S3::list_objects(&client, &bucket, &ObjectKey::new(list_prefix))
-            .await?
-            .into_iter()
-            .filter(|object| {
-                ArchivePath::relative_key(object.key.as_str(), &prefix).and_then(ArchivePath::kind)
-                    == Some(ArchiveKind::Events)
-            })
-            .map(|object| object.key)
-            .collect::<Vec<_>>();
+        let mut objects = select_event_objects(
+            S3::list_objects(&client, &bucket, &ObjectKey::new(list_prefix)).await?,
+            &prefix,
+            partition,
+            partition_count,
+        );
         objects.sort();
 
         info!(
@@ -464,6 +461,34 @@ impl S3ArchivedEventSource {
         );
         Ok(true)
     }
+}
+
+/// Selects the raw-event objects owned by one partition.
+///
+/// Archive objects are written under a fixed virtual routing bucket, so a
+/// partition can discard every object belonging to another partition before
+/// downloading it. This keeps a cold rebuild at `O(archive)` across the cluster
+/// instead of making every partition scan the whole archive.
+fn select_event_objects(
+    objects: Vec<S3Object>,
+    prefix: &str,
+    partition: PartitionId,
+    partition_count: usize,
+) -> Vec<ObjectKey> {
+    objects
+        .into_iter()
+        .filter(|object| {
+            let Some(relative) = ArchivePath::relative_key(object.key.as_str(), prefix) else {
+                return false;
+            };
+            if ArchivePath::kind(relative) != Some(ArchiveKind::Events) {
+                return false;
+            }
+            ArchivePath::routing_bucket_from_key(relative)
+                .is_some_and(|bucket| bucket.is_owned_by(partition.get(), partition_count))
+        })
+        .map(|object| object.key)
+        .collect()
 }
 
 #[async_trait]
@@ -860,5 +885,72 @@ mod tests {
         let trades: Vec<Trade> = decoder.decode(&event).unwrap();
         assert_eq!(trades.len(), 1);
         assert_eq!(trades[0].price, Decimal::from_str_exact("100").unwrap());
+    }
+
+    #[test]
+    fn archive_recovery_selects_only_owned_event_objects() {
+        let prefix = "market-data/raw";
+        let partition_count = 4;
+        let partition = PartitionId::new(2);
+        let owned = (0..platform_archive::ROUTING_BUCKET_COUNT)
+            .map(|index| platform_archive::RoutingBucket::from_index(index).unwrap())
+            .find(|bucket| bucket.is_owned_by(partition.get(), partition_count))
+            .unwrap();
+        let other = (0..platform_archive::ROUTING_BUCKET_COUNT)
+            .map(|index| platform_archive::RoutingBucket::from_index(index).unwrap())
+            .find(|bucket| !bucket.is_owned_by(partition.get(), partition_count))
+            .unwrap();
+
+        let owned_event = ArchivePath::raw_key(
+            prefix,
+            ArchiveKind::Events,
+            TimestampMilliseconds(0),
+            owned,
+            "owned.parquet",
+        )
+        .unwrap();
+        let other_event = ArchivePath::raw_key(
+            prefix,
+            ArchiveKind::Events,
+            TimestampMilliseconds(0),
+            other,
+            "other.parquet",
+        )
+        .unwrap();
+        let owned_candle = ArchivePath::raw_key(
+            prefix,
+            ArchiveKind::Candles,
+            TimestampMilliseconds(0),
+            owned,
+            "candles.parquet",
+        )
+        .unwrap();
+        let objects = vec![
+            s3_object(&other_event),
+            s3_object(&owned_candle),
+            s3_object(&owned_event),
+        ];
+
+        let selected = select_event_objects(objects, prefix, partition, partition_count);
+
+        assert_eq!(selected, vec![ObjectKey::new(owned_event)]);
+    }
+
+    #[test]
+    fn archive_recovery_ignores_event_objects_without_a_routing_bucket() {
+        let prefix = "market-data/raw";
+        let key = "market-data/raw/events/year=2024/month=01/day=02/hour=03/legacy.parquet";
+
+        let selected = select_event_objects(vec![s3_object(key)], prefix, PartitionId::new(0), 1);
+
+        assert!(selected.is_empty());
+    }
+
+    fn s3_object(key: &str) -> S3Object {
+        S3Object {
+            key: ObjectKey::new(key),
+            last_modified_millis: None,
+            size: 0,
+        }
     }
 }

@@ -33,7 +33,7 @@ On startup a writer applies `AGGREGATOR_REPLAY_START_POLICY`:
 | `earliest` | Ignore persisted state and replay the live source from the beginning. |
 | `latest` | Ignore persisted state and process only messages published after startup. |
 
-Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. See [ADR 0001](../../docs/adr/0001-scalable-aggregator.md) for the event-log, keyed-state, checkpoint, and rebuild contract.
+Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. Raw archive objects are grouped by a fixed virtual routing bucket, so each partition only reads the objects it owns and every archived event is replayed by exactly one recovery worker. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. See [ADR 0001](../../docs/adr/0001-scalable-aggregator.md) for the event-log, keyed-state, checkpoint, and rebuild contract.
 
 ### Configuration
 
