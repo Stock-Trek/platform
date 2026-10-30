@@ -650,10 +650,7 @@ async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
     let checkpoint = checkpoints.get(partition).unwrap();
     assert_eq!(checkpoint.next_sequence, 42);
     assert_eq!(checkpoint.source_stream, "aggregator-shards");
-    assert!(
-        checkpoint.watermark.unwrap() > TimestampMilliseconds(61_000),
-        "{checkpoint:?}"
-    );
+    assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(61_000)));
 }
 
 #[tokio::test]
