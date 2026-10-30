@@ -270,11 +270,18 @@ where
 
         let expected = pending.missing_to.saturating_sub(pending.missing_from) + 1;
         let covered = events.len() as u64;
-        let unresolved = PendingGap::missing_ranges(
-            pending.missing_from,
-            pending.missing_to,
-            events.iter().map(|event| event.sequence),
-        );
+        let snapshot_supersedes_gap = events
+            .iter()
+            .any(|event| event.sequence > pending.missing_to);
+        let unresolved = if snapshot_supersedes_gap {
+            Vec::new()
+        } else {
+            PendingGap::missing_ranges(
+                pending.missing_from,
+                pending.missing_to,
+                events.iter().map(|event| event.sequence),
+            )
+        };
 
         if expected > 0 {
             MarketDataMetrics::record_backfill_gap_coverage(expected, covered);
@@ -313,9 +320,13 @@ where
         let mut events: Vec<_> = events
             .into_iter()
             .filter(|event| {
-                event.sequence >= gap.missing_from
-                    && event.sequence <= gap.missing_to
-                    && seen.insert(event.sequence)
+                let in_range =
+                    event.sequence >= gap.missing_from && event.sequence <= gap.missing_to;
+                // Snapshot-based streams, such as Binance depth, cannot replay
+                // historical update IDs. A snapshot fetched after the gap is
+                // newer than `missing_to` and supersedes the missing range.
+                let supersedes_gap = event.sequence > gap.missing_to;
+                (in_range || supersedes_gap) && seen.insert(event.sequence)
             })
             .collect();
         events.sort_by_key(|event| event.sequence);

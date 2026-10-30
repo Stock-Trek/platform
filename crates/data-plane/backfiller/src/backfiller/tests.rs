@@ -97,6 +97,35 @@ async fn acknowledges_after_processing_a_covered_gap() {
 }
 
 #[tokio::test]
+async fn closes_a_depth_gap_with_a_snapshot_after_the_missing_range() {
+    let acked = Arc::new(Mutex::new(Vec::new()));
+    let publisher = Arc::new(RecordingPublisher::default());
+    let store = Arc::new(InMemoryGapRetryStore::new());
+    let gap = GapMarker {
+        stream: "btcusdt@depth".to_string(),
+        ..GapMarker::gap(2, 5)
+    };
+    let service = BackfillService::new(
+        OneGapSource {
+            gap: Some(gap),
+            acked: acked.clone(),
+        },
+        OnceFetcher {
+            events: Mutex::new(vec![event(100)]),
+        },
+        publisher.clone(),
+        options(),
+    )
+    .with_retry_store_arc(Arc::new(SharedStore(store.clone())));
+
+    service.run().await.unwrap();
+
+    assert_eq!(*publisher.sequences.lock().unwrap(), vec![100]);
+    assert_eq!(acked.lock().unwrap().len(), 1);
+    assert!(store.snapshot().await.is_empty());
+}
+
+#[tokio::test]
 async fn persists_partial_ranges_instead_of_forgetting_them() {
     let store = Arc::new(InMemoryGapRetryStore::new());
     let mut service = BackfillService::new(
