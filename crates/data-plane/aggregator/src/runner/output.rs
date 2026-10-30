@@ -1,22 +1,29 @@
-//! Coalesced candle sink writes.
+//! Asynchronous candle sink writes.
 //!
-//! Open candles and their tombstones are a derived serving projection, so
-//! writes can be accumulated for a short window and only the final value per
-//! [`CandleKey`] needs to be written. Closed candles are durable outputs and
-//! are never coalesced away. The buffer is flushed before a checkpoint is
-//! saved (and therefore before source records are acknowledged), and on
-//! quiesce or shutdown.
+//! Open candles and their tombstones are a derived serving projection, so a
+//! single writer task can coalesce them and only write the final value per
+//! [`CandleKey`]. Closed candles are durable outputs and are never coalesced
+//! away. The task is fed by a bounded channel and exposes a flush barrier that
+//! completes only after every queued closed candle has been published, allowing
+//! the source checkpoint to advance safely.
+//!
+//! The writer is drained before a partition is quiesced or its lease released.
 
 use crate::{
     processor::ProcessorUpdate,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     state::AggregatorState,
 };
-use platform_errors::BpResult;
+use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::{Candle, CandleKey, ClosedCandle};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
+use tokio::sync::{mpsc, oneshot};
+use tokio::task::JoinHandle;
+use tokio::time::{self, MissedTickBehavior};
 
+/// Maximum number of updates waiting for the projection writer.
+pub(super) const DEFAULT_CHANNEL_CAPACITY: usize = 1_024;
 /// How long an open-candle write may wait for more updates to coalesce.
 pub(super) const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
 /// Maximum number of queued open mutations and closed candles before a flush.
@@ -28,9 +35,209 @@ enum OpenMutation {
     Delete,
 }
 
-/// Buffers sink writes so the hot loop can batch and coalesce them.
 #[derive(Debug)]
-pub(super) struct CandleOutputBuffer {
+enum OutputCommand {
+    Update {
+        closed: Vec<ClosedCandle>,
+        open: Vec<(CandleKey, OpenMutation)>,
+    },
+    /// Publishes the closed candles queued before this command, then
+    /// acknowledges the barrier. Open projections may still be pending.
+    Barrier {
+        reply: oneshot::Sender<BpResult<()>>,
+    },
+    /// Publishes everything queued before this command, then acknowledges the
+    /// barrier. This is used before quiescing or releasing the lease.
+    Flush {
+        reply: oneshot::Sender<BpResult<()>>,
+    },
+    /// Flushes and stops the writer task.
+    Shutdown {
+        reply: oneshot::Sender<BpResult<()>>,
+    },
+}
+
+/// Handle used by the hot loop to submit outputs to the projection writer.
+#[derive(Debug)]
+pub(super) struct CandleOutputWriter {
+    sender: mpsc::Sender<OutputCommand>,
+    task: JoinHandle<()>,
+}
+
+impl CandleOutputWriter {
+    pub(super) fn start<K>(sink: K) -> Self
+    where
+        K: OpenCandleStore + ClosedCandlePublisher + 'static,
+    {
+        Self::start_with_limits(
+            sink,
+            DEFAULT_CHANNEL_CAPACITY,
+            DEFAULT_FLUSH_INTERVAL,
+            DEFAULT_MAX_PENDING,
+        )
+    }
+
+    pub(super) fn start_with_limits<K>(
+        sink: K,
+        channel_capacity: usize,
+        flush_interval: Duration,
+        max_pending: usize,
+    ) -> Self
+    where
+        K: OpenCandleStore + ClosedCandlePublisher + 'static,
+    {
+        let (sender, receiver) = mpsc::channel(channel_capacity.max(1));
+        let pending = PendingWrites::with_limits(flush_interval, max_pending);
+        let task = tokio::spawn(run_writer(sink, receiver, pending));
+        Self { sender, task }
+    }
+
+    /// Queues one processor update without waiting for the open-candle write to
+    /// complete. The writer task coalesces repeated writes for the same key.
+    pub(super) async fn enqueue(
+        &self,
+        update: ProcessorUpdate,
+        state: &AggregatorState,
+    ) -> BpResult<()> {
+        let deletes = closed_open_keys(&update, state);
+        let mut open = Vec::with_capacity(update.open.len() + deletes.len());
+        for candle in update.open {
+            open.push((candle.key.clone(), OpenMutation::Put(candle)));
+        }
+        // Apply tombstones after puts. `closed_open_keys` only contains keys
+        // with no open window in the post-update state, so an open value for
+        // one of those keys is a stale intermediate that must not resurrect the
+        // deleted projection entry.
+        for key in deletes {
+            open.push((key, OpenMutation::Delete));
+        }
+
+        if update.closed.is_empty() && open.is_empty() {
+            return Ok(());
+        }
+
+        self.send(OutputCommand::Update {
+            closed: update.closed,
+            open,
+        })
+        .await
+    }
+
+    /// Waits until every closed candle submitted before this call has been
+    /// published.
+    ///
+    /// Pending open projections do not delay the barrier: they are derived
+    /// data and may continue coalescing after the source checkpoint advances.
+    pub(super) async fn barrier(&self) -> BpResult<()> {
+        let (reply, receiver) = oneshot::channel();
+        self.send(OutputCommand::Barrier { reply }).await?;
+        receiver.await.map_err(|_| writer_stopped())?
+    }
+
+    /// Waits until every update submitted before this call has been written.
+    ///
+    /// This drains both closed candles and the open projection and is used
+    /// before quiescing or releasing the partition lease.
+    pub(super) async fn flush(&self) -> BpResult<()> {
+        let (reply, receiver) = oneshot::channel();
+        self.send(OutputCommand::Flush { reply }).await?;
+        receiver.await.map_err(|_| writer_stopped())?
+    }
+
+    /// Flushes the remaining outputs and waits for the writer task to stop.
+    ///
+    /// This must complete before the partition lease is released.
+    pub(super) async fn shutdown(self) -> BpResult<()> {
+        let (reply, receiver) = oneshot::channel();
+        let result = match self.sender.send(OutputCommand::Shutdown { reply }).await {
+            Ok(()) => receiver.await.map_err(|_| writer_stopped())?,
+            Err(_) => Err(writer_stopped()),
+        };
+
+        match self.task.await {
+            Ok(()) => result,
+            Err(error) => Err(BpError::bad_value(
+                "aggregator output writer",
+                "task",
+                error.to_string(),
+            )),
+        }
+    }
+
+    async fn send(&self, command: OutputCommand) -> BpResult<()> {
+        self.sender
+            .send(command)
+            .await
+            .map_err(|_| writer_stopped())
+    }
+}
+
+fn writer_stopped() -> BpError {
+    BpError::bad_value(
+        "aggregator output writer",
+        "channel",
+        "projection writer stopped before acknowledging the output",
+    )
+}
+
+async fn run_writer<K>(
+    sink: K,
+    mut receiver: mpsc::Receiver<OutputCommand>,
+    mut pending: PendingWrites,
+) where
+    K: OpenCandleStore + ClosedCandlePublisher,
+{
+    let mut ticker = time::interval(pending.flush_interval);
+    ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+    ticker.tick().await;
+
+    loop {
+        tokio::select! {
+            biased;
+            command = receiver.recv() => {
+                match command {
+                    Some(OutputCommand::Update { closed, open }) => {
+                        pending.push(closed, open);
+                        if pending.pending_len() >= pending.max_pending {
+                            // A transient failure leaves the batch queued. The
+                            // next timer tick or confirmation barrier retries
+                            // with the same deterministic output ids.
+                            let _ = pending.flush(&sink).await;
+                        }
+                    }
+                    Some(OutputCommand::Barrier { reply }) => {
+                        let result = pending.publish_closed(&sink).await;
+                        let _ = reply.send(result);
+                    }
+                    Some(OutputCommand::Flush { reply }) => {
+                        let result = pending.flush(&sink).await;
+                        let _ = reply.send(result);
+                    }
+                    Some(OutputCommand::Shutdown { reply }) => {
+                        let result = pending.flush(&sink).await;
+                        let _ = reply.send(result);
+                        break;
+                    }
+                    None => {
+                        // The handle was dropped without an explicit shutdown.
+                        // Still make a best effort to drain accepted outputs.
+                        let _ = pending.flush(&sink).await;
+                        break;
+                    }
+                }
+            }
+            _ = ticker.tick() => {
+                if pending.should_flush(Instant::now()) {
+                    let _ = pending.flush(&sink).await;
+                }
+            }
+        }
+    }
+}
+
+/// Buffers sink writes so stale open projections can be dropped.
+#[derive(Debug)]
+struct PendingWrites {
     open: HashMap<CandleKey, OpenMutation>,
     closed: Vec<ClosedCandle>,
     last_flush: Instant,
@@ -38,12 +245,8 @@ pub(super) struct CandleOutputBuffer {
     max_pending: usize,
 }
 
-impl CandleOutputBuffer {
-    pub(super) fn new() -> Self {
-        Self::with_limits(DEFAULT_FLUSH_INTERVAL, DEFAULT_MAX_PENDING)
-    }
-
-    pub(super) fn with_limits(flush_interval: Duration, max_pending: usize) -> Self {
+impl PendingWrites {
+    fn with_limits(flush_interval: Duration, max_pending: usize) -> Self {
         Self {
             open: HashMap::new(),
             closed: Vec::new(),
@@ -53,75 +256,31 @@ impl CandleOutputBuffer {
         }
     }
 
-    pub(super) fn flush_interval(&self) -> Duration {
-        self.flush_interval
-    }
-
-    pub(super) fn is_empty(&self) -> bool {
+    fn is_empty(&self) -> bool {
         self.open.is_empty() && self.closed.is_empty()
     }
 
-    pub(super) fn pending_len(&self) -> usize {
+    fn pending_len(&self) -> usize {
         self.open.len() + self.closed.len()
     }
 
-    pub(super) fn should_flush(&self, now: Instant) -> bool {
-        !self.is_empty()
-            && (self.pending_len() >= self.max_pending
-                || now.saturating_duration_since(self.last_flush) >= self.flush_interval)
+    fn should_flush(&self, now: Instant) -> bool {
+        !self.is_empty() && now.saturating_duration_since(self.last_flush) >= self.flush_interval
     }
 
-    /// Queues one processor update, flushing first when the update would
-    /// exceed the configured bound.
-    pub(super) async fn enqueue<K>(
-        &mut self,
-        sink: &K,
-        update: &ProcessorUpdate,
-        state: &AggregatorState,
-    ) -> BpResult<()>
-    where
-        K: OpenCandleStore + ClosedCandlePublisher + ?Sized,
-    {
-        let deletes = closed_open_keys(update, state);
-        let incoming = update
-            .closed
-            .len()
-            .saturating_add(deletes.len())
-            .saturating_add(update.open.len());
-
-        // Flush the previous batch before applying this update. This keeps
-        // per-key ordering across flush boundaries: an older open value can
-        // never be written after a newer one from this update.
-        if !self.is_empty() && self.pending_len().saturating_add(incoming) > self.max_pending {
-            self.flush(sink).await?;
+    fn push(&mut self, closed: Vec<ClosedCandle>, open: Vec<(CandleKey, OpenMutation)>) {
+        self.closed.extend(closed);
+        for (key, mutation) in open {
+            // Only the latest value for an open projection key is observable.
+            self.open.insert(key, mutation);
         }
-
-        self.closed.extend(update.closed.iter().cloned());
-        // Apply puts before tombstones. `closed_open_keys` only contains keys
-        // with no open window in the post-update state, so an open value for
-        // one of those keys is a stale intermediate that must not resurrect the
-        // deleted projection entry.
-        for candle in &update.open {
-            self.open
-                .insert(candle.key.clone(), OpenMutation::Put(candle.clone()));
-        }
-        for key in deletes {
-            self.open.insert(key, OpenMutation::Delete);
-        }
-
-        if self.should_flush(Instant::now()) {
-            self.flush(sink).await?;
-        }
-        Ok(())
     }
 
-    /// Publishes closed candles, then flushes the final open projection.
+    /// Publishes closed candles first, then flushes the open projection.
     ///
-    /// Closed candles are published first and awaited so the durable output is
-    /// stored before the caller can advance its checkpoint. If a flush fails,
-    /// the batch is retained so a retry republishes the same deterministic
-    /// closed-candle message ids and idempotent KV mutations.
-    pub(super) async fn flush<K>(&mut self, sink: &K) -> BpResult<()>
+    /// Closed candles are the durable, revision-bearing output and must be
+    /// acknowledged before a checkpoint can advance past their inputs.
+    async fn flush<K>(&mut self, sink: &K) -> BpResult<()>
     where
         K: OpenCandleStore + ClosedCandlePublisher + ?Sized,
     {
@@ -130,7 +289,42 @@ impl CandleOutputBuffer {
             return Ok(());
         }
 
+        self.publish_closed(sink).await?;
+        self.flush_open(sink).await?;
+        self.last_flush = Instant::now();
+        Ok(())
+    }
+
+    /// Publishes only closed candles, leaving open projections pending.
+    ///
+    /// If publication fails, the batch is retained so a retry republishes the
+    /// same deterministic closed-candle message ids.
+    async fn publish_closed<K>(&mut self, sink: &K) -> BpResult<()>
+    where
+        K: ClosedCandlePublisher + ?Sized,
+    {
+        if self.closed.is_empty() {
+            return Ok(());
+        }
+
         let closed = std::mem::take(&mut self.closed);
+        match sink.publish_closed(&closed).await {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                self.closed = closed;
+                Err(error)
+            }
+        }
+    }
+
+    async fn flush_open<K>(&mut self, sink: &K) -> BpResult<()>
+    where
+        K: OpenCandleStore + ?Sized,
+    {
+        if self.open.is_empty() {
+            return Ok(());
+        }
+
         let mutations = std::mem::take(&mut self.open);
         let mut deletes = Vec::new();
         let mut opens = Vec::new();
@@ -144,9 +338,6 @@ impl CandleOutputBuffer {
         opens.sort_by_key(|candle| candle.key.subject_suffix());
 
         let result = async {
-            if !closed.is_empty() {
-                sink.publish_closed(&closed).await?;
-            }
             if !deletes.is_empty() {
                 sink.delete_open(&deletes).await?;
             }
@@ -157,23 +348,17 @@ impl CandleOutputBuffer {
         }
         .await;
 
-        match result {
-            Ok(()) => {
-                self.last_flush = Instant::now();
-                Ok(())
+        if let Err(error) = result {
+            for key in deletes {
+                self.open.insert(key, OpenMutation::Delete);
             }
-            Err(error) => {
-                self.closed = closed;
-                for key in deletes {
-                    self.open.insert(key, OpenMutation::Delete);
-                }
-                for candle in opens {
-                    self.open
-                        .insert(candle.key.clone(), OpenMutation::Put(candle));
-                }
-                Err(error)
+            for candle in opens {
+                self.open
+                    .insert(candle.key.clone(), OpenMutation::Put(candle));
             }
+            return Err(error);
         }
+        Ok(())
     }
 }
 
@@ -201,8 +386,10 @@ mod tests {
     use async_trait::async_trait;
     use platform_market_data::candle::CandleInterval;
     use platform_types::new_types::TimestampMilliseconds;
+    use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
     use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
+    use tokio::sync::Notify;
 
     #[derive(Default, Clone)]
     struct RecordingSink {
@@ -242,6 +429,74 @@ mod tests {
         }
     }
 
+    #[derive(Default, Clone)]
+    struct BlockingSink {
+        published: Arc<Mutex<usize>>,
+        gate: Arc<Notify>,
+    }
+
+    #[async_trait]
+    impl OpenCandleStore for BlockingSink {
+        async fn update_open(&self, _candles: &[Candle]) -> BpResult<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl ClosedCandlePublisher for BlockingSink {
+        async fn publish_closed(&self, _candles: &[ClosedCandle]) -> BpResult<()> {
+            self.gate.notified().await;
+            *self.published.lock().unwrap() += 1;
+            Ok(())
+        }
+    }
+
+    #[derive(Default, Clone)]
+    struct BlockingOpenSink {
+        opens: Arc<Mutex<usize>>,
+        gate: Arc<Notify>,
+    }
+
+    #[async_trait]
+    impl OpenCandleStore for BlockingOpenSink {
+        async fn update_open(&self, _candles: &[Candle]) -> BpResult<()> {
+            self.gate.notified().await;
+            *self.opens.lock().unwrap() += 1;
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl ClosedCandlePublisher for BlockingOpenSink {
+        async fn publish_closed(&self, _candles: &[ClosedCandle]) -> BpResult<()> {
+            Ok(())
+        }
+    }
+
+    #[derive(Default, Clone)]
+    struct RetrySink {
+        attempts: Arc<AtomicUsize>,
+        published: Arc<Mutex<Vec<ClosedCandle>>>,
+    }
+
+    #[async_trait]
+    impl OpenCandleStore for RetrySink {
+        async fn update_open(&self, _candles: &[Candle]) -> BpResult<()> {
+            Ok(())
+        }
+    }
+
+    #[async_trait]
+    impl ClosedCandlePublisher for RetrySink {
+        async fn publish_closed(&self, candles: &[ClosedCandle]) -> BpResult<()> {
+            if self.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
+                return Err(BpError::bad_value("sink", "test", "transient failure"));
+            }
+            self.published.lock().unwrap().extend_from_slice(candles);
+            Ok(())
+        }
+    }
+
     fn key(interval: &str) -> CandleKey {
         CandleKey::new(
             CexId::Binance,
@@ -268,40 +523,34 @@ mod tests {
         ClosedCandle::new(candle, TimestampMilliseconds(121_000), 1, 0)
     }
 
+    fn update(open: Vec<Candle>, closed: Vec<ClosedCandle>) -> ProcessorUpdate {
+        ProcessorUpdate {
+            open,
+            closed,
+            ..ProcessorUpdate::default()
+        }
+    }
+
     #[tokio::test]
     async fn open_mutations_are_coalesced_to_the_last_value_per_key() {
         let sink = RecordingSink::default();
-        let mut buffer = CandleOutputBuffer::with_limits(Duration::from_secs(60), 100);
+        let observed = sink.clone();
+        let writer = CandleOutputWriter::start_with_limits(sink, 16, Duration::from_secs(60), 100);
         let state = AggregatorState::new();
 
-        buffer
-            .enqueue(
-                &sink,
-                &ProcessorUpdate {
-                    open: vec![candle("1m", 100.0)],
-                    ..ProcessorUpdate::default()
-                },
-                &state,
-            )
+        writer
+            .enqueue(update(vec![candle("1m", 100.0)], Vec::new()), &state)
             .await
             .unwrap();
-        buffer
-            .enqueue(
-                &sink,
-                &ProcessorUpdate {
-                    open: vec![candle("1m", 105.0)],
-                    ..ProcessorUpdate::default()
-                },
-                &state,
-            )
+        writer
+            .enqueue(update(vec![candle("1m", 105.0)], Vec::new()), &state)
             .await
             .unwrap();
+        writer.flush().await.unwrap();
+        writer.shutdown().await.unwrap();
 
-        assert!(sink.calls().is_empty());
-        buffer.flush(&sink).await.unwrap();
-
-        assert_eq!(sink.calls(), vec!["open"]);
-        let open = sink.open.lock().unwrap();
+        assert_eq!(observed.calls(), vec!["open"]);
+        let open = observed.open.lock().unwrap();
         assert_eq!(open.len(), 1);
         assert_eq!(open[0].market_candle.ohlcv.close, 105.0);
     }
@@ -309,81 +558,158 @@ mod tests {
     #[tokio::test]
     async fn closed_candles_are_published_before_open_mutations() {
         let sink = RecordingSink::default();
-        let mut buffer = CandleOutputBuffer::with_limits(Duration::from_secs(60), 100);
+        let observed = sink.clone();
+        let writer = CandleOutputWriter::start_with_limits(sink, 16, Duration::from_secs(60), 100);
 
-        buffer
+        writer
             .enqueue(
-                &sink,
-                &ProcessorUpdate {
-                    closed: vec![closed(candle("1m", 99.0))],
-                    ..ProcessorUpdate::default()
-                },
+                update(vec![], vec![closed(candle("1m", 99.0))]),
                 &AggregatorState::new(),
             )
             .await
             .unwrap();
-        buffer.flush(&sink).await.unwrap();
+        writer.flush().await.unwrap();
+        writer.shutdown().await.unwrap();
 
-        assert_eq!(sink.calls(), vec!["closed", "delete"]);
-        assert_eq!(sink.closed.lock().unwrap().len(), 1);
-        assert_eq!(*sink.deleted.lock().unwrap(), vec![key("1m")]);
+        assert_eq!(observed.calls(), vec!["closed", "delete"]);
+        assert_eq!(observed.closed.lock().unwrap().len(), 1);
+        assert_eq!(*observed.deleted.lock().unwrap(), vec![key("1m")]);
 
         let sink = RecordingSink::default();
-        buffer
+        let observed = sink.clone();
+        let writer = CandleOutputWriter::start_with_limits(sink, 16, Duration::from_secs(60), 100);
+        writer
             .enqueue(
-                &sink,
-                &ProcessorUpdate {
-                    open: vec![candle("1m", 100.0)],
-                    ..ProcessorUpdate::default()
-                },
+                update(vec![candle("1m", 100.0)], Vec::new()),
                 &AggregatorState::new(),
             )
             .await
             .unwrap();
-        buffer.flush(&sink).await.unwrap();
-        assert_eq!(sink.calls(), vec!["open"]);
+        writer.flush().await.unwrap();
+        writer.shutdown().await.unwrap();
+        assert_eq!(observed.calls(), vec!["open"]);
     }
 
-    #[test]
-    fn time_bound_requests_a_flush() {
-        let mut buffer = CandleOutputBuffer::with_limits(Duration::from_millis(10), 100);
-        buffer
-            .open
-            .insert(key("1m"), OpenMutation::Put(candle("1m", 100.0)));
+    #[tokio::test]
+    async fn flush_waits_for_closed_candle_publication() {
+        let sink = BlockingSink::default();
+        let observed = sink.clone();
+        let writer = CandleOutputWriter::start_with_limits(sink, 16, Duration::from_secs(60), 100);
 
-        assert!(!buffer.should_flush(Instant::now()));
-        assert!(buffer.should_flush(Instant::now() + Duration::from_millis(11)));
+        writer
+            .enqueue(
+                update(vec![], vec![closed(candle("1m", 99.0))]),
+                &AggregatorState::new(),
+            )
+            .await
+            .unwrap();
+
+        let barrier = tokio::spawn(async move { writer.flush().await });
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert!(!barrier.is_finished());
+        assert_eq!(*observed.published.lock().unwrap(), 0);
+
+        observed.gate.notify_one();
+        tokio::time::timeout(Duration::from_secs(1), barrier)
+            .await
+            .expect("barrier should complete after publication")
+            .expect("barrier task should not panic")
+            .unwrap();
+        assert_eq!(*observed.published.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn barrier_does_not_wait_for_pending_open_writes() {
+        let sink = BlockingOpenSink::default();
+        let observed = sink.clone();
+        let writer = CandleOutputWriter::start_with_limits(sink, 16, Duration::from_secs(60), 100);
+
+        writer
+            .enqueue(
+                update(vec![candle("1m", 100.0)], Vec::new()),
+                &AggregatorState::new(),
+            )
+            .await
+            .unwrap();
+
+        tokio::time::timeout(Duration::from_secs(1), writer.barrier())
+            .await
+            .expect("closed-candle barrier must not wait for open projections")
+            .unwrap();
+        assert_eq!(*observed.opens.lock().unwrap(), 0);
+
+        observed.gate.notify_one();
+        writer.shutdown().await.unwrap();
+        assert_eq!(*observed.opens.lock().unwrap(), 1);
+    }
+
+    #[tokio::test]
+    async fn a_failed_closed_publication_is_retried_by_the_next_barrier() {
+        let sink = RetrySink::default();
+        let observed = sink.clone();
+        let writer = CandleOutputWriter::start_with_limits(sink, 16, Duration::from_secs(60), 100);
+
+        writer
+            .enqueue(
+                update(vec![], vec![closed(candle("1m", 99.0))]),
+                &AggregatorState::new(),
+            )
+            .await
+            .unwrap();
+
+        assert!(writer.barrier().await.is_err());
+        assert_eq!(observed.published.lock().unwrap().len(), 0);
+
+        writer.barrier().await.unwrap();
+        writer.shutdown().await.unwrap();
+
+        assert_eq!(observed.attempts.load(Ordering::SeqCst), 2);
+        assert_eq!(observed.published.lock().unwrap().len(), 1);
+    }
+
+    #[tokio::test]
+    async fn shutdown_drains_pending_open_mutations() {
+        let sink = RecordingSink::default();
+        let observed = sink.clone();
+        let writer = CandleOutputWriter::start_with_limits(sink, 16, Duration::from_secs(60), 100);
+
+        writer
+            .enqueue(
+                update(vec![candle("1m", 100.0)], Vec::new()),
+                &AggregatorState::new(),
+            )
+            .await
+            .unwrap();
+        writer.shutdown().await.unwrap();
+
+        assert_eq!(observed.calls(), vec!["open"]);
+        assert_eq!(observed.open.lock().unwrap().len(), 1);
     }
 
     #[tokio::test]
     async fn size_bound_flushes_without_waiting_for_the_timer() {
         let sink = RecordingSink::default();
-        let mut buffer = CandleOutputBuffer::with_limits(Duration::from_secs(60), 2);
+        let observed = sink.clone();
+        let writer = CandleOutputWriter::start_with_limits(sink, 16, Duration::from_secs(60), 2);
+        let state = AggregatorState::new();
 
-        buffer
-            .enqueue(
-                &sink,
-                &ProcessorUpdate {
-                    open: vec![candle("1m", 100.0)],
-                    ..ProcessorUpdate::default()
-                },
-                &AggregatorState::new(),
-            )
+        writer
+            .enqueue(update(vec![candle("1m", 100.0)], Vec::new()), &state)
             .await
             .unwrap();
-        buffer
-            .enqueue(
-                &sink,
-                &ProcessorUpdate {
-                    open: vec![candle("5m", 100.0)],
-                    ..ProcessorUpdate::default()
-                },
-                &AggregatorState::new(),
-            )
+        writer
+            .enqueue(update(vec![candle("5m", 100.0)], Vec::new()), &state)
             .await
             .unwrap();
 
-        assert_eq!(sink.calls(), vec!["open"]);
-        assert!(buffer.is_empty());
+        tokio::time::timeout(Duration::from_secs(1), async {
+            while observed.calls().is_empty() {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("size bound should trigger a flush");
+        writer.shutdown().await.unwrap();
+        assert_eq!(observed.calls(), vec!["open"]);
     }
 }
