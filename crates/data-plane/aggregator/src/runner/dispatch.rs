@@ -1,7 +1,7 @@
 //! Source input dispatch, candle publishing and idle flushing.
 
 use super::{
-    ProcessorRunner, QuiesceReceiver, commit::CommitState, output::CandleOutputBuffer,
+    ProcessorRunner, QuiesceReceiver, commit::CommitState, output::CandleOutputWriter,
     writer::Writer,
 };
 use crate::{
@@ -32,13 +32,12 @@ use tracing::{error, info, warn};
 impl<S, K> ProcessorRunner<S, K>
 where
     S: MarketSource,
-    K: OpenCandleStore + ClosedCandlePublisher,
+    K: OpenCandleStore + ClosedCandlePublisher + 'static,
 {
     #[allow(clippy::too_many_arguments)]
     pub(super) async fn process_inputs(
         config: &AggregatorConfig,
         source: &mut S,
-        sink: &K,
         checkpoints: &Arc<dyn StateStore>,
         leases: &Arc<dyn LeaseStore>,
         partition: PartitionId,
@@ -47,7 +46,7 @@ where
         writer: &mut Writer,
         mut quiesce: Option<QuiesceReceiver>,
         state: &mut CommitState,
-        outputs: &mut CandleOutputBuffer,
+        outputs: &CandleOutputWriter,
     ) -> BpResult<()> {
         let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
         let mut checkpoint_ticker = time::interval(config.checkpoint_interval);
@@ -56,10 +55,6 @@ where
         let mut idle_ticker = time::interval(config.watermark_idle_timeout);
         idle_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         idle_ticker.tick().await;
-        let mut output_ticker = time::interval(outputs.flush_interval());
-        output_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
-        output_ticker.tick().await;
-
         loop {
             tokio::select! {
                 biased;
@@ -74,11 +69,6 @@ where
                         "quiesce requested; draining and checkpointing aggregator partition"
                     );
                     break;
-                }
-                _ = output_ticker.tick() => {
-                    if outputs.should_flush(std::time::Instant::now()) {
-                        outputs.flush(sink).await?;
-                    }
                 }
                 maybe_record = source.next_input() => {
                     match maybe_record {
@@ -101,7 +91,7 @@ where
                                 );
                                 Self::record_update_metrics(&update);
                                 outputs
-                                    .enqueue(sink, &update, processor.state())
+                                    .enqueue(update, processor.state())
                                     .await?;
                                 state.dirty = true;
                             } else {
@@ -134,10 +124,10 @@ where
                         leases,
                         partition,
                         processor,
-                        sink,
                         writer,
                         state,
                         outputs,
+                        false,
                     )
                     .await?;
                     state.dirty = false;
@@ -145,12 +135,12 @@ where
                 _ = idle_ticker.tick() => {
                     let previous_watermark = processor.state().watermark;
                     let update = Self::flush_idle(processor);
+                    let changed = !update.is_empty()
+                        || processor.state().watermark != previous_watermark;
                     outputs
-                        .enqueue(sink, &update, processor.state())
+                        .enqueue(update, processor.state())
                         .await?;
-                    if !update.is_empty()
-                        || processor.state().watermark != previous_watermark
-                    {
+                    if changed {
                         state.dirty = true;
                     }
                     Self::record_watermark_lag(partition, processor);
@@ -161,10 +151,10 @@ where
                         leases,
                         partition,
                         processor,
-                        sink,
                         writer,
                         state,
                         outputs,
+                        false,
                     )
                     .await?;
                     state.dirty = false;

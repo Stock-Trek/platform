@@ -1,6 +1,6 @@
 //! Checkpointing and source acknowledgement for a partition writer.
 
-use super::{ProcessorRunner, output::CandleOutputBuffer, writer::Writer};
+use super::{ProcessorRunner, output::CandleOutputWriter, writer::Writer};
 use crate::{
     checkpoint::{CheckpointRecord, StateStore},
     config::AggregatorConfig,
@@ -47,7 +47,7 @@ impl CommitState {
 impl<S, K> ProcessorRunner<S, K>
 where
     S: MarketSource,
-    K: OpenCandleStore + ClosedCandlePublisher,
+    K: OpenCandleStore + ClosedCandlePublisher + 'static,
 {
     pub(super) async fn resume_position(
         checkpoints: &Arc<dyn StateStore>,
@@ -92,16 +92,23 @@ where
         leases: &Arc<dyn LeaseStore>,
         partition: PartitionId,
         processor: &CandleProcessor,
-        sink: &K,
         writer: &mut Writer,
         state: &mut CommitState,
-        outputs: &mut CandleOutputBuffer,
+        outputs: &CandleOutputWriter,
+        drain_open: bool,
     ) -> BpResult<()> {
         writer.renew(leases, partition, config.lease_ttl).await?;
 
         // Durable outputs must reach the sink before the checkpoint that
-        // advances past the inputs which produced them can be saved.
-        outputs.flush(sink).await?;
+        // advances past the inputs which produced them can be saved. Ordinary
+        // checkpoints only need the closed-candle confirmation barrier; open
+        // projections are derived and may still be coalescing. Final drains
+        // before quiesce or lease release flush both.
+        if drain_open {
+            outputs.flush().await?;
+        } else {
+            outputs.barrier().await?;
+        }
 
         AggregatorMetrics::record_checkpoint_age(
             partition.get(),

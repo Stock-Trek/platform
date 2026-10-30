@@ -1,7 +1,7 @@
 //! Partition processing worker lifecycle.
 
 use super::{
-    commit::CommitState, output::CandleOutputBuffer, quiesce::QuiesceReceiver, writer::Writer,
+    commit::CommitState, output::CandleOutputWriter, quiesce::QuiesceReceiver, writer::Writer,
 };
 use crate::{
     checkpoint::{InMemoryStateStore, StateStore},
@@ -48,7 +48,7 @@ pub struct ProcessorRunner<S, K> {
 impl<S, K> ProcessorRunner<S, K>
 where
     S: MarketSource,
-    K: OpenCandleStore + ClosedCandlePublisher,
+    K: OpenCandleStore + ClosedCandlePublisher + 'static,
 {
     pub fn new(config: AggregatorConfig, source: S, sink: K) -> Self {
         let state = AggregatorState::new_with_schema_version(config.state_schema_version);
@@ -165,11 +165,10 @@ where
             Self::resume_position(&checkpoints, partition, replay_watermark, processor.state())
                 .await;
         let mut commit_state = CommitState::new(resume_position);
-        let mut outputs = CandleOutputBuffer::new();
+        let outputs = CandleOutputWriter::start(sink);
         let result = Runtime::run_until_shutdown(Self::process_inputs(
             &config,
             &mut source,
-            &sink,
             &checkpoints,
             &leases,
             partition,
@@ -178,7 +177,7 @@ where
             &mut writer,
             quiesce,
             &mut commit_state,
-            &mut outputs,
+            &outputs,
         ))
         .await;
         let commit_result = if result.is_ok() {
@@ -189,19 +188,21 @@ where
                 &leases,
                 partition,
                 &processor,
-                &sink,
                 &mut writer,
                 &mut commit_state,
-                &mut outputs,
+                &outputs,
+                true,
             )
             .await
         } else {
             Ok(())
         };
+        let shutdown_result = outputs.shutdown().await;
         let release_result = writer.release(&leases).await;
 
         result?;
         commit_result?;
+        shutdown_result?;
         release_result?;
         Ok(())
     }
