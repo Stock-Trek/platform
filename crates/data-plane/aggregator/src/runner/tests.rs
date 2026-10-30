@@ -723,6 +723,34 @@ async fn restored_partitions_apply_new_backfills_older_than_the_replay_watermark
 }
 
 #[tokio::test]
+async fn restored_partitions_apply_sequence_less_backfills_older_than_the_replay_watermark() {
+    let sink = FakeSink::default();
+    let observed = sink.clone();
+    let acked = Arc::new(Mutex::new(0));
+    let mut backfill = trade_event(61_000);
+    backfill.sequence = None;
+    let source = FakeSource {
+        records: vec![record(MarketInput::Event(backfill), 2)],
+        acked: acked.clone(),
+        ..FakeSource::default()
+    };
+    let checkpoints = Arc::new(InMemoryStateStore::new());
+    let mut restored_state = AggregatorState::new();
+    restored_state.advance_watermark(TimestampMilliseconds(121_000));
+
+    ProcessorRunner::new(config(), source, sink)
+        .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
+        .with_state(restored_state)
+        .with_replay_watermark(Some(TimestampMilliseconds(121_000)))
+        .run()
+        .await
+        .unwrap();
+
+    assert_eq!(observed.open_updates(), 1);
+    assert_eq!(*acked.lock().unwrap(), 1);
+}
+
+#[tokio::test]
 async fn waits_for_an_active_writer_then_takes_over_the_partition() {
     let leases = Arc::new(InMemoryLeaseStore::new());
     let ttl = std::time::Duration::from_secs(30);

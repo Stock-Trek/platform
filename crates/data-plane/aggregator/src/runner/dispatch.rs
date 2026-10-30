@@ -183,7 +183,7 @@ where
             return false;
         }
         match input {
-            MarketInput::Event(event) => event.sequence.is_none_or(|sequence| {
+            MarketInput::Event(event) => event.sequence.is_some_and(|sequence| {
                 processor.state().is_duplicate(&DeduplicationKey::new(
                     event.exchange,
                     &event.stream,
