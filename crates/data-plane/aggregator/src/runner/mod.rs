@@ -1,5 +1,6 @@
 mod commit;
 mod dispatch;
+mod output;
 mod processor;
 mod quiesce;
 mod writer;

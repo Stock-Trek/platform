@@ -1,6 +1,6 @@
 //! Checkpointing and source acknowledgement for a partition writer.
 
-use super::{ProcessorRunner, writer::Writer};
+use super::{ProcessorRunner, output::CandleOutputBuffer, writer::Writer};
 use crate::{
     checkpoint::{CheckpointRecord, StateStore},
     config::AggregatorConfig,
@@ -92,10 +92,16 @@ where
         leases: &Arc<dyn LeaseStore>,
         partition: PartitionId,
         processor: &CandleProcessor,
+        sink: &K,
         writer: &mut Writer,
         state: &mut CommitState,
+        outputs: &mut CandleOutputBuffer,
     ) -> BpResult<()> {
         writer.renew(leases, partition, config.lease_ttl).await?;
+
+        // Durable outputs must reach the sink before the checkpoint that
+        // advances past the inputs which produced them can be saved.
+        outputs.flush(sink).await?;
 
         AggregatorMetrics::record_checkpoint_age(
             partition.get(),
