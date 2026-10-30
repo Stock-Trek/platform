@@ -1,4 +1,4 @@
-//! Rebalance quiescence signalling for partition workers.
+//! Rebalance quiescence signalling for shard workers.
 
 use std::sync::Arc;
 use tokio::sync::watch;
@@ -7,7 +7,7 @@ use tokio::sync::watch;
 ///
 /// The worker stops polling its source once quiesced, checkpoints and
 /// acknowledges everything it already accepted, and then releases its lease so
-/// the next owner can take over the partition.
+/// the next owner can take over the shard.
 #[derive(Debug, Clone)]
 pub struct QuiesceSignal {
     sender: watch::Sender<bool>,

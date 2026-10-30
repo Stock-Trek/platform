@@ -1,4 +1,4 @@
-//! Durable checkpoints for aggregator partitions.
+//! Durable checkpoints for aggregator shards.
 //!
 //! A checkpoint contains the source position *and* the serialized keyed state
 //! whose effects are included up to that position. The source message is
@@ -7,7 +7,7 @@
 
 use crate::config::AggregatorConfig;
 use crate::lease::{WriterLease, lease_key};
-use crate::partition::PartitionId;
+use crate::shard::ShardId;
 use crate::state::AggregatorState;
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
@@ -17,15 +17,15 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Mutex;
 
-/// A complete checkpoint for one aggregator partition.
+/// A complete checkpoint for one aggregator shard.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct CheckpointRecord {
     /// JetStream stream that delivered the source message.
     pub source_stream: String,
     /// First source sequence that must be delivered on resume.
     pub next_sequence: u64,
-    /// Partition/shard that owns this state.
-    pub partition: PartitionId,
+    /// Shard that owns this state.
+    pub shard: ShardId,
     /// Event-time watermark captured with the state.
     pub watermark: Option<TimestampMilliseconds>,
     /// Fencing token of the writer that produced this checkpoint.
@@ -41,7 +41,7 @@ pub struct CheckpointRecord {
 
 impl CheckpointRecord {
     pub fn new(
-        partition: PartitionId,
+        shard: ShardId,
         source_stream: impl Into<String>,
         next_sequence: u64,
         state: AggregatorState,
@@ -50,7 +50,7 @@ impl CheckpointRecord {
         Self {
             source_stream: source_stream.into(),
             next_sequence,
-            partition,
+            shard,
             watermark,
             fencing_token: 0,
             writer_id: String::new(),
@@ -74,7 +74,7 @@ impl CheckpointRecord {
     /// no source position to persist.
     pub fn from_message(
         message: &Message,
-        partition: PartitionId,
+        shard: ShardId,
         state: AggregatorState,
     ) -> BpResult<Option<Self>> {
         let (Some(stream), Some(stream_sequence)) = (&message.stream, message.stream_sequence)
@@ -89,7 +89,7 @@ impl CheckpointRecord {
             ));
         }
         Ok(Some(Self::new(
-            partition,
+            shard,
             stream.clone(),
             stream_sequence.saturating_add(1),
             state,
@@ -101,20 +101,20 @@ impl CheckpointRecord {
         self.next_sequence
     }
 
-    /// Whether this record can be used to restore the given partition.
-    pub fn is_compatible(&self, partition: PartitionId, source_stream: &str) -> bool {
-        self.is_compatible_with_schema(partition, source_stream, crate::state::STATE_SCHEMA_VERSION)
+    /// Whether this record can be used to restore the given shard.
+    pub fn is_compatible(&self, shard: ShardId, source_stream: &str) -> bool {
+        self.is_compatible_with_schema(shard, source_stream, crate::state::STATE_SCHEMA_VERSION)
     }
 
-    /// Whether this record matches the partition, stream, position, and state
+    /// Whether this record matches the shard, stream, position, and state
     /// schema version expected by the reader.
     pub fn is_compatible_with_schema(
         &self,
-        partition: PartitionId,
+        shard: ShardId,
         source_stream: &str,
         expected_schema_version: u32,
     ) -> bool {
-        self.partition == partition
+        self.shard == shard
             && self.source_stream == source_stream
             && self.next_sequence > 0
             && self
@@ -141,10 +141,10 @@ impl CheckpointRecord {
     }
 }
 
-/// Durable storage for complete partition checkpoints.
+/// Durable storage for complete shard checkpoints.
 #[async_trait]
 pub trait StateStore: Send + Sync {
-    async fn load(&self, partition: PartitionId) -> BpResult<Option<CheckpointRecord>>;
+    async fn load(&self, shard: ShardId) -> BpResult<Option<CheckpointRecord>>;
 
     async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()>;
 }
@@ -152,7 +152,7 @@ pub trait StateStore: Send + Sync {
 /// In-memory state store used by tests and single-process runs.
 #[derive(Debug, Default)]
 pub struct InMemoryStateStore {
-    checkpoints: Mutex<HashMap<PartitionId, (u64, CheckpointRecord)>>,
+    checkpoints: Mutex<HashMap<ShardId, (u64, CheckpointRecord)>>,
 }
 
 impl InMemoryStateStore {
@@ -160,16 +160,16 @@ impl InMemoryStateStore {
         Self::default()
     }
 
-    pub fn get(&self, partition: PartitionId) -> Option<CheckpointRecord> {
-        self.load_with_revision(partition)
+    pub fn get(&self, shard: ShardId) -> Option<CheckpointRecord> {
+        self.load_with_revision(shard)
             .map(|(checkpoint, _)| checkpoint)
     }
 
-    pub fn load_with_revision(&self, partition: PartitionId) -> Option<(CheckpointRecord, u64)> {
+    pub fn load_with_revision(&self, shard: ShardId) -> Option<(CheckpointRecord, u64)> {
         self.checkpoints
             .lock()
             .expect("checkpoint store lock")
-            .get(&partition)
+            .get(&shard)
             .cloned()
             .map(|(revision, checkpoint)| (checkpoint, revision))
     }
@@ -177,13 +177,13 @@ impl InMemoryStateStore {
 
 #[async_trait]
 impl StateStore for InMemoryStateStore {
-    async fn load(&self, partition: PartitionId) -> BpResult<Option<CheckpointRecord>> {
-        Ok(self.get(partition))
+    async fn load(&self, shard: ShardId) -> BpResult<Option<CheckpointRecord>> {
+        Ok(self.get(shard))
     }
 
     async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
         let mut checkpoints = self.checkpoints.lock().expect("checkpoint store lock");
-        if let Some((_, existing)) = checkpoints.get(&checkpoint.partition)
+        if let Some((_, existing)) = checkpoints.get(&checkpoint.shard)
             && !existing.is_writable_by(&checkpoint.writer_id, checkpoint.fencing_token)
         {
             return Err(BpError::bad_value(
@@ -196,10 +196,10 @@ impl StateStore for InMemoryStateStore {
             ));
         }
         let next_revision = checkpoints
-            .get(&checkpoint.partition)
+            .get(&checkpoint.shard)
             .map(|(revision, _)| revision.saturating_add(1))
             .unwrap_or(1);
-        checkpoints.insert(checkpoint.partition, (next_revision, checkpoint.clone()));
+        checkpoints.insert(checkpoint.shard, (next_revision, checkpoint.clone()));
         Ok(())
     }
 }
@@ -225,16 +225,16 @@ impl NatsStateStore {
         self.values.bucket()
     }
 
-    fn key(&self, partition: PartitionId) -> String {
-        format!("{}-{}", self.key_prefix, partition.get())
+    fn key(&self, shard: ShardId) -> String {
+        format!("{}-{}", self.key_prefix, shard.get())
     }
 
     /// Loads a checkpoint and the KV revision it was read from.
     pub async fn load_with_revision(
         &self,
-        partition: PartitionId,
+        shard: ShardId,
     ) -> BpResult<Option<(CheckpointRecord, u64)>> {
-        let Some((payload, revision)) = self.values.get_with_revision(&self.key(partition)).await?
+        let Some((payload, revision)) = self.values.get_with_revision(&self.key(shard)).await?
         else {
             return Ok(None);
         };
@@ -252,7 +252,7 @@ impl NatsStateStore {
         expected_revision: Option<u64>,
     ) -> BpResult<u64> {
         let payload = serde_json::to_vec(checkpoint)?;
-        let key = self.key(checkpoint.partition);
+        let key = self.key(checkpoint.shard);
         match expected_revision {
             Some(revision) => self.values.update(&key, &payload, revision).await,
             None => self.values.create(&key, &payload).await,
@@ -262,12 +262,12 @@ impl NatsStateStore {
     async fn ensure_lease_holder(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
         let Some((payload, _)) = self
             .values
-            .get_with_revision(&lease_key(checkpoint.partition))
+            .get_with_revision(&lease_key(checkpoint.shard))
             .await?
         else {
             return Err(BpError::bad_value(
                 "checkpoint lease",
-                checkpoint.partition.to_string(),
+                checkpoint.shard.to_string(),
                 "no active writer lease",
             ));
         };
@@ -290,9 +290,9 @@ impl NatsStateStore {
 
 #[async_trait]
 impl StateStore for NatsStateStore {
-    async fn load(&self, partition: PartitionId) -> BpResult<Option<CheckpointRecord>> {
+    async fn load(&self, shard: ShardId) -> BpResult<Option<CheckpointRecord>> {
         Ok(self
-            .load_with_revision(partition)
+            .load_with_revision(shard)
             .await?
             .map(|(checkpoint, _)| checkpoint))
     }
@@ -302,7 +302,7 @@ impl StateStore for NatsStateStore {
         // Read the current revision and conditionally update. If another writer
         // wins the race, `update` fails rather than overwriting its state.
         let expected_revision = self
-            .load_with_revision(checkpoint.partition)
+            .load_with_revision(checkpoint.shard)
             .await?
             .map(|(_, revision)| revision);
         self.compare_and_swap(checkpoint, expected_revision).await?;
@@ -334,7 +334,7 @@ mod tests {
         let mut state = AggregatorState::new();
         state.mark_processed(41);
         state.advance_watermark(TimestampMilliseconds(1_000));
-        CheckpointRecord::from_message(&message(), PartitionId::new(2), state)
+        CheckpointRecord::from_message(&message(), ShardId::new(2), state)
             .unwrap()
             .unwrap()
     }
@@ -347,22 +347,22 @@ mod tests {
         assert_eq!(checkpoint.next_sequence, 42);
         assert_eq!(checkpoint.last_sequence(), 41);
         assert_eq!(checkpoint.resume_sequence(), 42);
-        assert_eq!(checkpoint.partition, PartitionId::new(2));
+        assert_eq!(checkpoint.shard, ShardId::new(2));
         assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(1_000)));
         assert_eq!(checkpoint.state.schema_version, STATE_SCHEMA_VERSION);
-        assert!(checkpoint.is_compatible(PartitionId::new(2), "aggregator-shards"));
+        assert!(checkpoint.is_compatible(ShardId::new(2), "aggregator-shards"));
     }
 
     #[test]
     fn incompatible_checkpoints_are_not_used_for_recovery() {
         let checkpoint = checkpoint();
 
-        assert!(!checkpoint.is_compatible(PartitionId::new(3), "aggregator-shards"));
-        assert!(!checkpoint.is_compatible(PartitionId::new(2), "another-stream"));
+        assert!(!checkpoint.is_compatible(ShardId::new(3), "aggregator-shards"));
+        assert!(!checkpoint.is_compatible(ShardId::new(2), "another-stream"));
 
         let mut invalid_sequence = checkpoint;
         invalid_sequence.next_sequence = 0;
-        assert!(!invalid_sequence.is_compatible(PartitionId::new(2), "aggregator-shards"));
+        assert!(!invalid_sequence.is_compatible(ShardId::new(2), "aggregator-shards"));
     }
 
     #[test]
@@ -373,7 +373,7 @@ mod tests {
         };
 
         assert_eq!(
-            CheckpointRecord::from_message(&message, PartitionId::new(0), AggregatorState::new())
+            CheckpointRecord::from_message(&message, ShardId::new(0), AggregatorState::new())
                 .unwrap(),
             None
         );
@@ -382,55 +382,52 @@ mod tests {
     #[tokio::test]
     async fn in_memory_store_round_trips_checkpoints() {
         let store = InMemoryStateStore::new();
-        let partition = PartitionId::new(2);
+        let shard = ShardId::new(2);
         let checkpoint = checkpoint();
 
         store.save(&checkpoint).await.unwrap();
 
-        let loaded = store.load(partition).await.unwrap().unwrap();
+        let loaded = store.load(shard).await.unwrap().unwrap();
         assert_eq!(loaded.next_sequence, 42);
         assert_eq!(loaded.watermark, checkpoint.watermark);
-        assert_eq!(store.load(PartitionId::new(3)).await.unwrap(), None);
-        assert_eq!(store.load_with_revision(partition).unwrap().1, 1);
+        assert_eq!(store.load(ShardId::new(3)).await.unwrap(), None);
+        assert_eq!(store.load_with_revision(shard).unwrap().1, 1);
     }
 
     #[tokio::test]
     async fn in_memory_store_overwrites_are_atomic() {
         let store = InMemoryStateStore::new();
-        let partition = PartitionId::new(1);
+        let shard = ShardId::new(1);
         let mut checkpoint = checkpoint();
-        checkpoint.partition = partition;
+        checkpoint.shard = shard;
 
         store.save(&checkpoint).await.unwrap();
         checkpoint.next_sequence = 50;
         store.save(&checkpoint).await.unwrap();
 
-        assert_eq!(
-            store.load(partition).await.unwrap().unwrap().next_sequence,
-            50
-        );
-        assert_eq!(store.load_with_revision(partition).unwrap().1, 2);
+        assert_eq!(store.load(shard).await.unwrap().unwrap().next_sequence, 50);
+        assert_eq!(store.load_with_revision(shard).unwrap().1, 2);
     }
 
     #[tokio::test]
     async fn an_older_fencing_token_cannot_overwrite_a_newer_checkpoint() {
         let store = InMemoryStateStore::new();
-        let partition = PartitionId::new(1);
+        let shard = ShardId::new(1);
         let lease = WriterLease {
-            partition,
+            shard,
             owner_id: "writer-b".to_string(),
             fencing_token: 2,
             expires_at: TimestampMilliseconds::now(),
         };
         let mut checkpoint = checkpoint();
-        checkpoint.partition = partition;
+        checkpoint.shard = shard;
         store
             .save(&checkpoint.clone().with_lease(&lease))
             .await
             .unwrap();
 
         let stale_lease = WriterLease {
-            partition,
+            shard,
             owner_id: "writer-a".to_string(),
             fencing_token: 1,
             expires_at: TimestampMilliseconds::now(),
@@ -439,7 +436,7 @@ mod tests {
 
         assert!(store.save(&stale).await.is_err());
         assert_eq!(
-            store.load(partition).await.unwrap().unwrap().writer_id,
+            store.load(shard).await.unwrap().unwrap().writer_id,
             "writer-b"
         );
     }

@@ -10,7 +10,7 @@ pub use catalog::{
     S3ArchiveRecovery,
 };
 pub use rebuild::{
-    RestoreOptions, RestoreSource, RestoredPartition, rebuild_state_from_archive,
-    rebuild_state_from_archive_with_schema, restore_partition,
+    RestoreOptions, RestoreSource, RestoredShard, rebuild_state_from_archive,
+    rebuild_state_from_archive_with_schema, restore_shard,
 };
 pub use replay::{ArchivedEventSource, EmptyArchivedEventSource, S3ArchivedEventSource};

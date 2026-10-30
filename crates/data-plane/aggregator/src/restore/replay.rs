@@ -4,7 +4,7 @@
 //! archive event objects from S3 in bounded Parquet batches.
 
 use super::catalog::{ArchiveObject, ArchiveRecoveryConfig, S3ArchiveRecovery};
-use crate::partition::{PartitionId, partition_for};
+use crate::shard::{ShardId, shard_for};
 use async_trait::async_trait;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{ArchiveKind, ArchiveParquet, ArchivedMarketEvent, ParquetReader};
@@ -52,16 +52,16 @@ pub(crate) fn decoder_for(
     Ok(decoder)
 }
 
-/// Replays archive event objects from S3 for one partition.
+/// Replays archive event objects from S3 for one shard.
 ///
 /// Objects are read in bounded Parquet batches through ranged S3 requests, so
 /// recovery never downloads or decodes a whole object at once. A
 /// process-wide semaphore bounds how many archive objects are streamed
-/// concurrently across all partitions.
+/// concurrently across all shards.
 pub struct S3ArchivedEventSource {
     transfer_client: TransferClient,
-    partition: PartitionId,
-    partition_count: usize,
+    shard: ShardId,
+    shard_count: usize,
     objects: VecDeque<ArchiveObject>,
     reader: Option<platform_archive::ArchiveParquetStream<ParquetReader>>,
     /// Keeps the recovery slot held for as long as an object is being streamed.
@@ -74,15 +74,15 @@ pub struct S3ArchivedEventSource {
 impl S3ArchivedEventSource {
     pub(crate) fn from_objects(
         transfer_client: TransferClient,
-        partition: PartitionId,
-        partition_count: usize,
+        shard: ShardId,
+        shard_count: usize,
         objects: VecDeque<ArchiveObject>,
         recovery_slots: Arc<Semaphore>,
     ) -> Self {
         Self {
             transfer_client,
-            partition,
-            partition_count,
+            shard,
+            shard_count,
             objects,
             reader: None,
             _reader_permit: None,
@@ -94,11 +94,11 @@ impl S3ArchivedEventSource {
 
     pub async fn connect(
         config: &ArchiveRecoveryConfig,
-        partition: PartitionId,
-        partition_count: usize,
+        shard: ShardId,
+        shard_count: usize,
     ) -> BpResult<Self> {
         S3ArchiveRecovery::new(config.clone())
-            .connect(partition, partition_count)
+            .connect(shard, shard_count)
             .await
     }
 
@@ -189,8 +189,7 @@ impl ArchivedEventSource for S3ArchivedEventSource {
                 let decoder = decoder_for(&mut self.decoders, event.exchange)?;
                 let trades = decoder.decode(&event.event)?;
                 if trades.iter().any(|trade| {
-                    partition_for(trade.exchange, trade.trading_pair, self.partition_count)
-                        == self.partition
+                    shard_for(trade.exchange, trade.trading_pair, self.shard_count) == self.shard
                 }) {
                     return Ok(Some(event));
                 }

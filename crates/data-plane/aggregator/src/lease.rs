@@ -1,7 +1,7 @@
-//! Single-writer leases and fencing tokens for partition state.
+//! Single-writer leases and fencing tokens for shard state.
 
 use crate::config::AggregatorConfig;
-use crate::partition::PartitionId;
+use crate::shard::ShardId;
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
 use platform_metrics::AggregatorMetrics;
@@ -17,10 +17,10 @@ use tracing::info;
 const LEASE_KEY_PREFIX: &str = "lease";
 const LEASE_RETRY_INTERVAL: Duration = Duration::from_millis(100);
 
-/// A lease held by the only writer allowed to commit a partition.
+/// A lease held by the only writer allowed to commit a shard.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct WriterLease {
-    pub partition: PartitionId,
+    pub shard: ShardId,
     pub owner_id: String,
     pub fencing_token: u64,
     pub expires_at: TimestampMilliseconds,
@@ -36,12 +36,12 @@ impl WriterLease {
     }
 }
 
-/// Durable storage for partition writer leases.
+/// Durable storage for shard writer leases.
 #[async_trait]
 pub trait LeaseStore: Send + Sync {
     async fn acquire(
         &self,
-        partition: PartitionId,
+        shard: ShardId,
         owner_id: &str,
         ttl: Duration,
     ) -> BpResult<Option<WriterLease>>;
@@ -50,37 +50,37 @@ pub trait LeaseStore: Send + Sync {
 
     async fn release(&self, lease: &WriterLease) -> BpResult<()>;
 
-    async fn current(&self, partition: PartitionId) -> BpResult<Option<WriterLease>>;
+    async fn current(&self, shard: ShardId) -> BpResult<Option<WriterLease>>;
 }
 
-pub fn lease_key(partition: PartitionId) -> String {
-    format!("{LEASE_KEY_PREFIX}-{}", partition.get())
+pub fn lease_key(shard: ShardId) -> String {
+    format!("{LEASE_KEY_PREFIX}-{}", shard.get())
 }
 
-/// Waits until this owner can acquire `partition`'s lease.
+/// Waits until this owner can acquire `shard`'s lease.
 ///
-/// A replica that starts while another writer owns the partition becomes a
+/// A replica that starts while another writer owns the shard becomes a
 /// standby instead of failing. It keeps polling until the active writer
 /// releases the lease or lets it expire, at which point the next fencing token
 /// is issued.
 pub async fn wait_for_lease(
     leases: &dyn LeaseStore,
-    partition: PartitionId,
+    shard: ShardId,
     owner_id: &str,
     ttl: Duration,
 ) -> BpResult<WriterLease> {
     let mut waiting = false;
     loop {
-        if let Some(lease) = leases.acquire(partition, owner_id, ttl).await? {
+        if let Some(lease) = leases.acquire(shard, owner_id, ttl).await? {
             return Ok(lease);
         }
         if !waiting {
             waiting = true;
-            AggregatorMetrics::record_rebalance(partition.get(), "lease_waiting");
+            AggregatorMetrics::record_rebalance(shard.get(), "lease_waiting");
             info!(
-                partition = %partition,
+                shard = %shard,
                 writer = %owner_id,
-                "partition lease is held by another writer; standing by"
+                "shard lease is held by another writer; standing by"
             );
         }
         tokio::time::sleep(LEASE_RETRY_INTERVAL).await;
@@ -107,7 +107,7 @@ fn expires_at(now: TimestampMilliseconds, ttl: Duration) -> TimestampMillisecond
 /// In-memory lease store used by tests and single-process runs.
 #[derive(Debug, Default)]
 pub struct InMemoryLeaseStore {
-    leases: Mutex<HashMap<PartitionId, WriterLease>>,
+    leases: Mutex<HashMap<ShardId, WriterLease>>,
 }
 
 impl InMemoryLeaseStore {
@@ -120,13 +120,13 @@ impl InMemoryLeaseStore {
 impl LeaseStore for InMemoryLeaseStore {
     async fn acquire(
         &self,
-        partition: PartitionId,
+        shard: ShardId,
         owner_id: &str,
         ttl: Duration,
     ) -> BpResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
         let mut leases = self.leases.lock().expect("lease store lock");
-        let lease = match leases.get(&partition) {
+        let lease = match leases.get(&shard) {
             Some(existing) if existing.owner_id == owner_id => {
                 let mut renewed = existing.clone();
                 renewed.expires_at = expires_at(now, ttl);
@@ -134,26 +134,26 @@ impl LeaseStore for InMemoryLeaseStore {
             }
             Some(existing) if !existing.is_expired(now) => return Ok(None),
             Some(existing) => WriterLease {
-                partition,
+                shard,
                 owner_id: owner_id.to_string(),
                 fencing_token: existing.fencing_token.saturating_add(1),
                 expires_at: expires_at(now, ttl),
             },
             None => WriterLease {
-                partition,
+                shard,
                 owner_id: owner_id.to_string(),
                 fencing_token: 1,
                 expires_at: expires_at(now, ttl),
             },
         };
-        leases.insert(partition, lease.clone());
+        leases.insert(shard, lease.clone());
         Ok(Some(lease))
     }
 
     async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BpResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
         let mut leases = self.leases.lock().expect("lease store lock");
-        let Some(current) = leases.get_mut(&lease.partition) else {
+        let Some(current) = leases.get_mut(&lease.shard) else {
             return Ok(None);
         };
         if !current.is_held_by(&lease.owner_id, lease.fencing_token) || current.is_expired(now) {
@@ -165,7 +165,7 @@ impl LeaseStore for InMemoryLeaseStore {
 
     async fn release(&self, lease: &WriterLease) -> BpResult<()> {
         let mut leases = self.leases.lock().expect("lease store lock");
-        if let Some(current) = leases.get_mut(&lease.partition)
+        if let Some(current) = leases.get_mut(&lease.shard)
             && current.is_held_by(&lease.owner_id, lease.fencing_token)
         {
             // Keep the fencing token as a tombstone. Removing the key would
@@ -175,12 +175,12 @@ impl LeaseStore for InMemoryLeaseStore {
         Ok(())
     }
 
-    async fn current(&self, partition: PartitionId) -> BpResult<Option<WriterLease>> {
+    async fn current(&self, shard: ShardId) -> BpResult<Option<WriterLease>> {
         Ok(self
             .leases
             .lock()
             .expect("lease store lock")
-            .get(&partition)
+            .get(&shard)
             .cloned())
     }
 }
@@ -201,9 +201,8 @@ impl NatsLeaseStore {
         Ok(Self { values })
     }
 
-    async fn load(&self, partition: PartitionId) -> BpResult<Option<(WriterLease, u64)>> {
-        let Some((payload, revision)) =
-            self.values.get_with_revision(&lease_key(partition)).await?
+    async fn load(&self, shard: ShardId) -> BpResult<Option<(WriterLease, u64)>> {
+        let Some((payload, revision)) = self.values.get_with_revision(&lease_key(shard)).await?
         else {
             return Ok(None);
         };
@@ -216,15 +215,15 @@ impl NatsLeaseStore {
 impl LeaseStore for NatsLeaseStore {
     async fn acquire(
         &self,
-        partition: PartitionId,
+        shard: ShardId,
         owner_id: &str,
         ttl: Duration,
     ) -> BpResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
-        let key = lease_key(partition);
-        let Some((existing, revision)) = self.load(partition).await? else {
+        let key = lease_key(shard);
+        let Some((existing, revision)) = self.load(shard).await? else {
             let lease = WriterLease {
-                partition,
+                shard,
                 owner_id: owner_id.to_string(),
                 fencing_token: 1,
                 expires_at: expires_at(now, ttl),
@@ -233,10 +232,10 @@ impl LeaseStore for NatsLeaseStore {
             return match self.values.create(&key, &payload).await {
                 Ok(_) => Ok(Some(lease)),
                 Err(_) => {
-                    let Some((current, _)) = self.load(partition).await? else {
+                    let Some((current, _)) = self.load(shard).await? else {
                         return Err(BpError::bad_value(
                             "aggregator lease",
-                            partition.to_string(),
+                            shard.to_string(),
                             "lease creation conflicted without a visible holder",
                         ));
                     };
@@ -245,7 +244,7 @@ impl LeaseStore for NatsLeaseStore {
                     } else {
                         Err(BpError::bad_value(
                             "aggregator lease",
-                            partition.to_string(),
+                            shard.to_string(),
                             "lease creation conflicted; retry acquisition",
                         ))
                     }
@@ -262,7 +261,7 @@ impl LeaseStore for NatsLeaseStore {
             existing.fencing_token.saturating_add(1)
         };
         let lease = WriterLease {
-            partition,
+            shard,
             owner_id: owner_id.to_string(),
             fencing_token,
             expires_at: expires_at(now, ttl),
@@ -276,7 +275,7 @@ impl LeaseStore for NatsLeaseStore {
 
     async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BpResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
-        let Some((current, revision)) = self.load(lease.partition).await? else {
+        let Some((current, revision)) = self.load(lease.shard).await? else {
             return Ok(None);
         };
         if !current.is_held_by(&lease.owner_id, lease.fencing_token) || current.is_expired(now) {
@@ -287,7 +286,7 @@ impl LeaseStore for NatsLeaseStore {
         let payload = serde_json::to_vec(&renewed)?;
         match self
             .values
-            .update(&lease_key(lease.partition), &payload, revision)
+            .update(&lease_key(lease.shard), &payload, revision)
             .await
         {
             Ok(_) => Ok(Some(renewed)),
@@ -296,7 +295,7 @@ impl LeaseStore for NatsLeaseStore {
     }
 
     async fn release(&self, lease: &WriterLease) -> BpResult<()> {
-        let Some((mut current, revision)) = self.load(lease.partition).await? else {
+        let Some((mut current, revision)) = self.load(lease.shard).await? else {
             return Ok(());
         };
         if current.is_held_by(&lease.owner_id, lease.fencing_token) {
@@ -305,14 +304,14 @@ impl LeaseStore for NatsLeaseStore {
             current.expires_at = TimestampMilliseconds::now();
             let payload = serde_json::to_vec(&current)?;
             self.values
-                .update(&lease_key(lease.partition), &payload, revision)
+                .update(&lease_key(lease.shard), &payload, revision)
                 .await?;
         }
         Ok(())
     }
 
-    async fn current(&self, partition: PartitionId) -> BpResult<Option<WriterLease>> {
-        Ok(self.load(partition).await?.map(|(lease, _)| lease))
+    async fn current(&self, shard: ShardId) -> BpResult<Option<WriterLease>> {
+        Ok(self.load(shard).await?.map(|(lease, _)| lease))
     }
 }
 
@@ -320,26 +319,26 @@ impl LeaseStore for NatsLeaseStore {
 mod tests {
     use super::*;
 
-    fn partition() -> PartitionId {
-        PartitionId::new(3)
+    fn shard() -> ShardId {
+        ShardId::new(3)
     }
 
     #[tokio::test]
-    async fn only_one_owner_can_hold_a_partition_lease() {
+    async fn only_one_owner_can_hold_a_shard_lease() {
         let store = InMemoryLeaseStore::new();
         let ttl = Duration::from_secs(30);
 
         let first = store
-            .acquire(partition(), "writer-a", ttl)
+            .acquire(shard(), "writer-a", ttl)
             .await
             .unwrap()
             .unwrap();
-        let second = store.acquire(partition(), "writer-b", ttl).await.unwrap();
+        let second = store.acquire(shard(), "writer-b", ttl).await.unwrap();
 
         assert_eq!(first.fencing_token, 1);
         assert_eq!(second, None);
         assert_eq!(
-            store.current(partition()).await.unwrap().unwrap().owner_id,
+            store.current(shard()).await.unwrap().unwrap().owner_id,
             "writer-a"
         );
     }
@@ -349,14 +348,14 @@ mod tests {
         let store = InMemoryLeaseStore::new();
         let ttl = Duration::from_secs(30);
         let first = store
-            .acquire(partition(), "writer-a", ttl)
+            .acquire(shard(), "writer-a", ttl)
             .await
             .unwrap()
             .unwrap();
         store.release(&first).await.unwrap();
 
         let second = store
-            .acquire(partition(), "writer-b", ttl)
+            .acquire(shard(), "writer-b", ttl)
             .await
             .unwrap()
             .unwrap();
@@ -369,13 +368,13 @@ mod tests {
         let store = InMemoryLeaseStore::new();
         let ttl = Duration::from_secs(30);
         let stale = store
-            .acquire(partition(), "writer-a", ttl)
+            .acquire(shard(), "writer-a", ttl)
             .await
             .unwrap()
             .unwrap();
         store.release(&stale).await.unwrap();
         let current = store
-            .acquire(partition(), "writer-b", ttl)
+            .acquire(shard(), "writer-b", ttl)
             .await
             .unwrap()
             .unwrap();
@@ -383,7 +382,7 @@ mod tests {
         assert!(store.renew(&stale, ttl).await.unwrap().is_none());
         store.release(&stale).await.unwrap();
 
-        assert_eq!(store.current(partition()).await.unwrap().unwrap(), current);
+        assert_eq!(store.current(shard()).await.unwrap().unwrap(), current);
     }
 
     #[test]

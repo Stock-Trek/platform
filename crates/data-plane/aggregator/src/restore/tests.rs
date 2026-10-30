@@ -1,9 +1,9 @@
 use super::catalog::{ArchiveObject, select_event_objects, sort_archive_objects};
-use super::rebuild::{RestoreOptions, RestoreSource, restore_partition};
+use super::rebuild::{RestoreOptions, RestoreSource, restore_shard};
 use super::replay::ArchivedEventSource;
 use crate::checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore};
 use crate::config::ReplayStartPolicy;
-use crate::partition::{PartitionId, partition_for};
+use crate::shard::{ShardId, shard_for};
 use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -91,12 +91,12 @@ fn interval() -> CandleInterval {
     CandleInterval::from_label("1m").unwrap()
 }
 
-fn options(partition: PartitionId, partition_count: usize) -> RestoreOptions {
+fn options(shard: ShardId, shard_count: usize) -> RestoreOptions {
     RestoreOptions {
-        partition,
+        shard,
         source_stream: "aggregator-shards".to_string(),
         intervals: vec![interval()],
-        partition_count,
+        shard_count,
         allowed_lateness: DurationMilliseconds::ZERO,
         replay_start_policy: ReplayStartPolicy::Checkpoint,
         expected_schema_version: STATE_SCHEMA_VERSION,
@@ -106,18 +106,18 @@ fn options(partition: PartitionId, partition_count: usize) -> RestoreOptions {
 #[tokio::test]
 async fn a_compatible_checkpoint_is_restored_without_replaying_the_archive() {
     let store = InMemoryStateStore::new();
-    let partition = PartitionId::new(0);
+    let shard = ShardId::new(0);
     let mut state = AggregatorState::new();
     state.mark_processed(10);
     state.advance_watermark(TimestampMilliseconds(61_000));
-    let checkpoint = CheckpointRecord::new(partition, "aggregator-shards", 11, state);
+    let checkpoint = CheckpointRecord::new(shard, "aggregator-shards", 11, state);
     store.save(&checkpoint).await.unwrap();
 
     let connects = Arc::new(AtomicUsize::new(0));
-    let restored = restore_partition(
+    let restored = restore_shard(
         &store,
         counting_archive(vec![event(1, 1_000)], connects.clone()),
-        &options(partition, 1),
+        &options(shard, 1),
     )
     .await
     .unwrap();
@@ -135,11 +135,11 @@ async fn a_compatible_checkpoint_is_restored_without_replaying_the_archive() {
 #[tokio::test]
 async fn a_missing_checkpoint_rebuilds_from_archived_events() {
     let store = InMemoryStateStore::new();
-    let partition = PartitionId::new(0);
-    let restored = restore_partition(
+    let shard = ShardId::new(0);
+    let restored = restore_shard(
         &store,
         archive_source(VecArchive::new(vec![event(1, 61_000), event(2, 62_000)])),
-        &options(partition, 1),
+        &options(shard, 1),
     )
     .await
     .unwrap();
@@ -168,10 +168,10 @@ async fn a_missing_checkpoint_rebuilds_from_archived_events() {
 #[tokio::test]
 async fn a_rebuild_continues_the_latest_archived_state_epoch_without_advancing_it() {
     let store = InMemoryStateStore::new();
-    let partition = PartitionId::new(0);
+    let shard = ShardId::new(0);
     let archive = VecArchive::with_epochs(vec![(event(1, 61_000), 7), (event(2, 62_000), 3)]);
 
-    let restored = restore_partition(&store, archive_source(archive), &options(partition, 1))
+    let restored = restore_shard(&store, archive_source(archive), &options(shard, 1))
         .await
         .unwrap();
 
@@ -182,16 +182,16 @@ async fn a_rebuild_continues_the_latest_archived_state_epoch_without_advancing_i
 #[tokio::test]
 async fn an_incompatible_checkpoint_rebuilds_from_archived_events() {
     let store = InMemoryStateStore::new();
-    let partition = PartitionId::new(0);
+    let shard = ShardId::new(0);
     let mut state = AggregatorState::new();
     state.schema_version = STATE_SCHEMA_VERSION + 1;
-    let checkpoint = CheckpointRecord::new(partition, "aggregator-shards", 11, state);
+    let checkpoint = CheckpointRecord::new(shard, "aggregator-shards", 11, state);
     store.save(&checkpoint).await.unwrap();
 
-    let restored = restore_partition(
+    let restored = restore_shard(
         &store,
         archive_source(VecArchive::new(vec![event(1, 61_000)])),
-        &options(partition, 1),
+        &options(shard, 1),
     )
     .await
     .unwrap();
@@ -203,15 +203,15 @@ async fn an_incompatible_checkpoint_rebuilds_from_archived_events() {
 }
 
 #[tokio::test]
-async fn rebuild_only_applies_events_owned_by_the_partition() {
+async fn rebuild_only_applies_events_owned_by_the_shard() {
     let store = InMemoryStateStore::new();
-    let partition_count = 2;
-    let bitcoin_partition = partition_for(CexId::Binance, pair(), partition_count);
-    let other_partition = PartitionId::new((bitcoin_partition.get() + 1) % 2);
-    let restored = restore_partition(
+    let shard_count = 2;
+    let bitcoin_shard = shard_for(CexId::Binance, pair(), shard_count);
+    let other_shard = ShardId::new((bitcoin_shard.get() + 1) % 2);
+    let restored = restore_shard(
         &store,
         archive_source(VecArchive::new(vec![event(1, 61_000)])),
-        &options(other_partition, partition_count),
+        &options(other_shard, shard_count),
     )
     .await
     .unwrap();
@@ -221,15 +221,15 @@ async fn rebuild_only_applies_events_owned_by_the_partition() {
 }
 
 #[tokio::test]
-async fn rebuild_watermark_only_moves_forward_for_events_owned_by_the_partition() {
+async fn rebuild_watermark_only_moves_forward_for_events_owned_by_the_shard() {
     let store = InMemoryStateStore::new();
-    let partition_count = 2;
-    let bitcoin_partition = partition_for(CexId::Binance, pair(), partition_count);
-    let other_partition = PartitionId::new((bitcoin_partition.get() + 1) % 2);
-    let restored = restore_partition(
+    let shard_count = 2;
+    let bitcoin_shard = shard_for(CexId::Binance, pair(), shard_count);
+    let other_shard = ShardId::new((bitcoin_shard.get() + 1) % 2);
+    let restored = restore_shard(
         &store,
         archive_source(VecArchive::new(vec![event(1, 61_000)])),
-        &options(other_partition, partition_count),
+        &options(other_shard, shard_count),
     )
     .await
     .unwrap();
@@ -241,12 +241,12 @@ async fn rebuild_watermark_only_moves_forward_for_events_owned_by_the_partition(
 #[tokio::test]
 async fn archive_policy_ignores_a_compatible_checkpoint() {
     let store = InMemoryStateStore::new();
-    let partition = PartitionId::new(0);
+    let shard = ShardId::new(0);
     let mut state = AggregatorState::new();
     state.mark_processed(10);
     store
         .save(&CheckpointRecord::new(
-            partition,
+            shard,
             "aggregator-shards",
             11,
             state,
@@ -255,9 +255,9 @@ async fn archive_policy_ignores_a_compatible_checkpoint() {
         .unwrap();
 
     let connects = Arc::new(AtomicUsize::new(0));
-    let mut options = options(partition, 1);
+    let mut options = options(shard, 1);
     options.replay_start_policy = ReplayStartPolicy::Archive;
-    let restored = restore_partition(
+    let restored = restore_shard(
         &store,
         counting_archive(vec![event(1, 61_000)], connects.clone()),
         &options,
@@ -275,12 +275,12 @@ async fn archive_policy_ignores_a_compatible_checkpoint() {
 #[tokio::test]
 async fn earliest_policy_skips_checkpoint_and_archive() {
     let store = InMemoryStateStore::new();
-    let partition = PartitionId::new(0);
+    let shard = ShardId::new(0);
     let connects = Arc::new(AtomicUsize::new(0));
-    let mut options = options(partition, 1);
+    let mut options = options(shard, 1);
     options.replay_start_policy = ReplayStartPolicy::Earliest;
 
-    let restored = restore_partition(
+    let restored = restore_shard(
         &store,
         counting_archive(vec![event(1, 61_000)], connects.clone()),
         &options,
@@ -299,12 +299,12 @@ async fn earliest_policy_skips_checkpoint_and_archive() {
 #[tokio::test]
 async fn empty_state_uses_the_configured_schema_version() {
     let store = InMemoryStateStore::new();
-    let partition = PartitionId::new(0);
-    let mut options = options(partition, 1);
+    let shard = ShardId::new(0);
+    let mut options = options(shard, 1);
     options.replay_start_policy = ReplayStartPolicy::Earliest;
     options.expected_schema_version = STATE_SCHEMA_VERSION + 2;
 
-    let restored = restore_partition(
+    let restored = restore_shard(
         &store,
         archive_source(VecArchive::new(vec![event(1, 61_000)])),
         &options,
@@ -319,11 +319,11 @@ async fn empty_state_uses_the_configured_schema_version() {
 #[tokio::test]
 async fn latest_policy_starts_at_the_end_of_the_live_source() {
     let store = InMemoryStateStore::new();
-    let partition = PartitionId::new(0);
-    let mut options = options(partition, 1);
+    let shard = ShardId::new(0);
+    let mut options = options(shard, 1);
     options.replay_start_policy = ReplayStartPolicy::Latest;
 
-    let restored = restore_partition(
+    let restored = restore_shard(
         &store,
         archive_source(VecArchive::new(vec![event(1, 61_000)])),
         &options,
@@ -339,12 +339,12 @@ async fn latest_policy_starts_at_the_end_of_the_live_source() {
 #[tokio::test]
 async fn configured_schema_mismatch_forces_archive_rebuild() {
     let store = InMemoryStateStore::new();
-    let partition = PartitionId::new(0);
+    let shard = ShardId::new(0);
     let mut state = AggregatorState::new();
     state.mark_processed(10);
     store
         .save(&CheckpointRecord::new(
-            partition,
+            shard,
             "aggregator-shards",
             11,
             state,
@@ -352,9 +352,9 @@ async fn configured_schema_mismatch_forces_archive_rebuild() {
         .await
         .unwrap();
 
-    let mut options = options(partition, 1);
+    let mut options = options(shard, 1);
     options.expected_schema_version = STATE_SCHEMA_VERSION + 1;
-    let restored = restore_partition(
+    let restored = restore_shard(
         &store,
         archive_source(VecArchive::new(vec![event(1, 61_000)])),
         &options,
@@ -380,15 +380,15 @@ fn trade_type_still_has_the_expected_shape_for_rebuild_tests() {
 #[test]
 fn archive_recovery_selects_only_owned_event_objects() {
     let prefix = "market-data/raw";
-    let partition_count = 4;
-    let partition = PartitionId::new(2);
+    let shard_count = 4;
+    let shard = ShardId::new(2);
     let owned = (0..platform_archive::ROUTING_BUCKET_COUNT)
         .map(|index| platform_archive::RoutingBucket::from_index(index).unwrap())
-        .find(|bucket| bucket.is_owned_by(partition.get(), partition_count))
+        .find(|bucket| bucket.is_owned_by(shard.get(), shard_count))
         .unwrap();
     let other = (0..platform_archive::ROUTING_BUCKET_COUNT)
         .map(|index| platform_archive::RoutingBucket::from_index(index).unwrap())
-        .find(|bucket| !bucket.is_owned_by(partition.get(), partition_count))
+        .find(|bucket| !bucket.is_owned_by(shard.get(), shard_count))
         .unwrap();
 
     let owned_event = ArchivePath::raw_key(
@@ -433,7 +433,7 @@ fn archive_recovery_selects_only_owned_event_objects() {
         archive_object(&owned_event),
     ];
 
-    let mut selected = select_event_objects(objects, partition, partition_count);
+    let mut selected = select_event_objects(objects, shard, shard_count);
     sort_archive_objects(&mut selected);
 
     assert_eq!(
@@ -481,7 +481,7 @@ fn archive_recovery_orders_files_by_coverage_hour_not_layer_prefix() {
 fn archive_recovery_ignores_event_objects_without_a_routing_bucket() {
     let key = "market-data/raw/events/year=2024/month=01/day=02/hour=03/legacy.parquet";
 
-    let selected = select_event_objects(vec![archive_object(key)], PartitionId::new(0), 1);
+    let selected = select_event_objects(vec![archive_object(key)], ShardId::new(0), 1);
 
     assert!(selected.is_empty());
 }

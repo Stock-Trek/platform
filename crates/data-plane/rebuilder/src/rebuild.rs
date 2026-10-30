@@ -59,7 +59,7 @@ struct ReplayEvent {
 ///
 /// Events are grouped by their decoded `(exchange, trading pair)` before
 /// replay. The live router sends every stream carrying a pair to the same
-/// partition, so `@trade` and `@aggTrade` events must update the same candles.
+/// shard, so `@trade` and `@aggTrade` events must update the same candles.
 /// Grouping by pair also keeps one stream's high watermark from making another
 /// pair's earlier events late, while still supporting raw files that are not
 /// globally ordered.

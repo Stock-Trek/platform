@@ -2,8 +2,8 @@
 //!
 //! A routing key is a pure function of `(exchange, trading pair)`. Archive
 //! files are grouped into a fixed number of virtual buckets derived from that
-//! key, so changing the active partition count only changes which buckets a
-//! partition owns. It never changes the contents of an archive bucket.
+//! key, so changing the active shard count only changes which buckets a
+//! shard owns. It never changes the contents of an archive bucket.
 
 use platform_market_data::{decoders::trade::TradeDecoderFactory, event::MarketEvent};
 use std::fmt;
@@ -13,7 +13,7 @@ use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 ///
 /// The value is intentionally independent of the aggregator's active shard
 /// count. A power of two keeps the bucket path compact while still spreading
-/// keys evenly for the partition counts used in practice.
+/// keys evenly for the shard counts used in practice.
 pub const ROUTING_BUCKET_COUNT: u64 = 1 << 16;
 
 const ROUTING_BUCKET_FIELD: &str = "bucket=";
@@ -79,20 +79,20 @@ impl RoutingBucket {
         self.0
     }
 
-    /// The partition that owns this bucket for the given active shard count.
-    pub fn partition_index(self, partition_count: usize) -> u32 {
-        debug_assert!(partition_count > 0, "partition count must be positive");
-        let partition_count = partition_count.max(1) as u64;
-        (self.0 % partition_count) as u32
+    /// The shard that owns this bucket for the given active shard count.
+    pub fn shard_index(self, shard_count: usize) -> u32 {
+        debug_assert!(shard_count > 0, "shard count must be positive");
+        let shard_count = shard_count.max(1) as u64;
+        (self.0 % shard_count) as u32
     }
 
-    /// Whether the given active partition owns this bucket.
+    /// Whether the given active shard owns this bucket.
     ///
     /// Bucket ownership is derived from the fixed virtual bucket index, so this
     /// is the single check archive readers use to select their own slice of
     /// the archive.
-    pub fn is_owned_by(self, partition: u32, partition_count: usize) -> bool {
-        self.partition_index(partition_count) == partition
+    pub fn is_owned_by(self, shard: u32, shard_count: usize) -> bool {
+        self.shard_index(shard_count) == shard
     }
 
     /// The object-key path segment for this bucket.
@@ -178,23 +178,23 @@ mod tests {
     }
 
     #[test]
-    fn partition_assignment_is_derived_from_the_archive_bucket() {
+    fn shard_assignment_is_derived_from_the_archive_bucket() {
         let bucket = RoutingKey::for_pair(CexId::Binance, &bitcoin_pair()).bucket();
 
-        for partition_count in [1, 2, 8, 16, 100] {
-            assert!(bucket.partition_index(partition_count) < partition_count as u32);
+        for shard_count in [1, 2, 8, 16, 100] {
+            assert!(bucket.shard_index(shard_count) < shard_count as u32);
         }
     }
 
     #[test]
-    fn every_archive_bucket_has_exactly_one_owning_partition() {
-        for partition_count in [1_u32, 2, 8, 16, 100] {
-            let mut owned = vec![0_usize; partition_count as usize];
+    fn every_archive_bucket_has_exactly_one_owning_shard() {
+        for shard_count in [1_u32, 2, 8, 16, 100] {
+            let mut owned = vec![0_usize; shard_count as usize];
             for index in 0..RoutingBucket::COUNT {
                 let bucket = RoutingBucket::from_index(index).unwrap();
-                let partition = bucket.partition_index(partition_count as usize);
-                assert!(bucket.is_owned_by(partition, partition_count as usize));
-                owned[partition as usize] += 1;
+                let shard = bucket.shard_index(shard_count as usize);
+                assert!(bucket.is_owned_by(shard, shard_count as usize));
+                owned[shard as usize] += 1;
             }
             assert_eq!(owned.iter().sum::<usize>(), RoutingBucket::COUNT as usize);
         }

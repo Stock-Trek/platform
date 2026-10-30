@@ -19,7 +19,7 @@ const MAX_CONCURRENT_SINK_OPERATIONS: usize = 16;
 /// Stores the latest version of candles that are still open.
 ///
 /// This is a derived serving projection. Recovery uses the keyed state stored in
-/// partition checkpoints, not this bucket.
+/// shard checkpoints, not this bucket.
 #[async_trait]
 pub trait OpenCandleStore: Send + Sync {
     async fn update_open(&self, candles: &[Candle]) -> BpResult<()>;
@@ -48,10 +48,10 @@ pub trait ClosedCandlePublisher: Send + Sync {
 /// never reads this bucket back into the aggregator.
 ///
 /// Closed candles already carry a deterministic revision derived from the
-/// candle identity, window, close watermark, source offset, and partition state
+/// candle identity, window, close watermark, source offset, and shard state
 /// epoch. Publishing therefore needs no global revision counter or pending
 /// marker: every replay publishes the same `Nats-Msg-Id`, which JetStream
-/// de-duplicates while the partition checkpoint still fences redelivery.
+/// de-duplicates while the shard checkpoint still fences redelivery.
 pub struct NatsCandleSink {
     publisher: NatsPublisher,
     open_candles: KeyValue,

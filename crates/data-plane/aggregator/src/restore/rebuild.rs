@@ -1,17 +1,17 @@
 //! Checkpoint restore and archive-backed state rebuild for aggregator
-//! partitions.
+//! shards.
 //!
 //! Recovery prefers the latest compatible checkpoint because it contains the
 //! exact keyed state and the next source sequence. If the checkpoint is
-//! missing, stale, or from an incompatible schema, the partition state is
+//! missing, stale, or from an incompatible schema, the shard state is
 //! rebuilt from the compacted event archive plus the raw tail that has not been
 //! compacted yet.
 
 use super::replay::{ArchivedEventSource, decoder_for};
 use crate::checkpoint::StateStore;
 use crate::config::{AggregatorConfig, ReplayStartPolicy};
-use crate::partition::{PartitionId, partition_for};
 use crate::processor::{CandleProcessor, ProcessorConfig};
+use crate::shard::{ShardId, shard_for};
 use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use platform_errors::{BpResult, ErrorType};
 use platform_market_data::candle::CandleInterval;
@@ -23,9 +23,9 @@ use std::future::Future;
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
 
-/// The state and source position a partition should start from.
+/// The state and source position a shard should start from.
 #[derive(Debug, Clone)]
-pub struct RestoredPartition {
+pub struct RestoredShard {
     pub state: AggregatorState,
     /// Where the live source should begin after recovery.
     pub start: ConsumerStart,
@@ -35,7 +35,7 @@ pub struct RestoredPartition {
     pub rebuilt_from_archive: bool,
 }
 
-/// Recovery path that produced a partition's starting state.
+/// Recovery path that produced a shard's starting state.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RestoreSource {
     Checkpoint,
@@ -53,7 +53,7 @@ impl RestoreSource {
     }
 }
 
-impl RestoredPartition {
+impl RestoredShard {
     pub fn replay_watermark(&self) -> Option<TimestampMilliseconds> {
         if self.rebuilt_from_archive {
             self.state.watermark
@@ -73,10 +73,10 @@ impl RestoredPartition {
 /// Inputs that control checkpoint restore and archive rebuild for one writer.
 #[derive(Debug, Clone)]
 pub struct RestoreOptions {
-    pub partition: PartitionId,
+    pub shard: ShardId,
     pub source_stream: String,
     pub intervals: Vec<CandleInterval>,
-    pub partition_count: usize,
+    pub shard_count: usize,
     pub allowed_lateness: DurationMilliseconds,
     pub replay_start_policy: ReplayStartPolicy,
     pub expected_schema_version: u32,
@@ -85,14 +85,14 @@ pub struct RestoreOptions {
 impl RestoreOptions {
     pub fn from_config(
         config: &AggregatorConfig,
-        partition: PartitionId,
+        shard: ShardId,
         source_stream: impl Into<String>,
     ) -> Self {
         Self {
-            partition,
+            shard,
             source_stream: source_stream.into(),
             intervals: config.intervals.clone(),
-            partition_count: config.shard_count,
+            shard_count: config.shard_count,
             allowed_lateness: config.processor_config().allowed_lateness,
             replay_start_policy: config.replay_start_policy,
             expected_schema_version: config.state_schema_version,
@@ -100,10 +100,10 @@ impl RestoreOptions {
     }
 }
 
-/// Restores a partition from its latest checkpoint, rebuilds it from archived
+/// Restores a shard from its latest checkpoint, rebuilds it from archived
 /// raw events, or starts with empty state according to the configured policy.
 ///
-/// A checkpoint is accepted only when it belongs to this partition, names the
+/// A checkpoint is accepted only when it belongs to this shard, names the
 /// same source stream, and carries the expected state schema. Otherwise the
 /// archive is replayed from the beginning and the caller starts the live source
 /// from the beginning as well. Events at or before the rebuilt watermark are
@@ -112,35 +112,35 @@ impl RestoreOptions {
 ///
 /// `connect_archive` is only invoked when archive replay is required, so a
 /// valid checkpoint or an `earliest`/`latest` start performs no archive I/O.
-pub async fn restore_partition<F, Fut>(
+pub async fn restore_shard<F, Fut>(
     store: &dyn StateStore,
     connect_archive: F,
     options: &RestoreOptions,
-) -> BpResult<RestoredPartition>
+) -> BpResult<RestoredShard>
 where
     F: FnOnce() -> Fut,
     Fut: Future<Output = BpResult<Box<dyn ArchivedEventSource>>>,
 {
     let started = Instant::now();
-    let result = restore_partition_inner(store, connect_archive, options).await;
+    let result = restore_shard_inner(store, connect_archive, options).await;
     let outcome = match &result {
         Ok(restored) => restored.restored_from.label(),
         Err(_) => "error",
     };
-    AggregatorMetrics::record_state_restore(options.partition.get(), outcome, started.elapsed());
+    AggregatorMetrics::record_state_restore(options.shard.get(), outcome, started.elapsed());
     result
 }
 
-async fn restore_partition_inner<F, Fut>(
+async fn restore_shard_inner<F, Fut>(
     store: &dyn StateStore,
     connect_archive: F,
     options: &RestoreOptions,
-) -> BpResult<RestoredPartition>
+) -> BpResult<RestoredShard>
 where
     F: FnOnce() -> Fut,
     Fut: Future<Output = BpResult<Box<dyn ArchivedEventSource>>>,
 {
-    let partition = options.partition;
+    let shard = options.shard;
     match options.replay_start_policy {
         ReplayStartPolicy::Earliest | ReplayStartPolicy::Latest => {
             let start = match options.replay_start_policy {
@@ -148,11 +148,11 @@ where
                 _ => ConsumerStart::Earliest,
             };
             info!(
-                partition = %partition,
+                shard = %shard,
                 policy = options.replay_start_policy.label(),
-                "starting aggregator partition with empty state"
+                "starting aggregator shard with empty state"
             );
-            return Ok(RestoredPartition {
+            return Ok(RestoredShard {
                 state: AggregatorState::new_with_schema_version(options.expected_schema_version),
                 start,
                 restored_from: RestoreSource::Empty,
@@ -161,31 +161,31 @@ where
         }
         ReplayStartPolicy::Archive => {
             info!(
-                partition = %partition,
+                shard = %shard,
                 "archive replay policy selected; ignoring checkpoint"
             );
         }
-        ReplayStartPolicy::Checkpoint => match store.load(partition).await {
+        ReplayStartPolicy::Checkpoint => match store.load(shard).await {
             Ok(Some(checkpoint))
                 if checkpoint.is_compatible_with_schema(
-                    partition,
+                    shard,
                     &options.source_stream,
                     options.expected_schema_version,
                 ) =>
             {
                 let age = checkpoint.age(TimestampMilliseconds::now());
                 AggregatorMetrics::record_checkpoint_age(
-                    partition.get(),
+                    shard.get(),
                     Duration::from_millis(age.0.max(0) as u64),
                 );
                 info!(
-                    partition = %partition,
+                    shard = %shard,
                     next_sequence = checkpoint.next_sequence,
                     watermark = ?checkpoint.watermark,
                     open_candles = checkpoint.state.open_candles_len(),
-                    "restored aggregator partition from checkpoint"
+                    "restored aggregator shard from checkpoint"
                 );
-                return Ok(RestoredPartition {
+                return Ok(RestoredShard {
                     state: checkpoint.state,
                     start: ConsumerStart::Sequence(checkpoint.next_sequence),
                     restored_from: RestoreSource::Checkpoint,
@@ -194,7 +194,7 @@ where
             }
             Ok(Some(checkpoint)) => {
                 warn!(
-                    partition = %partition,
+                    shard = %shard,
                     source_stream = %checkpoint.source_stream,
                     schema_version = checkpoint.state.schema_version,
                     expected_schema_version = options.expected_schema_version,
@@ -203,14 +203,14 @@ where
             }
             Ok(None) => {
                 info!(
-                    partition = %partition,
+                    shard = %shard,
                     "no checkpoint found; rebuilding from archive"
                 );
             }
             Err(error) => {
-                AggregatorMetrics::record_checkpoint_failure(partition.get(), error.error_type());
+                AggregatorMetrics::record_checkpoint_failure(shard.get(), error.error_type());
                 warn!(
-                    partition = %partition,
+                    shard = %shard,
                     error = %error,
                     "failed to load checkpoint; rebuilding from archive"
                 );
@@ -218,25 +218,25 @@ where
         },
     }
 
-    AggregatorMetrics::record_replay_progress(partition.get(), "archive", 0.0);
+    AggregatorMetrics::record_replay_progress(shard.get(), "archive", 0.0);
     let mut archive = connect_archive().await?;
     let state = rebuild_state_from_archive_with_schema(
         archive.as_mut(),
-        partition,
+        shard,
         &options.intervals,
-        options.partition_count,
+        options.shard_count,
         options.allowed_lateness,
         options.expected_schema_version,
     )
     .await?;
-    AggregatorMetrics::record_replay_progress(partition.get(), "archive", 1.0);
+    AggregatorMetrics::record_replay_progress(shard.get(), "archive", 1.0);
     info!(
-        partition = %partition,
+        shard = %shard,
         watermark = ?state.watermark,
         open_candles = state.open_candles_len(),
-        "rebuilt aggregator partition state from archived raw events"
+        "rebuilt aggregator shard state from archived raw events"
     );
-    Ok(RestoredPartition {
+    Ok(RestoredShard {
         state,
         start: ConsumerStart::Earliest,
         restored_from: RestoreSource::Archive,
@@ -244,26 +244,26 @@ where
     })
 }
 
-/// Replays all archived events for one partition into a fresh keyed state.
+/// Replays all archived events for one shard into a fresh keyed state.
 pub async fn rebuild_state_from_archive(
     archive: &mut dyn ArchivedEventSource,
-    partition: PartitionId,
+    shard: ShardId,
     intervals: &[CandleInterval],
-    partition_count: usize,
+    shard_count: usize,
     allowed_lateness: DurationMilliseconds,
 ) -> BpResult<AggregatorState> {
     rebuild_state_from_archive_with_schema(
         archive,
-        partition,
+        shard,
         intervals,
-        partition_count,
+        shard_count,
         allowed_lateness,
         STATE_SCHEMA_VERSION,
     )
     .await
 }
 
-/// Replays all archived events for one partition into fresh keyed state with
+/// Replays all archived events for one shard into fresh keyed state with
 /// the configured schema version.
 ///
 /// Archive recovery continues the highest state epoch observed on the replayed
@@ -273,9 +273,9 @@ pub async fn rebuild_state_from_archive(
 /// must assign a fresh epoch themselves.
 pub async fn rebuild_state_from_archive_with_schema(
     archive: &mut dyn ArchivedEventSource,
-    partition: PartitionId,
+    shard: ShardId,
     intervals: &[CandleInterval],
-    partition_count: usize,
+    shard_count: usize,
     allowed_lateness: DurationMilliseconds,
     state_schema_version: u32,
 ) -> BpResult<AggregatorState> {
@@ -288,16 +288,14 @@ pub async fn rebuild_state_from_archive_with_schema(
     while let Some(archived) = archive.next_event().await? {
         replayed = replayed.saturating_add(1);
         if replayed.is_multiple_of(1_000) {
-            AggregatorMetrics::record_replay_events(partition.get(), "archive", 1_000);
+            AggregatorMetrics::record_replay_events(shard.get(), "archive", 1_000);
         }
         let event = &archived.event;
         let decoder = decoder_for(&mut decoders, event.exchange)?;
         let trades = match decoder.decode(event) {
             Ok(trades) => trades
                 .into_iter()
-                .filter(|trade| {
-                    partition_for(trade.exchange, trade.trading_pair, partition_count) == partition
-                })
+                .filter(|trade| shard_for(trade.exchange, trade.trading_pair, shard_count) == shard)
                 .collect::<Vec<_>>(),
             Err(error) => {
                 warn!(%error, stream = %event.stream, "skipping unreadable archived event");
@@ -307,7 +305,7 @@ pub async fn rebuild_state_from_archive_with_schema(
         // Closed candles produced during rebuild are already represented by
         // the archive's candle records; the fold reconstructs the same keyed
         // state, deduplication ranges, gaps, and event-time watermarks. Events
-        // with no trades for this partition must not move its watermark.
+        // with no trades for this shard must not move its watermark.
         if !trades.is_empty() {
             // Recovery continues the lineage that produced the archived inputs,
             // so the same processing step produces the same deterministic
@@ -318,7 +316,7 @@ pub async fn rebuild_state_from_archive_with_schema(
             let _ = processor.apply_event(event, &trades);
         }
     }
-    AggregatorMetrics::record_replay_events(partition.get(), "archive", replayed % 1_000);
+    AggregatorMetrics::record_replay_events(shard.get(), "archive", replayed % 1_000);
 
     Ok(processor.into_state())
 }

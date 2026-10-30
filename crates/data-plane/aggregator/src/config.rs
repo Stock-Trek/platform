@@ -1,5 +1,5 @@
-use crate::partition::{PartitionId, all_partitions};
 use crate::processor::ProcessorConfig;
+use crate::shard::{ShardId, all_shards};
 use platform_archive::RoutingBucket;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
@@ -29,7 +29,7 @@ pub const AGGREGATOR_SHARD_SUBJECT_PREFIX: &str = "AGGREGATOR_SHARD_SUBJECT_PREF
 pub const AGGREGATOR_SHARD_COUNT: &str = "AGGREGATOR_SHARD_COUNT";
 pub const AGGREGATOR_SHARD_INDEX: &str = "AGGREGATOR_SHARD_INDEX";
 
-/// What a partition writer does with persisted state when it starts.
+/// What a shard writer does with persisted state when it starts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ReplayStartPolicy {
     /// Resume from a compatible checkpoint, rebuilding from the archive only
@@ -88,10 +88,10 @@ pub struct AggregatorConfig {
     /// This intentionally lives outside the market-data subject tree so the
     /// router stream cannot overlap the ingester stream.
     pub shard_subject_prefix: String,
-    /// Total number of key partitions.
+    /// Total number of key shards.
     pub shard_count: usize,
-    /// When set, this process only owns that single partition. Otherwise it runs
-    /// every partition (useful for local development and tests).
+    /// When set, this process only owns that single shard. Otherwise it runs
+    /// every shard (useful for local development and tests).
     pub shard_index: Option<usize>,
     pub intervals: Vec<CandleInterval>,
     /// How long after a candle window ends a late event may still update it.
@@ -106,14 +106,14 @@ pub struct AggregatorConfig {
     /// flushed and state is checkpointed. Idle flushing uses the current
     /// event-time watermark and never advances it with the wall clock.
     pub watermark_idle_timeout: Duration,
-    /// What state a partition starts from.
+    /// What state a shard starts from.
     pub replay_start_policy: ReplayStartPolicy,
     /// State schema version written into new state and required in checkpoints.
     pub state_schema_version: u32,
     /// Prefix used for durable consumer names. The router uses
-    /// `{prefix}-router` and each partition uses `{prefix}-shard-{n}`.
+    /// `{prefix}-router` and each shard uses `{prefix}-shard-{n}`.
     pub consumer_prefix: String,
-    /// Lifetime of the single-writer partition lease.
+    /// Lifetime of the single-writer shard lease.
     pub lease_ttl: Duration,
 }
 
@@ -229,19 +229,19 @@ impl AggregatorConfig {
         })
     }
 
-    /// The KV bucket that stores source checkpoints for routed partitions.
+    /// The KV bucket that stores source checkpoints for routed shards.
     pub fn checkpoint_bucket(&self) -> String {
         self.checkpoint_bucket.clone()
     }
 
-    /// Durable name used by the repartition router.
+    /// Durable name used by the reshard router.
     pub fn router_durable_name(&self) -> String {
         format!("{}-router", self.consumer_prefix)
     }
 
-    /// Durable name used by one partition writer.
-    pub fn partition_durable_name(&self, partition: PartitionId) -> String {
-        format!("{}-shard-{}", self.consumer_prefix, partition.get())
+    /// Durable name used by one shard writer.
+    pub fn shard_durable_name(&self, shard: ShardId) -> String {
+        format!("{}-shard-{}", self.consumer_prefix, shard.get())
     }
 
     /// The deterministic processing configuration used by live processing and
@@ -256,11 +256,11 @@ impl AggregatorConfig {
         .with_state_schema_version(self.state_schema_version)
     }
 
-    /// The partitions this process is responsible for.
-    pub fn partitions(&self) -> Vec<PartitionId> {
+    /// The shards this process is responsible for.
+    pub fn shards(&self) -> Vec<ShardId> {
         match self.shard_index {
-            Some(index) => vec![PartitionId::new(index as u32)],
-            None => all_partitions(self.shard_count),
+            Some(index) => vec![ShardId::new(index as u32)],
+            None => all_shards(self.shard_count),
         }
     }
 }
