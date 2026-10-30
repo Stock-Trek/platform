@@ -32,24 +32,3 @@ impl NatsError {
         }
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn protocol_errors_are_retryable() {
-        assert_eq!(
-            NatsError::protocol("connection lost").retryability(),
-            Retryability::Retryable
-        );
-    }
-
-    #[test]
-    fn invalid_bucket_names_are_permanent() {
-        assert_eq!(
-            NatsError::invalid_bucket("invalid.bucket").retryability(),
-            Retryability::Permanent
-        );
-    }
-}

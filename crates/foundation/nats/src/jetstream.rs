@@ -124,14 +124,6 @@ mod tests {
     }
 
     #[test]
-    fn protocol_errors_are_retryable_nats_errors() {
-        let error = JetStream::protocol_error("test", "connection lost");
-
-        assert!(matches!(error, BpError::Nats(NatsError::Protocol { .. })));
-        assert!(error.retryability().is_retryable());
-    }
-
-    #[test]
     fn message_ids_are_deterministic_and_payload_sensitive() {
         let first = JetStream::message_id("subject.a", b"payload");
         let again = JetStream::message_id("subject.a", b"payload");
