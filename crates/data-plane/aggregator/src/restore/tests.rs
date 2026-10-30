@@ -1,0 +1,559 @@
+use super::catalog::{
+    AGGREGATOR_ARCHIVE_S3_BUCKET, ArchiveObject, ArchiveRecoveryConfig, DEFAULT_ARCHIVE_PREFIX,
+    select_event_objects, sort_archive_objects,
+};
+use super::rebuild::{RestoreOptions, RestoreSource, restore_partition};
+use super::replay::ArchivedEventSource;
+use crate::checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore};
+use crate::config::{AggregatorConfig, ReplayStartPolicy};
+use crate::partition::{PartitionId, partition_for};
+use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
+use async_trait::async_trait;
+use base64::{Engine as _, engine::general_purpose::STANDARD};
+use platform_archive::{ArchiveKind, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey};
+use platform_config::env_vars::EnvVars;
+use platform_errors::BpResult;
+use platform_market_data::{
+    candle::CandleInterval,
+    decoders::trade::{Trade, TradeDecoderFactory},
+    event::MarketEvent,
+};
+use platform_nats::ConsumerStart;
+use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use rust_decimal::Decimal;
+use std::collections::VecDeque;
+use std::sync::{
+    Arc,
+    atomic::{AtomicUsize, Ordering},
+};
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
+
+fn pair() -> TradingPair {
+    TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD)
+}
+
+fn event(sequence: u64, timestamp: i64) -> MarketEvent {
+    MarketEvent {
+        exchange: CexId::Binance,
+        stream: "btcusdt@trade".to_string(),
+        sequence: Some(sequence),
+        exchange_timestamp: Some(TimestampMilliseconds(timestamp)),
+        received_at: TimestampMilliseconds(timestamp),
+        payload: STANDARD.encode(format!(
+            r#"{{"e":"trade","E":{timestamp},"s":"BTCUSDT","t":{sequence},"p":"100","q":"1","T":{timestamp}}}"#
+        )),
+    }
+}
+
+struct VecArchive {
+    events: VecDeque<ArchivedMarketEvent>,
+}
+
+impl VecArchive {
+    fn new(events: Vec<MarketEvent>) -> Self {
+        Self {
+            events: events.into_iter().map(ArchivedMarketEvent::from).collect(),
+        }
+    }
+
+    fn with_epochs(events: Vec<(MarketEvent, u64)>) -> Self {
+        Self {
+            events: events
+                .into_iter()
+                .map(|(event, epoch)| ArchivedMarketEvent::new(event, epoch))
+                .collect(),
+        }
+    }
+}
+
+#[async_trait]
+impl ArchivedEventSource for VecArchive {
+    async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>> {
+        Ok(self.events.pop_front())
+    }
+}
+
+fn archive_source(
+    archive: VecArchive,
+) -> impl FnOnce() -> std::future::Ready<BpResult<Box<dyn ArchivedEventSource>>> {
+    || std::future::ready(Ok(Box::new(archive) as Box<dyn ArchivedEventSource>))
+}
+
+fn counting_archive(
+    events: Vec<MarketEvent>,
+    connects: Arc<AtomicUsize>,
+) -> impl FnOnce() -> std::future::Ready<BpResult<Box<dyn ArchivedEventSource>>> {
+    move || {
+        connects.fetch_add(1, Ordering::SeqCst);
+        std::future::ready(Ok(
+            Box::new(VecArchive::new(events)) as Box<dyn ArchivedEventSource>
+        ))
+    }
+}
+
+fn interval() -> CandleInterval {
+    CandleInterval::from_label("1m").unwrap()
+}
+
+fn options(partition: PartitionId, partition_count: usize) -> RestoreOptions {
+    RestoreOptions {
+        partition,
+        source_stream: "aggregator-shards".to_string(),
+        intervals: vec![interval()],
+        partition_count,
+        allowed_lateness: DurationMilliseconds::ZERO,
+        replay_start_policy: ReplayStartPolicy::Checkpoint,
+        expected_schema_version: STATE_SCHEMA_VERSION,
+    }
+}
+
+#[tokio::test]
+async fn a_compatible_checkpoint_is_restored_without_replaying_the_archive() {
+    let store = InMemoryStateStore::new();
+    let partition = PartitionId::new(0);
+    let mut state = AggregatorState::new();
+    state.mark_processed(10);
+    state.advance_watermark(TimestampMilliseconds(61_000));
+    let checkpoint = CheckpointRecord::new(partition, "aggregator-shards", 11, state);
+    store.save(&checkpoint).await.unwrap();
+
+    let connects = Arc::new(AtomicUsize::new(0));
+    let restored = restore_partition(
+        &store,
+        counting_archive(vec![event(1, 1_000)], connects.clone()),
+        &options(partition, 1),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.start_sequence(), Some(11));
+    assert_eq!(restored.start, ConsumerStart::Sequence(11));
+    assert!(!restored.rebuilt_from_archive);
+    assert_eq!(
+        restored.state.watermark,
+        Some(TimestampMilliseconds(61_000))
+    );
+    assert_eq!(connects.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn a_missing_checkpoint_rebuilds_from_archived_events() {
+    let store = InMemoryStateStore::new();
+    let partition = PartitionId::new(0);
+    let restored = restore_partition(
+        &store,
+        archive_source(VecArchive::new(vec![event(1, 61_000), event(2, 62_000)])),
+        &options(partition, 1),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.start_sequence(), None);
+    assert_eq!(restored.start, ConsumerStart::Earliest);
+    assert!(restored.rebuilt_from_archive);
+    assert_eq!(
+        restored.replay_watermark(),
+        Some(TimestampMilliseconds(62_000))
+    );
+    assert_eq!(restored.state.open_candles_len(), 1);
+    let candle = restored
+        .state
+        .open_candles
+        .values()
+        .next()
+        .unwrap()
+        .last()
+        .unwrap();
+    assert_eq!(candle.market_candle.ohlcv.open, 100.0);
+    assert_eq!(candle.market_candle.ohlcv.volume, 2.0);
+    assert_eq!(candle.market_candle.trade_count, 2);
+}
+
+#[tokio::test]
+async fn a_rebuild_continues_the_latest_archived_state_epoch() {
+    let store = InMemoryStateStore::new();
+    let partition = PartitionId::new(0);
+    let archive = VecArchive::with_epochs(vec![(event(1, 61_000), 7), (event(2, 62_000), 3)]);
+
+    let restored = restore_partition(&store, archive_source(archive), &options(partition, 1))
+        .await
+        .unwrap();
+
+    assert!(restored.rebuilt_from_archive);
+    assert_eq!(restored.state.state_epoch, 7);
+}
+
+#[tokio::test]
+async fn an_incompatible_checkpoint_rebuilds_from_archived_events() {
+    let store = InMemoryStateStore::new();
+    let partition = PartitionId::new(0);
+    let mut state = AggregatorState::new();
+    state.schema_version = STATE_SCHEMA_VERSION + 1;
+    let checkpoint = CheckpointRecord::new(partition, "aggregator-shards", 11, state);
+    store.save(&checkpoint).await.unwrap();
+
+    let restored = restore_partition(
+        &store,
+        archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        &options(partition, 1),
+    )
+    .await
+    .unwrap();
+
+    assert!(restored.rebuilt_from_archive);
+    assert_eq!(restored.start_sequence(), None);
+    assert_eq!(restored.state.open_candles_len(), 1);
+    assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION);
+}
+
+#[tokio::test]
+async fn rebuild_only_applies_events_owned_by_the_partition() {
+    let store = InMemoryStateStore::new();
+    let partition_count = 2;
+    let bitcoin_partition = partition_for(CexId::Binance, pair(), partition_count);
+    let other_partition = PartitionId::new((bitcoin_partition.get() + 1) % 2);
+    let restored = restore_partition(
+        &store,
+        archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        &options(other_partition, partition_count),
+    )
+    .await
+    .unwrap();
+
+    assert!(restored.rebuilt_from_archive);
+    assert_eq!(restored.state.open_candles_len(), 0);
+}
+
+#[tokio::test]
+async fn rebuild_watermark_only_moves_forward_for_events_owned_by_the_partition() {
+    let store = InMemoryStateStore::new();
+    let partition_count = 2;
+    let bitcoin_partition = partition_for(CexId::Binance, pair(), partition_count);
+    let other_partition = PartitionId::new((bitcoin_partition.get() + 1) % 2);
+    let restored = restore_partition(
+        &store,
+        archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        &options(other_partition, partition_count),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.state.watermark, None);
+    assert_eq!(restored.replay_watermark(), None);
+}
+
+#[tokio::test]
+async fn archive_policy_ignores_a_compatible_checkpoint() {
+    let store = InMemoryStateStore::new();
+    let partition = PartitionId::new(0);
+    let mut state = AggregatorState::new();
+    state.mark_processed(10);
+    store
+        .save(&CheckpointRecord::new(
+            partition,
+            "aggregator-shards",
+            11,
+            state,
+        ))
+        .await
+        .unwrap();
+
+    let connects = Arc::new(AtomicUsize::new(0));
+    let mut options = options(partition, 1);
+    options.replay_start_policy = ReplayStartPolicy::Archive;
+    let restored = restore_partition(
+        &store,
+        counting_archive(vec![event(1, 61_000)], connects.clone()),
+        &options,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.restored_from, RestoreSource::Archive);
+    assert!(restored.rebuilt_from_archive);
+    assert_eq!(restored.start, ConsumerStart::Earliest);
+    assert_eq!(restored.state.open_candles_len(), 1);
+    assert_eq!(connects.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn earliest_policy_skips_checkpoint_and_archive() {
+    let store = InMemoryStateStore::new();
+    let partition = PartitionId::new(0);
+    let connects = Arc::new(AtomicUsize::new(0));
+    let mut options = options(partition, 1);
+    options.replay_start_policy = ReplayStartPolicy::Earliest;
+
+    let restored = restore_partition(
+        &store,
+        counting_archive(vec![event(1, 61_000)], connects.clone()),
+        &options,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.restored_from, RestoreSource::Empty);
+    assert!(!restored.rebuilt_from_archive);
+    assert_eq!(restored.start, ConsumerStart::Earliest);
+    assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION);
+    assert_eq!(restored.state.open_candles_len(), 0);
+    assert_eq!(connects.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn empty_state_uses_the_configured_schema_version() {
+    let store = InMemoryStateStore::new();
+    let partition = PartitionId::new(0);
+    let mut options = options(partition, 1);
+    options.replay_start_policy = ReplayStartPolicy::Earliest;
+    options.expected_schema_version = STATE_SCHEMA_VERSION + 2;
+
+    let restored = restore_partition(
+        &store,
+        archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        &options,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.restored_from, RestoreSource::Empty);
+    assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION + 2);
+}
+
+#[tokio::test]
+async fn latest_policy_starts_at_the_end_of_the_live_source() {
+    let store = InMemoryStateStore::new();
+    let partition = PartitionId::new(0);
+    let mut options = options(partition, 1);
+    options.replay_start_policy = ReplayStartPolicy::Latest;
+
+    let restored = restore_partition(
+        &store,
+        archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        &options,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.restored_from, RestoreSource::Empty);
+    assert_eq!(restored.start, ConsumerStart::Latest);
+    assert_eq!(restored.state.open_candles_len(), 0);
+}
+
+#[tokio::test]
+async fn configured_schema_mismatch_forces_archive_rebuild() {
+    let store = InMemoryStateStore::new();
+    let partition = PartitionId::new(0);
+    let mut state = AggregatorState::new();
+    state.mark_processed(10);
+    store
+        .save(&CheckpointRecord::new(
+            partition,
+            "aggregator-shards",
+            11,
+            state,
+        ))
+        .await
+        .unwrap();
+
+    let mut options = options(partition, 1);
+    options.expected_schema_version = STATE_SCHEMA_VERSION + 1;
+    let restored = restore_partition(
+        &store,
+        archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        &options,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.restored_from, RestoreSource::Archive);
+    assert!(restored.rebuilt_from_archive);
+    assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION + 1);
+}
+
+#[test]
+fn restore_options_come_from_the_aggregator_configuration() {
+    let config = AggregatorConfig::from_vars(&EnvVars::from_map(vec![
+        ("RUST_LOG", "info"),
+        ("AGGREGATOR_NATS_URL", "nats://localhost:4222"),
+        ("AGGREGATOR_EVENT_SUBJECT_PREFIX", "market.events"),
+        (
+            "AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX",
+            "market.candles.open",
+        ),
+        (
+            "AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX",
+            "market.candles.closed",
+        ),
+        ("AGGREGATOR_STATE_SCHEMA_VERSION", "4"),
+        ("AGGREGATOR_REPLAY_START_POLICY", "archive"),
+        ("AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS", "12"),
+    ]))
+    .unwrap();
+    let options = RestoreOptions::from_config(&config, PartitionId::new(2), "aggregator-shards");
+
+    assert_eq!(options.partition, PartitionId::new(2));
+    assert_eq!(options.expected_schema_version, 4);
+    assert_eq!(options.replay_start_policy, ReplayStartPolicy::Archive);
+    assert_eq!(
+        config.watermark_idle_timeout,
+        std::time::Duration::from_secs(12)
+    );
+}
+
+#[test]
+fn archive_recovery_config_is_optional() {
+    assert_eq!(
+        ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(Vec::<(&str, &str)>::new())).unwrap(),
+        None
+    );
+    let config = ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(vec![(
+        AGGREGATOR_ARCHIVE_S3_BUCKET,
+        "market-data",
+    )]))
+    .unwrap()
+    .unwrap();
+    assert_eq!(config.bucket, "market-data");
+    assert_eq!(config.prefix, DEFAULT_ARCHIVE_PREFIX);
+    assert!(config.iceberg.is_none());
+}
+
+#[test]
+fn archive_recovery_enables_the_compacted_handoff_when_iceberg_is_configured() {
+    let config = ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(vec![
+        (AGGREGATOR_ARCHIVE_S3_BUCKET, "market-data"),
+        ("ICEBERG_CATALOG_URI", "https://catalog.test"),
+    ]))
+    .unwrap()
+    .unwrap();
+
+    let iceberg = config.iceberg.unwrap();
+    assert_eq!(iceberg.warehouse, "s3://market-data/iceberg");
+}
+
+#[test]
+fn trade_type_still_has_the_expected_shape_for_rebuild_tests() {
+    // Keep the test helper's payload in sync with the Binance decoder.
+    let event = event(7, 61_000);
+    let decoder = TradeDecoderFactory::for_exchange(event.exchange).unwrap();
+    let trades: Vec<Trade> = decoder.decode(&event).unwrap();
+    assert_eq!(trades.len(), 1);
+    assert_eq!(trades[0].price, Decimal::from_str_exact("100").unwrap());
+}
+
+#[test]
+fn archive_recovery_selects_only_owned_event_objects() {
+    let prefix = "market-data/raw";
+    let partition_count = 4;
+    let partition = PartitionId::new(2);
+    let owned = (0..platform_archive::ROUTING_BUCKET_COUNT)
+        .map(|index| platform_archive::RoutingBucket::from_index(index).unwrap())
+        .find(|bucket| bucket.is_owned_by(partition.get(), partition_count))
+        .unwrap();
+    let other = (0..platform_archive::ROUTING_BUCKET_COUNT)
+        .map(|index| platform_archive::RoutingBucket::from_index(index).unwrap())
+        .find(|bucket| !bucket.is_owned_by(partition.get(), partition_count))
+        .unwrap();
+
+    let owned_event = ArchivePath::raw_key(
+        prefix,
+        ArchiveKind::Events,
+        TimestampMilliseconds(0),
+        owned,
+        "owned.parquet",
+    )
+    .unwrap();
+    let other_event = ArchivePath::raw_key(
+        prefix,
+        ArchiveKind::Events,
+        TimestampMilliseconds(0),
+        other,
+        "other.parquet",
+    )
+    .unwrap();
+    let owned_candle = ArchivePath::raw_key(
+        prefix,
+        ArchiveKind::Candles,
+        TimestampMilliseconds(0),
+        owned,
+        "candles.parquet",
+    )
+    .unwrap();
+    let owned_compacted = ArchivePath::compacted_key(
+        "market-data/compacted",
+        &platform_archive::ArchivePartition::Events {
+            exchange: CexId::Binance,
+            stream: "btcusdt@trade".to_string(),
+        },
+        TimestampMilliseconds(3_600_000),
+        owned,
+        "compacted.parquet",
+    )
+    .unwrap();
+    let objects = vec![
+        archive_object(&other_event),
+        archive_object(&owned_candle),
+        archive_object(&owned_compacted),
+        archive_object(&owned_event),
+    ];
+
+    let mut selected = select_event_objects(objects, partition, partition_count);
+    sort_archive_objects(&mut selected);
+
+    assert_eq!(
+        selected,
+        vec![
+            archive_object(&owned_event),
+            archive_object(&owned_compacted)
+        ]
+    );
+}
+
+#[test]
+fn archive_recovery_orders_files_by_coverage_hour_not_layer_prefix() {
+    let bucket = platform_archive::RoutingBucket::from_index(0).unwrap();
+    let older_raw = ArchivePath::raw_key(
+        "market-data/raw",
+        ArchiveKind::Events,
+        TimestampMilliseconds(0),
+        bucket,
+        "older.parquet",
+    )
+    .unwrap();
+    let newer_compacted = ArchivePath::compacted_key(
+        "market-data/compacted",
+        &platform_archive::ArchivePartition::Events {
+            exchange: CexId::Binance,
+            stream: "btcusdt@trade".to_string(),
+        },
+        TimestampMilliseconds(3_600_000),
+        bucket,
+        "newer.parquet",
+    )
+    .unwrap();
+
+    let mut objects = vec![archive_object(&newer_compacted), archive_object(&older_raw)];
+    sort_archive_objects(&mut objects);
+
+    assert_eq!(
+        objects,
+        vec![archive_object(&older_raw), archive_object(&newer_compacted)]
+    );
+}
+
+#[test]
+fn archive_recovery_ignores_event_objects_without_a_routing_bucket() {
+    let key = "market-data/raw/events/year=2024/month=01/day=02/hour=03/legacy.parquet";
+
+    let selected = select_event_objects(vec![archive_object(key)], PartitionId::new(0), 1);
+
+    assert!(selected.is_empty());
+}
+
+fn archive_object(key: &str) -> ArchiveObject {
+    ArchiveObject {
+        bucket: Bucket::new("market-data"),
+        key: ObjectKey::new(key),
+        size: 0,
+    }
+}
