@@ -237,8 +237,12 @@ fn idle_flushes_do_not_push_event_time_stream_watermarks() {
     let mut processor = CandleProcessor::new(vec![one_minute()]);
     processor.apply_event(&event(1, 61_000), &[trade("100", 61_000)]);
 
-    let closed = processor.flush_closed_at_or_before(TimestampMilliseconds(125_000));
-    assert_eq!(closed.len(), 1);
+    let update = processor.flush_expired();
+    assert!(update.closed.is_empty());
+    assert_eq!(
+        processor.state().watermark,
+        Some(TimestampMilliseconds(61_000))
+    );
     assert_eq!(
         processor
             .state()
@@ -247,9 +251,25 @@ fn idle_flushes_do_not_push_event_time_stream_watermarks() {
     );
 
     let update = processor.apply_event(&event(2, 61_500), &[trade("105", 61_500)]);
-    assert_eq!(update.late_trades, 1);
-    assert_eq!(update.closed.len(), 1);
-    assert_eq!(update.closed[0].candle.market_candle.trade_count, 2);
+    assert_eq!(update.late_trades, 0);
+    assert!(update.closed.is_empty());
+    assert_eq!(update.open.len(), 1);
+    assert_eq!(update.open[0].market_candle.trade_count, 2);
+}
+
+#[test]
+fn idle_flushes_never_close_windows_with_the_wall_clock() {
+    let mut processor = CandleProcessor::new(vec![one_minute()]);
+    processor.apply_event(&event(1, 61_000), &[trade("100", 61_000)]);
+
+    let update = processor.flush_expired();
+
+    assert!(update.closed.is_empty());
+    assert_eq!(processor.state().open_candles_len(), 1);
+    assert_eq!(
+        processor.state().watermark,
+        Some(TimestampMilliseconds(61_000))
+    );
 }
 
 #[test]

@@ -219,13 +219,10 @@ where
     }
 
     fn flush_idle(processor: &mut CandleProcessor) -> ProcessorUpdate {
-        if processor.state().watermark.is_none() {
-            return ProcessorUpdate::default();
-        }
-        let update = ProcessorUpdate {
-            closed: processor.flush_closed_at_or_before(TimestampMilliseconds::now()),
-            ..ProcessorUpdate::default()
-        };
+        // Idle ticks must not advance event time to the wall clock. Doing so
+        // closes old windows early and can make later backfills create
+        // partial correction candles instead of revising the full history.
+        let update = processor.flush_expired();
         Self::record_update_metrics(&update);
         update
     }

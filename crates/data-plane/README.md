@@ -18,6 +18,8 @@ Aggregator consumes both market events and gap markers from NATS. A router hashe
 
 Each partition writer keeps the open candles up to date, sends updated open candles to NATS KV, and publishes closed candles to a Jetstream stream with a revision number. Source positions and keyed state are checkpointed before a message is acknowledged, so a restarted partition resumes from the first unprocessed message.
 
+Idle flushing only closes windows that are already expired at the current event-time watermark. It never advances event time to the wall clock, so backfilled trades for older windows still find and revise the retained full closed candle instead of creating a partial correction candle.
+
 ### Scaling contract
 
 The aggregator is horizontally scalable by partition, not by sharing a partition between writers. Candle ownership is determined by `(exchange, trading pair)`, so every candle key has exactly one writer for a given shard count. Changing `AGGREGATOR_SHARD_COUNT` changes that mapping and requires a rebuild rather than an in-place rolling change.
@@ -48,7 +50,7 @@ Archive rebuilds replay raw events through the same deterministic candle process
 | `AGGREGATOR_CHECKPOINT_BUCKET` | required | NATS KV bucket for checkpoints and leases. |
 | `AGGREGATOR_CHECKPOINT_PREFIX` | required | Key prefix inside the checkpoint bucket. |
 | `AGGREGATOR_ALLOWED_LATENESS_MS` | required | How late a trade may arrive and still update a candle. |
-| `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | required | Idle time before the wall clock advances the event-time watermark and closes expired windows. |
+| `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | required | Idle time before expired windows are flushed and state is checkpointed. Idle flushing never advances event time with the wall clock. |
 | `AGGREGATOR_REPLAY_START_POLICY` | required | `checkpoint`, `archive`, `earliest`, or `latest`. |
 | `AGGREGATOR_STATE_SCHEMA_VERSION` | required | State schema version written to new state and required for checkpoint restore. |
 | `AGGREGATOR_DURABLE_PREFIX` | required | Durable consumer prefix. The router uses `{prefix}-router`; partitions use `{prefix}-shard-{n}`. |

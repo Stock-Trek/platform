@@ -102,8 +102,9 @@ pub struct AggregatorConfig {
     pub checkpoint_bucket: String,
     /// Prefix of checkpoint and lease keys inside the checkpoint bucket.
     pub checkpoint_key_prefix: String,
-    /// How long the input may be idle before the wall clock advances the
-    /// event-time watermark so open candle windows can close.
+    /// How long the input may be idle before expired candle windows are
+    /// flushed and state is checkpointed. Idle flushing uses the current
+    /// event-time watermark and never advances it with the wall clock.
     pub watermark_idle_timeout: Duration,
     /// What state a partition starts from.
     pub replay_start_policy: ReplayStartPolicy,
