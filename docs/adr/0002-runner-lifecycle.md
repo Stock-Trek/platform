@@ -120,4 +120,4 @@ The current code does not yet implement every point above:
 - the aggregator does not distinguish retryable from permanent errors inside its supervisor;
 - `rebuilder` does not handle shutdown explicitly, so an interrupted attempt exits through normal process termination.
 
-These are implementation changes, not permission to introduce another lifecycle pattern. Until these are addressed, the external supervisor should be configured to restart both non-zero exits and unexpectedly successful exits for the affected long-running services.
+These are implementation changes, not permission to introduce another lifecycle pattern.
