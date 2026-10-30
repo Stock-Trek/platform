@@ -123,7 +123,7 @@ impl ArchiveBatchSource for S3ArchiveSource {
             }
             if processed
                 .get(&kind)
-                .is_some_and(|files| files.contains(key))
+                .is_some_and(|files| files.contains(&s3_uri))
             {
                 continue;
             }

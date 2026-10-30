@@ -13,7 +13,7 @@ The aggregator originally kept open candles in process memory and used one durab
 
 Market events and gap markers are the source of truth. The ingester and backfiller append them to a NATS JetStream stream with sequence numbers. The router repartitions those inputs onto shard subjects. A partition writer consumes only its shard, in stream order, and acknowledges a message only after the effects of that message are durable.
 
-The event log is also archived as raw Parquet objects. The archive is ordered by event time and sequence and is sufficient to rebuild a partition without relying on another replica's memory.
+The event log is also archived as raw Parquet objects. The archive is ordered by event time and sequence and is sufficient to rebuild a partition without relying on another replica's memory. Compaction adds a second, de-duplicated copy of completed raw objects. Each compacted snapshot records the raw source object URIs it represents, so readers can replay the compacted files plus only the raw objects that are still in the un-compacted tail.
 
 ### Keyed state
 
@@ -39,11 +39,13 @@ Checkpoint keys use a configurable prefix inside a configurable KV bucket. This 
 Recovery follows the configured replay policy:
 
 - `checkpoint` restores compatible state and resumes at `next_sequence`.
-- `archive` ignores checkpoints and replays archived raw events through the deterministic candle processor.
+- `archive` ignores checkpoints and replays compacted archived events plus the un-compacted raw tail through the deterministic candle processor.
 - `earliest` starts with empty state at the beginning of the live log.
 - `latest` starts with empty state at the end of the live log.
 
 An archive rebuild records its event-time watermark. The live source is then consumed from the beginning. Inputs at or before that watermark are skipped only when they are already represented in the rebuilt deduplication state (or carry no sequence); new backfills with unseen sequences still pass through the candle fold and revise retained closed candles. This makes the archive-plus-log handoff idempotent without dropping late data. Closed-candle revisions are derived from source offsets and state epoch, not from process-local counters.
+
+Compacted files and their processed raw-source set are read from the same Iceberg snapshot. A raw object is either fully represented by compacted files in that snapshot or remains in the raw tail, so replays do not need a second scan of the full raw history and cannot duplicate the compacted prefix.
 
 When the shard count or key mapping changes, operators select `archive` (or `earliest` with an empty live stream) or run the Rebuilder. There is no mixed old/new partition mapping rollout.
 

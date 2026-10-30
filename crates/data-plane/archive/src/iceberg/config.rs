@@ -40,6 +40,17 @@ impl IcebergConfig {
             namespace,
         })
     }
+
+    /// Reads catalog configuration when `ICEBERG_CATALOG_URI` is present.
+    ///
+    /// Services that can operate without Iceberg use this to enable the
+    /// compacted archive handoff only when a catalog has been configured.
+    pub fn optional_from_vars(vars: &EnvVars, default_warehouse: &str) -> BpResult<Option<Self>> {
+        if vars.optional(ICEBERG_CATALOG_URI)?.is_none() {
+            return Ok(None);
+        }
+        Self::from_vars(vars, default_warehouse).map(Some)
+    }
 }
 
 #[cfg(test)]
@@ -80,6 +91,22 @@ mod tests {
         assert_eq!(config.warehouse, "s3://archive/iceberg");
         assert_eq!(config.namespace, "market_data");
         assert_eq!(config.token, None);
+    }
+
+    #[test]
+    fn optional_configuration_is_only_enabled_by_the_catalog_uri() {
+        assert_eq!(
+            IcebergConfig::optional_from_vars(&vars(&[]), "s3://archive/iceberg").unwrap(),
+            None
+        );
+        assert!(
+            IcebergConfig::optional_from_vars(
+                &vars(&[("ICEBERG_CATALOG_URI", "https://catalog.test")]),
+                "s3://archive/iceberg",
+            )
+            .unwrap()
+            .is_some()
+        );
     }
 
     #[test]

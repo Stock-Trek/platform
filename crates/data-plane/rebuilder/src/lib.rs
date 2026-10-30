@@ -1,11 +1,11 @@
 //! Deterministic candle rebuild from archived market events.
 //!
-//! The rebuilder reads compacted event partitions when they are available and
-//! falls back to raw partitions otherwise. Events are grouped by exchange
-//! trading pair and replayed through the aggregator's pure candle processor, so
-//! all streams for a pair update the same candles and the same archived input
-//! always produces the same candle revisions. Regenerated candles can be
-//! written to either the raw or the compacted candle layer.
+//! The rebuilder reads compacted event partitions plus the raw tail that has not
+//! been compacted yet. Events are grouped by exchange trading pair and replayed
+//! through the aggregator's pure candle processor, so all streams for a pair
+//! update the same candles and the same archived input always produces the same
+//! candle revisions. Regenerated candles can be written to either the raw or
+//! the compacted candle layer.
 
 pub mod config;
 pub mod events;
@@ -39,8 +39,10 @@ pub async fn run(config: RebuildConfig) -> BpResult<()> {
     let result = rebuild_candles(events, &options)?;
 
     info!(
-        source_layer = source.layer().label(),
-        source_files = source.files().len(),
+        source_layer = source.source_layer().label(),
+        compacted_files = source.compacted_files().len(),
+        raw_tail_files = source.raw_tail_files().len(),
+        source_files = source.file_count(),
         events = result.stats.events_read,
         trades = result.stats.trades_applied,
         decode_failures = result.stats.decode_failures,

@@ -69,6 +69,23 @@ pub trait ArchiveCatalog: Send + Sync {
 
     async fn processed_source_files(&self, table: ArchiveIcebergTable)
     -> BpResult<HashSet<String>>;
+
+    /// Reads the compacted data files and the processed raw-source set from one
+    /// table snapshot.
+    ///
+    /// The two values form the compacted/raw handoff contract. They must come
+    /// from the same snapshot, otherwise a concurrent compaction commit can mark
+    /// a raw object as processed before the matching compacted files are visible
+    /// to the recovery reader.
+    async fn compacted_snapshot(
+        &self,
+        table: ArchiveIcebergTable,
+    ) -> BpResult<(Vec<IcebergDataFile>, HashSet<String>)> {
+        Ok((
+            self.data_files(table).await?,
+            self.processed_source_files(table).await?,
+        ))
+    }
 }
 
 pub struct IcebergCatalog {
@@ -385,6 +402,32 @@ impl ArchiveCatalog for IcebergCatalog {
 
     async fn data_files(&self, table: ArchiveIcebergTable) -> BpResult<Vec<IcebergDataFile>> {
         let table = self.ensure_table(table).await?;
+        self.data_files_from_table(&table).await
+    }
+
+    async fn processed_source_files(
+        &self,
+        table: ArchiveIcebergTable,
+    ) -> BpResult<HashSet<String>> {
+        let table = self.ensure_table(table).await?;
+        Ok(Self::source_files_from_metadata(&table))
+    }
+
+    async fn compacted_snapshot(
+        &self,
+        table: ArchiveIcebergTable,
+    ) -> BpResult<(Vec<IcebergDataFile>, HashSet<String>)> {
+        // Load the table once and derive both views from that metadata so the
+        // processed set can never describe a newer snapshot than the files.
+        let table = self.ensure_table(table).await?;
+        let files = self.data_files_from_table(&table).await?;
+        let processed = Self::source_files_from_metadata(&table);
+        Ok((files, processed))
+    }
+}
+
+impl IcebergCatalog {
+    async fn data_files_from_table(&self, table: &Table) -> BpResult<Vec<IcebergDataFile>> {
         let scan = table
             .scan()
             .build()
@@ -407,14 +450,6 @@ impl ArchiveCatalog for IcebergCatalog {
         }
         files.sort_by(|left, right| left.file_path.cmp(&right.file_path));
         Ok(files)
-    }
-
-    async fn processed_source_files(
-        &self,
-        table: ArchiveIcebergTable,
-    ) -> BpResult<HashSet<String>> {
-        let table = self.ensure_table(table).await?;
-        Ok(Self::source_files_from_metadata(&table))
     }
 }
 

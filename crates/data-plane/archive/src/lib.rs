@@ -1,5 +1,6 @@
 pub mod batch;
 pub mod buffer;
+pub mod handoff;
 pub mod iceberg;
 pub mod layout;
 pub mod parquet;
@@ -12,6 +13,7 @@ pub mod source;
 
 pub use batch::ArchiveBatch;
 pub use buffer::ArchiveBuffer;
+pub use handoff::ArchiveHandoff;
 pub use iceberg::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveTableLayer, IcebergCatalog, IcebergConfig,
     IcebergDataFile,

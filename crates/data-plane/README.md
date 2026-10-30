@@ -28,12 +28,12 @@ On startup a writer applies `AGGREGATOR_REPLAY_START_POLICY`:
 
 | Policy | Behaviour |
 | --- | --- |
-| `checkpoint` | Resume a compatible checkpoint, otherwise rebuild from the raw-event archive. |
-| `archive` | Ignore checkpoints and rebuild keyed state from the raw-event archive. |
+| `checkpoint` | Resume a compatible checkpoint, otherwise rebuild from the compacted archive plus the un-compacted raw tail. |
+| `archive` | Ignore checkpoints and rebuild keyed state from the compacted archive plus the un-compacted raw tail. |
 | `earliest` | Ignore persisted state and replay the live source from the beginning. |
 | `latest` | Ignore persisted state and process only messages published after startup. |
 
-Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. Raw archive objects are grouped by a fixed virtual routing bucket, so each partition only reads the objects it owns and every archived event is replayed by exactly one recovery worker. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. See [ADR 0001](../../docs/adr/0001-scalable-aggregator.md) for the event-log, keyed-state, checkpoint, and rebuild contract.
+Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. When an Iceberg catalog is configured, recovery reads the compacted event files and only the raw objects that are not represented by the compacted snapshot. Without a catalog it falls back to listing `AGGREGATOR_ARCHIVE_S3_PREFIX` and replaying the raw history. Both raw and compacted objects are grouped by a fixed virtual routing bucket, so each partition only reads the objects it owns and every archived event is replayed by exactly one recovery worker. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. See [ADR 0001](../../docs/adr/0001-scalable-aggregator.md) for the event-log, keyed-state, checkpoint, and rebuild contract.
 
 ### Configuration
 
@@ -50,8 +50,9 @@ Archive rebuilds replay raw events through the same deterministic candle process
 | `AGGREGATOR_STATE_SCHEMA_VERSION` | current code version | State schema version written to new state and required for checkpoint restore. |
 | `AGGREGATOR_DURABLE_PREFIX` | `aggregator` | Durable consumer prefix. The router uses `{prefix}-router`; partitions use `{prefix}-shard-{n}`. |
 | `AGGREGATOR_LEASE_TTL_SECS` | `30` | Single-writer lease lifetime. |
-| `AGGREGATOR_ARCHIVE_S3_BUCKET` | unset | Enables raw-event archive recovery. |
-| `AGGREGATOR_ARCHIVE_S3_PREFIX` | `market-data/raw` | Archive prefix used for rebuilds. |
+| `AGGREGATOR_ARCHIVE_S3_BUCKET` | unset | Enables archive recovery. |
+| `AGGREGATOR_ARCHIVE_S3_PREFIX` | `market-data/raw` | Raw archive prefix used when no Iceberg catalog is configured. |
+| `ICEBERG_CATALOG_URI` | unset | Enables the compacted/raw handoff for archive recovery. |
 
 ### Observability
 
@@ -72,9 +73,11 @@ Archiver will be a durable Jetstream consumer, and periodically flush de-duplica
 
 Compactor will run regularly converting the raw archived S3 files into clean and tidy files, partitioning by symbol and routing bucket and sorting by timestamp.
 
+Each compacted Iceberg snapshot records the raw source object URIs it represents in the same commit as the compacted data files. That snapshot is the explicit compacted/raw handoff: recovery readers replay all live compacted files plus only the raw objects that are absent from the source-object set. A raw object is therefore either fully represented by compacted files or still in the raw tail, never both. Because the compacted files and source-object set are read from one snapshot, a concurrent compaction commit cannot create a gap or a duplicate.
+
 ## Rebuilder
 
-Rebuilder replays archived market events from Iceberg to deterministically regenerate candles after an aggregator configuration or code change. It prefers compacted event partitions, which are already de-duplicated and sorted by exchange stream, timestamp, and sequence, and falls back to raw partitions when no compacted table exists. Events are grouped by their decoded exchange and trading pair and replayed through the aggregator's pure candle processor using a new state epoch, so all streams for a pair (such as `@trade` and `@aggTrade`) update the same candles. Regenerated candles can be written either as raw hourly objects in the raw candle table or as candle-key partitions in the compacted candle table.
+Rebuilder replays archived market events from Iceberg to deterministically regenerate candles after an aggregator configuration or code change. With `REBUILDER_SOURCE_LAYER=auto` it reads compacted event partitions plus the raw tail that has not been compacted yet, using the same handoff contract as aggregator recovery. Explicit `raw` and `compacted` modes read only that layer. Events are grouped by their decoded exchange and trading pair and replayed through the aggregator's pure candle processor using a new state epoch, so all streams for a pair (such as `@trade` and `@aggTrade`) update the same candles. Regenerated candles can be written either as raw hourly objects in the raw candle table or as candle-key partitions in the compacted candle table.
 
 ### Configuration
 

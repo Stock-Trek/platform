@@ -36,8 +36,10 @@ pub trait BatchCompactor: Send + Sync {
 /// Parquet runs once they reach the configured record limit, so a single large
 /// compaction batch does not have to fit in memory.
 ///
-/// Compacted files are committed to the compacted Iceberg table. Raw source
-/// objects are intentionally left in place for now.
+/// Compacted files and the raw source object URIs are committed in the same
+/// Iceberg snapshot. That snapshot is the compacted/raw handoff: source objects
+/// below it are never replayed, while all other raw objects remain in the tail.
+/// Raw objects are intentionally left in place.
 pub struct Compactor {
     client: S3Client,
     catalog: Arc<dyn ArchiveCatalog>,
@@ -134,8 +136,13 @@ impl Compactor {
             );
         }
 
+        let source_files = batch
+            .files
+            .iter()
+            .map(|key| format!("s3://{}/{key}", self.bucket))
+            .collect::<Vec<_>>();
         self.catalog
-            .register_files(table, &data_files, Some(&batch.files))
+            .register_files(table, &data_files, Some(&source_files))
             .await?;
 
         Ok(stats)
