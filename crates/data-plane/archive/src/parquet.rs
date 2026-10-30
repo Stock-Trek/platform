@@ -5,7 +5,9 @@ use parquet::{
     arrow::{
         ArrowWriter,
         arrow_reader::{ParquetRecordBatchReader, ParquetRecordBatchReaderBuilder},
-        async_reader::ParquetRecordBatchStreamBuilder,
+        async_reader::{
+            AsyncFileReader, ParquetRecordBatchStream, ParquetRecordBatchStreamBuilder,
+        },
     },
     basic::Compression,
     file::{properties::WriterProperties, reader::ChunkReader},
@@ -13,6 +15,7 @@ use parquet::{
 use platform_errors::{BpError, BpResult};
 use std::io::Write;
 
+const READ_BATCH_SIZE: usize = 8_192;
 const WRITE_BATCH_SIZE: usize = 8_192;
 
 /// Reads and writes the Parquet format shared by the archiver and compactor.
@@ -31,6 +34,40 @@ impl Iterator for ArchiveParquetBatches {
         match self.reader.next()? {
             Ok(batch) => Some(ArchiveBatch::from_record_batch(self.kind, &batch)),
             Err(error) => Some(Err(error.into())),
+        }
+    }
+}
+
+/// Streams decoded archive batches from an asynchronous Parquet source.
+///
+/// The stream fetches metadata and column chunks on demand, so callers can
+/// process an object without downloading or decoding it in full. Only one
+/// bounded batch of records is materialized at a time.
+pub struct ArchiveParquetStream<T> {
+    kind: ArchiveKind,
+    stream: ParquetRecordBatchStream<T>,
+}
+
+impl<T> ArchiveParquetStream<T>
+where
+    T: AsyncFileReader + Unpin + Send + 'static,
+{
+    pub async fn new(kind: ArchiveKind, reader: T) -> BpResult<Self> {
+        Self::with_batch_size(kind, reader, READ_BATCH_SIZE).await
+    }
+
+    async fn with_batch_size(kind: ArchiveKind, reader: T, batch_size: usize) -> BpResult<Self> {
+        let builder = ParquetRecordBatchStreamBuilder::new(reader).await?;
+        let stream = builder.with_batch_size(batch_size).build()?;
+        Ok(Self { kind, stream })
+    }
+
+    /// Returns the next bounded batch, or `None` when the object is exhausted.
+    pub async fn next_batch(&mut self) -> BpResult<Option<ArchiveBatch>> {
+        match self.stream.next().await {
+            Some(Ok(batch)) => Ok(Some(ArchiveBatch::from_record_batch(self.kind, &batch)?)),
+            Some(Err(error)) => Err(error.into()),
+            None => Ok(None),
         }
     }
 }
@@ -111,7 +148,7 @@ impl ArchiveParquet {
         R: ChunkReader + 'static,
     {
         let builder = ParquetRecordBatchReaderBuilder::try_new(source)?;
-        let reader = builder.with_batch_size(8_192).build()?;
+        let reader = builder.with_batch_size(READ_BATCH_SIZE).build()?;
         Ok(ArchiveParquetBatches { kind, reader })
     }
 
@@ -120,18 +157,68 @@ impl ArchiveParquet {
     /// The reader fetches the Parquet footer/metadata and only the column chunks
     /// needed for each record batch through the S3 transfer manager.
     pub async fn decode_reader(kind: ArchiveKind, reader: ParquetReader) -> BpResult<ArchiveBatch> {
-        let builder = ParquetRecordBatchStreamBuilder::new(reader).await?;
-        let mut stream = builder.with_batch_size(8_192).build()?;
+        let mut stream = Self::decode_reader_batches(kind, reader).await?;
         let mut records = Vec::new();
-        while let Some(batch) = stream.next().await {
-            records.extend(ArchiveBatch::from_record_batch(kind, &batch?)?.into_records());
+        while let Some(batch) = stream.next_batch().await? {
+            records.extend(batch.into_records());
         }
         ArchiveBatch::new(kind, records)
+    }
+
+    /// Streams an object in bounded batches without downloading it in full.
+    ///
+    /// The reader fetches the Parquet footer/metadata and only the column chunks
+    /// needed for each batch through the S3 transfer manager.
+    pub async fn decode_reader_batches(
+        kind: ArchiveKind,
+        reader: ParquetReader,
+    ) -> BpResult<ArchiveParquetStream<ParquetReader>> {
+        ArchiveParquetStream::new(kind, reader).await
     }
 
     pub(crate) fn writer_properties() -> WriterProperties {
         WriterProperties::builder()
             .set_compression(Compression::ZSTD(Default::default()))
             .build()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::record::{ArchiveRecord, ArchivedMarketEvent};
+    use platform_market_data::event::MarketEvent;
+    use platform_types::new_types::TimestampMilliseconds;
+    use std::io::Cursor;
+    use stock_trek_types::cex::cex_id::CexId;
+
+    fn event(sequence: u64) -> ArchiveRecord {
+        ArchiveRecord::MarketEvent(ArchivedMarketEvent::new(
+            MarketEvent {
+                exchange: CexId::Binance,
+                stream: "btcusdt@trade".to_string(),
+                sequence: Some(sequence),
+                exchange_timestamp: Some(TimestampMilliseconds(sequence as i64)),
+                received_at: TimestampMilliseconds(sequence as i64),
+                payload: "payload".to_string(),
+            },
+            0,
+        ))
+    }
+
+    #[tokio::test]
+    async fn async_reader_streams_bounded_batches() {
+        let batch =
+            ArchiveBatch::new(ArchiveKind::Events, vec![event(1), event(2), event(3)]).unwrap();
+        let encoded = ArchiveParquet::encode(&batch).unwrap();
+        let reader = Cursor::new(encoded);
+
+        let mut stream = ArchiveParquetStream::with_batch_size(ArchiveKind::Events, reader, 2)
+            .await
+            .unwrap();
+
+        assert_eq!(stream.next_batch().await.unwrap().unwrap().len(), 2);
+        assert_eq!(stream.next_batch().await.unwrap().unwrap().len(), 1);
+        assert!(stream.next_batch().await.unwrap().is_none());
     }
 }
