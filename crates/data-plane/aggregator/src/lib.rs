@@ -12,11 +12,13 @@ pub mod sink;
 pub mod source;
 pub mod state;
 
-pub use checkpoint::{CheckpointRecord, InMemoryStateStore, NatsStateStore, StateStore};
+#[cfg(test)]
+pub use checkpoint::InMemoryStateStore;
+pub use checkpoint::{CheckpointRecord, NatsStateStore, StateStore};
 pub use config::{AggregatorConfig, ReplayStartPolicy};
-pub use lease::{
-    InMemoryLeaseStore, LeaseStore, NatsLeaseStore, WriterLease, new_writer_id, wait_for_lease,
-};
+#[cfg(test)]
+pub use lease::InMemoryLeaseStore;
+pub use lease::{LeaseStore, NatsLeaseStore, WriterLease, new_writer_id, wait_for_lease};
 pub use processor::{CandleProcessor, ProcessorConfig, ProcessorUpdate};
 pub use restore::{
     ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource, RestoreOptions,

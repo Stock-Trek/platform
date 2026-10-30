@@ -3,10 +3,12 @@
 use super::{
     commit::CommitState, output::CandleOutputWriter, quiesce::QuiesceReceiver, writer::Writer,
 };
+#[cfg(test)]
+use crate::{checkpoint::InMemoryStateStore, lease::InMemoryLeaseStore};
 use crate::{
-    checkpoint::{InMemoryStateStore, StateStore},
+    checkpoint::StateStore,
     config::AggregatorConfig,
-    lease::{InMemoryLeaseStore, LeaseStore, WriterLease},
+    lease::{LeaseStore, WriterLease},
     processor::CandleProcessor,
     shard::ShardId,
     sink::{ClosedCandlePublisher, OpenCandleStore},
@@ -50,6 +52,7 @@ where
     S: MarketSource,
     K: OpenCandleStore + ClosedCandlePublisher + 'static,
 {
+    #[cfg(test)]
     pub fn new(config: AggregatorConfig, source: S, sink: K) -> Self {
         let state = AggregatorState::new_with_schema_version(config.state_schema_version);
         Self {
@@ -122,6 +125,7 @@ where
         source: S,
         sink: K,
         checkpoints: Arc<dyn StateStore>,
+        leases: Arc<dyn LeaseStore>,
         shard: ShardId,
     ) -> Self {
         let state = AggregatorState::new_with_schema_version(config.state_schema_version);
@@ -130,7 +134,7 @@ where
             source,
             sink,
             checkpoints,
-            leases: Arc::new(InMemoryLeaseStore::new()),
+            leases,
             shard,
             state,
             replay_watermark: None,

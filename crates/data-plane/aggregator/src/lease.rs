@@ -3,12 +3,14 @@
 use crate::config::AggregatorConfig;
 use crate::shard::ShardId;
 use async_trait::async_trait;
+#[cfg(test)]
 use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult};
 use platform_metrics::AggregatorMetrics;
 use platform_nats::KeyValue;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
@@ -104,18 +106,21 @@ fn expires_at(now: TimestampMilliseconds, ttl: Duration) -> TimestampMillisecond
     now + DurationMilliseconds(millis)
 }
 
-/// In-memory lease store used by tests and single-process runs.
+/// In-memory lease store used by tests.
+#[cfg(test)]
 #[derive(Debug, Default)]
 pub struct InMemoryLeaseStore {
     leases: Mutex<HashMap<ShardId, WriterLease>>,
 }
 
+#[cfg(test)]
 impl InMemoryLeaseStore {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
+#[cfg(test)]
 #[async_trait]
 impl LeaseStore for InMemoryLeaseStore {
     async fn acquire(

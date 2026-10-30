@@ -10,11 +10,13 @@ use crate::lease::{WriterLease, lease_key};
 use crate::shard::ShardId;
 use crate::state::AggregatorState;
 use async_trait::async_trait;
+#[cfg(test)]
 use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult};
 use platform_nats::{JetStream, KeyValue, Message};
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
+#[cfg(test)]
 use std::collections::HashMap;
 
 /// A complete checkpoint for one aggregator shard.
@@ -149,12 +151,14 @@ pub trait StateStore: Send + Sync {
     async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()>;
 }
 
-/// In-memory state store used by tests and single-process runs.
+/// In-memory state store used by tests.
+#[cfg(test)]
 #[derive(Debug, Default)]
 pub struct InMemoryStateStore {
     checkpoints: Mutex<HashMap<ShardId, (u64, CheckpointRecord)>>,
 }
 
+#[cfg(test)]
 impl InMemoryStateStore {
     pub fn new() -> Self {
         Self::default()
@@ -174,6 +178,7 @@ impl InMemoryStateStore {
     }
 }
 
+#[cfg(test)]
 #[async_trait]
 impl StateStore for InMemoryStateStore {
     async fn load(&self, shard: ShardId) -> BpResult<Option<CheckpointRecord>> {

@@ -258,13 +258,18 @@ async fn run_shard_once(
             }
         };
 
-        let runner =
-            ProcessorRunner::new_shard(config.clone(), source, sink, checkpoints.clone(), shard)
-                .with_lease_store(leases.clone())
-                .with_lease(lease.clone())
-                .with_writer_id(writer_id.clone())
-                .with_state(state)
-                .with_replay_watermark(replay_watermark);
+        let runner = ProcessorRunner::new_shard(
+            config.clone(),
+            source,
+            sink,
+            checkpoints.clone(),
+            leases.clone(),
+            shard,
+        )
+        .with_lease(lease.clone())
+        .with_writer_id(writer_id.clone())
+        .with_state(state)
+        .with_replay_watermark(replay_watermark);
         runner.run().await
     }
     .await;
