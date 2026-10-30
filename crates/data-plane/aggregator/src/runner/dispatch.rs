@@ -1,6 +1,9 @@
 //! Source input dispatch, candle publishing and idle flushing.
 
-use super::{ProcessorRunner, QuiesceReceiver, commit::CommitState, writer::Writer};
+use super::{
+    ProcessorRunner, QuiesceReceiver, commit::CommitState, output::CandleOutputBuffer,
+    writer::Writer,
+};
 use crate::{
     checkpoint::StateStore,
     config::AggregatorConfig,
@@ -9,11 +12,10 @@ use crate::{
     processor::{CandleProcessor, ProcessorUpdate},
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::{MarketInput, MarketSource},
-    state::{AggregatorState, DeduplicationKey},
+    state::DeduplicationKey,
 };
 use platform_errors::BpResult;
 use platform_market_data::{
-    candle::CandleKey,
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
     event::{GapMarker, MarketEvent},
 };
@@ -45,6 +47,7 @@ where
         writer: &mut Writer,
         mut quiesce: Option<QuiesceReceiver>,
         state: &mut CommitState,
+        outputs: &mut CandleOutputBuffer,
     ) -> BpResult<()> {
         let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
         let mut checkpoint_ticker = time::interval(config.checkpoint_interval);
@@ -53,6 +56,9 @@ where
         let mut idle_ticker = time::interval(config.watermark_idle_timeout);
         idle_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         idle_ticker.tick().await;
+        let mut output_ticker = time::interval(outputs.flush_interval());
+        output_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        output_ticker.tick().await;
 
         loop {
             tokio::select! {
@@ -68,6 +74,11 @@ where
                         "quiesce requested; draining and checkpointing aggregator partition"
                     );
                     break;
+                }
+                _ = output_ticker.tick() => {
+                    if outputs.should_flush(std::time::Instant::now()) {
+                        outputs.flush(sink).await?;
+                    }
                 }
                 maybe_record = source.next_input() => {
                     match maybe_record {
@@ -89,7 +100,9 @@ where
                                     &record.input,
                                 );
                                 Self::record_update_metrics(&update);
-                                Self::publish_update(sink, &update, processor.state()).await?;
+                                outputs
+                                    .enqueue(sink, &update, processor.state())
+                                    .await?;
                                 state.dirty = true;
                             } else {
                                 AggregatorMetrics::record_replay_events(
@@ -121,8 +134,10 @@ where
                         leases,
                         partition,
                         processor,
+                        sink,
                         writer,
                         state,
+                        outputs,
                     )
                     .await?;
                     state.dirty = false;
@@ -130,7 +145,9 @@ where
                 _ = idle_ticker.tick() => {
                     let previous_watermark = processor.state().watermark;
                     let update = Self::flush_idle(processor);
-                    Self::publish_update(sink, &update, processor.state()).await?;
+                    outputs
+                        .enqueue(sink, &update, processor.state())
+                        .await?;
                     if !update.is_empty()
                         || processor.state().watermark != previous_watermark
                     {
@@ -144,8 +161,10 @@ where
                         leases,
                         partition,
                         processor,
+                        sink,
                         writer,
                         state,
+                        outputs,
                     )
                     .await?;
                     state.dirty = false;
@@ -268,38 +287,12 @@ where
         }
     }
 
-    async fn publish_update(
-        sink: &K,
-        update: &ProcessorUpdate,
-        state: &AggregatorState,
-    ) -> BpResult<()> {
-        if !update.closed.is_empty() {
-            sink.publish_closed(&update.closed).await?;
-        }
-        let closed_open_keys = Self::closed_open_keys(update, state);
-        if !closed_open_keys.is_empty() {
-            sink.delete_open(&closed_open_keys).await?;
-        }
-        if !update.open.is_empty() {
-            sink.update_open(&update.open).await?;
-        }
-        Ok(())
-    }
-
+    #[cfg(test)]
     pub(super) fn closed_open_keys(
         update: &ProcessorUpdate,
-        state: &AggregatorState,
-    ) -> Vec<CandleKey> {
-        let mut keys = update
-            .closed
-            .iter()
-            .map(|closed| &closed.candle.key)
-            .filter(|key| state.open_candle(key).is_none())
-            .cloned()
-            .collect::<Vec<_>>();
-        keys.sort_by_key(CandleKey::subject_suffix);
-        keys.dedup();
-        keys
+        state: &crate::state::AggregatorState,
+    ) -> Vec<platform_market_data::candle::CandleKey> {
+        super::output::closed_open_keys(update, state)
     }
 }
 

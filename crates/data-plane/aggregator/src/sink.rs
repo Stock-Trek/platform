@@ -1,12 +1,20 @@
 use crate::config::AggregatorConfig;
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use futures::{StreamExt, TryStreamExt, stream};
+use platform_errors::{BpError, BpResult};
 use platform_market_data::{
     candle::{Candle, CandleKey, ClosedCandle},
     envelope::EnvelopeCodec,
 };
 use platform_nats::{JetStream, KeyValue, NatsPublisher};
+use std::collections::HashMap;
 use std::sync::Arc;
+
+/// Maximum number of independent sink operations in flight at once.
+///
+/// Operations for one candle key are kept ordered; the bound applies across
+/// independent keys so a large flush cannot overwhelm a single stream leader.
+const MAX_CONCURRENT_SINK_OPERATIONS: usize = 16;
 
 /// Stores the latest version of candles that are still open.
 ///
@@ -103,18 +111,24 @@ where
 #[async_trait]
 impl OpenCandleStore for NatsCandleSink {
     async fn update_open(&self, candles: &[Candle]) -> BpResult<()> {
-        for candle in candles {
-            let key = candle.key.subject_suffix();
-            let payload = candle.encode()?;
-            self.open_candles.put(&key, &payload).await?;
-        }
+        stream::iter(candles.iter().cloned())
+            .map(|candle| async move {
+                let key = candle.key.subject_suffix();
+                let payload = candle.encode()?;
+                self.open_candles.put(&key, &payload).await.map(|_| ())
+            })
+            .buffer_unordered(MAX_CONCURRENT_SINK_OPERATIONS)
+            .try_collect::<Vec<_>>()
+            .await?;
         Ok(())
     }
 
     async fn delete_open(&self, keys: &[CandleKey]) -> BpResult<()> {
-        for key in keys {
-            self.open_candles.delete(&key.subject_suffix()).await?;
-        }
+        stream::iter(keys.iter().cloned())
+            .map(|key| async move { self.open_candles.delete(&key.subject_suffix()).await })
+            .buffer_unordered(MAX_CONCURRENT_SINK_OPERATIONS)
+            .try_collect::<Vec<_>>()
+            .await?;
         Ok(())
     }
 }
@@ -122,13 +136,31 @@ impl OpenCandleStore for NatsCandleSink {
 #[async_trait]
 impl ClosedCandlePublisher for NatsCandleSink {
     async fn publish_closed(&self, candles: &[ClosedCandle]) -> BpResult<()> {
+        // Group by candle key so revisions for the same key are published in
+        // input order, while independent keys can be published concurrently.
+        let mut groups: HashMap<CandleKey, Vec<ClosedCandle>> = HashMap::new();
         for closed in candles {
-            let (subject, message_id) = Self::publish_target(&self.closed_subject_prefix, closed);
-            let payload = closed.encode()?;
-            self.publisher
-                .publish_with_message_id(&subject, &message_id, &payload)
-                .await?;
+            groups
+                .entry(closed.candle.key.clone())
+                .or_default()
+                .push(closed.clone());
         }
+
+        stream::iter(groups.into_values())
+            .map(|group| async move {
+                for closed in group {
+                    let (subject, message_id) =
+                        Self::publish_target(&self.closed_subject_prefix, &closed);
+                    let payload = closed.encode()?;
+                    self.publisher
+                        .publish_with_message_id(&subject, &message_id, &payload)
+                        .await?;
+                }
+                Ok::<(), BpError>(())
+            })
+            .buffer_unordered(MAX_CONCURRENT_SINK_OPERATIONS)
+            .try_collect::<Vec<_>>()
+            .await?;
         Ok(())
     }
 }

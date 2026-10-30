@@ -1,6 +1,8 @@
 //! Partition processing worker lifecycle.
 
-use super::{commit::CommitState, quiesce::QuiesceReceiver, writer::Writer};
+use super::{
+    commit::CommitState, output::CandleOutputBuffer, quiesce::QuiesceReceiver, writer::Writer,
+};
 use crate::{
     checkpoint::{InMemoryStateStore, StateStore},
     config::AggregatorConfig,
@@ -163,6 +165,7 @@ where
             Self::resume_position(&checkpoints, partition, replay_watermark, processor.state())
                 .await;
         let mut commit_state = CommitState::new(resume_position);
+        let mut outputs = CandleOutputBuffer::new();
         let result = Runtime::run_until_shutdown(Self::process_inputs(
             &config,
             &mut source,
@@ -175,6 +178,7 @@ where
             &mut writer,
             quiesce,
             &mut commit_state,
+            &mut outputs,
         ))
         .await;
         let commit_result = if result.is_ok() {
@@ -185,8 +189,10 @@ where
                 &leases,
                 partition,
                 &processor,
+                &sink,
                 &mut writer,
                 &mut commit_state,
+                &mut outputs,
             )
             .await
         } else {

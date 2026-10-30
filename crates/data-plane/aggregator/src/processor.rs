@@ -14,6 +14,7 @@ use platform_market_data::{
 use platform_metrics::descriptions::{DROP_REASON_DUPLICATE, STAGE_AGGREGATOR};
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use std::collections::HashSet;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 
 /// Interval and lateness settings shared by live processing and recovery.
@@ -68,6 +69,22 @@ impl ProcessorUpdate {
 
     pub fn has_outputs(&self) -> bool {
         !self.open.is_empty() || !self.closed.is_empty()
+    }
+
+    /// Keeps only the last open-candle value for each [`CandleKey`].
+    ///
+    /// Open candles are a derived projection keyed only by candle identity, so
+    /// intermediate values produced while folding multiple trades are not
+    /// observable. Coalescing them here avoids cloning and writing each
+    /// intermediate value to the shared KV bucket.
+    pub fn coalesce_open(&mut self) {
+        if self.open.len() < 2 {
+            return;
+        }
+        let mut seen = HashSet::with_capacity(self.open.len());
+        self.open.reverse();
+        self.open.retain(|candle| seen.insert(candle.key.clone()));
+        self.open.reverse();
     }
 }
 
@@ -138,6 +155,7 @@ impl CandleProcessor {
             self.apply_trade_inner(trade, Some(&event.stream), &mut update);
         }
         self.close_expired(&mut update);
+        update.coalesce_open();
         update
     }
 
@@ -148,6 +166,7 @@ impl CandleProcessor {
         self.state.advance_watermark(trade.timestamp);
         self.apply_trade_inner(trade, None, &mut update);
         self.close_expired(&mut update);
+        update.coalesce_open();
         update
     }
 
@@ -166,6 +185,7 @@ impl CandleProcessor {
         self.state.record_gap(gap);
         self.mark_affected_windows(gap, trading_pair, previous_stream_watermark, &mut update);
         self.close_expired(&mut update);
+        update.coalesce_open();
         update
     }
 
@@ -929,6 +949,19 @@ mod tests {
             update.incomplete_windows[0].key.trading_pair,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD)
         );
+    }
+
+    #[test]
+    fn open_updates_are_coalesced_by_key_keeping_the_last_value() {
+        let mut processor = CandleProcessor::new(vec![one_minute()]);
+        let update = processor.apply_event(
+            &event(1, 62_000),
+            &[trade("100", 61_000), trade("101", 61_500)],
+        );
+
+        assert_eq!(update.open.len(), 1);
+        assert_eq!(update.open[0].market_candle.trade_count, 2);
+        assert_eq!(update.open[0].market_candle.ohlcv.close, 101.0);
     }
 
     #[test]

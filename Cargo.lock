@@ -4227,6 +4227,7 @@ dependencies = [
  "async-trait",
  "aws-sdk-s3",
  "base64 0.23.1",
+ "futures",
  "platform-archive",
  "platform-config",
  "platform-errors",

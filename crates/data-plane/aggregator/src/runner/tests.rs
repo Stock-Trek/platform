@@ -390,9 +390,10 @@ async fn gap_markers_close_expired_candle_windows() {
         .await
         .unwrap();
 
-    // The trade publishes the open candle, then the gap republishes it
-    // with the completeness flag cleared before the window closes.
-    assert_eq!(observed.open_updates(), 2);
+    // The intermediate open value from the trade is coalesced away before it
+    // is flushed: the gap closes that window, so the final projection mutation
+    // is a tombstone and the closed candle is the durable output.
+    assert_eq!(observed.open_updates(), 0);
     assert_eq!(observed.closed_updates(), 1);
     assert_eq!(observed.deleted_open_updates(), 1);
     assert_eq!(*acked.lock().unwrap(), 2);
@@ -459,6 +460,94 @@ async fn duplicate_events_are_applied_once_but_both_are_acknowledged() {
 
     assert_eq!(observed.open_updates(), 1);
     assert_eq!(*acked.lock().unwrap(), 2);
+}
+
+#[tokio::test]
+async fn repeated_open_writes_for_the_same_key_are_coalesced() {
+    let sink = FakeSink::default();
+    let observed = sink.clone();
+    let acked = Arc::new(Mutex::new(0));
+    let mut second = trade_event(62_000);
+    second.sequence = Some(2);
+    let source = FakeSource {
+        records: vec![
+            record(MarketInput::Event(trade_event(61_000)), 1),
+            record(MarketInput::Event(second), 2),
+        ],
+        acked: acked.clone(),
+        ..FakeSource::default()
+    };
+
+    ProcessorRunner::new(config(), source, sink)
+        .run()
+        .await
+        .unwrap();
+
+    assert_eq!(observed.open_updates(), 1);
+    assert_eq!(*acked.lock().unwrap(), 2);
+}
+
+#[tokio::test]
+async fn pending_open_writes_are_drained_when_quiescing() {
+    let sink = FakeSink::default();
+    let observed = sink.clone();
+    let signal = QuiesceSignal::new();
+    let source = SignalingSource {
+        records: vec![record(MarketInput::Event(trade_event(61_000)), 1)],
+        signal: signal.clone(),
+        polls: Arc::new(AtomicUsize::new(0)),
+        acked: Arc::new(Mutex::new(0)),
+    };
+    let checkpoints = Arc::new(InMemoryStateStore::new());
+
+    ProcessorRunner::new(config(), source, sink)
+        .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
+        .with_quiesce_signal(signal)
+        .run()
+        .await
+        .unwrap();
+
+    assert_eq!(observed.open_updates(), 1);
+    assert_eq!(
+        checkpoints
+            .get(PartitionId::new(0))
+            .unwrap()
+            .state
+            .open_candles_len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn a_checkpoint_failure_after_closed_publication_does_not_acknowledge() {
+    let sink = FakeSink::default();
+    let observed = sink.clone();
+    let acked = Arc::new(Mutex::new(0));
+    let gap = GapMarker {
+        exchange: CexId::Binance,
+        stream: "btcusdt@trade".to_string(),
+        previous_sequence: 1,
+        observed_sequence: 3,
+        missing_from: 2,
+        missing_to: 2,
+        detected_at: TimestampMilliseconds(126_000),
+    };
+    let source = FakeSource {
+        records: vec![
+            record(MarketInput::Event(trade_event(61_000)), 1),
+            record(MarketInput::Gap(gap), 2),
+        ],
+        acked: acked.clone(),
+        ..FakeSource::default()
+    };
+
+    let runner = ProcessorRunner::new(config(), source, sink)
+        .with_checkpoint_store(Arc::new(FailingCheckpointStore), PartitionId::new(0));
+
+    assert!(runner.run().await.is_err());
+
+    assert_eq!(observed.closed_updates(), 1);
+    assert_eq!(*acked.lock().unwrap(), 0);
 }
 
 #[tokio::test]
