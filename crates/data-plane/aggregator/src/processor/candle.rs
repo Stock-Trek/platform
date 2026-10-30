@@ -9,6 +9,8 @@ use platform_market_data::{
     candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
     decoders::trade::{Trade, TradeDecoderFactory},
 };
+use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
+use platform_metrics::market_data::MarketDataMetrics;
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 
@@ -47,13 +49,21 @@ impl CandleProcessor {
                 .binary_search_by_key(&candle_start.0, |candle| candle.start_time().0)
             {
                 Ok(position) => {
-                    if let Some(candle) = candles.get_mut(position) {
-                        candle.apply_trade(trade);
+                    let Some(candle) = candles.get_mut(position) else {
+                        return;
+                    };
+                    if candle.apply_trade(trade).is_err() {
+                        Self::record_invalid_trade();
+                        return;
                     }
                     position
                 }
                 Err(position) => {
-                    candles.insert(position, Candle::open(trade, interval));
+                    let Ok(candle) = Candle::open(trade, interval) else {
+                        Self::record_invalid_trade();
+                        return;
+                    };
+                    candles.insert(position, candle);
                     position
                 }
             };
@@ -86,7 +96,10 @@ impl CandleProcessor {
         let Some(candle) = candles.get_mut(position) else {
             return;
         };
-        candle.apply_trade(trade);
+        if candle.apply_trade(trade).is_err() {
+            Self::record_invalid_trade();
+            return;
+        }
         candle.close();
         update.late_trades += 1;
         update.closed.push(ClosedCandle::new(
@@ -106,7 +119,10 @@ impl CandleProcessor {
         let close_watermark = self.state.watermark.unwrap_or(trade.timestamp);
         let source_offset = self.state.last_processed_offset().unwrap_or_default();
         let state_epoch = self.state.state_epoch;
-        let mut candle = Candle::open(trade, interval);
+        let Ok(mut candle) = Candle::open(trade, interval) else {
+            Self::record_invalid_trade();
+            return;
+        };
         candle.close();
         self.state.retain_closed_candle(candle.clone());
         update.late_trades += 1;
@@ -116,6 +132,10 @@ impl CandleProcessor {
             source_offset,
             state_epoch,
         ));
+    }
+
+    fn record_invalid_trade() {
+        MarketDataMetrics::record_dropped_event(STAGE_AGGREGATOR, DROP_REASON_INVALID_TRADE);
     }
 
     fn watermark_for_trade(

@@ -1,6 +1,7 @@
 use crate::decoders::trade::Trade;
+use platform_errors::{BpError, BpResult};
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
-use rust_decimal::prelude::ToPrimitive;
+use rust_decimal::{Decimal, prelude::ToPrimitive};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use stock_trek::markets::{MarketCandle, MarketOhlcv};
@@ -11,6 +12,13 @@ const MILLIS_PER_SECOND: i64 = 1_000;
 const MILLIS_PER_MINUTE: i64 = 60 * MILLIS_PER_SECOND;
 const MILLIS_PER_HOUR: i64 = 60 * MILLIS_PER_MINUTE;
 const MILLIS_PER_DAY: i64 = 24 * MILLIS_PER_HOUR;
+
+#[derive(Debug, Error)]
+#[error("{field} value {value} cannot be represented as a finite f64")]
+struct DecimalConversionError {
+    field: &'static str,
+    value: Decimal,
+}
 
 /// A candle interval such as `1s`, `5m`, or `1h`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
@@ -274,14 +282,14 @@ impl std::ops::DerefMut for ClosedCandle {
 }
 
 impl Candle {
-    pub fn open(trade: &Trade, interval: CandleInterval) -> Self {
-        let price = trade.price.to_f64().unwrap_or_default();
-        let quantity = trade.quantity.to_f64().unwrap_or_default();
+    pub fn open(trade: &Trade, interval: CandleInterval) -> BpResult<Self> {
+        let price = Self::to_f64("price", trade.price)?;
+        let quantity = Self::to_f64("quantity", trade.quantity)?;
         let quote_volume = price * quantity;
         let start_time = interval.start_for(trade.timestamp);
         let end_time = interval.end_for(trade.timestamp);
 
-        Self {
+        Ok(Self {
             key: CandleKey::new(trade.exchange, trade.trading_pair, interval),
             market_candle: MarketCandle::new(
                 Self::to_millis(start_time.0),
@@ -292,7 +300,7 @@ impl Candle {
                 1,
             ),
             is_complete: true,
-        }
+        })
     }
 
     /// Whether every source event that belongs to this candle was observed.
@@ -315,9 +323,9 @@ impl Candle {
         self.is_complete = true;
     }
 
-    pub fn apply_trade(&mut self, trade: &Trade) {
-        let price = trade.price.to_f64().unwrap_or_default();
-        let quantity = trade.quantity.to_f64().unwrap_or_default();
+    pub fn apply_trade(&mut self, trade: &Trade) -> BpResult<()> {
+        let price = Self::to_f64("price", trade.price)?;
+        let quantity = Self::to_f64("quantity", trade.quantity)?;
         let ohlcv = &mut self.market_candle.ohlcv;
 
         ohlcv.high = ohlcv.high.max(price);
@@ -331,6 +339,7 @@ impl Candle {
             ohlcv.quote_volume / ohlcv.volume
         };
         self.market_candle.trade_count = self.market_candle.trade_count.saturating_add(1);
+        Ok(())
     }
 
     pub fn close(&mut self) {
@@ -343,6 +352,15 @@ impl Candle {
 
     pub fn end_time(&self) -> TimestampMilliseconds {
         Self::to_timestamp(self.market_candle.end_time_millis_exc)
+    }
+
+    fn to_f64(field: &'static str, value: Decimal) -> BpResult<f64> {
+        value
+            .to_f64()
+            .filter(|value| value.is_finite())
+            .ok_or_else(|| {
+                BpError::candle_conversion(field, DecimalConversionError { field, value })
+            })
     }
 
     fn to_millis(value: i64) -> u64 {
@@ -394,9 +412,9 @@ mod tests {
     #[test]
     fn applying_trades_updates_ohlcv() {
         let interval = CandleInterval::from_label("1m").unwrap();
-        let mut candle = Candle::open(&trade("100", "2", 61_000), interval);
-        candle.apply_trade(&trade("110", "1", 62_000));
-        candle.apply_trade(&trade("90", "3", 63_000));
+        let mut candle = Candle::open(&trade("100", "2", 61_000), interval).unwrap();
+        candle.apply_trade(&trade("110", "1", 62_000)).unwrap();
+        candle.apply_trade(&trade("90", "3", 63_000)).unwrap();
 
         let ohlcv = &candle.market_candle.ohlcv;
         assert_eq!(ohlcv.open, 100.0);
@@ -412,7 +430,7 @@ mod tests {
     #[test]
     fn candles_start_complete_and_can_be_marked_incomplete() {
         let interval = CandleInterval::from_label("1m").unwrap();
-        let mut candle = Candle::open(&trade("100", "2", 61_000), interval);
+        let mut candle = Candle::open(&trade("100", "2", 61_000), interval).unwrap();
         assert!(candle.is_complete());
         assert!(!candle.is_incomplete());
 
@@ -435,7 +453,7 @@ mod tests {
 
     fn closed_candle(offset: u64, epoch: u64) -> ClosedCandle {
         let interval = CandleInterval::from_label("1m").unwrap();
-        let mut candle = Candle::open(&trade("100", "2", 61_000), interval);
+        let mut candle = Candle::open(&trade("100", "2", 61_000), interval).unwrap();
         candle.close();
         ClosedCandle::new(candle, TimestampMilliseconds(121_000), offset, epoch)
     }

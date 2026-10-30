@@ -139,7 +139,7 @@ fn candle(interval: &str, close: f64) -> Candle {
         quantity: Decimal::ONE,
         timestamp: TimestampMilliseconds(61_000),
     };
-    Candle::open(&trade, CandleInterval::from_label(interval).unwrap())
+    Candle::open(&trade, CandleInterval::from_label(interval).unwrap()).unwrap()
 }
 
 fn closed(candle: Candle) -> ClosedCandle {
