@@ -8,6 +8,7 @@ async-trait = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-s3-transfer-manager = { workspace = true }
 futures = { workspace = true }
+parking_lot = { workspace = true }
 platform-archive = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }

@@ -10,12 +10,12 @@ use crate::lease::{WriterLease, lease_key};
 use crate::shard::ShardId;
 use crate::state::AggregatorState;
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult};
 use platform_nats::{JetStream, KeyValue, Message};
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Mutex;
 
 /// A complete checkpoint for one aggregator shard.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -168,7 +168,6 @@ impl InMemoryStateStore {
     pub fn load_with_revision(&self, shard: ShardId) -> Option<(CheckpointRecord, u64)> {
         self.checkpoints
             .lock()
-            .expect("checkpoint store lock")
             .get(&shard)
             .cloned()
             .map(|(revision, checkpoint)| (checkpoint, revision))
@@ -182,7 +181,7 @@ impl StateStore for InMemoryStateStore {
     }
 
     async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
-        let mut checkpoints = self.checkpoints.lock().expect("checkpoint store lock");
+        let mut checkpoints = self.checkpoints.lock();
         if let Some((_, existing)) = checkpoints.get(&checkpoint.shard)
             && !existing.is_writable_by(&checkpoint.writer_id, checkpoint.fencing_token)
         {
