@@ -1,4 +1,4 @@
-use crate::sequence::{InMemorySequenceStore, SequenceObservation, SequenceStore, SequenceTracker};
+use crate::sequence::{SequenceObservation, SequenceStore, SequenceTracker};
 use platform_errors::BpResult;
 use platform_market_data::{
     envelope::EnvelopeCodec,
@@ -43,15 +43,7 @@ pub struct Ingester<P> {
 }
 
 impl<P: EventPublisher> Ingester<P> {
-    pub fn new(publisher: Arc<P>, options: IngestOptions) -> Self {
-        Self::with_sequence_store(publisher, options, Arc::new(InMemorySequenceStore::new()))
-    }
-
-    pub fn with_sequence_store(
-        publisher: Arc<P>,
-        options: IngestOptions,
-        store: Arc<dyn SequenceStore>,
-    ) -> Self {
+    pub fn new(publisher: Arc<P>, options: IngestOptions, store: Arc<dyn SequenceStore>) -> Self {
         Self {
             publisher,
             options,
@@ -207,6 +199,7 @@ impl<P: EventPublisher> Ingester<P> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::sequence::InMemorySequenceStore;
     use async_trait::async_trait;
     use platform_errors::BpResult;
     use serde_json::Value;
@@ -284,14 +277,14 @@ mod tests {
     }
 
     fn ingester(publisher: Arc<RecordingPublisher>) -> Ingester<RecordingPublisher> {
-        Ingester::new(publisher, options())
+        Ingester::new(publisher, options(), Arc::new(InMemorySequenceStore::new()))
     }
 
     fn ingester_with_store(
         publisher: Arc<RecordingPublisher>,
         store: Arc<InMemorySequenceStore>,
     ) -> Ingester<RecordingPublisher> {
-        Ingester::with_sequence_store(publisher, options(), store)
+        Ingester::new(publisher, options(), store)
     }
 
     fn options() -> IngestOptions {
