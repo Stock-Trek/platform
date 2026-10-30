@@ -1,4 +1,7 @@
-use super::catalog::{ArchiveObject, select_event_objects, sort_archive_objects};
+use super::catalog::{
+    AGGREGATOR_ARCHIVE_S3_BUCKET, AGGREGATOR_ARCHIVE_S3_PREFIX, ArchiveObject,
+    ArchiveRecoveryConfig, select_event_objects, sort_archive_objects,
+};
 use super::rebuild::{RestoreOptions, RestoreSource, restore_shard};
 use super::replay::ArchivedEventSource;
 use crate::checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore};
@@ -8,7 +11,8 @@ use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_archive::{ArchiveKind, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey};
-use platform_errors::BpResult;
+use platform_config::env_vars::EnvVars;
+use platform_errors::{BpError, BpResult, ConfigError};
 use platform_market_data::{
     candle::CandleInterval,
     decoders::trade::{Trade, TradeDecoderFactory},
@@ -492,4 +496,40 @@ fn archive_object(key: &str) -> ArchiveObject {
         key: ObjectKey::new(key),
         size: 0,
     }
+}
+
+#[test]
+fn archive_recovery_config_is_required_for_policies_that_replay_the_archive() {
+    let vars = EnvVars::from_map(Vec::<(String, String)>::new());
+
+    for policy in [ReplayStartPolicy::Checkpoint, ReplayStartPolicy::Archive] {
+        assert!(matches!(
+            ArchiveRecoveryConfig::from_vars_for_policy(&vars, policy).unwrap_err(),
+            BpError::Config(ConfigError::Missing { name })
+                if name == AGGREGATOR_ARCHIVE_S3_BUCKET
+        ));
+    }
+}
+
+#[test]
+fn archive_recovery_config_is_optional_for_explicit_empty_starts() {
+    let vars = EnvVars::from_map(Vec::<(String, String)>::new());
+
+    for policy in [ReplayStartPolicy::Earliest, ReplayStartPolicy::Latest] {
+        assert_eq!(
+            ArchiveRecoveryConfig::from_vars_for_policy(&vars, policy).unwrap(),
+            None
+        );
+    }
+}
+
+#[test]
+fn optional_archive_recovery_config_validates_a_configured_bucket() {
+    let vars = EnvVars::from_map([(AGGREGATOR_ARCHIVE_S3_BUCKET, "market-archive")]);
+
+    assert!(matches!(
+        ArchiveRecoveryConfig::optional_from_vars(&vars).unwrap_err(),
+        BpError::Config(ConfigError::Missing { name })
+            if name == AGGREGATOR_ARCHIVE_S3_PREFIX
+    ));
 }

@@ -25,6 +25,15 @@ impl ReplayStartPolicy {
         }
     }
 
+    /// Whether this policy can need to rebuild state from the archive.
+    ///
+    /// `checkpoint` falls back to the archive when a checkpoint is missing,
+    /// stale, or unreadable. `archive` always rebuilds from it. `earliest` and
+    /// `latest` explicitly start with empty state instead.
+    pub const fn requires_archive(self) -> bool {
+        matches!(self, Self::Checkpoint | Self::Archive)
+    }
+
     /// Parses the operator-facing policy name, accepting a few common aliases.
     pub fn parse(value: &str) -> Option<Self> {
         match value.trim().to_ascii_lowercase().as_str() {

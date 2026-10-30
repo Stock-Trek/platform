@@ -106,7 +106,7 @@ No optional variables.
 
 | Variable | Description |
 | --- | --- |
-| `AGGREGATOR_ARCHIVE_S3_BUCKET` | S3 bucket containing archived market events. Archive recovery is disabled when this is unset or empty. |
+| `AGGREGATOR_ARCHIVE_S3_BUCKET` | S3 bucket containing archived market events. Required when `AGGREGATOR_REPLAY_START_POLICY` is `checkpoint` or `archive`; optional for `earliest` and `latest`. Archive recovery is enabled when set. |
 | `AGGREGATOR_ARCHIVE_S3_PREFIX` | Raw archive prefix used when no Iceberg catalog is configured. Required when `AGGREGATOR_ARCHIVE_S3_BUCKET` is set. |
 | `AGGREGATOR_SHARD_INDEX` | Zero-based partition index to run as a single partition. When unset or empty, the process runs every partition. Must be lower than `AGGREGATOR_SHARD_COUNT`. |
 

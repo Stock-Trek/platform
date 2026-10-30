@@ -1,5 +1,5 @@
 use platform_aggregator::{
-    AggregatorConfig, ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource,
+    AGGREGATOR_ARCHIVE_S3_BUCKET, AggregatorConfig, ArchiveRecoveryConfig, ArchivedEventSource,
     LeaseStore, NatsCandleSink, NatsLeaseStore, NatsMarketSource, NatsRouter, NatsShardSource,
     NatsStateStore, ProcessorRunner, RestoreOptions, S3ArchiveRecovery, ShardId, StateStore,
     WriterLease, new_writer_id, restore_shard, wait_for_lease,
@@ -21,6 +21,9 @@ const HEALTHY_RUN_THRESHOLD: Duration = Duration::from_secs(60);
 #[tokio::main]
 async fn main() -> BpResult<()> {
     let config = AggregatorConfig::from_env()?;
+    let archive_recovery = ArchiveRecoveryConfig::from_env_for_policy(config.replay_start_policy)?
+        .map(S3ArchiveRecovery::new)
+        .map(Arc::new);
     SERVICE.init_logging(&config.log_filter)?;
 
     let shards = config.shards();
@@ -43,9 +46,6 @@ async fn main() -> BpResult<()> {
     let checkpoints: Arc<dyn StateStore> = Arc::new(NatsStateStore::connect(&config).await?);
     let leases: Arc<dyn LeaseStore> = Arc::new(NatsLeaseStore::connect(&config).await?);
     let sink = Arc::new(NatsCandleSink::connect(&config).await?);
-    let archive_recovery = ArchiveRecoveryConfig::from_env()?
-        .map(S3ArchiveRecovery::new)
-        .map(Arc::new);
 
     let mut tasks = JoinSet::new();
     let router_config = config.clone();
@@ -222,9 +222,7 @@ async fn run_shard_once(
                             archive_recovery.connect(shard, config.shard_count).await?,
                         )
                             as Box<dyn ArchivedEventSource>),
-                        None => {
-                            Ok(Box::new(EmptyArchivedEventSource) as Box<dyn ArchivedEventSource>)
-                        }
+                        None => Err(BpError::config_missing(AGGREGATOR_ARCHIVE_S3_BUCKET)),
                     }
                 },
                 &options,
