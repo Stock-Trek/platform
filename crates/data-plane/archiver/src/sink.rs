@@ -3,7 +3,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveParquet,
-    ArchivePath, ArchiveRecord, Bucket, IcebergDataFile, ObjectKey, ParquetReader, S3,
+    ArchivePath, ArchiveRecord, Bucket, IcebergDataFile, ObjectKey, ParquetReader, RoutingBucket,
+    S3,
 };
 use platform_errors::BpResult;
 use platform_metrics::descriptions::S3_OPERATION_ARCHIVE_UPLOAD;
@@ -51,10 +52,16 @@ impl S3ParquetSink {
         })
     }
 
-    fn object_key(&self, partition: ArchiveBucket, bytes: &[u8]) -> BpResult<ObjectKey> {
+    fn object_key(
+        &self,
+        partition: ArchiveBucket,
+        routing_bucket: RoutingBucket,
+        bytes: &[u8],
+    ) -> BpResult<ObjectKey> {
         partition
             .raw_key(
                 &self.prefix,
+                routing_bucket,
                 format!("{}-{:x}.parquet", Self::content_id(bytes), bytes.len()),
             )
             .map(ObjectKey::new)
@@ -164,22 +171,29 @@ impl ArchiveSink for S3ParquetSink {
         // Sort by archive bucket in place. Each contiguous group can then be
         // encoded from a borrowed slice instead of cloning every record into a
         // per-partition `Vec`.
-        records.sort_by_key(|record| ArchiveBucket::new(record, self.bucket_millis));
+        records.sort_by_key(|record| {
+            (
+                ArchiveBucket::new(record, self.bucket_millis),
+                record.routing_bucket(),
+            )
+        });
 
         let mut pending: Vec<(ArchiveIcebergTable, Vec<IcebergDataFile>)> = Vec::new();
         let mut start = 0;
         while start < records.len() {
             let partition = ArchiveBucket::new(&records[start], self.bucket_millis);
+            let routing_bucket = records[start].routing_bucket();
             let mut end = start + 1;
             while end < records.len()
                 && ArchiveBucket::new(&records[end], self.bucket_millis) == partition
+                && records[end].routing_bucket() == routing_bucket
             {
                 end += 1;
             }
 
             let batch = ArchiveBatch::new(partition.kind, records[start..end].to_vec())?;
             let bytes = ArchiveParquet::encode(&batch)?;
-            let key = self.object_key(partition, &bytes)?;
+            let key = self.object_key(partition, routing_bucket, &bytes)?;
             self.upload_with_retry(&key, Bytes::from(bytes.clone()))
                 .await?;
 

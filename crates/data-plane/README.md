@@ -66,11 +66,11 @@ Aggregator metrics are named `market_data_aggregator_*` and cover:
 
 ## Archiver
 
-Archiver will be a durable Jetstream consumer, and periodically flush de-duplicated data to parquet files bucketed by exchange event timestamp and send it using Apache Iceberg to S3. It will also listen to closed candles and archive those as well.
+Archiver will be a durable Jetstream consumer, and periodically flush de-duplicated data to parquet files bucketed by exchange event timestamp and send it using Apache Iceberg to S3. Raw objects are also grouped by a fixed virtual routing bucket derived from the trading pair, so archive layout does not depend on the current aggregator shard count. It will also listen to closed candles and archive those as well.
 
 ## Compactor
 
-Compactor will run regularly converting the raw archived S3 files into clean and tidy files, partitioning by symbol and sorting by timestamp.
+Compactor will run regularly converting the raw archived S3 files into clean and tidy files, partitioning by symbol and routing bucket and sorting by timestamp.
 
 ## Rebuilder
 

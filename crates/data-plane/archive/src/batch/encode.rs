@@ -32,6 +32,9 @@ impl ArchiveBatch {
                     Arc::new(UInt64Array::from_iter_values(
                         events.iter().map(|event| event.state_epoch),
                     )),
+                    Arc::new(UInt64Array::from_iter_values(
+                        events.iter().map(|event| event.routing_key().value()),
+                    )),
                 ];
                 Ok(RecordBatch::try_new(Self::schema(kind), columns)?)
             }
@@ -142,6 +145,15 @@ impl ArchiveBatch {
                     Arc::new(BooleanArray::from_iter(
                         candles.iter().map(|closed| Some(closed.candle.is_complete)),
                     )),
+                    Arc::new(UInt64Array::from_iter_values(candles.iter().map(
+                        |closed| {
+                            crate::routing::RoutingKey::for_pair(
+                                closed.candle.key.exchange,
+                                &closed.candle.key.trading_pair,
+                            )
+                            .value()
+                        },
+                    ))),
                 ];
                 Ok(RecordBatch::try_new(Self::schema(kind), columns)?)
             }

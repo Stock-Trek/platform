@@ -153,7 +153,7 @@ mod tests {
         let schema = ArchiveIcebergTable::schema(ArchiveKind::Events).unwrap();
         let fields = schema.as_struct().fields();
 
-        assert_eq!(fields.len(), 7);
+        assert_eq!(fields.len(), 8);
         assert_eq!(fields[0].name, "exchange");
         assert_eq!(
             fields[0].field_type.as_ref(),
@@ -169,6 +169,12 @@ mod tests {
         assert!(fields[4].required);
         assert_eq!(fields[6].name, "state_epoch");
         assert!(fields[6].required);
+        assert_eq!(fields[7].name, "routing_key");
+        assert_eq!(
+            fields[7].field_type.as_ref(),
+            &Type::Primitive(PrimitiveType::Long)
+        );
+        assert!(fields[7].required);
     }
 
     #[test]
@@ -176,7 +182,7 @@ mod tests {
         let schema = ArchiveIcebergTable::schema(ArchiveKind::Candles).unwrap();
         let fields = schema.as_struct().fields();
 
-        assert_eq!(fields.len(), 22);
+        assert_eq!(fields.len(), 23);
         assert_eq!(fields[8].name, "open");
         assert_eq!(
             fields[8].field_type.as_ref(),
@@ -192,5 +198,11 @@ mod tests {
             fields[21].field_type.as_ref(),
             &Type::Primitive(PrimitiveType::Boolean)
         );
+        assert_eq!(fields[22].name, "routing_key");
+        assert_eq!(
+            fields[22].field_type.as_ref(),
+            &Type::Primitive(PrimitiveType::Long)
+        );
+        assert!(fields[22].required);
     }
 }

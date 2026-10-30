@@ -6,6 +6,7 @@ pub mod parquet;
 pub mod parquet_reader;
 pub mod quantized_time;
 pub mod record;
+pub mod routing;
 pub mod s3;
 pub mod source;
 
@@ -22,5 +23,6 @@ pub use record::{
     ArchiveKind, ArchivePartition, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey,
     ArchivedMarketEvent, STATE_EPOCH_HEADER,
 };
+pub use routing::{ROUTING_BUCKET_COUNT, RoutingBucket, RoutingKey};
 pub use s3::{Bucket, ObjectKey, S3};
 pub use source::SourceBatch;

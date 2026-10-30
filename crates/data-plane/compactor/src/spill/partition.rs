@@ -1,6 +1,7 @@
 use super::run::SpillRun;
 use platform_archive::{
-    ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetBatches, ArchiveRecord, ArchiveSortKey,
+    ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetBatches, ArchivePath, ArchiveRecord,
+    ArchiveSortKey,
 };
 use platform_errors::{BpError, BpResult};
 use std::{
@@ -20,8 +21,10 @@ pub struct PartitionItem {
 
 impl PartitionItem {
     fn new(record: ArchiveRecord) -> Self {
+        let partition =
+            ArchivePath::compacted_partition(&record.partition(), record.routing_bucket());
         Self {
-            partition: record.partition().path(),
+            partition,
             sort_key: record.sort_key(),
             record,
         }
