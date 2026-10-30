@@ -167,6 +167,7 @@ impl S3 {
         Ok(())
     }
 
+    #[allow(unused)]
     pub async fn download_bytes(
         s3_client: &S3Client,
         bucket: &Bucket,

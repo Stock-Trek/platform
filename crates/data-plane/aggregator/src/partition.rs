@@ -25,10 +25,6 @@ impl PartitionId {
         self.0
     }
 
-    pub const fn as_usize(self) -> usize {
-        self.0 as usize
-    }
-
     /// The subject this partition's routed input is published to.
     pub fn subject(self, prefix: &str) -> String {
         format!("{prefix}.{}", self.0)

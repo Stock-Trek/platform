@@ -27,17 +27,6 @@ impl DeliveryDedup {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn is_duplicate(&self, delivery_id: &str) -> bool {
-        match self.claim(delivery_id) {
-            Some(guard) => {
-                guard.complete();
-                false
-            }
-            None => true,
-        }
-    }
-
     pub fn claim(&self, delivery_id: &str) -> Option<DeliveryDedupGuard> {
         let mut seen = self.seen.lock();
         if seen
@@ -84,6 +73,18 @@ impl Drop for DeliveryDedupGuard {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    impl DeliveryDedup {
+        pub fn is_duplicate(&self, delivery_id: &str) -> bool {
+            match self.claim(delivery_id) {
+                Some(guard) => {
+                    guard.complete();
+                    false
+                }
+                None => true,
+            }
+        }
+    }
 
     fn capacity(capacity: usize) -> NonZeroUsize {
         NonZeroUsize::new(capacity).unwrap()

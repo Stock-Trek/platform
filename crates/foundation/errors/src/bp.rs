@@ -237,17 +237,6 @@ impl BpError {
         Self::Data(DataError::multiple(failures))
     }
 
-    pub fn is_skippable(&self) -> bool {
-        matches!(
-            self,
-            Self::Exchange(
-                ExchangeError::MissingSymbol { .. }
-                    | ExchangeError::UnsupportedExchange { .. }
-                    | ExchangeError::UnsupportedTradingMode { .. }
-            ) | Self::Data(DataError::LockContention { .. })
-        )
-    }
-
     pub fn any_sent(&self) -> bool {
         matches!(self, Self::Sqs(error) if error.any_sent())
     }

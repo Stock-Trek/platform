@@ -70,19 +70,6 @@ impl GitSource {
             GitSource::GitHub { delivery_id, .. } => delivery_id.as_deref(),
         }
     }
-    pub fn without_delivery_id(&self) -> Self {
-        match self {
-            GitSource::GitHub {
-                host,
-                installation_id,
-                ..
-            } => GitSource::GitHub {
-                host: host.clone(),
-                delivery_id: None,
-                installation_id: *installation_id,
-            },
-        }
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

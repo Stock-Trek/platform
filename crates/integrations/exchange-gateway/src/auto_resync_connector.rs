@@ -215,6 +215,7 @@ where
     pub async fn sync_clock_http(&self) -> BpResult<()> {
         self.connector.sync_clock_http().await
     }
+    #[allow(unused)]
     pub async fn set_clock_sync_frequency_http(&self, frequency: Duration) -> BpResult<()>
     where
         Exchange: Send + Sync + 'static,
@@ -258,6 +259,7 @@ where
     pub async fn sync_clock_websocket(&self) -> BpResult<()> {
         self.connector.sync_clock_websocket().await
     }
+    #[allow(unused)]
     pub async fn set_clock_sync_frequency_websocket(&self, frequency: Duration) -> BpResult<()>
     where
         Exchange: Send + Sync + 'static,

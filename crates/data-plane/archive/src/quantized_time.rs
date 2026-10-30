@@ -50,24 +50,6 @@ pub enum TopOfMonth {
     Six = 6,
 }
 
-impl Quantization {
-    /// Maximum number of one-minute candles a single window of this quantization can contain.
-    ///
-    /// Month and year windows vary in length, so their values are upper bounds.
-    pub const fn max_window_candles(self) -> u32 {
-        const MINUTES_PER_DAY: u32 = 24 * 60;
-
-        match self {
-            Quantization::Minutes(top_of_minute) => top_of_minute as u32,
-            Quantization::Hour(top_of_hour) => top_of_hour as u32 * 60,
-            Quantization::Day => MINUTES_PER_DAY,
-            Quantization::Week(_) => 7 * MINUTES_PER_DAY,
-            Quantization::Month(top_of_month) => top_of_month as u32 * 31 * MINUTES_PER_DAY,
-            Quantization::Year => 366 * MINUTES_PER_DAY,
-        }
-    }
-}
-
 impl QuantizedTime {
     pub fn timestamp(
         timestamp: DateTime<Utc>,
@@ -117,6 +99,7 @@ impl QuantizedTime {
         }
     }
 
+    #[allow(unused)]
     pub fn previous_top(top: DateTime<Utc>, quantization: Quantization) -> BpResult<DateTime<Utc>> {
         match quantization {
             Quantization::Minutes(top_of_minute) => {
