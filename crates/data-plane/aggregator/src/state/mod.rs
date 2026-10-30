@@ -10,4 +10,4 @@ mod tests;
 pub use aggregator::{AggregatorState, STATE_SCHEMA_VERSION};
 pub use gaps::{IncompleteWindow, KnownGap};
 pub use sequence::SequenceRange;
-pub use streams::{DeduplicationKey, StreamProgress, stream_id};
+pub use streams::{DeduplicationKey, MAX_SEEN_SEQUENCE_RANGES, StreamProgress, stream_id};

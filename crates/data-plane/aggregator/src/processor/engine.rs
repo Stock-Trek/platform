@@ -29,8 +29,9 @@ impl CandleProcessor {
         Self { config, state }
     }
 
-    pub fn from_state(config: ProcessorConfig, state: AggregatorState) -> BpResult<Self> {
+    pub fn from_state(config: ProcessorConfig, mut state: AggregatorState) -> BpResult<Self> {
         state.ensure_schema_compatible_with(config.state_schema_version)?;
+        state.prune_stream_dedup();
         Ok(Self { config, state })
     }
 
