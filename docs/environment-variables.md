@@ -223,7 +223,7 @@ No optional variables.
 | `BUILD_AGENT_BUILD_CACHE_DIR` | Directory used to cache build dependencies and outputs between builds. |
 | `BUILD_AGENT_MAX_EXTRACTED_SOURCE_SIZE_BYTES` | Maximum total size of extracted source, in bytes. |
 | `BUILD_AGENT_SOURCE_DIR` | Working directory where the build agent unpacks and builds source. |
-| `FAILURE_PUBLISH_BUDGET_SECS` | Time budget reserved for publishing a failure result before the invocation deadline, in seconds. |
+| `BUILD_AGENT_FAILURE_PUBLISH_BUDGET_SECS` | Time budget reserved for publishing a failure result before the invocation deadline, in seconds. |
 
 #### Optional
 

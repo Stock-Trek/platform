@@ -10,7 +10,7 @@ const BUILD_AGENT_BUILD_CACHE_DIR: &str = "BUILD_AGENT_BUILD_CACHE_DIR";
 const BUILD_AGENT_MAX_EXTRACTED_SOURCE_SIZE_BYTES: &str =
     "BUILD_AGENT_MAX_EXTRACTED_SOURCE_SIZE_BYTES";
 const BUILD_AGENT_SOURCE_DIR: &str = "BUILD_AGENT_SOURCE_DIR";
-const FAILURE_PUBLISH_BUDGET_SECS: &str = "FAILURE_PUBLISH_BUDGET_SECS";
+const BUILD_AGENT_FAILURE_PUBLISH_BUDGET_SECS: &str = "BUILD_AGENT_FAILURE_PUBLISH_BUDGET_SECS";
 
 /// Configuration required by the build agent process.
 ///
@@ -40,7 +40,7 @@ impl AgentConfig {
         let source_download_timeout =
             vars.required_positive_duration_secs(BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS)?;
         let failure_publish_budget =
-            vars.required_positive_duration_secs(FAILURE_PUBLISH_BUDGET_SECS)?;
+            vars.required_positive_duration_secs(BUILD_AGENT_FAILURE_PUBLISH_BUDGET_SECS)?;
 
         Ok(Self {
             log_filter: vars.required_log_filter(RUST_LOG)?,
