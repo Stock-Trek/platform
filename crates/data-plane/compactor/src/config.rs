@@ -12,13 +12,6 @@ const COMPACTOR_SETTLE_SECS: &str = "COMPACTOR_SETTLE_SECS";
 const COMPACTOR_MIN_SOURCE_FILES: &str = "COMPACTOR_MIN_SOURCE_FILES";
 const COMPACTOR_SPILL_RECORDS: &str = "COMPACTOR_SPILL_RECORDS";
 
-const DEFAULT_S3_PREFIX: &str = "market-data/raw";
-const DEFAULT_OUTPUT_PREFIX: &str = "market-data/compacted";
-const DEFAULT_POLL_INTERVAL_SECS: u64 = 300;
-const DEFAULT_SETTLE_SECS: u64 = 3_600;
-const DEFAULT_MIN_SOURCE_FILES: usize = 1;
-const DEFAULT_SPILL_RECORDS: usize = 50_000;
-
 #[derive(Debug, Clone)]
 pub struct CompactorConfig {
     pub log_filter: String,
@@ -40,33 +33,14 @@ impl CompactorConfig {
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(COMPACTOR_S3_BUCKET)?;
-        let s3_prefix = vars
-            .optional(COMPACTOR_S3_PREFIX)?
-            .unwrap_or_else(|| DEFAULT_S3_PREFIX.to_string());
-        let output_prefix = vars
-            .optional(COMPACTOR_OUTPUT_PREFIX)?
-            .unwrap_or_else(|| DEFAULT_OUTPUT_PREFIX.to_string());
-
-        let poll_interval = Config::optional_positive_duration_secs(
-            vars,
-            COMPACTOR_POLL_INTERVAL_SECS,
-            DEFAULT_POLL_INTERVAL_SECS,
-        )?;
-
-        let settle = Config::optional_positive_duration_secs(
-            vars,
-            COMPACTOR_SETTLE_SECS,
-            DEFAULT_SETTLE_SECS,
-        )?;
-        let min_source_files = Config::optional_positive_usize(
-            vars,
-            COMPACTOR_MIN_SOURCE_FILES,
-            DEFAULT_MIN_SOURCE_FILES,
-        )?;
-
-        let spill_records =
-            Config::optional_positive_usize(vars, COMPACTOR_SPILL_RECORDS, DEFAULT_SPILL_RECORDS)?;
-        let iceberg = IcebergConfig::from_vars(vars, &format!("s3://{s3_bucket}/iceberg"))?;
+        let s3_prefix = vars.required(COMPACTOR_S3_PREFIX)?;
+        let output_prefix = vars.required(COMPACTOR_OUTPUT_PREFIX)?;
+        let poll_interval =
+            Config::required_positive_duration_secs(vars, COMPACTOR_POLL_INTERVAL_SECS)?;
+        let settle = Config::required_positive_duration_secs(vars, COMPACTOR_SETTLE_SECS)?;
+        let min_source_files = Config::required_positive_usize(vars, COMPACTOR_MIN_SOURCE_FILES)?;
+        let spill_records = Config::required_positive_usize(vars, COMPACTOR_SPILL_RECORDS)?;
+        let iceberg = IcebergConfig::from_vars(vars)?;
 
         Ok(Self {
             log_filter,

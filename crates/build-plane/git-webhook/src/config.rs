@@ -49,7 +49,7 @@ impl WebhookConfig {
             sqs_queue_url: vars.required(SQS_QUEUE_URL)?,
             ssm: SsmConfig::new(
                 vars.required(SSM_PATH_ENV)?,
-                vars.optional_parsed_or(SSM_DECRYPT_ENV, true)?,
+                vars.required_parsed(SSM_DECRYPT_ENV)?,
             )?,
             github_allowed_hosts: HostAllowlist::from_hosts(
                 vars.required_csv(GITHUB_ENTERPRISE_ALLOWED_HOSTS)?,
@@ -69,7 +69,7 @@ impl WebhookConfig {
 mod tests {
     use super::*;
 
-    const REQUIRED: [(&str, &str); 13] = [
+    const REQUIRED: [(&str, &str); 14] = [
         (RUST_LOG, "info"),
         (AWS_LAMBDA_FUNCTION_NAME, "platform-git-webhook"),
         (DEADLINE_BUFFER_SECS, "5"),
@@ -83,6 +83,7 @@ mod tests {
         (WEBHOOK_REFRESH_COOLDOWN_SECS, "60"),
         (WEBHOOK_SECRET_FAILURE_BACKOFF_SECS, "30"),
         (WEBHOOK_COLD_START_REFRESH_TIMEOUT_SECS, "10"),
+        (SSM_DECRYPT_ENV, "true"),
     ];
 
     fn vars(values: &[(&str, &str)]) -> EnvVars {
@@ -108,7 +109,11 @@ mod tests {
             .position(|(required, _)| *required == SSM_PATH_ENV)
             .unwrap();
         values[index] = (SSM_PATH_ENV, "platform/git-webhook/production");
-        values.push((SSM_DECRYPT_ENV, "false"));
+        let index = values
+            .iter()
+            .position(|(required, _)| *required == SSM_DECRYPT_ENV)
+            .unwrap();
+        values[index] = (SSM_DECRYPT_ENV, "false");
 
         let config = WebhookConfig::from_vars(&vars(&values)).unwrap();
 

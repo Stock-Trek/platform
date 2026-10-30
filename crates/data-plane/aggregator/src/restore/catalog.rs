@@ -19,8 +19,6 @@ use tracing::info;
 pub const AGGREGATOR_ARCHIVE_S3_BUCKET: &str = "AGGREGATOR_ARCHIVE_S3_BUCKET";
 pub const AGGREGATOR_ARCHIVE_S3_PREFIX: &str = "AGGREGATOR_ARCHIVE_S3_PREFIX";
 
-pub(crate) const DEFAULT_ARCHIVE_PREFIX: &str = "market-data/raw";
-
 /// Maximum number of archive objects streamed concurrently across all
 /// partitions in one aggregator process.
 const MAX_CONCURRENT_ARCHIVE_OBJECTS: usize = 4;
@@ -53,10 +51,8 @@ impl ArchiveRecoveryConfig {
                 "must not be empty",
             ));
         }
-        let prefix = vars
-            .optional(AGGREGATOR_ARCHIVE_S3_PREFIX)?
-            .unwrap_or_else(|| DEFAULT_ARCHIVE_PREFIX.to_string());
-        let iceberg = IcebergConfig::optional_from_vars(vars, &format!("s3://{bucket}/iceberg"))?;
+        let prefix = vars.required(AGGREGATOR_ARCHIVE_S3_PREFIX)?;
+        let iceberg = IcebergConfig::optional_from_vars(vars)?;
         Ok(Some(Self {
             bucket,
             prefix,

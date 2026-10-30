@@ -41,7 +41,7 @@ impl BackfillerConfig {
             vars.required_url(BACKFILLER_EXCHANGE_HTTP_URL, &["http", "https"])?;
         let ssm = SsmConfig::new(
             vars.required(SSM_PATH_ENV)?,
-            vars.optional_parsed_or(SSM_DECRYPT_ENV, true)?,
+            vars.required_parsed(SSM_DECRYPT_ENV)?,
         )?;
 
         Ok(Self {
@@ -60,7 +60,7 @@ impl BackfillerConfig {
 mod tests {
     use super::*;
 
-    const REQUIRED: [(&str, &str); 7] = [
+    const REQUIRED: [(&str, &str); 8] = [
         (platform_runtime::Config::RUST_LOG, "info"),
         (BACKFILLER_EXCHANGE, "binance"),
         (BACKFILLER_NATS_URL, "nats://localhost:4222"),
@@ -68,6 +68,7 @@ mod tests {
         (BACKFILLER_EVENT_SUBJECT_PREFIX, "market.events"),
         (BACKFILLER_EXCHANGE_HTTP_URL, "https://api.binance.com"),
         (SSM_PATH_ENV, "/platform/backfiller/production"),
+        (SSM_DECRYPT_ENV, "true"),
     ];
 
     fn vars(values: &[(&str, &str)]) -> EnvVars {
@@ -86,7 +87,11 @@ mod tests {
     #[test]
     fn reads_the_ssm_decrypt_flag() {
         let mut values = REQUIRED.to_vec();
-        values.push((SSM_DECRYPT_ENV, "false"));
+        let index = values
+            .iter()
+            .position(|(name, _)| *name == SSM_DECRYPT_ENV)
+            .unwrap();
+        values[index] = (SSM_DECRYPT_ENV, "false");
 
         let config = BackfillerConfig::from_vars(&vars(&values)).unwrap();
 

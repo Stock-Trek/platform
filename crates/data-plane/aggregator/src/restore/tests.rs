@@ -1,6 +1,6 @@
 use super::catalog::{
-    AGGREGATOR_ARCHIVE_S3_BUCKET, ArchiveObject, ArchiveRecoveryConfig, DEFAULT_ARCHIVE_PREFIX,
-    select_event_objects, sort_archive_objects,
+    AGGREGATOR_ARCHIVE_S3_BUCKET, AGGREGATOR_ARCHIVE_S3_PREFIX, ArchiveObject,
+    ArchiveRecoveryConfig, select_event_objects, sort_archive_objects,
 };
 use super::rebuild::{RestoreOptions, RestoreSource, restore_partition};
 use super::replay::ArchivedEventSource;
@@ -377,6 +377,7 @@ fn restore_options_come_from_the_aggregator_configuration() {
         ("RUST_LOG", "info"),
         ("AGGREGATOR_NATS_URL", "nats://localhost:4222"),
         ("AGGREGATOR_EVENT_SUBJECT_PREFIX", "market.events"),
+        ("AGGREGATOR_GAP_SUBJECT_PREFIX", "market.gaps"),
         (
             "AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX",
             "market.candles.open",
@@ -385,6 +386,18 @@ fn restore_options_come_from_the_aggregator_configuration() {
             "AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX",
             "market.candles.closed",
         ),
+        ("AGGREGATOR_INTERVALS", "1s,1m,5m"),
+        ("AGGREGATOR_ALLOWED_LATENESS_MS", "5000"),
+        ("AGGREGATOR_CHECKPOINT_INTERVAL_SECS", "5"),
+        (
+            "AGGREGATOR_CHECKPOINT_BUCKET",
+            "aggregator_shards_checkpoints",
+        ),
+        ("AGGREGATOR_CHECKPOINT_PREFIX", "partition"),
+        ("AGGREGATOR_LEASE_TTL_SECS", "30"),
+        ("AGGREGATOR_DURABLE_PREFIX", "aggregator"),
+        ("AGGREGATOR_SHARD_SUBJECT_PREFIX", "aggregator.shards"),
+        ("AGGREGATOR_SHARD_COUNT", "16"),
         ("AGGREGATOR_STATE_SCHEMA_VERSION", "4"),
         ("AGGREGATOR_REPLAY_START_POLICY", "archive"),
         ("AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS", "12"),
@@ -407,14 +420,14 @@ fn archive_recovery_config_is_optional() {
         ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(Vec::<(&str, &str)>::new())).unwrap(),
         None
     );
-    let config = ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(vec![(
-        AGGREGATOR_ARCHIVE_S3_BUCKET,
-        "market-data",
-    )]))
+    let config = ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(vec![
+        (AGGREGATOR_ARCHIVE_S3_BUCKET, "market-data"),
+        (AGGREGATOR_ARCHIVE_S3_PREFIX, "market-data/raw"),
+    ]))
     .unwrap()
     .unwrap();
     assert_eq!(config.bucket, "market-data");
-    assert_eq!(config.prefix, DEFAULT_ARCHIVE_PREFIX);
+    assert_eq!(config.prefix, "market-data/raw");
     assert!(config.iceberg.is_none());
 }
 
@@ -422,7 +435,10 @@ fn archive_recovery_config_is_optional() {
 fn archive_recovery_enables_the_compacted_handoff_when_iceberg_is_configured() {
     let config = ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(vec![
         (AGGREGATOR_ARCHIVE_S3_BUCKET, "market-data"),
+        (AGGREGATOR_ARCHIVE_S3_PREFIX, "market-data/raw"),
         ("ICEBERG_CATALOG_URI", "https://catalog.test"),
+        ("ICEBERG_CATALOG_WAREHOUSE", "s3://market-data/iceberg"),
+        ("ICEBERG_NAMESPACE", "market_data"),
     ]))
     .unwrap()
     .unwrap();
