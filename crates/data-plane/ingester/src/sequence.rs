@@ -2,6 +2,7 @@ use async_trait::async_trait;
 use platform_errors::BpResult;
 use platform_nats::{JetStream, KeyValue};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+#[cfg(test)]
 use std::{collections::HashMap, sync::Mutex};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -33,17 +34,20 @@ pub trait SequenceStore: Send + Sync {
 }
 
 /// Sequence state kept in process memory.
+#[cfg(test)]
 #[derive(Debug, Default)]
 pub struct InMemorySequenceStore {
     trackers: Mutex<HashMap<String, SequenceTracker>>,
 }
 
+#[cfg(test)]
 impl InMemorySequenceStore {
     pub fn new() -> Self {
         Self::default()
     }
 }
 
+#[cfg(test)]
 #[async_trait]
 impl SequenceStore for InMemorySequenceStore {
     async fn load(&self, key: &str) -> BpResult<Option<SequenceTracker>> {

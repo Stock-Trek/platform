@@ -18,7 +18,7 @@ pub struct IngesterRunner<S, P> {
     config: IngesterConfig,
     source: S,
     publisher: Arc<P>,
-    sequences: Option<Arc<dyn SequenceStore>>,
+    sequences: Arc<dyn SequenceStore>,
 }
 
 impl<S, P> IngesterRunner<S, P>
@@ -26,18 +26,18 @@ where
     S: MarketMessageSource + 'static,
     P: EventPublisher + 'static,
 {
-    pub fn new(config: IngesterConfig, source: S, publisher: Arc<P>) -> Self {
+    pub fn new(
+        config: IngesterConfig,
+        source: S,
+        publisher: Arc<P>,
+        sequences: Arc<dyn SequenceStore>,
+    ) -> Self {
         Self {
             config,
             source,
             publisher,
-            sequences: None,
+            sequences,
         }
-    }
-
-    pub fn with_sequence_store(mut self, sequences: Arc<dyn SequenceStore>) -> Self {
-        self.sequences = Some(sequences);
-        self
     }
 
     pub async fn run(self) -> BpResult<()> {
@@ -57,10 +57,7 @@ where
                 exchange: config.exchange,
                 subject_prefix: config.nats_subject_prefix.clone(),
             };
-            match sequences {
-                Some(sequences) => Ingester::with_sequence_store(publisher, options, sequences),
-                None => Ingester::new(publisher, options),
-            }
+            Ingester::new(publisher, options, sequences)
         };
 
         let result = Runtime::run_until_shutdown(Self::process_messages(
@@ -104,7 +101,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::source::StreamFormat;
+    use crate::{sequence::InMemorySequenceStore, source::StreamFormat};
     use async_trait::async_trait;
     use platform_errors::BpResult;
     use platform_market_data::event::ParsedMessage;
@@ -153,6 +150,7 @@ mod tests {
             config(),
             FakeSource { fail: false },
             Arc::new(FakePublisher),
+            Arc::new(InMemorySequenceStore::new()),
         );
 
         runner.run().await.unwrap();
@@ -160,8 +158,12 @@ mod tests {
 
     #[tokio::test]
     async fn propagates_source_error() {
-        let runner =
-            IngesterRunner::new(config(), FakeSource { fail: true }, Arc::new(FakePublisher));
+        let runner = IngesterRunner::new(
+            config(),
+            FakeSource { fail: true },
+            Arc::new(FakePublisher),
+            Arc::new(InMemorySequenceStore::new()),
+        );
 
         let error = runner.run().await.unwrap_err();
 
