@@ -4325,6 +4325,7 @@ dependencies = [
  "platform-runtime",
  "platform-time",
  "platform-types",
+ "secrecy",
  "serde",
  "serde_json",
  "stock-trek-types",

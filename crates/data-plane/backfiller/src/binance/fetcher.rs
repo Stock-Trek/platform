@@ -11,7 +11,8 @@ use platform_errors::{BpError, BpResult, ExchangeError};
 use platform_exchange_gateway::clients::reqwest::ReqwestHttpClient;
 use platform_exchange_gateway::connector::Connector;
 use platform_exchange_types::{
-    binance::exchange::BinanceExchange, encode::ByteEncoder, signer::Signer,
+    api_key_credential::ApiKeyCredentials, binance::exchange::BinanceExchange, encode::ByteEncoder,
+    encrypt::EncryptionAlgorithm, signer::Signer,
 };
 use platform_market_data::event::GapMarker;
 use std::{sync::Arc, time::Duration};
@@ -27,14 +28,20 @@ pub struct BinanceGapFetcher {
 }
 
 impl BinanceGapFetcher {
-    pub fn try_new(config: &BackfillerConfig, api_key: String) -> BpResult<Self> {
+    pub fn try_new(config: &BackfillerConfig, credentials: ApiKeyCredentials) -> BpResult<Self> {
         if config.exchange != CexId::Binance {
             return Err(BpError::Exchange(ExchangeError::UnsupportedExchange {
                 exchange: config.exchange.to_string(),
             }));
         }
-        // TODO: support the exchange's testnet credentials and signing mode.
-        let signer = Signer::new_unencrypted(ByteEncoder::HexLower);
+        if config.signing_algorithm != EncryptionAlgorithm::Ed25519 {
+            return Err(BpError::config_invalid(
+                "BACKFILLER_EXCHANGE_SIGNING_ALGORITHM",
+                "only ed25519 is supported",
+            ));
+        }
+        let signer = Signer::try_new(credentials, config.signing_algorithm, ByteEncoder::Base64)?;
+        let api_key = signer.api_key();
         let connector = Connector::try_new_http_reqwest(
             config.exchange_http_url.clone(),
             BinanceExchange,

@@ -71,6 +71,8 @@ sections list the additional variables read by each process.
 | `BACKFILLER_EVENT_SUBJECT_PREFIX` | NATS subject prefix for replayed market events. |
 | `BACKFILLER_EXCHANGE` | Exchange identifier to backfill, for example `binance`. |
 | `BACKFILLER_EXCHANGE_HTTP_URL` | Exchange REST base URL using the `http` or `https` scheme, used to fetch historical trades. |
+| `BACKFILLER_EXCHANGE_SIGNING_ALGORITHM` | Exchange request signing algorithm. Only `ed25519` is currently supported. |
+| `BACKFILLER_EXCHANGE_TRADING_MODE` | Exchange trading mode: `real` for production or `paper` for testnet. `production`, `testnet`, and `sandbox` are accepted aliases. |
 | `BACKFILLER_GAP_SUBJECT_PREFIX` | NATS subject prefix carrying gap markers from the ingester. |
 | `BACKFILLER_NATS_URL` | NATS URL used to receive gap markers and publish replayed events. |
 
@@ -236,6 +238,14 @@ environment. The backfiller and Git webhook load every parameter under `SECRETS_
 look up secrets by name:
 
 - The Git webhook expects `GITHUB_WEBHOOK_SECRET`.
-- The backfiller expects `BACKFILLER_EXCHANGE_API_KEY`.
+- The backfiller reads `BACKFILLER_EXCHANGE_PRODUCTION_API_KEY` and
+  `BACKFILLER_EXCHANGE_PRODUCTION_API_SECRET` when
+  `BACKFILLER_EXCHANGE_TRADING_MODE=real`, or
+  `BACKFILLER_EXCHANGE_TESTNET_API_KEY` and
+  `BACKFILLER_EXCHANGE_TESTNET_API_SECRET` when it is `paper`. The
+  `BACKFILLER_EXCHANGE_REAL_API_KEY`/`BACKFILLER_EXCHANGE_REAL_API_SECRET` and
+  `BACKFILLER_EXCHANGE_PAPER_API_KEY`/`BACKFILLER_EXCHANGE_PAPER_API_SECRET`
+  aliases are also accepted. The unsuffixed `BACKFILLER_EXCHANGE_API_KEY` and
+  `BACKFILLER_EXCHANGE_API_SECRET` names are used as a final fallback.
 
 These names are SSM parameter names, not environment variables.

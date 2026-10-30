@@ -1,5 +1,7 @@
+use platform_errors::ExchangeError;
 pub use platform_types::protocol::Protocol;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 use strum::Display;
 
 pub trait Urls {
@@ -10,6 +12,20 @@ pub trait Urls {
 pub enum TradingMode {
     Real,
     Paper,
+}
+
+impl FromStr for TradingMode {
+    type Err = ExchangeError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        match value.trim().to_ascii_lowercase().as_str() {
+            "real" | "production" | "prod" | "live" | "mainnet" => Ok(Self::Real),
+            "paper" | "testnet" | "sandbox" => Ok(Self::Paper),
+            _ => Err(ExchangeError::UnsupportedTradingMode {
+                trading_mode: value.to_string(),
+            }),
+        }
+    }
 }
 
 pub struct LocalhostUrls;

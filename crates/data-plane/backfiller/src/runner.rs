@@ -104,6 +104,8 @@ mod tests {
         BackfillerConfig {
             log_filter: "info".to_string(),
             exchange: CexId::Binance,
+            trading_mode: platform_exchange_types::urls::TradingMode::Real,
+            signing_algorithm: platform_exchange_types::encrypt::EncryptionAlgorithm::Ed25519,
             nats_url: "nats://localhost:4222".to_string(),
             gap_subject_prefix: "market.gaps".to_string(),
             event_subject_prefix: "market.events".to_string(),
