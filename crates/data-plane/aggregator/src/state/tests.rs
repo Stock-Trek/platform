@@ -1,5 +1,5 @@
 use super::*;
-use platform_market_data::candle::CandleInterval;
+use platform_market_data::candle::{Candle, CandleInterval};
 use platform_market_data::decoders::trade::Trade;
 use platform_market_data::event::GapMarker;
 use platform_types::new_types::TimestampMilliseconds;
