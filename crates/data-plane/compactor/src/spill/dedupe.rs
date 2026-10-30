@@ -212,7 +212,9 @@ impl DedupeMerge {
             .peek()
             .is_some_and(|candidate| candidate.key == best.key)
         {
-            let candidate = self.heap.pop().expect("peeked heap entry");
+            let Some(candidate) = self.heap.pop() else {
+                break;
+            };
             self.advance(candidate.run)?;
             if candidate.run > best.run {
                 best = candidate;

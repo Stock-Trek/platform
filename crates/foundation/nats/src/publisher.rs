@@ -6,8 +6,9 @@ use async_nats::{
     jetstream::{self, Context},
 };
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::BpResult;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 
 /// Abstraction over event publication, allowing services to be tested with an
@@ -81,12 +82,7 @@ impl NatsPublisher {
     pub async fn ensure_stream(&self, subject_prefix: &str) -> BpResult<()> {
         NatsSubject::validate_named("subject prefix", subject_prefix)?;
         let stream = JetStream::stream_name(subject_prefix);
-        if self
-            .streams
-            .lock()
-            .expect("publisher streams lock")
-            .contains(&stream)
-        {
+        if self.streams.lock().contains(&stream) {
             return Ok(());
         }
 
@@ -98,10 +94,7 @@ impl NatsPublisher {
             .map_err(|error| JetStream::protocol_error("failed to ensure JetStream stream", error));
         match result {
             Ok(()) => {
-                self.streams
-                    .lock()
-                    .expect("publisher streams lock")
-                    .push(stream);
+                self.streams.lock().push(stream);
                 Ok(())
             }
             Err(error) => {
@@ -153,13 +146,12 @@ impl NatsPublisher {
 
     async fn context(&self) -> BpResult<Context> {
         let mut context = self.context.lock().await;
-        if context.is_none() {
-            let client = self.address.connect(&self.name).await?;
-            *context = Some(jetstream::new(client));
+        if let Some(initialised) = context.as_ref() {
+            return Ok(initialised.clone());
         }
-        Ok(context
-            .as_ref()
-            .expect("NATS context was initialised above")
-            .clone())
+        let client = self.address.connect(&self.name).await?;
+        let initialised = jetstream::new(client);
+        *context = Some(initialised.clone());
+        Ok(initialised)
     }
 }

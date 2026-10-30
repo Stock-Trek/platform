@@ -9,6 +9,7 @@ use crate::{
     shard::{ShardId, shard_for},
     source::{MarketInput, MarketSource, SourceRecord},
 };
+use parking_lot::Mutex;
 use platform_errors::BpResult;
 use platform_market_data::{
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
@@ -19,7 +20,6 @@ use platform_metrics::market_data::MarketDataMetrics;
 use platform_nats::EventPublisher;
 use platform_runtime::Runtime;
 use std::collections::{BTreeSet, HashMap};
-use std::sync::Mutex;
 use stock_trek_types::cex::cex_id::CexId;
 use tracing::{info, warn};
 
@@ -57,7 +57,7 @@ impl HashRouter {
     }
 
     fn decoder(&self, exchange: CexId) -> BpResult<SharedTradeDecoder> {
-        let mut decoders = self.decoders.lock().expect("router decoders lock");
+        let mut decoders = self.decoders.lock();
         if let Some(decoder) = decoders.get(&exchange) {
             return Ok(decoder.clone());
         }

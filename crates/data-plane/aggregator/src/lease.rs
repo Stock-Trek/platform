@@ -3,13 +3,13 @@
 use crate::config::AggregatorConfig;
 use crate::shard::ShardId;
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult};
 use platform_metrics::AggregatorMetrics;
 use platform_nats::KeyValue;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;
 use tracing::info;
@@ -125,7 +125,7 @@ impl LeaseStore for InMemoryLeaseStore {
         ttl: Duration,
     ) -> BpResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
-        let mut leases = self.leases.lock().expect("lease store lock");
+        let mut leases = self.leases.lock();
         let lease = match leases.get(&shard) {
             Some(existing) if existing.owner_id == owner_id => {
                 let mut renewed = existing.clone();
@@ -152,7 +152,7 @@ impl LeaseStore for InMemoryLeaseStore {
 
     async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BpResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
-        let mut leases = self.leases.lock().expect("lease store lock");
+        let mut leases = self.leases.lock();
         let Some(current) = leases.get_mut(&lease.shard) else {
             return Ok(None);
         };
@@ -164,7 +164,7 @@ impl LeaseStore for InMemoryLeaseStore {
     }
 
     async fn release(&self, lease: &WriterLease) -> BpResult<()> {
-        let mut leases = self.leases.lock().expect("lease store lock");
+        let mut leases = self.leases.lock();
         if let Some(current) = leases.get_mut(&lease.shard)
             && current.is_held_by(&lease.owner_id, lease.fencing_token)
         {
@@ -176,12 +176,7 @@ impl LeaseStore for InMemoryLeaseStore {
     }
 
     async fn current(&self, shard: ShardId) -> BpResult<Option<WriterLease>> {
-        Ok(self
-            .leases
-            .lock()
-            .expect("lease store lock")
-            .get(&shard)
-            .cloned())
+        Ok(self.leases.lock().get(&shard).cloned())
     }
 }
 

@@ -150,10 +150,7 @@ impl<P: EventPublisher> Ingester<P> {
         sequence: u64,
     ) -> BpResult<()> {
         let result = self.publisher.publish(subject, &event.encode()?).await;
-        let tracker = self
-            .sequences
-            .get_mut(&event.stream)
-            .expect("sequence tracker is loaded before publishing");
+        let tracker = self.sequence_tracker(&event.stream).await?;
         match &result {
             Ok(()) => tracker.commit(sequence),
             Err(_) => tracker.record_failure(first_sequence),
@@ -173,17 +170,19 @@ impl<P: EventPublisher> Ingester<P> {
             self.sequences.insert(stream.to_string(), tracker);
             self.loaded_streams.insert(stream.to_string());
         }
-        Ok(self
-            .sequences
-            .get_mut(stream)
-            .expect("sequence tracker is loaded"))
+        self.sequences.get_mut(stream).ok_or_else(|| {
+            platform_errors::BpError::bad_value(
+                "sequence tracker",
+                stream,
+                "sequence tracker is not loaded",
+            )
+        })
     }
 
     async fn persist_sequence(&self, stream: &str) -> BpResult<()> {
-        let tracker = self
-            .sequences
-            .get(stream)
-            .expect("sequence tracker is loaded before persistence");
+        let Some(tracker) = self.sequences.get(stream) else {
+            return Ok(());
+        };
         self.store.save(&self.sequence_key(stream), tracker).await
     }
 

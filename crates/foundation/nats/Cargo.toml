@@ -8,6 +8,7 @@ async-nats = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
+parking_lot = { workspace = true }
 platform-errors = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time"] }

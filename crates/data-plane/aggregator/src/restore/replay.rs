@@ -142,13 +142,11 @@ impl S3ArchivedEventSource {
                 );
             }
 
-            let Some(batch) = self
-                .reader
-                .as_mut()
-                .expect("archive reader is initialized")
-                .next_batch()
-                .await?
-            else {
+            let next_batch = match self.reader.as_mut() {
+                Some(reader) => reader.next_batch().await?,
+                None => continue,
+            };
+            let Some(batch) = next_batch else {
                 self.reader = None;
                 self._reader_permit = None;
                 continue;
