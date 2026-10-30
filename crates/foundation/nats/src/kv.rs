@@ -9,7 +9,7 @@ use async_nats::{
     },
 };
 use futures::TryStreamExt;
-use platform_errors::{BpError, BpResult, IngesterError};
+use platform_errors::{BpError, BpResult, NatsError};
 
 /// A NATS KV bucket storing the latest value per key.
 ///
@@ -165,9 +165,7 @@ impl KeyValue {
         if valid {
             Ok(())
         } else {
-            Err(BpError::Ingester(IngesterError::protocol(format!(
-                "invalid KV bucket name {bucket:?}: must only contain alphanumeric characters, dashes, and underscores"
-            ))))
+            Err(BpError::Nats(NatsError::invalid_bucket(bucket)))
         }
     }
 }

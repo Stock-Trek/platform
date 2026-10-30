@@ -1,7 +1,7 @@
 //! JetStream naming and error helpers shared by the publisher, consumer, and KV store.
 
 use async_nats::jetstream::stream;
-use platform_errors::{BpError, IngesterError};
+use platform_errors::{BpError, NatsError};
 use std::fmt::Display;
 use std::time::Duration;
 
@@ -85,7 +85,7 @@ impl JetStream {
     }
 
     pub(crate) fn protocol_error(context: &str, error: impl Display) -> BpError {
-        BpError::Ingester(IngesterError::protocol(format!("{context}: {error}")))
+        BpError::Nats(NatsError::protocol(format!("{context}: {error}")))
     }
 }
 

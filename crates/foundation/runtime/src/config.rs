@@ -49,26 +49,9 @@ impl Config {
         vars.required_positive_duration_secs(name)
     }
 
-    /// Reads an optional duration expressed as a positive number of seconds,
-    /// falling back to `default_secs` when the variable is missing or empty.
-    pub fn optional_positive_duration_secs(
-        vars: &EnvVars,
-        name: &str,
-        default_secs: u64,
-    ) -> BpResult<Duration> {
-        vars.optional_positive_duration_secs(name, default_secs)
-    }
-
     /// Reads a required positive `usize`.
     pub fn required_positive_usize(vars: &EnvVars, name: &str) -> BpResult<usize> {
         let value = vars.required_parsed(name)?;
-        Self::positive_usize(name, value)
-    }
-
-    /// Reads an optional positive `usize`, falling back to `default` when the
-    /// variable is missing or empty.
-    pub fn optional_positive_usize(vars: &EnvVars, name: &str, default: usize) -> BpResult<usize> {
-        let value = vars.optional_parsed_or(name, default)?;
         Self::positive_usize(name, value)
     }
 

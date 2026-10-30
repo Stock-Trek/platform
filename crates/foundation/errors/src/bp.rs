@@ -9,8 +9,9 @@ use crate::storage::StorageError;
 use crate::{
     ErrorType, binance::BinanceError, config::ConfigError, connector::ConnectorError,
     connector::SendFailure, data::DataError, exchange::ExchangeError, ingester::IngesterError,
-    io::IoError, rate_limit::RateLimitError, retryability::Retryability, secrets::SecretsError,
-    sqs::SqsError, system::SystemError, timeout::TimeoutError, validation::ValidationError,
+    io::IoError, nats::NatsError, rate_limit::RateLimitError, retryability::Retryability,
+    secrets::SecretsError, sqs::SqsError, system::SystemError, timeout::TimeoutError,
+    validation::ValidationError,
 };
 #[cfg(feature = "lambda")]
 use lambda_runtime::Diagnostic;
@@ -45,6 +46,8 @@ pub enum BpError {
     #[cfg(feature = "lambda")]
     #[error(transparent)]
     Lambda(#[from] LambdaError),
+    #[error(transparent)]
+    Nats(#[from] NatsError),
     #[error(transparent)]
     RateLimit(#[from] RateLimitError),
     #[error(transparent)]
@@ -277,6 +280,7 @@ impl BpError {
             Self::Io(error) => error.retryability(),
             #[cfg(feature = "lambda")]
             Self::Lambda(error) => error.retryability(),
+            Self::Nats(error) => error.retryability(),
             Self::RateLimit(error) => error.retryability(),
             Self::Secrets(error) => error.retryability(),
             Self::Sqs(error) => error.retryability(),
@@ -305,6 +309,7 @@ impl ErrorType for BpError {
             Self::Io(error) => error.error_type(),
             #[cfg(feature = "lambda")]
             Self::Lambda(error) => error.error_type(),
+            Self::Nats(error) => error.error_type(),
             Self::RateLimit(error) => error.error_type(),
             Self::Secrets(error) => error.error_type(),
             Self::Sqs(error) => error.error_type(),

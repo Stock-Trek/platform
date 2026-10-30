@@ -37,8 +37,6 @@ pub enum IngesterError {
         #[source]
         source: std::str::Utf8Error,
     },
-    #[error("NATS protocol error: {message}")]
-    Protocol { message: String },
 }
 
 impl IngesterError {
@@ -64,12 +62,6 @@ impl IngesterError {
 
     pub fn utf8(source: std::str::Utf8Error) -> Self {
         Self::Utf8 { source }
-    }
-
-    pub fn protocol(message: impl Into<String>) -> Self {
-        Self::Protocol {
-            message: message.into(),
-        }
     }
 
     pub fn retryability(&self) -> Retryability {
