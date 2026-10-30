@@ -24,5 +24,5 @@ pub use record::{
     ArchivedMarketEvent, STATE_EPOCH_HEADER,
 };
 pub use routing::{ROUTING_BUCKET_COUNT, RoutingBucket, RoutingKey};
-pub use s3::{Bucket, ObjectKey, S3};
+pub use s3::{Bucket, ObjectKey, S3, S3Object};
 pub use source::SourceBatch;

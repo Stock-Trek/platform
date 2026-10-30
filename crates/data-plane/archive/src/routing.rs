@@ -86,6 +86,15 @@ impl RoutingBucket {
         (self.0 % partition_count) as u32
     }
 
+    /// Whether the given active partition owns this bucket.
+    ///
+    /// Bucket ownership is derived from the fixed virtual bucket index, so this
+    /// is the single check archive readers use to select their own slice of
+    /// the archive.
+    pub fn is_owned_by(self, partition: u32, partition_count: usize) -> bool {
+        self.partition_index(partition_count) == partition
+    }
+
     /// The object-key path segment for this bucket.
     pub fn segment(self) -> String {
         format!("{ROUTING_BUCKET_FIELD}{:05}", self.0)
@@ -174,6 +183,20 @@ mod tests {
 
         for partition_count in [1, 2, 8, 16, 100] {
             assert!(bucket.partition_index(partition_count) < partition_count as u32);
+        }
+    }
+
+    #[test]
+    fn every_archive_bucket_has_exactly_one_owning_partition() {
+        for partition_count in [1_u32, 2, 8, 16, 100] {
+            let mut owned = vec![0_usize; partition_count as usize];
+            for index in 0..RoutingBucket::COUNT {
+                let bucket = RoutingBucket::from_index(index).unwrap();
+                let partition = bucket.partition_index(partition_count as usize);
+                assert!(bucket.is_owned_by(partition, partition_count as usize));
+                owned[partition as usize] += 1;
+            }
+            assert_eq!(owned.iter().sum::<usize>(), RoutingBucket::COUNT as usize);
         }
     }
 }
