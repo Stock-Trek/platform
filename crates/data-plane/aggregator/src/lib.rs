@@ -29,6 +29,6 @@ pub use shard::{ShardId, all_shards, shard_for, shard_for_candle_key};
 pub use sink::{ClosedCandlePublisher, NatsCandleSink, OpenCandleStore};
 pub use source::{MarketInput, MarketSource, NatsMarketSource, NatsShardSource, SourceRecord};
 pub use state::{
-    AggregatorState, DeduplicationKey, IncompleteWindow, KnownGap, STATE_SCHEMA_VERSION,
-    SequenceRange, StreamProgress,
+    AggregatorState, DeduplicationKey, IncompleteWindow, KnownGap, MAX_SEEN_SEQUENCE_RANGES,
+    STATE_SCHEMA_VERSION, SequenceRange, StreamProgress,
 };

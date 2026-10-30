@@ -90,6 +90,59 @@ fn non_adjacent_sequences_keep_separate_ranges() {
 }
 
 #[test]
+fn sparse_sequences_have_bounded_deduplication_ranges() {
+    let mut progress = StreamProgress::default();
+    let observed = MAX_SEEN_SEQUENCE_RANGES as u64 * 3;
+
+    for step in 0..observed {
+        assert!(progress.observe_sequence(step * 2));
+    }
+
+    assert_eq!(progress.seen_sequences.len(), MAX_SEEN_SEQUENCE_RANGES);
+    assert!(!progress.is_duplicate(0));
+    assert!(progress.is_duplicate((observed - 1) * 2));
+}
+
+#[test]
+fn contiguous_sequences_are_not_pruned() {
+    let mut progress = StreamProgress::default();
+    let observed = MAX_SEEN_SEQUENCE_RANGES as u64 * 3;
+
+    for sequence in 0..observed {
+        assert!(progress.observe_sequence(sequence));
+    }
+
+    assert_eq!(
+        progress.seen_sequences,
+        vec![SequenceRange::new(0, observed - 1)]
+    );
+    assert!(progress.is_duplicate(0));
+}
+
+#[test]
+fn restored_state_is_pruned_to_the_deduplication_bound() {
+    let mut state = AggregatorState::new();
+    let stream = stream_id(CexId::Binance, "btcusdt@trade");
+    let ranges = (0..MAX_SEEN_SEQUENCE_RANGES as u64 * 2)
+        .map(|sequence| SequenceRange::new(sequence * 2, sequence * 2))
+        .collect();
+    state.streams.insert(
+        stream.clone(),
+        StreamProgress {
+            seen_sequences: ranges,
+            ..StreamProgress::default()
+        },
+    );
+
+    state.prune_stream_dedup();
+
+    assert_eq!(
+        state.streams[&stream].seen_sequences.len(),
+        MAX_SEEN_SEQUENCE_RANGES
+    );
+}
+
+#[test]
 fn gaps_merge_overlapping_and_adjacent_ranges() {
     let mut state = AggregatorState::new();
     let mut first = GapMarker {

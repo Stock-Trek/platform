@@ -33,12 +33,23 @@ pub fn stream_id(exchange: CexId, stream: &str) -> String {
     format!("{exchange}.{stream}")
 }
 
+/// Maximum number of disjoint sequence ranges retained per stream.
+///
+/// Exchange sequence numbers can be sparse or permanently missing, so a stream
+/// can otherwise accumulate one range per event forever. Retaining only the
+/// most recent ranges bounds checkpoint size. Older sequences beyond this
+/// horizon are no longer recognized as duplicates.
+pub const MAX_SEEN_SEQUENCE_RANGES: usize = 1_024;
+
 /// Per-stream event-time progress and deduplication ranges.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct StreamProgress {
     pub watermark: Option<TimestampMilliseconds>,
     pub last_sequence: Option<u64>,
     /// Inclusive sequence ranges already applied for this stream.
+    ///
+    /// Bounded to [`MAX_SEEN_SEQUENCE_RANGES`] entries so sparse streams cannot
+    /// grow checkpoints without limit.
     pub seen_sequences: Vec<SequenceRange>,
 }
 
@@ -60,6 +71,14 @@ impl StreamProgress {
             None => sequence,
         });
         true
+    }
+
+    /// Drops the oldest ranges when the retained set exceeds the per-stream cap.
+    pub fn prune_seen_sequences(&mut self) {
+        if self.seen_sequences.len() > MAX_SEEN_SEQUENCE_RANGES {
+            let excess = self.seen_sequences.len() - MAX_SEEN_SEQUENCE_RANGES;
+            self.seen_sequences.drain(..excess);
+        }
     }
 
     pub fn advance_watermark(&mut self, timestamp: TimestampMilliseconds) -> bool {
@@ -85,6 +104,7 @@ impl StreamProgress {
         });
         self.seen_sequences.push(merged);
         self.seen_sequences.sort();
+        self.prune_seen_sequences();
     }
 }
 
@@ -119,5 +139,12 @@ impl AggregatorState {
             .entry(key.stream_id())
             .or_default()
             .observe_sequence(key.sequence)
+    }
+
+    /// Applies the per-stream deduplication bound to restored state.
+    pub fn prune_stream_dedup(&mut self) {
+        for progress in self.streams.values_mut() {
+            progress.prune_seen_sequences();
+        }
     }
 }
