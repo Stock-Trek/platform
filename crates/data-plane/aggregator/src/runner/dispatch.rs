@@ -9,7 +9,7 @@ use crate::{
     config::AggregatorConfig,
     lease::LeaseStore,
     processor::{CandleProcessor, ProcessorUpdate},
-    shard::ShardId,
+    shard::{ShardId, trades_for_shard},
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::{MarketInput, MarketSource},
     state::DeduplicationKey,
@@ -87,6 +87,8 @@ where
                                 let update = Self::process_input(
                                     processor,
                                     &mut decoders,
+                                    shard,
+                                    config.shard_count,
                                     &record.input,
                                 );
                                 Self::record_update_metrics(&update);
@@ -197,10 +199,14 @@ where
     fn process_input(
         processor: &mut CandleProcessor,
         decoders: &mut HashMap<CexId, SharedTradeDecoder>,
+        shard: ShardId,
+        shard_count: usize,
         input: &MarketInput,
     ) -> ProcessorUpdate {
         match input {
-            MarketInput::Event(event) => Self::process_event(processor, decoders, event),
+            MarketInput::Event(event) => {
+                Self::process_event(processor, decoders, shard, shard_count, event)
+            }
             MarketInput::Gap(gap) => Self::process_gap(processor, gap),
         }
     }
@@ -246,6 +252,8 @@ where
     fn process_event(
         processor: &mut CandleProcessor,
         decoders: &mut HashMap<CexId, SharedTradeDecoder>,
+        shard: ShardId,
+        shard_count: usize,
         event: &MarketEvent,
     ) -> ProcessorUpdate {
         let decoder = match decoders.entry(event.exchange) {
@@ -263,7 +271,13 @@ where
             },
         };
         match decoder.decode(event) {
-            Ok(trades) => processor.apply_event(event, &trades),
+            Ok(trades) => {
+                let trades = trades_for_shard(trades, shard, shard_count);
+                if trades.is_empty() {
+                    return ProcessorUpdate::default();
+                }
+                processor.apply_event(event, &trades)
+            }
             Err(error) => {
                 // Undecodable exchange streams still advance the event-time
                 // watermark and are deduplicated, but they contribute no trades.

@@ -1,7 +1,7 @@
 //! Stable key-to-shard assignment for the aggregator shard stream.
 
 use platform_archive::{RoutingBucket, RoutingKey};
-use platform_market_data::candle::CandleKey;
+use platform_market_data::{candle::CandleKey, decoders::trade::Trade};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
@@ -59,6 +59,22 @@ pub fn shard_for(exchange: CexId, trading_pair: TradingPair, shard_count: usize)
 /// stays on the same shard, which keeps all state for the pair together.
 pub fn shard_for_candle_key(key: &CandleKey, shard_count: usize) -> ShardId {
     shard_for(key.exchange, key.trading_pair, shard_count)
+}
+
+/// Filters decoded trades down to the ones owned by `shard`.
+///
+/// A decoder may emit trades for more than one trading pair from a single
+/// event, so live processing and archive rebuilds must apply the same ownership
+/// check before folding trades into keyed state.
+pub fn trades_for_shard(
+    trades: impl IntoIterator<Item = Trade>,
+    shard: ShardId,
+    shard_count: usize,
+) -> Vec<Trade> {
+    trades
+        .into_iter()
+        .filter(|trade| shard_for(trade.exchange, trade.trading_pair, shard_count) == shard)
+        .collect()
 }
 
 /// Every shard in `0..shard_count`, in ascending order.
