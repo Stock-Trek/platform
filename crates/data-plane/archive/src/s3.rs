@@ -192,10 +192,53 @@ impl S3 {
         format!("s3://{bucket}/{key}")
     }
 
+    /// Splits an `s3://bucket/key` URI into its object identity.
+    pub fn parse_uri(uri: &str) -> BpResult<(Bucket, ObjectKey)> {
+        let path = uri.strip_prefix("s3://").ok_or_else(|| {
+            BpError::external(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("expected an s3:// URI, got {uri}"),
+            ))
+        })?;
+        let (bucket, key) = path.split_once('/').ok_or_else(|| {
+            BpError::external(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("expected an s3://bucket/key URI, got {uri}"),
+            ))
+        })?;
+        if bucket.is_empty() || key.is_empty() {
+            return Err(BpError::external(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                format!("expected an s3://bucket/key URI, got {uri}"),
+            )));
+        }
+        Ok((Bucket::new(bucket), ObjectKey::new(key)))
+    }
+
     fn modified_millis(value: &aws_sdk_s3::primitives::DateTime) -> i64 {
         value
             .secs()
             .saturating_mul(1000)
             .saturating_add(i64::from(value.subsec_nanos() / 1_000_000))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_s3_uris_and_rejects_incomplete_ones() {
+        assert_eq!(
+            S3::parse_uri("s3://archive/market-data/raw/events/a.parquet").unwrap(),
+            (
+                Bucket::new("archive"),
+                ObjectKey::new("market-data/raw/events/a.parquet")
+            )
+        );
+        assert!(S3::parse_uri("https://archive/key").is_err());
+        assert!(S3::parse_uri("s3://archive").is_err());
+        assert!(S3::parse_uri("s3:///key").is_err());
+        assert!(S3::parse_uri("s3://archive/").is_err());
     }
 }

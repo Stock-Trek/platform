@@ -3,7 +3,8 @@
 //! Recovery prefers the latest compatible checkpoint because it contains the
 //! exact keyed state and the next source sequence. If the checkpoint is
 //! missing, stale, or from an incompatible schema, the partition state is
-//! rebuilt from the raw event archive instead.
+//! rebuilt from the compacted event archive plus the raw tail that has not been
+//! compacted yet.
 
 use crate::checkpoint::StateStore;
 use crate::config::{AggregatorConfig, ReplayStartPolicy};
@@ -13,8 +14,8 @@ use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{
-    ArchiveKind, ArchiveParquet, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey,
-    ParquetReader, S3, S3Object,
+    ArchiveHandoff, ArchiveKind, ArchiveParquet, ArchivePath, ArchivedMarketEvent, Bucket,
+    IcebergCatalog, IcebergConfig, ObjectKey, ParquetReader, S3,
 };
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult, ErrorType};
@@ -43,11 +44,14 @@ const DEFAULT_ARCHIVE_PREFIX: &str = "market-data/raw";
 /// partitions in one aggregator process.
 const MAX_CONCURRENT_ARCHIVE_OBJECTS: usize = 4;
 
-/// Optional raw-event archive used to rebuild partition state.
+/// Optional archive used to rebuild partition state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveRecoveryConfig {
     pub bucket: String,
     pub prefix: String,
+    /// When configured, recovery uses the compacted/raw handoff instead of
+    /// replaying the full raw history.
+    pub iceberg: Option<IcebergConfig>,
 }
 
 impl ArchiveRecoveryConfig {
@@ -71,7 +75,12 @@ impl ArchiveRecoveryConfig {
         let prefix = vars
             .optional(AGGREGATOR_ARCHIVE_S3_PREFIX)?
             .unwrap_or_else(|| DEFAULT_ARCHIVE_PREFIX.to_string());
-        Ok(Some(Self { bucket, prefix }))
+        let iceberg = IcebergConfig::optional_from_vars(vars, &format!("s3://{bucket}/iceberg"))?;
+        Ok(Some(Self {
+            bucket,
+            prefix,
+            iceberg,
+        }))
     }
 }
 
@@ -414,7 +423,28 @@ struct ArchiveSnapshot {
     transfer_client: TransferClient,
     bucket: Bucket,
     prefix: String,
-    objects: Vec<S3Object>,
+    compacted_objects: usize,
+    raw_tail_objects: usize,
+    objects: Vec<ArchiveObject>,
+}
+
+/// An archive object with enough identity to stream it directly from S3.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct ArchiveObject {
+    bucket: Bucket,
+    key: ObjectKey,
+    size: i64,
+}
+
+impl ArchiveObject {
+    fn from_data_file(file: &platform_archive::IcebergDataFile) -> BpResult<Self> {
+        let (bucket, key) = S3::parse_uri(&file.file_path)?;
+        Ok(Self {
+            bucket,
+            key,
+            size: file.file_size_in_bytes,
+        })
+    }
 }
 
 impl S3ArchiveRecovery {
@@ -428,8 +458,10 @@ impl S3ArchiveRecovery {
 
     /// Builds a partition-specific source from the shared archive snapshot.
     ///
-    /// The first call performs the S3 client setup and listing; later calls
-    /// reuse both and only select the objects owned by their partition.
+    /// The first call discovers the archive files; later calls reuse the same
+    /// snapshot and only select the objects owned by their partition. With an
+    /// Iceberg catalog configured the snapshot is the compacted/raw handoff,
+    /// otherwise it falls back to listing the raw prefix.
     pub async fn connect(
         &self,
         partition: PartitionId,
@@ -441,41 +473,66 @@ impl S3ArchiveRecovery {
                 let (client, transfer_client) = S3::clients().await;
                 let bucket = Bucket::new(self.config.bucket.clone());
                 let prefix = self.config.prefix.trim_matches('/').to_string();
-                let list_prefix = if prefix.is_empty() {
-                    String::new()
+
+                let (objects, compacted_objects, raw_tail_objects) = if let Some(iceberg) =
+                    &self.config.iceberg
+                {
+                    let catalog = IcebergCatalog::connect(iceberg).await?;
+                    let handoff = ArchiveHandoff::discover(&catalog, ArchiveKind::Events).await?;
+                    let compacted_objects = handoff.compacted.len();
+                    let raw_tail_objects = handoff.raw_tail.len();
+                    let objects = handoff
+                        .files()
+                        .map(ArchiveObject::from_data_file)
+                        .collect::<BpResult<Vec<_>>>()?;
+                    (objects, compacted_objects, raw_tail_objects)
                 } else {
-                    format!("{prefix}/")
+                    let list_prefix = if prefix.is_empty() {
+                        String::new()
+                    } else {
+                        format!("{prefix}/")
+                    };
+                    let listed =
+                        S3::list_objects(&client, &bucket, &ObjectKey::new(list_prefix)).await?;
+                    let raw_tail_objects = listed.len();
+                    let objects = listed
+                        .into_iter()
+                        .map(|object| ArchiveObject {
+                            bucket: bucket.clone(),
+                            key: object.key,
+                            size: object.size,
+                        })
+                        .collect();
+                    (objects, 0, raw_tail_objects)
                 };
-                let objects =
-                    S3::list_objects(&client, &bucket, &ObjectKey::new(list_prefix)).await?;
+
                 Ok::<_, BpError>(ArchiveSnapshot {
                     transfer_client,
                     bucket,
                     prefix,
+                    compacted_objects,
+                    raw_tail_objects,
                     objects,
                 })
             })
             .await?;
 
-        let mut objects = select_event_objects(
-            snapshot.objects.clone(),
-            &snapshot.prefix,
-            partition,
-            partition_count,
-        );
-        objects.sort_by(|left, right| left.key.cmp(&right.key));
+        let mut objects =
+            select_event_objects(snapshot.objects.clone(), partition, partition_count);
+        sort_archive_objects(&mut objects);
 
         info!(
             bucket = %snapshot.bucket,
             prefix = %snapshot.prefix,
-            objects = objects.len(),
+            compacted_objects = snapshot.compacted_objects,
+            raw_tail_objects = snapshot.raw_tail_objects,
+            selected_objects = objects.len(),
             partition = %partition,
             "connected archive recovery source"
         );
 
         Ok(S3ArchivedEventSource {
             transfer_client: snapshot.transfer_client.clone(),
-            bucket: snapshot.bucket.clone(),
             partition,
             partition_count,
             objects: objects.into(),
@@ -488,7 +545,7 @@ impl S3ArchiveRecovery {
     }
 }
 
-/// Replays raw event objects from S3 for one partition.
+/// Replays archive event objects from S3 for one partition.
 ///
 /// Objects are read in bounded Parquet batches through ranged S3 requests, so
 /// recovery never downloads or decodes a whole object at once. A
@@ -496,10 +553,9 @@ impl S3ArchiveRecovery {
 /// concurrently across all partitions.
 pub struct S3ArchivedEventSource {
     transfer_client: TransferClient,
-    bucket: Bucket,
     partition: PartitionId,
     partition_count: usize,
-    objects: VecDeque<S3Object>,
+    objects: VecDeque<ArchiveObject>,
     reader: Option<platform_archive::ArchiveParquetStream<ParquetReader>>,
     /// Keeps the recovery slot held for as long as an object is being streamed.
     _reader_permit: Option<OwnedSemaphorePermit>,
@@ -544,8 +600,12 @@ impl S3ArchivedEventSource {
                                 "archive recovery limiter closed: {error}"
                             )))
                         })?;
-                let reader =
-                    ParquetReader::new(&self.transfer_client, &self.bucket, &object.key, file_size);
+                let reader = ParquetReader::new(
+                    &self.transfer_client,
+                    &object.bucket,
+                    &object.key,
+                    file_size,
+                );
                 self.reader =
                     Some(ArchiveParquet::decode_reader_batches(ArchiveKind::Events, reader).await?);
                 self._reader_permit = Some(permit);
@@ -594,31 +654,47 @@ impl S3ArchivedEventSource {
     }
 }
 
-/// Selects the raw-event objects owned by one partition.
+/// Selects the event objects owned by one partition.
 ///
-/// Archive objects are written under a fixed virtual routing bucket, so a
+/// Raw and compacted objects both carry a fixed virtual routing bucket, so a
 /// partition can discard every object belonging to another partition before
 /// downloading it. This keeps a cold rebuild at `O(archive)` across the cluster
 /// instead of making every partition scan the whole archive.
 fn select_event_objects(
-    objects: Vec<S3Object>,
-    prefix: &str,
+    objects: Vec<ArchiveObject>,
     partition: PartitionId,
     partition_count: usize,
-) -> Vec<S3Object> {
+) -> Vec<ArchiveObject> {
     objects
         .into_iter()
         .filter(|object| {
-            let Some(relative) = ArchivePath::relative_key(object.key.as_str(), prefix) else {
-                return false;
-            };
-            if ArchivePath::kind(relative) != Some(ArchiveKind::Events) {
+            let key = object.key.as_str();
+            if ArchivePath::kind(key) != Some(ArchiveKind::Events) {
                 return false;
             }
-            ArchivePath::routing_bucket_from_key(relative)
+            ArchivePath::routing_bucket_from_key(key)
                 .is_some_and(|bucket| bucket.is_owned_by(partition.get(), partition_count))
         })
         .collect()
+}
+
+/// Orders archive files by coverage hour, then by path.
+///
+/// The layer prefix must not dominate ordering: an un-compacted older raw
+/// hour has to be replayed before a newer compacted hour so each partition
+/// observes its event history in time order.
+fn sort_archive_objects(objects: &mut [ArchiveObject]) {
+    objects.sort_by(|left, right| {
+        let left_hour = ArchivePath::bucket_start_from_key(left.key.as_str())
+            .map(|hour| hour.0)
+            .unwrap_or(i64::MAX);
+        let right_hour = ArchivePath::bucket_start_from_key(right.key.as_str())
+            .map(|hour| hour.0)
+            .unwrap_or(i64::MAX);
+        left_hour
+            .cmp(&right_hour)
+            .then_with(|| left.key.cmp(&right.key))
+    });
 }
 
 #[async_trait]
@@ -1049,6 +1125,20 @@ mod tests {
         .unwrap();
         assert_eq!(config.bucket, "market-data");
         assert_eq!(config.prefix, DEFAULT_ARCHIVE_PREFIX);
+        assert!(config.iceberg.is_none());
+    }
+
+    #[test]
+    fn archive_recovery_enables_the_compacted_handoff_when_iceberg_is_configured() {
+        let config = ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(vec![
+            (AGGREGATOR_ARCHIVE_S3_BUCKET, "market-data"),
+            ("ICEBERG_CATALOG_URI", "https://catalog.test"),
+        ]))
+        .unwrap()
+        .unwrap();
+
+        let iceberg = config.iceberg.unwrap();
+        assert_eq!(iceberg.warehouse, "s3://market-data/iceberg");
     }
 
     #[test]
@@ -1099,31 +1189,81 @@ mod tests {
             "candles.parquet",
         )
         .unwrap();
+        let owned_compacted = ArchivePath::compacted_key(
+            "market-data/compacted",
+            &platform_archive::ArchivePartition::Events {
+                exchange: CexId::Binance,
+                stream: "btcusdt@trade".to_string(),
+            },
+            TimestampMilliseconds(3_600_000),
+            owned,
+            "compacted.parquet",
+        )
+        .unwrap();
         let objects = vec![
-            s3_object(&other_event),
-            s3_object(&owned_candle),
-            s3_object(&owned_event),
+            archive_object(&other_event),
+            archive_object(&owned_candle),
+            archive_object(&owned_compacted),
+            archive_object(&owned_event),
         ];
 
-        let selected = select_event_objects(objects, prefix, partition, partition_count);
+        let mut selected = select_event_objects(objects, partition, partition_count);
+        sort_archive_objects(&mut selected);
 
-        assert_eq!(selected, vec![s3_object(&owned_event)]);
+        assert_eq!(
+            selected,
+            vec![
+                archive_object(&owned_event),
+                archive_object(&owned_compacted)
+            ]
+        );
+    }
+
+    #[test]
+    fn archive_recovery_orders_files_by_coverage_hour_not_layer_prefix() {
+        let bucket = platform_archive::RoutingBucket::from_index(0).unwrap();
+        let older_raw = ArchivePath::raw_key(
+            "market-data/raw",
+            ArchiveKind::Events,
+            TimestampMilliseconds(0),
+            bucket,
+            "older.parquet",
+        )
+        .unwrap();
+        let newer_compacted = ArchivePath::compacted_key(
+            "market-data/compacted",
+            &platform_archive::ArchivePartition::Events {
+                exchange: CexId::Binance,
+                stream: "btcusdt@trade".to_string(),
+            },
+            TimestampMilliseconds(3_600_000),
+            bucket,
+            "newer.parquet",
+        )
+        .unwrap();
+
+        let mut objects = vec![archive_object(&newer_compacted), archive_object(&older_raw)];
+        sort_archive_objects(&mut objects);
+
+        assert_eq!(
+            objects,
+            vec![archive_object(&older_raw), archive_object(&newer_compacted)]
+        );
     }
 
     #[test]
     fn archive_recovery_ignores_event_objects_without_a_routing_bucket() {
-        let prefix = "market-data/raw";
         let key = "market-data/raw/events/year=2024/month=01/day=02/hour=03/legacy.parquet";
 
-        let selected = select_event_objects(vec![s3_object(key)], prefix, PartitionId::new(0), 1);
+        let selected = select_event_objects(vec![archive_object(key)], PartitionId::new(0), 1);
 
         assert!(selected.is_empty());
     }
 
-    fn s3_object(key: &str) -> S3Object {
-        S3Object {
+    fn archive_object(key: &str) -> ArchiveObject {
+        ArchiveObject {
+            bucket: Bucket::new("market-data"),
             key: ObjectKey::new(key),
-            last_modified_millis: None,
             size: 0,
         }
     }

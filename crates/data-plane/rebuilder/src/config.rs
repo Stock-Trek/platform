@@ -25,8 +25,8 @@ const DEFAULT_BUCKET_MILLIS: usize = 3_600_000;
 /// Which Iceberg table the rebuilder reads events from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RebuildSourceLayer {
-    /// Prefer compacted event partitions and fall back to raw partitions when
-    /// no compacted table exists yet.
+    /// Read compacted event files plus the raw tail not represented by the
+    /// compacted snapshot.
     Auto,
     Raw,
     Compacted,

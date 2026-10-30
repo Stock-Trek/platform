@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{
-    ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveParquet, ArchiveRecord,
-    ArchiveTableLayer, Bucket, IcebergDataFile, ObjectKey, ParquetReader, S3,
+    ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind, ArchiveParquet,
+    ArchiveRecord, IcebergDataFile, ParquetReader, S3,
 };
 use platform_errors::{BpError, BpResult};
 use platform_market_data::event::MarketEvent;
@@ -17,43 +17,54 @@ pub trait EventSource: Send {
     async fn read_events(&mut self) -> BpResult<Vec<MarketEvent>>;
 }
 
-/// Reads events from the live data files registered in an Iceberg table.
+/// Reads events from the compacted archive plus the un-compacted raw tail.
 pub struct IcebergEventReader {
     transfer_client: TransferClient,
-    layer: ArchiveTableLayer,
-    files: Vec<IcebergDataFile>,
+    source_layer: RebuildSourceLayer,
+    handoff: ArchiveHandoff,
 }
 
 impl IcebergEventReader {
-    /// Discovers the preferred event table and all of its live data files.
+    /// Discovers which archive files must be replayed.
     ///
-    /// `Auto` prefers compacted event partitions because they are already
-    /// de-duplicated and sorted by stream, timestamp, and sequence. Raw
-    /// partitions are used only when the compacted table has no data.
+    /// `Auto` uses the explicit compacted/raw handoff contract: all compacted
+    /// event files plus only the raw objects that are not yet represented by
+    /// the compacted snapshot. It never falls back to a full second scan of the
+    /// raw history when compacted data exists.
     pub async fn connect(
         catalog: &dyn ArchiveCatalog,
         source_layer: RebuildSourceLayer,
     ) -> BpResult<Self> {
-        let (layer, files) = discover_event_files(catalog, source_layer).await?;
+        let (source_layer, handoff) = discover_event_files(catalog, source_layer).await?;
         let transfer_client = S3::transfer_client().await;
         info!(
-            layer = layer.label(),
-            files = files.len(),
+            source_layer = source_layer.label(),
+            compacted_files = handoff.compacted.len(),
+            raw_tail_files = handoff.raw_tail.len(),
+            files = handoff.len(),
             "discovered rebuild event partitions"
         );
         Ok(Self {
             transfer_client,
-            layer,
-            files,
+            source_layer,
+            handoff,
         })
     }
 
-    pub fn layer(&self) -> ArchiveTableLayer {
-        self.layer
+    pub fn source_layer(&self) -> RebuildSourceLayer {
+        self.source_layer
     }
 
-    pub fn files(&self) -> &[IcebergDataFile] {
-        &self.files
+    pub fn compacted_files(&self) -> &[IcebergDataFile] {
+        &self.handoff.compacted
+    }
+
+    pub fn raw_tail_files(&self) -> &[IcebergDataFile] {
+        &self.handoff.raw_tail
+    }
+
+    pub fn file_count(&self) -> usize {
+        self.handoff.len()
     }
 
     /// Reads all events from the selected files.
@@ -63,8 +74,8 @@ impl IcebergEventReader {
     /// stream, timestamp, and sequence.
     pub async fn read_all(&self) -> BpResult<Vec<MarketEvent>> {
         let mut events = Vec::new();
-        for file in &self.files {
-            let (bucket, key) = parse_s3_uri(&file.file_path)?;
+        for file in self.handoff.files() {
+            let (bucket, key) = S3::parse_uri(&file.file_path)?;
             let file_size = u64::try_from(file.file_size_in_bytes).map_err(|error| {
                 BpError::external(std::io::Error::new(
                     std::io::ErrorKind::InvalidData,
@@ -104,77 +115,140 @@ impl EventSource for IcebergEventReader {
     }
 }
 
-/// Selects the source table and returns its data files in stable path order.
+/// Selects the archive files to replay for a rebuild.
 pub async fn discover_event_files(
     catalog: &dyn ArchiveCatalog,
     source_layer: RebuildSourceLayer,
-) -> BpResult<(ArchiveTableLayer, Vec<IcebergDataFile>)> {
+) -> BpResult<(RebuildSourceLayer, ArchiveHandoff)> {
     match source_layer {
         RebuildSourceLayer::Raw => {
-            let files = catalog
+            let mut raw = catalog
                 .data_files(ArchiveIcebergTable::raw(ArchiveKind::Events))
                 .await?;
-            Ok((ArchiveTableLayer::Raw, files))
+            raw.sort_by(|left, right| left.file_path.cmp(&right.file_path));
+            Ok((
+                RebuildSourceLayer::Raw,
+                ArchiveHandoff {
+                    compacted: Vec::new(),
+                    raw_tail: raw,
+                },
+            ))
         }
         RebuildSourceLayer::Compacted => {
-            let files = catalog
+            let mut compacted = catalog
                 .data_files(ArchiveIcebergTable::compacted(ArchiveKind::Events))
                 .await?;
-            Ok((ArchiveTableLayer::Compacted, files))
+            compacted.sort_by(|left, right| left.file_path.cmp(&right.file_path));
+            Ok((
+                RebuildSourceLayer::Compacted,
+                ArchiveHandoff {
+                    compacted,
+                    raw_tail: Vec::new(),
+                },
+            ))
         }
         RebuildSourceLayer::Auto => {
-            let compacted = catalog
-                .data_files(ArchiveIcebergTable::compacted(ArchiveKind::Events))
-                .await?;
-            if !compacted.is_empty() {
-                return Ok((ArchiveTableLayer::Compacted, compacted));
-            }
-            let raw = catalog
-                .data_files(ArchiveIcebergTable::raw(ArchiveKind::Events))
-                .await?;
-            Ok((ArchiveTableLayer::Raw, raw))
+            let handoff = ArchiveHandoff::discover(catalog, ArchiveKind::Events).await?;
+            Ok((RebuildSourceLayer::Auto, handoff))
         }
     }
-}
-
-fn parse_s3_uri(uri: &str) -> BpResult<(Bucket, ObjectKey)> {
-    let path = uri.strip_prefix("s3://").ok_or_else(|| {
-        BpError::external(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("rebuild input {uri} is not an s3:// URI"),
-        ))
-    })?;
-    let (bucket, key) = path.split_once('/').ok_or_else(|| {
-        BpError::external(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("rebuild input {uri} does not name an S3 object"),
-        ))
-    })?;
-    if bucket.is_empty() || key.is_empty() {
-        return Err(BpError::external(std::io::Error::new(
-            std::io::ErrorKind::InvalidData,
-            format!("rebuild input {uri} does not name an S3 object"),
-        )));
-    }
-    Ok((Bucket::new(bucket), ObjectKey::new(key)))
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use async_trait::async_trait;
+    use std::collections::HashSet;
 
-    #[test]
-    fn s3_uris_are_split_without_losing_the_key_prefix() {
-        let (bucket, key) = parse_s3_uri("s3://archive/market-data/events/a.parquet").unwrap();
-        assert_eq!(bucket.as_str(), "archive");
-        assert_eq!(key.as_str(), "market-data/events/a.parquet");
+    #[derive(Default)]
+    struct FakeCatalog {
+        raw: Vec<IcebergDataFile>,
+        compacted: Vec<IcebergDataFile>,
+        processed: HashSet<String>,
     }
 
-    #[test]
-    fn non_s3_and_incomplete_uris_are_rejected() {
-        assert!(parse_s3_uri("https://archive/a.parquet").is_err());
-        assert!(parse_s3_uri("s3://archive").is_err());
-        assert!(parse_s3_uri("s3:///a.parquet").is_err());
-        assert!(parse_s3_uri("s3://archive/").is_err());
+    #[async_trait]
+    impl ArchiveCatalog for FakeCatalog {
+        async fn register_files(
+            &self,
+            _table: ArchiveIcebergTable,
+            _files: &[IcebergDataFile],
+            _source_files: Option<&[String]>,
+        ) -> BpResult<()> {
+            Ok(())
+        }
+
+        async fn registered_data_files(
+            &self,
+            _table: ArchiveIcebergTable,
+        ) -> BpResult<HashSet<String>> {
+            Ok(HashSet::new())
+        }
+
+        async fn data_files(&self, table: ArchiveIcebergTable) -> BpResult<Vec<IcebergDataFile>> {
+            let files = match table.layer() {
+                platform_archive::ArchiveTableLayer::Raw => &self.raw,
+                platform_archive::ArchiveTableLayer::Compacted => &self.compacted,
+            };
+            Ok(files.clone())
+        }
+
+        async fn processed_source_files(
+            &self,
+            table: ArchiveIcebergTable,
+        ) -> BpResult<HashSet<String>> {
+            if table.layer() == platform_archive::ArchiveTableLayer::Compacted {
+                Ok(self.processed.clone())
+            } else {
+                Ok(HashSet::new())
+            }
+        }
+    }
+
+    fn file(path: &str) -> IcebergDataFile {
+        IcebergDataFile::new(path, 10, 1)
+    }
+
+    #[tokio::test]
+    async fn auto_reads_compacted_files_and_only_the_uncompacted_raw_tail() {
+        let covered = "s3://archive/market-data/raw/events/covered.parquet";
+        let tail = "s3://archive/market-data/raw/events/tail.parquet";
+        let compacted = "s3://archive/market-data/compacted/events/a.parquet";
+        let catalog = FakeCatalog {
+            raw: vec![file(covered), file(tail)],
+            compacted: vec![file(compacted)],
+            processed: HashSet::from([covered.to_string()]),
+        };
+
+        let (layer, handoff) = discover_event_files(&catalog, RebuildSourceLayer::Auto)
+            .await
+            .unwrap();
+
+        assert_eq!(layer, RebuildSourceLayer::Auto);
+        assert_eq!(handoff.compacted, vec![file(compacted)]);
+        assert_eq!(handoff.raw_tail, vec![file(tail)]);
+    }
+
+    #[tokio::test]
+    async fn explicit_layers_do_not_mix_sources() {
+        let raw = file("s3://archive/market-data/raw/events/a.parquet");
+        let compacted = file("s3://archive/market-data/compacted/events/a.parquet");
+        let catalog = FakeCatalog {
+            raw: vec![raw.clone()],
+            compacted: vec![compacted.clone()],
+            processed: HashSet::new(),
+        };
+
+        let (_, raw_handoff) = discover_event_files(&catalog, RebuildSourceLayer::Raw)
+            .await
+            .unwrap();
+        let (_, compacted_handoff) = discover_event_files(&catalog, RebuildSourceLayer::Compacted)
+            .await
+            .unwrap();
+
+        assert_eq!(raw_handoff.raw_tail, vec![raw]);
+        assert!(raw_handoff.compacted.is_empty());
+        assert_eq!(compacted_handoff.compacted, vec![compacted]);
+        assert!(compacted_handoff.raw_tail.is_empty());
     }
 }
