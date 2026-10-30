@@ -404,6 +404,14 @@ impl std::ops::Add<TimestampMilliseconds> for DurationMilliseconds {
 }
 
 /// Non-zero duration newtypes, useful as divisor types.
+pub type NonZeroDuration = NonZero<std::time::Duration>;
+
+impl From<NonZeroDuration> for std::time::Duration {
+    fn from(value: NonZeroDuration) -> Self {
+        value.get()
+    }
+}
+
 pub type NonZeroDurationSeconds = NonZero<DurationSeconds>;
 pub type NonZeroDurationMilliseconds = NonZero<DurationMilliseconds>;
 pub type NonZeroDurationMicroseconds = NonZero<DurationMicroseconds>;
