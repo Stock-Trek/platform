@@ -120,6 +120,33 @@ impl JetStreamConsumer {
         durable: &str,
         start: ConsumerStart,
     ) -> BpResult<Self> {
+        Self::connect_with_start_and_ack_wait(
+            url,
+            name,
+            stream_subject_prefix,
+            filter_subject,
+            durable,
+            start,
+            ACK_WAIT,
+        )
+        .await
+    }
+
+    /// Connects a durable consumer at an explicit [`ConsumerStart`] position
+    /// with a custom acknowledgement window.
+    ///
+    /// The acknowledgement window must cover the longest time a caller may
+    /// hold a message before acknowledging it. An existing durable consumer
+    /// keeps its position when only the acknowledgement window changes.
+    pub async fn connect_with_start_and_ack_wait(
+        url: &str,
+        name: &str,
+        stream_subject_prefix: &str,
+        filter_subject: &str,
+        durable: &str,
+        start: ConsumerStart,
+        ack_wait: Duration,
+    ) -> BpResult<Self> {
         let address = NatsAddress::parse(url)?;
         NatsSubject::validate_named("filter subject", filter_subject)?;
         let stream = JetStream::stream_name(stream_subject_prefix);
@@ -136,7 +163,7 @@ impl JetStreamConsumer {
             filter_subject: filter_subject.to_string(),
             deliver_policy: Self::deliver_policy_for_start(start),
             ack_policy: AckPolicy::Explicit,
-            ack_wait: ACK_WAIT,
+            ack_wait,
             max_deliver: -1,
             ..Default::default()
         };
@@ -163,6 +190,13 @@ impl JetStreamConsumer {
                 .await
                 .map_err(|error| {
                     JetStream::protocol_error("failed to recreate JetStream consumer", error)
+                })?;
+        } else if info.config.ack_wait != consumer_config.ack_wait {
+            consumer = stream_handle
+                .update_consumer(consumer_config)
+                .await
+                .map_err(|error| {
+                    JetStream::protocol_error("failed to update JetStream consumer", error)
                 })?;
         }
         Ok(Self {

@@ -5,7 +5,8 @@ use platform_errors::{BpError, IngesterError};
 use std::fmt::Display;
 use std::time::Duration;
 
-pub(crate) const ACK_WAIT: Duration = Duration::from_secs(30);
+/// Default time JetStream waits for an acknowledgement before redelivering.
+pub const ACK_WAIT: Duration = Duration::from_secs(30);
 
 /// Maximum age of a message retained in a market-data stream.
 pub const STREAM_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);

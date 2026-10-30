@@ -9,7 +9,7 @@ use platform_metrics::descriptions::{
     DECODE_KIND_CLOSED_CANDLE, DECODE_KIND_MARKET_EVENT, STAGE_ARCHIVER,
 };
 use platform_metrics::market_data::MarketDataMetrics;
-use platform_nats::{JetStreamConsumer, Message};
+use platform_nats::{ConsumerStart, JetStreamConsumer, Message};
 use std::collections::VecDeque;
 use tracing::warn;
 
@@ -33,7 +33,9 @@ pub trait ArchiveSource: Send {
 ///
 /// Messages are acknowledged only after the archiver has flushed the record to
 /// durable storage, so records buffered for a later flush are redelivered after
-/// a restart instead of being lost.
+/// a restart instead of being lost. The consumer acknowledgement window is
+/// derived from the flush interval so a buffered batch is not redelivered while
+/// it is waiting to be flushed.
 pub struct NatsArchiveSource {
     events: JetStreamConsumer,
     candles: JetStreamConsumer,
@@ -54,20 +56,25 @@ enum Consumer {
 
 impl NatsArchiveSource {
     pub async fn connect(config: &ArchiverConfig) -> BpResult<Self> {
-        let events = JetStreamConsumer::connect(
+        let ack_wait = config.ack_wait();
+        let events = JetStreamConsumer::connect_with_start_and_ack_wait(
             &config.nats_url,
             "platform-archiver-events",
             &config.event_subject_prefix,
             &MarketEventSubject::prefix_wildcard(&config.event_subject_prefix),
             EVENTS_DURABLE_NAME,
+            ConsumerStart::Earliest,
+            ack_wait,
         )
         .await?;
-        let candles = JetStreamConsumer::connect(
+        let candles = JetStreamConsumer::connect_with_start_and_ack_wait(
             &config.nats_url,
             "platform-archiver-candles",
             &config.closed_candle_subject_prefix,
             &format!("{}.>", config.closed_candle_subject_prefix),
             CANDLES_DURABLE_NAME,
+            ConsumerStart::Earliest,
+            ack_wait,
         )
         .await?;
         Ok(Self {
