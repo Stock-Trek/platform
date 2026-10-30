@@ -21,8 +21,8 @@ pub use partition::{PartitionId, all_partitions, partition_for, partition_for_ca
 pub use processor::{CandleProcessor, ProcessorConfig, ProcessorUpdate};
 pub use restore::{
     ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource, RestoreOptions,
-    RestoreSource, RestoredPartition, S3ArchivedEventSource, rebuild_state_from_archive,
-    rebuild_state_from_archive_with_schema, restore_partition,
+    RestoreSource, RestoredPartition, S3ArchiveRecovery, S3ArchivedEventSource,
+    rebuild_state_from_archive, rebuild_state_from_archive_with_schema, restore_partition,
 };
 pub use router::{HashRouter, NatsRouter};
 pub use runner::{ProcessorRunner, QuiesceReceiver, QuiesceSignal};
