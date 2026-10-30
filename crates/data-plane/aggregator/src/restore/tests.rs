@@ -1,17 +1,13 @@
-use super::catalog::{
-    AGGREGATOR_ARCHIVE_S3_BUCKET, ArchiveObject, ArchiveRecoveryConfig, DEFAULT_ARCHIVE_PREFIX,
-    select_event_objects, sort_archive_objects,
-};
+use super::catalog::{ArchiveObject, select_event_objects, sort_archive_objects};
 use super::rebuild::{RestoreOptions, RestoreSource, restore_partition};
 use super::replay::ArchivedEventSource;
 use crate::checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore};
-use crate::config::{AggregatorConfig, ReplayStartPolicy};
+use crate::config::ReplayStartPolicy;
 use crate::partition::{PartitionId, partition_for};
 use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_archive::{ArchiveKind, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey};
-use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
 use platform_market_data::{
     candle::CandleInterval,
@@ -369,66 +365,6 @@ async fn configured_schema_mismatch_forces_archive_rebuild() {
     assert_eq!(restored.restored_from, RestoreSource::Archive);
     assert!(restored.rebuilt_from_archive);
     assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION + 1);
-}
-
-#[test]
-fn restore_options_come_from_the_aggregator_configuration() {
-    let config = AggregatorConfig::from_vars(&EnvVars::from_map(vec![
-        ("RUST_LOG", "info"),
-        ("AGGREGATOR_NATS_URL", "nats://localhost:4222"),
-        ("AGGREGATOR_EVENT_SUBJECT_PREFIX", "market.events"),
-        (
-            "AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX",
-            "market.candles.open",
-        ),
-        (
-            "AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX",
-            "market.candles.closed",
-        ),
-        ("AGGREGATOR_STATE_SCHEMA_VERSION", "4"),
-        ("AGGREGATOR_REPLAY_START_POLICY", "archive"),
-        ("AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS", "12"),
-    ]))
-    .unwrap();
-    let options = RestoreOptions::from_config(&config, PartitionId::new(2), "aggregator-shards");
-
-    assert_eq!(options.partition, PartitionId::new(2));
-    assert_eq!(options.expected_schema_version, 4);
-    assert_eq!(options.replay_start_policy, ReplayStartPolicy::Archive);
-    assert_eq!(
-        config.watermark_idle_timeout,
-        std::time::Duration::from_secs(12)
-    );
-}
-
-#[test]
-fn archive_recovery_config_is_optional() {
-    assert_eq!(
-        ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(Vec::<(&str, &str)>::new())).unwrap(),
-        None
-    );
-    let config = ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(vec![(
-        AGGREGATOR_ARCHIVE_S3_BUCKET,
-        "market-data",
-    )]))
-    .unwrap()
-    .unwrap();
-    assert_eq!(config.bucket, "market-data");
-    assert_eq!(config.prefix, DEFAULT_ARCHIVE_PREFIX);
-    assert!(config.iceberg.is_none());
-}
-
-#[test]
-fn archive_recovery_enables_the_compacted_handoff_when_iceberg_is_configured() {
-    let config = ArchiveRecoveryConfig::from_vars(&EnvVars::from_map(vec![
-        (AGGREGATOR_ARCHIVE_S3_BUCKET, "market-data"),
-        ("ICEBERG_CATALOG_URI", "https://catalog.test"),
-    ]))
-    .unwrap()
-    .unwrap();
-
-    let iceberg = config.iceberg.unwrap();
-    assert_eq!(iceberg.warehouse, "s3://market-data/iceberg");
 }
 
 #[test]

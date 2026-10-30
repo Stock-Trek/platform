@@ -39,20 +39,25 @@ Archive rebuilds replay raw events through the same deterministic candle process
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AGGREGATOR_SHARD_COUNT` | `16` | Number of keyed partitions. |
+| `AGGREGATOR_INTERVALS` | required | Comma-separated candle intervals to generate. |
+| `AGGREGATOR_GAP_SUBJECT_PREFIX` | required | Subject prefix carrying gap markers from the ingester. |
+| `AGGREGATOR_SHARD_SUBJECT_PREFIX` | required | Subject prefix owned by the aggregator for routed shard inputs. |
+| `AGGREGATOR_SHARD_COUNT` | required | Number of keyed partitions. |
 | `AGGREGATOR_SHARD_INDEX` | all partitions | Run only one partition in this process. |
-| `AGGREGATOR_CHECKPOINT_INTERVAL_SECS` | `5` | Checkpoint cadence. Must be lower than the lease TTL. |
-| `AGGREGATOR_CHECKPOINT_BUCKET` | derived from the shard prefix | NATS KV bucket for checkpoints and leases. |
-| `AGGREGATOR_CHECKPOINT_PREFIX` | `partition` | Key prefix inside the checkpoint bucket. |
-| `AGGREGATOR_ALLOWED_LATENESS_MS` | `5000` | How late a trade may arrive and still update a candle. |
-| `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | `60` | Idle time before the wall clock advances the event-time watermark and closes expired windows. |
-| `AGGREGATOR_REPLAY_START_POLICY` | `checkpoint` | `checkpoint`, `archive`, `earliest`, or `latest`. |
-| `AGGREGATOR_STATE_SCHEMA_VERSION` | current code version | State schema version written to new state and required for checkpoint restore. |
-| `AGGREGATOR_DURABLE_PREFIX` | `aggregator` | Durable consumer prefix. The router uses `{prefix}-router`; partitions use `{prefix}-shard-{n}`. |
-| `AGGREGATOR_LEASE_TTL_SECS` | `30` | Single-writer lease lifetime. |
+| `AGGREGATOR_CHECKPOINT_INTERVAL_SECS` | required | Checkpoint cadence. Must be lower than the lease TTL. |
+| `AGGREGATOR_CHECKPOINT_BUCKET` | required | NATS KV bucket for checkpoints and leases. |
+| `AGGREGATOR_CHECKPOINT_PREFIX` | required | Key prefix inside the checkpoint bucket. |
+| `AGGREGATOR_ALLOWED_LATENESS_MS` | required | How late a trade may arrive and still update a candle. |
+| `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | required | Idle time before the wall clock advances the event-time watermark and closes expired windows. |
+| `AGGREGATOR_REPLAY_START_POLICY` | required | `checkpoint`, `archive`, `earliest`, or `latest`. |
+| `AGGREGATOR_STATE_SCHEMA_VERSION` | required | State schema version written to new state and required for checkpoint restore. |
+| `AGGREGATOR_DURABLE_PREFIX` | required | Durable consumer prefix. The router uses `{prefix}-router`; partitions use `{prefix}-shard-{n}`. |
+| `AGGREGATOR_LEASE_TTL_SECS` | required | Single-writer lease lifetime. |
 | `AGGREGATOR_ARCHIVE_S3_BUCKET` | unset | Enables archive recovery. |
-| `AGGREGATOR_ARCHIVE_S3_PREFIX` | `market-data/raw` | Raw archive prefix used when no Iceberg catalog is configured. |
+| `AGGREGATOR_ARCHIVE_S3_PREFIX` | required when archive recovery is enabled | Raw archive prefix used when no Iceberg catalog is configured. |
 | `ICEBERG_CATALOG_URI` | unset | Enables the compacted/raw handoff for archive recovery. |
+| `ICEBERG_CATALOG_WAREHOUSE` | required when the catalog is configured | Iceberg warehouse URI. |
+| `ICEBERG_NAMESPACE` | required when the catalog is configured | Iceberg namespace. |
 
 ### Observability
 
@@ -84,12 +89,15 @@ Rebuilder replays archived market events from Iceberg to deterministically regen
 | Variable | Default | Purpose |
 | --- | --- | --- |
 | `REBUILDER_S3_BUCKET` | required | Archive bucket for rebuilt candle output. |
-| `REBUILDER_OUTPUT_PREFIX` | `market-data/rebuilt` | Prefix for rebuilt candle objects. |
-| `REBUILDER_SOURCE_LAYER` | `auto` | Event source layer: `auto`, `raw`, or `compacted`. |
-| `REBUILDER_OUTPUT_LAYER` | `raw` | Candle output layer: `raw` or `compacted`. |
-| `REBUILDER_INTERVALS` | `1s,1m,5m` | Comma-separated candle intervals to regenerate. |
-| `REBUILDER_ALLOWED_LATENESS_MS` | `5000` | How late a trade may arrive and still update a candle. |
-| `REBUILDER_STATE_EPOCH` | `1` | State epoch assigned to regenerated candle revisions. |
-| `REBUILDER_FINISH_OPEN_WINDOWS` | `true` | Close candles that are still open when archived input ends. |
-| `REBUILDER_BUCKET_MILLIS` | `3600000` | Output bucket size in milliseconds. |
-| `REBUILDER_DRY_RUN` | `false` | Rebuild without writing output. |
+| `REBUILDER_OUTPUT_PREFIX` | required | Prefix for rebuilt candle objects. |
+| `REBUILDER_SOURCE_LAYER` | required | Event source layer: `auto`, `raw`, or `compacted`. |
+| `REBUILDER_OUTPUT_LAYER` | required | Candle output layer: `raw` or `compacted`. |
+| `REBUILDER_INTERVALS` | required | Comma-separated candle intervals to regenerate. |
+| `REBUILDER_ALLOWED_LATENESS_MS` | required | How late a trade may arrive and still update a candle. |
+| `REBUILDER_STATE_EPOCH` | required | State epoch assigned to regenerated candle revisions. |
+| `REBUILDER_FINISH_OPEN_WINDOWS` | required | Close candles that are still open when archived input ends. |
+| `REBUILDER_BUCKET_MILLIS` | required | Output bucket size in milliseconds. |
+| `REBUILDER_DRY_RUN` | required | Rebuild without writing output. |
+| `ICEBERG_CATALOG_URI` | required | Iceberg REST catalog URI. |
+| `ICEBERG_CATALOG_WAREHOUSE` | required | Iceberg warehouse URI. |
+| `ICEBERG_NAMESPACE` | required | Iceberg namespace. |

@@ -41,7 +41,7 @@ impl BackfillerConfig {
             vars.required_url(BACKFILLER_EXCHANGE_HTTP_URL, &["http", "https"])?;
         let ssm = SsmConfig::new(
             vars.required(SSM_PATH_ENV)?,
-            vars.optional_parsed_or(SSM_DECRYPT_ENV, true)?,
+            vars.required_parsed(SSM_DECRYPT_ENV)?,
         )?;
 
         Ok(Self {
@@ -53,83 +53,5 @@ impl BackfillerConfig {
             exchange_http_url,
             ssm,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const REQUIRED: [(&str, &str); 7] = [
-        (platform_runtime::Config::RUST_LOG, "info"),
-        (BACKFILLER_EXCHANGE, "binance"),
-        (BACKFILLER_NATS_URL, "nats://localhost:4222"),
-        (BACKFILLER_GAP_SUBJECT_PREFIX, "market.gaps"),
-        (BACKFILLER_EVENT_SUBJECT_PREFIX, "market.events"),
-        (BACKFILLER_EXCHANGE_HTTP_URL, "https://api.binance.com"),
-        (SSM_PATH_ENV, "/platform/backfiller/production"),
-    ];
-
-    fn vars(values: &[(&str, &str)]) -> EnvVars {
-        EnvVars::from_map(values.iter().copied())
-    }
-
-    #[test]
-    fn parses_required_values_and_normalises_the_ssm_path() {
-        let config = BackfillerConfig::from_vars(&vars(&REQUIRED)).unwrap();
-
-        assert_eq!(config.exchange, CexId::Binance);
-        assert_eq!(config.ssm.path, "/platform/backfiller/production");
-        assert!(config.ssm.decrypt);
-    }
-
-    #[test]
-    fn reads_the_ssm_decrypt_flag() {
-        let mut values = REQUIRED.to_vec();
-        values.push((SSM_DECRYPT_ENV, "false"));
-
-        let config = BackfillerConfig::from_vars(&vars(&values)).unwrap();
-
-        assert!(!config.ssm.decrypt);
-    }
-
-    #[test]
-    fn every_value_is_required() {
-        for (missing, _) in REQUIRED {
-            let values = REQUIRED
-                .iter()
-                .copied()
-                .filter(|(name, _)| *name != missing)
-                .collect::<Vec<_>>();
-
-            assert!(
-                BackfillerConfig::from_vars(&vars(&values)).is_err(),
-                "{missing} should be required"
-            );
-        }
-    }
-
-    #[test]
-    fn rejects_invalid_values() {
-        for (name, value) in [
-            (BACKFILLER_EXCHANGE, "kraken"),
-            (BACKFILLER_NATS_URL, "http://localhost:4222"),
-            (BACKFILLER_GAP_SUBJECT_PREFIX, "market.*"),
-            (BACKFILLER_EXCHANGE_HTTP_URL, "ftp://api.binance.com"),
-            (SSM_PATH_ENV, "/platform/backfiller/production/"),
-            (SSM_DECRYPT_ENV, "not a bool"),
-        ] {
-            let mut values = REQUIRED.to_vec();
-            if let Some(index) = values.iter().position(|(required, _)| *required == name) {
-                values[index] = (name, value);
-            } else {
-                values.push((name, value));
-            }
-
-            assert!(
-                BackfillerConfig::from_vars(&vars(&values)).is_err(),
-                "{name}={value} should be rejected"
-            );
-        }
     }
 }

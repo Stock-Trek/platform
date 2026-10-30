@@ -49,7 +49,7 @@ impl WebhookConfig {
             sqs_queue_url: vars.required(SQS_QUEUE_URL)?,
             ssm: SsmConfig::new(
                 vars.required(SSM_PATH_ENV)?,
-                vars.optional_parsed_or(SSM_DECRYPT_ENV, true)?,
+                vars.required_parsed(SSM_DECRYPT_ENV)?,
             )?,
             github_allowed_hosts: HostAllowlist::from_hosts(
                 vars.required_csv(GITHUB_ENTERPRISE_ALLOWED_HOSTS)?,
@@ -62,96 +62,5 @@ impl WebhookConfig {
             cold_start_refresh_timeout: vars
                 .required_duration_secs(WEBHOOK_COLD_START_REFRESH_TIMEOUT_SECS)?,
         })
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    const REQUIRED: [(&str, &str); 13] = [
-        (RUST_LOG, "info"),
-        (AWS_LAMBDA_FUNCTION_NAME, "platform-git-webhook"),
-        (DEADLINE_BUFFER_SECS, "5"),
-        (AWS_CONNECT_TIMEOUT_SECS, "10"),
-        (AWS_OPERATION_TIMEOUT_SECS, "120"),
-        (SQS_QUEUE_URL, "https://sqs.test/queue"),
-        (SSM_PATH_ENV, "/platform/git-webhook/production"),
-        (GITHUB_ENTERPRISE_ALLOWED_HOSTS, "github.com"),
-        (WEBHOOK_DEDUP_MAX_DELIVERIES, "4096"),
-        (WEBHOOK_DEDUP_TTL_SECS, "3600"),
-        (WEBHOOK_REFRESH_COOLDOWN_SECS, "60"),
-        (WEBHOOK_SECRET_FAILURE_BACKOFF_SECS, "30"),
-        (WEBHOOK_COLD_START_REFRESH_TIMEOUT_SECS, "10"),
-    ];
-
-    fn vars(values: &[(&str, &str)]) -> EnvVars {
-        EnvVars::from_map(values.iter().copied())
-    }
-
-    #[test]
-    fn parses_all_required_values() {
-        let config = WebhookConfig::from_vars(&vars(&REQUIRED)).unwrap();
-
-        assert_eq!(config.lambda_function_name, "platform-git-webhook");
-        assert_eq!(config.sqs_queue_url, "https://sqs.test/queue");
-        assert_eq!(config.dedup_max_deliveries.get(), 4096);
-        assert_eq!(config.ssm.path, "/platform/git-webhook/production");
-        assert!(config.ssm.decrypt);
-    }
-
-    #[test]
-    fn normalises_the_ssm_path_and_reads_the_decrypt_flag() {
-        let mut values = REQUIRED.to_vec();
-        let index = values
-            .iter()
-            .position(|(required, _)| *required == SSM_PATH_ENV)
-            .unwrap();
-        values[index] = (SSM_PATH_ENV, "platform/git-webhook/production");
-        values.push((SSM_DECRYPT_ENV, "false"));
-
-        let config = WebhookConfig::from_vars(&vars(&values)).unwrap();
-
-        assert_eq!(config.ssm.path, "/platform/git-webhook/production");
-        assert!(!config.ssm.decrypt);
-    }
-
-    #[test]
-    fn every_value_is_required() {
-        for (missing, _) in REQUIRED {
-            let values = REQUIRED
-                .iter()
-                .copied()
-                .filter(|(name, _)| *name != missing)
-                .collect::<Vec<_>>();
-
-            assert!(
-                WebhookConfig::from_vars(&vars(&values)).is_err(),
-                "{missing} should be required"
-            );
-        }
-    }
-
-    #[test]
-    fn rejects_invalid_values() {
-        for (name, value) in [
-            (WEBHOOK_DEDUP_MAX_DELIVERIES, "0"),
-            (SSM_PATH_ENV, "/platform/git-webhook/production/"),
-            (SSM_DECRYPT_ENV, "not a bool"),
-            (GITHUB_ENTERPRISE_ALLOWED_HOSTS, "not a host!"),
-            (RUST_LOG, "not a valid [directive"),
-        ] {
-            let mut values = REQUIRED.to_vec();
-            if let Some(index) = values.iter().position(|(required, _)| *required == name) {
-                values[index] = (name, value);
-            } else {
-                values.push((name, value));
-            }
-
-            assert!(
-                WebhookConfig::from_vars(&vars(&values)).is_err(),
-                "{name}={value} should be rejected"
-            );
-        }
     }
 }

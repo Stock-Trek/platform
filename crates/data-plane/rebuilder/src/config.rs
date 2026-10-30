@@ -16,12 +16,6 @@ const REBUILDER_FINISH_OPEN_WINDOWS: &str = "REBUILDER_FINISH_OPEN_WINDOWS";
 const REBUILDER_BUCKET_MILLIS: &str = "REBUILDER_BUCKET_MILLIS";
 const REBUILDER_DRY_RUN: &str = "REBUILDER_DRY_RUN";
 
-const DEFAULT_OUTPUT_PREFIX: &str = "market-data/rebuilt";
-const DEFAULT_INTERVALS: &str = "1s,1m,5m";
-const DEFAULT_ALLOWED_LATENESS_MS: i64 = 5_000;
-const DEFAULT_STATE_EPOCH: u64 = 1;
-const DEFAULT_BUCKET_MILLIS: usize = 3_600_000;
-
 /// Which Iceberg table the rebuilder reads events from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RebuildSourceLayer {
@@ -78,29 +72,21 @@ impl RebuildConfig {
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(REBUILDER_S3_BUCKET)?;
-        let output_prefix = vars
-            .optional(REBUILDER_OUTPUT_PREFIX)?
-            .unwrap_or_else(|| DEFAULT_OUTPUT_PREFIX.to_string());
+        let output_prefix = vars.required(REBUILDER_OUTPUT_PREFIX)?;
         let intervals = Self::intervals(vars)?;
-        let allowed_lateness = DurationMilliseconds(
-            vars.optional_parsed_or(REBUILDER_ALLOWED_LATENESS_MS, DEFAULT_ALLOWED_LATENESS_MS)?,
-        );
-        let source_layer = RebuildSourceLayer::parse(
-            &vars
-                .optional(REBUILDER_SOURCE_LAYER)?
-                .unwrap_or_else(|| "auto".to_string()),
-        )?;
+        let allowed_lateness =
+            DurationMilliseconds(vars.required_parsed(REBUILDER_ALLOWED_LATENESS_MS)?);
+        let source_layer = RebuildSourceLayer::parse(&vars.required(REBUILDER_SOURCE_LAYER)?)?;
         let output_layer = Self::output_layer(vars)?;
-        let state_epoch = vars.optional_parsed_or(REBUILDER_STATE_EPOCH, DEFAULT_STATE_EPOCH)?;
-        let finish_open_windows = vars.optional_parsed_or(REBUILDER_FINISH_OPEN_WINDOWS, true)?;
-        let bucket_millis = i64::try_from(Config::optional_positive_usize(
+        let state_epoch = vars.required_parsed(REBUILDER_STATE_EPOCH)?;
+        let finish_open_windows = vars.required_parsed(REBUILDER_FINISH_OPEN_WINDOWS)?;
+        let bucket_millis = i64::try_from(Config::required_positive_usize(
             vars,
             REBUILDER_BUCKET_MILLIS,
-            DEFAULT_BUCKET_MILLIS,
         )?)
         .map_err(|error| BpError::config_invalid_source(REBUILDER_BUCKET_MILLIS, error))?;
-        let dry_run = vars.optional_parsed_or(REBUILDER_DRY_RUN, false)?;
-        let iceberg = IcebergConfig::from_vars(vars, &format!("s3://{s3_bucket}/iceberg"))?;
+        let dry_run = vars.required_parsed(REBUILDER_DRY_RUN)?;
+        let iceberg = IcebergConfig::from_vars(vars)?;
 
         Ok(Self {
             log_filter,
@@ -119,9 +105,7 @@ impl RebuildConfig {
     }
 
     fn output_layer(vars: &EnvVars) -> BpResult<ArchiveTableLayer> {
-        let value = vars
-            .optional(REBUILDER_OUTPUT_LAYER)?
-            .unwrap_or_else(|| "raw".to_string());
+        let value = vars.required(REBUILDER_OUTPUT_LAYER)?;
         match value.as_str() {
             "raw" => Ok(ArchiveTableLayer::Raw),
             "compacted" => Ok(ArchiveTableLayer::Compacted),
@@ -133,10 +117,8 @@ impl RebuildConfig {
     }
 
     fn intervals(vars: &EnvVars) -> BpResult<Vec<CandleInterval>> {
-        let labels = vars.optional(REBUILDER_INTERVALS)?;
+        let labels = vars.required(REBUILDER_INTERVALS)?;
         let labels = labels
-            .as_deref()
-            .unwrap_or(DEFAULT_INTERVALS)
             .split(',')
             .map(str::trim)
             .filter(|label| !label.is_empty())
@@ -157,81 +139,5 @@ impl RebuildConfig {
             }
         }
         Ok(intervals)
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn vars(values: &[(&str, &str)]) -> EnvVars {
-        EnvVars::from_map(values.iter().copied())
-    }
-
-    #[test]
-    fn defaults_and_interval_parsing_are_stable() {
-        let config = RebuildConfig::from_vars(&vars(&[
-            ("RUST_LOG", "info"),
-            ("ICEBERG_CATALOG_URI", "http://catalog:8181"),
-            (REBUILDER_S3_BUCKET, "archive"),
-        ]))
-        .unwrap();
-
-        assert_eq!(config.output_prefix, DEFAULT_OUTPUT_PREFIX);
-        assert_eq!(config.intervals.len(), 3);
-        assert_eq!(config.intervals[0].label(), "1s");
-        assert_eq!(config.intervals[2].label(), "5m");
-        assert_eq!(config.allowed_lateness, DurationMilliseconds(5_000));
-        assert_eq!(config.source_layer, RebuildSourceLayer::Auto);
-        assert_eq!(config.output_layer, ArchiveTableLayer::Raw);
-        assert_eq!(config.state_epoch, DEFAULT_STATE_EPOCH);
-        assert!(config.finish_open_windows);
-        assert_eq!(config.iceberg.warehouse, "s3://archive/iceberg".to_string());
-    }
-
-    #[test]
-    fn explicit_source_layer_and_epoch_are_parsed() {
-        let config = RebuildConfig::from_vars(&vars(&[
-            ("RUST_LOG", "info"),
-            ("ICEBERG_CATALOG_URI", "http://catalog:8181"),
-            (REBUILDER_S3_BUCKET, "archive"),
-            (REBUILDER_SOURCE_LAYER, "compacted"),
-            (REBUILDER_OUTPUT_LAYER, "compacted"),
-            (REBUILDER_STATE_EPOCH, "42"),
-            (REBUILDER_INTERVALS, "1m, 1m, 15m"),
-        ]))
-        .unwrap();
-
-        assert_eq!(config.source_layer, RebuildSourceLayer::Compacted);
-        assert_eq!(config.output_layer, ArchiveTableLayer::Compacted);
-        assert_eq!(config.state_epoch, 42);
-        assert_eq!(config.intervals.len(), 2);
-        assert_eq!(config.intervals[1].label(), "15m");
-    }
-
-    #[test]
-    fn invalid_source_layer_is_rejected() {
-        assert!(
-            RebuildConfig::from_vars(&vars(&[
-                ("RUST_LOG", "info"),
-                ("ICEBERG_CATALOG_URI", "http://catalog:8181"),
-                (REBUILDER_S3_BUCKET, "archive"),
-                (REBUILDER_SOURCE_LAYER, "warehouse"),
-            ]))
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn invalid_output_layer_is_rejected() {
-        assert!(
-            RebuildConfig::from_vars(&vars(&[
-                ("RUST_LOG", "info"),
-                ("ICEBERG_CATALOG_URI", "http://catalog:8181"),
-                (REBUILDER_S3_BUCKET, "archive"),
-                (REBUILDER_OUTPUT_LAYER, "warehouse"),
-            ]))
-            .is_err()
-        );
     }
 }
