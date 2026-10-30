@@ -10,6 +10,9 @@ const BACKFILLER_GAP_SUBJECT_PREFIX: &str = "BACKFILLER_GAP_SUBJECT_PREFIX";
 const BACKFILLER_EVENT_SUBJECT_PREFIX: &str = "BACKFILLER_EVENT_SUBJECT_PREFIX";
 const BACKFILLER_EXCHANGE_HTTP_URL: &str = "BACKFILLER_EXCHANGE_HTTP_URL";
 
+/// SSM parameter name holding the exchange API key used for historical trades.
+pub const EXCHANGE_API_KEY_SECRET: &str = "BACKFILLER_EXCHANGE_API_KEY";
+
 #[derive(Debug, Clone)]
 pub struct BackfillerConfig {
     pub log_filter: String,

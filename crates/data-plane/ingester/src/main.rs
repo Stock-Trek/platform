@@ -24,8 +24,7 @@ async fn main() -> BpResult<()> {
     let sequences =
         Arc::new(NatsSequenceStore::connect(&config.nats_url, &config.nats_subject_prefix).await?);
     let source = WebsocketSource::from_config(&config);
-    IngesterRunner::new(config, source, publisher)
-        .with_sequence_store(sequences)
+    IngesterRunner::new(config, source, publisher, sequences)
         .run()
         .await
 }
