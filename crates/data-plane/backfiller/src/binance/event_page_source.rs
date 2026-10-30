@@ -73,13 +73,13 @@ impl BinanceEventPageSource {
     pub async fn fetch_book_ticker(
         &self,
         symbol: &str,
-        sequence: u64,
+        observed_sequence: u64,
     ) -> BpResult<Vec<BackfilledEvent>> {
         let request = BinanceBookTickerRequest::new(symbol.to_string());
         let response = self.submit(request).await?.book_ticker()?;
         Ok(vec![BinanceEventParser::book_ticker(
             symbol,
-            sequence,
+            observed_sequence,
             &response.bidPrice,
             &response.bidQty,
             &response.askPrice,
