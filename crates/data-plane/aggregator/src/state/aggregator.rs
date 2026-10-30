@@ -1,7 +1,7 @@
 //! Durable keyed aggregation state.
 //!
 //! The open candles, event-time watermarks, deduplication ranges, and gap
-//! markers are the recovery state of a partition. Applying an input is a pure
+//! markers are the recovery state of a shard. Applying an input is a pure
 //! update of this state, so replaying the same event log produces the same
 //! candles and the same incompleteness records.
 
@@ -18,10 +18,10 @@ use std::collections::{BTreeMap, HashMap};
 ///
 /// Bump this whenever the persisted shape changes in a way that cannot be read
 /// as the current state. Checkpoints with another version are ignored and the
-/// partition is rebuilt from archived raw events.
+/// shard is rebuilt from archived raw events.
 pub const STATE_SCHEMA_VERSION: u32 = 4;
 
-/// The keyed state of one aggregator partition.
+/// The keyed state of one aggregator shard.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AggregatorState {
     /// Version of this serialized state.
@@ -47,7 +47,7 @@ pub struct AggregatorState {
     pub closed_candles: HashMap<CandleKey, Vec<Candle>>,
     /// Last routed source sequence whose effects are included in this state.
     pub last_processed_sequence: Option<u64>,
-    /// Global event-time watermark observed by this partition.
+    /// Global event-time watermark observed by this shard.
     pub watermark: Option<TimestampMilliseconds>,
     /// Per-stream watermarks and deduplication ranges.
     pub streams: BTreeMap<String, StreamProgress>,

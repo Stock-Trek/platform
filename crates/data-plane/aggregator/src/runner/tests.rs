@@ -3,8 +3,8 @@ use crate::{
     checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore},
     config::AggregatorConfig,
     lease::{InMemoryLeaseStore, LeaseStore},
-    partition::PartitionId,
     processor::ProcessorUpdate,
+    shard::ShardId,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::{MarketInput, MarketSource, SourceRecord},
     state::{AggregatorState, DeduplicationKey},
@@ -111,7 +111,7 @@ struct FailingCheckpointStore;
 
 #[async_trait]
 impl StateStore for FailingCheckpointStore {
-    async fn load(&self, _partition: PartitionId) -> BpResult<Option<CheckpointRecord>> {
+    async fn load(&self, _shard: ShardId) -> BpResult<Option<CheckpointRecord>> {
         Ok(None)
     }
 
@@ -135,7 +135,7 @@ fn config() -> AggregatorConfig {
         allowed_lateness: std::time::Duration::from_millis(5_000),
         checkpoint_interval: std::time::Duration::from_secs(1),
         checkpoint_bucket: "aggregator_shards_checkpoints".to_string(),
-        checkpoint_key_prefix: "partition".to_string(),
+        checkpoint_key_prefix: "shard".to_string(),
         watermark_idle_timeout: std::time::Duration::from_secs(60),
         replay_start_policy: crate::config::ReplayStartPolicy::Checkpoint,
         state_schema_version: crate::state::STATE_SCHEMA_VERSION,
@@ -215,7 +215,7 @@ async fn quiesce_stops_new_inputs_and_drains_accepted_records() {
     let checkpoints = Arc::new(InMemoryStateStore::new());
     let leases = Arc::new(InMemoryLeaseStore::new());
     let runner = ProcessorRunner::new(config(), source, sink)
-        .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
+        .with_checkpoint_store(checkpoints.clone(), ShardId::new(0))
         .with_lease_store(leases.clone())
         .with_writer_id("quiescing-writer")
         .with_quiesce_signal(signal);
@@ -228,10 +228,10 @@ async fn quiesce_stops_new_inputs_and_drains_accepted_records() {
     assert_eq!(polls.load(Ordering::SeqCst), 1);
     assert_eq!(observed.open_updates(), 1);
     assert_eq!(*acked.lock().unwrap(), 1);
-    let checkpoint = checkpoints.get(PartitionId::new(0)).unwrap();
+    let checkpoint = checkpoints.get(ShardId::new(0)).unwrap();
     assert_eq!(checkpoint.next_sequence, 2);
     assert_eq!(checkpoint.state.last_processed_sequence, Some(1));
-    let lease = leases.current(PartitionId::new(0)).await.unwrap().unwrap();
+    let lease = leases.current(ShardId::new(0)).await.unwrap().unwrap();
     assert!(lease.is_expired(TimestampMilliseconds::now()));
 }
 
@@ -307,17 +307,17 @@ async fn checkpoints_before_acknowledging_a_trade() {
     };
     let checkpoints = Arc::new(InMemoryStateStore::new());
     let runner = ProcessorRunner::new(config(), source, sink)
-        .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0));
+        .with_checkpoint_store(checkpoints.clone(), ShardId::new(0));
 
     runner.run().await.unwrap();
 
     assert_eq!(observed.open_updates(), 1);
     assert_eq!(*acked.lock().unwrap(), 1);
-    let checkpoint = checkpoints.get(PartitionId::new(0)).unwrap();
+    let checkpoint = checkpoints.get(ShardId::new(0)).unwrap();
     assert_eq!(checkpoint.next_sequence, 2);
     assert_eq!(checkpoint.resume_sequence(), 2);
     assert_eq!(checkpoint.source_stream, "aggregator-shards");
-    assert_eq!(checkpoint.partition, PartitionId::new(0));
+    assert_eq!(checkpoint.shard, ShardId::new(0));
     assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(61_000)));
     assert_eq!(checkpoint.state.last_processed_sequence, Some(1));
     assert_eq!(checkpoint.state.open_candles_len(), 1);
@@ -356,7 +356,7 @@ async fn does_not_acknowledge_when_checkpointing_fails() {
         ..FakeSource::default()
     };
     let runner = ProcessorRunner::new(config(), source, FakeSink::default())
-        .with_checkpoint_store(Arc::new(FailingCheckpointStore), PartitionId::new(0));
+        .with_checkpoint_store(Arc::new(FailingCheckpointStore), ShardId::new(0));
 
     assert!(runner.run().await.is_err());
     assert_eq!(*acked.lock().unwrap(), 0);
@@ -501,7 +501,7 @@ async fn pending_open_writes_are_drained_when_quiescing() {
     let checkpoints = Arc::new(InMemoryStateStore::new());
 
     ProcessorRunner::new(config(), source, sink)
-        .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
+        .with_checkpoint_store(checkpoints.clone(), ShardId::new(0))
         .with_quiesce_signal(signal)
         .run()
         .await
@@ -510,7 +510,7 @@ async fn pending_open_writes_are_drained_when_quiescing() {
     assert_eq!(observed.open_updates(), 1);
     assert_eq!(
         checkpoints
-            .get(PartitionId::new(0))
+            .get(ShardId::new(0))
             .unwrap()
             .state
             .open_candles_len(),
@@ -542,7 +542,7 @@ async fn a_checkpoint_failure_after_closed_publication_does_not_acknowledge() {
     };
 
     let runner = ProcessorRunner::new(config(), source, sink)
-        .with_checkpoint_store(Arc::new(FailingCheckpointStore), PartitionId::new(0));
+        .with_checkpoint_store(Arc::new(FailingCheckpointStore), ShardId::new(0));
 
     assert!(runner.run().await.is_err());
 
@@ -566,7 +566,7 @@ async fn restores_state_and_skips_inputs_already_in_the_archive() {
     restored_state.observe_sequence(&DeduplicationKey::new(CexId::Binance, "btcusdt@trade", 1));
 
     ProcessorRunner::new(config(), source, sink)
-        .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
+        .with_checkpoint_store(checkpoints.clone(), ShardId::new(0))
         .with_state(restored_state)
         .with_replay_watermark(Some(TimestampMilliseconds(61_000)))
         .run()
@@ -575,7 +575,7 @@ async fn restores_state_and_skips_inputs_already_in_the_archive() {
 
     assert_eq!(observed.open_updates(), 0);
     assert_eq!(*acked.lock().unwrap(), 1);
-    let checkpoint = checkpoints.get(PartitionId::new(0)).unwrap();
+    let checkpoint = checkpoints.get(ShardId::new(0)).unwrap();
     assert_eq!(checkpoint.next_sequence, 2);
     assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(61_000)));
     assert_eq!(checkpoint.state.open_candles_len(), 0);
@@ -583,7 +583,7 @@ async fn restores_state_and_skips_inputs_already_in_the_archive() {
 
 #[tokio::test]
 async fn idle_flush_after_restore_does_not_fail_without_a_source_record() {
-    let partition = PartitionId::new(0);
+    let shard = ShardId::new(0);
     let signal = QuiesceSignal::new();
     let trigger = signal.clone();
     let source = SignalingSource {
@@ -598,7 +598,7 @@ async fn idle_flush_after_restore_does_not_fail_without_a_source_record() {
     restored_state.advance_watermark(TimestampMilliseconds(61_000));
     let checkpoints = Arc::new(InMemoryStateStore::new());
     let runner = ProcessorRunner::new(config, source, FakeSink::default())
-        .with_checkpoint_store(checkpoints.clone(), partition)
+        .with_checkpoint_store(checkpoints.clone(), shard)
         .with_state(restored_state)
         .with_quiesce_signal(signal);
 
@@ -611,12 +611,12 @@ async fn idle_flush_after_restore_does_not_fail_without_a_source_record() {
         .expect("runner task should not panic")
         .unwrap();
 
-    assert!(checkpoints.get(partition).is_none());
+    assert!(checkpoints.get(shard).is_none());
 }
 
 #[tokio::test]
 async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
-    let partition = PartitionId::new(0);
+    let shard = ShardId::new(0);
     let signal = QuiesceSignal::new();
     let trigger = signal.clone();
     let source = SignalingSource {
@@ -629,12 +629,12 @@ async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
     restored_state.advance_watermark(TimestampMilliseconds(61_000));
     let checkpoints = Arc::new(InMemoryStateStore::new());
     let restored_checkpoint =
-        CheckpointRecord::new(partition, "aggregator-shards", 42, restored_state.clone());
+        CheckpointRecord::new(shard, "aggregator-shards", 42, restored_state.clone());
     checkpoints.save(&restored_checkpoint).await.unwrap();
     let mut config = config();
     config.watermark_idle_timeout = std::time::Duration::from_millis(10);
     let runner = ProcessorRunner::new(config, source, FakeSink::default())
-        .with_checkpoint_store(checkpoints.clone(), partition)
+        .with_checkpoint_store(checkpoints.clone(), shard)
         .with_state(restored_state)
         .with_quiesce_signal(signal);
 
@@ -647,7 +647,7 @@ async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
         .expect("runner task should not panic")
         .unwrap();
 
-    let checkpoint = checkpoints.get(partition).unwrap();
+    let checkpoint = checkpoints.get(shard).unwrap();
     assert_eq!(checkpoint.next_sequence, 42);
     assert_eq!(checkpoint.source_stream, "aggregator-shards");
     assert!(
@@ -658,7 +658,7 @@ async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
 
 #[tokio::test]
 async fn idle_flush_after_archive_restore_does_not_reuse_a_stale_checkpoint_position() {
-    let partition = PartitionId::new(0);
+    let shard = ShardId::new(0);
     let signal = QuiesceSignal::new();
     let trigger = signal.clone();
     let source = SignalingSource {
@@ -671,12 +671,12 @@ async fn idle_flush_after_archive_restore_does_not_reuse_a_stale_checkpoint_posi
     restored_state.advance_watermark(TimestampMilliseconds(61_000));
     let checkpoints = Arc::new(InMemoryStateStore::new());
     let stale_checkpoint =
-        CheckpointRecord::new(partition, "aggregator-shards", 99, AggregatorState::new());
+        CheckpointRecord::new(shard, "aggregator-shards", 99, AggregatorState::new());
     checkpoints.save(&stale_checkpoint).await.unwrap();
     let mut config = config();
     config.watermark_idle_timeout = std::time::Duration::from_millis(10);
     let runner = ProcessorRunner::new(config, source, FakeSink::default())
-        .with_checkpoint_store(checkpoints.clone(), partition)
+        .with_checkpoint_store(checkpoints.clone(), shard)
         .with_state(restored_state)
         .with_replay_watermark(Some(TimestampMilliseconds(61_000)))
         .with_quiesce_signal(signal);
@@ -690,11 +690,11 @@ async fn idle_flush_after_archive_restore_does_not_reuse_a_stale_checkpoint_posi
         .expect("runner task should not panic")
         .unwrap();
 
-    assert_eq!(checkpoints.get(partition).unwrap(), stale_checkpoint);
+    assert_eq!(checkpoints.get(shard).unwrap(), stale_checkpoint);
 }
 
 #[tokio::test]
-async fn restored_partitions_apply_new_backfills_older_than_the_replay_watermark() {
+async fn restored_shards_apply_new_backfills_older_than_the_replay_watermark() {
     let sink = FakeSink::default();
     let observed = sink.clone();
     let acked = Arc::new(Mutex::new(0));
@@ -711,7 +711,7 @@ async fn restored_partitions_apply_new_backfills_older_than_the_replay_watermark
     restored_state.observe_sequence(&DeduplicationKey::new(CexId::Binance, "btcusdt@trade", 1));
 
     ProcessorRunner::new(config(), source, sink)
-        .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
+        .with_checkpoint_store(checkpoints.clone(), ShardId::new(0))
         .with_state(restored_state)
         .with_replay_watermark(Some(TimestampMilliseconds(121_000)))
         .run()
@@ -723,7 +723,7 @@ async fn restored_partitions_apply_new_backfills_older_than_the_replay_watermark
 }
 
 #[tokio::test]
-async fn restored_partitions_apply_sequence_less_backfills_older_than_the_replay_watermark() {
+async fn restored_shards_apply_sequence_less_backfills_older_than_the_replay_watermark() {
     let sink = FakeSink::default();
     let observed = sink.clone();
     let acked = Arc::new(Mutex::new(0));
@@ -739,7 +739,7 @@ async fn restored_partitions_apply_sequence_less_backfills_older_than_the_replay
     restored_state.advance_watermark(TimestampMilliseconds(121_000));
 
     ProcessorRunner::new(config(), source, sink)
-        .with_checkpoint_store(checkpoints.clone(), PartitionId::new(0))
+        .with_checkpoint_store(checkpoints.clone(), ShardId::new(0))
         .with_state(restored_state)
         .with_replay_watermark(Some(TimestampMilliseconds(121_000)))
         .run()
@@ -751,11 +751,11 @@ async fn restored_partitions_apply_sequence_less_backfills_older_than_the_replay
 }
 
 #[tokio::test]
-async fn waits_for_an_active_writer_then_takes_over_the_partition() {
+async fn waits_for_an_active_writer_then_takes_over_the_shard() {
     let leases = Arc::new(InMemoryLeaseStore::new());
     let ttl = std::time::Duration::from_secs(30);
     let held = leases
-        .acquire(PartitionId::new(0), "other-writer", ttl)
+        .acquire(ShardId::new(0), "other-writer", ttl)
         .await
         .unwrap()
         .unwrap();
@@ -774,7 +774,7 @@ async fn waits_for_an_active_writer_then_takes_over_the_partition() {
         .expect("runner task should not panic")
         .unwrap();
 
-    let lease = leases.current(held.partition).await.unwrap().unwrap();
+    let lease = leases.current(held.shard).await.unwrap().unwrap();
     assert_eq!(lease.owner_id, "this-writer");
     assert_eq!(lease.fencing_token, held.fencing_token + 1);
 }

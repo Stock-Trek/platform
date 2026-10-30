@@ -261,31 +261,31 @@ impl DescriptionsMetrics {
         );
         describe_gauge!(
             MARKET_DATA_AGGREGATOR_CHECKPOINT_AGE_SECONDS,
-            "Age in seconds of the last successful aggregator partition checkpoint, labelled by partition"
+            "Age in seconds of the last successful aggregator shard checkpoint, labelled by shard"
         );
         describe_counter!(
             MARKET_DATA_AGGREGATOR_CHECKPOINT_FAILURES_TOTAL,
-            "Total number of failed aggregator checkpoints, labelled by partition and error type"
+            "Total number of failed aggregator checkpoints, labelled by shard and error type"
         );
         describe_gauge!(
             MARKET_DATA_AGGREGATOR_WATERMARK_LAG_SECONDS,
-            "Wall-clock lag behind the aggregator event-time watermark in seconds, labelled by partition"
+            "Wall-clock lag behind the aggregator event-time watermark in seconds, labelled by shard"
         );
         describe_counter!(
             MARKET_DATA_AGGREGATOR_REPLAY_EVENTS_TOTAL,
-            "Total number of aggregator events replayed, labelled by partition and replay source"
+            "Total number of aggregator events replayed, labelled by shard and replay source"
         );
         describe_gauge!(
             MARKET_DATA_AGGREGATOR_REPLAY_PROGRESS_RATIO,
-            "Fraction of an aggregator replay that has completed, labelled by partition and replay source"
+            "Fraction of an aggregator replay that has completed, labelled by shard and replay source"
         );
         describe_histogram!(
             MARKET_DATA_AGGREGATOR_STATE_RESTORE_SECONDS,
-            "Duration in seconds to restore aggregator partition state, labelled by partition and outcome"
+            "Duration in seconds to restore aggregator shard state, labelled by shard and outcome"
         );
         describe_counter!(
             MARKET_DATA_AGGREGATOR_REBALANCES_TOTAL,
-            "Total number of aggregator partition ownership changes, labelled by partition and reason"
+            "Total number of aggregator shard ownership changes, labelled by shard and reason"
         );
         describe_counter!(
             MARKET_DATA_AGGREGATOR_DUPLICATE_EVENTS_TOTAL,

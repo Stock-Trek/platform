@@ -14,15 +14,15 @@ It listens for gap markers, fetches the missing data and pushes data into the sa
 
 ## Aggregator
 
-Aggregator consumes both market events and gap markers from NATS. A router hashes each exchange and trading pair onto a shard subject, and one partition writer owns every candle key on that shard. Gap markers close candle windows that ended before the gap was observed.
+Aggregator consumes both market events and gap markers from NATS. A router hashes each exchange and trading pair onto a shard subject, and one shard writer owns every candle key on that shard. Gap markers close candle windows that ended before the gap was observed.
 
-Each partition writer keeps the open candles up to date, sends updated open candles to NATS KV, and publishes closed candles to a Jetstream stream with a revision number. Source positions and keyed state are checkpointed before a message is acknowledged, so a restarted partition resumes from the first unprocessed message.
+Each shard writer keeps the open candles up to date, sends updated open candles to NATS KV, and publishes closed candles to a Jetstream stream with a revision number. Source positions and keyed state are checkpointed before a message is acknowledged, so a restarted shard resumes from the first unprocessed message.
 
 ### Scaling contract
 
-The aggregator is horizontally scalable by partition, not by sharing a partition between writers. Candle ownership is determined by `(exchange, trading pair)`, so every candle key has exactly one writer for a given shard count. Changing `AGGREGATOR_SHARD_COUNT` changes that mapping and requires a rebuild rather than an in-place rolling change.
+The aggregator is horizontally scalable by shard, not by sharing a shard between writers. Candle ownership is determined by `(exchange, trading pair)`, so every candle key has exactly one writer for a given shard count. Changing `AGGREGATOR_SHARD_COUNT` changes that mapping and requires a rebuild rather than an in-place rolling change.
 
-A partition writer uses a fenced lease in the checkpoint bucket. Only the lease holder may write checkpoints and publish candle revisions. Checkpoints contain the next source sequence, the event-time watermark, the writer generation, and the serialized keyed state. A writer acknowledges source messages only after its checkpoint is durable.
+A shard writer uses a fenced lease in the checkpoint bucket. Only the lease holder may write checkpoints and publish candle revisions. Checkpoints contain the next source sequence, the event-time watermark, the writer generation, and the serialized keyed state. A writer acknowledges source messages only after its checkpoint is durable.
 
 On startup a writer applies `AGGREGATOR_REPLAY_START_POLICY`:
 
@@ -33,7 +33,7 @@ On startup a writer applies `AGGREGATOR_REPLAY_START_POLICY`:
 | `earliest` | Ignore persisted state and replay the live source from the beginning. |
 | `latest` | Ignore persisted state and process only messages published after startup. |
 
-Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. When an Iceberg catalog is configured, recovery reads the compacted event files and only the raw objects that are not represented by the compacted snapshot. Without a catalog it falls back to listing `AGGREGATOR_ARCHIVE_S3_PREFIX` and replaying the raw history. Both raw and compacted objects are grouped by a fixed virtual routing bucket, so each partition only reads the objects it owns and every archived event is replayed by exactly one recovery worker. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. Recovery continues the highest state epoch recorded on the replayed events, so rebuilding the same inputs reproduces the same deterministic output ids. Regenerating candles under a changed configuration uses the rebuilder with a new configured epoch instead. See [ADR 0001](../../docs/adr/0001-scalable-aggregator.md) for the event-log, keyed-state, checkpoint, and rebuild contract.
+Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. When an Iceberg catalog is configured, recovery reads the compacted event files and only the raw objects that are not represented by the compacted snapshot. Without a catalog it falls back to listing `AGGREGATOR_ARCHIVE_S3_PREFIX` and replaying the raw history. Both raw and compacted objects are grouped by a fixed virtual routing bucket, so each shard only reads the objects it owns and every archived event is replayed by exactly one recovery worker. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. Recovery continues the highest state epoch recorded on the replayed events, so rebuilding the same inputs reproduces the same deterministic output ids. Regenerating candles under a changed configuration uses the rebuilder with a new configured epoch instead. See [ADR 0001](../../docs/adr/0001-scalable-aggregator.md) for the event-log, keyed-state, checkpoint, and rebuild contract.
 
 ### Configuration
 
@@ -42,8 +42,8 @@ Archive rebuilds replay raw events through the same deterministic candle process
 | `AGGREGATOR_INTERVALS` | required | Comma-separated candle intervals to generate. |
 | `AGGREGATOR_GAP_SUBJECT_PREFIX` | required | Subject prefix carrying gap markers from the ingester. |
 | `AGGREGATOR_SHARD_SUBJECT_PREFIX` | required | Subject prefix owned by the aggregator for routed shard inputs. |
-| `AGGREGATOR_SHARD_COUNT` | required | Number of keyed partitions. |
-| `AGGREGATOR_SHARD_INDEX` | all partitions | Run only one partition in this process. |
+| `AGGREGATOR_SHARD_COUNT` | required | Number of keyed shards. |
+| `AGGREGATOR_SHARD_INDEX` | all shards | Run only one shard in this process. |
 | `AGGREGATOR_CHECKPOINT_INTERVAL_SECS` | required | Checkpoint cadence. Must be lower than the lease TTL. |
 | `AGGREGATOR_CHECKPOINT_BUCKET` | required | NATS KV bucket for checkpoints and leases. |
 | `AGGREGATOR_CHECKPOINT_PREFIX` | required | Key prefix inside the checkpoint bucket. |
@@ -51,7 +51,7 @@ Archive rebuilds replay raw events through the same deterministic candle process
 | `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | required | Idle time before the wall clock advances the event-time watermark and closes expired windows. |
 | `AGGREGATOR_REPLAY_START_POLICY` | required | `checkpoint`, `archive`, `earliest`, or `latest`. |
 | `AGGREGATOR_STATE_SCHEMA_VERSION` | required | State schema version written to new state and required for checkpoint restore. |
-| `AGGREGATOR_DURABLE_PREFIX` | required | Durable consumer prefix. The router uses `{prefix}-router`; partitions use `{prefix}-shard-{n}`. |
+| `AGGREGATOR_DURABLE_PREFIX` | required | Durable consumer prefix. The router uses `{prefix}-router`; shards use `{prefix}-shard-{n}`. |
 | `AGGREGATOR_LEASE_TTL_SECS` | required | Single-writer lease lifetime. |
 | `AGGREGATOR_ARCHIVE_S3_BUCKET` | unset | Enables archive recovery. |
 | `AGGREGATOR_ARCHIVE_S3_PREFIX` | required when archive recovery is enabled | Raw archive prefix used when no Iceberg catalog is configured. |

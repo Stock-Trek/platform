@@ -1,12 +1,12 @@
-//! Checkpointing and source acknowledgement for a partition writer.
+//! Checkpointing and source acknowledgement for a shard writer.
 
 use super::{ProcessorRunner, output::CandleOutputWriter, writer::Writer};
 use crate::{
     checkpoint::{CheckpointRecord, StateStore},
     config::AggregatorConfig,
     lease::LeaseStore,
-    partition::PartitionId,
     processor::CandleProcessor,
+    shard::ShardId,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::{MarketSource, SourceRecord},
     state::AggregatorState,
@@ -51,14 +51,14 @@ where
 {
     pub(super) async fn resume_position(
         checkpoints: &Arc<dyn StateStore>,
-        partition: PartitionId,
+        shard: ShardId,
         replay_watermark: Option<TimestampMilliseconds>,
         state: &AggregatorState,
     ) -> Option<CheckpointPosition> {
         if replay_watermark.is_some() {
             return None;
         }
-        match checkpoints.load(partition).await {
+        match checkpoints.load(shard).await {
             Ok(Some(checkpoint))
                 if checkpoint.next_sequence > 0
                     && !checkpoint.source_stream.is_empty()
@@ -76,7 +76,7 @@ where
             Err(error) => {
                 warn!(
                     %error,
-                    partition = %partition,
+                    shard = %shard,
                     "failed to load checkpoint position for idle checkpoints"
                 );
                 None
@@ -90,14 +90,14 @@ where
         source: &mut S,
         checkpoints: &Arc<dyn StateStore>,
         leases: &Arc<dyn LeaseStore>,
-        partition: PartitionId,
+        shard: ShardId,
         processor: &CandleProcessor,
         writer: &mut Writer,
         state: &mut CommitState,
         outputs: &CandleOutputWriter,
         drain_open: bool,
     ) -> BpResult<()> {
-        writer.renew(leases, partition, config.lease_ttl).await?;
+        writer.renew(leases, shard, config.lease_ttl).await?;
 
         // Durable outputs must reach the sink before the checkpoint that
         // advances past the inputs which produced them can be saved. Ordinary
@@ -110,10 +110,7 @@ where
             outputs.barrier().await?;
         }
 
-        AggregatorMetrics::record_checkpoint_age(
-            partition.get(),
-            state.last_checkpoint_at.elapsed(),
-        );
+        AggregatorMetrics::record_checkpoint_age(shard.get(), state.last_checkpoint_at.elapsed());
         if !state.dirty && state.pending.is_empty() {
             return Ok(());
         }
@@ -122,13 +119,13 @@ where
             Some(record) => {
                 let Some(checkpoint) = CheckpointRecord::from_message(
                     &record.message,
-                    partition,
+                    shard,
                     processor.state().clone(),
                 )?
                 else {
                     return Err(BpError::bad_value(
                         "aggregator checkpoint",
-                        partition.to_string(),
+                        shard.to_string(),
                         "source record has no JetStream sequence to checkpoint",
                     ));
                 };
@@ -141,12 +138,12 @@ where
                     }
                     return Err(BpError::bad_value(
                         "aggregator checkpoint",
-                        partition.to_string(),
+                        shard.to_string(),
                         "cannot checkpoint without a source record",
                     ));
                 };
                 CheckpointRecord::new(
-                    partition,
+                    shard,
                     position.source_stream.clone(),
                     position.next_sequence,
                     processor.state().clone(),
@@ -157,14 +154,11 @@ where
             .save(&checkpoint.with_lease(writer.lease()))
             .await
         {
-            AggregatorMetrics::record_checkpoint_failure(partition.get(), error.error_type());
+            AggregatorMetrics::record_checkpoint_failure(shard.get(), error.error_type());
             return Err(error);
         }
         state.last_checkpoint_at = Instant::now();
-        AggregatorMetrics::record_checkpoint_age(
-            partition.get(),
-            state.last_checkpoint_at.elapsed(),
-        );
+        AggregatorMetrics::record_checkpoint_age(shard.get(), state.last_checkpoint_at.elapsed());
 
         for record in state.pending.drain(..) {
             source.ack(&record).await?;

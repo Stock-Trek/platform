@@ -1,9 +1,9 @@
-//! Fenced writer lease management for a partition processor.
+//! Fenced writer lease management for a shard processor.
 
 use crate::{
     config::AggregatorConfig,
     lease::{LeaseStore, WriterLease, new_writer_id, wait_for_lease},
-    partition::PartitionId,
+    shard::ShardId,
 };
 use platform_errors::{BpError, BpResult};
 use platform_metrics::AggregatorMetrics;
@@ -12,18 +12,18 @@ use std::sync::Arc;
 use std::time::Duration;
 use tracing::info;
 
-/// The identity and active lease of the writer owning a partition.
+/// The identity and active lease of the writer owning a shard.
 pub(super) struct Writer {
     id: String,
     lease: WriterLease,
 }
 
 impl Writer {
-    /// Acquires the partition lease, or returns `None` if shutdown was
+    /// Acquires the shard lease, or returns `None` if shutdown was
     /// requested while waiting for another writer to release it.
     pub(super) async fn acquire(
         leases: &Arc<dyn LeaseStore>,
-        partition: PartitionId,
+        shard: ShardId,
         requested_id: Option<String>,
         initial_lease: Option<WriterLease>,
         config: &AggregatorConfig,
@@ -36,7 +36,7 @@ impl Writer {
             None => tokio::select! {
                 result = wait_for_lease(
                     leases.as_ref(),
-                    partition,
+                    shard,
                     &writer_id,
                     config.lease_ttl,
                 ) => result?,
@@ -47,9 +47,9 @@ impl Writer {
             },
         };
 
-        AggregatorMetrics::record_rebalance(partition.get(), "lease_acquired");
+        AggregatorMetrics::record_rebalance(shard.get(), "lease_acquired");
         info!(
-            partition = %partition,
+            shard = %shard,
             writer = %writer_id,
             fencing_token = lease.fencing_token,
             intervals = ?config
@@ -57,7 +57,7 @@ impl Writer {
                 .iter()
                 .map(|interval| interval.label())
                 .collect::<Vec<_>>(),
-            "aggregator partition processor started"
+            "aggregator shard processor started"
         );
 
         Ok(Some(Self {
@@ -78,13 +78,13 @@ impl Writer {
     pub(super) async fn renew(
         &mut self,
         leases: &Arc<dyn LeaseStore>,
-        partition: PartitionId,
+        shard: ShardId,
         ttl: Duration,
     ) -> BpResult<()> {
         let Some(renewed) = leases.renew(&self.lease, ttl).await? else {
             return Err(BpError::bad_value(
                 "aggregator lease",
-                partition.to_string(),
+                shard.to_string(),
                 format!("writer {} lost its fencing lease", self.id),
             ));
         };

@@ -1,8 +1,8 @@
 use platform_aggregator::{
     AggregatorConfig, ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource,
-    LeaseStore, NatsCandleSink, NatsLeaseStore, NatsMarketSource, NatsPartitionSource, NatsRouter,
-    NatsStateStore, PartitionId, ProcessorRunner, RestoreOptions, S3ArchiveRecovery, StateStore,
-    WriterLease, new_writer_id, restore_partition, wait_for_lease,
+    LeaseStore, NatsCandleSink, NatsLeaseStore, NatsMarketSource, NatsRouter, NatsShardSource,
+    NatsStateStore, ProcessorRunner, RestoreOptions, S3ArchiveRecovery, ShardId, StateStore,
+    WriterLease, new_writer_id, restore_shard, wait_for_lease,
 };
 use platform_errors::{BpError, BpResult};
 use platform_nats::{JetStream, NatsPublisher};
@@ -23,15 +23,15 @@ async fn main() -> BpResult<()> {
     let config = AggregatorConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
 
-    let partitions = config.partitions();
+    let shards = config.shards();
     info!(
         shard_subject_prefix = %config.shard_subject_prefix,
         shard_count = config.shard_count,
-        partitions = ?partitions,
-        "starting aggregator router and partition writers"
+        shards = ?shards,
+        "starting aggregator router and shard writers"
     );
 
-    // The router owns the repartition stream. It must exist before partition
+    // The router owns the reshard stream. It must exist before shard
     // consumers connect, and it deliberately lives outside the market subject
     // tree so its subjects cannot overlap the ingester stream.
     let publisher =
@@ -59,14 +59,14 @@ async fn main() -> BpResult<()> {
         .await
     });
 
-    for partition in partitions {
-        tasks.spawn(run_partition(
+    for shard in shards {
+        tasks.spawn(run_shard(
             config.clone(),
             archive_recovery.clone(),
             checkpoints.clone(),
             leases.clone(),
             sink.clone(),
-            partition,
+            shard,
         ));
     }
 
@@ -162,16 +162,16 @@ async fn run_router(config: AggregatorConfig, publisher: Arc<NatsPublisher>) -> 
     NatsRouter::new(config, source, publisher).run().await
 }
 
-async fn run_partition(
+async fn run_shard(
     config: AggregatorConfig,
     archive_recovery: Option<Arc<S3ArchiveRecovery>>,
     checkpoints: Arc<dyn StateStore>,
     leases: Arc<dyn LeaseStore>,
     sink: Arc<NatsCandleSink>,
-    partition: PartitionId,
+    shard: ShardId,
 ) -> BpResult<()> {
     let source_stream = JetStream::stream_name(&config.shard_subject_prefix);
-    supervise("partition", move || {
+    supervise("shard", move || {
         let config = config.clone();
         let archive_recovery = archive_recovery.clone();
         let checkpoints = checkpoints.clone();
@@ -179,13 +179,13 @@ async fn run_partition(
         let sink = sink.clone();
         let source_stream = source_stream.clone();
         async move {
-            run_partition_once(
+            run_shard_once(
                 config,
                 archive_recovery,
                 checkpoints,
                 leases,
                 sink,
-                partition,
+                shard,
                 source_stream,
             )
             .await
@@ -195,33 +195,31 @@ async fn run_partition(
 }
 
 #[allow(clippy::too_many_arguments)]
-async fn run_partition_once(
+async fn run_shard_once(
     config: AggregatorConfig,
     archive_recovery: Option<Arc<S3ArchiveRecovery>>,
     checkpoints: Arc<dyn StateStore>,
     leases: Arc<dyn LeaseStore>,
     sink: Arc<NatsCandleSink>,
-    partition: PartitionId,
+    shard: ShardId,
     source_stream: String,
 ) -> BpResult<()> {
     let writer_id = new_writer_id();
     let Some(mut lease) =
-        acquire_lease_or_shutdown(leases.as_ref(), partition, &writer_id, config.lease_ttl).await?
+        acquire_lease_or_shutdown(leases.as_ref(), shard, &writer_id, config.lease_ttl).await?
     else {
         return Ok(());
     };
 
     let result = async {
         let restore = async {
-            let options = RestoreOptions::from_config(&config, partition, &source_stream);
-            let restored = restore_partition(
+            let options = RestoreOptions::from_config(&config, shard, &source_stream);
+            let restored = restore_shard(
                 checkpoints.as_ref(),
                 || async {
                     match &archive_recovery {
                         Some(archive_recovery) => Ok(Box::new(
-                            archive_recovery
-                                .connect(partition, config.shard_count)
-                                .await?,
+                            archive_recovery.connect(shard, config.shard_count).await?,
                         )
                             as Box<dyn ArchivedEventSource>),
                         None => {
@@ -233,7 +231,7 @@ async fn run_partition_once(
             )
             .await?;
             let replay_watermark = restored.replay_watermark();
-            let source = NatsPartitionSource::connect(&config, partition, restored.start).await?;
+            let source = NatsShardSource::connect(&config, shard, restored.start).await?;
             Ok::<_, BpError>((restored.state, replay_watermark, source))
         };
         tokio::pin!(restore);
@@ -249,9 +247,9 @@ async fn run_partition_once(
                     let Some(renewed) = leases.renew(&lease, config.lease_ttl).await? else {
                         return Err(BpError::bad_value(
                             "aggregator lease",
-                            partition.to_string(),
+                            shard.to_string(),
                             format!(
-                                "writer {writer_id} lost the partition lease while preparing"
+                                "writer {writer_id} lost the shard lease while preparing"
                             ),
                         ));
                     };
@@ -260,18 +258,13 @@ async fn run_partition_once(
             }
         };
 
-        let runner = ProcessorRunner::new_partition(
-            config.clone(),
-            source,
-            sink,
-            checkpoints.clone(),
-            partition,
-        )
-        .with_lease_store(leases.clone())
-        .with_lease(lease.clone())
-        .with_writer_id(writer_id.clone())
-        .with_state(state)
-        .with_replay_watermark(replay_watermark);
+        let runner =
+            ProcessorRunner::new_shard(config.clone(), source, sink, checkpoints.clone(), shard)
+                .with_lease_store(leases.clone())
+                .with_lease(lease.clone())
+                .with_writer_id(writer_id.clone())
+                .with_state(state)
+                .with_replay_watermark(replay_watermark);
         runner.run().await
     }
     .await;
@@ -284,12 +277,12 @@ async fn run_partition_once(
 
 async fn acquire_lease_or_shutdown(
     leases: &dyn LeaseStore,
-    partition: PartitionId,
+    shard: ShardId,
     owner_id: &str,
     ttl: Duration,
 ) -> BpResult<Option<WriterLease>> {
     tokio::select! {
-        result = wait_for_lease(leases, partition, owner_id, ttl) => Ok(Some(result?)),
+        result = wait_for_lease(leases, shard, owner_id, ttl) => Ok(Some(result?)),
         signal = Runtime::shutdown_signal() => {
             signal?;
             Ok(None)

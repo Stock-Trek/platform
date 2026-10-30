@@ -8,8 +8,8 @@ use crate::{
     checkpoint::StateStore,
     config::AggregatorConfig,
     lease::LeaseStore,
-    partition::PartitionId,
     processor::{CandleProcessor, ProcessorUpdate},
+    shard::ShardId,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::{MarketInput, MarketSource},
     state::DeduplicationKey,
@@ -40,7 +40,7 @@ where
         source: &mut S,
         checkpoints: &Arc<dyn StateStore>,
         leases: &Arc<dyn LeaseStore>,
-        partition: PartitionId,
+        shard: ShardId,
         processor: &mut CandleProcessor,
         replay_watermark: Option<TimestampMilliseconds>,
         writer: &mut Writer,
@@ -60,13 +60,13 @@ where
                 biased;
                 _ = Self::wait_for_quiesce(quiesce.as_mut()) => {
                     AggregatorMetrics::record_rebalance(
-                        partition.get(),
+                        shard.get(),
                         "quiesce_requested",
                     );
                     info!(
-                        partition = %partition,
+                        shard = %shard,
                         writer = %writer.id(),
-                        "quiesce requested; draining and checkpointing aggregator partition"
+                        "quiesce requested; draining and checkpointing aggregator shard"
                     );
                     break;
                 }
@@ -96,18 +96,18 @@ where
                                 state.dirty = true;
                             } else {
                                 AggregatorMetrics::record_replay_events(
-                                    partition.get(),
+                                    shard.get(),
                                     "live",
                                     1,
                                 );
                             }
-                            Self::record_watermark_lag(partition, processor);
+                            Self::record_watermark_lag(shard, processor);
                             idle_ticker.reset();
                             state.last_record = Some(record.clone());
                             state.pending.push(record);
                         }
                         Ok(None) => {
-                            info!("aggregator input source ended; draining partition");
+                            info!("aggregator input source ended; draining shard");
                             break;
                         }
                         Err(error) => {
@@ -122,7 +122,7 @@ where
                         source,
                         checkpoints,
                         leases,
-                        partition,
+                        shard,
                         processor,
                         writer,
                         state,
@@ -143,13 +143,13 @@ where
                     if changed {
                         state.dirty = true;
                     }
-                    Self::record_watermark_lag(partition, processor);
+                    Self::record_watermark_lag(shard, processor);
                     Self::commit(
                         config,
                         source,
                         checkpoints,
                         leases,
-                        partition,
+                        shard,
                         processor,
                         writer,
                         state,
@@ -210,12 +210,12 @@ where
         AggregatorMetrics::record_incomplete_windows(update.incomplete_windows.len() as u64);
     }
 
-    fn record_watermark_lag(partition: PartitionId, processor: &CandleProcessor) {
+    fn record_watermark_lag(shard: ShardId, processor: &CandleProcessor) {
         let Some(watermark) = processor.state().watermark else {
             return;
         };
         let lag = TimestampMilliseconds::now() - watermark;
-        AggregatorMetrics::record_watermark_lag(partition.get(), lag.0.max(0) as f64 / 1_000.0);
+        AggregatorMetrics::record_watermark_lag(shard.get(), lag.0.max(0) as f64 / 1_000.0);
     }
 
     fn flush_idle(processor: &mut CandleProcessor) -> ProcessorUpdate {

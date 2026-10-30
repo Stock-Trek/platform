@@ -141,7 +141,7 @@ pub struct Candle {
 ///
 /// A revision is a pure function of the candle identity and window, the source
 /// watermark that closed the candle, the source offset that advanced that
-/// watermark, and the partition state epoch. Replaying the same input log
+/// watermark, and the shard state epoch. Replaying the same input log
 /// therefore recreates the same revision; there is no process-local or global
 /// revision counter to race across replicas.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
@@ -181,7 +181,7 @@ impl Ord for CandleRevision {
 
 impl CandleRevision {
     /// Derives the revision for `candle` from the closing watermark and source
-    /// offset that are part of the partition state.
+    /// offset that are part of the shard state.
     pub fn for_candle(
         candle: &Candle,
         close_watermark: TimestampMilliseconds,

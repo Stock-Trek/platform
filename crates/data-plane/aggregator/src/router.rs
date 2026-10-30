@@ -1,12 +1,12 @@
-//! Repartition/router stage.
+//! Reshard/router stage.
 //!
 //! The router turns the ingester's exchange/stream subjects into a shard stream
-//! keyed by `(exchange, trading pair)`. Downstream partition writers therefore
+//! keyed by `(exchange, trading pair)`. Downstream shard writers therefore
 //! see every event for a candle key in order, on exactly one shard.
 
 use crate::{
     config::AggregatorConfig,
-    partition::{PartitionId, partition_for},
+    shard::{ShardId, shard_for},
     source::{MarketInput, MarketSource, SourceRecord},
 };
 use platform_errors::BpResult;
@@ -23,7 +23,7 @@ use std::sync::Mutex;
 use stock_trek_types::cex::cex_id::CexId;
 use tracing::{info, warn};
 
-/// Hashes decoded trading pairs onto partitions.
+/// Hashes decoded trading pairs onto shards.
 #[derive(Default)]
 pub struct HashRouter {
     decoders: Mutex<HashMap<CexId, SharedTradeDecoder>>,
@@ -34,38 +34,26 @@ impl HashRouter {
         Self::default()
     }
 
-    /// Returns the partitions that must receive `input`.
+    /// Returns the shards that must receive `input`.
     ///
-    /// An event is routed to every partition owning one of its trading pairs.
-    /// Gap markers are routed to the partition owning the trading pair encoded
+    /// An event is routed to every shard owning one of its trading pairs.
+    /// Gap markers are routed to the shard owning the trading pair encoded
     /// in their exchange stream.
-    pub fn partitions(
-        &self,
-        input: &MarketInput,
-        partition_count: usize,
-    ) -> BpResult<Vec<PartitionId>> {
+    pub fn shards(&self, input: &MarketInput, shard_count: usize) -> BpResult<Vec<ShardId>> {
         match input {
-            MarketInput::Gap(gap) => self.gap_partitions(gap, partition_count),
-            MarketInput::Event(event) => self.event_partitions(event, partition_count),
+            MarketInput::Gap(gap) => self.gap_shards(gap, shard_count),
+            MarketInput::Event(event) => self.event_shards(event, shard_count),
         }
     }
 
-    fn event_partitions(
-        &self,
-        event: &MarketEvent,
-        partition_count: usize,
-    ) -> BpResult<Vec<PartitionId>> {
+    fn event_shards(&self, event: &MarketEvent, shard_count: usize) -> BpResult<Vec<ShardId>> {
         let decoder = self.decoder(event.exchange)?;
         let trades = decoder.decode(event)?;
-        let mut partitions = BTreeSet::new();
+        let mut shards = BTreeSet::new();
         for trade in trades {
-            partitions.insert(partition_for(
-                trade.exchange,
-                trade.trading_pair,
-                partition_count,
-            ));
+            shards.insert(shard_for(trade.exchange, trade.trading_pair, shard_count));
         }
-        Ok(partitions.into_iter().collect())
+        Ok(shards.into_iter().collect())
     }
 
     fn decoder(&self, exchange: CexId) -> BpResult<SharedTradeDecoder> {
@@ -78,22 +66,14 @@ impl HashRouter {
         Ok(decoder)
     }
 
-    fn gap_partitions(
-        &self,
-        gap: &GapMarker,
-        partition_count: usize,
-    ) -> BpResult<Vec<PartitionId>> {
+    fn gap_shards(&self, gap: &GapMarker, shard_count: usize) -> BpResult<Vec<ShardId>> {
         let decoder = self.decoder(gap.exchange)?;
         let trading_pair = decoder.trading_pair_for_stream(&gap.stream)?;
-        Ok(vec![partition_for(
-            gap.exchange,
-            trading_pair,
-            partition_count,
-        )])
+        Ok(vec![shard_for(gap.exchange, trading_pair, shard_count)])
     }
 }
 
-/// Publishes routed inputs to their partition subjects.
+/// Publishes routed inputs to their shard subjects.
 pub struct NatsRouter<S, P> {
     config: AggregatorConfig,
     source: S,
@@ -158,11 +138,11 @@ where
         router: &HashRouter,
         record: SourceRecord,
     ) -> BpResult<()> {
-        let partitions = match router.partitions(&record.input, config.shard_count) {
-            Ok(partitions) => partitions,
+        let shards = match router.shards(&record.input, config.shard_count) {
+            Ok(shards) => shards,
             Err(error) => {
                 // Undecodable exchange streams must not poison the router. The
-                // partition writer would drop the same event, so acknowledge it
+                // shard writer would drop the same event, so acknowledge it
                 // after recording why it produced no output.
                 match &record.input {
                     MarketInput::Event(_) => MarketDataMetrics::record_decode_failure(
@@ -179,10 +159,10 @@ where
             }
         };
 
-        if !partitions.is_empty() {
+        if !shards.is_empty() {
             let payload = record.input.encode()?;
-            for partition in partitions {
-                let subject = partition.subject(&config.shard_subject_prefix);
+            for shard in shards {
+                let subject = shard.subject(&config.shard_subject_prefix);
                 publisher.publish(&subject, &payload).await?;
             }
         }
@@ -197,7 +177,7 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::partition::partition_for_candle_key;
+    use crate::shard::shard_for_candle_key;
     use async_trait::async_trait;
     use platform_errors::BpResult;
     use platform_market_data::candle::CandleKey;
@@ -230,20 +210,20 @@ mod tests {
     }
 
     #[test]
-    fn events_route_to_the_partition_owning_their_pair() {
+    fn events_route_to_the_shard_owning_their_pair() {
         let router = HashRouter::new();
         let event = trade_event();
-        let partitions = router.partitions(&MarketInput::Event(event), 8).unwrap();
+        let shards = router.shards(&MarketInput::Event(event), 8).unwrap();
 
-        assert_eq!(partitions.len(), 1);
-        assert!(partitions[0].get() < 8);
+        assert_eq!(shards.len(), 1);
+        assert!(shards[0].get() < 8);
     }
 
     #[test]
-    fn gaps_route_to_the_partition_owning_their_stream_pair() {
+    fn gaps_route_to_the_shard_owning_their_stream_pair() {
         let router = HashRouter::new();
         let gap = gap();
-        let expected = vec![partition_for(
+        let expected = vec![shard_for(
             CexId::Binance,
             stock_trek_types::cex::trading_pair::TradingPair::new(
                 AssetId::Bitcoin,
@@ -251,11 +231,9 @@ mod tests {
             ),
             4,
         )];
-        let partitions = router
-            .partitions(&MarketInput::Gap(gap.clone()), 4)
-            .unwrap();
+        let shards = router.shards(&MarketInput::Gap(gap.clone()), 4).unwrap();
 
-        assert_eq!(partitions, expected);
+        assert_eq!(shards, expected);
     }
 
     #[test]
@@ -264,11 +242,11 @@ mod tests {
         let mut gap = gap();
         gap.stream = "unknown@trade".to_string();
 
-        assert!(router.partitions(&MarketInput::Gap(gap), 4).is_err());
+        assert!(router.shards(&MarketInput::Gap(gap), 4).is_err());
     }
 
     #[test]
-    fn every_interval_for_a_pair_uses_the_same_partition() {
+    fn every_interval_for_a_pair_uses_the_same_shard() {
         let first = CandleKey::new(
             CexId::Binance,
             stock_trek_types::cex::trading_pair::TradingPair::new(
@@ -283,8 +261,8 @@ mod tests {
         };
 
         assert_eq!(
-            partition_for_candle_key(&first, 16),
-            partition_for_candle_key(&second, 16)
+            shard_for_candle_key(&first, 16),
+            shard_for_candle_key(&second, 16)
         );
     }
 
@@ -356,7 +334,7 @@ mod tests {
             allowed_lateness: std::time::Duration::from_millis(5_000),
             checkpoint_interval: std::time::Duration::from_secs(5),
             checkpoint_bucket: "aggregator_shards_checkpoints".to_string(),
-            checkpoint_key_prefix: "partition".to_string(),
+            checkpoint_key_prefix: "shard".to_string(),
             watermark_idle_timeout: std::time::Duration::from_secs(60),
             replay_start_policy: crate::config::ReplayStartPolicy::Checkpoint,
             state_schema_version: crate::state::STATE_SCHEMA_VERSION,

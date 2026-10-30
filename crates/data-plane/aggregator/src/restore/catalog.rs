@@ -1,11 +1,11 @@
 //! Archive catalog discovery for aggregator restore.
 //!
-//! Discovers the archive objects that make up a partition's recovery history,
+//! Discovers the archive objects that make up a shard's recovery history,
 //! either through the compacted/raw Iceberg handoff or by listing the raw
 //! prefix.
 
 use super::replay::S3ArchivedEventSource;
-use crate::partition::PartitionId;
+use crate::shard::ShardId;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{
     ArchiveHandoff, ArchiveKind, ArchivePath, Bucket, IcebergCatalog, IcebergConfig, ObjectKey, S3,
@@ -20,10 +20,10 @@ pub const AGGREGATOR_ARCHIVE_S3_BUCKET: &str = "AGGREGATOR_ARCHIVE_S3_BUCKET";
 pub const AGGREGATOR_ARCHIVE_S3_PREFIX: &str = "AGGREGATOR_ARCHIVE_S3_PREFIX";
 
 /// Maximum number of archive objects streamed concurrently across all
-/// partitions in one aggregator process.
+/// shards in one aggregator process.
 const MAX_CONCURRENT_ARCHIVE_OBJECTS: usize = 4;
 
-/// Optional archive used to rebuild partition state.
+/// Optional archive used to rebuild shard state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveRecoveryConfig {
     pub bucket: String,
@@ -62,12 +62,12 @@ impl ArchiveRecoveryConfig {
 }
 
 /// Lazily connects to the archive and shares its clients and object listing
-/// across every partition recovery source in this process.
+/// across every shard recovery source in this process.
 ///
-/// The snapshot is created on the first partition that actually needs archive
+/// The snapshot is created on the first shard that actually needs archive
 /// replay, so checkpoints and live-only starts never touch S3. The listing is
 /// startup-scoped; archive growth during recovery is not observed by later
-/// partitions.
+/// shards.
 pub struct S3ArchiveRecovery {
     config: ArchiveRecoveryConfig,
     snapshot: OnceCell<ArchiveSnapshot>,
@@ -111,16 +111,16 @@ impl S3ArchiveRecovery {
         }
     }
 
-    /// Builds a partition-specific source from the shared archive snapshot.
+    /// Builds a shard-specific source from the shared archive snapshot.
     ///
     /// The first call discovers the archive files; later calls reuse the same
-    /// snapshot and only select the objects owned by their partition. With an
+    /// snapshot and only select the objects owned by their shard. With an
     /// Iceberg catalog configured the snapshot is the compacted/raw handoff,
     /// otherwise it falls back to listing the raw prefix.
     pub async fn connect(
         &self,
-        partition: PartitionId,
-        partition_count: usize,
+        shard: ShardId,
+        shard_count: usize,
     ) -> BpResult<S3ArchivedEventSource> {
         let snapshot = self
             .snapshot
@@ -172,8 +172,7 @@ impl S3ArchiveRecovery {
             })
             .await?;
 
-        let mut objects =
-            select_event_objects(snapshot.objects.clone(), partition, partition_count);
+        let mut objects = select_event_objects(snapshot.objects.clone(), shard, shard_count);
         sort_archive_objects(&mut objects);
 
         info!(
@@ -182,30 +181,30 @@ impl S3ArchiveRecovery {
             compacted_objects = snapshot.compacted_objects,
             raw_tail_objects = snapshot.raw_tail_objects,
             selected_objects = objects.len(),
-            partition = %partition,
+            shard = %shard,
             "connected archive recovery source"
         );
 
         Ok(S3ArchivedEventSource::from_objects(
             snapshot.transfer_client.clone(),
-            partition,
-            partition_count,
+            shard,
+            shard_count,
             objects.into(),
             self.recovery_slots.clone(),
         ))
     }
 }
 
-/// Selects the event objects owned by one partition.
+/// Selects the event objects owned by one shard.
 ///
 /// Raw and compacted objects both carry a fixed virtual routing bucket, so a
-/// partition can discard every object belonging to another partition before
+/// shard can discard every object belonging to another shard before
 /// downloading it. This keeps a cold rebuild at `O(archive)` across the cluster
-/// instead of making every partition scan the whole archive.
+/// instead of making every shard scan the whole archive.
 pub(crate) fn select_event_objects(
     objects: Vec<ArchiveObject>,
-    partition: PartitionId,
-    partition_count: usize,
+    shard: ShardId,
+    shard_count: usize,
 ) -> Vec<ArchiveObject> {
     objects
         .into_iter()
@@ -215,7 +214,7 @@ pub(crate) fn select_event_objects(
                 return false;
             }
             ArchivePath::routing_bucket_from_key(key)
-                .is_some_and(|bucket| bucket.is_owned_by(partition.get(), partition_count))
+                .is_some_and(|bucket| bucket.is_owned_by(shard.get(), shard_count))
         })
         .collect()
 }
@@ -223,7 +222,7 @@ pub(crate) fn select_event_objects(
 /// Orders archive files by coverage hour, then by path.
 ///
 /// The layer prefix must not dominate ordering: an un-compacted older raw
-/// hour has to be replayed before a newer compacted hour so each partition
+/// hour has to be replayed before a newer compacted hour so each shard
 /// observes its event history in time order.
 pub(crate) fn sort_archive_objects(objects: &mut [ArchiveObject]) {
     objects.sort_by(|left, right| {

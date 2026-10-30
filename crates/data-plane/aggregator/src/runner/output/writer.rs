@@ -7,7 +7,7 @@
 //! completes only after every queued closed candle has been published, allowing
 //! the source checkpoint to advance safely.
 //!
-//! The writer is drained before a partition is quiesced or its lease released.
+//! The writer is drained before a shard is quiesced or its lease released.
 
 use crate::{
     processor::ProcessorUpdate,
@@ -137,7 +137,7 @@ impl CandleOutputWriter {
     /// Waits until every update submitted before this call has been written.
     ///
     /// This drains both closed candles and the open projection and is used
-    /// before quiescing or releasing the partition lease.
+    /// before quiescing or releasing the shard lease.
     pub(crate) async fn flush(&self) -> BpResult<()> {
         let (reply, receiver) = oneshot::channel();
         self.send(OutputCommand::Flush { reply }).await?;
@@ -146,7 +146,7 @@ impl CandleOutputWriter {
 
     /// Flushes the remaining outputs and waits for the writer task to stop.
     ///
-    /// This must complete before the partition lease is released.
+    /// This must complete before the shard lease is released.
     pub(crate) async fn shutdown(self) -> BpResult<()> {
         let (reply, receiver) = oneshot::channel();
         let result = match self.sender.send(OutputCommand::Shutdown { reply }).await {

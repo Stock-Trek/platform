@@ -1,4 +1,4 @@
-//! Partition processing worker lifecycle.
+//! Shard processing worker lifecycle.
 
 use super::{
     commit::CommitState, output::CandleOutputWriter, quiesce::QuiesceReceiver, writer::Writer,
@@ -7,8 +7,8 @@ use crate::{
     checkpoint::{InMemoryStateStore, StateStore},
     config::AggregatorConfig,
     lease::{InMemoryLeaseStore, LeaseStore, WriterLease},
-    partition::PartitionId,
     processor::CandleProcessor,
+    shard::ShardId,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::MarketSource,
     state::AggregatorState,
@@ -18,7 +18,7 @@ use platform_runtime::Runtime;
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::Arc;
 
-/// Processes one partition's ordered inputs.
+/// Processes one shard's ordered inputs.
 ///
 /// The worker acquires a fenced writer lease, applies inputs through the pure
 /// [`CandleProcessor`], publishes outputs, checkpoints the keyed state
@@ -34,7 +34,7 @@ pub struct ProcessorRunner<S, K> {
     sink: K,
     checkpoints: Arc<dyn StateStore>,
     leases: Arc<dyn LeaseStore>,
-    partition: PartitionId,
+    shard: ShardId,
     state: AggregatorState,
     /// When set, inputs at or before this watermark are already represented by
     /// state rebuilt from the archive and are only used to advance the source
@@ -58,7 +58,7 @@ where
             sink,
             checkpoints: Arc::new(InMemoryStateStore::new()),
             leases: Arc::new(InMemoryLeaseStore::new()),
-            partition: PartitionId::new(0),
+            shard: ShardId::new(0),
             state,
             replay_watermark: None,
             writer_id: None,
@@ -70,10 +70,10 @@ where
     pub fn with_checkpoint_store(
         mut self,
         checkpoints: Arc<dyn StateStore>,
-        partition: PartitionId,
+        shard: ShardId,
     ) -> Self {
         self.checkpoints = checkpoints;
-        self.partition = partition;
+        self.shard = shard;
         self
     }
 
@@ -117,12 +117,12 @@ where
         self
     }
 
-    pub fn new_partition(
+    pub fn new_shard(
         config: AggregatorConfig,
         source: S,
         sink: K,
         checkpoints: Arc<dyn StateStore>,
-        partition: PartitionId,
+        shard: ShardId,
     ) -> Self {
         let state = AggregatorState::new_with_schema_version(config.state_schema_version);
         Self {
@@ -131,7 +131,7 @@ where
             sink,
             checkpoints,
             leases: Arc::new(InMemoryLeaseStore::new()),
-            partition,
+            shard,
             state,
             replay_watermark: None,
             writer_id: None,
@@ -147,7 +147,7 @@ where
             sink,
             checkpoints,
             leases,
-            partition,
+            shard,
             state,
             replay_watermark,
             writer_id,
@@ -156,14 +156,13 @@ where
         } = self;
         let mut processor = CandleProcessor::from_state(config.processor_config(), state)?;
         let Some(mut writer) =
-            Writer::acquire(&leases, partition, writer_id, initial_lease, &config).await?
+            Writer::acquire(&leases, shard, writer_id, initial_lease, &config).await?
         else {
             return Ok(());
         };
 
         let resume_position =
-            Self::resume_position(&checkpoints, partition, replay_watermark, processor.state())
-                .await;
+            Self::resume_position(&checkpoints, shard, replay_watermark, processor.state()).await;
         let mut commit_state = CommitState::new(resume_position);
         let outputs = CandleOutputWriter::start(sink);
         let result = Runtime::run_until_shutdown(Self::process_inputs(
@@ -171,7 +170,7 @@ where
             &mut source,
             &checkpoints,
             &leases,
-            partition,
+            shard,
             &mut processor,
             replay_watermark,
             &mut writer,
@@ -186,7 +185,7 @@ where
                 &mut source,
                 &checkpoints,
                 &leases,
-                partition,
+                shard,
                 &processor,
                 &mut writer,
                 &mut commit_state,

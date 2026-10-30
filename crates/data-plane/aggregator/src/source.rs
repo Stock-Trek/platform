@@ -1,11 +1,11 @@
 //! Input sources for the aggregator.
 //!
 //! The router consumes the ingester's market events and gap markers and
-//! repartitions them onto shard subjects. Each partition writer then consumes
+//! reshards them onto shard subjects. Each shard writer then consumes
 //! only its own shard subject, which gives every candle key a single writer.
 
 use crate::config::AggregatorConfig;
-use crate::partition::PartitionId;
+use crate::shard::ShardId;
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
 use platform_market_data::{
@@ -21,7 +21,7 @@ use platform_nats::{ConsumerStart, JetStreamConsumer, Message};
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
-/// One input record consumed by the router or a partition writer.
+/// One input record consumed by the router or a shard writer.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum MarketInput {
     Event(MarketEvent),
@@ -118,7 +118,7 @@ pub fn common_subject_prefix(left: &str, right: &str) -> Option<String> {
     (!shared.is_empty()).then(|| shared.join("."))
 }
 
-/// Reads original market events and gap markers for the repartition router.
+/// Reads original market events and gap markers for the reshard router.
 ///
 /// Both categories are consumed from one ordered stream so gaps are applied in
 /// the same order the ingester observed them. The router must see a gap before
@@ -194,26 +194,26 @@ impl MarketSource for NatsMarketSource {
     }
 }
 
-/// Reads routed inputs for exactly one partition.
-pub struct NatsPartitionSource {
+/// Reads routed inputs for exactly one shard.
+pub struct NatsShardSource {
     consumer: JetStreamConsumer,
     in_flight: Option<Message>,
 }
 
-impl NatsPartitionSource {
-    /// Connects the partition durable consumer at the configured start
+impl NatsShardSource {
+    /// Connects the shard durable consumer at the configured start
     /// position.
     pub async fn connect(
         config: &AggregatorConfig,
-        partition: PartitionId,
+        shard: ShardId,
         start: ConsumerStart,
     ) -> BpResult<Self> {
-        let partition_subject = partition.subject(&config.shard_subject_prefix);
-        let filter = format!("{partition_subject}.>");
-        let durable = config.partition_durable_name(partition);
+        let shard_subject = shard.subject(&config.shard_subject_prefix);
+        let filter = format!("{shard_subject}.>");
+        let durable = config.shard_durable_name(shard);
         let consumer = JetStreamConsumer::connect_with_start(
             &config.nats_url,
-            "platform-aggregator-partition",
+            "platform-aggregator-shard",
             &config.shard_subject_prefix,
             &filter,
             &durable,
@@ -237,7 +237,7 @@ impl NatsPartitionSource {
 }
 
 #[async_trait]
-impl MarketSource for NatsPartitionSource {
+impl MarketSource for NatsShardSource {
     async fn next_input(&mut self) -> BpResult<Option<SourceRecord>> {
         loop {
             let Some(message) = self.consumer.next_message_unacked().await else {
@@ -341,7 +341,7 @@ mod tests {
             input
         );
         assert_eq!(
-            NatsPartitionSource::decode_routed(&input.encode().unwrap()).unwrap(),
+            NatsShardSource::decode_routed(&input.encode().unwrap()).unwrap(),
             input
         );
     }
