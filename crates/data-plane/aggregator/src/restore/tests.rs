@@ -166,7 +166,7 @@ async fn a_missing_checkpoint_rebuilds_from_archived_events() {
 }
 
 #[tokio::test]
-async fn a_rebuild_continues_the_latest_archived_state_epoch() {
+async fn a_rebuild_continues_the_latest_archived_state_epoch_without_advancing_it() {
     let store = InMemoryStateStore::new();
     let partition = PartitionId::new(0);
     let archive = VecArchive::with_epochs(vec![(event(1, 61_000), 7), (event(2, 62_000), 3)]);

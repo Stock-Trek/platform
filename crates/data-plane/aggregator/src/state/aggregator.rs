@@ -28,9 +28,12 @@ pub struct AggregatorState {
     pub schema_version: u32,
     /// Epoch of this state lineage.
     ///
-    /// Every checkpoint restores the same epoch. A state rebuilt from archived
-    /// inputs must advance it so deterministic output ids from the previous
-    /// lineage cannot suppress the rebuilt outputs.
+    /// Every checkpoint restores the same epoch. Recovery from archived inputs
+    /// continues the highest epoch observed on those inputs, so replaying the
+    /// same processing step reproduces the same deterministic output ids and
+    /// remains idempotent. An explicit output rebuild that starts a new lineage
+    /// (for example the rebuilder) assigns a fresh epoch, so ids from the old
+    /// lineage cannot suppress the regenerated outputs.
     pub state_epoch: u64,
     /// Open candles keyed by exchange, trading pair, and interval.
     ///
