@@ -17,7 +17,9 @@ pub use iceberg::{
     IcebergDataFile,
 };
 pub use layout::{ArchiveBucket, ArchiveHour, ArchivePath};
-pub use parquet::{ArchiveParquet, ArchiveParquetBatches, ArchiveParquetWriter};
+pub use parquet::{
+    ArchiveParquet, ArchiveParquetBatches, ArchiveParquetStream, ArchiveParquetWriter,
+};
 pub use parquet_reader::ParquetReader;
 pub use record::{
     ArchiveKind, ArchivePartition, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey,

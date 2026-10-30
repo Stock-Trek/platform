@@ -11,8 +11,10 @@ use crate::partition::{PartitionId, partition_for};
 use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
+use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{
-    ArchiveKind, ArchiveParquet, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey, S3, S3Object,
+    ArchiveKind, ArchiveParquet, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey,
+    ParquetReader, S3, S3Object,
 };
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult, ErrorType};
@@ -26,15 +28,20 @@ use platform_nats::ConsumerStart;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::collections::{HashMap, VecDeque};
 use std::future::Future;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 use stock_trek_types::cex::cex_id::CexId;
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, OwnedSemaphorePermit, Semaphore};
 use tracing::{info, warn};
 
 pub const AGGREGATOR_ARCHIVE_S3_BUCKET: &str = "AGGREGATOR_ARCHIVE_S3_BUCKET";
 pub const AGGREGATOR_ARCHIVE_S3_PREFIX: &str = "AGGREGATOR_ARCHIVE_S3_PREFIX";
 
 const DEFAULT_ARCHIVE_PREFIX: &str = "market-data/raw";
+
+/// Maximum number of archive objects streamed concurrently across all
+/// partitions in one aggregator process.
+const MAX_CONCURRENT_ARCHIVE_OBJECTS: usize = 4;
 
 /// Optional raw-event archive used to rebuild partition state.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -390,7 +397,7 @@ fn decoder_for(
     Ok(decoder)
 }
 
-/// Lazily connects to the archive and shares its client and object listing
+/// Lazily connects to the archive and shares its clients and object listing
 /// across every partition recovery source in this process.
 ///
 /// The snapshot is created on the first partition that actually needs archive
@@ -400,10 +407,11 @@ fn decoder_for(
 pub struct S3ArchiveRecovery {
     config: ArchiveRecoveryConfig,
     snapshot: OnceCell<ArchiveSnapshot>,
+    recovery_slots: Arc<Semaphore>,
 }
 
 struct ArchiveSnapshot {
-    client: aws_sdk_s3::Client,
+    transfer_client: TransferClient,
     bucket: Bucket,
     prefix: String,
     objects: Vec<S3Object>,
@@ -414,6 +422,7 @@ impl S3ArchiveRecovery {
         Self {
             config,
             snapshot: OnceCell::new(),
+            recovery_slots: Arc::new(Semaphore::new(MAX_CONCURRENT_ARCHIVE_OBJECTS)),
         }
     }
 
@@ -429,7 +438,7 @@ impl S3ArchiveRecovery {
         let snapshot = self
             .snapshot
             .get_or_try_init(|| async {
-                let client = S3::s3_client().await;
+                let (client, transfer_client) = S3::clients().await;
                 let bucket = Bucket::new(self.config.bucket.clone());
                 let prefix = self.config.prefix.trim_matches('/').to_string();
                 let list_prefix = if prefix.is_empty() {
@@ -440,7 +449,7 @@ impl S3ArchiveRecovery {
                 let objects =
                     S3::list_objects(&client, &bucket, &ObjectKey::new(list_prefix)).await?;
                 Ok::<_, BpError>(ArchiveSnapshot {
-                    client,
+                    transfer_client,
                     bucket,
                     prefix,
                     objects,
@@ -454,7 +463,7 @@ impl S3ArchiveRecovery {
             partition,
             partition_count,
         );
-        objects.sort();
+        objects.sort_by(|left, right| left.key.cmp(&right.key));
 
         info!(
             bucket = %snapshot.bucket,
@@ -465,11 +474,14 @@ impl S3ArchiveRecovery {
         );
 
         Ok(S3ArchivedEventSource {
-            client: snapshot.client.clone(),
+            transfer_client: snapshot.transfer_client.clone(),
             bucket: snapshot.bucket.clone(),
             partition,
             partition_count,
             objects: objects.into(),
+            reader: None,
+            _reader_permit: None,
+            recovery_slots: self.recovery_slots.clone(),
             events: VecDeque::new(),
             decoders: HashMap::new(),
         })
@@ -478,15 +490,20 @@ impl S3ArchiveRecovery {
 
 /// Replays raw event objects from S3 for one partition.
 ///
-/// This first cut downloads one Parquet object at a time and decodes it in
-/// memory. TODO: stream column chunks and skip events owned by other partitions
-/// without fully decoding them.
+/// Objects are read in bounded Parquet batches through ranged S3 requests, so
+/// recovery never downloads or decodes a whole object at once. A
+/// process-wide semaphore bounds how many archive objects are streamed
+/// concurrently across all partitions.
 pub struct S3ArchivedEventSource {
-    client: aws_sdk_s3::Client,
+    transfer_client: TransferClient,
     bucket: Bucket,
     partition: PartitionId,
     partition_count: usize,
-    objects: VecDeque<ObjectKey>,
+    objects: VecDeque<S3Object>,
+    reader: Option<platform_archive::ArchiveParquetStream<ParquetReader>>,
+    /// Keeps the recovery slot held for as long as an object is being streamed.
+    _reader_permit: Option<OwnedSemaphorePermit>,
+    recovery_slots: Arc<Semaphore>,
     events: VecDeque<ArchivedMarketEvent>,
     decoders: HashMap<CexId, SharedTradeDecoder>,
 }
@@ -502,34 +519,78 @@ impl S3ArchivedEventSource {
             .await
     }
 
-    async fn load_next_object(&mut self) -> BpResult<bool> {
-        let Some(key) = self.objects.pop_front() else {
-            return Ok(false);
-        };
-        let bytes = S3::download_bytes(&self.client, &self.bucket, &key).await?;
-        let batch = ArchiveParquet::decode(ArchiveKind::Events, bytes)?;
-        let mut events = batch
-            .into_records()
-            .into_iter()
-            .filter_map(|record| match record {
-                platform_archive::ArchiveRecord::MarketEvent(event) => Some(event),
-                platform_archive::ArchiveRecord::ClosedCandle(_) => None,
-            })
-            .collect::<Vec<_>>();
-        events.sort_by_key(|event| {
-            (
-                event_timestamp(&event.event).0,
-                event.event.sequence.unwrap_or_default(),
-                event.state_epoch,
-            )
-        });
-        self.events.extend(events);
-        info!(
-            key = %key,
-            queued_events = self.events.len(),
-            "loaded archive object for recovery"
-        );
-        Ok(true)
+    async fn load_next_batch(&mut self) -> BpResult<bool> {
+        loop {
+            if self.reader.is_none() {
+                let Some(object) = self.objects.pop_front() else {
+                    return Ok(false);
+                };
+                let file_size = u64::try_from(object.size).map_err(|error| {
+                    BpError::external(std::io::Error::new(
+                        std::io::ErrorKind::InvalidData,
+                        format!(
+                            "archive object {} has invalid size {}: {error}",
+                            object.key, object.size
+                        ),
+                    ))
+                })?;
+                let permit =
+                    self.recovery_slots
+                        .clone()
+                        .acquire_owned()
+                        .await
+                        .map_err(|error| {
+                            BpError::external(std::io::Error::other(format!(
+                                "archive recovery limiter closed: {error}"
+                            )))
+                        })?;
+                let reader =
+                    ParquetReader::new(&self.transfer_client, &self.bucket, &object.key, file_size);
+                self.reader =
+                    Some(ArchiveParquet::decode_reader_batches(ArchiveKind::Events, reader).await?);
+                self._reader_permit = Some(permit);
+                info!(
+                    key = %object.key,
+                    "streaming archive object for recovery"
+                );
+            }
+
+            let Some(batch) = self
+                .reader
+                .as_mut()
+                .expect("archive reader is initialized")
+                .next_batch()
+                .await?
+            else {
+                self.reader = None;
+                self._reader_permit = None;
+                continue;
+            };
+            let mut events = batch
+                .into_records()
+                .into_iter()
+                .filter_map(|record| match record {
+                    platform_archive::ArchiveRecord::MarketEvent(event) => Some(event),
+                    platform_archive::ArchiveRecord::ClosedCandle(_) => None,
+                })
+                .collect::<Vec<_>>();
+            events.sort_by_key(|event| {
+                (
+                    event_timestamp(&event.event).0,
+                    event.event.sequence.unwrap_or_default(),
+                    event.state_epoch,
+                )
+            });
+            if events.is_empty() {
+                continue;
+            }
+            self.events.extend(events);
+            info!(
+                queued_events = self.events.len(),
+                "loaded archive batch for recovery"
+            );
+            return Ok(true);
+        }
     }
 }
 
@@ -544,7 +605,7 @@ fn select_event_objects(
     prefix: &str,
     partition: PartitionId,
     partition_count: usize,
-) -> Vec<ObjectKey> {
+) -> Vec<S3Object> {
     objects
         .into_iter()
         .filter(|object| {
@@ -557,7 +618,6 @@ fn select_event_objects(
             ArchivePath::routing_bucket_from_key(relative)
                 .is_some_and(|bucket| bucket.is_owned_by(partition.get(), partition_count))
         })
-        .map(|object| object.key)
         .collect()
 }
 
@@ -576,7 +636,7 @@ impl ArchivedEventSource for S3ArchivedEventSource {
                 }
                 continue;
             }
-            if !self.load_next_object().await? {
+            if !self.load_next_batch().await? {
                 return Ok(None);
             }
         }
@@ -1047,7 +1107,7 @@ mod tests {
 
         let selected = select_event_objects(objects, prefix, partition, partition_count);
 
-        assert_eq!(selected, vec![ObjectKey::new(owned_event)]);
+        assert_eq!(selected, vec![s3_object(&owned_event)]);
     }
 
     #[test]
