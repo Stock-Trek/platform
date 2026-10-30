@@ -86,8 +86,9 @@ where
                             }
                         }
                         Ok(None) => {
-                            info!("archive source ended");
-                            break;
+                            return Err(platform_errors::BpError::external(
+                                "archive source ended before shutdown was requested",
+                            ));
                         }
                         Err(error) => {
                             warn!(%error, "archive source stopped");
@@ -100,7 +101,6 @@ where
                 }
             }
         }
-        Ok(())
     }
 
     async fn flush(
@@ -228,7 +228,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn runs_with_injected_source_and_sink() {
+    async fn flushes_and_acknowledges_before_reporting_the_source_end() {
         let sink = FakeSink::default();
         let observed = sink.clone();
         let acked = Arc::new(Mutex::new(0));
@@ -238,10 +238,12 @@ mod tests {
             ..FakeSource::default()
         };
 
-        ArchiverRunner::new(config(), source, sink)
-            .run()
-            .await
-            .unwrap();
+        assert!(
+            ArchiverRunner::new(config(), source, sink)
+                .run()
+                .await
+                .is_err()
+        );
 
         assert_eq!(*observed.writes.lock().unwrap(), 1);
         assert_eq!(*acked.lock().unwrap(), 1);
@@ -270,7 +272,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn acknowledges_duplicate_records() {
+    async fn acknowledges_duplicate_records_without_treating_the_end_as_success() {
         let sink = FakeSink::default();
         let acked = Arc::new(Mutex::new(0));
         let source = FakeSource {
@@ -279,10 +281,12 @@ mod tests {
             ..FakeSource::default()
         };
 
-        ArchiverRunner::new(config(), source, sink)
-            .run()
-            .await
-            .unwrap();
+        assert!(
+            ArchiverRunner::new(config(), source, sink)
+                .run()
+                .await
+                .is_err()
+        );
 
         assert_eq!(*acked.lock().unwrap(), 2);
     }

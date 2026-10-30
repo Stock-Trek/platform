@@ -4237,6 +4237,7 @@ dependencies = [
  "platform-nats",
  "platform-runtime",
  "platform-types",
+ "rand 0.8.8",
  "rust_decimal",
  "serde",
  "serde_json",

@@ -91,7 +91,8 @@ async fn acknowledges_after_processing_a_covered_gap() {
         options(),
     );
 
-    service.run().await.unwrap();
+    let error = service.run().await.unwrap_err();
+    assert!(error.to_string().contains("before shutdown"));
 
     assert_eq!(acked.lock().unwrap().len(), 1);
 }
@@ -118,7 +119,8 @@ async fn closes_a_depth_gap_with_a_snapshot_after_the_missing_range() {
     )
     .with_retry_store_arc(Arc::new(SharedStore(store.clone())));
 
-    service.run().await.unwrap();
+    let error = service.run().await.unwrap_err();
+    assert!(error.to_string().contains("before shutdown"));
 
     assert_eq!(*publisher.sequences.lock().unwrap(), vec![100]);
     assert_eq!(acked.lock().unwrap().len(), 1);
@@ -147,7 +149,8 @@ async fn closes_a_book_ticker_gap_with_the_observed_snapshot_sequence() {
     )
     .with_retry_store_arc(Arc::new(SharedStore(store.clone())));
 
-    service.run().await.unwrap();
+    let error = service.run().await.unwrap_err();
+    assert!(error.to_string().contains("before shutdown"));
 
     assert_eq!(*publisher.sequences.lock().unwrap(), vec![6]);
     assert_eq!(acked.lock().unwrap().len(), 1);
@@ -212,7 +215,8 @@ async fn retries_pending_ranges_after_the_source_ends() {
     )
     .with_retry_store_arc(Arc::new(SharedStore(store.clone())));
 
-    service.run().await.unwrap();
+    let error = service.run().await.unwrap_err();
+    assert!(error.to_string().contains("before shutdown"));
 
     assert!(store.snapshot().await.is_empty());
 }

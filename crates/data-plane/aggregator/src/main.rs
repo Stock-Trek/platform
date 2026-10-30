@@ -9,13 +9,14 @@ use platform_nats::{JetStream, NatsPublisher};
 use platform_runtime::{Runtime, Service};
 use std::future::Future;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::task::JoinSet;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 
 const SERVICE: Service = Service::new("platform-aggregator");
 const INITIAL_RESTART_DELAY: Duration = Duration::from_secs(1);
 const MAX_RESTART_DELAY: Duration = Duration::from_secs(30);
+const HEALTHY_RUN_THRESHOLD: Duration = Duration::from_secs(60);
 
 #[tokio::main]
 async fn main() -> BpResult<()> {
@@ -74,13 +75,21 @@ async fn main() -> BpResult<()> {
         match result {
             Ok(Ok(())) => {}
             Ok(Err(error)) => {
-                error!(%error, "aggregator supervisor stopped");
-                first_error.get_or_insert(error);
+                error!(%error, "aggregator task stopped");
+                if first_error.is_none() {
+                    first_error = Some(error);
+                    // A permanently failed role must stop its siblings and the
+                    // process. The external supervisor then owns the restart.
+                    tasks.shutdown().await;
+                }
             }
             Err(error) if error.is_cancelled() => {}
             Err(error) => {
-                error!(%error, "aggregator supervisor panicked");
-                first_error.get_or_insert(BpError::external(error));
+                error!(%error, "aggregator task panicked");
+                if first_error.is_none() {
+                    first_error = Some(BpError::external(error));
+                    tasks.shutdown().await;
+                }
             }
         }
     }
@@ -101,21 +110,51 @@ where
     tokio::pin!(shutdown);
 
     loop {
+        let started_at = Instant::now();
         match run().await {
-            Ok(()) => return Ok(()),
-            Err(error) => {
+            Ok(()) => {
+                warn!(
+                    task = name,
+                    "aggregator task exited without a shutdown request; restarting"
+                );
+            }
+            Err(error) if error.retryability().is_retryable() => {
                 error!(task = name, %error, "aggregator task stopped; restarting");
-                tokio::select! {
-                    _ = tokio::time::sleep(restart_delay) => {}
-                    result = &mut shutdown => {
-                        result?;
-                        return Ok(());
-                    }
-                }
-                restart_delay = (restart_delay * 2).min(MAX_RESTART_DELAY);
+            }
+            Err(error) => {
+                error!(
+                    task = name,
+                    %error,
+                    "aggregator task failed permanently; not restarting"
+                );
+                return Err(error);
             }
         }
+
+        if started_at.elapsed() >= HEALTHY_RUN_THRESHOLD {
+            restart_delay = INITIAL_RESTART_DELAY;
+        }
+        let delay = jittered_delay(restart_delay);
+        tokio::select! {
+            _ = tokio::time::sleep(delay) => {}
+            result = &mut shutdown => {
+                result?;
+                return Ok(());
+            }
+        }
+        restart_delay = next_restart_delay(restart_delay);
     }
+}
+
+fn next_restart_delay(current: Duration) -> Duration {
+    (current * 2).min(MAX_RESTART_DELAY)
+}
+
+fn jittered_delay(base: Duration) -> Duration {
+    // Jitter the upper half of the delay so replicas that failed together do
+    // not all reconnect in lockstep when a shared dependency recovers.
+    let jitter = 0.5 + rand::random::<f64>() * 0.5;
+    base.mul_f64(jitter).min(MAX_RESTART_DELAY)
 }
 
 async fn run_router(config: AggregatorConfig, publisher: Arc<NatsPublisher>) -> BpResult<()> {
@@ -255,5 +294,40 @@ async fn acquire_lease_or_shutdown(
             signal?;
             Ok(None)
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn restart_delay_doubles_until_it_reaches_the_cap() {
+        assert_eq!(
+            next_restart_delay(INITIAL_RESTART_DELAY),
+            Duration::from_secs(2)
+        );
+        assert_eq!(next_restart_delay(MAX_RESTART_DELAY), MAX_RESTART_DELAY);
+    }
+
+    #[test]
+    fn jitter_keeps_the_delay_within_the_upper_half_of_the_base() {
+        let base = Duration::from_secs(8);
+        for _ in 0..32 {
+            let delay = jittered_delay(base);
+            assert!(delay >= base / 2);
+            assert!(delay <= base);
+        }
+    }
+
+    #[tokio::test]
+    async fn permanent_task_errors_are_not_restarted() {
+        let error = supervise("test", || async {
+            Err(BpError::config_missing("aggregator test setting"))
+        })
+        .await
+        .unwrap_err();
+
+        assert!(error.retryability().is_permanent());
     }
 }

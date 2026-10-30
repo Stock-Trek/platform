@@ -111,13 +111,13 @@ These are not deployment units:
 - Exit status zero means "requested shutdown completed" or "job completed". Any unexpected end, failed finalisation, or startup error is non-zero.
 - Adding a binary requires adding it to the lifecycle table and choosing a restart owner. Adding another in-process supervisor requires an ADR.
 
-## Follow-up required to make the implementation match this contract
+## Implementation status
 
-The current code does not yet implement every point above:
+The implementation now matches this contract:
 
-- the aggregator supervisor retries all errors, treats a clean task exit as final, and does not reset its backoff after sustained health;
-- some single-role work loops return success when their source ends instead of treating that as an unexpected exit;
-- the aggregator does not distinguish retryable from permanent errors inside its supervisor;
-- `rebuilder` does not handle shutdown explicitly, so an interrupted attempt exits through normal process termination.
+- the aggregator supervisor restarts retryable failures and unexpected clean exits, stops on permanent errors, resets its backoff after sustained health, and adds jitter to restart delays;
+- a permanent aggregator task failure stops its sibling tasks and exits the process non-zero so the external supervisor owns the restart;
+- single-role work loops treat a source ending before shutdown as an unexpected failure rather than a successful completion;
+- `rebuilder` handles shutdown explicitly and reports an interrupted attempt as a failure rather than success.
 
-These are implementation changes, not permission to introduce another lifecycle pattern.
+These are implementation details of the lifecycle contract above, not permission to introduce another lifecycle pattern.
