@@ -1,29 +1,7 @@
 use crate::deadline::Deadline;
 use platform_errors::BpResult;
+pub use platform_types::new_types::NonZeroDuration;
 use std::time::Duration;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct NonZeroDuration(Duration);
-
-impl NonZeroDuration {
-    pub const fn new(duration: Duration) -> Option<Self> {
-        if duration.is_zero() {
-            None
-        } else {
-            Some(Self(duration))
-        }
-    }
-
-    pub const fn get(self) -> Duration {
-        self.0
-    }
-}
-
-impl From<NonZeroDuration> for Duration {
-    fn from(value: NonZeroDuration) -> Self {
-        value.0
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Timeout {

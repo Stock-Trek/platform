@@ -4700,6 +4700,7 @@ name = "platform-time"
 version = "0.2.0"
 dependencies = [
  "platform-errors",
+ "platform-types",
 ]
 
 [[package]]
