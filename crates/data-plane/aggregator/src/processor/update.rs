@@ -26,10 +26,6 @@ impl ProcessorUpdate {
             && self.late_trades == 0
     }
 
-    pub fn has_outputs(&self) -> bool {
-        !self.open.is_empty() || !self.closed.is_empty()
-    }
-
     /// Keeps only the last open-candle value for each [`platform_market_data::candle::CandleKey`].
     ///
     /// Open candles are a derived projection keyed only by candle identity, so

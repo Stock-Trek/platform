@@ -113,7 +113,7 @@ impl Connector<(), ()> {
             websocket_listener: Some(websocket_listener),
         })
     }
-    #[allow(clippy::type_complexity)]
+    #[allow(clippy::type_complexity, unused)]
     pub fn try_new_websocket_iris<Exchange>(
         url: String,
         exchange: Exchange,
@@ -169,6 +169,7 @@ impl<Exchange, Client> Connector<Exchange, Client>
 where
     Exchange: ETExchange,
 {
+    #[allow(unused)]
     pub fn into_auto_resync(self) -> AutoResyncConnector<Exchange, Client>
     where
         Exchange: Send + Sync + 'static,

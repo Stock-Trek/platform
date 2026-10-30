@@ -23,14 +23,6 @@ pub enum ArithmeticError {
 pub struct NonZero<T>(T);
 
 impl<T: Copy> NonZero<T> {
-    /// Creates a `NonZero` without checking the value.
-    ///
-    /// Prefer [`NonZero::new`] or `try_from`; this exists for values whose
-    /// non-zero invariant has already been established by construction.
-    pub const fn new_unchecked(value: T) -> Self {
-        Self(value)
-    }
-
     /// Returns the wrapped value.
     pub const fn get(self) -> T {
         self.0
