@@ -33,8 +33,43 @@ fn intervals_are_parsed_and_canonicalized() {
 fn invalid_intervals_are_rejected() {
     assert!(CandleInterval::from_label("").is_err());
     assert!(CandleInterval::from_label("0s").is_err());
-    assert!(CandleInterval::from_label("1w").is_err());
+    assert!(CandleInterval::from_label("45s").is_err());
     assert!(CandleInterval::from_label("abc").is_err());
+}
+
+#[test]
+fn aligned_window_intervals_have_unique_labels() {
+    let intervals = CandleInterval::all();
+    let labels = intervals
+        .iter()
+        .map(|interval| interval.label())
+        .collect::<std::collections::BTreeSet<_>>();
+
+    assert_eq!(labels.len(), intervals.len());
+    assert!(labels.contains("5s"));
+    assert!(labels.contains("1m"));
+    assert!(labels.contains("1h"));
+    assert!(labels.contains("1d"));
+    assert!(labels.contains("7d"));
+    assert!(labels.contains("1mo"));
+    assert!(labels.contains("1y"));
+}
+
+#[test]
+fn calendar_intervals_use_calendar_bounds() {
+    let interval = CandleInterval::from_label("1mo").unwrap();
+
+    assert_eq!(interval.label(), "1mo");
+    assert_eq!(
+        interval
+            .start_for(TimestampMilliseconds(1_704_067_200_000))
+            .0,
+        1_704_067_200_000
+    );
+    assert_eq!(
+        interval.end_for(TimestampMilliseconds(1_704_067_200_000)).0,
+        1_706_745_600_000
+    );
 }
 
 #[test]
@@ -67,6 +102,16 @@ fn candles_start_complete_and_can_be_marked_incomplete() {
 
     candle.mark_complete();
     assert!(candle.is_complete());
+}
+
+#[test]
+fn intervals_serialize_without_losing_calendar_windows() {
+    for label in ["1m", "1mo", "1y"] {
+        let interval = CandleInterval::from_label(label).unwrap();
+        let json = serde_json::to_string(&interval).unwrap();
+        let decoded: CandleInterval = serde_json::from_str(&json).unwrap();
+        assert_eq!(decoded, interval);
+    }
 }
 
 #[test]

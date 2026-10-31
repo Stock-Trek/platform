@@ -28,8 +28,8 @@ checkpoint path and is rebuilt from the archive.
       - `AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL` for the per-interval caps
         `N_i`. Parse it as a comma-separated list of `<interval>=<count>` pairs,
         for example `1m=1440,5m=288,1h=48`. Require exactly one positive entry
-        for every interval in `AGGREGATOR_INTERVALS`; reject missing, duplicate,
-        unknown, malformed, or non-positive entries.
+        for every distinct stock-trek `AlignedWindow` interval; reject missing,
+        duplicate, unknown, malformed, or non-positive entries.
       - `AGGREGATOR_CORRECTION_CUTOFF_MS` for the event-time correction cutoff.
       - `AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES` for the config-load
         memory check.
@@ -40,7 +40,7 @@ checkpoint path and is rebuilt from the archive.
       caps as a lookup from `CandleInterval` to `usize`.
 - [ ] Parse them as required positive values in
       `crates/data-plane/aggregator/src/config/loader.rs`. Validate the cap map
-      against `AGGREGATOR_INTERVALS`, convert the cutoff to
+      against the stock-trek `AlignedWindow` intervals, convert the cutoff to
       `DurationMilliseconds`, and use checked conversion for the byte budget.
 - [ ] Extend `ProcessorConfig` in
       `crates/data-plane/aggregator/src/processor/config.rs` with
@@ -49,7 +49,8 @@ checkpoint path and is rebuilt from the archive.
       processing, pruning, and publication do not depend on hash order.
 - [ ] Make `AggregatorConfig::processor_config()` pass both values through.
 - [ ] Add `REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL` (using the same
-      `<interval>=<count>` syntax and validation against `REBUILDER_INTERVALS`)
+      `<interval>=<count>` syntax and validation against the stock-trek
+      `AlignedWindow` intervals)
       and `REBUILDER_CORRECTION_CUTOFF_MS` to
       `crates/data-plane/rebuilder/src/config.rs`, and pass them into the
       rebuilder's `ProcessorConfig` in `crates/data-plane/rebuilder/src/lib.rs`.

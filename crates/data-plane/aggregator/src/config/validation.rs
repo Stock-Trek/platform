@@ -1,6 +1,6 @@
 use super::env::{
     AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, AGGREGATOR_CORRECTION_CUTOFF_MS,
-    AGGREGATOR_INTERVALS, AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
+    AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
 };
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::CandleInterval;
@@ -45,10 +45,7 @@ pub(super) fn parse_max_closed_candles_per_interval(
         if !intervals.contains(&interval) {
             return Err(BpError::config_invalid(
                 name,
-                format!(
-                    "interval {} is not listed in {AGGREGATOR_INTERVALS}",
-                    interval
-                ),
+                format!("interval {} is not an AlignedWindow interval", interval),
             ));
         }
         let count: usize = count.trim().parse().map_err(|error| {

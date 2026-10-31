@@ -4,7 +4,7 @@ use super::env::{
     AGGREGATOR_CHECKPOINT_INTERVAL_SECS, AGGREGATOR_CHECKPOINT_PREFIX,
     AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX,
     AGGREGATOR_CORRECTION_CUTOFF_MS, AGGREGATOR_DURABLE_PREFIX, AGGREGATOR_EVENT_SUBJECT_PREFIX,
-    AGGREGATOR_GAP_SUBJECT_PREFIX, AGGREGATOR_INTERVALS, AGGREGATOR_LEASE_TTL_SECS,
+    AGGREGATOR_GAP_SUBJECT_PREFIX, AGGREGATOR_LEASE_TTL_SECS,
     AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL, AGGREGATOR_NATS_URL,
     AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX, AGGREGATOR_REPLAY_START_POLICY, AGGREGATOR_SHARD_COUNT,
     AGGREGATOR_SHARD_INDEX, AGGREGATOR_SHARD_SUBJECT_PREFIX, AGGREGATOR_STATE_SCHEMA_VERSION,
@@ -40,25 +40,7 @@ impl AggregatorConfig {
         let closed_candle_subject_prefix =
             Config::required_nats_subject(vars, AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX)?;
 
-        let interval_labels = vars.required(AGGREGATOR_INTERVALS)?;
-        let mut intervals = Vec::new();
-        for label in interval_labels
-            .split(',')
-            .map(str::trim)
-            .filter(|v| !v.is_empty())
-        {
-            let interval = CandleInterval::from_label(label)
-                .map_err(|error| BpError::config_invalid_source(AGGREGATOR_INTERVALS, error))?;
-            if !intervals.contains(&interval) {
-                intervals.push(interval);
-            }
-        }
-        if intervals.is_empty() {
-            return Err(BpError::config_invalid(
-                AGGREGATOR_INTERVALS,
-                "at least one interval is required",
-            ));
-        }
+        let intervals = CandleInterval::all();
 
         let checkpoint_interval =
             Config::required_positive_duration_secs(vars, AGGREGATOR_CHECKPOINT_INTERVAL_SECS)?;

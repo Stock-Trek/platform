@@ -4579,6 +4579,7 @@ name = "platform-market-data"
 version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
+ "chrono",
  "iris",
  "metrics",
  "platform-errors",
@@ -4591,6 +4592,7 @@ dependencies = [
  "serde_json",
  "stock-trek",
  "stock-trek-types",
+ "strum 0.28.0",
  "thiserror",
  "tokio-websockets",
 ]

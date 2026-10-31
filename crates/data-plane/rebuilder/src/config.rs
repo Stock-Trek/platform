@@ -8,7 +8,6 @@ use std::collections::BTreeMap;
 
 const REBUILDER_S3_BUCKET: &str = "REBUILDER_S3_BUCKET";
 const REBUILDER_OUTPUT_PREFIX: &str = "REBUILDER_OUTPUT_PREFIX";
-const REBUILDER_INTERVALS: &str = "REBUILDER_INTERVALS";
 const REBUILDER_ALLOWED_LATENESS_MS: &str = "REBUILDER_ALLOWED_LATENESS_MS";
 const REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL: &str = "REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL";
 const REBUILDER_CORRECTION_CUTOFF_MS: &str = "REBUILDER_CORRECTION_CUTOFF_MS";
@@ -78,7 +77,7 @@ impl RebuildConfig {
         let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(REBUILDER_S3_BUCKET)?;
         let output_prefix = vars.required(REBUILDER_OUTPUT_PREFIX)?;
-        let intervals = Self::intervals(vars)?;
+        let intervals = CandleInterval::all();
         let allowed_lateness =
             DurationMilliseconds(vars.required_parsed(REBUILDER_ALLOWED_LATENESS_MS)?);
         let max_closed_candles_per_interval =
@@ -153,7 +152,7 @@ impl RebuildConfig {
             if !intervals.contains(&interval) {
                 return Err(BpError::config_invalid(
                     REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL,
-                    format!("interval {interval} is not listed in {REBUILDER_INTERVALS}"),
+                    format!("interval {interval} is not an AlignedWindow interval"),
                 ));
             }
             let count: usize = count.trim().parse().map_err(|error| {
@@ -197,30 +196,5 @@ impl RebuildConfig {
                 format!("must be raw or compacted, got {other}"),
             )),
         }
-    }
-
-    fn intervals(vars: &EnvVars) -> BpResult<Vec<CandleInterval>> {
-        let labels = vars.required(REBUILDER_INTERVALS)?;
-        let labels = labels
-            .split(',')
-            .map(str::trim)
-            .filter(|label| !label.is_empty())
-            .collect::<Vec<_>>();
-        if labels.is_empty() {
-            return Err(BpError::config_invalid(
-                REBUILDER_INTERVALS,
-                "must contain at least one interval",
-            ));
-        }
-
-        let mut intervals = Vec::with_capacity(labels.len());
-        for label in labels {
-            let interval = CandleInterval::from_label(label)
-                .map_err(|error| BpError::config_invalid_source(REBUILDER_INTERVALS, error))?;
-            if !intervals.contains(&interval) {
-                intervals.push(interval);
-            }
-        }
-        Ok(intervals)
     }
 }

@@ -59,8 +59,7 @@ Archive rebuilds replay raw events through the same deterministic candle process
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `AGGREGATOR_INTERVALS` | required | Comma-separated candle intervals to generate. |
-| `AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL` | required | Comma-separated `<interval>=<count>` caps, for example `1m=1440,5m=288`. Requires exactly one positive entry per configured interval. |
+| `AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL` | required | Comma-separated `<interval>=<count>` caps, for example `1m=1440,5m=288`. Requires exactly one positive entry per distinct stock-trek `AlignedWindow` interval. |
 | `AGGREGATOR_CORRECTION_CUTOFF_MS` | required | Event-time correction cutoff in milliseconds. Must be positive and at least `AGGREGATOR_ALLOWED_LATENESS_MS`. |
 | `AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES` | required | Startup ceiling for the worst-case estimated closed-candle state per shard. |
 | `AGGREGATOR_GAP_SUBJECT_PREFIX` | required | Subject prefix carrying gap markers from the ingester. |
@@ -118,9 +117,8 @@ Rebuilder replays archived market events from Iceberg to deterministically regen
 | `REBUILDER_OUTPUT_PREFIX` | required | Prefix for rebuilt candle objects. |
 | `REBUILDER_SOURCE_LAYER` | required | Event source layer: `auto`, `raw`, or `compacted`. |
 | `REBUILDER_OUTPUT_LAYER` | required | Candle output layer: `raw` or `compacted`. |
-| `REBUILDER_INTERVALS` | required | Comma-separated candle intervals to regenerate. |
 | `REBUILDER_ALLOWED_LATENESS_MS` | required | How late a trade may arrive and still update a candle. |
-| `REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL` | required | Comma-separated `<interval>=<count>` caps. Requires exactly one positive entry per configured interval. |
+| `REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL` | required | Comma-separated `<interval>=<count>` caps. Requires exactly one positive entry per distinct stock-trek `AlignedWindow` interval. |
 | `REBUILDER_CORRECTION_CUTOFF_MS` | required | Event-time correction cutoff in milliseconds. Must be positive and at least `REBUILDER_ALLOWED_LATENESS_MS`. |
 | `REBUILDER_STATE_EPOCH` | required | State epoch assigned to regenerated candle revisions. |
 | `REBUILDER_FINISH_OPEN_WINDOWS` | required | Close candles that are still open when archived input ends. |
