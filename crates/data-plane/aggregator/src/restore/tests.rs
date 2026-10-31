@@ -1,4 +1,7 @@
-use super::catalog::{ArchiveObject, select_event_objects, sort_archive_objects};
+use super::catalog::{
+    AGGREGATOR_ARCHIVE_S3_BUCKET, AGGREGATOR_ARCHIVE_S3_PREFIX, ArchiveObject,
+    ArchiveRecoveryConfig, select_event_objects, sort_archive_objects,
+};
 use super::rebuild::{RestoreOptions, RestoreSource, restore_shard};
 use super::replay::ArchivedEventSource;
 use crate::checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore};
@@ -8,7 +11,8 @@ use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_archive::{ArchiveKind, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey};
-use platform_errors::BpResult;
+use platform_config::env_vars::EnvVars;
+use platform_errors::{BpError, BpResult, ConfigError};
 use platform_market_data::{
     candle::CandleInterval,
     decoders::trade::{Trade, TradeDecoderFactory},
@@ -84,6 +88,34 @@ fn counting_archive(
         std::future::ready(Ok(
             Box::new(VecArchive::new(events)) as Box<dyn ArchivedEventSource>
         ))
+    }
+}
+
+#[derive(Clone, Copy)]
+enum CheckpointLoadFailure {
+    Retryable,
+    Permanent,
+}
+
+struct FailingStateStore {
+    failure: CheckpointLoadFailure,
+}
+
+#[async_trait]
+impl StateStore for FailingStateStore {
+    async fn load(&self, _shard: ShardId) -> BpResult<Option<CheckpointRecord>> {
+        Err(match self.failure {
+            CheckpointLoadFailure::Retryable => {
+                BpError::external(std::io::Error::other("transient checkpoint read failure"))
+            }
+            CheckpointLoadFailure::Permanent => {
+                BpError::config_invalid("checkpoint", "corrupt checkpoint payload")
+            }
+        })
+    }
+
+    async fn save(&self, _checkpoint: &CheckpointRecord) -> BpResult<()> {
+        Ok(())
     }
 }
 
@@ -492,4 +524,125 @@ fn archive_object(key: &str) -> ArchiveObject {
         key: ObjectKey::new(key),
         size: 0,
     }
+}
+
+#[test]
+fn archive_recovery_config_is_required_for_policies_that_replay_the_archive() {
+    let vars = EnvVars::from_map(Vec::<(String, String)>::new());
+
+    for policy in [ReplayStartPolicy::Checkpoint, ReplayStartPolicy::Archive] {
+        assert!(matches!(
+            ArchiveRecoveryConfig::from_vars_for_policy(&vars, policy).unwrap_err(),
+            BpError::Config(ConfigError::Missing { name })
+                if name == AGGREGATOR_ARCHIVE_S3_BUCKET
+        ));
+    }
+}
+
+#[test]
+fn archive_recovery_config_is_optional_for_explicit_empty_starts() {
+    let vars = EnvVars::from_map(Vec::<(String, String)>::new());
+
+    for policy in [ReplayStartPolicy::Earliest, ReplayStartPolicy::Latest] {
+        assert_eq!(
+            ArchiveRecoveryConfig::from_vars_for_policy(&vars, policy).unwrap(),
+            None
+        );
+    }
+}
+
+#[test]
+fn optional_archive_recovery_config_validates_a_configured_bucket() {
+    let vars = EnvVars::from_map([(AGGREGATOR_ARCHIVE_S3_BUCKET, "market-archive")]);
+
+    assert!(matches!(
+        ArchiveRecoveryConfig::optional_from_vars(&vars).unwrap_err(),
+        BpError::Config(ConfigError::Missing { name })
+            if name == AGGREGATOR_ARCHIVE_S3_PREFIX
+    ));
+}
+
+#[tokio::test]
+async fn an_empty_archive_starts_with_explicit_empty_state() {
+    for policy in [ReplayStartPolicy::Checkpoint, ReplayStartPolicy::Archive] {
+        let store = InMemoryStateStore::new();
+        let shard = ShardId::new(0);
+        let mut options = options(shard, 1);
+        options.replay_start_policy = policy;
+
+        let restored = restore_shard(
+            &store,
+            archive_source(VecArchive::new(Vec::new())),
+            &options,
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(restored.restored_from, RestoreSource::Empty);
+        assert!(!restored.rebuilt_from_archive);
+        assert_eq!(restored.start, ConsumerStart::Earliest);
+        assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION);
+        assert_eq!(restored.state.open_candles_len(), 0);
+    }
+}
+
+#[tokio::test]
+async fn transient_checkpoint_read_failures_are_returned_instead_of_falling_back() {
+    let store = FailingStateStore {
+        failure: CheckpointLoadFailure::Retryable,
+    };
+    let shard = ShardId::new(0);
+    let connects = Arc::new(AtomicUsize::new(0));
+
+    let error = restore_shard(
+        &store,
+        counting_archive(vec![event(1, 61_000)], connects.clone()),
+        &options(shard, 1),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(error.retryability().is_retryable());
+    assert_eq!(connects.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn permanent_checkpoint_read_failures_still_rebuild_from_the_archive() {
+    let store = FailingStateStore {
+        failure: CheckpointLoadFailure::Permanent,
+    };
+    let shard = ShardId::new(0);
+    let connects = Arc::new(AtomicUsize::new(0));
+
+    let restored = restore_shard(
+        &store,
+        counting_archive(vec![event(1, 61_000)], connects.clone()),
+        &options(shard, 1),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.restored_from, RestoreSource::Archive);
+    assert!(restored.rebuilt_from_archive);
+    assert_eq!(connects.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
+async fn checkpoint_fallback_without_archive_configuration_fails_fast() {
+    let store = InMemoryStateStore::new();
+    let shard = ShardId::new(0);
+
+    let error = restore_shard(
+        &store,
+        || async { Err(BpError::config_missing(AGGREGATOR_ARCHIVE_S3_BUCKET)) },
+        &options(shard, 1),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(matches!(
+        error,
+        BpError::Config(ConfigError::Missing { name })
+            if name == AGGREGATOR_ARCHIVE_S3_BUCKET
+    ));
 }

@@ -209,10 +209,18 @@ where
             }
             Err(error) => {
                 AggregatorMetrics::record_checkpoint_failure(shard.get(), error.error_type());
+                if error.retryability().is_retryable() {
+                    warn!(
+                        shard = %shard,
+                        error = %error,
+                        "transient checkpoint load failure; retrying instead of rebuilding from archive"
+                    );
+                    return Err(error);
+                }
                 warn!(
                     shard = %shard,
                     error = %error,
-                    "failed to load checkpoint; rebuilding from archive"
+                    "permanent checkpoint load failure; rebuilding from archive"
                 );
             }
         },
@@ -220,7 +228,7 @@ where
 
     AggregatorMetrics::record_replay_progress(shard.get(), "archive", 0.0);
     let mut archive = connect_archive().await?;
-    let state = rebuild_state_from_archive_with_schema(
+    let rebuilt = rebuild_state_from_archive_outcome(
         archive.as_mut(),
         shard,
         &options.intervals,
@@ -230,6 +238,22 @@ where
     )
     .await?;
     AggregatorMetrics::record_replay_progress(shard.get(), "archive", 1.0);
+
+    if rebuilt.replayed_events == 0 {
+        warn!(
+            shard = %shard,
+            policy = options.replay_start_policy.label(),
+            "archive contains no events; starting with explicit empty state"
+        );
+        return Ok(RestoredShard {
+            state: rebuilt.state,
+            start: ConsumerStart::Earliest,
+            restored_from: RestoreSource::Empty,
+            rebuilt_from_archive: false,
+        });
+    }
+
+    let state = rebuilt.state;
     info!(
         shard = %shard,
         watermark = ?state.watermark,
@@ -244,6 +268,11 @@ where
     })
 }
 
+struct RebuiltArchiveState {
+    state: AggregatorState,
+    replayed_events: u64,
+}
+
 /// Replays all archived events for one shard into a fresh keyed state.
 pub async fn rebuild_state_from_archive(
     archive: &mut dyn ArchivedEventSource,
@@ -252,7 +281,7 @@ pub async fn rebuild_state_from_archive(
     shard_count: usize,
     allowed_lateness: DurationMilliseconds,
 ) -> BpResult<AggregatorState> {
-    rebuild_state_from_archive_with_schema(
+    Ok(rebuild_state_from_archive_outcome(
         archive,
         shard,
         intervals,
@@ -260,7 +289,8 @@ pub async fn rebuild_state_from_archive(
         allowed_lateness,
         STATE_SCHEMA_VERSION,
     )
-    .await
+    .await?
+    .state)
 }
 
 /// Replays all archived events for one shard into fresh keyed state with
@@ -279,6 +309,26 @@ pub async fn rebuild_state_from_archive_with_schema(
     allowed_lateness: DurationMilliseconds,
     state_schema_version: u32,
 ) -> BpResult<AggregatorState> {
+    Ok(rebuild_state_from_archive_outcome(
+        archive,
+        shard,
+        intervals,
+        shard_count,
+        allowed_lateness,
+        state_schema_version,
+    )
+    .await?
+    .state)
+}
+
+async fn rebuild_state_from_archive_outcome(
+    archive: &mut dyn ArchivedEventSource,
+    shard: ShardId,
+    intervals: &[CandleInterval],
+    shard_count: usize,
+    allowed_lateness: DurationMilliseconds,
+    state_schema_version: u32,
+) -> BpResult<RebuiltArchiveState> {
     let config = ProcessorConfig::new(intervals.to_vec(), allowed_lateness)
         .with_state_schema_version(state_schema_version);
     let mut processor = CandleProcessor::with_config(config);
@@ -315,5 +365,8 @@ pub async fn rebuild_state_from_archive_with_schema(
     }
     AggregatorMetrics::record_replay_events(shard.get(), "archive", replayed % 1_000);
 
-    Ok(processor.into_state())
+    Ok(RebuiltArchiveState {
+        state: processor.into_state(),
+        replayed_events: replayed,
+    })
 }
