@@ -165,6 +165,25 @@ async fn a_failed_first_publish_creates_a_gap_for_the_next_event() {
 }
 
 #[tokio::test]
+async fn a_failed_first_publish_at_sequence_zero_does_not_underflow() {
+    let publisher = Arc::new(RecordingPublisher::default());
+    let mut ingester = ingester(publisher.clone());
+
+    publisher.fail_sequence(0);
+    assert!(ingester.ingest(message(Some(0))).await.is_err());
+    ingester.ingest(message(Some(1))).await.unwrap();
+
+    let messages = publisher.messages();
+    assert_eq!(messages.len(), 2);
+    assert_eq!(messages[0].0, "market.gaps.binance.btcusdt.trade");
+    assert_eq!(messages[0].1["previous_sequence"], 0);
+    assert_eq!(messages[0].1["missing_from"], 0);
+    assert_eq!(messages[0].1["missing_to"], 0);
+    assert_eq!(messages[0].1["observed_sequence"], 1);
+    assert_eq!(messages[1].1["sequence"], 1);
+}
+
+#[tokio::test]
 async fn a_failed_event_after_a_gap_is_not_suppressed() {
     let publisher = Arc::new(RecordingPublisher::default());
     let mut ingester = ingester(publisher.clone());

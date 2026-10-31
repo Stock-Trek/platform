@@ -106,7 +106,7 @@ impl<P: EventPublisher> Ingester<P> {
                 let gap = GapMarker {
                     exchange: event.exchange,
                     stream: event.stream.clone(),
-                    previous_sequence: missing_from - 1,
+                    previous_sequence: missing_from.saturating_sub(1),
                     observed_sequence: sequence,
                     missing_from,
                     missing_to,
