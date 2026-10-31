@@ -49,16 +49,6 @@ where
     S: MarketSource,
     K: OpenCandleStore + ClosedCandlePublisher + 'static,
 {
-    pub fn with_checkpoint_store(
-        mut self,
-        checkpoints: Arc<dyn StateStore>,
-        shard: ShardId,
-    ) -> Self {
-        self.checkpoints = checkpoints;
-        self.shard = shard;
-        self
-    }
-
     pub fn with_lease_store(mut self, leases: Arc<dyn LeaseStore>) -> Self {
         self.leases = leases;
         self

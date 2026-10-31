@@ -1,7 +1,9 @@
 use super::*;
-use crate::{checkpoint::tests::InMemoryStateStore, lease::tests::InMemoryLeaseStore};
 use crate::{
+    StateStore,
+    checkpoint::tests::InMemoryStateStore,
     config::AggregatorConfig,
+    lease::tests::InMemoryLeaseStore,
     shard::ShardId,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::MarketSource,
@@ -29,5 +31,15 @@ where
             initial_lease: None,
             quiesce: None,
         }
+    }
+
+    pub fn with_checkpoint_store(
+        mut self,
+        checkpoints: Arc<dyn StateStore>,
+        shard: ShardId,
+    ) -> Self {
+        self.checkpoints = checkpoints;
+        self.shard = shard;
+        self
     }
 }
