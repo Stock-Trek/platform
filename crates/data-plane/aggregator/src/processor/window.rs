@@ -2,14 +2,15 @@
 //!
 //! Event-time watermarks close candle windows once their allowed lateness has
 //! elapsed. Source gaps mark the affected open or retained closed windows as
-//! incomplete and publish those revisions.
+//! incomplete and publish those revisions. When a backfill has supplied every
+//! missing sequence, the affected windows are marked complete and republished.
 
 use super::{CandleProcessor, ProcessorUpdate};
 use crate::state::IncompleteWindow;
 use platform_market_data::{candle::ClosedCandle, event::GapMarker};
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::HashSet;
-use stock_trek_types::cex::trading_pair::TradingPair;
+use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 use tracing::warn;
 
 impl CandleProcessor {
@@ -82,6 +83,83 @@ impl CandleProcessor {
         if let Some(watermark) = self.state.watermark {
             let cutoff = watermark - self.config.allowed_lateness;
             self.state.prune_closed_windows(cutoff);
+        }
+    }
+
+    pub(super) fn resolve_gaps(
+        &mut self,
+        exchange: CexId,
+        stream: &str,
+        update: &mut ProcessorUpdate,
+    ) {
+        let windows = self
+            .state
+            .take_resolved_incomplete_windows(exchange, stream);
+        if windows.is_empty() {
+            return;
+        }
+        for window in &windows {
+            update.incomplete_windows.retain(|recorded| {
+                !(recorded.key == window.key
+                    && recorded.window_start == window.window_start
+                    && recorded.stream == window.stream)
+            });
+        }
+
+        let source_offset = self.state.last_processed_offset().unwrap_or_default();
+        let state_epoch = self.state.state_epoch;
+        for window in windows {
+            if !self.is_within_correction_contract(window.window_end, self.state.watermark)
+                || self
+                    .state
+                    .has_incomplete_window(&window.key, window.window_start)
+            {
+                continue;
+            }
+            let close_watermark = self.state.watermark.unwrap_or(window.window_end);
+            if let Some(candle) = self
+                .state
+                .open_candles
+                .get_mut(&window.key)
+                .and_then(|candles| {
+                    candles
+                        .iter_mut()
+                        .find(|candle| candle.start_time() == window.window_start)
+                })
+                && candle.is_incomplete()
+            {
+                candle.mark_complete();
+                update.open.push(candle.clone());
+            }
+            if let Some(candle) =
+                self.state
+                    .closed_candles
+                    .get_mut(&window.key)
+                    .and_then(|candles| {
+                        candles
+                            .iter_mut()
+                            .find(|candle| candle.start_time() == window.window_start)
+                    })
+                && candle.is_incomplete()
+            {
+                candle.mark_complete();
+                candle.close();
+                let closed =
+                    ClosedCandle::new(candle.clone(), close_watermark, source_offset, state_epoch);
+                let matches = |existing: &ClosedCandle| {
+                    existing.candle().key == closed.candle().key
+                        && existing.candle().start_time() == closed.candle().start_time()
+                };
+                let position = update
+                    .closed
+                    .iter()
+                    .position(matches)
+                    .unwrap_or(update.closed.len());
+                update.closed.retain(|existing| !matches(existing));
+                update
+                    .closed
+                    .insert(position.min(update.closed.len()), closed);
+            }
         }
     }
 

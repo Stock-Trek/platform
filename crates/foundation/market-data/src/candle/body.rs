@@ -27,7 +27,10 @@ pub struct Candle {
     ///
     /// Candles start complete. A gap marker that covers the window marks it
     /// incomplete before it closes, and the flag is carried by the published
-    /// closed candle.
+    /// closed candle. While the candle remains in the correction contract,
+    /// observing every missing source sequence restores the flag and
+    /// republishes the corrected candle. A gap that is never backfilled remains
+    /// permanently incomplete.
     pub is_complete: bool,
 }
 

@@ -194,6 +194,9 @@ impl RestoreOptions {
                             "pruned restored checkpoint candles to the configured per-interval caps"
                         );
                     }
+                    if let Some(watermark) = state.watermark {
+                        state.prune_closed_windows(watermark - self.allowed_lateness);
+                    }
                     AggregatorMetrics::record_checkpoint_age(
                         shard.get(),
                         Duration::from_millis(age.0.max(0) as u64),

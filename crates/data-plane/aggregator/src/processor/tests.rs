@@ -377,9 +377,7 @@ fn a_gap_records_an_incomplete_window_and_closes_expired_candles() {
     );
     assert_eq!(update.incomplete_windows[0].from_sequence, 2);
     assert_eq!(update.incomplete_windows[0].to_sequence, 2);
-    // The closed window no longer needs to be tracked once the flag has
-    // been carried onto the candle.
-    assert!(processor.state().incomplete_windows.is_empty());
+    assert_eq!(processor.state().incomplete_windows.len(), 1);
 }
 
 #[test]
@@ -432,12 +430,121 @@ fn a_gap_marks_a_retained_closed_candle_incomplete() {
 }
 
 #[test]
-fn pruned_gap_bookkeeping_does_not_grow_without_bound() {
+fn pruned_gap_bookkeeping_keeps_windows_for_retained_candles() {
     let mut processor = CandleProcessor::new(vec![one_minute()]);
     processor.apply_trade(&trade("100", 61_000));
     processor.apply_gap(&gap(120_000));
 
     assert!(processor.state().known_gaps.is_empty());
+    assert_eq!(processor.state().incomplete_windows.len(), 1);
+}
+
+#[test]
+fn a_fully_backfilled_gap_restores_closed_candle_completeness() {
+    let mut processor = CandleProcessor::new(vec![one_minute()]);
+    processor.apply_trade(&trade("100", 61_000));
+    let gap_update = processor.apply_gap(&gap(120_000));
+    assert!(gap_update.closed[0].is_incomplete());
+
+    let update = processor.apply_event(
+        &event(2, 62_000),
+        &[trade("101", 62_000), trade("102", 62_500)],
+    );
+
+    assert_eq!(update.closed.len(), 1);
+    assert!(update.closed[0].is_complete());
+    assert!(processor.state().incomplete_windows.is_empty());
+    let key = CandleKey::new(
+        CexId::Binance,
+        TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+        one_minute(),
+    );
+    let retained = processor
+        .state()
+        .closed_candle(&key, TimestampMilliseconds(60_000))
+        .unwrap();
+    assert!(retained.is_complete());
+}
+
+#[test]
+fn a_gap_is_only_resolved_after_every_missing_sequence_is_observed() {
+    let mut processor = CandleProcessor::new(vec![one_minute()]);
+    processor.apply_trade(&trade("100", 61_000));
+    processor.apply_gap(&GapMarker {
+        observed_sequence: 4,
+        missing_from: 2,
+        missing_to: 3,
+        ..gap(120_000)
+    });
+
+    let first = processor.apply_event(&event(2, 62_000), &[trade("101", 62_000)]);
+    assert_eq!(first.closed.len(), 1);
+    assert!(first.closed[0].is_incomplete());
+
+    let second = processor.apply_event(&event(3, 63_000), &[trade("102", 63_000)]);
+    assert_eq!(second.closed.len(), 1);
+    assert!(second.closed[0].is_complete());
+    assert!(processor.state().incomplete_windows.is_empty());
+}
+
+#[test]
+fn a_gap_already_covered_by_observed_sequences_is_resolved_immediately() {
+    let mut processor = CandleProcessor::new(vec![one_minute()]);
+    processor.apply_event(&event(1, 61_000), &[trade("100", 61_000)]);
+    processor.apply_event(&event(2, 62_000), &[trade("101", 62_000)]);
+
+    let update = processor.apply_gap(&GapMarker {
+        detected_at: TimestampMilliseconds(63_000),
+        ..gap(63_000)
+    });
+
+    assert!(update.incomplete_windows.is_empty());
+    assert_eq!(update.open.len(), 1);
+    assert!(update.open[0].is_complete());
+    assert!(processor.state().incomplete_windows.is_empty());
+}
+
+#[test]
+fn a_candle_stays_incomplete_until_every_affected_stream_is_backfilled() {
+    let mut processor = CandleProcessor::new(vec![one_minute()]);
+    processor.apply_trade(&trade("100", 61_000));
+    processor.apply_gap(&gap(120_000));
+    processor.apply_gap(&GapMarker {
+        stream: "btcusdt@depth".to_string(),
+        detected_at: TimestampMilliseconds(120_000),
+        ..gap(120_000)
+    });
+    assert_eq!(processor.state().incomplete_windows.len(), 2);
+
+    let trade_update = processor.apply_event(&event(2, 62_000), &[trade("101", 62_000)]);
+    assert!(trade_update.closed[0].is_incomplete());
+    assert_eq!(processor.state().incomplete_windows.len(), 1);
+
+    let depth_update = processor.apply_event(
+        &MarketEvent {
+            stream: "btcusdt@depth".to_string(),
+            ..event(2, 63_000)
+        },
+        &[],
+    );
+    assert!(depth_update.closed[0].is_complete());
+    assert!(processor.state().incomplete_windows.is_empty());
+}
+
+#[test]
+fn a_fully_backfilled_gap_restores_open_candle_completeness() {
+    let mut processor = CandleProcessor::new(vec![one_minute()]);
+    processor.apply_trade(&trade("100", 61_000));
+    let gap_update = processor.apply_gap(&GapMarker {
+        detected_at: TimestampMilliseconds(65_000),
+        ..gap(65_000)
+    });
+    assert!(gap_update.open[0].is_incomplete());
+
+    let update = processor.apply_event(&event(2, 66_000), &[trade("101", 66_000)]);
+
+    assert_eq!(update.open.len(), 1);
+    assert!(update.open[0].is_complete());
     assert!(processor.state().incomplete_windows.is_empty());
 }
 
