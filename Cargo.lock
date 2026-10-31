@@ -6083,9 +6083,9 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "stock-trek"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34c09b74f1fc3f923c7054568f7cee535735fabd579022faeeca08d4f73bd5f6"
+checksum = "dbcf0cfd67e6c3f383f350ebc7680d14aab28165ce033cb2d0407920ea78bcdf"
 dependencies = [
  "chrono",
  "regex",
@@ -6114,9 +6114,9 @@ dependencies = [
 
 [[package]]
 name = "stock-trek-types"
-version = "0.4.5"
+version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cbce0b03c693c22e0be70f63c14386465cb5c5c34f20bff00adf7756d55d95bb"
+checksum = "1f11844c8848a4ce4a87353f2080eb1c00ec8ea61c532820bdc719b430e9a1d4"
 dependencies = [
  "rust_decimal",
  "serde",
