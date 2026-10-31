@@ -270,4 +270,36 @@ impl AggregatorMetrics {
             counter!(MARKET_DATA_AGGREGATOR_INCOMPLETE_WINDOWS_TOTAL).increment(windows);
         }
     }
+
+    pub fn record_retained_closed_candles(shard: u32, interval: &str, candles: usize) {
+        gauge!(
+            MARKET_DATA_AGGREGATOR_RETAINED_CLOSED_CANDLES,
+            "shard" => shard.to_string(),
+            "interval" => interval.to_string(),
+        )
+        .set(candles as f64);
+    }
+
+    pub fn record_closed_candle_evictions(shard: u32, interval: &str, candles: u64) {
+        if candles > 0 {
+            counter!(
+                MARKET_DATA_AGGREGATOR_CLOSED_CANDLES_EVICTED_TOTAL,
+                "shard" => shard.to_string(),
+                "interval" => interval.to_string(),
+            )
+            .increment(candles);
+        }
+    }
+
+    pub fn record_out_of_contract_trades(trades: u64) {
+        if trades > 0 {
+            counter!(MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL).increment(trades);
+        }
+    }
+
+    pub fn record_out_of_contract_gap_windows(windows: u64) {
+        if windows > 0 {
+            counter!(MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL).increment(windows);
+        }
+    }
 }

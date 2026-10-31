@@ -9,6 +9,7 @@ use platform_market_data::{
 };
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use rust_decimal::Decimal;
+use std::collections::BTreeMap;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 fn trade(price: &str, timestamp: i64) -> Trade {
@@ -50,7 +51,7 @@ fn gap(detected_at: i64) -> GapMarker {
 
 #[test]
 fn configured_schema_version_is_used_for_new_and_restored_state() {
-    let config = ProcessorConfig::new(vec![one_minute()], DurationMilliseconds::ZERO)
+    let config = ProcessorConfig::without_retention(vec![one_minute()], DurationMilliseconds::ZERO)
         .with_state_schema_version(9);
 
     let processor = CandleProcessor::with_config(config.clone());
@@ -171,7 +172,7 @@ fn replaying_the_same_events_produces_identical_state() {
 
 #[test]
 fn trades_inside_the_allowed_lateness_update_the_older_window() {
-    let mut processor = CandleProcessor::with_config(ProcessorConfig::new(
+    let mut processor = CandleProcessor::with_config(ProcessorConfig::without_retention(
         vec![one_minute()],
         DurationMilliseconds(5_000),
     ));
@@ -194,7 +195,7 @@ fn trades_inside_the_allowed_lateness_update_the_older_window() {
 
 #[test]
 fn trades_after_allowed_lateness_correct_the_closed_candle() {
-    let mut processor = CandleProcessor::with_config(ProcessorConfig::new(
+    let mut processor = CandleProcessor::with_config(ProcessorConfig::without_retention(
         vec![one_minute()],
         DurationMilliseconds(5_000),
     ));
@@ -494,4 +495,195 @@ fn late_trades_do_not_reopen_a_closed_candle() {
     assert!(update.open.is_empty());
     assert_eq!(update.closed.len(), 1);
     assert_eq!(processor.state().open_candles_len(), 1);
+}
+
+fn retention_config(
+    intervals: Vec<CandleInterval>,
+    caps: &[(CandleInterval, usize)],
+    allowed_lateness: DurationMilliseconds,
+    correction_cutoff: DurationMilliseconds,
+) -> ProcessorConfig {
+    ProcessorConfig::new(
+        intervals,
+        allowed_lateness,
+        caps.iter().copied().collect::<BTreeMap<_, _>>(),
+        correction_cutoff,
+    )
+}
+
+#[test]
+fn a_late_trade_inside_the_correction_cutoff_revises_the_full_candle() {
+    let mut processor = CandleProcessor::with_config(retention_config(
+        vec![one_minute()],
+        &[(one_minute(), 10)],
+        DurationMilliseconds::ZERO,
+        DurationMilliseconds(100_000),
+    ));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.flush_closed_at_or_before(TimestampMilliseconds(121_000));
+
+    let update = processor.apply_trade(&trade("90", 61_500));
+
+    assert_eq!(update.late_trades, 1);
+    assert_eq!(update.out_of_contract_trades, 0);
+    assert_eq!(update.closed.len(), 1);
+    assert_eq!(update.closed[0].candle.market_candle.trade_count, 2);
+    assert_eq!(update.closed[0].candle.market_candle.ohlcv.low, 90.0);
+}
+
+#[test]
+fn a_late_trade_outside_the_correction_cutoff_publishes_nothing() {
+    let mut processor = CandleProcessor::with_config(retention_config(
+        vec![one_minute()],
+        &[(one_minute(), 10)],
+        DurationMilliseconds::ZERO,
+        DurationMilliseconds(1_000),
+    ));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.flush_closed_at_or_before(TimestampMilliseconds(200_000));
+
+    let update = processor.apply_trade(&trade("90", 61_500));
+
+    assert_eq!(update.late_trades, 0);
+    assert_eq!(update.out_of_contract_trades, 1);
+    assert!(update.closed.is_empty());
+    let candle = processor
+        .state()
+        .closed_candle(
+            &CandleKey::new(
+                CexId::Binance,
+                TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+                one_minute(),
+            ),
+            TimestampMilliseconds(60_000),
+        )
+        .unwrap();
+    assert_eq!(candle.market_candle.trade_count, 1);
+    assert_eq!(candle.market_candle.ohlcv.low, 100.0);
+}
+
+#[test]
+fn a_correction_for_a_cap_evicted_window_is_rejected() {
+    let mut processor = CandleProcessor::with_config(retention_config(
+        vec![one_minute()],
+        &[(one_minute(), 1)],
+        DurationMilliseconds::ZERO,
+        DurationMilliseconds(i64::MAX),
+    ));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.apply_trade(&trade("101", 121_000));
+    let evicting_update = processor.apply_trade(&trade("102", 181_000));
+    assert_eq!(evicting_update.closed_candle_evictions, 1);
+
+    let update = processor.apply_trade(&trade("90", 61_500));
+
+    assert_eq!(update.late_trades, 0);
+    assert_eq!(update.out_of_contract_trades, 1);
+    assert!(update.closed.is_empty());
+    let key = CandleKey::new(
+        CexId::Binance,
+        TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+        one_minute(),
+    );
+    assert!(
+        processor
+            .state()
+            .closed_candle(&key, TimestampMilliseconds(60_000))
+            .is_none()
+    );
+    assert!(
+        processor
+            .state()
+            .closed_candle(&key, TimestampMilliseconds(120_000))
+            .is_some()
+    );
+}
+
+#[test]
+fn different_intervals_apply_their_own_caps() {
+    let one_minute = one_minute();
+    let five_minutes = CandleInterval::from_label("5m").unwrap();
+    let mut processor = CandleProcessor::with_config(retention_config(
+        vec![one_minute, five_minutes],
+        &[(one_minute, 1), (five_minutes, 1)],
+        DurationMilliseconds::ZERO,
+        DurationMilliseconds(i64::MAX),
+    ));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.apply_trade(&trade("101", 121_000));
+    processor.flush_closed_at_or_before(TimestampMilliseconds(301_000));
+
+    let update = processor.apply_trade(&trade("102", 121_500));
+
+    assert_eq!(update.out_of_contract_trades, 0);
+    let pair = TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD);
+    let one_minute_key = CandleKey::new(CexId::Binance, pair, one_minute);
+    let five_minute_key = CandleKey::new(CexId::Binance, pair, five_minutes);
+    assert!(
+        processor
+            .state()
+            .closed_candle(&one_minute_key, TimestampMilliseconds(60_000))
+            .is_none()
+    );
+    assert!(
+        processor
+            .state()
+            .closed_candle(&one_minute_key, TimestampMilliseconds(120_000))
+            .is_some()
+    );
+    assert!(
+        processor
+            .state()
+            .closed_candle(&five_minute_key, TimestampMilliseconds(0))
+            .is_some()
+    );
+}
+
+#[test]
+fn a_gap_inside_the_correction_cutoff_republishes_the_retained_candle() {
+    let mut processor = CandleProcessor::with_config(retention_config(
+        vec![one_minute()],
+        &[(one_minute(), 10)],
+        DurationMilliseconds::ZERO,
+        DurationMilliseconds(100_000),
+    ));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.flush_closed_at_or_before(TimestampMilliseconds(121_000));
+
+    let update = processor.apply_gap(&gap(130_000));
+
+    assert_eq!(update.out_of_contract_gap_windows, 0);
+    assert_eq!(update.incomplete_windows.len(), 1);
+    assert_eq!(update.closed.len(), 1);
+    assert!(update.closed[0].candle.is_incomplete());
+}
+
+#[test]
+fn a_gap_outside_the_correction_cutoff_leaves_the_candle_unchanged() {
+    let mut processor = CandleProcessor::with_config(retention_config(
+        vec![one_minute()],
+        &[(one_minute(), 10)],
+        DurationMilliseconds::ZERO,
+        DurationMilliseconds(1_000),
+    ));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.flush_closed_at_or_before(TimestampMilliseconds(121_000));
+
+    let update = processor.apply_gap(&gap(200_000));
+
+    assert_eq!(update.out_of_contract_gap_windows, 1);
+    assert!(update.incomplete_windows.is_empty());
+    assert!(update.closed.is_empty());
+    let candle = processor
+        .state()
+        .closed_candle(
+            &CandleKey::new(
+                CexId::Binance,
+                TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+                one_minute(),
+            ),
+            TimestampMilliseconds(60_000),
+        )
+        .unwrap();
+    assert!(!candle.is_incomplete());
 }

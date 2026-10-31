@@ -31,6 +31,20 @@ impl CandleProcessor {
 
     pub fn from_state(config: ProcessorConfig, mut state: AggregatorState) -> BpResult<Self> {
         state.ensure_schema_compatible_with(config.state_schema_version)?;
+        if !state.candles_use_intervals(&config.intervals) {
+            return Err(platform_errors::BpError::config_invalid(
+                "aggregator state",
+                "restored candle intervals are not configured",
+            ));
+        }
+        let evicted =
+            state.prune_closed_candles_to_caps(&config.max_closed_candles_per_interval)?;
+        if !evicted.is_empty() {
+            tracing::warn!(
+                evicted = evicted.len(),
+                "pruned restored closed candles to the configured per-interval caps"
+            );
+        }
         state.prune_stream_dedup();
         Ok(Self { config, state })
     }

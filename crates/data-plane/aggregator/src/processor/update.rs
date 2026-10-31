@@ -1,8 +1,8 @@
 //! Outputs produced by applying one input to the keyed state.
 
 use crate::state::IncompleteWindow;
-use platform_market_data::candle::{Candle, ClosedCandle};
-use std::collections::HashSet;
+use platform_market_data::candle::{Candle, CandleInterval, ClosedCandle};
+use std::collections::{BTreeMap, HashSet};
 
 /// Outputs produced by applying one input to the keyed state.
 #[derive(Debug, Default, Clone)]
@@ -15,6 +15,10 @@ pub struct ProcessorUpdate {
     /// Trades that arrived after their candle's allowed-lateness window closed
     /// and were applied as closed-candle corrections.
     pub late_trades: usize,
+    pub closed_candle_evictions: usize,
+    pub closed_candle_evictions_by_interval: BTreeMap<CandleInterval, usize>,
+    pub out_of_contract_trades: usize,
+    pub out_of_contract_gap_windows: usize,
 }
 
 impl ProcessorUpdate {
@@ -24,6 +28,20 @@ impl ProcessorUpdate {
             && self.incomplete_windows.is_empty()
             && self.duplicates == 0
             && self.late_trades == 0
+            && self.closed_candle_evictions == 0
+            && self.closed_candle_evictions_by_interval.is_empty()
+            && self.out_of_contract_trades == 0
+            && self.out_of_contract_gap_windows == 0
+    }
+
+    pub(super) fn record_evictions(&mut self, evicted: &[Candle]) {
+        self.closed_candle_evictions += evicted.len();
+        for candle in evicted {
+            *self
+                .closed_candle_evictions_by_interval
+                .entry(candle.key.interval)
+                .or_default() += 1;
+        }
     }
 
     /// Keeps only the last open-candle value for each [`platform_market_data::candle::CandleKey`].

@@ -44,7 +44,7 @@ impl Candle {
             market_candle: MarketCandle::new(
                 Self::to_millis(start_time.0),
                 Self::to_millis(end_time.0),
-                Self::to_millis(interval.duration().0),
+                Self::to_millis(end_time.0 - start_time.0),
                 false,
                 MarketOhlcv::new(price, price, price, price, quantity, quote_volume, price),
                 1,

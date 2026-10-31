@@ -21,8 +21,11 @@ rust_decimal = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
+strum = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
 base64 = { workspace = true }
+metrics = { workspace = true }
+platform-metrics = { workspace = true, features = ["test-utils"] }

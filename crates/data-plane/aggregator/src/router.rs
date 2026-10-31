@@ -332,6 +332,12 @@ mod tests {
                 platform_market_data::candle::CandleInterval::from_label("1m").unwrap(),
             ],
             allowed_lateness: std::time::Duration::from_millis(5_000),
+            max_closed_candles_per_interval: std::collections::BTreeMap::from([(
+                platform_market_data::candle::CandleInterval::from_label("1m").unwrap(),
+                usize::MAX,
+            )]),
+            correction_cutoff: platform_types::new_types::DurationMilliseconds(i64::MAX),
+            closed_candle_memory_budget_bytes: usize::MAX,
             checkpoint_interval: std::time::Duration::from_secs(5),
             checkpoint_bucket: "aggregator_shards_checkpoints".to_string(),
             checkpoint_key_prefix: "shard".to_string(),

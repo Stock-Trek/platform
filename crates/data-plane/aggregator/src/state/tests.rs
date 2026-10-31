@@ -236,7 +236,8 @@ fn state_round_trips_through_json_with_candle_keys() {
         .push(candle.clone());
     let mut closed = candle.clone();
     closed.close();
-    state.retain_closed_candle(closed);
+    state.retain_closed_candle(closed, usize::MAX);
+    state.retain_closed_candle(closed_candle_for(candle.key.interval, 120_000), usize::MAX);
     state.mark_processed(42);
     state.advance_watermark(TimestampMilliseconds(61_000));
     state.observe_sequence(&DeduplicationKey::new(CexId::Binance, "btcusdt@trade", 9));
@@ -246,7 +247,11 @@ fn state_round_trips_through_json_with_candle_keys() {
 
     assert!(decoded.is_schema_compatible());
     assert_eq!(decoded.open_candles_len(), 1);
-    assert_eq!(decoded.closed_candles_len(), 1);
+    assert_eq!(decoded.closed_candles_len(), 2);
+    assert_eq!(
+        decoded.closed_candles_len_by_interval()[&candle.key.interval],
+        2
+    );
     let decoded_candle = decoded
         .open_candles
         .values()
@@ -295,5 +300,143 @@ fn schema_compatibility_can_be_checked_against_a_configured_version() {
         state
             .ensure_schema_compatible_with(STATE_SCHEMA_VERSION + 1)
             .is_err()
+    );
+}
+
+fn candle_for(interval: CandleInterval, timestamp: i64) -> Candle {
+    let mut trade = trade(timestamp);
+    trade.timestamp = TimestampMilliseconds(timestamp);
+    Candle::open(&trade, interval).unwrap()
+}
+
+fn closed_candle_for(interval: CandleInterval, timestamp: i64) -> Candle {
+    let mut candle = candle_for(interval, timestamp);
+    candle.close();
+    candle
+}
+
+#[test]
+fn per_interval_cap_keeps_the_newest_candles() {
+    let mut state = AggregatorState::new();
+    let interval = CandleInterval::from_label("1m").unwrap();
+    let key = candle_for(interval, 60_000).key.clone();
+
+    for timestamp in [60_000, 120_000, 180_000] {
+        let evicted = state.retain_closed_candle(closed_candle_for(interval, timestamp), 2);
+        assert!(evicted.len() <= 1);
+    }
+
+    assert_eq!(state.closed_candles_len(), 2);
+    assert!(
+        state
+            .closed_candle(&key, TimestampMilliseconds(60_000))
+            .is_none()
+    );
+    assert!(
+        state
+            .closed_candle(&key, TimestampMilliseconds(120_000))
+            .is_some()
+    );
+    assert!(
+        state
+            .closed_candle(&key, TimestampMilliseconds(180_000))
+            .is_some()
+    );
+}
+
+#[test]
+fn caps_are_independent_between_intervals() {
+    let mut state = AggregatorState::new();
+    let one_minute = CandleInterval::from_label("1m").unwrap();
+    let five_minutes = CandleInterval::from_label("5m").unwrap();
+    let one_minute_key = candle_for(one_minute, 60_000).key.clone();
+    let five_minute_key = candle_for(five_minutes, 60_000).key.clone();
+
+    state.retain_closed_candle(closed_candle_for(five_minutes, 60_000), 1);
+    state.retain_closed_candle(closed_candle_for(one_minute, 60_000), 1);
+    state.retain_closed_candle(closed_candle_for(one_minute, 120_000), 1);
+
+    assert!(
+        state
+            .closed_candle(&one_minute_key, TimestampMilliseconds(60_000))
+            .is_none()
+    );
+    assert!(
+        state
+            .closed_candle(&one_minute_key, TimestampMilliseconds(120_000))
+            .is_some()
+    );
+    assert!(
+        state
+            .closed_candle(&five_minute_key, TimestampMilliseconds(0))
+            .is_some()
+    );
+}
+
+#[test]
+fn replacing_a_retained_window_does_not_evict() {
+    let mut state = AggregatorState::new();
+    let interval = CandleInterval::from_label("1m").unwrap();
+    let key = candle_for(interval, 60_000).key.clone();
+
+    state.retain_closed_candle(closed_candle_for(interval, 60_000), 1);
+    let evicted = state.retain_closed_candle(closed_candle_for(interval, 60_000), 1);
+
+    assert!(evicted.is_empty());
+    assert_eq!(state.closed_candles_len(), 1);
+    assert!(
+        state
+            .closed_candle(&key, TimestampMilliseconds(60_000))
+            .is_some()
+    );
+}
+
+#[test]
+fn retaining_an_older_window_at_capacity_would_evict_the_candidate() {
+    let mut state = AggregatorState::new();
+    let interval = CandleInterval::from_label("1m").unwrap();
+    let key = candle_for(interval, 120_000).key.clone();
+
+    state.retain_closed_candle(closed_candle_for(interval, 120_000), 1);
+
+    assert!(state.would_evict_closed_candidate(&key, TimestampMilliseconds(60_000), 1,));
+    assert!(!state.would_evict_closed_candidate(&key, TimestampMilliseconds(120_000), 1,));
+    assert!(!state.would_evict_closed_candidate(&key, TimestampMilliseconds(180_000), 1,));
+}
+
+#[test]
+fn multiple_keys_each_keep_their_own_cap() {
+    let mut state = AggregatorState::new();
+    let interval = CandleInterval::from_label("1m").unwrap();
+    let mut other_trade = trade(61_000);
+    other_trade.trading_pair = TradingPair::new(AssetId::Ethereum, AssetId::TetherUSD);
+    let other_key = Candle::open(&other_trade, interval).unwrap().key.clone();
+    let key = candle_for(interval, 60_000).key.clone();
+
+    for timestamp in [60_000, 120_000] {
+        state.retain_closed_candle(closed_candle_for(interval, timestamp), 1);
+        let mut other = Candle::open(
+            &{
+                let mut trade = other_trade.clone();
+                trade.timestamp = TimestampMilliseconds(timestamp);
+                trade
+            },
+            interval,
+        )
+        .unwrap();
+        other.close();
+        state.retain_closed_candle(other, 1);
+    }
+
+    assert_eq!(state.closed_candles_len(), 2);
+    assert!(
+        state
+            .closed_candle(&key, TimestampMilliseconds(120_000))
+            .is_some()
+    );
+    assert!(
+        state
+            .closed_candle(&other_key, TimestampMilliseconds(120_000))
+            .is_some()
     );
 }
