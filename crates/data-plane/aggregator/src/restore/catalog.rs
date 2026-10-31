@@ -5,6 +5,7 @@
 //! prefix.
 
 use super::replay::S3ArchivedEventSource;
+use crate::config::ReplayStartPolicy;
 use crate::shard::ShardId;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{
@@ -23,7 +24,7 @@ pub const AGGREGATOR_ARCHIVE_S3_PREFIX: &str = "AGGREGATOR_ARCHIVE_S3_PREFIX";
 /// shards in one aggregator process.
 const MAX_CONCURRENT_ARCHIVE_OBJECTS: usize = 4;
 
-/// Optional archive used to rebuild shard state.
+/// Archive used to rebuild shard state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveRecoveryConfig {
     pub bucket: String,
@@ -34,17 +35,19 @@ pub struct ArchiveRecoveryConfig {
 }
 
 impl ArchiveRecoveryConfig {
-    /// Reads archive recovery settings from the environment.
+    /// Reads the required archive recovery settings from the environment.
     ///
-    /// Recovery is disabled when `AGGREGATOR_ARCHIVE_S3_BUCKET` is unset.
-    pub fn from_env() -> BpResult<Option<Self>> {
+    /// The `checkpoint` and `archive` replay policies use this because they
+    /// may need to rebuild state from the archive. Explicit `earliest` and
+    /// `latest` starts use [`Self::optional_from_vars`] instead.
+    pub fn from_env() -> BpResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Option<Self>> {
-        let Some(bucket) = vars.optional(AGGREGATOR_ARCHIVE_S3_BUCKET)? else {
-            return Ok(None);
-        };
+    /// Reads the required archive recovery settings from a captured
+    /// environment.
+    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+        let bucket = vars.required(AGGREGATOR_ARCHIVE_S3_BUCKET)?;
         if bucket.trim().is_empty() {
             return Err(BpError::config_invalid(
                 AGGREGATOR_ARCHIVE_S3_BUCKET,
@@ -53,11 +56,40 @@ impl ArchiveRecoveryConfig {
         }
         let prefix = vars.required(AGGREGATOR_ARCHIVE_S3_PREFIX)?;
         let iceberg = IcebergConfig::optional_from_vars(vars)?;
-        Ok(Some(Self {
+        Ok(Self {
             bucket,
             prefix,
             iceberg,
-        }))
+        })
+    }
+
+    /// Reads archive recovery settings when they are configured.
+    ///
+    /// Explicit `earliest` and `latest` starts intentionally discard persisted
+    /// state, so they can run without an archive. When a bucket is provided,
+    /// the rest of the archive configuration is still validated.
+    pub fn optional_from_vars(vars: &EnvVars) -> BpResult<Option<Self>> {
+        if vars.optional(AGGREGATOR_ARCHIVE_S3_BUCKET)?.is_none() {
+            return Ok(None);
+        }
+        Self::from_vars(vars).map(Some)
+    }
+
+    /// Reads the archive recovery settings required by `policy` from a
+    /// captured environment.
+    ///
+    /// `checkpoint` and `archive` require a fully configured archive. Explicit
+    /// `earliest` and `latest` starts can omit it, but any settings that are
+    /// present are still validated.
+    pub fn from_vars_for_policy(
+        vars: &EnvVars,
+        policy: ReplayStartPolicy,
+    ) -> BpResult<Option<Self>> {
+        if policy.requires_archive() {
+            Self::from_vars(vars).map(Some)
+        } else {
+            Self::optional_from_vars(vars)
+        }
     }
 }
 

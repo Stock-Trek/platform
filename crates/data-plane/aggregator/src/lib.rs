@@ -21,9 +21,10 @@ pub use lease::InMemoryLeaseStore;
 pub use lease::{LeaseStore, NatsLeaseStore, WriterLease, new_writer_id, wait_for_lease};
 pub use processor::{CandleProcessor, ProcessorConfig, ProcessorUpdate};
 pub use restore::{
-    ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource, RestoreOptions,
-    RestoreSource, RestoredShard, S3ArchiveRecovery, S3ArchivedEventSource,
-    rebuild_state_from_archive, rebuild_state_from_archive_with_schema, restore_shard,
+    AGGREGATOR_ARCHIVE_S3_BUCKET, AGGREGATOR_ARCHIVE_S3_PREFIX, ArchiveRecoveryConfig,
+    ArchivedEventSource, EmptyArchivedEventSource, RestoreOptions, RestoreSource, RestoredShard,
+    S3ArchiveRecovery, S3ArchivedEventSource, rebuild_state_from_archive,
+    rebuild_state_from_archive_with_schema, restore_shard,
 };
 pub use router::{HashRouter, NatsRouter};
 pub use runner::{ProcessorRunner, QuiesceReceiver, QuiesceSignal};
