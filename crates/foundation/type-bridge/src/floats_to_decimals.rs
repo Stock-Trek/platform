@@ -1,4 +1,5 @@
-use crate::{BpResult, trading_precision::TradingPrecision};
+use crate::trading_precision::TradingPrecision;
+use platform_errors::BpResult;
 use rust_decimal::{Decimal, RoundingStrategy, prelude::ToPrimitive};
 use stock_trek_types::cex::{
     activation::Activation, asset_id::AssetId, order_request::OrderRequest,

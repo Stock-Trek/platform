@@ -1,4 +1,5 @@
-use crate::urls::{Protocol, TradingMode, Urls};
+use crate::urls::{TradingMode, Urls};
+use platform_types::protocol::Protocol;
 
 pub struct BinanceUrls;
 

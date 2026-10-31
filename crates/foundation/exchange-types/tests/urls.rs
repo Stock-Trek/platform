@@ -1,7 +1,8 @@
 use platform_exchange_types::{
     binance::urls::BinanceUrls,
-    urls::{LocalhostUrls, Protocol, TradingMode, Urls},
+    urls::{LocalhostUrls, TradingMode, Urls},
 };
+use platform_types::protocol::Protocol;
 
 #[test]
 fn exchange_defaults_are_available_without_environment_configuration() {

@@ -1,4 +1,4 @@
-use crate::aws_ops::presigned_post::PresignedPostSigner;
+use crate::aws_ops::presigned_post::{PresignedPost, PresignedPostSigner};
 use aws_credential_types::{
     Credentials,
     provider::{ProvideCredentials, SharedCredentialsProvider},
@@ -9,8 +9,6 @@ use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BpError, BpResult, StorageError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 use std::{num::NonZeroU64, time::Duration};
-
-pub use crate::aws_ops::presigned_post::PresignedPost;
 
 #[derive(Debug, Clone)]
 pub struct S3Config {
