@@ -68,11 +68,13 @@ impl BuildRunner {
     }
 
     /// Invoke the algorithm entry point with the resolved arguments.
-    fn invoke(command: &Command) -> Result<i32, NulError> {
-        let args = Self::args(command)
+    fn invoke(command: &Command) -> Result<i32, String> {
+        let args = Self::args(command)?;
+        let args = args
             .iter()
             .map(|arg| Self::cstring(arg))
-            .collect::<Result<Vec<_>, _>>()?;
+            .collect::<Result<Vec<_>, _>>()
+            .map_err(|error| error.to_string())?;
         let argv = args.iter().map(|arg| arg.as_ptr()).collect::<Vec<_>>();
 
         // Safety: `argv` holds valid, NUL-terminated C strings for the duration of
@@ -81,39 +83,39 @@ impl BuildRunner {
     }
 
     /// Build the argv layout expected by `entry` for `command`.
-    fn args(command: &Command) -> Vec<&str> {
+    fn args(command: &Command) -> Result<Vec<&str>, String> {
         match command {
             Command::Algorithm { strategy_name } => {
-                vec!["build-runner", "Algorithm", strategy_name.as_str()]
+                Ok(vec!["build-runner", "Algorithm", strategy_name.as_str()])
             }
             Command::Execute {
                 strategy_name,
                 strategy_context_path,
                 portfolio_path,
-            } => vec![
+            } => Ok(vec![
                 "build-runner",
                 "Execute",
                 strategy_name.as_str(),
                 strategy_context_path.as_str(),
                 portfolio_path.as_str(),
-            ],
+            ]),
             Command::Metadata { strategy_name } => {
-                vec!["build-runner", "Metadata", strategy_name.as_str()]
+                Ok(vec!["build-runner", "Metadata", strategy_name.as_str()])
             }
             Command::Preferences { strategy_name } => {
-                vec!["build-runner", "Preferences", strategy_name.as_str()]
+                Ok(vec!["build-runner", "Preferences", strategy_name.as_str()])
             }
             Command::Signals {
                 strategy_name,
                 strategy_context_path,
-            } => vec![
+            } => Ok(vec![
                 "build-runner",
                 "Signals",
                 strategy_name.as_str(),
                 strategy_context_path.as_str(),
-            ],
+            ]),
             // `Command` is `#[non_exhaustive]`.
-            _ => vec!["build-runner", "Algorithm", ""],
+            _ => Err(format!("unsupported command: {command:?}")),
         }
     }
 
