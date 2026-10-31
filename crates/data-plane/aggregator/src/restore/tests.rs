@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_archive::{ArchiveKind, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey};
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult, ConfigError};
+use platform_errors::{BpError, BpResult, ConfigError, Retryability};
 use platform_market_data::{
     candle::CandleInterval,
     decoders::trade::{Trade, TradeDecoderFactory},
@@ -91,24 +91,18 @@ fn counting_archive(
     }
 }
 
-#[derive(Clone, Copy)]
-enum CheckpointLoadFailure {
-    Retryable,
-    Permanent,
-}
-
 struct FailingStateStore {
-    failure: CheckpointLoadFailure,
+    retryability: Retryability,
 }
 
 #[async_trait]
 impl StateStore for FailingStateStore {
     async fn load(&self, _shard: ShardId) -> BpResult<Option<CheckpointRecord>> {
-        Err(match self.failure {
-            CheckpointLoadFailure::Retryable => {
+        Err(match self.retryability {
+            Retryability::Retryable => {
                 BpError::external(std::io::Error::other("transient checkpoint read failure"))
             }
-            CheckpointLoadFailure::Permanent => {
+            Retryability::Permanent => {
                 BpError::config_invalid("checkpoint", "corrupt checkpoint payload")
             }
         })
@@ -589,7 +583,7 @@ async fn an_empty_archive_starts_with_explicit_empty_state() {
 #[tokio::test]
 async fn transient_checkpoint_read_failures_are_returned_instead_of_falling_back() {
     let store = FailingStateStore {
-        failure: CheckpointLoadFailure::Retryable,
+        retryability: Retryability::Retryable,
     };
     let shard = ShardId::new(0);
     let connects = Arc::new(AtomicUsize::new(0));
@@ -609,7 +603,7 @@ async fn transient_checkpoint_read_failures_are_returned_instead_of_falling_back
 #[tokio::test]
 async fn permanent_checkpoint_read_failures_still_rebuild_from_the_archive() {
     let store = FailingStateStore {
-        failure: CheckpointLoadFailure::Permanent,
+        retryability: Retryability::Permanent,
     };
     let shard = ShardId::new(0);
     let connects = Arc::new(AtomicUsize::new(0));

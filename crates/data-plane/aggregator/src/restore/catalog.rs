@@ -39,7 +39,7 @@ impl ArchiveRecoveryConfig {
     ///
     /// The `checkpoint` and `archive` replay policies use this because they
     /// may need to rebuild state from the archive. Explicit `earliest` and
-    /// `latest` starts use [`Self::optional_from_env`] instead.
+    /// `latest` starts use [`Self::optional_from_vars`] instead.
     pub fn from_env() -> BpResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
@@ -68,11 +68,6 @@ impl ArchiveRecoveryConfig {
     /// Explicit `earliest` and `latest` starts intentionally discard persisted
     /// state, so they can run without an archive. When a bucket is provided,
     /// the rest of the archive configuration is still validated.
-    pub fn optional_from_env() -> BpResult<Option<Self>> {
-        Self::optional_from_vars(&EnvVars::from_env())
-    }
-
-    /// Reads optional archive recovery settings from a captured environment.
     pub fn optional_from_vars(vars: &EnvVars) -> BpResult<Option<Self>> {
         if vars.optional(AGGREGATOR_ARCHIVE_S3_BUCKET)?.is_none() {
             return Ok(None);
@@ -80,17 +75,12 @@ impl ArchiveRecoveryConfig {
         Self::from_vars(vars).map(Some)
     }
 
-    /// Reads the archive recovery settings required by `policy`.
+    /// Reads the archive recovery settings required by `policy` from a
+    /// captured environment.
     ///
     /// `checkpoint` and `archive` require a fully configured archive. Explicit
     /// `earliest` and `latest` starts can omit it, but any settings that are
     /// present are still validated.
-    pub fn from_env_for_policy(policy: ReplayStartPolicy) -> BpResult<Option<Self>> {
-        Self::from_vars_for_policy(&EnvVars::from_env(), policy)
-    }
-
-    /// Reads the archive recovery settings required by `policy` from a
-    /// captured environment.
     pub fn from_vars_for_policy(
         vars: &EnvVars,
         policy: ReplayStartPolicy,

@@ -4,6 +4,7 @@ use platform_aggregator::{
     NatsStateStore, ProcessorRunner, RestoreOptions, S3ArchiveRecovery, ShardId, StateStore,
     WriterLease, new_writer_id, restore_shard, wait_for_lease,
 };
+use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_nats::{JetStream, NatsPublisher};
 use platform_runtime::{Runtime, Service};
@@ -20,10 +21,12 @@ const HEALTHY_RUN_THRESHOLD: Duration = Duration::from_secs(60);
 
 #[tokio::main]
 async fn main() -> BpResult<()> {
-    let config = AggregatorConfig::from_env()?;
-    let archive_recovery = ArchiveRecoveryConfig::from_env_for_policy(config.replay_start_policy)?
-        .map(S3ArchiveRecovery::new)
-        .map(Arc::new);
+    let vars = EnvVars::from_env();
+    let config = AggregatorConfig::from_vars(&vars)?;
+    let archive_recovery =
+        ArchiveRecoveryConfig::from_vars_for_policy(&vars, config.replay_start_policy)?
+            .map(S3ArchiveRecovery::new)
+            .map(Arc::new);
     SERVICE.init_logging(&config.log_filter)?;
 
     let shards = config.shards();
