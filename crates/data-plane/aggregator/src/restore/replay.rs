@@ -52,7 +52,6 @@ pub struct S3ArchivedEventSource {
     _reader_permit: Option<OwnedSemaphorePermit>,
     recovery_slots: Arc<Semaphore>,
     events: VecDeque<ArchivedMarketEvent>,
-    decoders: HashMap<CexId, SharedTradeDecoder>,
 }
 
 impl S3ArchivedEventSource {
@@ -88,7 +87,6 @@ impl S3ArchivedEventSource {
             _reader_permit: None,
             recovery_slots,
             events: VecDeque::new(),
-            decoders: HashMap::new(),
         }
     }
 
@@ -184,12 +182,11 @@ impl ArchivedEventSource for S3ArchivedEventSource {
     async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>> {
         loop {
             if let Some(event) = self.events.pop_front() {
-                let decoder = Self::decoder_for(&mut self.decoders, event.exchange)?;
-                let trades = decoder.decode(&event.event)?;
-                if trades.iter().any(|trade| {
-                    ShardId::for_trading_pair(trade.exchange, trade.trading_pair, self.shard_count)
-                        == self.shard
-                }) {
+                if event
+                    .routing_key()
+                    .bucket()
+                    .is_owned_by(self.shard.get(), self.shard_count)
+                {
                     return Ok(Some(event));
                 }
                 continue;

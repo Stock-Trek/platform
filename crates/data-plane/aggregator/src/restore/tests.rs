@@ -9,7 +9,7 @@ use crate::checkpoint::{CheckpointRecord, StateStore};
 use crate::config::ReplayStartPolicy;
 use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::shard::ShardId;
-use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
+use crate::state::{AggregatorState, DeduplicationKey, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_archive::{ArchiveKind, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey};
@@ -54,6 +54,13 @@ fn event(sequence: u64, timestamp: i64) -> MarketEvent {
         payload: STANDARD.encode(format!(
             r#"{{"e":"trade","E":{timestamp},"s":"BTCUSDT","t":{sequence},"p":"100","q":"1","T":{timestamp}}}"#
         )),
+    }
+}
+
+fn undecodable_event(sequence: u64, timestamp: i64) -> MarketEvent {
+    MarketEvent {
+        payload: STANDARD.encode("not a market event"),
+        ..event(sequence, timestamp)
     }
 }
 
@@ -277,6 +284,35 @@ async fn rebuild_watermark_only_moves_forward_for_events_owned_by_the_shard() {
 
     assert_eq!(restored.state.watermark, None);
     assert_eq!(restored.replay_watermark(), None);
+}
+
+#[tokio::test]
+async fn rebuild_advances_watermark_and_dedup_for_undecodable_events() {
+    let store = InMemoryStateStore::new();
+    let shard = ShardId::new(0);
+    let restored = options(shard, 1)
+        .restore(
+            &store,
+            archive_source(VecArchive::new(vec![undecodable_event(1, 61_000)])),
+        )
+        .await
+        .unwrap();
+
+    assert!(restored.rebuilt_from_archive);
+    assert_eq!(
+        restored.state.watermark,
+        Some(TimestampMilliseconds(61_000))
+    );
+    assert_eq!(
+        restored.replay_watermark(),
+        Some(TimestampMilliseconds(61_000))
+    );
+    assert!(restored.state.is_duplicate(&DeduplicationKey::new(
+        CexId::Binance,
+        "btcusdt@trade",
+        1
+    )));
+    assert_eq!(restored.state.open_candles_len(), 0);
 }
 
 #[tokio::test]
