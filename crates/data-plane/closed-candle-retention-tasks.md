@@ -1,8 +1,8 @@
 # Implementation tasks: event-time correction cutoff with a per-key hot candle cap
 
 This document lists the work needed in this repository to implement the
-"Event-time correction cutoff with a per-key hot candle cap" option described in
-[README.md](README.md#event-time-correction-cutoff-with-a-per-key-hot-candle-cap).
+"Event-time correction cutoff with a per-key hot candle cap" retention policy
+described in [README.md](README.md#closed-candle-retention).
 
 The intended behaviour is:
 
