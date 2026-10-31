@@ -12,6 +12,23 @@ use tokio::{
     net::TcpListener,
 };
 
+impl Artifacts {
+    fn new(
+        signed_post: SignedPost,
+        source_get_url: String,
+        source_dir: PathBuf,
+        build_cache_dir: PathBuf,
+    ) -> platform_errors::BpResult<Self> {
+        Self::with_source_limits(
+            signed_post,
+            source_get_url,
+            source_dir,
+            build_cache_dir,
+            crate::source::SourceLimits::default(),
+        )
+    }
+}
+
 async fn upload_server(expected_uploads: usize) -> (String, tokio::task::JoinHandle<Vec<String>>) {
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
     let url = format!("http://{}/upload", listener.local_addr().unwrap());

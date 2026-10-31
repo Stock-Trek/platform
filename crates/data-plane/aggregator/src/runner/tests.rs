@@ -1,8 +1,10 @@
 use super::*;
 use crate::{
-    checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore},
+    checkpoint::tests::InMemoryStateStore,
+    checkpoint::{CheckpointRecord, StateStore},
     config::AggregatorConfig,
-    lease::{InMemoryLeaseStore, LeaseStore},
+    lease::LeaseStore,
+    lease::tests::InMemoryLeaseStore,
     processor::{CandleProcessor, ProcessorUpdate},
     shard::ShardId,
     sink::{ClosedCandlePublisher, OpenCandleStore},
@@ -28,6 +30,10 @@ use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use stock_trek_types::cex::cex_id::CexId;
 use tokio::sync::watch;
+
+fn closed_open_keys(update: &ProcessorUpdate, state: &AggregatorState) -> Vec<CandleKey> {
+    super::output::CandleOutputWriter::closed_open_keys(update, state)
+}
 
 #[derive(Default)]
 struct FakeSource {
@@ -442,13 +448,10 @@ fn closed_open_keys_keep_a_newer_open_window() {
     };
 
     let mut state = AggregatorState::new();
-    assert_eq!(
-        ProcessorRunner::<FakeSource, FakeSink>::closed_open_keys(&update, &state),
-        vec![key.clone()]
-    );
+    assert_eq!(closed_open_keys(&update, &state), vec![key.clone()]);
 
     state.open_candles.entry(key).or_default().push(newer_open);
-    assert!(ProcessorRunner::<FakeSource, FakeSink>::closed_open_keys(&update, &state).is_empty());
+    assert!(closed_open_keys(&update, &state).is_empty());
 }
 
 #[tokio::test]

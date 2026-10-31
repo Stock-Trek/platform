@@ -4,7 +4,8 @@ use super::catalog::{
 };
 use super::rebuild::{RestoreOptions, RestoreSource};
 use super::replay::ArchivedEventSource;
-use crate::checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore};
+use crate::checkpoint::tests::InMemoryStateStore;
+use crate::checkpoint::{CheckpointRecord, StateStore};
 use crate::config::ReplayStartPolicy;
 use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::shard::ShardId;

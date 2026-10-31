@@ -319,12 +319,4 @@ where
             }
         }
     }
-
-    #[cfg(test)]
-    pub(super) fn closed_open_keys(
-        update: &ProcessorUpdate,
-        state: &crate::state::AggregatorState,
-    ) -> Vec<platform_market_data::candle::CandleKey> {
-        super::output::CandleOutputWriter::closed_open_keys(update, state)
-    }
 }
