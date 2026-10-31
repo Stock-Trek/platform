@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    StateStore,
+    LeaseStore, StateStore,
     checkpoint::tests::InMemoryStateStore,
     config::AggregatorConfig,
     lease::tests::InMemoryLeaseStore,
@@ -40,6 +40,11 @@ where
     ) -> Self {
         self.checkpoints = checkpoints;
         self.shard = shard;
+        self
+    }
+
+    pub fn with_lease_store(mut self, leases: Arc<dyn LeaseStore>) -> Self {
+        self.leases = leases;
         self
     }
 }

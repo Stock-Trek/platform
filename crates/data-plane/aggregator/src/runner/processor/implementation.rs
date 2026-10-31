@@ -49,11 +49,6 @@ where
     S: MarketSource,
     K: OpenCandleStore + ClosedCandlePublisher + 'static,
 {
-    pub fn with_lease_store(mut self, leases: Arc<dyn LeaseStore>) -> Self {
-        self.leases = leases;
-        self
-    }
-
     pub fn with_writer_id(mut self, writer_id: impl Into<String>) -> Self {
         self.writer_id = Some(writer_id.into());
         self
