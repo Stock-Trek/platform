@@ -11,10 +11,6 @@ use super::env::{
     AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS,
 };
 use super::replay::ReplayStartPolicy;
-use super::validation::{
-    parse_correction_cutoff, parse_max_closed_candles_per_interval, validate_kv_bucket,
-    validate_retention,
-};
 use platform_archive::RoutingBucket;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
@@ -45,7 +41,7 @@ impl AggregatorConfig {
         let checkpoint_interval =
             Config::required_positive_duration_secs(vars, AGGREGATOR_CHECKPOINT_INTERVAL_SECS)?;
         let checkpoint_bucket = vars.required(AGGREGATOR_CHECKPOINT_BUCKET)?;
-        validate_kv_bucket(AGGREGATOR_CHECKPOINT_BUCKET, &checkpoint_bucket)?;
+        Self::validate_kv_bucket(AGGREGATOR_CHECKPOINT_BUCKET, &checkpoint_bucket)?;
         let checkpoint_key_prefix = vars.required(AGGREGATOR_CHECKPOINT_PREFIX)?;
         NatsSubject::validate_named(
             AGGREGATOR_CHECKPOINT_PREFIX,
@@ -72,13 +68,13 @@ impl AggregatorConfig {
         }
         let allowed_lateness_ms: u64 = vars.required_parsed(AGGREGATOR_ALLOWED_LATENESS_MS)?;
         let allowed_lateness = Duration::from_millis(allowed_lateness_ms);
-        let max_closed_candles_per_interval = parse_max_closed_candles_per_interval(
+        let max_closed_candles_per_interval = Self::parse_max_closed_candles_per_interval(
             AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
             &vars.required(AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL)?,
             &intervals,
         )?;
         let correction_cutoff_ms: u64 = vars.required_parsed(AGGREGATOR_CORRECTION_CUTOFF_MS)?;
-        let correction_cutoff = parse_correction_cutoff(
+        let correction_cutoff = Self::parse_correction_cutoff(
             AGGREGATOR_CORRECTION_CUTOFF_MS,
             correction_cutoff_ms,
             allowed_lateness,
@@ -99,7 +95,7 @@ impl AggregatorConfig {
         let shard_subject_prefix =
             Config::required_nats_subject(vars, AGGREGATOR_SHARD_SUBJECT_PREFIX)?;
         let shard_count = Config::required_positive_usize(vars, AGGREGATOR_SHARD_COUNT)?;
-        validate_retention(
+        Self::validate_retention(
             &intervals,
             &max_closed_candles_per_interval,
             shard_count,

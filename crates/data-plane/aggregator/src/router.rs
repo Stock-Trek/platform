@@ -6,7 +6,7 @@
 
 use crate::{
     config::AggregatorConfig,
-    shard::{ShardId, shard_for},
+    shard::ShardId,
     source::{MarketInput, MarketSource, SourceRecord},
 };
 use parking_lot::Mutex;
@@ -51,7 +51,11 @@ impl HashRouter {
         let trades = decoder.decode(event)?;
         let mut shards = BTreeSet::new();
         for trade in trades {
-            shards.insert(shard_for(trade.exchange, trade.trading_pair, shard_count));
+            shards.insert(ShardId::for_trading_pair(
+                trade.exchange,
+                trade.trading_pair,
+                shard_count,
+            ));
         }
         Ok(shards.into_iter().collect())
     }
@@ -69,7 +73,11 @@ impl HashRouter {
     fn gap_shards(&self, gap: &GapMarker, shard_count: usize) -> BpResult<Vec<ShardId>> {
         let decoder = self.decoder(gap.exchange)?;
         let trading_pair = decoder.trading_pair_for_stream(&gap.stream)?;
-        Ok(vec![shard_for(gap.exchange, trading_pair, shard_count)])
+        Ok(vec![ShardId::for_trading_pair(
+            gap.exchange,
+            trading_pair,
+            shard_count,
+        )])
     }
 }
 
@@ -177,7 +185,6 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shard::shard_for_candle_key;
     use async_trait::async_trait;
     use platform_errors::BpResult;
     use platform_market_data::candle::CandleKey;
@@ -223,7 +230,7 @@ mod tests {
     fn gaps_route_to_the_shard_owning_their_stream_pair() {
         let router = HashRouter::new();
         let gap = gap();
-        let expected = vec![shard_for(
+        let expected = vec![ShardId::for_trading_pair(
             CexId::Binance,
             stock_trek_types::cex::trading_pair::TradingPair::new(
                 AssetId::Bitcoin,
@@ -261,8 +268,8 @@ mod tests {
         };
 
         assert_eq!(
-            shard_for_candle_key(&first, 16),
-            shard_for_candle_key(&second, 16)
+            ShardId::for_candle_key(&first, 16),
+            ShardId::for_candle_key(&second, 16)
         );
     }
 

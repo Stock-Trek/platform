@@ -9,7 +9,7 @@ async fn main() -> BpResult<()> {
     let config = RebuildConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     tokio::select! {
-        result = platform_rebuilder::run(config) => result,
+        result = config.run() => result,
         signal = Runtime::shutdown_signal() => {
             signal?;
             Err(BpError::external(

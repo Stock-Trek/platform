@@ -18,17 +18,16 @@ pub use checkpoint::{CheckpointRecord, NatsStateStore, StateStore};
 pub use config::{AggregatorConfig, ReplayStartPolicy};
 #[cfg(test)]
 pub use lease::InMemoryLeaseStore;
-pub use lease::{LeaseStore, NatsLeaseStore, WriterLease, new_writer_id, wait_for_lease};
+pub use lease::{LeaseStore, NatsLeaseStore, WriterLease};
 pub use processor::{CandleProcessor, ProcessorConfig, ProcessorUpdate};
 pub use restore::{
     AGGREGATOR_ARCHIVE_S3_BUCKET, AGGREGATOR_ARCHIVE_S3_PREFIX, ArchiveRecoveryConfig,
     ArchivedEventSource, EmptyArchivedEventSource, RestoreOptions, RestoreSource, RestoredShard,
-    S3ArchiveRecovery, S3ArchivedEventSource, rebuild_state_from_archive,
-    rebuild_state_from_archive_with_schema, restore_shard,
+    S3ArchiveRecovery, S3ArchivedEventSource,
 };
 pub use router::{HashRouter, NatsRouter};
 pub use runner::{ProcessorRunner, QuiesceReceiver, QuiesceSignal};
-pub use shard::{ShardId, all_shards, shard_for, shard_for_candle_key};
+pub use shard::ShardId;
 pub use sink::{ClosedCandlePublisher, NatsCandleSink, OpenCandleStore};
 pub use source::{MarketInput, MarketSource, NatsMarketSource, NatsShardSource, SourceRecord};
 pub use state::{

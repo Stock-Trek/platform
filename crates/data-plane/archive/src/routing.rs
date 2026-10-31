@@ -26,7 +26,7 @@ impl RoutingKey {
     /// Builds the routing key for an exchange and trading pair.
     pub fn for_pair(exchange: CexId, trading_pair: &TradingPair) -> Self {
         let key = format!("{exchange}.{}.{}", trading_pair.base, trading_pair.quote);
-        Self(fnv1a_64(key.as_bytes()))
+        Self(Self::fnv1a_64(key.as_bytes()))
     }
 
     /// Builds the routing key for a market event.
@@ -40,7 +40,7 @@ impl RoutingKey {
             Ok(trading_pair) => Self::for_pair(event.exchange, &trading_pair),
             Err(_) => {
                 let key = format!("{}.stream.{}", event.exchange, event.stream);
-                Self(fnv1a_64(key.as_bytes()))
+                Self(Self::fnv1a_64(key.as_bytes()))
             }
         }
     }
@@ -115,13 +115,15 @@ impl fmt::Display for RoutingBucket {
     }
 }
 
-fn fnv1a_64(bytes: &[u8]) -> u64 {
-    const OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
-    const PRIME: u64 = 0x0000_0100_0000_01b3;
+impl RoutingKey {
+    fn fnv1a_64(bytes: &[u8]) -> u64 {
+        const OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+        const PRIME: u64 = 0x0000_0100_0000_01b3;
 
-    bytes.iter().fold(OFFSET_BASIS, |hash, byte| {
-        (hash ^ u64::from(*byte)).wrapping_mul(PRIME)
-    })
+        bytes.iter().fold(OFFSET_BASIS, |hash, byte| {
+            (hash ^ u64::from(*byte)).wrapping_mul(PRIME)
+        })
+    }
 }
 
 #[cfg(test)]

@@ -36,10 +36,10 @@ impl ArchiveHandoff {
             .await?;
         let raw = catalog.data_files(ArchiveIcebergTable::raw(kind)).await?;
 
-        let mut compacted = deduplicated(compacted);
+        let mut compacted = Self::deduplicated(compacted);
         compacted.sort_by(|left, right| left.file_path.cmp(&right.file_path));
 
-        let mut raw_tail = deduplicated(
+        let mut raw_tail = Self::deduplicated(
             raw.into_iter()
                 .filter(|file| !processed.contains(&file.file_path))
                 .collect(),
@@ -66,10 +66,12 @@ impl ArchiveHandoff {
     }
 }
 
-fn deduplicated(mut files: Vec<IcebergDataFile>) -> Vec<IcebergDataFile> {
-    files.sort_by(|left, right| left.file_path.cmp(&right.file_path));
-    files.dedup_by(|left, right| left.file_path == right.file_path);
-    files
+impl ArchiveHandoff {
+    fn deduplicated(mut files: Vec<IcebergDataFile>) -> Vec<IcebergDataFile> {
+        files.sort_by(|left, right| left.file_path.cmp(&right.file_path));
+        files.dedup_by(|left, right| left.file_path == right.file_path);
+        files
+    }
 }
 
 #[cfg(test)]

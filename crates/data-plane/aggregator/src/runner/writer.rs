@@ -2,7 +2,7 @@
 
 use crate::{
     config::AggregatorConfig,
-    lease::{LeaseStore, WriterLease, new_writer_id, wait_for_lease},
+    lease::{LeaseStore, WriterLease},
     shard::ShardId,
 };
 use platform_errors::{BpError, BpResult};
@@ -30,11 +30,11 @@ impl Writer {
     ) -> BpResult<Option<Self>> {
         let writer_id = requested_id
             .or_else(|| initial_lease.as_ref().map(|lease| lease.owner_id.clone()))
-            .unwrap_or_else(new_writer_id);
+            .unwrap_or_else(WriterLease::new_writer_id);
         let lease = match initial_lease {
             Some(lease) => lease,
             None => tokio::select! {
-                result = wait_for_lease(
+                result = WriterLease::wait_for_lease(
                     leases.as_ref(),
                     shard,
                     &writer_id,

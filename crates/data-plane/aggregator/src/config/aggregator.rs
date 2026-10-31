@@ -1,6 +1,6 @@
 use super::replay::ReplayStartPolicy;
 use crate::processor::ProcessorConfig;
-use crate::shard::{ShardId, all_shards};
+use crate::shard::ShardId;
 use platform_market_data::candle::CandleInterval;
 use platform_types::new_types::DurationMilliseconds;
 use std::time::Duration;
@@ -85,7 +85,7 @@ impl AggregatorConfig {
     pub fn shards(&self) -> Vec<ShardId> {
         match self.shard_index {
             Some(index) => vec![ShardId::new(index as u32)],
-            None => all_shards(self.shard_count),
+            None => ShardId::all(self.shard_count),
         }
     }
 }

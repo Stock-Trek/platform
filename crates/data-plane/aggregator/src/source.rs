@@ -18,6 +18,7 @@ use platform_metrics::descriptions::{
 };
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_nats::{ConsumerStart, JetStreamConsumer, Message};
+use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use tracing::warn;
 
@@ -75,6 +76,13 @@ impl MarketInput {
     pub fn is_event_subject(subject: &str) -> bool {
         subject.split('.').any(|segment| segment == EVENT_CATEGORY)
     }
+
+    pub fn timestamp(&self) -> TimestampMilliseconds {
+        match self {
+            Self::Event(event) => event.exchange_timestamp.unwrap_or(event.received_at),
+            Self::Gap(gap) => gap.detected_at,
+        }
+    }
 }
 
 /// An input together with the source message that delivered it.
@@ -107,17 +115,6 @@ pub trait MarketSource: Send {
     }
 }
 
-/// Returns the longest subject prefix shared by `left` and `right`.
-pub fn common_subject_prefix(left: &str, right: &str) -> Option<String> {
-    let shared: Vec<&str> = left
-        .split('.')
-        .zip(right.split('.'))
-        .take_while(|(left, right)| left == right)
-        .map(|(segment, _)| segment)
-        .collect();
-    (!shared.is_empty()).then(|| shared.join("."))
-}
-
 /// Reads original market events and gap markers for the reshard router.
 ///
 /// Both categories are consumed from one ordered stream so gaps are applied in
@@ -129,9 +126,21 @@ pub struct NatsMarketSource {
 }
 
 impl NatsMarketSource {
+    /// Returns the longest subject prefix shared by `left` and `right`.
+    pub fn common_subject_prefix(left: &str, right: &str) -> Option<String> {
+        let shared: Vec<&str> = left
+            .split('.')
+            .zip(right.split('.'))
+            .take_while(|(left, right)| left == right)
+            .map(|(segment, _)| segment)
+            .collect();
+        (!shared.is_empty()).then(|| shared.join("."))
+    }
+
     pub async fn connect(config: &AggregatorConfig) -> BpResult<Self> {
-        let root = common_subject_prefix(&config.event_subject_prefix, &config.gap_subject_prefix)
-            .ok_or_else(|| {
+        let root =
+            Self::common_subject_prefix(&config.event_subject_prefix, &config.gap_subject_prefix)
+                .ok_or_else(|| {
                 BpError::config_invalid(
                     "aggregator subject prefixes",
                     "event and gap prefixes must share a common root",
@@ -271,7 +280,6 @@ impl MarketSource for NatsShardSource {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use platform_types::new_types::TimestampMilliseconds;
     use stock_trek_types::cex::cex_id::CexId;
 
     fn event() -> MarketEvent {
@@ -355,13 +363,17 @@ mod tests {
     #[test]
     fn event_and_gap_prefixes_share_the_stream_root() {
         assert_eq!(
-            common_subject_prefix("market.events", "market.gaps").as_deref(),
+            NatsMarketSource::common_subject_prefix("market.events", "market.gaps").as_deref(),
             Some("market")
         );
         assert_eq!(
-            common_subject_prefix("market.events.binance", "market.events").as_deref(),
+            NatsMarketSource::common_subject_prefix("market.events.binance", "market.events")
+                .as_deref(),
             Some("market.events")
         );
-        assert_eq!(common_subject_prefix("events", "gaps"), None);
+        assert_eq!(
+            NatsMarketSource::common_subject_prefix("events", "gaps"),
+            None
+        );
     }
 }

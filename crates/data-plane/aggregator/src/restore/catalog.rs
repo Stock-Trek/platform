@@ -204,8 +204,9 @@ impl S3ArchiveRecovery {
             })
             .await?;
 
-        let mut objects = select_event_objects(snapshot.objects.clone(), shard, shard_count);
-        sort_archive_objects(&mut objects);
+        let mut objects =
+            ArchiveObject::select_for_shard(snapshot.objects.clone(), shard, shard_count);
+        ArchiveObject::sort(&mut objects);
 
         info!(
             bucket = %snapshot.bucket,
@@ -227,45 +228,47 @@ impl S3ArchiveRecovery {
     }
 }
 
-/// Selects the event objects owned by one shard.
-///
-/// Raw and compacted objects both carry a fixed virtual routing bucket, so a
-/// shard can discard every object belonging to another shard before
-/// downloading it. This keeps a cold rebuild at `O(archive)` across the cluster
-/// instead of making every shard scan the whole archive.
-pub(crate) fn select_event_objects(
-    objects: Vec<ArchiveObject>,
-    shard: ShardId,
-    shard_count: usize,
-) -> Vec<ArchiveObject> {
-    objects
-        .into_iter()
-        .filter(|object| {
-            let key = object.key.as_str();
-            if ArchivePath::kind(key) != Some(ArchiveKind::Events) {
-                return false;
-            }
-            ArchivePath::routing_bucket_from_key(key)
-                .is_some_and(|bucket| bucket.is_owned_by(shard.get(), shard_count))
-        })
-        .collect()
-}
+impl ArchiveObject {
+    /// Selects the event objects owned by one shard.
+    ///
+    /// Raw and compacted objects both carry a fixed virtual routing bucket, so a
+    /// shard can discard every object belonging to another shard before
+    /// downloading it. This keeps a cold rebuild at `O(archive)` across the
+    /// cluster instead of making every shard scan the whole archive.
+    pub(crate) fn select_for_shard(
+        objects: Vec<ArchiveObject>,
+        shard: ShardId,
+        shard_count: usize,
+    ) -> Vec<ArchiveObject> {
+        objects
+            .into_iter()
+            .filter(|object| {
+                let key = object.key.as_str();
+                if ArchivePath::kind(key) != Some(ArchiveKind::Events) {
+                    return false;
+                }
+                ArchivePath::routing_bucket_from_key(key)
+                    .is_some_and(|bucket| bucket.is_owned_by(shard.get(), shard_count))
+            })
+            .collect()
+    }
 
-/// Orders archive files by coverage hour, then by path.
-///
-/// The layer prefix must not dominate ordering: an un-compacted older raw
-/// hour has to be replayed before a newer compacted hour so each shard
-/// observes its event history in time order.
-pub(crate) fn sort_archive_objects(objects: &mut [ArchiveObject]) {
-    objects.sort_by(|left, right| {
-        let left_hour = ArchivePath::bucket_start_from_key(left.key.as_str())
-            .map(|hour| hour.0)
-            .unwrap_or(i64::MAX);
-        let right_hour = ArchivePath::bucket_start_from_key(right.key.as_str())
-            .map(|hour| hour.0)
-            .unwrap_or(i64::MAX);
-        left_hour
-            .cmp(&right_hour)
-            .then_with(|| left.key.cmp(&right.key))
-    });
+    /// Orders archive files by coverage hour, then by path.
+    ///
+    /// The layer prefix must not dominate ordering: an un-compacted older raw
+    /// hour has to be replayed before a newer compacted hour so each shard
+    /// observes its event history in time order.
+    pub(crate) fn sort(objects: &mut [ArchiveObject]) {
+        objects.sort_by(|left, right| {
+            let left_hour = ArchivePath::bucket_start_from_key(left.key.as_str())
+                .map(|hour| hour.0)
+                .unwrap_or(i64::MAX);
+            let right_hour = ArchivePath::bucket_start_from_key(right.key.as_str())
+                .map(|hour| hour.0)
+                .unwrap_or(i64::MAX);
+            left_hour
+                .cmp(&right_hour)
+                .then_with(|| left.key.cmp(&right.key))
+        });
+    }
 }

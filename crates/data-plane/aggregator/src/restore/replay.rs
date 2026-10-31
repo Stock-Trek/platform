@@ -4,7 +4,7 @@
 //! archive event objects from S3 in bounded Parquet batches.
 
 use super::catalog::{ArchiveObject, ArchiveRecoveryConfig, S3ArchiveRecovery};
-use crate::shard::{ShardId, shard_for};
+use crate::shard::ShardId;
 use async_trait::async_trait;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{ArchiveKind, ArchiveParquet, ArchivedMarketEvent, ParquetReader};
@@ -36,22 +36,6 @@ impl ArchivedEventSource for EmptyArchivedEventSource {
     }
 }
 
-pub(crate) fn event_timestamp(event: &MarketEvent) -> TimestampMilliseconds {
-    event.exchange_timestamp.unwrap_or(event.received_at)
-}
-
-pub(crate) fn decoder_for(
-    decoders: &mut HashMap<CexId, SharedTradeDecoder>,
-    exchange: CexId,
-) -> BpResult<SharedTradeDecoder> {
-    if let Some(decoder) = decoders.get(&exchange) {
-        return Ok(decoder.clone());
-    }
-    let decoder = TradeDecoderFactory::for_exchange(exchange)?;
-    decoders.insert(exchange, decoder.clone());
-    Ok(decoder)
-}
-
 /// Replays archive event objects from S3 for one shard.
 ///
 /// Objects are read in bounded Parquet batches through ranged S3 requests, so
@@ -72,6 +56,22 @@ pub struct S3ArchivedEventSource {
 }
 
 impl S3ArchivedEventSource {
+    fn event_timestamp(event: &MarketEvent) -> TimestampMilliseconds {
+        event.exchange_timestamp.unwrap_or(event.received_at)
+    }
+
+    pub(crate) fn decoder_for(
+        decoders: &mut HashMap<CexId, SharedTradeDecoder>,
+        exchange: CexId,
+    ) -> BpResult<SharedTradeDecoder> {
+        if let Some(decoder) = decoders.get(&exchange) {
+            return Ok(decoder.clone());
+        }
+        let decoder = TradeDecoderFactory::for_exchange(exchange)?;
+        decoders.insert(exchange, decoder.clone());
+        Ok(decoder)
+    }
+
     pub(crate) fn from_objects(
         transfer_client: TransferClient,
         shard: ShardId,
@@ -161,7 +161,7 @@ impl S3ArchivedEventSource {
                 .collect::<Vec<_>>();
             events.sort_by_key(|event| {
                 (
-                    event_timestamp(&event.event).0,
+                    Self::event_timestamp(&event.event).0,
                     event.event.sequence.unwrap_or_default(),
                     event.state_epoch,
                 )
@@ -184,10 +184,11 @@ impl ArchivedEventSource for S3ArchivedEventSource {
     async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>> {
         loop {
             if let Some(event) = self.events.pop_front() {
-                let decoder = decoder_for(&mut self.decoders, event.exchange)?;
+                let decoder = Self::decoder_for(&mut self.decoders, event.exchange)?;
                 let trades = decoder.decode(&event.event)?;
                 if trades.iter().any(|trade| {
-                    shard_for(trade.exchange, trade.trading_pair, self.shard_count) == self.shard
+                    ShardId::for_trading_pair(trade.exchange, trade.trading_pair, self.shard_count)
+                        == self.shard
                 }) {
                     return Ok(Some(event));
                 }

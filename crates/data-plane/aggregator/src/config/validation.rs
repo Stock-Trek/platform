@@ -1,3 +1,4 @@
+use super::aggregator::AggregatorConfig;
 use super::env::{
     AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, AGGREGATOR_CORRECTION_CUTOFF_MS,
     AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
@@ -12,169 +13,173 @@ use strum::EnumCount;
 
 pub(super) const ESTIMATED_BYTES_PER_CLOSED_CANDLE: u64 = 512;
 
-pub(super) fn validate_kv_bucket(name: &str, bucket: &str) -> BpResult<()> {
-    let valid = !bucket.is_empty()
-        && bucket
-            .chars()
-            .all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_'));
-    if valid {
-        Ok(())
-    } else {
-        Err(BpError::config_invalid(
-            name,
-            "must only contain alphanumeric characters, dashes, and underscores",
-        ))
+impl AggregatorConfig {
+    pub(super) fn validate_kv_bucket(name: &str, bucket: &str) -> BpResult<()> {
+        let valid = !bucket.is_empty()
+            && bucket.chars().all(|character| {
+                character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
+            });
+        if valid {
+            Ok(())
+        } else {
+            Err(BpError::config_invalid(
+                name,
+                "must only contain alphanumeric characters, dashes, and underscores",
+            ))
+        }
+    }
+
+    pub(super) fn parse_max_closed_candles_per_interval(
+        name: &str,
+        value: &str,
+        intervals: &[CandleInterval],
+    ) -> BpResult<BTreeMap<CandleInterval, usize>> {
+        let mut caps = BTreeMap::new();
+        for entry in value.split(',').map(str::trim).filter(|v| !v.is_empty()) {
+            let Some((label, count)) = entry.split_once('=') else {
+                return Err(BpError::config_invalid(
+                    name,
+                    format!("entry {entry:?} must use <interval>=<count>"),
+                ));
+            };
+            let interval = CandleInterval::from_label(label.trim())
+                .map_err(|error| BpError::config_invalid_source(name, error))?;
+            if !intervals.contains(&interval) {
+                return Err(BpError::config_invalid(
+                    name,
+                    format!("interval {} is not an AlignedWindow interval", interval),
+                ));
+            }
+            let count: usize = count.trim().parse().map_err(|error| {
+                BpError::config_invalid(
+                    name,
+                    format!("invalid candle count for {}: {error}", interval),
+                )
+            })?;
+            if count == 0 {
+                return Err(BpError::config_invalid(
+                    name,
+                    format!("interval {} must have a positive candle count", interval),
+                ));
+            }
+            if caps.insert(interval, count).is_some() {
+                return Err(BpError::config_invalid(
+                    name,
+                    format!("interval {} is listed more than once", interval),
+                ));
+            }
+        }
+
+        let configured = intervals.iter().copied().collect::<BTreeSet<_>>();
+        let missing = configured
+            .iter()
+            .filter(|interval| !caps.contains_key(interval))
+            .map(|interval| interval.label())
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
+            return Err(BpError::config_invalid(
+                name,
+                format!(
+                    "missing a candle count for interval(s): {}",
+                    missing.join(", ")
+                ),
+            ));
+        }
+        let unknown = caps
+            .keys()
+            .filter(|interval| !configured.contains(interval))
+            .map(|interval| interval.label())
+            .collect::<Vec<_>>();
+        if !unknown.is_empty() {
+            return Err(BpError::config_invalid(
+                name,
+                format!("unknown interval(s): {}", unknown.join(", ")),
+            ));
+        }
+
+        Ok(caps)
     }
 }
 
-pub(super) fn parse_max_closed_candles_per_interval(
-    name: &str,
-    value: &str,
-    intervals: &[CandleInterval],
-) -> BpResult<BTreeMap<CandleInterval, usize>> {
-    let mut caps = BTreeMap::new();
-    for entry in value.split(',').map(str::trim).filter(|v| !v.is_empty()) {
-        let Some((label, count)) = entry.split_once('=') else {
+impl AggregatorConfig {
+    #[allow(clippy::too_many_arguments)]
+    pub(super) fn validate_retention(
+        intervals: &[CandleInterval],
+        caps: &BTreeMap<CandleInterval, usize>,
+        shard_count: usize,
+        allowed_lateness: Duration,
+        correction_cutoff_ms: u64,
+        memory_budget_bytes: usize,
+    ) -> BpResult<()> {
+        let configured = intervals.iter().copied().collect::<BTreeSet<_>>();
+        let missing = configured
+            .iter()
+            .filter(|interval| !caps.contains_key(interval))
+            .map(|interval| interval.label())
+            .collect::<Vec<_>>();
+        if !missing.is_empty() {
             return Err(BpError::config_invalid(
-                name,
-                format!("entry {entry:?} must use <interval>=<count>"),
-            ));
-        };
-        let interval = CandleInterval::from_label(label.trim())
-            .map_err(|error| BpError::config_invalid_source(name, error))?;
-        if !intervals.contains(&interval) {
-            return Err(BpError::config_invalid(
-                name,
-                format!("interval {} is not an AlignedWindow interval", interval),
+                AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
+                format!(
+                    "missing a candle count for interval(s): {}",
+                    missing.join(", ")
+                ),
             ));
         }
-        let count: usize = count.trim().parse().map_err(|error| {
-            BpError::config_invalid(
-                name,
-                format!("invalid candle count for {}: {error}", interval),
-            )
+        let unknown = caps
+            .keys()
+            .filter(|interval| !configured.contains(interval))
+            .map(|interval| interval.label())
+            .collect::<Vec<_>>();
+        if !unknown.is_empty() {
+            return Err(BpError::config_invalid(
+                AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
+                format!("unknown interval(s): {}", unknown.join(", ")),
+            ));
+        }
+        if caps.values().any(|cap| *cap == 0) {
+            return Err(BpError::config_invalid(
+                AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
+                "every interval must have a positive candle count",
+            ));
+        }
+
+        if correction_cutoff_ms == 0 {
+            return Err(BpError::config_invalid(
+                AGGREGATOR_CORRECTION_CUTOFF_MS,
+                "must be greater than zero",
+            ));
+        }
+        let correction_cutoff = Duration::from_millis(correction_cutoff_ms);
+        if correction_cutoff < allowed_lateness {
+            return Err(BpError::config_invalid(
+                AGGREGATOR_CORRECTION_CUTOFF_MS,
+                format!("must be at least AGGREGATOR_ALLOWED_LATENESS_MS ({allowed_lateness:?})"),
+            ));
+        }
+
+        let limits = RetentionLimits::calculate(intervals, caps, shard_count)?;
+        let memory_budget_bytes = u64::try_from(memory_budget_bytes).map_err(|error| {
+            BpError::config_invalid_source(AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, error)
         })?;
-        if count == 0 {
+        if limits.estimated_memory_bytes > memory_budget_bytes {
             return Err(BpError::config_invalid(
-                name,
-                format!("interval {} must have a positive candle count", interval),
-            ));
-        }
-        if caps.insert(interval, count).is_some() {
-            return Err(BpError::config_invalid(
-                name,
-                format!("interval {} is listed more than once", interval),
-            ));
-        }
-    }
-
-    let configured = intervals.iter().copied().collect::<BTreeSet<_>>();
-    let missing = configured
-        .iter()
-        .filter(|interval| !caps.contains_key(interval))
-        .map(|interval| interval.label())
-        .collect::<Vec<_>>();
-    if !missing.is_empty() {
-        return Err(BpError::config_invalid(
-            name,
-            format!(
-                "missing a candle count for interval(s): {}",
-                missing.join(", ")
-            ),
-        ));
-    }
-    let unknown = caps
-        .keys()
-        .filter(|interval| !configured.contains(interval))
-        .map(|interval| interval.label())
-        .collect::<Vec<_>>();
-    if !unknown.is_empty() {
-        return Err(BpError::config_invalid(
-            name,
-            format!("unknown interval(s): {}", unknown.join(", ")),
-        ));
-    }
-
-    Ok(caps)
-}
-
-#[allow(clippy::too_many_arguments)]
-pub(super) fn validate_retention(
-    intervals: &[CandleInterval],
-    caps: &BTreeMap<CandleInterval, usize>,
-    shard_count: usize,
-    allowed_lateness: Duration,
-    correction_cutoff_ms: u64,
-    memory_budget_bytes: usize,
-) -> BpResult<()> {
-    let configured = intervals.iter().copied().collect::<BTreeSet<_>>();
-    let missing = configured
-        .iter()
-        .filter(|interval| !caps.contains_key(interval))
-        .map(|interval| interval.label())
-        .collect::<Vec<_>>();
-    if !missing.is_empty() {
-        return Err(BpError::config_invalid(
-            AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
-            format!(
-                "missing a candle count for interval(s): {}",
-                missing.join(", ")
-            ),
-        ));
-    }
-    let unknown = caps
-        .keys()
-        .filter(|interval| !configured.contains(interval))
-        .map(|interval| interval.label())
-        .collect::<Vec<_>>();
-    if !unknown.is_empty() {
-        return Err(BpError::config_invalid(
-            AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
-            format!("unknown interval(s): {}", unknown.join(", ")),
-        ));
-    }
-    if caps.values().any(|cap| *cap == 0) {
-        return Err(BpError::config_invalid(
-            AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
-            "every interval must have a positive candle count",
-        ));
-    }
-
-    if correction_cutoff_ms == 0 {
-        return Err(BpError::config_invalid(
-            AGGREGATOR_CORRECTION_CUTOFF_MS,
-            "must be greater than zero",
-        ));
-    }
-    let correction_cutoff = Duration::from_millis(correction_cutoff_ms);
-    if correction_cutoff < allowed_lateness {
-        return Err(BpError::config_invalid(
-            AGGREGATOR_CORRECTION_CUTOFF_MS,
-            format!("must be at least AGGREGATOR_ALLOWED_LATENESS_MS ({allowed_lateness:?})"),
-        ));
-    }
-
-    let limits = RetentionLimits::calculate(intervals, caps, shard_count)?;
-    let memory_budget_bytes = u64::try_from(memory_budget_bytes).map_err(|error| {
-        BpError::config_invalid_source(AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, error)
-    })?;
-    if limits.estimated_memory_bytes > memory_budget_bytes {
-        return Err(BpError::config_invalid(
-            AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES,
-            format!(
-                "worst-case closed-candle state needs {} bytes for {} retained candles per shard \
+                AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES,
+                format!(
+                    "worst-case closed-candle state needs {} bytes for {} retained candles per shard \
                  (static pair ceiling {}, static candle-key ceiling {}), exceeding the {} byte budget; \
                  caps: {}",
-                limits.estimated_memory_bytes,
-                limits.worst_case_retained_candles_per_shard,
-                limits.static_pair_ceiling,
-                limits.static_key_ceiling,
-                memory_budget_bytes,
-                format_caps(caps),
-            ),
-        ));
+                    limits.estimated_memory_bytes,
+                    limits.worst_case_retained_candles_per_shard,
+                    limits.static_pair_ceiling,
+                    limits.static_key_ceiling,
+                    memory_budget_bytes,
+                    RetentionLimits::format_caps(caps),
+                ),
+            ));
+        }
+        Ok(())
     }
-    Ok(())
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -197,34 +202,34 @@ impl RetentionLimits {
                 "must be greater than zero",
             ));
         }
-        let asset_id_count = u64::try_from(AssetId::COUNT).map_err(|_| overflow_error())?;
-        let cex_id_count = u64::try_from(CexId::COUNT).map_err(|_| overflow_error())?;
+        let asset_id_count = u64::try_from(AssetId::COUNT).map_err(|_| Self::overflow_error())?;
+        let cex_id_count = u64::try_from(CexId::COUNT).map_err(|_| Self::overflow_error())?;
         let asset_pairs = asset_id_count
             .checked_mul(asset_id_count)
-            .ok_or_else(overflow_error)?;
+            .ok_or_else(Self::overflow_error)?;
         let static_pair_ceiling = cex_id_count
             .checked_mul(asset_pairs)
-            .ok_or_else(overflow_error)?;
+            .ok_or_else(Self::overflow_error)?;
         let static_key_ceiling = static_pair_ceiling
-            .checked_mul(u64::try_from(intervals.len()).map_err(|_| overflow_error())?)
-            .ok_or_else(overflow_error)?;
+            .checked_mul(u64::try_from(intervals.len()).map_err(|_| Self::overflow_error())?)
+            .ok_or_else(Self::overflow_error)?;
 
         let sum_caps = caps.values().try_fold(0_u64, |total, cap| {
             total
-                .checked_add(u64::try_from(*cap).map_err(|_| overflow_error())?)
-                .ok_or_else(overflow_error)
+                .checked_add(u64::try_from(*cap).map_err(|_| Self::overflow_error())?)
+                .ok_or_else(Self::overflow_error)
         })?;
-        let shard_count = u64::try_from(shard_count).map_err(|_| overflow_error())?;
+        let shard_count = u64::try_from(shard_count).map_err(|_| Self::overflow_error())?;
         let pairs_per_shard = static_pair_ceiling
             .checked_add(shard_count - 1)
-            .ok_or_else(overflow_error)?
+            .ok_or_else(Self::overflow_error)?
             / shard_count;
         let worst_case_retained_candles_per_shard = pairs_per_shard
             .checked_mul(sum_caps)
-            .ok_or_else(overflow_error)?;
+            .ok_or_else(Self::overflow_error)?;
         let estimated_memory_bytes = worst_case_retained_candles_per_shard
             .checked_mul(ESTIMATED_BYTES_PER_CLOSED_CANDLE)
-            .ok_or_else(overflow_error)?;
+            .ok_or_else(Self::overflow_error)?;
 
         Ok(Self {
             static_pair_ceiling,
@@ -235,37 +240,41 @@ impl RetentionLimits {
     }
 }
 
-fn format_caps(caps: &BTreeMap<CandleInterval, usize>) -> String {
-    caps.iter()
-        .map(|(interval, cap)| format!("{}={cap}", interval.label()))
-        .collect::<Vec<_>>()
-        .join(",")
+impl RetentionLimits {
+    fn format_caps(caps: &BTreeMap<CandleInterval, usize>) -> String {
+        caps.iter()
+            .map(|(interval, cap)| format!("{}={cap}", interval.label()))
+            .collect::<Vec<_>>()
+            .join(",")
+    }
+
+    fn overflow_error() -> BpError {
+        BpError::config_invalid(
+            AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
+            "retention calculation overflowed",
+        )
+    }
 }
 
-fn overflow_error() -> BpError {
-    BpError::config_invalid(
-        AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
-        "retention calculation overflowed",
-    )
-}
-
-pub(super) fn parse_correction_cutoff(
-    name: &str,
-    value: u64,
-    allowed_lateness: Duration,
-) -> BpResult<DurationMilliseconds> {
-    if value == 0 {
-        return Err(BpError::config_invalid(name, "must be greater than zero"));
+impl AggregatorConfig {
+    pub(super) fn parse_correction_cutoff(
+        name: &str,
+        value: u64,
+        allowed_lateness: Duration,
+    ) -> BpResult<DurationMilliseconds> {
+        if value == 0 {
+            return Err(BpError::config_invalid(name, "must be greater than zero"));
+        }
+        if Duration::from_millis(value) < allowed_lateness {
+            return Err(BpError::config_invalid(
+                name,
+                format!("must be at least AGGREGATOR_ALLOWED_LATENESS_MS ({allowed_lateness:?})"),
+            ));
+        }
+        let value =
+            i64::try_from(value).map_err(|error| BpError::config_invalid_source(name, error))?;
+        Ok(DurationMilliseconds(value))
     }
-    if Duration::from_millis(value) < allowed_lateness {
-        return Err(BpError::config_invalid(
-            name,
-            format!("must be at least AGGREGATOR_ALLOWED_LATENESS_MS ({allowed_lateness:?})"),
-        ));
-    }
-    let value =
-        i64::try_from(value).map_err(|error| BpError::config_invalid_source(name, error))?;
-    Ok(DurationMilliseconds(value))
 }
 
 #[cfg(test)]
@@ -283,9 +292,13 @@ mod tests {
     fn cap_parsing_requires_one_positive_entry_per_interval() {
         let intervals = intervals();
         assert_eq!(
-            parse_max_closed_candles_per_interval("caps", "1m=1440,5m=288", &intervals,)
-                .unwrap()
-                .len(),
+            AggregatorConfig::parse_max_closed_candles_per_interval(
+                "caps",
+                "1m=1440,5m=288",
+                &intervals,
+            )
+            .unwrap()
+            .len(),
             2
         );
 
@@ -298,7 +311,8 @@ mod tests {
             "1m,5m=1",
         ] {
             assert!(
-                parse_max_closed_candles_per_interval("caps", value, &intervals).is_err(),
+                AggregatorConfig::parse_max_closed_candles_per_interval("caps", value, &intervals)
+                    .is_err(),
                 "{value} should be rejected"
             );
         }
@@ -338,9 +352,27 @@ mod tests {
             .unwrap()
             .estimated_memory_bytes as usize;
 
-        assert!(validate_retention(&intervals, &caps, 1, Duration::ZERO, 1_000, required,).is_ok());
         assert!(
-            validate_retention(&intervals, &caps, 1, Duration::ZERO, 1_000, required - 1,).is_err()
+            AggregatorConfig::validate_retention(
+                &intervals,
+                &caps,
+                1,
+                Duration::ZERO,
+                1_000,
+                required,
+            )
+            .is_ok()
+        );
+        assert!(
+            AggregatorConfig::validate_retention(
+                &intervals,
+                &caps,
+                1,
+                Duration::ZERO,
+                1_000,
+                required - 1,
+            )
+            .is_err()
         );
     }
 
@@ -350,7 +382,7 @@ mod tests {
         let caps = BTreeMap::from([(intervals[0], 1), (intervals[1], 1)]);
 
         assert!(
-            validate_retention(
+            AggregatorConfig::validate_retention(
                 &intervals,
                 &BTreeMap::from([(intervals[0], 1)]),
                 1,
@@ -361,7 +393,7 @@ mod tests {
             .is_err()
         );
         assert!(
-            validate_retention(
+            AggregatorConfig::validate_retention(
                 &intervals,
                 &BTreeMap::from([(intervals[0], 1), (intervals[1], 0)]),
                 1,
@@ -372,7 +404,7 @@ mod tests {
             .is_err()
         );
         assert!(
-            validate_retention(
+            AggregatorConfig::validate_retention(
                 &intervals,
                 &BTreeMap::from([(intervals[0], 1), (intervals[1], 1)]),
                 1,
@@ -384,10 +416,20 @@ mod tests {
         );
 
         assert!(
-            validate_retention(&intervals, &caps, 1, Duration::from_millis(1_000), 999, 1,)
+            AggregatorConfig::validate_retention(
+                &intervals,
+                &caps,
+                1,
+                Duration::from_millis(1_000),
+                999,
+                1,
+            )
+            .is_err()
+        );
+        assert!(
+            AggregatorConfig::validate_retention(&intervals, &caps, 1, Duration::ZERO, 0, 1,)
                 .is_err()
         );
-        assert!(validate_retention(&intervals, &caps, 1, Duration::ZERO, 0, 1,).is_err());
 
         let overflow_caps =
             BTreeMap::from([(intervals[0], usize::MAX), (intervals[1], usize::MAX)]);
