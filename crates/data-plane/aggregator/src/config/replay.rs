@@ -34,22 +34,63 @@ impl ReplayStartPolicy {
         matches!(self, Self::Checkpoint | Self::Archive)
     }
 
-    /// Parses the operator-facing policy name, accepting a few common aliases.
+    /// Parses a canonical operator-facing policy name.
+    ///
+    /// Only the names returned by [`Self::label`] are accepted; aliases are
+    /// intentionally rejected.
     pub fn parse(value: &str) -> Option<Self> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "checkpoint" | "resume" | "checkpoint-first" | "checkpoint_first" => {
-                Some(Self::Checkpoint)
-            }
-            "archive" | "rebuild" | "rebuild-archive" | "rebuild_archive" => Some(Self::Archive),
-            "earliest" | "beginning" | "start" | "all" => Some(Self::Earliest),
-            "latest" | "new" | "now" => Some(Self::Latest),
-            _ => None,
-        }
+        let value = value.trim();
+        [
+            Self::Checkpoint,
+            Self::Archive,
+            Self::Earliest,
+            Self::Latest,
+        ]
+        .into_iter()
+        .find(|policy| policy.label().eq_ignore_ascii_case(value))
     }
 }
 
 impl fmt::Display for ReplayStartPolicy {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter.write_str(self.label())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::ReplayStartPolicy;
+
+    #[test]
+    fn parse_accepts_only_canonical_policy_labels() {
+        for (value, expected) in [
+            ("checkpoint", ReplayStartPolicy::Checkpoint),
+            ("archive", ReplayStartPolicy::Archive),
+            ("earliest", ReplayStartPolicy::Earliest),
+            ("latest", ReplayStartPolicy::Latest),
+            (" CHECKPOINT ", ReplayStartPolicy::Checkpoint),
+        ] {
+            assert_eq!(ReplayStartPolicy::parse(value), Some(expected));
+        }
+
+        for alias in [
+            "resume",
+            "checkpoint-first",
+            "checkpoint_first",
+            "rebuild",
+            "rebuild-archive",
+            "rebuild_archive",
+            "beginning",
+            "start",
+            "all",
+            "new",
+            "now",
+        ] {
+            assert_eq!(
+                ReplayStartPolicy::parse(alias),
+                None,
+                "{alias} should be rejected"
+            );
+        }
     }
 }
