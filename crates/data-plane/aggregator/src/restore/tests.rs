@@ -1,13 +1,13 @@
 use super::catalog::{
     AGGREGATOR_ARCHIVE_S3_BUCKET, AGGREGATOR_ARCHIVE_S3_PREFIX, ArchiveObject,
-    ArchiveRecoveryConfig, select_event_objects, sort_archive_objects,
+    ArchiveRecoveryConfig,
 };
-use super::rebuild::{RestoreOptions, RestoreSource, rebuild_state_from_archive, restore_shard};
+use super::rebuild::{RestoreOptions, RestoreSource};
 use super::replay::ArchivedEventSource;
 use crate::checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore};
 use crate::config::ReplayStartPolicy;
 use crate::processor::{CandleProcessor, ProcessorConfig};
-use crate::shard::{ShardId, shard_for};
+use crate::shard::ShardId;
 use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
@@ -153,13 +153,13 @@ async fn a_compatible_checkpoint_is_restored_without_replaying_the_archive() {
     store.save(&checkpoint).await.unwrap();
 
     let connects = Arc::new(AtomicUsize::new(0));
-    let restored = restore_shard(
-        &store,
-        counting_archive(vec![event(1, 1_000)], connects.clone()),
-        &options(shard, 1),
-    )
-    .await
-    .unwrap();
+    let restored = options(shard, 1)
+        .restore(
+            &store,
+            counting_archive(vec![event(1, 1_000)], connects.clone()),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(restored.start_sequence(), Some(11));
     assert_eq!(restored.start, ConsumerStart::Sequence(11));
@@ -175,13 +175,13 @@ async fn a_compatible_checkpoint_is_restored_without_replaying_the_archive() {
 async fn a_missing_checkpoint_rebuilds_from_archived_events() {
     let store = InMemoryStateStore::new();
     let shard = ShardId::new(0);
-    let restored = restore_shard(
-        &store,
-        archive_source(VecArchive::new(vec![event(1, 61_000), event(2, 62_000)])),
-        &options(shard, 1),
-    )
-    .await
-    .unwrap();
+    let restored = options(shard, 1)
+        .restore(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000), event(2, 62_000)])),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(restored.start_sequence(), None);
     assert_eq!(restored.start, ConsumerStart::Earliest);
@@ -210,7 +210,8 @@ async fn a_rebuild_continues_the_latest_archived_state_epoch_without_advancing_i
     let shard = ShardId::new(0);
     let archive = VecArchive::with_epochs(vec![(event(1, 61_000), 7), (event(2, 62_000), 3)]);
 
-    let restored = restore_shard(&store, archive_source(archive), &options(shard, 1))
+    let restored = options(shard, 1)
+        .restore(&store, archive_source(archive))
         .await
         .unwrap();
 
@@ -227,13 +228,13 @@ async fn an_incompatible_checkpoint_rebuilds_from_archived_events() {
     let checkpoint = CheckpointRecord::new(shard, "aggregator-shards", 11, state);
     store.save(&checkpoint).await.unwrap();
 
-    let restored = restore_shard(
-        &store,
-        archive_source(VecArchive::new(vec![event(1, 61_000)])),
-        &options(shard, 1),
-    )
-    .await
-    .unwrap();
+    let restored = options(shard, 1)
+        .restore(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        )
+        .await
+        .unwrap();
 
     assert!(restored.rebuilt_from_archive);
     assert_eq!(restored.start_sequence(), None);
@@ -245,15 +246,15 @@ async fn an_incompatible_checkpoint_rebuilds_from_archived_events() {
 async fn rebuild_only_applies_events_owned_by_the_shard() {
     let store = InMemoryStateStore::new();
     let shard_count = 2;
-    let bitcoin_shard = shard_for(CexId::Binance, pair(), shard_count);
+    let bitcoin_shard = ShardId::for_trading_pair(CexId::Binance, pair(), shard_count);
     let other_shard = ShardId::new((bitcoin_shard.get() + 1) % 2);
-    let restored = restore_shard(
-        &store,
-        archive_source(VecArchive::new(vec![event(1, 61_000)])),
-        &options(other_shard, shard_count),
-    )
-    .await
-    .unwrap();
+    let restored = options(other_shard, shard_count)
+        .restore(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        )
+        .await
+        .unwrap();
 
     assert!(restored.rebuilt_from_archive);
     assert_eq!(restored.state.open_candles_len(), 0);
@@ -263,15 +264,15 @@ async fn rebuild_only_applies_events_owned_by_the_shard() {
 async fn rebuild_watermark_only_moves_forward_for_events_owned_by_the_shard() {
     let store = InMemoryStateStore::new();
     let shard_count = 2;
-    let bitcoin_shard = shard_for(CexId::Binance, pair(), shard_count);
+    let bitcoin_shard = ShardId::for_trading_pair(CexId::Binance, pair(), shard_count);
     let other_shard = ShardId::new((bitcoin_shard.get() + 1) % 2);
-    let restored = restore_shard(
-        &store,
-        archive_source(VecArchive::new(vec![event(1, 61_000)])),
-        &options(other_shard, shard_count),
-    )
-    .await
-    .unwrap();
+    let restored = options(other_shard, shard_count)
+        .restore(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(restored.state.watermark, None);
     assert_eq!(restored.replay_watermark(), None);
@@ -296,13 +297,13 @@ async fn archive_policy_ignores_a_compatible_checkpoint() {
     let connects = Arc::new(AtomicUsize::new(0));
     let mut options = options(shard, 1);
     options.replay_start_policy = ReplayStartPolicy::Archive;
-    let restored = restore_shard(
-        &store,
-        counting_archive(vec![event(1, 61_000)], connects.clone()),
-        &options,
-    )
-    .await
-    .unwrap();
+    let restored = options
+        .restore(
+            &store,
+            counting_archive(vec![event(1, 61_000)], connects.clone()),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(restored.restored_from, RestoreSource::Archive);
     assert!(restored.rebuilt_from_archive);
@@ -319,13 +320,13 @@ async fn earliest_policy_skips_checkpoint_and_archive() {
     let mut options = options(shard, 1);
     options.replay_start_policy = ReplayStartPolicy::Earliest;
 
-    let restored = restore_shard(
-        &store,
-        counting_archive(vec![event(1, 61_000)], connects.clone()),
-        &options,
-    )
-    .await
-    .unwrap();
+    let restored = options
+        .restore(
+            &store,
+            counting_archive(vec![event(1, 61_000)], connects.clone()),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(restored.restored_from, RestoreSource::Empty);
     assert!(!restored.rebuilt_from_archive);
@@ -343,13 +344,13 @@ async fn empty_state_uses_the_configured_schema_version() {
     options.replay_start_policy = ReplayStartPolicy::Earliest;
     options.expected_schema_version = STATE_SCHEMA_VERSION + 2;
 
-    let restored = restore_shard(
-        &store,
-        archive_source(VecArchive::new(vec![event(1, 61_000)])),
-        &options,
-    )
-    .await
-    .unwrap();
+    let restored = options
+        .restore(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(restored.restored_from, RestoreSource::Empty);
     assert_eq!(restored.state.schema_version, STATE_SCHEMA_VERSION + 2);
@@ -362,13 +363,13 @@ async fn latest_policy_starts_at_the_end_of_the_live_source() {
     let mut options = options(shard, 1);
     options.replay_start_policy = ReplayStartPolicy::Latest;
 
-    let restored = restore_shard(
-        &store,
-        archive_source(VecArchive::new(vec![event(1, 61_000)])),
-        &options,
-    )
-    .await
-    .unwrap();
+    let restored = options
+        .restore(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(restored.restored_from, RestoreSource::Empty);
     assert_eq!(restored.start, ConsumerStart::Latest);
@@ -393,13 +394,13 @@ async fn configured_schema_mismatch_forces_archive_rebuild() {
 
     let mut options = options(shard, 1);
     options.expected_schema_version = STATE_SCHEMA_VERSION + 1;
-    let restored = restore_shard(
-        &store,
-        archive_source(VecArchive::new(vec![event(1, 61_000)])),
-        &options,
-    )
-    .await
-    .unwrap();
+    let restored = options
+        .restore(
+            &store,
+            archive_source(VecArchive::new(vec![event(1, 61_000)])),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(restored.restored_from, RestoreSource::Archive);
     assert!(restored.rebuilt_from_archive);
@@ -472,8 +473,8 @@ fn archive_recovery_selects_only_owned_event_objects() {
         archive_object(&owned_event),
     ];
 
-    let mut selected = select_event_objects(objects, shard, shard_count);
-    sort_archive_objects(&mut selected);
+    let mut selected = ArchiveObject::select_for_shard(objects, shard, shard_count);
+    ArchiveObject::sort(&mut selected);
 
     assert_eq!(
         selected,
@@ -508,7 +509,7 @@ fn archive_recovery_orders_files_by_coverage_hour_not_layer_prefix() {
     .unwrap();
 
     let mut objects = vec![archive_object(&newer_compacted), archive_object(&older_raw)];
-    sort_archive_objects(&mut objects);
+    ArchiveObject::sort(&mut objects);
 
     assert_eq!(
         objects,
@@ -520,7 +521,7 @@ fn archive_recovery_orders_files_by_coverage_hour_not_layer_prefix() {
 fn archive_recovery_ignores_event_objects_without_a_routing_bucket() {
     let key = "market-data/raw/events/year=2024/month=01/day=02/hour=03/legacy.parquet";
 
-    let selected = select_event_objects(vec![archive_object(key)], ShardId::new(0), 1);
+    let selected = ArchiveObject::select_for_shard(vec![archive_object(key)], ShardId::new(0), 1);
 
     assert!(selected.is_empty());
 }
@@ -577,13 +578,10 @@ async fn an_empty_archive_starts_with_explicit_empty_state() {
         let mut options = options(shard, 1);
         options.replay_start_policy = policy;
 
-        let restored = restore_shard(
-            &store,
-            archive_source(VecArchive::new(Vec::new())),
-            &options,
-        )
-        .await
-        .unwrap();
+        let restored = options
+            .restore(&store, archive_source(VecArchive::new(Vec::new())))
+            .await
+            .unwrap();
 
         assert_eq!(restored.restored_from, RestoreSource::Empty);
         assert!(!restored.rebuilt_from_archive);
@@ -601,13 +599,13 @@ async fn transient_checkpoint_read_failures_are_returned_instead_of_falling_back
     let shard = ShardId::new(0);
     let connects = Arc::new(AtomicUsize::new(0));
 
-    let error = restore_shard(
-        &store,
-        counting_archive(vec![event(1, 61_000)], connects.clone()),
-        &options(shard, 1),
-    )
-    .await
-    .unwrap_err();
+    let error = options(shard, 1)
+        .restore(
+            &store,
+            counting_archive(vec![event(1, 61_000)], connects.clone()),
+        )
+        .await
+        .unwrap_err();
 
     assert!(error.retryability().is_retryable());
     assert_eq!(connects.load(Ordering::SeqCst), 0);
@@ -621,13 +619,13 @@ async fn permanent_checkpoint_read_failures_still_rebuild_from_the_archive() {
     let shard = ShardId::new(0);
     let connects = Arc::new(AtomicUsize::new(0));
 
-    let restored = restore_shard(
-        &store,
-        counting_archive(vec![event(1, 61_000)], connects.clone()),
-        &options(shard, 1),
-    )
-    .await
-    .unwrap();
+    let restored = options(shard, 1)
+        .restore(
+            &store,
+            counting_archive(vec![event(1, 61_000)], connects.clone()),
+        )
+        .await
+        .unwrap();
 
     assert_eq!(restored.restored_from, RestoreSource::Archive);
     assert!(restored.rebuilt_from_archive);
@@ -639,13 +637,12 @@ async fn checkpoint_fallback_without_archive_configuration_fails_fast() {
     let store = InMemoryStateStore::new();
     let shard = ShardId::new(0);
 
-    let error = restore_shard(
-        &store,
-        || async { Err(BpError::config_missing(AGGREGATOR_ARCHIVE_S3_BUCKET)) },
-        &options(shard, 1),
-    )
-    .await
-    .unwrap_err();
+    let error = options(shard, 1)
+        .restore(&store, || async {
+            Err(BpError::config_missing(AGGREGATOR_ARCHIVE_S3_BUCKET))
+        })
+        .await
+        .unwrap_err();
 
     assert!(matches!(
         error,
@@ -671,13 +668,10 @@ async fn an_oversized_checkpoint_is_pruned_to_the_current_caps() {
 
     let mut options = options(shard, 1);
     options.max_closed_candles_per_interval = BTreeMap::from([(interval, 1)]);
-    let restored = restore_shard(
-        &store,
-        archive_source(VecArchive::new(Vec::new())),
-        &options,
-    )
-    .await
-    .unwrap();
+    let restored = options
+        .restore(&store, archive_source(VecArchive::new(Vec::new())))
+        .await
+        .unwrap();
 
     assert_eq!(restored.restored_from, RestoreSource::Checkpoint);
     assert_eq!(restored.state.closed_candles_len(), 1);
@@ -719,13 +713,10 @@ async fn restore_prunes_only_the_intervals_whose_cap_shrank() {
     let mut options = options(shard, 1);
     options.intervals = vec![one_minute, five_minutes];
     options.max_closed_candles_per_interval = BTreeMap::from([(one_minute, 1), (five_minutes, 2)]);
-    let restored = restore_shard(
-        &store,
-        archive_source(VecArchive::new(Vec::new())),
-        &options,
-    )
-    .await
-    .unwrap();
+    let restored = options
+        .restore(&store, archive_source(VecArchive::new(Vec::new())))
+        .await
+        .unwrap();
 
     assert_eq!(restored.restored_from, RestoreSource::Checkpoint);
     let pair = pair();
@@ -779,7 +770,7 @@ async fn archive_rebuild_uses_the_same_caps_and_cutoff_as_live_processing() {
     }
     let live_state = live.into_state();
 
-    let archive_state = rebuild_state_from_archive(
+    let archive_state = AggregatorState::rebuild_from_archive(
         &mut VecArchive::new(events),
         shard,
         &[interval],

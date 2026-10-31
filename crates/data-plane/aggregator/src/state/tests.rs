@@ -122,7 +122,7 @@ fn contiguous_sequences_are_not_pruned() {
 #[test]
 fn restored_state_is_pruned_to_the_deduplication_bound() {
     let mut state = AggregatorState::new();
-    let stream = stream_id(CexId::Binance, "btcusdt@trade");
+    let stream = StreamProgress::stream_id(CexId::Binance, "btcusdt@trade");
     let ranges = (0..MAX_SEEN_SEQUENCE_RANGES as u64 * 2)
         .map(|sequence| SequenceRange::new(sequence * 2, sequence * 2))
         .collect();

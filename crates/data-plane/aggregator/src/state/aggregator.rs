@@ -5,7 +5,6 @@
 //! update of this state, so replaying the same event log produces the same
 //! candles and the same incompleteness records.
 
-use super::candles::candle_maps_eq;
 use super::gaps::{IncompleteWindow, KnownGap};
 use super::streams::StreamProgress;
 use platform_errors::{BpError, BpResult};
@@ -141,7 +140,7 @@ impl PartialEq for AggregatorState {
             && self.streams == other.streams
             && self.known_gaps == other.known_gaps
             && self.incomplete_windows == other.incomplete_windows
-            && candle_maps_eq(&self.open_candles, &other.open_candles)
-            && candle_maps_eq(&self.closed_candles, &other.closed_candles)
+            && Self::candle_maps_eq(&self.open_candles, &other.open_candles)
+            && Self::candle_maps_eq(&self.closed_candles, &other.closed_candles)
     }
 }

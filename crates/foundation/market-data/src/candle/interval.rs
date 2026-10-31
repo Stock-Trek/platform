@@ -113,14 +113,14 @@ impl CandleInterval {
 
     fn bounds_for(self, timestamp: TimestampMilliseconds) -> (i64, i64) {
         match self.window {
-            AlignedWindow::Months1 => calendar_bounds(timestamp.0, 1),
-            AlignedWindow::Months2 => calendar_bounds(timestamp.0, 2),
-            AlignedWindow::Months3 => calendar_bounds(timestamp.0, 3),
-            AlignedWindow::Months4 => calendar_bounds(timestamp.0, 4),
-            AlignedWindow::Months6 => calendar_bounds(timestamp.0, 6),
-            AlignedWindow::Months12 => calendar_bounds(timestamp.0, 12),
-            AlignedWindow::Years1 => calendar_bounds(timestamp.0, 12),
-            AlignedWindow::Years2 => calendar_bounds(timestamp.0, 24),
+            AlignedWindow::Months1 => Self::calendar_bounds(timestamp.0, 1),
+            AlignedWindow::Months2 => Self::calendar_bounds(timestamp.0, 2),
+            AlignedWindow::Months3 => Self::calendar_bounds(timestamp.0, 3),
+            AlignedWindow::Months4 => Self::calendar_bounds(timestamp.0, 4),
+            AlignedWindow::Months6 => Self::calendar_bounds(timestamp.0, 6),
+            AlignedWindow::Months12 => Self::calendar_bounds(timestamp.0, 12),
+            AlignedWindow::Years1 => Self::calendar_bounds(timestamp.0, 12),
+            AlignedWindow::Years2 => Self::calendar_bounds(timestamp.0, 24),
             window => {
                 let duration = Self::fixed_duration(window);
                 let start = timestamp.0.div_euclid(duration) * duration;
@@ -266,22 +266,24 @@ impl Ord for CandleInterval {
     }
 }
 
-fn calendar_bounds(timestamp_millis: i64, months: u32) -> (i64, i64) {
-    let timestamp = DateTime::<Utc>::from_timestamp_millis(timestamp_millis)
-        .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
-    let month_index = i64::from(timestamp.year()) * 12 + i64::from(timestamp.month0());
-    let months = i64::from(months);
-    let start_month = month_index.div_euclid(months) * months;
-    let start_year = i32::try_from(start_month.div_euclid(12)).unwrap_or(1970);
-    let start_month_of_year = u32::try_from(start_month.rem_euclid(12) + 1).unwrap_or(1);
-    let start = Utc
-        .with_ymd_and_hms(start_year, start_month_of_year, 1, 0, 0, 0)
-        .single()
-        .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
-    let end = start
-        .checked_add_months(Months::new(u32::try_from(months).unwrap_or(1)))
-        .unwrap_or(start);
-    (start.timestamp_millis(), end.timestamp_millis())
+impl CandleInterval {
+    fn calendar_bounds(timestamp_millis: i64, months: u32) -> (i64, i64) {
+        let timestamp = DateTime::<Utc>::from_timestamp_millis(timestamp_millis)
+            .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
+        let month_index = i64::from(timestamp.year()) * 12 + i64::from(timestamp.month0());
+        let months = i64::from(months);
+        let start_month = month_index.div_euclid(months) * months;
+        let start_year = i32::try_from(start_month.div_euclid(12)).unwrap_or(1970);
+        let start_month_of_year = u32::try_from(start_month.rem_euclid(12) + 1).unwrap_or(1);
+        let start = Utc
+            .with_ymd_and_hms(start_year, start_month_of_year, 1, 0, 0, 0)
+            .single()
+            .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
+        let end = start
+            .checked_add_months(Months::new(u32::try_from(months).unwrap_or(1)))
+            .unwrap_or(start);
+        (start.timestamp_millis(), end.timestamp_millis())
+    }
 }
 
 impl Serialize for CandleInterval {

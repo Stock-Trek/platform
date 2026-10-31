@@ -1,8 +1,16 @@
-use platform_aws::secrets::{SSM_DECRYPT_ENV, SSM_PATH_ENV, SsmConfig};
+use platform_aws::{
+    Aws,
+    secrets::{SSM_DECRYPT_ENV, SSM_PATH_ENV, Secrets, SsmConfig},
+};
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
-use platform_exchange_types::{encrypt::EncryptionAlgorithm, urls::TradingMode};
+use platform_exchange_types::{
+    api_key_credential::ApiKeyCredentials, encrypt::EncryptionAlgorithm, urls::TradingMode,
+};
 use platform_runtime::Config;
+use platform_time::{deadline::Deadline, timeouts::Timeouts};
+use secrecy::SecretString;
+use std::time::{Duration, SystemTime};
 use stock_trek_types::cex::cex_id::CexId;
 
 const BACKFILLER_EXCHANGE: &str = "BACKFILLER_EXCHANGE";
@@ -14,6 +22,10 @@ const BACKFILLER_EXCHANGE_TRADING_MODE: &str = "BACKFILLER_EXCHANGE_TRADING_MODE
 const BACKFILLER_EXCHANGE_SIGNING_ALGORITHM: &str = "BACKFILLER_EXCHANGE_SIGNING_ALGORITHM";
 
 const EXCHANGE_SECRET_PREFIX: &str = "BACKFILLER_EXCHANGE";
+const AWS_CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
+const AWS_OPERATION_TIMEOUT: Duration = Duration::from_secs(30);
+const SECRETS_LOAD_DEADLINE: Duration = Duration::from_secs(30);
+const SECRETS_LOAD_BUFFER: Duration = Duration::from_secs(5);
 
 /// SSM parameter names holding an exchange's API key and secret or private
 /// signing key for one trading mode.
@@ -49,6 +61,25 @@ pub struct BackfillerConfig {
 }
 
 impl BackfillerConfig {
+    /// Loads the exchange API credentials for this backfiller's exchange and
+    /// trading mode from SSM.
+    pub async fn exchange_credentials(&self) -> BpResult<ApiKeyCredentials> {
+        let timeouts = Timeouts::from_durations(AWS_CONNECT_TIMEOUT, AWS_OPERATION_TIMEOUT);
+        let sdk_config = Aws::load_sdk_config(timeouts).await;
+        let deadline = Deadline::new(
+            SystemTime::now() + SECRETS_LOAD_DEADLINE,
+            SECRETS_LOAD_BUFFER,
+        );
+        let secrets = Secrets::load(&sdk_config, timeouts, deadline, &self.ssm).await?;
+        let names = Self::exchange_secret_names(self.exchange, self.trading_mode);
+        let api_key = secrets.get(&names.api_key)?;
+        let api_secret = secrets.get(&names.api_secret)?;
+        Ok(ApiKeyCredentials {
+            api_key,
+            secret: SecretString::from(api_secret),
+        })
+    }
+
     pub fn from_env() -> BpResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }

@@ -2,7 +2,7 @@ use platform_aggregator::{
     AGGREGATOR_ARCHIVE_S3_BUCKET, AggregatorConfig, ArchiveRecoveryConfig, ArchivedEventSource,
     LeaseStore, NatsCandleSink, NatsLeaseStore, NatsMarketSource, NatsRouter, NatsShardSource,
     NatsStateStore, ProcessorRunner, RestoreOptions, S3ArchiveRecovery, ShardId, StateStore,
-    WriterLease, new_writer_id, restore_shard, wait_for_lease,
+    WriterLease,
 };
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
@@ -207,7 +207,7 @@ async fn run_shard_once(
     shard: ShardId,
     source_stream: String,
 ) -> BpResult<()> {
-    let writer_id = new_writer_id();
+    let writer_id = WriterLease::new_writer_id();
     let Some(mut lease) =
         acquire_lease_or_shutdown(leases.as_ref(), shard, &writer_id, config.lease_ttl).await?
     else {
@@ -217,9 +217,8 @@ async fn run_shard_once(
     let result = async {
         let restore = async {
             let options = RestoreOptions::from_config(&config, shard, &source_stream);
-            let restored = restore_shard(
-                checkpoints.as_ref(),
-                || async {
+            let restored = options
+                .restore(checkpoints.as_ref(), || async {
                     match &archive_recovery {
                         Some(archive_recovery) => Ok(Box::new(
                             archive_recovery.connect(shard, config.shard_count).await?,
@@ -227,10 +226,8 @@ async fn run_shard_once(
                             as Box<dyn ArchivedEventSource>),
                         None => Err(BpError::config_missing(AGGREGATOR_ARCHIVE_S3_BUCKET)),
                     }
-                },
-                &options,
-            )
-            .await?;
+                })
+                .await?;
             let replay_watermark = restored.replay_watermark();
             let source = NatsShardSource::connect(&config, shard, restored.start).await?;
             Ok::<_, BpError>((restored.state, replay_watermark, source))
@@ -288,7 +285,7 @@ async fn acquire_lease_or_shutdown(
     ttl: Duration,
 ) -> BpResult<Option<WriterLease>> {
     tokio::select! {
-        result = wait_for_lease(leases, shard, owner_id, ttl) => Ok(Some(result?)),
+        result = WriterLease::wait_for_lease(leases, shard, owner_id, ttl) => Ok(Some(result?)),
         signal = Runtime::shutdown_signal() => {
             signal?;
             Ok(None)

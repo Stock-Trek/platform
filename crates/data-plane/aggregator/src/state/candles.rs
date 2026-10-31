@@ -132,37 +132,39 @@ impl AggregatorState {
     }
 }
 
-pub(super) fn candle_maps_eq(
-    left: &HashMap<CandleKey, Vec<Candle>>,
-    right: &HashMap<CandleKey, Vec<Candle>>,
-) -> bool {
-    left.len() == right.len()
-        && left.iter().all(|(key, candles)| {
-            right.get(key).is_some_and(|other| {
-                candles.len() == other.len()
-                    && candles
-                        .iter()
-                        .zip(other)
-                        .all(|(candle, other)| candle_eq(candle, other))
+impl AggregatorState {
+    pub(super) fn candle_maps_eq(
+        left: &HashMap<CandleKey, Vec<Candle>>,
+        right: &HashMap<CandleKey, Vec<Candle>>,
+    ) -> bool {
+        left.len() == right.len()
+            && left.iter().all(|(key, candles)| {
+                right.get(key).is_some_and(|other| {
+                    candles.len() == other.len()
+                        && candles
+                            .iter()
+                            .zip(other)
+                            .all(|(candle, other)| Self::candle_eq(candle, other))
+                })
             })
-        })
-}
+    }
 
-fn candle_eq(left: &Candle, right: &Candle) -> bool {
-    left.key == right.key
-        && left.is_complete == right.is_complete
-        && left.market_candle.start_time_millis_inc == right.market_candle.start_time_millis_inc
-        && left.market_candle.end_time_millis_exc == right.market_candle.end_time_millis_exc
-        && left.market_candle.duration_millis == right.market_candle.duration_millis
-        && left.market_candle.is_candle_closed == right.market_candle.is_candle_closed
-        && left.market_candle.trade_count == right.market_candle.trade_count
-        && left.market_candle.ohlcv.open == right.market_candle.ohlcv.open
-        && left.market_candle.ohlcv.high == right.market_candle.ohlcv.high
-        && left.market_candle.ohlcv.low == right.market_candle.ohlcv.low
-        && left.market_candle.ohlcv.close == right.market_candle.ohlcv.close
-        && left.market_candle.ohlcv.volume == right.market_candle.ohlcv.volume
-        && left.market_candle.ohlcv.quote_volume == right.market_candle.ohlcv.quote_volume
-        && left.market_candle.ohlcv.vwap == right.market_candle.ohlcv.vwap
+    fn candle_eq(left: &Candle, right: &Candle) -> bool {
+        left.key == right.key
+            && left.is_complete == right.is_complete
+            && left.market_candle.start_time_millis_inc == right.market_candle.start_time_millis_inc
+            && left.market_candle.end_time_millis_exc == right.market_candle.end_time_millis_exc
+            && left.market_candle.duration_millis == right.market_candle.duration_millis
+            && left.market_candle.is_candle_closed == right.market_candle.is_candle_closed
+            && left.market_candle.trade_count == right.market_candle.trade_count
+            && left.market_candle.ohlcv.open == right.market_candle.ohlcv.open
+            && left.market_candle.ohlcv.high == right.market_candle.ohlcv.high
+            && left.market_candle.ohlcv.low == right.market_candle.ohlcv.low
+            && left.market_candle.ohlcv.close == right.market_candle.ohlcv.close
+            && left.market_candle.ohlcv.volume == right.market_candle.ohlcv.volume
+            && left.market_candle.ohlcv.quote_volume == right.market_candle.ohlcv.quote_volume
+            && left.market_candle.ohlcv.vwap == right.market_candle.ohlcv.vwap
+    }
 }
 
 /// Serializes grouped open candles as one deterministically sorted list.

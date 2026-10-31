@@ -453,12 +453,12 @@ fn closed_open_keys_keep_a_newer_open_window() {
 
 #[tokio::test]
 async fn live_processing_ignores_trades_owned_by_another_shard() {
-    use crate::shard::shard_for;
+    use crate::shard::ShardId;
     use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
     let shard_count = 2;
     let pair = TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD);
-    let owner = shard_for(CexId::Binance, pair, shard_count);
+    let owner = ShardId::for_trading_pair(CexId::Binance, pair, shard_count);
     let other = ShardId::new((owner.get() + 1) % shard_count as u32);
     let sink = FakeSink::default();
     let observed = sink.clone();

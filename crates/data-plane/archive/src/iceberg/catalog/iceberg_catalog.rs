@@ -150,7 +150,7 @@ impl ArchiveCatalog for IcebergCatalog {
         table: ArchiveIcebergTable,
     ) -> BpResult<HashSet<String>> {
         let table = self.ensure_table(table).await?;
-        Ok(metadata::source_files_from_metadata(&table))
+        Ok(Self::source_files_from_metadata(&table))
     }
 
     async fn compacted_snapshot(
@@ -161,7 +161,7 @@ impl ArchiveCatalog for IcebergCatalog {
         // processed set can never describe a newer snapshot than the files.
         let table = self.ensure_table(table).await?;
         let files = self.data_files_from_table(&table).await?;
-        let processed = metadata::source_files_from_metadata(&table);
+        let processed = Self::source_files_from_metadata(&table);
         Ok((files, processed))
     }
 }

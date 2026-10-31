@@ -7,11 +7,11 @@
 //! rebuilt from the compacted event archive plus the raw tail that has not been
 //! compacted yet.
 
-use super::replay::{ArchivedEventSource, decoder_for};
+use super::replay::{ArchivedEventSource, S3ArchivedEventSource};
 use crate::checkpoint::StateStore;
 use crate::config::{AggregatorConfig, ReplayStartPolicy};
 use crate::processor::{CandleProcessor, ProcessorConfig};
-use crate::shard::{ShardId, trades_for_shard};
+use crate::shard::ShardId;
 use crate::state::AggregatorState;
 use platform_errors::{BpResult, ErrorType};
 use platform_market_data::candle::CandleInterval;
@@ -106,185 +106,186 @@ impl RestoreOptions {
     }
 }
 
-/// Restores a shard from its latest checkpoint, rebuilds it from archived
-/// raw events, or starts with empty state according to the configured policy.
-///
-/// A checkpoint is accepted only when it belongs to this shard, names the
-/// same source stream, and carries the expected state schema. Otherwise the
-/// archive is replayed from the beginning and the caller starts the live source
-/// from the beginning as well. Events at or before the rebuilt watermark are
-/// then ignored by [`crate::runner::ProcessorRunner`] to avoid applying state
-/// twice.
-///
-/// `connect_archive` is only invoked when archive replay is required, so a
-/// valid checkpoint or an `earliest`/`latest` start performs no archive I/O.
-pub async fn restore_shard<F, Fut>(
-    store: &dyn StateStore,
-    connect_archive: F,
-    options: &RestoreOptions,
-) -> BpResult<RestoredShard>
-where
-    F: FnOnce() -> Fut,
-    Fut: Future<Output = BpResult<Box<dyn ArchivedEventSource>>>,
-{
-    let started = Instant::now();
-    let result = restore_shard_inner(store, connect_archive, options).await;
-    let outcome = match &result {
-        Ok(restored) => restored.restored_from.label(),
-        Err(_) => "error",
-    };
-    AggregatorMetrics::record_state_restore(options.shard.get(), outcome, started.elapsed());
-    result
-}
+impl RestoreOptions {
+    /// Restores a shard from its latest checkpoint, rebuilds it from archived
+    /// raw events, or starts with empty state according to the configured policy.
+    ///
+    /// A checkpoint is accepted only when it belongs to this shard, names the
+    /// same source stream, and carries the expected state schema. Otherwise the
+    /// archive is replayed from the beginning and the caller starts the live source
+    /// from the beginning as well. Events at or before the rebuilt watermark are
+    /// then ignored by [`crate::runner::ProcessorRunner`] to avoid applying state
+    /// twice.
+    ///
+    /// `connect_archive` is only invoked when archive replay is required, so a
+    /// valid checkpoint or an `earliest`/`latest` start performs no archive I/O.
+    pub async fn restore<F, Fut>(
+        &self,
+        store: &dyn StateStore,
+        connect_archive: F,
+    ) -> BpResult<RestoredShard>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = BpResult<Box<dyn ArchivedEventSource>>>,
+    {
+        let started = Instant::now();
+        let result = self.restore_inner(store, connect_archive).await;
+        let outcome = match &result {
+            Ok(restored) => restored.restored_from.label(),
+            Err(_) => "error",
+        };
+        AggregatorMetrics::record_state_restore(self.shard.get(), outcome, started.elapsed());
+        result
+    }
 
-async fn restore_shard_inner<F, Fut>(
-    store: &dyn StateStore,
-    connect_archive: F,
-    options: &RestoreOptions,
-) -> BpResult<RestoredShard>
-where
-    F: FnOnce() -> Fut,
-    Fut: Future<Output = BpResult<Box<dyn ArchivedEventSource>>>,
-{
-    let shard = options.shard;
-    match options.replay_start_policy {
-        ReplayStartPolicy::Earliest | ReplayStartPolicy::Latest => {
-            let start = match options.replay_start_policy {
-                ReplayStartPolicy::Latest => ConsumerStart::Latest,
-                _ => ConsumerStart::Earliest,
-            };
-            info!(
+    async fn restore_inner<F, Fut>(
+        &self,
+        store: &dyn StateStore,
+        connect_archive: F,
+    ) -> BpResult<RestoredShard>
+    where
+        F: FnOnce() -> Fut,
+        Fut: Future<Output = BpResult<Box<dyn ArchivedEventSource>>>,
+    {
+        let shard = self.shard;
+        match self.replay_start_policy {
+            ReplayStartPolicy::Earliest | ReplayStartPolicy::Latest => {
+                let start = match self.replay_start_policy {
+                    ReplayStartPolicy::Latest => ConsumerStart::Latest,
+                    _ => ConsumerStart::Earliest,
+                };
+                info!(
+                    shard = %shard,
+                    policy = self.replay_start_policy.label(),
+                    "starting aggregator shard with empty state"
+                );
+                return Ok(RestoredShard {
+                    state: AggregatorState::new_with_schema_version(self.expected_schema_version),
+                    start,
+                    restored_from: RestoreSource::Empty,
+                    rebuilt_from_archive: false,
+                });
+            }
+            ReplayStartPolicy::Archive => {
+                info!(
+                    shard = %shard,
+                    "archive replay policy selected; ignoring checkpoint"
+                );
+            }
+            ReplayStartPolicy::Checkpoint => match store.load(shard).await {
+                Ok(Some(checkpoint))
+                    if checkpoint.is_compatible_with_schema(
+                        shard,
+                        &self.source_stream,
+                        self.expected_schema_version,
+                    ) && checkpoint.state.candles_use_intervals(&self.intervals) =>
+                {
+                    let age = checkpoint.age(TimestampMilliseconds::now());
+                    let next_sequence = checkpoint.next_sequence;
+                    let mut state = checkpoint.state;
+                    let evicted = state
+                        .prune_closed_candles_to_caps(&self.max_closed_candles_per_interval)?;
+                    if !evicted.is_empty() {
+                        warn!(
+                            shard = %shard,
+                            evicted = evicted.len(),
+                            "pruned restored checkpoint candles to the configured per-interval caps"
+                        );
+                    }
+                    AggregatorMetrics::record_checkpoint_age(
+                        shard.get(),
+                        Duration::from_millis(age.0.max(0) as u64),
+                    );
+                    info!(
+                        shard = %shard,
+                        next_sequence,
+                        watermark = ?checkpoint.watermark,
+                        open_candles = state.open_candles_len(),
+                        "restored aggregator shard from checkpoint"
+                    );
+                    return Ok(RestoredShard {
+                        state,
+                        start: ConsumerStart::Sequence(next_sequence),
+                        restored_from: RestoreSource::Checkpoint,
+                        rebuilt_from_archive: false,
+                    });
+                }
+                Ok(Some(checkpoint)) => {
+                    warn!(
+                        shard = %shard,
+                        source_stream = %checkpoint.source_stream,
+                        schema_version = checkpoint.state.schema_version,
+                        expected_schema_version = self.expected_schema_version,
+                        configured_intervals = ?self.intervals,
+                        "ignoring stale, incompatible, or unconfigured-interval checkpoint; rebuilding from archive"
+                    );
+                }
+                Ok(None) => {
+                    info!(
+                        shard = %shard,
+                        "no checkpoint found; rebuilding from archive"
+                    );
+                }
+                Err(error) => {
+                    AggregatorMetrics::record_checkpoint_failure(shard.get(), error.error_type());
+                    if error.retryability().is_retryable() {
+                        warn!(
+                            shard = %shard,
+                            error = %error,
+                            "transient checkpoint load failure; retrying instead of rebuilding from archive"
+                        );
+                        return Err(error);
+                    }
+                    warn!(
+                        shard = %shard,
+                        error = %error,
+                        "permanent checkpoint load failure; rebuilding from archive"
+                    );
+                }
+            },
+        }
+
+        AggregatorMetrics::record_replay_progress(shard.get(), "archive", 0.0);
+        let mut archive = connect_archive().await?;
+        let config = ProcessorConfig::new(
+            self.intervals.clone(),
+            self.allowed_lateness,
+            self.max_closed_candles_per_interval.clone(),
+            self.correction_cutoff,
+        )
+        .with_state_schema_version(self.expected_schema_version);
+        let rebuilt =
+            RebuiltArchiveState::rebuild(archive.as_mut(), shard, self.shard_count, config).await?;
+        AggregatorMetrics::record_replay_progress(shard.get(), "archive", 1.0);
+
+        if rebuilt.replayed_events == 0 {
+            warn!(
                 shard = %shard,
-                policy = options.replay_start_policy.label(),
-                "starting aggregator shard with empty state"
+                policy = self.replay_start_policy.label(),
+                "archive contains no events; starting with explicit empty state"
             );
             return Ok(RestoredShard {
-                state: AggregatorState::new_with_schema_version(options.expected_schema_version),
-                start,
+                state: rebuilt.state,
+                start: ConsumerStart::Earliest,
                 restored_from: RestoreSource::Empty,
                 rebuilt_from_archive: false,
             });
         }
-        ReplayStartPolicy::Archive => {
-            info!(
-                shard = %shard,
-                "archive replay policy selected; ignoring checkpoint"
-            );
-        }
-        ReplayStartPolicy::Checkpoint => match store.load(shard).await {
-            Ok(Some(checkpoint))
-                if checkpoint.is_compatible_with_schema(
-                    shard,
-                    &options.source_stream,
-                    options.expected_schema_version,
-                ) && checkpoint.state.candles_use_intervals(&options.intervals) =>
-            {
-                let age = checkpoint.age(TimestampMilliseconds::now());
-                let next_sequence = checkpoint.next_sequence;
-                let mut state = checkpoint.state;
-                let evicted =
-                    state.prune_closed_candles_to_caps(&options.max_closed_candles_per_interval)?;
-                if !evicted.is_empty() {
-                    warn!(
-                        shard = %shard,
-                        evicted = evicted.len(),
-                        "pruned restored checkpoint candles to the configured per-interval caps"
-                    );
-                }
-                AggregatorMetrics::record_checkpoint_age(
-                    shard.get(),
-                    Duration::from_millis(age.0.max(0) as u64),
-                );
-                info!(
-                    shard = %shard,
-                    next_sequence,
-                    watermark = ?checkpoint.watermark,
-                    open_candles = state.open_candles_len(),
-                    "restored aggregator shard from checkpoint"
-                );
-                return Ok(RestoredShard {
-                    state,
-                    start: ConsumerStart::Sequence(next_sequence),
-                    restored_from: RestoreSource::Checkpoint,
-                    rebuilt_from_archive: false,
-                });
-            }
-            Ok(Some(checkpoint)) => {
-                warn!(
-                    shard = %shard,
-                    source_stream = %checkpoint.source_stream,
-                    schema_version = checkpoint.state.schema_version,
-                    expected_schema_version = options.expected_schema_version,
-                    configured_intervals = ?options.intervals,
-                    "ignoring stale, incompatible, or unconfigured-interval checkpoint; rebuilding from archive"
-                );
-            }
-            Ok(None) => {
-                info!(
-                    shard = %shard,
-                    "no checkpoint found; rebuilding from archive"
-                );
-            }
-            Err(error) => {
-                AggregatorMetrics::record_checkpoint_failure(shard.get(), error.error_type());
-                if error.retryability().is_retryable() {
-                    warn!(
-                        shard = %shard,
-                        error = %error,
-                        "transient checkpoint load failure; retrying instead of rebuilding from archive"
-                    );
-                    return Err(error);
-                }
-                warn!(
-                    shard = %shard,
-                    error = %error,
-                    "permanent checkpoint load failure; rebuilding from archive"
-                );
-            }
-        },
-    }
 
-    AggregatorMetrics::record_replay_progress(shard.get(), "archive", 0.0);
-    let mut archive = connect_archive().await?;
-    let config = ProcessorConfig::new(
-        options.intervals.clone(),
-        options.allowed_lateness,
-        options.max_closed_candles_per_interval.clone(),
-        options.correction_cutoff,
-    )
-    .with_state_schema_version(options.expected_schema_version);
-    let rebuilt =
-        rebuild_state_from_archive_outcome(archive.as_mut(), shard, options.shard_count, config)
-            .await?;
-    AggregatorMetrics::record_replay_progress(shard.get(), "archive", 1.0);
-
-    if rebuilt.replayed_events == 0 {
-        warn!(
+        let state = rebuilt.state;
+        info!(
             shard = %shard,
-            policy = options.replay_start_policy.label(),
-            "archive contains no events; starting with explicit empty state"
+            watermark = ?state.watermark,
+            open_candles = state.open_candles_len(),
+            "rebuilt aggregator shard state from archived raw events"
         );
-        return Ok(RestoredShard {
-            state: rebuilt.state,
+        Ok(RestoredShard {
+            state,
             start: ConsumerStart::Earliest,
-            restored_from: RestoreSource::Empty,
-            rebuilt_from_archive: false,
-        });
+            restored_from: RestoreSource::Archive,
+            rebuilt_from_archive: true,
+        })
     }
-
-    let state = rebuilt.state;
-    info!(
-        shard = %shard,
-        watermark = ?state.watermark,
-        open_candles = state.open_candles_len(),
-        "rebuilt aggregator shard state from archived raw events"
-    );
-    Ok(RestoredShard {
-        state,
-        start: ConsumerStart::Earliest,
-        restored_from: RestoreSource::Archive,
-        rebuilt_from_archive: true,
-    })
 }
 
 struct RebuiltArchiveState {
@@ -292,104 +293,108 @@ struct RebuiltArchiveState {
     replayed_events: u64,
 }
 
-/// Replays all archived events for one shard into a fresh keyed state.
-pub async fn rebuild_state_from_archive(
-    archive: &mut dyn ArchivedEventSource,
-    shard: ShardId,
-    intervals: &[CandleInterval],
-    shard_count: usize,
-    allowed_lateness: DurationMilliseconds,
-    max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
-    correction_cutoff: DurationMilliseconds,
-) -> BpResult<AggregatorState> {
-    let config = ProcessorConfig::new(
-        intervals.to_vec(),
-        allowed_lateness,
-        max_closed_candles_per_interval,
-        correction_cutoff,
-    );
-    Ok(
-        rebuild_state_from_archive_outcome(archive, shard, shard_count, config)
-            .await?
-            .state,
-    )
-}
-
-/// Replays all archived events for one shard into fresh keyed state with
-/// the configured schema version.
-///
-/// Archive recovery continues the highest state epoch observed on the replayed
-/// events instead of starting a new output lineage. Replaying the same archived
-/// inputs therefore reproduces the same deterministic output ids; callers that
-/// intentionally regenerate outputs under a new lineage, such as the rebuilder,
-/// must assign a fresh epoch themselves.
-#[allow(clippy::too_many_arguments)]
-pub async fn rebuild_state_from_archive_with_schema(
-    archive: &mut dyn ArchivedEventSource,
-    shard: ShardId,
-    intervals: &[CandleInterval],
-    shard_count: usize,
-    allowed_lateness: DurationMilliseconds,
-    max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
-    correction_cutoff: DurationMilliseconds,
-    state_schema_version: u32,
-) -> BpResult<AggregatorState> {
-    let config = ProcessorConfig::new(
-        intervals.to_vec(),
-        allowed_lateness,
-        max_closed_candles_per_interval,
-        correction_cutoff,
-    )
-    .with_state_schema_version(state_schema_version);
-    Ok(
-        rebuild_state_from_archive_outcome(archive, shard, shard_count, config)
-            .await?
-            .state,
-    )
-}
-
-async fn rebuild_state_from_archive_outcome(
-    archive: &mut dyn ArchivedEventSource,
-    shard: ShardId,
-    shard_count: usize,
-    config: ProcessorConfig,
-) -> BpResult<RebuiltArchiveState> {
-    let mut processor = CandleProcessor::with_config(config);
-    let mut decoders = HashMap::new();
-    let mut replayed = 0_u64;
-
-    while let Some(archived) = archive.next_event().await? {
-        replayed = replayed.saturating_add(1);
-        if replayed.is_multiple_of(1_000) {
-            AggregatorMetrics::record_replay_events(shard.get(), "archive", 1_000);
-        }
-        let event = &archived.event;
-        let decoder = decoder_for(&mut decoders, event.exchange)?;
-        let trades = match decoder.decode(event) {
-            Ok(trades) => trades_for_shard(trades, shard, shard_count),
-            Err(error) => {
-                warn!(%error, stream = %event.stream, "skipping unreadable archived event");
-                Vec::new()
-            }
-        };
-        // Closed candles produced during rebuild are already represented by
-        // the archive's candle records; the fold reconstructs the same keyed
-        // state, deduplication ranges, gaps, and event-time watermarks. Events
-        // with no trades for this shard must not move its watermark.
-        if !trades.is_empty() {
-            // Recovery continues the lineage that produced the archived inputs,
-            // so the same processing step produces the same deterministic
-            // revision ids. A new epoch is reserved for an explicit output
-            // rebuild rather than ordinary state recovery.
-            let state = processor.state_mut();
-            state.state_epoch = state.state_epoch.max(archived.state_epoch);
-            let _ = processor.apply_event(event, &trades);
-        }
+impl AggregatorState {
+    /// Replays all archived events for one shard into a fresh keyed state.
+    pub async fn rebuild_from_archive(
+        archive: &mut dyn ArchivedEventSource,
+        shard: ShardId,
+        intervals: &[CandleInterval],
+        shard_count: usize,
+        allowed_lateness: DurationMilliseconds,
+        max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
+        correction_cutoff: DurationMilliseconds,
+    ) -> BpResult<Self> {
+        let config = ProcessorConfig::new(
+            intervals.to_vec(),
+            allowed_lateness,
+            max_closed_candles_per_interval,
+            correction_cutoff,
+        );
+        Ok(
+            RebuiltArchiveState::rebuild(archive, shard, shard_count, config)
+                .await?
+                .state,
+        )
     }
-    AggregatorMetrics::record_replay_events(shard.get(), "archive", replayed % 1_000);
 
-    Ok(RebuiltArchiveState {
-        state: processor.into_state(),
-        replayed_events: replayed,
-    })
+    /// Replays all archived events for one shard into fresh keyed state with
+    /// the configured schema version.
+    ///
+    /// Archive recovery continues the highest state epoch observed on the
+    /// replayed events instead of starting a new output lineage. Replaying the
+    /// same archived inputs therefore reproduces the same deterministic output
+    /// ids; callers that intentionally regenerate outputs under a new lineage,
+    /// such as the rebuilder, must assign a fresh epoch themselves.
+    #[allow(clippy::too_many_arguments)]
+    pub async fn rebuild_from_archive_with_schema(
+        archive: &mut dyn ArchivedEventSource,
+        shard: ShardId,
+        intervals: &[CandleInterval],
+        shard_count: usize,
+        allowed_lateness: DurationMilliseconds,
+        max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
+        correction_cutoff: DurationMilliseconds,
+        state_schema_version: u32,
+    ) -> BpResult<Self> {
+        let config = ProcessorConfig::new(
+            intervals.to_vec(),
+            allowed_lateness,
+            max_closed_candles_per_interval,
+            correction_cutoff,
+        )
+        .with_state_schema_version(state_schema_version);
+        Ok(
+            RebuiltArchiveState::rebuild(archive, shard, shard_count, config)
+                .await?
+                .state,
+        )
+    }
+}
+
+impl RebuiltArchiveState {
+    async fn rebuild(
+        archive: &mut dyn ArchivedEventSource,
+        shard: ShardId,
+        shard_count: usize,
+        config: ProcessorConfig,
+    ) -> BpResult<Self> {
+        let mut processor = CandleProcessor::with_config(config);
+        let mut decoders = HashMap::new();
+        let mut replayed = 0_u64;
+
+        while let Some(archived) = archive.next_event().await? {
+            replayed = replayed.saturating_add(1);
+            if replayed.is_multiple_of(1_000) {
+                AggregatorMetrics::record_replay_events(shard.get(), "archive", 1_000);
+            }
+            let event = &archived.event;
+            let decoder = S3ArchivedEventSource::decoder_for(&mut decoders, event.exchange)?;
+            let trades = match decoder.decode(event) {
+                Ok(trades) => ShardId::trades_for_shard(trades, shard, shard_count),
+                Err(error) => {
+                    warn!(%error, stream = %event.stream, "skipping unreadable archived event");
+                    Vec::new()
+                }
+            };
+            // Closed candles produced during rebuild are already represented by
+            // the archive's candle records; the fold reconstructs the same keyed
+            // state, deduplication ranges, gaps, and event-time watermarks. Events
+            // with no trades for this shard must not move its watermark.
+            if !trades.is_empty() {
+                // Recovery continues the lineage that produced the archived inputs,
+                // so the same processing step produces the same deterministic
+                // revision ids. A new epoch is reserved for an explicit output
+                // rebuild rather than ordinary state recovery.
+                let state = processor.state_mut();
+                state.state_epoch = state.state_epoch.max(archived.state_epoch);
+                let _ = processor.apply_event(event, &trades);
+            }
+        }
+        AggregatorMetrics::record_replay_events(shard.get(), "archive", replayed % 1_000);
+
+        Ok(RebuiltArchiveState {
+            state: processor.into_state(),
+            replayed_events: replayed,
+        })
+    }
 }

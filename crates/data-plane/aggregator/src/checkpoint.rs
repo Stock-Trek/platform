@@ -6,7 +6,7 @@
 //! work but cannot silently skip it.
 
 use crate::config::AggregatorConfig;
-use crate::lease::{WriterLease, lease_key};
+use crate::lease::WriterLease;
 use crate::shard::ShardId;
 use crate::state::AggregatorState;
 use async_trait::async_trait;
@@ -215,6 +215,11 @@ pub struct NatsStateStore {
 }
 
 impl NatsStateStore {
+    /// Derives the KV bucket used for source checkpoints.
+    pub fn bucket_name(shard_subject_prefix: &str) -> String {
+        JetStream::kv_bucket_name(&format!("{shard_subject_prefix}.checkpoints"))
+    }
+
     pub async fn connect(config: &AggregatorConfig) -> BpResult<Self> {
         let bucket = config.checkpoint_bucket();
         let values =
@@ -266,7 +271,7 @@ impl NatsStateStore {
     async fn ensure_lease_holder(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
         let Some((payload, _)) = self
             .values
-            .get_with_revision(&lease_key(checkpoint.shard))
+            .get_with_revision(&WriterLease::key(checkpoint.shard))
             .await?
         else {
             return Err(BpError::bad_value(
@@ -312,11 +317,6 @@ impl StateStore for NatsStateStore {
         self.compare_and_swap(checkpoint, expected_revision).await?;
         Ok(())
     }
-}
-
-/// Derives the KV bucket used for source checkpoints.
-pub fn checkpoint_bucket(shard_subject_prefix: &str) -> String {
-    JetStream::kv_bucket_name(&format!("{shard_subject_prefix}.checkpoints"))
 }
 
 #[cfg(test)]
@@ -447,7 +447,7 @@ mod tests {
 
     #[test]
     fn checkpoint_bucket_is_a_valid_kv_name() {
-        let bucket = checkpoint_bucket("aggregator.shards");
+        let bucket = NatsStateStore::bucket_name("aggregator.shards");
         assert_eq!(bucket, "aggregator_shards_checkpoints");
     }
 }

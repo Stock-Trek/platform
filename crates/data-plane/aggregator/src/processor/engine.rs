@@ -2,7 +2,7 @@
 //! window expiry.
 
 use super::{ProcessorConfig, ProcessorUpdate};
-use crate::state::{AggregatorState, SequenceRange, stream_id};
+use crate::state::{AggregatorState, SequenceRange, StreamProgress};
 use platform_errors::BpResult;
 use platform_market_data::{
     candle::{CandleInterval, ClosedCandle},
@@ -151,7 +151,7 @@ impl CandleProcessor {
     pub fn seen_sequences(&self, exchange: CexId, stream: &str) -> Vec<SequenceRange> {
         self.state
             .streams
-            .get(&stream_id(exchange, stream))
+            .get(&StreamProgress::stream_id(exchange, stream))
             .map(|progress| progress.seen_sequences.clone())
             .unwrap_or_default()
     }

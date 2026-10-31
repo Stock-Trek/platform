@@ -24,13 +24,8 @@ impl DeduplicationKey {
     }
 
     pub fn stream_id(&self) -> String {
-        stream_id(self.exchange, &self.stream)
+        StreamProgress::stream_id(self.exchange, &self.stream)
     }
-}
-
-/// Stable key for the progress of one exchange stream.
-pub fn stream_id(exchange: CexId, stream: &str) -> String {
-    format!("{exchange}.{stream}")
 }
 
 /// Maximum number of disjoint sequence ranges retained per stream.
@@ -54,6 +49,11 @@ pub struct StreamProgress {
 }
 
 impl StreamProgress {
+    /// Stable key for the progress of one exchange stream.
+    pub fn stream_id(exchange: CexId, stream: &str) -> String {
+        format!("{exchange}.{stream}")
+    }
+
     pub fn is_duplicate(&self, sequence: u64) -> bool {
         self.seen_sequences
             .iter()
@@ -111,7 +111,7 @@ impl StreamProgress {
 impl AggregatorState {
     pub fn stream_watermark(&self, exchange: CexId, stream: &str) -> Option<TimestampMilliseconds> {
         self.streams
-            .get(&stream_id(exchange, stream))
+            .get(&StreamProgress::stream_id(exchange, stream))
             .and_then(|progress| progress.watermark)
     }
 
@@ -122,7 +122,7 @@ impl AggregatorState {
         timestamp: TimestampMilliseconds,
     ) -> bool {
         self.streams
-            .entry(stream_id(exchange, stream))
+            .entry(StreamProgress::stream_id(exchange, stream))
             .or_default()
             .advance_watermark(timestamp)
     }

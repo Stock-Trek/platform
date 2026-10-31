@@ -9,7 +9,7 @@ use crate::{
     config::AggregatorConfig,
     lease::LeaseStore,
     processor::{CandleProcessor, ProcessorUpdate},
-    shard::{ShardId, trades_for_shard},
+    shard::ShardId,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::{MarketInput, MarketSource},
     state::DeduplicationKey,
@@ -181,7 +181,7 @@ where
         let Some(watermark) = replay_watermark else {
             return false;
         };
-        if input_timestamp(input) > watermark {
+        if input.timestamp() > watermark {
             return false;
         }
         match input {
@@ -304,7 +304,7 @@ where
         };
         match decoder.decode(event) {
             Ok(trades) => {
-                let trades = trades_for_shard(trades, shard, shard_count);
+                let trades = ShardId::trades_for_shard(trades, shard, shard_count);
                 if trades.is_empty() {
                     return ProcessorUpdate::default();
                 }
@@ -325,13 +325,6 @@ where
         update: &ProcessorUpdate,
         state: &crate::state::AggregatorState,
     ) -> Vec<platform_market_data::candle::CandleKey> {
-        super::output::closed_open_keys(update, state)
-    }
-}
-
-fn input_timestamp(input: &MarketInput) -> TimestampMilliseconds {
-    match input {
-        MarketInput::Event(event) => event.exchange_timestamp.unwrap_or(event.received_at),
-        MarketInput::Gap(gap) => gap.detected_at,
+        super::output::CandleOutputWriter::closed_open_keys(update, state)
     }
 }

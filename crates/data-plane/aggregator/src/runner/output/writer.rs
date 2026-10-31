@@ -88,7 +88,7 @@ impl CandleOutputWriter {
     {
         let (sender, receiver) = mpsc::channel(channel_capacity.max(1));
         let pending = PendingWrites::with_limits(flush_interval, max_pending);
-        let task = tokio::spawn(run_writer(sink, receiver, pending));
+        let task = tokio::spawn(Self::run_writer(sink, receiver, pending));
         Self { sender, task }
     }
 
@@ -99,7 +99,7 @@ impl CandleOutputWriter {
         update: ProcessorUpdate,
         state: &AggregatorState,
     ) -> BpResult<()> {
-        let deletes = closed_open_keys(&update, state);
+        let deletes = Self::closed_open_keys(&update, state);
         let mut open = Vec::with_capacity(update.open.len() + deletes.len());
         for candle in update.open {
             open.push((candle.key.clone(), OpenMutation::Put(candle)));
@@ -131,7 +131,7 @@ impl CandleOutputWriter {
     pub(crate) async fn barrier(&self) -> BpResult<()> {
         let (reply, receiver) = oneshot::channel();
         self.send(OutputCommand::Barrier { reply }).await?;
-        receiver.await.map_err(|_| writer_stopped())?
+        receiver.await.map_err(|_| Self::writer_stopped())?
     }
 
     /// Waits until every update submitted before this call has been written.
@@ -141,7 +141,7 @@ impl CandleOutputWriter {
     pub(crate) async fn flush(&self) -> BpResult<()> {
         let (reply, receiver) = oneshot::channel();
         self.send(OutputCommand::Flush { reply }).await?;
-        receiver.await.map_err(|_| writer_stopped())?
+        receiver.await.map_err(|_| Self::writer_stopped())?
     }
 
     /// Flushes the remaining outputs and waits for the writer task to stop.
@@ -150,8 +150,8 @@ impl CandleOutputWriter {
     pub(crate) async fn shutdown(self) -> BpResult<()> {
         let (reply, receiver) = oneshot::channel();
         let result = match self.sender.send(OutputCommand::Shutdown { reply }).await {
-            Ok(()) => receiver.await.map_err(|_| writer_stopped())?,
-            Err(_) => Err(writer_stopped()),
+            Ok(()) => receiver.await.map_err(|_| Self::writer_stopped())?,
+            Err(_) => Err(Self::writer_stopped()),
         };
 
         match self.task.await {
@@ -168,67 +168,71 @@ impl CandleOutputWriter {
         self.sender
             .send(command)
             .await
-            .map_err(|_| writer_stopped())
+            .map_err(|_| Self::writer_stopped())
     }
 }
 
-fn writer_stopped() -> BpError {
-    BpError::bad_value(
-        "aggregator output writer",
-        "channel",
-        "projection writer stopped before acknowledging the output",
-    )
+impl CandleOutputWriter {
+    fn writer_stopped() -> BpError {
+        BpError::bad_value(
+            "aggregator output writer",
+            "channel",
+            "projection writer stopped before acknowledging the output",
+        )
+    }
 }
 
-async fn run_writer<K>(
-    sink: K,
-    mut receiver: mpsc::Receiver<OutputCommand>,
-    mut pending: PendingWrites,
-) where
-    K: OpenCandleStore + ClosedCandlePublisher,
-{
-    let mut ticker = time::interval(pending.flush_interval);
-    ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
-    ticker.tick().await;
+impl CandleOutputWriter {
+    async fn run_writer<K>(
+        sink: K,
+        mut receiver: mpsc::Receiver<OutputCommand>,
+        mut pending: PendingWrites,
+    ) where
+        K: OpenCandleStore + ClosedCandlePublisher,
+    {
+        let mut ticker = time::interval(pending.flush_interval);
+        ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
+        ticker.tick().await;
 
-    loop {
-        tokio::select! {
-            biased;
-            command = receiver.recv() => {
-                match command {
-                    Some(OutputCommand::Update { closed, open }) => {
-                        pending.push(closed, open);
-                        if pending.pending_len() >= pending.max_pending {
-                            // A transient failure leaves the batch queued. The
-                            // next timer tick or confirmation barrier retries
-                            // with the same deterministic output ids.
+        loop {
+            tokio::select! {
+                biased;
+                command = receiver.recv() => {
+                    match command {
+                        Some(OutputCommand::Update { closed, open }) => {
+                            pending.push(closed, open);
+                            if pending.pending_len() >= pending.max_pending {
+                                // A transient failure leaves the batch queued. The
+                                // next timer tick or confirmation barrier retries
+                                // with the same deterministic output ids.
+                                let _ = pending.flush(&sink).await;
+                            }
+                        }
+                        Some(OutputCommand::Barrier { reply }) => {
+                            let result = pending.publish_closed(&sink).await;
+                            let _ = reply.send(result);
+                        }
+                        Some(OutputCommand::Flush { reply }) => {
+                            let result = pending.flush(&sink).await;
+                            let _ = reply.send(result);
+                        }
+                        Some(OutputCommand::Shutdown { reply }) => {
+                            let result = pending.flush(&sink).await;
+                            let _ = reply.send(result);
+                            break;
+                        }
+                        None => {
+                            // The handle was dropped without an explicit shutdown.
+                            // Still make a best effort to drain accepted outputs.
                             let _ = pending.flush(&sink).await;
+                            break;
                         }
                     }
-                    Some(OutputCommand::Barrier { reply }) => {
-                        let result = pending.publish_closed(&sink).await;
-                        let _ = reply.send(result);
-                    }
-                    Some(OutputCommand::Flush { reply }) => {
-                        let result = pending.flush(&sink).await;
-                        let _ = reply.send(result);
-                    }
-                    Some(OutputCommand::Shutdown { reply }) => {
-                        let result = pending.flush(&sink).await;
-                        let _ = reply.send(result);
-                        break;
-                    }
-                    None => {
-                        // The handle was dropped without an explicit shutdown.
-                        // Still make a best effort to drain accepted outputs.
-                        let _ = pending.flush(&sink).await;
-                        break;
-                    }
                 }
-            }
-            _ = ticker.tick() => {
-                if pending.should_flush(Instant::now()) {
-                    let _ = pending.flush(&sink).await;
+                _ = ticker.tick() => {
+                    if pending.should_flush(Instant::now()) {
+                        let _ = pending.flush(&sink).await;
+                    }
                 }
             }
         }
@@ -363,18 +367,20 @@ impl PendingWrites {
 }
 
 /// Open-candle keys whose windows closed and that have no newer open window.
-pub(crate) fn closed_open_keys(
-    update: &ProcessorUpdate,
-    state: &AggregatorState,
-) -> Vec<CandleKey> {
-    let mut keys = update
-        .closed
-        .iter()
-        .map(|closed| &closed.candle.key)
-        .filter(|key| state.open_candle(key).is_none())
-        .cloned()
-        .collect::<Vec<_>>();
-    keys.sort_by_key(CandleKey::subject_suffix);
-    keys.dedup();
-    keys
+impl CandleOutputWriter {
+    pub(crate) fn closed_open_keys(
+        update: &ProcessorUpdate,
+        state: &AggregatorState,
+    ) -> Vec<CandleKey> {
+        let mut keys = update
+            .closed
+            .iter()
+            .map(|closed| &closed.candle.key)
+            .filter(|key| state.open_candle(key).is_none())
+            .cloned()
+            .collect::<Vec<_>>();
+        keys.sort_by_key(CandleKey::subject_suffix);
+        keys.dedup();
+        keys
+    }
 }

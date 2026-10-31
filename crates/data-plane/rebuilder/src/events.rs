@@ -35,7 +35,7 @@ impl IcebergEventReader {
         catalog: &dyn ArchiveCatalog,
         source_layer: RebuildSourceLayer,
     ) -> BpResult<Self> {
-        let (source_layer, handoff) = discover_event_files(catalog, source_layer).await?;
+        let (source_layer, handoff) = Self::discover(catalog, source_layer).await?;
         let transfer_client = S3::transfer_client().await;
         info!(
             source_layer = source_layer.label(),
@@ -115,41 +115,43 @@ impl EventSource for IcebergEventReader {
     }
 }
 
-/// Selects the archive files to replay for a rebuild.
-pub async fn discover_event_files(
-    catalog: &dyn ArchiveCatalog,
-    source_layer: RebuildSourceLayer,
-) -> BpResult<(RebuildSourceLayer, ArchiveHandoff)> {
-    match source_layer {
-        RebuildSourceLayer::Raw => {
-            let mut raw = catalog
-                .data_files(ArchiveIcebergTable::raw(ArchiveKind::Events))
-                .await?;
-            raw.sort_by(|left, right| left.file_path.cmp(&right.file_path));
-            Ok((
-                RebuildSourceLayer::Raw,
-                ArchiveHandoff {
-                    compacted: Vec::new(),
-                    raw_tail: raw,
-                },
-            ))
-        }
-        RebuildSourceLayer::Compacted => {
-            let mut compacted = catalog
-                .data_files(ArchiveIcebergTable::compacted(ArchiveKind::Events))
-                .await?;
-            compacted.sort_by(|left, right| left.file_path.cmp(&right.file_path));
-            Ok((
-                RebuildSourceLayer::Compacted,
-                ArchiveHandoff {
-                    compacted,
-                    raw_tail: Vec::new(),
-                },
-            ))
-        }
-        RebuildSourceLayer::Auto => {
-            let handoff = ArchiveHandoff::discover(catalog, ArchiveKind::Events).await?;
-            Ok((RebuildSourceLayer::Auto, handoff))
+impl IcebergEventReader {
+    /// Selects the archive files to replay for a rebuild.
+    pub async fn discover(
+        catalog: &dyn ArchiveCatalog,
+        source_layer: RebuildSourceLayer,
+    ) -> BpResult<(RebuildSourceLayer, ArchiveHandoff)> {
+        match source_layer {
+            RebuildSourceLayer::Raw => {
+                let mut raw = catalog
+                    .data_files(ArchiveIcebergTable::raw(ArchiveKind::Events))
+                    .await?;
+                raw.sort_by(|left, right| left.file_path.cmp(&right.file_path));
+                Ok((
+                    RebuildSourceLayer::Raw,
+                    ArchiveHandoff {
+                        compacted: Vec::new(),
+                        raw_tail: raw,
+                    },
+                ))
+            }
+            RebuildSourceLayer::Compacted => {
+                let mut compacted = catalog
+                    .data_files(ArchiveIcebergTable::compacted(ArchiveKind::Events))
+                    .await?;
+                compacted.sort_by(|left, right| left.file_path.cmp(&right.file_path));
+                Ok((
+                    RebuildSourceLayer::Compacted,
+                    ArchiveHandoff {
+                        compacted,
+                        raw_tail: Vec::new(),
+                    },
+                ))
+            }
+            RebuildSourceLayer::Auto => {
+                let handoff = ArchiveHandoff::discover(catalog, ArchiveKind::Events).await?;
+                Ok((RebuildSourceLayer::Auto, handoff))
+            }
         }
     }
 }
@@ -220,7 +222,7 @@ mod tests {
             processed: HashSet::from([covered.to_string()]),
         };
 
-        let (layer, handoff) = discover_event_files(&catalog, RebuildSourceLayer::Auto)
+        let (layer, handoff) = IcebergEventReader::discover(&catalog, RebuildSourceLayer::Auto)
             .await
             .unwrap();
 
@@ -239,12 +241,13 @@ mod tests {
             processed: HashSet::new(),
         };
 
-        let (_, raw_handoff) = discover_event_files(&catalog, RebuildSourceLayer::Raw)
+        let (_, raw_handoff) = IcebergEventReader::discover(&catalog, RebuildSourceLayer::Raw)
             .await
             .unwrap();
-        let (_, compacted_handoff) = discover_event_files(&catalog, RebuildSourceLayer::Compacted)
-            .await
-            .unwrap();
+        let (_, compacted_handoff) =
+            IcebergEventReader::discover(&catalog, RebuildSourceLayer::Compacted)
+                .await
+                .unwrap();
 
         assert_eq!(raw_handoff.raw_tail, vec![raw]);
         assert!(raw_handoff.compacted.is_empty());

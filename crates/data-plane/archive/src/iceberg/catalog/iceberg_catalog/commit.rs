@@ -1,5 +1,4 @@
 use super::IcebergCatalog;
-use super::metadata::{snapshot_properties, source_files_from_metadata};
 use crate::iceberg::{ArchiveIcebergTable, catalog::IcebergDataFile};
 use iceberg::{
     spec::{DataContentType, DataFile, DataFileBuilder, DataFileFormat, Struct},
@@ -57,7 +56,7 @@ impl IcebergCatalog {
                 .iter()
                 .map(|file| self.data_file(&current, file))
                 .collect::<BpResult<Vec<_>>>()?;
-            let snapshot_properties = snapshot_properties(files, source_files);
+            let snapshot_properties = Self::snapshot_properties(files, source_files);
 
             let transaction = Transaction::new(&current);
             let action = transaction
@@ -116,7 +115,7 @@ impl IcebergCatalog {
         source_files: Option<&[String]>,
     ) -> BpResult<bool> {
         if let Some(source_files) = source_files {
-            let processed = source_files_from_metadata(table);
+            let processed = Self::source_files_from_metadata(table);
             return Ok(source_files.iter().all(|file| processed.contains(file)));
         }
         if files.is_empty() {

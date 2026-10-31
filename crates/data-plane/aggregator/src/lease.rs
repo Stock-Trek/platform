@@ -36,6 +36,57 @@ impl WriterLease {
     pub fn is_held_by(&self, owner_id: &str, fencing_token: u64) -> bool {
         self.owner_id == owner_id && self.fencing_token == fencing_token
     }
+
+    pub fn key(shard: ShardId) -> String {
+        format!("{LEASE_KEY_PREFIX}-{}", shard.get())
+    }
+
+    /// Waits until this owner can acquire `shard`'s lease.
+    ///
+    /// A replica that starts while another writer owns the shard becomes a
+    /// standby instead of failing. It keeps polling until the active writer
+    /// releases the lease or lets it expire, at which point the next fencing
+    /// token is issued.
+    pub async fn wait_for_lease(
+        leases: &dyn LeaseStore,
+        shard: ShardId,
+        owner_id: &str,
+        ttl: Duration,
+    ) -> BpResult<WriterLease> {
+        let mut waiting = false;
+        loop {
+            if let Some(lease) = leases.acquire(shard, owner_id, ttl).await? {
+                return Ok(lease);
+            }
+            if !waiting {
+                waiting = true;
+                AggregatorMetrics::record_rebalance(shard.get(), "lease_waiting");
+                info!(
+                    shard = %shard,
+                    writer = %owner_id,
+                    "shard lease is held by another writer; standing by"
+                );
+            }
+            tokio::time::sleep(LEASE_RETRY_INTERVAL).await;
+        }
+    }
+
+    /// Generates an owner identity that is unique to one process incarnation.
+    pub fn new_writer_id() -> String {
+        static COUNTER: AtomicU64 = AtomicU64::new(0);
+        let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
+        format!(
+            "{}-{}-{}",
+            std::process::id(),
+            TimestampMilliseconds::now().0,
+            counter
+        )
+    }
+
+    fn expires_at(now: TimestampMilliseconds, ttl: Duration) -> TimestampMilliseconds {
+        let millis = i64::try_from(ttl.as_millis()).unwrap_or(i64::MAX);
+        now + DurationMilliseconds(millis)
+    }
 }
 
 /// Durable storage for shard writer leases.
@@ -53,57 +104,6 @@ pub trait LeaseStore: Send + Sync {
     async fn release(&self, lease: &WriterLease) -> BpResult<()>;
 
     async fn current(&self, shard: ShardId) -> BpResult<Option<WriterLease>>;
-}
-
-pub fn lease_key(shard: ShardId) -> String {
-    format!("{LEASE_KEY_PREFIX}-{}", shard.get())
-}
-
-/// Waits until this owner can acquire `shard`'s lease.
-///
-/// A replica that starts while another writer owns the shard becomes a
-/// standby instead of failing. It keeps polling until the active writer
-/// releases the lease or lets it expire, at which point the next fencing token
-/// is issued.
-pub async fn wait_for_lease(
-    leases: &dyn LeaseStore,
-    shard: ShardId,
-    owner_id: &str,
-    ttl: Duration,
-) -> BpResult<WriterLease> {
-    let mut waiting = false;
-    loop {
-        if let Some(lease) = leases.acquire(shard, owner_id, ttl).await? {
-            return Ok(lease);
-        }
-        if !waiting {
-            waiting = true;
-            AggregatorMetrics::record_rebalance(shard.get(), "lease_waiting");
-            info!(
-                shard = %shard,
-                writer = %owner_id,
-                "shard lease is held by another writer; standing by"
-            );
-        }
-        tokio::time::sleep(LEASE_RETRY_INTERVAL).await;
-    }
-}
-
-/// Generates an owner identity that is unique to one process incarnation.
-pub fn new_writer_id() -> String {
-    static COUNTER: AtomicU64 = AtomicU64::new(0);
-    let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!(
-        "{}-{}-{}",
-        std::process::id(),
-        TimestampMilliseconds::now().0,
-        counter
-    )
-}
-
-fn expires_at(now: TimestampMilliseconds, ttl: Duration) -> TimestampMilliseconds {
-    let millis = i64::try_from(ttl.as_millis()).unwrap_or(i64::MAX);
-    now + DurationMilliseconds(millis)
 }
 
 /// In-memory lease store used by tests.
@@ -134,7 +134,7 @@ impl LeaseStore for InMemoryLeaseStore {
         let lease = match leases.get(&shard) {
             Some(existing) if existing.owner_id == owner_id => {
                 let mut renewed = existing.clone();
-                renewed.expires_at = expires_at(now, ttl);
+                renewed.expires_at = WriterLease::expires_at(now, ttl);
                 renewed
             }
             Some(existing) if !existing.is_expired(now) => return Ok(None),
@@ -142,13 +142,13 @@ impl LeaseStore for InMemoryLeaseStore {
                 shard,
                 owner_id: owner_id.to_string(),
                 fencing_token: existing.fencing_token.saturating_add(1),
-                expires_at: expires_at(now, ttl),
+                expires_at: WriterLease::expires_at(now, ttl),
             },
             None => WriterLease {
                 shard,
                 owner_id: owner_id.to_string(),
                 fencing_token: 1,
-                expires_at: expires_at(now, ttl),
+                expires_at: WriterLease::expires_at(now, ttl),
             },
         };
         leases.insert(shard, lease.clone());
@@ -164,7 +164,7 @@ impl LeaseStore for InMemoryLeaseStore {
         if !current.is_held_by(&lease.owner_id, lease.fencing_token) || current.is_expired(now) {
             return Ok(None);
         }
-        current.expires_at = expires_at(now, ttl);
+        current.expires_at = WriterLease::expires_at(now, ttl);
         Ok(Some(current.clone()))
     }
 
@@ -202,7 +202,10 @@ impl NatsLeaseStore {
     }
 
     async fn load(&self, shard: ShardId) -> BpResult<Option<(WriterLease, u64)>> {
-        let Some((payload, revision)) = self.values.get_with_revision(&lease_key(shard)).await?
+        let Some((payload, revision)) = self
+            .values
+            .get_with_revision(&WriterLease::key(shard))
+            .await?
         else {
             return Ok(None);
         };
@@ -220,13 +223,13 @@ impl LeaseStore for NatsLeaseStore {
         ttl: Duration,
     ) -> BpResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
-        let key = lease_key(shard);
+        let key = WriterLease::key(shard);
         let Some((existing, revision)) = self.load(shard).await? else {
             let lease = WriterLease {
                 shard,
                 owner_id: owner_id.to_string(),
                 fencing_token: 1,
-                expires_at: expires_at(now, ttl),
+                expires_at: WriterLease::expires_at(now, ttl),
             };
             let payload = serde_json::to_vec(&lease)?;
             return match self.values.create(&key, &payload).await {
@@ -264,7 +267,7 @@ impl LeaseStore for NatsLeaseStore {
             shard,
             owner_id: owner_id.to_string(),
             fencing_token,
-            expires_at: expires_at(now, ttl),
+            expires_at: WriterLease::expires_at(now, ttl),
         };
         let payload = serde_json::to_vec(&lease)?;
         match self.values.update(&key, &payload, revision).await {
@@ -282,11 +285,11 @@ impl LeaseStore for NatsLeaseStore {
             return Ok(None);
         }
         let mut renewed = current;
-        renewed.expires_at = expires_at(now, ttl);
+        renewed.expires_at = WriterLease::expires_at(now, ttl);
         let payload = serde_json::to_vec(&renewed)?;
         match self
             .values
-            .update(&lease_key(lease.shard), &payload, revision)
+            .update(&WriterLease::key(lease.shard), &payload, revision)
             .await
         {
             Ok(_) => Ok(Some(renewed)),
@@ -304,7 +307,7 @@ impl LeaseStore for NatsLeaseStore {
             current.expires_at = TimestampMilliseconds::now();
             let payload = serde_json::to_vec(&current)?;
             self.values
-                .update(&lease_key(lease.shard), &payload, revision)
+                .update(&WriterLease::key(lease.shard), &payload, revision)
                 .await?;
         }
         Ok(())
@@ -387,6 +390,6 @@ mod tests {
 
     #[test]
     fn writer_ids_are_unique_per_call() {
-        assert_ne!(new_writer_id(), new_writer_id());
+        assert_ne!(WriterLease::new_writer_id(), WriterLease::new_writer_id());
     }
 }

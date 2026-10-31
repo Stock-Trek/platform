@@ -63,155 +63,154 @@ struct ReplayEvent {
 /// Grouping by pair also keeps one stream's high watermark from making another
 /// pair's earlier events late, while still supporting raw files that are not
 /// globally ordered.
-pub fn rebuild_candles(
-    events: Vec<MarketEvent>,
-    options: &RebuildOptions,
-) -> BpResult<RebuildResult> {
-    let mut stats = RebuildStats {
-        events_read: events.len(),
-        ..RebuildStats::default()
-    };
-    let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
-    let mut groups: BTreeMap<PairKey, Vec<ReplayEvent>> = BTreeMap::new();
+impl RebuildOptions {
+    pub fn rebuild(&self, events: Vec<MarketEvent>) -> BpResult<RebuildResult> {
+        let mut stats = RebuildStats {
+            events_read: events.len(),
+            ..RebuildStats::default()
+        };
+        let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
+        let mut groups: BTreeMap<PairKey, Vec<ReplayEvent>> = BTreeMap::new();
 
-    for event in events {
-        let decoder = match decoders.get(&event.exchange) {
-            Some(decoder) => decoder.clone(),
-            None => match TradeDecoderFactory::for_exchange(event.exchange) {
-                Ok(decoder) => {
-                    decoders.insert(event.exchange, decoder.clone());
-                    decoder
-                }
+        for event in events {
+            let decoder = match decoders.get(&event.exchange) {
+                Some(decoder) => decoder.clone(),
+                None => match TradeDecoderFactory::for_exchange(event.exchange) {
+                    Ok(decoder) => {
+                        decoders.insert(event.exchange, decoder.clone());
+                        decoder
+                    }
+                    Err(error) => {
+                        stats.decode_failures += 1;
+                        warn!(
+                            exchange = %event.exchange,
+                            %error,
+                            "skipping archived event for unsupported exchange"
+                        );
+                        continue;
+                    }
+                },
+            };
+
+            let trades = match decoder.decode(&event) {
+                Ok(trades) => trades,
                 Err(error) => {
                     stats.decode_failures += 1;
                     warn!(
-                        exchange = %event.exchange,
+                        stream = %event.stream,
+                        sequence = ?event.sequence,
                         %error,
-                        "skipping archived event for unsupported exchange"
+                        "skipping undecodable archived event"
                     );
                     continue;
                 }
-            },
-        };
+            };
 
-        let trades = match decoder.decode(&event) {
-            Ok(trades) => trades,
-            Err(error) => {
-                stats.decode_failures += 1;
-                warn!(
-                    stream = %event.stream,
-                    sequence = ?event.sequence,
-                    %error,
-                    "skipping undecodable archived event"
+            // A single event can theoretically decode to more than one pair. Give
+            // each pair only its own trades so the replay mirrors routing.
+            let mut trades_by_pair: BTreeMap<PairKey, Vec<Trade>> = BTreeMap::new();
+            for trade in trades {
+                let key = (
+                    trade.exchange.to_string(),
+                    trade.trading_pair.base.to_string(),
+                    trade.trading_pair.quote.to_string(),
                 );
-                continue;
+                trades_by_pair.entry(key).or_default().push(trade);
             }
-        };
-
-        // A single event can theoretically decode to more than one pair. Give
-        // each pair only its own trades so the replay mirrors routing.
-        let mut trades_by_pair: BTreeMap<PairKey, Vec<Trade>> = BTreeMap::new();
-        for trade in trades {
-            let key = (
-                trade.exchange.to_string(),
-                trade.trading_pair.base.to_string(),
-                trade.trading_pair.quote.to_string(),
-            );
-            trades_by_pair.entry(key).or_default().push(trade);
+            for (key, trades) in trades_by_pair {
+                groups.entry(key).or_default().push(ReplayEvent {
+                    event: event.clone(),
+                    trades,
+                });
+            }
         }
-        for (key, trades) in trades_by_pair {
-            groups.entry(key).or_default().push(ReplayEvent {
-                event: event.clone(),
-                trades,
+        stats.trade_stream_groups = groups.len();
+
+        let max_interval = self
+            .processor
+            .intervals
+            .iter()
+            .map(|interval| interval.duration().0)
+            .max()
+            .unwrap_or_default();
+        let allowed_lateness = self.processor.allowed_lateness.0;
+        let mut regenerated = Vec::new();
+
+        for (_, mut group) in groups {
+            group.sort_by(|left, right| {
+                Self::event_timestamp(&left.event)
+                    .0
+                    .cmp(&Self::event_timestamp(&right.event).0)
+                    .then_with(|| {
+                        left.event
+                            .sequence
+                            .unwrap_or_default()
+                            .cmp(&right.event.sequence.unwrap_or_default())
+                    })
+                    .then_with(|| left.event.stream.cmp(&right.event.stream))
+                    .then_with(|| left.event.payload.cmp(&right.event.payload))
             });
-        }
-    }
-    stats.trade_stream_groups = groups.len();
 
-    let max_interval = options
-        .processor
-        .intervals
-        .iter()
-        .map(|interval| interval.duration().0)
-        .max()
-        .unwrap_or_default();
-    let allowed_lateness = options.processor.allowed_lateness.0;
-    let mut regenerated = Vec::new();
+            let mut processor = CandleProcessor::with_config(self.processor.clone());
+            let state: &mut AggregatorState = processor.state_mut();
+            state.state_epoch = self.state_epoch;
 
-    for (_, mut group) in groups {
-        group.sort_by(|left, right| {
-            event_timestamp(&left.event)
-                .0
-                .cmp(&event_timestamp(&right.event).0)
-                .then_with(|| {
-                    left.event
-                        .sequence
-                        .unwrap_or_default()
-                        .cmp(&right.event.sequence.unwrap_or_default())
-                })
-                .then_with(|| left.event.stream.cmp(&right.event.stream))
-                .then_with(|| left.event.payload.cmp(&right.event.payload))
-        });
+            // Raw archive files can contain the same event more than once. Drop
+            // duplicates before assigning replay offsets so redundant rows do not
+            // shift the provenance of later candle revisions. Sequence numbers are
+            // scoped to a stream; `@trade` and `@aggTrade` may both use sequence 1.
+            let mut seen_sequences = HashSet::new();
+            let mut offset = 0_u64;
+            let mut last_timestamp = None;
+            for replay in &group {
+                let event = &replay.event;
+                if let Some(sequence) = event.sequence
+                    && !seen_sequences.insert((event.stream.as_str(), sequence))
+                {
+                    stats.duplicate_events += 1;
+                    continue;
+                }
+                let event_offset = offset;
+                offset = offset.saturating_add(1);
+                last_timestamp = Some(Self::event_timestamp(event));
 
-        let mut processor = CandleProcessor::with_config(options.processor.clone());
-        let state: &mut AggregatorState = processor.state_mut();
-        state.state_epoch = options.state_epoch;
-
-        // Raw archive files can contain the same event more than once. Drop
-        // duplicates before assigning replay offsets so redundant rows do not
-        // shift the provenance of later candle revisions. Sequence numbers are
-        // scoped to a stream; `@trade` and `@aggTrade` may both use sequence 1.
-        let mut seen_sequences = HashSet::new();
-        let mut offset = 0_u64;
-        let mut last_timestamp = None;
-        for replay in &group {
-            let event = &replay.event;
-            if let Some(sequence) = event.sequence
-                && !seen_sequences.insert((event.stream.as_str(), sequence))
-            {
-                stats.duplicate_events += 1;
-                continue;
+                // Match the live runner by marking the offset before folding the
+                // event, so candles closed by this event carry its provenance.
+                processor.state_mut().mark_processed(event_offset);
+                let update = processor.apply_event(event, &replay.trades);
+                stats.trades_applied += replay.trades.len();
+                stats.duplicate_events += update.duplicates;
+                stats.late_trades += update.late_trades;
+                regenerated.extend(update.closed);
             }
-            let event_offset = offset;
-            offset = offset.saturating_add(1);
-            last_timestamp = Some(event_timestamp(event));
 
-            // Match the live runner by marking the offset before folding the
-            // event, so candles closed by this event carry its provenance.
-            processor.state_mut().mark_processed(event_offset);
-            let update = processor.apply_event(event, &replay.trades);
-            stats.trades_applied += replay.trades.len();
-            stats.duplicate_events += update.duplicates;
-            stats.late_trades += update.late_trades;
-            regenerated.extend(update.closed);
+            if self.finish_open_windows
+                && let Some(last_timestamp) = last_timestamp
+            {
+                let flush_at = last_timestamp
+                    .0
+                    .saturating_add(max_interval)
+                    .saturating_add(allowed_lateness);
+                regenerated
+                    .extend(processor.flush_closed_at_or_before(TimestampMilliseconds(flush_at)));
+            }
         }
 
-        if options.finish_open_windows
-            && let Some(last_timestamp) = last_timestamp
-        {
-            let flush_at = last_timestamp
-                .0
-                .saturating_add(max_interval)
-                .saturating_add(allowed_lateness);
-            regenerated
-                .extend(processor.flush_closed_at_or_before(TimestampMilliseconds(flush_at)));
+        stats.closed_candles = regenerated.len();
+        let mut unique = BTreeMap::new();
+        for candle in regenerated {
+            unique.insert(candle.message_id(), candle);
         }
+        let mut candles = unique.into_values().collect::<Vec<_>>();
+        candles.sort_by(|left, right| left.revision.cmp(&right.revision));
+        stats.unique_candles = candles.len();
+
+        Ok(RebuildResult { candles, stats })
     }
 
-    stats.closed_candles = regenerated.len();
-    let mut unique = BTreeMap::new();
-    for candle in regenerated {
-        unique.insert(candle.message_id(), candle);
+    fn event_timestamp(event: &MarketEvent) -> TimestampMilliseconds {
+        event.exchange_timestamp.unwrap_or(event.received_at)
     }
-    let mut candles = unique.into_values().collect::<Vec<_>>();
-    candles.sort_by(|left, right| left.revision.cmp(&right.revision));
-    stats.unique_candles = candles.len();
-
-    Ok(RebuildResult { candles, stats })
-}
-
-fn event_timestamp(event: &MarketEvent) -> TimestampMilliseconds {
-    event.exchange_timestamp.unwrap_or(event.received_at)
 }
 
 #[cfg(test)]
@@ -290,8 +289,8 @@ mod tests {
             event(4, 183_000),
         ];
 
-        let first = rebuild_candles(events.clone(), &options()).unwrap();
-        let second = rebuild_candles(events, &options()).unwrap();
+        let first = options().rebuild(events.clone()).unwrap();
+        let second = options().rebuild(events).unwrap();
 
         assert_eq!(first.stats.events_read, 4);
         assert_eq!(first.stats.trade_stream_groups, 1);
@@ -320,21 +319,17 @@ mod tests {
 
     #[test]
     fn duplicate_sequences_do_not_change_the_regenerated_candles() {
-        let unique = rebuild_candles(
-            vec![event(1, 1_000), event(2, 61_000), event(3, 122_000)],
-            &options(),
-        )
-        .unwrap();
-        let duplicated = rebuild_candles(
-            vec![
+        let unique = options()
+            .rebuild(vec![event(1, 1_000), event(2, 61_000), event(3, 122_000)])
+            .unwrap();
+        let duplicated = options()
+            .rebuild(vec![
                 event(1, 1_000),
                 event(2, 61_000),
                 event(2, 61_000),
                 event(3, 122_000),
-            ],
-            &options(),
-        )
-        .unwrap();
+            ])
+            .unwrap();
 
         assert_eq!(duplicated.stats.duplicate_events, 1);
         assert_eq!(
@@ -360,7 +355,7 @@ mod tests {
             stream_event("btcusdt@aggTrade", 1, 1_000, "200", "2"),
         ];
 
-        let result = rebuild_candles(events, &options()).unwrap();
+        let result = options().rebuild(events).unwrap();
 
         assert_eq!(result.stats.trade_stream_groups, 1);
         assert_eq!(result.stats.trades_applied, 2);
@@ -382,7 +377,7 @@ mod tests {
             stream_event("btcusdt@aggTrade", 2, 61_000, "200", "2"),
         ];
 
-        let result = rebuild_candles(events, &options()).unwrap();
+        let result = options().rebuild(events).unwrap();
 
         assert_eq!(result.stats.trade_stream_groups, 1);
         assert_eq!(result.stats.unique_candles, 2);
@@ -402,7 +397,7 @@ mod tests {
         let other = stream_event("ethusdt@trade", 1, 1_000, "10", "2");
         let events = vec![event(1, 1_000), event(2, 61_000), other];
 
-        let result = rebuild_candles(events, &options()).unwrap();
+        let result = options().rebuild(events).unwrap();
 
         assert_eq!(result.stats.trade_stream_groups, 2);
         assert_eq!(result.stats.trades_applied, 3);
@@ -415,8 +410,8 @@ mod tests {
         let mut unfinished = options();
         unfinished.finish_open_windows = false;
 
-        let finished = rebuild_candles(events.clone(), &options()).unwrap();
-        let unfinished = rebuild_candles(events, &unfinished).unwrap();
+        let finished = options().rebuild(events.clone()).unwrap();
+        let unfinished = unfinished.rebuild(events).unwrap();
 
         assert_eq!(finished.candles.len(), 1);
         assert!(unfinished.candles.is_empty());
@@ -454,7 +449,7 @@ mod tests {
         let mut options = options();
         options.processor = processor;
         options.finish_open_windows = false;
-        let rebuilt = rebuild_candles(events, &options).unwrap();
+        let rebuilt = options.rebuild(events).unwrap();
 
         assert_eq!(rebuilt.candles.len(), 2);
         assert_eq!(
