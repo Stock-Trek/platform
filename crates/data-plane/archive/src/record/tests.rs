@@ -110,17 +110,17 @@ fn candle_sort_keys_order_revision_provenance() {
     };
 
     let later_watermark = ArchiveRecord::ClosedCandle(ClosedCandle::new(
-        closed.candle.clone(),
+        closed.candle().clone(),
         TimestampMilliseconds(122_000),
-        closed.revision.source_offset,
-        closed.revision.state_epoch,
+        closed.revision().source_offset,
+        closed.revision().state_epoch,
     ));
     assert!(candle.sort_key() < later_watermark.sort_key());
 
     let later_epoch = ArchiveRecord::ClosedCandle(ClosedCandle::new(
-        closed.candle.clone(),
-        closed.revision.close_watermark,
-        closed.revision.source_offset,
+        closed.candle().clone(),
+        closed.revision().close_watermark,
+        closed.revision().source_offset,
         1,
     ));
     assert!(candle.sort_key() < later_epoch.sort_key());

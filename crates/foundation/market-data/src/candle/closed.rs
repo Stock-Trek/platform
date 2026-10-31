@@ -7,8 +7,8 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClosedCandle {
     /// Deterministic revision assigned when the candle closed.
-    pub revision: CandleRevision,
-    pub candle: Candle,
+    revision: CandleRevision,
+    candle: Candle,
 }
 
 impl ClosedCandle {
@@ -22,6 +22,19 @@ impl ClosedCandle {
         let revision =
             CandleRevision::for_candle(&candle, close_watermark, source_offset, state_epoch);
         Self { revision, candle }
+    }
+
+    /// The deterministic revision assigned when the candle closed.
+    ///
+    /// The revision is derived from the candle at construction time and cannot
+    /// be changed independently of the candle.
+    pub fn revision(&self) -> &CandleRevision {
+        &self.revision
+    }
+
+    /// The closed candle body.
+    pub fn candle(&self) -> &Candle {
+        &self.candle
     }
 
     /// Stable id used when publishing this candle.
@@ -38,11 +51,6 @@ impl ClosedCandle {
     pub fn is_incomplete(&self) -> bool {
         !self.is_complete()
     }
-
-    /// Marks this candle as affected by a source gap.
-    pub fn mark_incomplete(&mut self) {
-        self.candle.mark_incomplete();
-    }
 }
 
 impl std::ops::Deref for ClosedCandle {
@@ -50,11 +58,5 @@ impl std::ops::Deref for ClosedCandle {
 
     fn deref(&self) -> &Self::Target {
         &self.candle
-    }
-}
-
-impl std::ops::DerefMut for ClosedCandle {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.candle
     }
 }

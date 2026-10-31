@@ -202,7 +202,7 @@ impl RebuildOptions {
             unique.insert(candle.message_id(), candle);
         }
         let mut candles = unique.into_values().collect::<Vec<_>>();
-        candles.sort_by(|left, right| left.revision.cmp(&right.revision));
+        candles.sort_by(|left, right| left.revision().cmp(right.revision()));
         stats.unique_candles = candles.len();
 
         Ok(RebuildResult { candles, stats })

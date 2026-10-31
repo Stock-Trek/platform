@@ -79,7 +79,7 @@ impl NatsCandleSink {
     }
 
     pub(super) fn publish_target(prefix: &str, closed: &ClosedCandle) -> (String, String) {
-        let subject = format!("{}.{}", prefix, closed.candle.key.subject_suffix());
+        let subject = format!("{}.{}", prefix, closed.candle().key.subject_suffix());
         (subject, closed.message_id())
     }
 }
@@ -141,7 +141,7 @@ impl ClosedCandlePublisher for NatsCandleSink {
         let mut groups: HashMap<CandleKey, Vec<ClosedCandle>> = HashMap::new();
         for closed in candles {
             groups
-                .entry(closed.candle.key.clone())
+                .entry(closed.candle().key.clone())
                 .or_default()
                 .push(closed.clone());
         }

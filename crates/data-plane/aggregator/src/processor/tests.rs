@@ -82,14 +82,14 @@ fn crossing_a_boundary_closes_the_previous_candle_from_event_time() {
 
     assert_eq!(update.closed.len(), 1);
     assert_eq!(
-        update.closed[0].revision.close_watermark,
+        update.closed[0].revision().close_watermark,
         TimestampMilliseconds(121_000)
     );
-    assert_eq!(update.closed[0].revision.source_offset, 0);
-    assert_eq!(update.closed[0].revision.state_epoch, 0);
-    assert!(update.closed[0].candle.market_candle.is_candle_closed);
+    assert_eq!(update.closed[0].revision().source_offset, 0);
+    assert_eq!(update.closed[0].revision().state_epoch, 0);
+    assert!(update.closed[0].candle().market_candle.is_candle_closed);
     assert_eq!(
-        update.closed[0].candle.start_time(),
+        update.closed[0].candle().start_time(),
         TimestampMilliseconds(60_000)
     );
     assert_eq!(update.open.len(), 1);
@@ -109,14 +109,14 @@ fn closed_candle_revisions_are_reproducible_from_state() {
     let replay_update = replay.apply_trade(&trade("101", 121_000));
 
     assert_eq!(
-        first_update.closed[0].revision,
-        replay_update.closed[0].revision
+        first_update.closed[0].revision(),
+        replay_update.closed[0].revision()
     );
     assert_eq!(
         first_update.closed[0].message_id(),
         replay_update.closed[0].message_id()
     );
-    assert_eq!(first_update.closed[0].revision.source_offset, 42);
+    assert_eq!(first_update.closed[0].revision().source_offset, 42);
 }
 
 #[test]
@@ -206,8 +206,8 @@ fn trades_after_allowed_lateness_correct_the_closed_candle() {
     assert_eq!(update.late_trades, 1);
     assert!(update.open.is_empty());
     assert_eq!(update.closed.len(), 1);
-    assert_eq!(update.closed[0].candle.market_candle.trade_count, 2);
-    assert_eq!(update.closed[0].candle.market_candle.ohlcv.low, 90.0);
+    assert_eq!(update.closed[0].candle().market_candle.trade_count, 2);
+    assert_eq!(update.closed[0].candle().market_candle.ohlcv.low, 90.0);
 }
 
 #[test]
@@ -312,11 +312,11 @@ fn backfilled_trades_revise_closed_candles() {
     assert!(update.open.is_empty());
     assert_eq!(update.closed.len(), 1);
     assert_eq!(
-        update.closed[0].candle.start_time(),
+        update.closed[0].candle().start_time(),
         TimestampMilliseconds(60_000)
     );
-    assert_eq!(update.closed[0].candle.market_candle.trade_count, 2);
-    assert_eq!(update.closed[0].candle.market_candle.ohlcv.close, 105.0);
+    assert_eq!(update.closed[0].candle().market_candle.trade_count, 2);
+    assert_eq!(update.closed[0].candle().market_candle.ohlcv.close, 105.0);
     assert_ne!(
         update.closed[0].message_id(),
         original.closed[0].message_id()
@@ -344,10 +344,10 @@ fn backfilled_trades_create_candles_for_windows_without_history() {
     assert!(update.open.is_empty());
     assert_eq!(update.closed.len(), 1);
     assert_eq!(
-        update.closed[0].candle.start_time(),
+        update.closed[0].candle().start_time(),
         TimestampMilliseconds(60_000)
     );
-    assert_eq!(update.closed[0].candle.market_candle.trade_count, 1);
+    assert_eq!(update.closed[0].candle().market_candle.trade_count, 1);
 }
 
 #[test]
@@ -368,7 +368,7 @@ fn a_gap_records_an_incomplete_window_and_closes_expired_candles() {
     let update = processor.apply_gap(&gap(120_000));
 
     assert_eq!(update.closed.len(), 1);
-    assert!(update.closed[0].candle.market_candle.is_candle_closed);
+    assert!(update.closed[0].candle().market_candle.is_candle_closed);
     assert!(update.closed[0].is_incomplete());
     assert_eq!(update.incomplete_windows.len(), 1);
     assert_eq!(
@@ -527,8 +527,8 @@ fn a_late_trade_inside_the_correction_cutoff_revises_the_full_candle() {
     assert_eq!(update.late_trades, 1);
     assert_eq!(update.out_of_contract_trades, 0);
     assert_eq!(update.closed.len(), 1);
-    assert_eq!(update.closed[0].candle.market_candle.trade_count, 2);
-    assert_eq!(update.closed[0].candle.market_candle.ohlcv.low, 90.0);
+    assert_eq!(update.closed[0].candle().market_candle.trade_count, 2);
+    assert_eq!(update.closed[0].candle().market_candle.ohlcv.low, 90.0);
 }
 
 #[test]
@@ -655,7 +655,7 @@ fn a_gap_inside_the_correction_cutoff_republishes_the_retained_candle() {
     assert_eq!(update.out_of_contract_gap_windows, 0);
     assert_eq!(update.incomplete_windows.len(), 1);
     assert_eq!(update.closed.len(), 1);
-    assert!(update.closed[0].candle.is_incomplete());
+    assert!(update.closed[0].candle().is_incomplete());
 }
 
 #[test]
