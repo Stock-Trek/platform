@@ -16,6 +16,8 @@ use crate::state::AggregatorState;
 use platform_errors::{BpResult, ErrorType};
 use platform_market_data::candle::CandleInterval;
 use platform_metrics::AggregatorMetrics;
+use platform_metrics::descriptions::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
+use platform_metrics::market_data::MarketDataMetrics;
 use platform_nats::ConsumerStart;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::collections::{BTreeMap, HashMap};
@@ -368,26 +370,41 @@ impl RebuiltArchiveState {
                 AggregatorMetrics::record_replay_events(shard.get(), "archive", 1_000);
             }
             let event = &archived.event;
-            let decoder = S3ArchivedEventSource::decoder_for(&mut decoders, event.exchange)?;
-            let trades = match decoder.decode(event) {
-                Ok(trades) => ShardId::trades_for_shard(trades, shard, shard_count),
+            let trades = match S3ArchivedEventSource::decoder_for(&mut decoders, event.exchange) {
+                Ok(decoder) => match decoder.decode(event) {
+                    Ok(trades) => Some(ShardId::trades_for_shard(trades, shard, shard_count)),
+                    Err(error) => {
+                        MarketDataMetrics::record_decode_failure(
+                            STAGE_AGGREGATOR,
+                            DECODE_KIND_TRADE,
+                        );
+                        warn!(%error, stream = %event.stream, "skipping unreadable archived event");
+                        None
+                    }
+                },
                 Err(error) => {
-                    warn!(%error, stream = %event.stream, "skipping unreadable archived event");
-                    Vec::new()
+                    MarketDataMetrics::record_dropped_event(
+                        STAGE_AGGREGATOR,
+                        DROP_REASON_NO_DECODER,
+                    );
+                    warn!(%error, exchange = %event.exchange, "no trade decoder for archived exchange");
+                    None
                 }
             };
             // Closed candles produced during rebuild are already represented by
             // the archive's candle records; the fold reconstructs the same keyed
             // state, deduplication ranges, gaps, and event-time watermarks. Events
-            // with no trades for this shard must not move its watermark.
-            if !trades.is_empty() {
+            // that decode but have no trades for this shard must not move its
+            // watermark. Undecodable events are still folded with no trades so
+            // archive recovery matches live dispatch.
+            if trades.as_ref().is_none_or(|trades| !trades.is_empty()) {
                 // Recovery continues the lineage that produced the archived inputs,
                 // so the same processing step produces the same deterministic
                 // revision ids. A new epoch is reserved for an explicit output
                 // rebuild rather than ordinary state recovery.
                 let state = processor.state_mut();
                 state.state_epoch = state.state_epoch.max(archived.state_epoch);
-                let _ = processor.apply_event(event, &trades);
+                let _ = processor.apply_event(event, trades.as_deref().unwrap_or_default());
             }
         }
         AggregatorMetrics::record_replay_events(shard.get(), "archive", replayed % 1_000);
