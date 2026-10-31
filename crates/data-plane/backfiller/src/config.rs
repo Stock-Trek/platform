@@ -13,30 +13,27 @@ const BACKFILLER_EXCHANGE_HTTP_URL: &str = "BACKFILLER_EXCHANGE_HTTP_URL";
 const BACKFILLER_EXCHANGE_TRADING_MODE: &str = "BACKFILLER_EXCHANGE_TRADING_MODE";
 const BACKFILLER_EXCHANGE_SIGNING_ALGORITHM: &str = "BACKFILLER_EXCHANGE_SIGNING_ALGORITHM";
 
-/// SSM parameter name holding the exchange API key used for real trading.
-pub const EXCHANGE_REAL_API_KEY_SECRET: &str = "BACKFILLER_EXCHANGE_REAL_API_KEY";
-/// SSM parameter name holding the exchange API secret or private signing key used for real trading.
-pub const EXCHANGE_REAL_API_SECRET: &str = "BACKFILLER_EXCHANGE_REAL_API_SECRET";
-/// SSM parameter name holding the exchange API key used for paper trading.
-pub const EXCHANGE_PAPER_API_KEY_SECRET: &str = "BACKFILLER_EXCHANGE_PAPER_API_KEY";
-/// SSM parameter name holding the exchange API secret or private signing key used for paper trading.
-pub const EXCHANGE_PAPER_API_SECRET: &str = "BACKFILLER_EXCHANGE_PAPER_API_SECRET";
+const EXCHANGE_SECRET_PREFIX: &str = "BACKFILLER_EXCHANGE";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+/// SSM parameter names holding an exchange's API key and secret or private
+/// signing key for one trading mode.
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ExchangeSecretNames {
-    pub api_key: &'static str,
-    pub api_secret: &'static str,
+    pub api_key: String,
+    pub api_secret: String,
 }
 
-const REAL_EXCHANGE_SECRETS: ExchangeSecretNames = ExchangeSecretNames {
-    api_key: EXCHANGE_REAL_API_KEY_SECRET,
-    api_secret: EXCHANGE_REAL_API_SECRET,
-};
-
-const PAPER_EXCHANGE_SECRETS: ExchangeSecretNames = ExchangeSecretNames {
-    api_key: EXCHANGE_PAPER_API_KEY_SECRET,
-    api_secret: EXCHANGE_PAPER_API_SECRET,
-};
+impl ExchangeSecretNames {
+    pub fn new(exchange: CexId, trading_mode: TradingMode) -> Self {
+        let exchange = exchange.to_string().to_uppercase();
+        let trading_mode = trading_mode.to_string().to_uppercase();
+        let prefix = format!("{EXCHANGE_SECRET_PREFIX}_{exchange}_{trading_mode}");
+        Self {
+            api_key: format!("{prefix}_API_KEY"),
+            api_secret: format!("{prefix}_API_SECRET"),
+        }
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct BackfillerConfig {
@@ -93,10 +90,10 @@ impl BackfillerConfig {
         })
     }
 
-    pub fn exchange_secret_names(trading_mode: TradingMode) -> ExchangeSecretNames {
-        match trading_mode {
-            TradingMode::Real => REAL_EXCHANGE_SECRETS,
-            TradingMode::Paper => PAPER_EXCHANGE_SECRETS,
-        }
+    pub fn exchange_secret_names(
+        exchange: CexId,
+        trading_mode: TradingMode,
+    ) -> ExchangeSecretNames {
+        ExchangeSecretNames::new(exchange, trading_mode)
     }
 }

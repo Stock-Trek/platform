@@ -238,10 +238,13 @@ environment. The backfiller and Git webhook load every parameter under `SECRETS_
 look up secrets by name:
 
 - The Git webhook expects `GITHUB_WEBHOOK_SECRET`.
-- The backfiller reads `BACKFILLER_EXCHANGE_REAL_API_KEY` and
-  `BACKFILLER_EXCHANGE_REAL_API_SECRET` when
-  `BACKFILLER_EXCHANGE_TRADING_MODE=real`, or
-  `BACKFILLER_EXCHANGE_PAPER_API_KEY` and
-  `BACKFILLER_EXCHANGE_PAPER_API_SECRET` when it is `paper`.
+- The backfiller derives one API key/secret pair per exchange and trading mode from
+  `BACKFILLER_EXCHANGE`, `BACKFILLER_EXCHANGE_TRADING_MODE`, and the mode's canonical
+  `real` or `paper` name. For Binance in real mode it reads
+  `BACKFILLER_EXCHANGE_BINANCE_REAL_API_KEY` and
+  `BACKFILLER_EXCHANGE_BINANCE_REAL_API_SECRET`; in paper mode it reads
+  `BACKFILLER_EXCHANGE_BINANCE_PAPER_API_KEY` and
+  `BACKFILLER_EXCHANGE_BINANCE_PAPER_API_SECRET`. Every exchange uses the same pattern,
+  so multiple exchanges can share one SSM path.
 
 These names are SSM parameter names, not environment variables.

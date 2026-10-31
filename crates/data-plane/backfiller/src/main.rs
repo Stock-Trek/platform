@@ -35,9 +35,9 @@ async fn exchange_credentials(config: &BackfillerConfig) -> BpResult<ApiKeyCrede
         SECRETS_LOAD_BUFFER,
     );
     let secrets = Secrets::load(&sdk_config, timeouts, deadline, &config.ssm).await?;
-    let names = BackfillerConfig::exchange_secret_names(config.trading_mode);
-    let api_key = secrets.get(names.api_key)?;
-    let api_secret = secrets.get(names.api_secret)?;
+    let names = BackfillerConfig::exchange_secret_names(config.exchange, config.trading_mode);
+    let api_key = secrets.get(&names.api_key)?;
+    let api_secret = secrets.get(&names.api_secret)?;
     Ok(ApiKeyCredentials {
         api_key,
         secret: SecretString::from(api_secret),
