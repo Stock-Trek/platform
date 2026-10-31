@@ -1,6 +1,6 @@
-mod sqs_dedup;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use sqs_dedup::*;
+pub use implementation::*;

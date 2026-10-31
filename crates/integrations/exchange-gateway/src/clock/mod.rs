@@ -1,6 +1,6 @@
-mod clock;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use clock::*;
+pub use implementation::*;

@@ -1,6 +1,6 @@
-mod storage;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use storage::*;
+pub use implementation::*;

@@ -1,6 +1,6 @@
-mod parquet;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use parquet::*;
+pub use implementation::*;

@@ -1,6 +1,6 @@
-mod trade;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use trade::*;
+pub use implementation::*;

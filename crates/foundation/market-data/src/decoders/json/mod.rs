@@ -1,6 +1,6 @@
-mod json;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use json::*;
+pub use implementation::*;

@@ -1,6 +1,6 @@
-mod schema;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use schema::*;
+pub use implementation::*;

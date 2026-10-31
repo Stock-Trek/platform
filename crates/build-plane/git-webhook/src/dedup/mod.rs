@@ -1,6 +1,6 @@
-mod dedup;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use dedup::*;
+pub use implementation::*;

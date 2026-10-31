@@ -1,6 +1,6 @@
-mod record;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use record::*;
+pub use implementation::*;

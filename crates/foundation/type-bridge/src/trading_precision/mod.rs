@@ -1,6 +1,6 @@
-mod trading_precision;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use trading_precision::*;
+pub use implementation::*;

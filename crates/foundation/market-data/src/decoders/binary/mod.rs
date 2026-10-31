@@ -1,6 +1,6 @@
-mod binary;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use binary::*;
+pub use implementation::*;

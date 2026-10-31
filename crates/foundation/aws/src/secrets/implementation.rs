@@ -70,7 +70,10 @@ impl Secrets {
         Ok(secrets)
     }
 
-    pub(super) fn insert_page(secrets: &mut HashMap<String, String>, page: &GetParametersByPathOutput) {
+    pub(super) fn insert_page(
+        secrets: &mut HashMap<String, String>,
+        page: &GetParametersByPathOutput,
+    ) {
         for parameter in page.parameters() {
             let Some(name) = parameter
                 .name()

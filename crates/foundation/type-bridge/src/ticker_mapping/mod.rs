@@ -1,6 +1,6 @@
-mod ticker_mapping;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use ticker_mapping::*;
+pub use implementation::*;

@@ -1,6 +1,6 @@
-mod rate_limiter_state;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use rate_limiter_state::*;
+pub use implementation::*;

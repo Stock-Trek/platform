@@ -1,8 +1,8 @@
 //! JetStream naming and error helpers shared by the publisher, consumer, and KV store.
 
-mod jetstream;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use jetstream::*;
+pub use implementation::*;

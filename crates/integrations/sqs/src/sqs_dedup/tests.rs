@@ -1,8 +1,8 @@
 use super::*;
 use platform_messages::sqs_message::SqsMessage;
+use platform_messages::sqs_message::{GitSource, SqsDetail, SqsRefType};
 use std::num::NonZeroUsize;
 use std::time::Duration;
-use platform_messages::sqs_message::{GitSource, SqsDetail, SqsRefType};
 
 fn message(commit_hash: &str) -> SqsMessage {
     SqsMessage {

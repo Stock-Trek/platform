@@ -1,6 +1,6 @@
-mod exit_code;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use exit_code::*;
+pub use implementation::*;

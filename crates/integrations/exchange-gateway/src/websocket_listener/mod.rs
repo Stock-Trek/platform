@@ -1,6 +1,6 @@
-mod websocket_listener;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use websocket_listener::*;
+pub use implementation::*;

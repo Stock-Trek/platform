@@ -1,8 +1,8 @@
 use super::*;
 use crate::config::RebuildSourceLayer;
+use async_trait::async_trait;
 use platform_archive::{ArchiveCatalog, ArchiveIcebergTable, IcebergDataFile};
 use platform_errors::BpResult;
-use async_trait::async_trait;
 use std::collections::HashSet;
 
 #[derive(Default)]

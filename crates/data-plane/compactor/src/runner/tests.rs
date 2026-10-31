@@ -1,10 +1,10 @@
 use super::*;
 use crate::compactor::BatchCompactor;
-use crate::source::ArchiveBatchSource;
-use platform_errors::BpResult;
 use crate::compactor::CompactionStats;
+use crate::source::ArchiveBatchSource;
 use async_trait::async_trait;
 use platform_archive::{ArchiveKind, SourceBatch};
+use platform_errors::BpResult;
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::{Arc, Mutex};
 

@@ -1,8 +1,8 @@
 //! Stable key-to-shard assignment for the aggregator shard stream.
 
-mod shard;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use shard::*;
+pub use implementation::*;

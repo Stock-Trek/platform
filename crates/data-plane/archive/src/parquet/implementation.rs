@@ -56,7 +56,11 @@ where
         Self::with_batch_size(kind, reader, READ_BATCH_SIZE).await
     }
 
-    pub(super) async fn with_batch_size(kind: ArchiveKind, reader: T, batch_size: usize) -> BpResult<Self> {
+    pub(super) async fn with_batch_size(
+        kind: ArchiveKind,
+        reader: T,
+        batch_size: usize,
+    ) -> BpResult<Self> {
         let builder = ParquetRecordBatchStreamBuilder::new(reader).await?;
         let stream = builder.with_batch_size(batch_size).build()?;
         Ok(Self { kind, stream })

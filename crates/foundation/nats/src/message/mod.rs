@@ -1,8 +1,8 @@
 //! NATS message representation shared by core and JetStream flows.
 
-mod message;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use message::*;
+pub use implementation::*;

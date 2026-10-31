@@ -4,9 +4,9 @@
 //! browser-style POST policy used by the build agent. Keep that signing logic
 //! isolated here so ordinary S3 operations can use the SDK client.
 
-mod presigned_post;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use presigned_post::*;
+pub use implementation::*;

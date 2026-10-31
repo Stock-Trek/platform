@@ -1,6 +1,6 @@
-mod retry;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use retry::*;
+pub use implementation::*;

@@ -1,7 +1,7 @@
 use super::*;
 use crate::{ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, IcebergDataFile};
-use platform_errors::BpResult;
 use async_trait::async_trait;
+use platform_errors::BpResult;
 use std::collections::HashSet;
 
 #[derive(Default)]

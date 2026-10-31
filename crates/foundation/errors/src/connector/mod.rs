@@ -1,6 +1,6 @@
-mod connector;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use connector::*;
+pub use implementation::*;

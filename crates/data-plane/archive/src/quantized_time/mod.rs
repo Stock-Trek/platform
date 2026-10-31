@@ -1,6 +1,6 @@
-mod quantized_time;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use quantized_time::*;
+pub use implementation::*;

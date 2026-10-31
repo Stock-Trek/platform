@@ -1,6 +1,6 @@
-mod subject;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use subject::*;
+pub use implementation::*;

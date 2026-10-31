@@ -1,11 +1,11 @@
 use super::*;
 use crate::rate_limit::rate_limiter::RateLimiter;
+use crate::rate_limit::rate_limiter_state::RateLimiterState;
 use platform_errors::{BpError, RateLimitError};
 use platform_exchange_types::rate_limited::RateLimitRestriction;
 use platform_types::new_types::{DurationNanoseconds, UsageCount};
 use std::collections::HashMap;
 use std::time::Duration;
-use crate::rate_limit::rate_limiter_state::RateLimiterState;
 
 fn rate_limiters() -> RateLimiters {
     let state = RateLimiterState::try_new(DurationNanoseconds(60_000_000_000), UsageCount(10))

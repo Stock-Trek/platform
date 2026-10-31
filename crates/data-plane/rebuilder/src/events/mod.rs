@@ -1,6 +1,6 @@
-mod events;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use events::*;
+pub use implementation::*;

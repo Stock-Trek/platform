@@ -1,6 +1,6 @@
-mod deadline;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use deadline::*;
+pub use implementation::*;

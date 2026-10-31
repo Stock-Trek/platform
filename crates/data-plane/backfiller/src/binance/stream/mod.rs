@@ -1,6 +1,6 @@
-mod stream;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use stream::*;
+pub use implementation::*;

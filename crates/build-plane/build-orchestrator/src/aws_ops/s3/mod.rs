@@ -1,6 +1,6 @@
-mod s3;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use s3::*;
+pub use implementation::*;

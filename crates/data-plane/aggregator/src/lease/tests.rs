@@ -1,13 +1,13 @@
-use async_trait::async_trait;
 use crate::{
     lease::{LeaseStore, WriterLease},
     shard::ShardId,
 };
+use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::BpResult;
 use platform_types::new_types::TimestampMilliseconds;
-use std::time::Duration;
-use parking_lot::Mutex;
 use std::collections::HashMap;
+use std::time::Duration;
 
 /// In-memory lease store used by tests.
 #[derive(Debug, Default)]
@@ -84,7 +84,6 @@ impl LeaseStore for InMemoryLeaseStore {
         Ok(self.leases.lock().get(&shard).cloned())
     }
 }
-
 
 fn shard() -> ShardId {
     ShardId::new(3)

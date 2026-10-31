@@ -1,8 +1,8 @@
 //! Durable JetStream pull consumer with explicit acknowledgements.
 
-mod consumer;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use consumer::*;
+pub use implementation::*;

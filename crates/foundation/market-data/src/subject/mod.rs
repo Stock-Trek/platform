@@ -1,8 +1,8 @@
 //! NATS subject construction for the market data event contract.
 
-mod subject;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use subject::*;
+pub use implementation::*;

@@ -1,6 +1,6 @@
-mod fetcher;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use fetcher::*;
+pub use implementation::*;

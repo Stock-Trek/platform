@@ -1,6 +1,6 @@
-mod ingester;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use ingester::*;
+pub use implementation::*;

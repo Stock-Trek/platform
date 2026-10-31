@@ -4,9 +4,9 @@
 //! reshards them onto shard subjects. Each shard writer then consumes
 //! only its own shard subject, which gives every candle key a single writer.
 
-mod source;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use source::*;
+pub use implementation::*;

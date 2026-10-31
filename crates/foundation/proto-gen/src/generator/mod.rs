@@ -1,6 +1,6 @@
-mod generator;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use generator::*;
+pub use implementation::*;

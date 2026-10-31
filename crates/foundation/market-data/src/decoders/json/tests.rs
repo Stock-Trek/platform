@@ -1,8 +1,8 @@
 use super::*;
 use iris::Codec;
 use platform_errors::IngesterError;
-use tokio_websockets::Message;
 use serde_json::json;
+use tokio_websockets::Message;
 
 #[test]
 fn envelope_mapping_extracts_the_stream() {

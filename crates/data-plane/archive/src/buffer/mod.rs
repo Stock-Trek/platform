@@ -1,6 +1,6 @@
-mod buffer;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use buffer::*;
+pub use implementation::*;

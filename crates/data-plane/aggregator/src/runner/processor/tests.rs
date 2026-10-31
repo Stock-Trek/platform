@@ -1,4 +1,5 @@
 use super::*;
+use crate::{checkpoint::tests::InMemoryStateStore, lease::tests::InMemoryLeaseStore};
 use crate::{
     config::AggregatorConfig,
     shard::ShardId,
@@ -7,7 +8,6 @@ use crate::{
     state::AggregatorState,
 };
 use std::sync::Arc;
-use crate::{checkpoint::tests::InMemoryStateStore, lease::tests::InMemoryLeaseStore};
 
 impl<S, K> ProcessorRunner<S, K>
 where

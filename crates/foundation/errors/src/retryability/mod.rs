@@ -1,6 +1,6 @@
-mod retryability;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use retryability::*;
+pub use implementation::*;

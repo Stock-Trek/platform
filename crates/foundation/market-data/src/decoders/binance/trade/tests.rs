@@ -2,14 +2,14 @@ use super::*;
 use crate::decoders::trade::TradeDecoder;
 use crate::event::MarketEvent;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use platform_metrics::descriptions::MARKET_DATA_DROPPED_EVENTS_TOTAL;
 use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
+use platform_metrics::test_utils::TestRecorder;
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use serde_json::Value;
-use stock_trek_types::cex::trading_pair::TradingPair;
-use platform_metrics::descriptions::MARKET_DATA_DROPPED_EVENTS_TOTAL;
-use platform_metrics::test_utils::TestRecorder;
 use serde_json::json;
+use stock_trek_types::cex::trading_pair::TradingPair;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 
 fn event(stream: &str, payload: Value) -> MarketEvent {

@@ -7,9 +7,9 @@
 //! working directory replaces the checked in algorithm stub with the user's
 //! source.
 
-mod source;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use source::*;
+pub use implementation::*;

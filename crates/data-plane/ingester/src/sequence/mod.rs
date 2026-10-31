@@ -1,6 +1,6 @@
-mod sequence;
+mod implementation;
 
 #[cfg(test)]
 pub(crate) mod tests;
 
-pub use sequence::*;
+pub use implementation::*;

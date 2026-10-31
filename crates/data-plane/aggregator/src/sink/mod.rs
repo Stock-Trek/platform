@@ -1,6 +1,6 @@
-mod sink;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use sink::*;
+pub use implementation::*;

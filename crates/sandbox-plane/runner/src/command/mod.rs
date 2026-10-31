@@ -1,6 +1,6 @@
-mod command;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub use command::*;
+pub use implementation::*;

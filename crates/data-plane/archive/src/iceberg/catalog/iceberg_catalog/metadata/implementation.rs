@@ -7,7 +7,9 @@ const SOURCE_FILE_SUMMARY_PREFIX: &str = "source-file:";
 const ARCHIVE_BATCH_SUMMARY_KEY: &str = "archive-batch";
 
 impl IcebergCatalog {
-    pub(in crate::iceberg::catalog::iceberg_catalog) fn source_files_from_metadata(table: &Table) -> HashSet<String> {
+    pub(in crate::iceberg::catalog::iceberg_catalog) fn source_files_from_metadata(
+        table: &Table,
+    ) -> HashSet<String> {
         table
             .metadata()
             .snapshots()

@@ -1,6 +1,6 @@
-mod content_id;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
 
-pub(crate) use content_id::*;
+pub(crate) use implementation::*;
