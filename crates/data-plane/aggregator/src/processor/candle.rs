@@ -13,6 +13,7 @@ use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
+use tracing::warn;
 
 impl CandleProcessor {
     pub(super) fn apply_trade_inner(
@@ -35,12 +36,12 @@ impl CandleProcessor {
                     .binary_search_by_key(&candle_start.0, |candle| candle.start_time().0)
                     .is_ok()
             }) {
-                self.apply_late_trade(trade, &key, candle_start, update);
+                self.apply_late_trade(trade, &key, candle_start, candle_end, watermark, update);
                 continue;
             }
 
             if window_is_closed {
-                self.open_closed_correction(trade, interval, update);
+                self.open_closed_correction(trade, interval, watermark, update);
                 continue;
             }
 
@@ -80,8 +81,22 @@ impl CandleProcessor {
         trade: &Trade,
         key: &CandleKey,
         candle_start: TimestampMilliseconds,
+        candle_end: TimestampMilliseconds,
+        watermark: Option<TimestampMilliseconds>,
         update: &mut ProcessorUpdate,
     ) {
+        if !self.is_within_correction_contract(candle_end, watermark) {
+            self.record_out_of_contract_trade(
+                trade,
+                key,
+                candle_start,
+                candle_end,
+                watermark,
+                update,
+            );
+            return;
+        }
+
         let close_watermark = self.state.watermark.unwrap_or(trade.timestamp);
         let source_offset = self.state.last_processed_offset().unwrap_or_default();
         let state_epoch = self.state.state_epoch;
@@ -114,8 +129,40 @@ impl CandleProcessor {
         &mut self,
         trade: &Trade,
         interval: CandleInterval,
+        watermark: Option<TimestampMilliseconds>,
         update: &mut ProcessorUpdate,
     ) {
+        let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
+        let candle_start = interval.start_for(trade.timestamp);
+        let candle_end = interval.end_for(trade.timestamp);
+        if !self.is_within_correction_contract(candle_end, watermark) {
+            self.record_out_of_contract_trade(
+                trade,
+                &key,
+                candle_start,
+                candle_end,
+                watermark,
+                update,
+            );
+            return;
+        }
+
+        let max_closed_candles = self.max_closed_candles(interval);
+        if self
+            .state
+            .would_evict_closed_candidate(&key, candle_start, max_closed_candles)
+        {
+            self.record_out_of_contract_trade(
+                trade,
+                &key,
+                candle_start,
+                candle_end,
+                watermark,
+                update,
+            );
+            return;
+        }
+
         let close_watermark = self.state.watermark.unwrap_or(trade.timestamp);
         let source_offset = self.state.last_processed_offset().unwrap_or_default();
         let state_epoch = self.state.state_epoch;
@@ -124,7 +171,10 @@ impl CandleProcessor {
             return;
         };
         candle.close();
-        self.state.retain_closed_candle(candle.clone());
+        let evicted = self
+            .state
+            .retain_closed_candle(candle.clone(), max_closed_candles);
+        update.record_evictions(&evicted);
         update.late_trades += 1;
         update.closed.push(ClosedCandle::new(
             candle,
@@ -132,6 +182,46 @@ impl CandleProcessor {
             source_offset,
             state_epoch,
         ));
+    }
+
+    pub(super) fn max_closed_candles(&self, interval: CandleInterval) -> usize {
+        self.config
+            .max_closed_candles(interval)
+            .unwrap_or(usize::MAX)
+    }
+
+    pub(super) fn is_within_correction_contract(
+        &self,
+        window_end: TimestampMilliseconds,
+        watermark: Option<TimestampMilliseconds>,
+    ) -> bool {
+        let Some(watermark) = watermark else {
+            return true;
+        };
+        window_end >= watermark - self.config.correction_cutoff
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn record_out_of_contract_trade(
+        &self,
+        trade: &Trade,
+        key: &CandleKey,
+        window_start: TimestampMilliseconds,
+        window_end: TimestampMilliseconds,
+        watermark: Option<TimestampMilliseconds>,
+        update: &mut ProcessorUpdate,
+    ) {
+        update.out_of_contract_trades += 1;
+        warn!(
+            exchange = %trade.exchange,
+            trading_pair = ?trade.trading_pair,
+            interval = %key.interval,
+            window_start = window_start.0,
+            window_end = window_end.0,
+            watermark = ?watermark.map(|value| value.0),
+            correction_cutoff_ms = self.config.correction_cutoff.0,
+            "rejected trade correction outside the event-time correction contract"
+        );
     }
 
     fn record_invalid_trade() {

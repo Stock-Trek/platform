@@ -26,3 +26,5 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 base64 = { workspace = true }
+metrics = { workspace = true }
+platform-metrics = { workspace = true, features = ["test-utils"] }

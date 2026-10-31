@@ -10,6 +10,7 @@ use platform_market_data::{candle::ClosedCandle, event::GapMarker};
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::HashSet;
 use stock_trek_types::cex::trading_pair::TradingPair;
+use tracing::warn;
 
 impl CandleProcessor {
     pub(super) fn close_expired(&mut self, update: &mut ProcessorUpdate) {
@@ -66,7 +67,11 @@ impl CandleProcessor {
                 self.state.open_candles.remove(&key);
             }
             candle.close();
-            self.state.retain_closed_candle(candle.clone());
+            let max_closed_candles = self.max_closed_candles(key.interval);
+            let evicted = self
+                .state
+                .retain_closed_candle(candle.clone(), max_closed_candles);
+            update.record_evictions(&evicted);
             update.closed.push(ClosedCandle::new(
                 candle,
                 watermark,
@@ -124,6 +129,29 @@ impl CandleProcessor {
             })
             .filter(|window| seen.insert((window.key.clone(), window.window_start)))
             .collect::<Vec<_>>();
+        let mut rejected = 0;
+        affected.retain(|window| {
+            let watermark = self
+                .watermark_for_pair(window.key.exchange, window.key.trading_pair)
+                .or(previous_stream_watermark)
+                .or_else(|| self.global_watermark_fallback());
+            if self.is_within_correction_contract(window.window_end, watermark) {
+                return true;
+            }
+            rejected += 1;
+            warn!(
+                exchange = %window.key.exchange,
+                trading_pair = ?window.key.trading_pair,
+                interval = %window.key.interval,
+                window_start = window.window_start.0,
+                window_end = window.window_end.0,
+                watermark = ?watermark.map(|value| value.0),
+                correction_cutoff_ms = self.config.correction_cutoff.0,
+                "skipped gap-affected candle window outside the event-time correction contract"
+            );
+            false
+        });
+        update.out_of_contract_gap_windows += rejected;
         affected.sort_by(|left, right| {
             left.key
                 .subject_suffix()

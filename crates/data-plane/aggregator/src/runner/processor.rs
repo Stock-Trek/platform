@@ -16,6 +16,7 @@ use crate::{
     state::AggregatorState,
 };
 use platform_errors::BpResult;
+use platform_metrics::AggregatorMetrics;
 use platform_runtime::Runtime;
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::Arc;
@@ -159,6 +160,18 @@ where
             quiesce,
         } = self;
         let mut processor = CandleProcessor::from_state(config.processor_config(), state)?;
+        for interval in &processor.config().intervals {
+            AggregatorMetrics::record_retained_closed_candles(
+                shard.get(),
+                &interval.label(),
+                processor
+                    .state()
+                    .closed_candles_len_by_interval()
+                    .get(interval)
+                    .copied()
+                    .unwrap_or_default(),
+            );
+        }
         let Some(mut writer) =
             Writer::acquire(&leases, shard, writer_id, initial_lease, &config).await?
         else {

@@ -12,13 +12,13 @@ use crate::checkpoint::StateStore;
 use crate::config::{AggregatorConfig, ReplayStartPolicy};
 use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::shard::{ShardId, trades_for_shard};
-use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
+use crate::state::AggregatorState;
 use platform_errors::{BpResult, ErrorType};
 use platform_market_data::candle::CandleInterval;
 use platform_metrics::AggregatorMetrics;
 use platform_nats::ConsumerStart;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::future::Future;
 use std::time::{Duration, Instant};
 use tracing::{info, warn};
@@ -78,6 +78,8 @@ pub struct RestoreOptions {
     pub intervals: Vec<CandleInterval>,
     pub shard_count: usize,
     pub allowed_lateness: DurationMilliseconds,
+    pub max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
+    pub correction_cutoff: DurationMilliseconds,
     pub replay_start_policy: ReplayStartPolicy,
     pub expected_schema_version: u32,
 }
@@ -94,6 +96,10 @@ impl RestoreOptions {
             intervals: config.intervals.clone(),
             shard_count: config.shard_count,
             allowed_lateness: config.processor_config().allowed_lateness,
+            max_closed_candles_per_interval: config
+                .processor_config()
+                .max_closed_candles_per_interval,
+            correction_cutoff: config.processor_config().correction_cutoff,
             replay_start_policy: config.replay_start_policy,
             expected_schema_version: config.state_schema_version,
         }
@@ -171,23 +177,34 @@ where
                     shard,
                     &options.source_stream,
                     options.expected_schema_version,
-                ) =>
+                ) && checkpoint.state.candles_use_intervals(&options.intervals) =>
             {
                 let age = checkpoint.age(TimestampMilliseconds::now());
+                let next_sequence = checkpoint.next_sequence;
+                let mut state = checkpoint.state;
+                let evicted =
+                    state.prune_closed_candles_to_caps(&options.max_closed_candles_per_interval)?;
+                if !evicted.is_empty() {
+                    warn!(
+                        shard = %shard,
+                        evicted = evicted.len(),
+                        "pruned restored checkpoint candles to the configured per-interval caps"
+                    );
+                }
                 AggregatorMetrics::record_checkpoint_age(
                     shard.get(),
                     Duration::from_millis(age.0.max(0) as u64),
                 );
                 info!(
                     shard = %shard,
-                    next_sequence = checkpoint.next_sequence,
+                    next_sequence,
                     watermark = ?checkpoint.watermark,
-                    open_candles = checkpoint.state.open_candles_len(),
+                    open_candles = state.open_candles_len(),
                     "restored aggregator shard from checkpoint"
                 );
                 return Ok(RestoredShard {
-                    state: checkpoint.state,
-                    start: ConsumerStart::Sequence(checkpoint.next_sequence),
+                    state,
+                    start: ConsumerStart::Sequence(next_sequence),
                     restored_from: RestoreSource::Checkpoint,
                     rebuilt_from_archive: false,
                 });
@@ -198,7 +215,8 @@ where
                     source_stream = %checkpoint.source_stream,
                     schema_version = checkpoint.state.schema_version,
                     expected_schema_version = options.expected_schema_version,
-                    "ignoring stale or incompatible checkpoint; rebuilding from archive"
+                    configured_intervals = ?options.intervals,
+                    "ignoring stale, incompatible, or unconfigured-interval checkpoint; rebuilding from archive"
                 );
             }
             Ok(None) => {
@@ -228,15 +246,16 @@ where
 
     AggregatorMetrics::record_replay_progress(shard.get(), "archive", 0.0);
     let mut archive = connect_archive().await?;
-    let rebuilt = rebuild_state_from_archive_outcome(
-        archive.as_mut(),
-        shard,
-        &options.intervals,
-        options.shard_count,
+    let config = ProcessorConfig::new(
+        options.intervals.clone(),
         options.allowed_lateness,
-        options.expected_schema_version,
+        options.max_closed_candles_per_interval.clone(),
+        options.correction_cutoff,
     )
-    .await?;
+    .with_state_schema_version(options.expected_schema_version);
+    let rebuilt =
+        rebuild_state_from_archive_outcome(archive.as_mut(), shard, options.shard_count, config)
+            .await?;
     AggregatorMetrics::record_replay_progress(shard.get(), "archive", 1.0);
 
     if rebuilt.replayed_events == 0 {
@@ -280,17 +299,20 @@ pub async fn rebuild_state_from_archive(
     intervals: &[CandleInterval],
     shard_count: usize,
     allowed_lateness: DurationMilliseconds,
+    max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
+    correction_cutoff: DurationMilliseconds,
 ) -> BpResult<AggregatorState> {
-    Ok(rebuild_state_from_archive_outcome(
-        archive,
-        shard,
-        intervals,
-        shard_count,
+    let config = ProcessorConfig::new(
+        intervals.to_vec(),
         allowed_lateness,
-        STATE_SCHEMA_VERSION,
+        max_closed_candles_per_interval,
+        correction_cutoff,
+    );
+    Ok(
+        rebuild_state_from_archive_outcome(archive, shard, shard_count, config)
+            .await?
+            .state,
     )
-    .await?
-    .state)
 }
 
 /// Replays all archived events for one shard into fresh keyed state with
@@ -301,36 +323,37 @@ pub async fn rebuild_state_from_archive(
 /// inputs therefore reproduces the same deterministic output ids; callers that
 /// intentionally regenerate outputs under a new lineage, such as the rebuilder,
 /// must assign a fresh epoch themselves.
+#[allow(clippy::too_many_arguments)]
 pub async fn rebuild_state_from_archive_with_schema(
     archive: &mut dyn ArchivedEventSource,
     shard: ShardId,
     intervals: &[CandleInterval],
     shard_count: usize,
     allowed_lateness: DurationMilliseconds,
+    max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
+    correction_cutoff: DurationMilliseconds,
     state_schema_version: u32,
 ) -> BpResult<AggregatorState> {
-    Ok(rebuild_state_from_archive_outcome(
-        archive,
-        shard,
-        intervals,
-        shard_count,
+    let config = ProcessorConfig::new(
+        intervals.to_vec(),
         allowed_lateness,
-        state_schema_version,
+        max_closed_candles_per_interval,
+        correction_cutoff,
     )
-    .await?
-    .state)
+    .with_state_schema_version(state_schema_version);
+    Ok(
+        rebuild_state_from_archive_outcome(archive, shard, shard_count, config)
+            .await?
+            .state,
+    )
 }
 
 async fn rebuild_state_from_archive_outcome(
     archive: &mut dyn ArchivedEventSource,
     shard: ShardId,
-    intervals: &[CandleInterval],
     shard_count: usize,
-    allowed_lateness: DurationMilliseconds,
-    state_schema_version: u32,
+    config: ProcessorConfig,
 ) -> BpResult<RebuiltArchiveState> {
-    let config = ProcessorConfig::new(intervals.to_vec(), allowed_lateness)
-        .with_state_schema_version(state_schema_version);
     let mut processor = CandleProcessor::with_config(config);
     let mut decoders = HashMap::new();
     let mut replayed = 0_u64;

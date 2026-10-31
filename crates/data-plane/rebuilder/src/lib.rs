@@ -32,7 +32,12 @@ pub async fn run(config: RebuildConfig) -> BpResult<()> {
     let mut source = IcebergEventReader::connect(catalog.as_ref(), config.source_layer).await?;
     let events = source.read_events().await?;
     let options = RebuildOptions {
-        processor: ProcessorConfig::new(config.intervals.clone(), config.allowed_lateness),
+        processor: ProcessorConfig::new(
+            config.intervals.clone(),
+            config.allowed_lateness,
+            config.max_closed_candles_per_interval.clone(),
+            config.correction_cutoff,
+        ),
         state_epoch: config.state_epoch,
         finish_open_windows: config.finish_open_windows,
     };

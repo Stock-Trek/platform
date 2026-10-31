@@ -2,15 +2,19 @@ use super::aggregator::AggregatorConfig;
 use super::env::{
     AGGREGATOR_ALLOWED_LATENESS_MS, AGGREGATOR_CHECKPOINT_BUCKET,
     AGGREGATOR_CHECKPOINT_INTERVAL_SECS, AGGREGATOR_CHECKPOINT_PREFIX,
-    AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX, AGGREGATOR_DURABLE_PREFIX,
-    AGGREGATOR_EVENT_SUBJECT_PREFIX, AGGREGATOR_GAP_SUBJECT_PREFIX, AGGREGATOR_INTERVALS,
-    AGGREGATOR_LEASE_TTL_SECS, AGGREGATOR_NATS_URL, AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX,
-    AGGREGATOR_REPLAY_START_POLICY, AGGREGATOR_SHARD_COUNT, AGGREGATOR_SHARD_INDEX,
-    AGGREGATOR_SHARD_SUBJECT_PREFIX, AGGREGATOR_STATE_SCHEMA_VERSION,
+    AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX,
+    AGGREGATOR_CORRECTION_CUTOFF_MS, AGGREGATOR_DURABLE_PREFIX, AGGREGATOR_EVENT_SUBJECT_PREFIX,
+    AGGREGATOR_GAP_SUBJECT_PREFIX, AGGREGATOR_INTERVALS, AGGREGATOR_LEASE_TTL_SECS,
+    AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL, AGGREGATOR_NATS_URL,
+    AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX, AGGREGATOR_REPLAY_START_POLICY, AGGREGATOR_SHARD_COUNT,
+    AGGREGATOR_SHARD_INDEX, AGGREGATOR_SHARD_SUBJECT_PREFIX, AGGREGATOR_STATE_SCHEMA_VERSION,
     AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS,
 };
 use super::replay::ReplayStartPolicy;
-use super::validation::validate_kv_bucket;
+use super::validation::{
+    parse_correction_cutoff, parse_max_closed_candles_per_interval, validate_kv_bucket,
+    validate_retention,
+};
 use platform_archive::RoutingBucket;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
@@ -85,10 +89,42 @@ impl AggregatorConfig {
             ));
         }
         let allowed_lateness_ms: u64 = vars.required_parsed(AGGREGATOR_ALLOWED_LATENESS_MS)?;
+        let allowed_lateness = Duration::from_millis(allowed_lateness_ms);
+        let max_closed_candles_per_interval = parse_max_closed_candles_per_interval(
+            AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
+            &vars.required(AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL)?,
+            &intervals,
+        )?;
+        let correction_cutoff_ms: u64 = vars.required_parsed(AGGREGATOR_CORRECTION_CUTOFF_MS)?;
+        let correction_cutoff = parse_correction_cutoff(
+            AGGREGATOR_CORRECTION_CUTOFF_MS,
+            correction_cutoff_ms,
+            allowed_lateness,
+        )?;
+        let memory_budget_bytes: u64 =
+            vars.required_parsed(AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES)?;
+        let closed_candle_memory_budget_bytes =
+            usize::try_from(memory_budget_bytes).map_err(|error| {
+                BpError::config_invalid_source(AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, error)
+            })?;
+        if closed_candle_memory_budget_bytes == 0 {
+            return Err(BpError::config_invalid(
+                AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES,
+                "must be greater than zero",
+            ));
+        }
 
         let shard_subject_prefix =
             Config::required_nats_subject(vars, AGGREGATOR_SHARD_SUBJECT_PREFIX)?;
         let shard_count = Config::required_positive_usize(vars, AGGREGATOR_SHARD_COUNT)?;
+        validate_retention(
+            &intervals,
+            &max_closed_candles_per_interval,
+            shard_count,
+            allowed_lateness,
+            correction_cutoff_ms,
+            closed_candle_memory_budget_bytes,
+        )?;
         if shard_count as u64 > RoutingBucket::COUNT {
             return Err(BpError::config_invalid(
                 AGGREGATOR_SHARD_COUNT,
@@ -119,7 +155,10 @@ impl AggregatorConfig {
             shard_count,
             shard_index,
             intervals,
-            allowed_lateness: Duration::from_millis(allowed_lateness_ms),
+            allowed_lateness,
+            max_closed_candles_per_interval,
+            correction_cutoff,
+            closed_candle_memory_budget_bytes,
             checkpoint_interval,
             checkpoint_bucket,
             checkpoint_key_prefix,

@@ -3,7 +3,7 @@ use crate::{
     checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore},
     config::AggregatorConfig,
     lease::{InMemoryLeaseStore, LeaseStore},
-    processor::ProcessorUpdate,
+    processor::{CandleProcessor, ProcessorUpdate},
     shard::ShardId,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     source::{MarketInput, MarketSource, SourceRecord},
@@ -15,6 +15,12 @@ use platform_market_data::{
     candle::{Candle, CandleKey, ClosedCandle},
     event::{GapMarker, MarketEvent},
 };
+use platform_metrics::descriptions::{
+    MARKET_DATA_AGGREGATOR_CLOSED_CANDLES_EVICTED_TOTAL,
+    MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL,
+    MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL,
+};
+use platform_metrics::test_utils::TestRecorder;
 use platform_nats::Message;
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::Arc;
@@ -133,6 +139,12 @@ fn config() -> AggregatorConfig {
         shard_index: None,
         intervals: vec![CandleInterval::from_label("1m").unwrap()],
         allowed_lateness: std::time::Duration::from_millis(5_000),
+        max_closed_candles_per_interval: std::collections::BTreeMap::from([(
+            CandleInterval::from_label("1m").unwrap(),
+            usize::MAX,
+        )]),
+        correction_cutoff: platform_types::new_types::DurationMilliseconds(i64::MAX),
+        closed_candle_memory_budget_bytes: usize::MAX,
         checkpoint_interval: std::time::Duration::from_secs(1),
         checkpoint_bucket: "aggregator_shards_checkpoints".to_string(),
         checkpoint_key_prefix: "shard".to_string(),
@@ -850,4 +862,55 @@ async fn propagates_source_error() {
     let error = runner.run().await.unwrap_err();
 
     assert_eq!(error.to_string(), "source failed");
+}
+
+#[tokio::test]
+async fn count_only_retention_updates_reach_metrics_without_publishing_candles() {
+    let recorder = TestRecorder::default();
+    let processor = CandleProcessor::with_config(config().processor_config());
+    let interval = CandleInterval::from_label("1m").unwrap();
+    let update = ProcessorUpdate {
+        closed_candle_evictions: 3,
+        closed_candle_evictions_by_interval: std::collections::BTreeMap::from([(interval, 3)]),
+        out_of_contract_trades: 2,
+        out_of_contract_gap_windows: 1,
+        ..ProcessorUpdate::default()
+    };
+
+    metrics::with_local_recorder(&recorder, || {
+        ProcessorRunner::<FakeSource, FakeSink>::record_update_metrics(
+            ShardId::new(0),
+            &processor,
+            &update,
+        );
+    });
+
+    assert_eq!(
+        recorder.counter(
+            MARKET_DATA_AGGREGATOR_CLOSED_CANDLES_EVICTED_TOTAL,
+            &[("shard", "0"), ("interval", "1m")],
+        ),
+        3
+    );
+    assert_eq!(
+        recorder.counter(MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL, &[]),
+        2
+    );
+    assert_eq!(
+        recorder.counter(
+            MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL,
+            &[],
+        ),
+        1
+    );
+
+    let sink = FakeSink::default();
+    let writer = super::output::CandleOutputWriter::start(sink.clone());
+    writer.enqueue(update, processor.state()).await.unwrap();
+    writer.flush().await.unwrap();
+    writer.shutdown().await.unwrap();
+
+    assert_eq!(sink.open_updates(), 0);
+    assert_eq!(sink.closed_updates(), 0);
+    assert_eq!(sink.deleted_open_updates(), 0);
 }

@@ -91,7 +91,7 @@ where
                                     config.shard_count,
                                     &record.input,
                                 );
-                                Self::record_update_metrics(&update);
+                                Self::record_update_metrics(shard, processor, &update);
                                 outputs
                                     .enqueue(update, processor.state())
                                     .await?;
@@ -136,7 +136,7 @@ where
                 }
                 _ = idle_ticker.tick() => {
                     let previous_watermark = processor.state().watermark;
-                    let update = Self::flush_idle(processor);
+                    let update = Self::flush_idle(shard, processor);
                     let changed = !update.is_empty()
                         || processor.state().watermark != previous_watermark;
                     outputs
@@ -211,9 +211,41 @@ where
         }
     }
 
-    fn record_update_metrics(update: &ProcessorUpdate) {
+    pub(super) fn record_update_metrics(
+        shard: ShardId,
+        processor: &CandleProcessor,
+        update: &ProcessorUpdate,
+    ) {
         AggregatorMetrics::record_duplicate_events(update.duplicates as u64);
         AggregatorMetrics::record_incomplete_windows(update.incomplete_windows.len() as u64);
+        AggregatorMetrics::record_out_of_contract_trades(update.out_of_contract_trades as u64);
+        AggregatorMetrics::record_out_of_contract_gap_windows(
+            update.out_of_contract_gap_windows as u64,
+        );
+        for (interval, evicted) in &update.closed_candle_evictions_by_interval {
+            AggregatorMetrics::record_closed_candle_evictions(
+                shard.get(),
+                &interval.label(),
+                *evicted as u64,
+            );
+        }
+        Self::record_retained_closed_candles(shard, processor);
+    }
+
+    fn record_retained_closed_candles(shard: ShardId, processor: &CandleProcessor) {
+        for interval in &processor.config().intervals {
+            let retained = processor
+                .state()
+                .closed_candles_len_by_interval()
+                .get(interval)
+                .copied()
+                .unwrap_or_default();
+            AggregatorMetrics::record_retained_closed_candles(
+                shard.get(),
+                &interval.label(),
+                retained,
+            );
+        }
     }
 
     fn record_watermark_lag(shard: ShardId, processor: &CandleProcessor) {
@@ -224,12 +256,12 @@ where
         AggregatorMetrics::record_watermark_lag(shard.get(), lag.0.max(0) as f64 / 1_000.0);
     }
 
-    fn flush_idle(processor: &mut CandleProcessor) -> ProcessorUpdate {
+    fn flush_idle(shard: ShardId, processor: &mut CandleProcessor) -> ProcessorUpdate {
         // Idle ticks must not advance event time to the wall clock. Doing so
         // closes old windows early and can make later backfills create
         // partial correction candles instead of revising the full history.
         let update = processor.flush_expired();
-        Self::record_update_metrics(&update);
+        Self::record_update_metrics(shard, processor, &update);
         update
     }
 

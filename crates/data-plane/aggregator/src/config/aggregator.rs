@@ -27,6 +27,9 @@ pub struct AggregatorConfig {
     pub intervals: Vec<CandleInterval>,
     /// How long after a candle window ends a late event may still update it.
     pub allowed_lateness: Duration,
+    pub max_closed_candles_per_interval: std::collections::BTreeMap<CandleInterval, usize>,
+    pub correction_cutoff: DurationMilliseconds,
+    pub closed_candle_memory_budget_bytes: usize,
     /// How often keyed state is checkpointed while processing.
     pub checkpoint_interval: Duration,
     /// KV bucket for checkpoints and writer leases.
@@ -72,6 +75,8 @@ impl AggregatorConfig {
             DurationMilliseconds(
                 i64::try_from(self.allowed_lateness.as_millis()).unwrap_or(i64::MAX),
             ),
+            self.max_closed_candles_per_interval.clone(),
+            self.correction_cutoff,
         )
         .with_state_schema_version(self.state_schema_version)
     }

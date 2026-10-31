@@ -253,9 +253,26 @@ mod tests {
         }
     }
 
+    fn event_with_trade_time(
+        sequence: u64,
+        event_timestamp: i64,
+        trade_timestamp: i64,
+    ) -> MarketEvent {
+        MarketEvent {
+            exchange: CexId::Binance,
+            stream: "btcusdt@trade".to_string(),
+            sequence: Some(sequence),
+            exchange_timestamp: Some(TimestampMilliseconds(event_timestamp)),
+            received_at: TimestampMilliseconds(event_timestamp),
+            payload: STANDARD.encode(format!(
+                r#"{{"e":"trade","E":{event_timestamp},"s":"BTCUSDT","p":"100","q":"1","T":{trade_timestamp}}}"#
+            )),
+        }
+    }
+
     fn options() -> RebuildOptions {
         RebuildOptions {
-            processor: ProcessorConfig::new(
+            processor: ProcessorConfig::without_retention(
                 vec![CandleInterval::from_label("1m").unwrap()],
                 DurationMilliseconds::ZERO,
             ),
@@ -403,5 +420,62 @@ mod tests {
 
         assert_eq!(finished.candles.len(), 1);
         assert!(unfinished.candles.is_empty());
+    }
+
+    #[test]
+    fn rebuilt_candles_match_live_processing_for_cap_eviction_and_a_rejected_correction() {
+        let interval = CandleInterval::from_label("1m").unwrap();
+        let cutoff = DurationMilliseconds(1_000);
+        let processor = ProcessorConfig::new(
+            vec![interval],
+            DurationMilliseconds::ZERO,
+            BTreeMap::from([(interval, 1)]),
+            cutoff,
+        );
+
+        let events = vec![
+            event_with_trade_time(1, 61_000, 61_000),
+            event_with_trade_time(2, 121_000, 121_000),
+            event_with_trade_time(3, 181_000, 181_000),
+            event_with_trade_time(4, 181_000, 61_500),
+        ];
+
+        let mut live = CandleProcessor::with_config(processor.clone());
+        live.state_mut().state_epoch = 7;
+        let decoder = TradeDecoderFactory::for_exchange(CexId::Binance).unwrap();
+        let mut live_candles = Vec::new();
+        for (offset, event) in events.iter().enumerate() {
+            live.state_mut().mark_processed(offset as u64);
+            let trades = decoder.decode(event).unwrap();
+            let update = live.apply_event(event, &trades);
+            live_candles.extend(update.closed);
+        }
+
+        let mut options = options();
+        options.processor = processor;
+        options.finish_open_windows = false;
+        let rebuilt = rebuild_candles(events, &options).unwrap();
+
+        assert_eq!(rebuilt.candles.len(), 2);
+        assert_eq!(
+            rebuilt
+                .candles
+                .iter()
+                .map(ClosedCandle::message_id)
+                .collect::<Vec<_>>(),
+            live_candles
+                .iter()
+                .map(ClosedCandle::message_id)
+                .collect::<Vec<_>>()
+        );
+        assert!(
+            rebuilt
+                .candles
+                .iter()
+                .all(
+                    |candle| candle.candle.start_time() != TimestampMilliseconds(60_000)
+                        || candle.candle.market_candle.trade_count == 1
+                )
+        );
     }
 }

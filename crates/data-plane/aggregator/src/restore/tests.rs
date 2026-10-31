@@ -2,10 +2,11 @@ use super::catalog::{
     AGGREGATOR_ARCHIVE_S3_BUCKET, AGGREGATOR_ARCHIVE_S3_PREFIX, ArchiveObject,
     ArchiveRecoveryConfig, select_event_objects, sort_archive_objects,
 };
-use super::rebuild::{RestoreOptions, RestoreSource, restore_shard};
+use super::rebuild::{RestoreOptions, RestoreSource, rebuild_state_from_archive, restore_shard};
 use super::replay::ArchivedEventSource;
 use crate::checkpoint::{CheckpointRecord, InMemoryStateStore, StateStore};
 use crate::config::ReplayStartPolicy;
+use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::shard::{ShardId, shard_for};
 use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
@@ -14,14 +15,14 @@ use platform_archive::{ArchiveKind, ArchivePath, ArchivedMarketEvent, Bucket, Ob
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult, ConfigError, Retryability};
 use platform_market_data::{
-    candle::CandleInterval,
+    candle::{Candle, CandleInterval, CandleKey},
     decoders::trade::{Trade, TradeDecoderFactory},
     event::MarketEvent,
 };
 use platform_nats::ConsumerStart;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use rust_decimal::Decimal;
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -30,6 +31,16 @@ use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::Trad
 
 fn pair() -> TradingPair {
     TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD)
+}
+
+fn trade(timestamp: i64) -> Trade {
+    Trade {
+        exchange: CexId::Binance,
+        trading_pair: pair(),
+        price: Decimal::from_str_exact("100").unwrap(),
+        quantity: Decimal::ONE,
+        timestamp: TimestampMilliseconds(timestamp),
+    }
 }
 
 fn event(sequence: u64, timestamp: i64) -> MarketEvent {
@@ -124,6 +135,8 @@ fn options(shard: ShardId, shard_count: usize) -> RestoreOptions {
         intervals: vec![interval()],
         shard_count,
         allowed_lateness: DurationMilliseconds::ZERO,
+        max_closed_candles_per_interval: BTreeMap::from([(interval(), usize::MAX)]),
+        correction_cutoff: DurationMilliseconds(i64::MAX),
         replay_start_policy: ReplayStartPolicy::Checkpoint,
         expected_schema_version: STATE_SCHEMA_VERSION,
     }
@@ -639,4 +652,159 @@ async fn checkpoint_fallback_without_archive_configuration_fails_fast() {
         BpError::Config(ConfigError::Missing { name })
             if name == AGGREGATOR_ARCHIVE_S3_BUCKET
     ));
+}
+
+#[tokio::test]
+async fn an_oversized_checkpoint_is_pruned_to_the_current_caps() {
+    let store = InMemoryStateStore::new();
+    let shard = ShardId::new(0);
+    let interval = interval();
+    let mut state = AggregatorState::new();
+    for timestamp in [60_000, 120_000, 180_000] {
+        let mut candle = Candle::open(&trade(timestamp), interval).unwrap();
+        candle.close();
+        let evicted = state.retain_closed_candle(candle, usize::MAX);
+        assert!(evicted.is_empty());
+    }
+    let checkpoint = CheckpointRecord::new(shard, "aggregator-shards", 11, state);
+    store.save(&checkpoint).await.unwrap();
+
+    let mut options = options(shard, 1);
+    options.max_closed_candles_per_interval = BTreeMap::from([(interval, 1)]);
+    let restored = restore_shard(
+        &store,
+        archive_source(VecArchive::new(Vec::new())),
+        &options,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.restored_from, RestoreSource::Checkpoint);
+    assert_eq!(restored.state.closed_candles_len(), 1);
+    let key = CandleKey::new(CexId::Binance, pair(), interval);
+    assert!(
+        restored
+            .state
+            .closed_candle(&key, TimestampMilliseconds(120_000))
+            .is_none()
+    );
+    assert!(
+        restored
+            .state
+            .closed_candle(&key, TimestampMilliseconds(180_000))
+            .is_some()
+    );
+}
+
+#[tokio::test]
+async fn restore_prunes_only_the_intervals_whose_cap_shrank() {
+    let store = InMemoryStateStore::new();
+    let shard = ShardId::new(0);
+    let one_minute = interval();
+    let five_minutes = CandleInterval::from_label("5m").unwrap();
+    let mut state = AggregatorState::new();
+    for (interval, timestamp) in [
+        (one_minute, 60_000),
+        (one_minute, 120_000),
+        (five_minutes, 0),
+        (five_minutes, 300_000),
+    ] {
+        let mut candle = Candle::open(&trade(timestamp), interval).unwrap();
+        candle.close();
+        state.retain_closed_candle(candle, usize::MAX);
+    }
+    let checkpoint = CheckpointRecord::new(shard, "aggregator-shards", 11, state);
+    store.save(&checkpoint).await.unwrap();
+
+    let mut options = options(shard, 1);
+    options.intervals = vec![one_minute, five_minutes];
+    options.max_closed_candles_per_interval = BTreeMap::from([(one_minute, 1), (five_minutes, 2)]);
+    let restored = restore_shard(
+        &store,
+        archive_source(VecArchive::new(Vec::new())),
+        &options,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.restored_from, RestoreSource::Checkpoint);
+    let pair = pair();
+    let one_minute_key = CandleKey::new(CexId::Binance, pair, one_minute);
+    let five_minute_key = CandleKey::new(CexId::Binance, pair, five_minutes);
+    assert_eq!(
+        restored.state.closed_candles_len_by_interval(),
+        BTreeMap::from([(one_minute, 1), (five_minutes, 2)])
+    );
+    assert!(
+        restored
+            .state
+            .closed_candle(&one_minute_key, TimestampMilliseconds(60_000))
+            .is_none()
+    );
+    assert!(
+        restored
+            .state
+            .closed_candle(&five_minute_key, TimestampMilliseconds(0))
+            .is_some()
+    );
+    assert!(
+        restored
+            .state
+            .closed_candle(&five_minute_key, TimestampMilliseconds(300_000))
+            .is_some()
+    );
+}
+
+#[tokio::test]
+async fn archive_rebuild_uses_the_same_caps_and_cutoff_as_live_processing() {
+    let interval = interval();
+    let shard = ShardId::new(0);
+    let caps = BTreeMap::from([(interval, 1)]);
+    let cutoff = DurationMilliseconds(1_000);
+    let events = vec![
+        event(1, 61_000),
+        event(2, 121_000),
+        event(3, 181_000),
+        event(4, 61_500),
+    ];
+    let config = ProcessorConfig::new(
+        vec![interval],
+        DurationMilliseconds::ZERO,
+        caps.clone(),
+        cutoff,
+    );
+    let mut live = CandleProcessor::with_config(config);
+    for event in &events {
+        live.apply_event(event, &[trade(event.exchange_timestamp.unwrap().0)]);
+    }
+    let live_state = live.into_state();
+
+    let archive_state = rebuild_state_from_archive(
+        &mut VecArchive::new(events),
+        shard,
+        &[interval],
+        1,
+        DurationMilliseconds::ZERO,
+        caps,
+        cutoff,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(live_state, archive_state);
+    assert_eq!(
+        archive_state.closed_candles_len_by_interval(),
+        BTreeMap::from([(interval, 1)])
+    );
+    let key = CandleKey::new(CexId::Binance, pair(), interval);
+    assert!(
+        archive_state
+            .closed_candle(&key, TimestampMilliseconds(120_000))
+            .is_some()
+    );
+    assert!(
+        archive_state
+            .closed_candle(&key, TimestampMilliseconds(60_000))
+            .is_none()
+    );
 }

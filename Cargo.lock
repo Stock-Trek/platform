@@ -4228,6 +4228,7 @@ dependencies = [
  "aws-sdk-s3-transfer-manager",
  "base64 0.23.1",
  "futures",
+ "metrics",
  "parking_lot",
  "platform-archive",
  "platform-config",
