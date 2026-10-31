@@ -15,11 +15,27 @@ struct DecimalConversionError {
     value: Decimal,
 }
 
+#[derive(Debug, Error)]
+enum CandleTimestampError {
+    #[error("candle timestamp {0} is outside the supported range")]
+    OutOfRange(u64),
+    #[error("candle end timestamp {end} precedes start timestamp {start}")]
+    EndBeforeStart { start: u64, end: u64 },
+}
+
+#[derive(Deserialize)]
+struct CandleWire {
+    key: CandleKey,
+    market_candle: MarketCandle,
+    is_complete: bool,
+}
+
 /// An aggregated candle together with its exchange and interval identity.
 ///
 /// The candle body reuses the stock-trek market data DTOs so downstream
 /// consumers receive the same representation as other market data producers.
 #[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(try_from = "CandleWire")]
 pub struct Candle {
     pub key: CandleKey,
     pub market_candle: MarketCandle,
@@ -31,20 +47,47 @@ pub struct Candle {
     pub is_complete: bool,
 }
 
+impl TryFrom<CandleWire> for Candle {
+    type Error = CandleTimestampError;
+
+    fn try_from(wire: CandleWire) -> Result<Self, Self::Error> {
+        let start = wire.market_candle.start_time_millis_inc;
+        let end = wire.market_candle.end_time_millis_exc;
+        Self::validate_timestamp(start)?;
+        Self::validate_timestamp(end)?;
+        if end < start {
+            return Err(CandleTimestampError::EndBeforeStart { start, end });
+        }
+
+        Ok(Self {
+            key: wire.key,
+            market_candle: wire.market_candle,
+            is_complete: wire.is_complete,
+        })
+    }
+}
+
 impl Candle {
     pub fn open(trade: &Trade, interval: CandleInterval) -> BpResult<Self> {
         let price = Self::to_f64("price", trade.price)?;
         let quantity = Self::to_f64("quantity", trade.quantity)?;
         let quote_volume = price * quantity;
-        let start_time = interval.start_for(trade.timestamp);
-        let end_time = interval.end_for(trade.timestamp);
+        let start_time = interval
+            .start_for(trade.timestamp)
+            .map_err(|error| BpError::candle_conversion("timestamp", error))?;
+        let end_time = interval
+            .end_for(trade.timestamp)
+            .map_err(|error| BpError::candle_conversion("timestamp", error))?;
+        let start_millis = Self::to_millis(start_time.0)?;
+        let end_millis = Self::to_millis(end_time.0)?;
+        let duration_millis = end_millis - start_millis;
 
         Ok(Self {
             key: CandleKey::new(trade.exchange, trade.trading_pair, interval),
             market_candle: MarketCandle::new(
-                Self::to_millis(start_time.0),
-                Self::to_millis(end_time.0),
-                Self::to_millis(end_time.0 - start_time.0),
+                start_millis,
+                end_millis,
+                duration_millis,
                 false,
                 MarketOhlcv::new(price, price, price, price, quantity, quote_volume, price),
                 1,
@@ -113,11 +156,19 @@ impl Candle {
             })
     }
 
-    fn to_millis(value: i64) -> u64 {
-        u64::try_from(value).unwrap_or_default()
+    fn to_millis(value: i64) -> BpResult<u64> {
+        u64::try_from(value).map_err(|error| BpError::candle_conversion("timestamp", error))
+    }
+
+    fn validate_timestamp(value: u64) -> Result<(), CandleTimestampError> {
+        i64::try_from(value)
+            .map(|_| ())
+            .map_err(|_| CandleTimestampError::OutOfRange(value))
     }
 
     fn to_timestamp(value: u64) -> TimestampMilliseconds {
-        TimestampMilliseconds(i64::try_from(value).unwrap_or(i64::MAX))
+        TimestampMilliseconds(
+            i64::try_from(value).expect("validated candle timestamps must fit in i64"),
+        )
     }
 }

@@ -25,8 +25,14 @@ fn intervals_are_parsed_and_canonicalized() {
     let interval = CandleInterval::from_label("60s").unwrap();
     assert_eq!(interval.label(), "1m");
     assert_eq!(interval.duration().0, 60_000);
-    assert_eq!(interval.start_for(TimestampMilliseconds(61_234)).0, 60_000);
-    assert_eq!(interval.end_for(TimestampMilliseconds(61_234)).0, 120_000);
+    assert_eq!(
+        interval.start_for(TimestampMilliseconds(61_234)).unwrap().0,
+        60_000
+    );
+    assert_eq!(
+        interval.end_for(TimestampMilliseconds(61_234)).unwrap().0,
+        120_000
+    );
 }
 
 #[test]
@@ -63,13 +69,54 @@ fn calendar_intervals_use_calendar_bounds() {
     assert_eq!(
         interval
             .start_for(TimestampMilliseconds(1_704_067_200_000))
+            .unwrap()
             .0,
         1_704_067_200_000
     );
     assert_eq!(
-        interval.end_for(TimestampMilliseconds(1_704_067_200_000)).0,
+        interval
+            .end_for(TimestampMilliseconds(1_704_067_200_000))
+            .unwrap()
+            .0,
         1_706_745_600_000
     );
+}
+
+#[test]
+fn negative_timestamps_are_rejected() {
+    let interval = CandleInterval::from_label("1m").unwrap();
+
+    assert!(interval.start_for(TimestampMilliseconds(-1)).is_err());
+    assert!(interval.end_for(TimestampMilliseconds(-1)).is_err());
+    assert!(Candle::open(&trade("100", "1", -1), interval).is_err());
+}
+
+#[test]
+fn timestamp_bounds_that_overflow_are_rejected() {
+    let minute = CandleInterval::from_label("1m").unwrap();
+    let month = CandleInterval::from_label("1mo").unwrap();
+
+    assert!(minute.end_for(TimestampMilliseconds(i64::MAX)).is_err());
+    assert!(month.start_for(TimestampMilliseconds(i64::MAX)).is_err());
+    assert!(Candle::open(&trade("100", "1", i64::MAX), minute).is_err());
+    assert!(Candle::open(&trade("100", "1", i64::MAX), month).is_err());
+}
+
+#[test]
+fn invalid_candle_timestamps_cannot_be_deserialized() {
+    let candle = Candle::open(
+        &trade("100", "1", 61_000),
+        CandleInterval::from_label("1m").unwrap(),
+    )
+    .unwrap();
+
+    let mut out_of_range = serde_json::to_value(&candle).unwrap();
+    out_of_range["market_candle"]["end_time_millis_exc"] = u64::MAX.into();
+    assert!(serde_json::from_value::<Candle>(out_of_range).is_err());
+
+    let mut reversed = serde_json::to_value(&candle).unwrap();
+    reversed["market_candle"]["end_time_millis_exc"] = 0.into();
+    assert!(serde_json::from_value::<Candle>(reversed).is_err());
 }
 
 #[test]

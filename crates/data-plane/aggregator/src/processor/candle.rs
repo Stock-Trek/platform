@@ -22,11 +22,20 @@ impl CandleProcessor {
         stream: Option<&str>,
         update: &mut ProcessorUpdate,
     ) {
-        for index in 0..self.config.intervals.len() {
-            let interval = self.config.intervals[index];
+        let mut interval_bounds = Vec::with_capacity(self.config.intervals.len());
+        for interval in &self.config.intervals {
+            let (Ok(candle_start), Ok(candle_end)) = (
+                interval.start_for(trade.timestamp),
+                interval.end_for(trade.timestamp),
+            ) else {
+                Self::record_invalid_trade();
+                return;
+            };
+            interval_bounds.push((*interval, candle_start, candle_end));
+        }
+
+        for (interval, candle_start, candle_end) in interval_bounds {
             let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
-            let candle_start = interval.start_for(trade.timestamp);
-            let candle_end = interval.end_for(trade.timestamp);
             let watermark = self.watermark_for_trade(trade, stream);
             let window_is_closed = watermark
                 .is_some_and(|watermark| candle_end + self.config.allowed_lateness <= watermark);
@@ -133,8 +142,13 @@ impl CandleProcessor {
         update: &mut ProcessorUpdate,
     ) {
         let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
-        let candle_start = interval.start_for(trade.timestamp);
-        let candle_end = interval.end_for(trade.timestamp);
+        let (Ok(candle_start), Ok(candle_end)) = (
+            interval.start_for(trade.timestamp),
+            interval.end_for(trade.timestamp),
+        ) else {
+            Self::record_invalid_trade();
+            return;
+        };
         if !self.is_within_correction_contract(candle_end, watermark) {
             self.record_out_of_contract_trade(
                 trade,

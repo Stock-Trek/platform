@@ -75,6 +75,24 @@ fn first_trade_opens_a_candle() {
 }
 
 #[test]
+fn invalid_timestamps_are_rejected_without_mutating_state() {
+    let mut processor = CandleProcessor::new(vec![one_minute()]);
+
+    for timestamp in [-1, i64::MAX] {
+        let update = processor.apply_trade(&trade("100", timestamp));
+
+        assert!(update.closed.is_empty());
+        assert!(update.open.is_empty());
+        assert_eq!(processor.state().open_candles_len(), 0);
+        assert!(
+            processor
+                .seen_sequences(CexId::Binance, "btcusdt@trade")
+                .is_empty()
+        );
+    }
+}
+
+#[test]
 fn crossing_a_boundary_closes_the_previous_candle_from_event_time() {
     let mut processor = CandleProcessor::new(vec![one_minute()]);
     processor.apply_trade(&trade("100", 61_000));
