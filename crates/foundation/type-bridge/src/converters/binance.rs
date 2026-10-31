@@ -1,9 +1,9 @@
 use crate::{
-    BpError, BpResult, Converter, MinMaxStep, TBExchangeInfo, TickerMapping, TradingPrecision,
+    Converter, MinMaxStep, TBExchangeInfo, TickerMapping, TradingPrecision,
     asset_limits::TBAssetLimits,
 };
 use bimap::BiHashMap;
-use platform_errors::{ExchangeError, ValidationError};
+use platform_errors::{BpError, BpResult, ExchangeError, ValidationError};
 use platform_exchange_types::binance::{
     asset_limits::{BinanceAssetLimitsRequest, BinanceAssetLimitsResponse},
     exchange::BinanceExchange,

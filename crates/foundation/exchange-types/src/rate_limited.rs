@@ -1,5 +1,7 @@
-use crate::urls::Protocol;
-use platform_types::new_types::{DurationNanoseconds, UsageCount};
+use platform_types::{
+    new_types::{DurationNanoseconds, UsageCount},
+    protocol::Protocol,
+};
 use serde::Deserialize;
 use strum::{Display, EnumIter};
 

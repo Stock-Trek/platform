@@ -1,4 +1,4 @@
-use crate::aws_ops::s3::PresignedPost;
+use crate::aws_ops::presigned_post::PresignedPost;
 use platform_errors::BpResult;
 use platform_messages::{
     build_request::{BuildRequest as BuildRequestPayload, BuildRequestSignedPost},
