@@ -12,7 +12,7 @@ use crate::{
     gap_marker_source::NatsGapMarkerSource, retry::NatsGapRetryStore, runner::BackfillerRunner,
 };
 use platform_aws::{Aws, secrets::Secrets};
-use platform_errors::{BpError, BpResult};
+use platform_errors::BpResult;
 use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use platform_nats::NatsPublisher;
 use platform_runtime::Service;
@@ -36,14 +36,8 @@ async fn exchange_credentials(config: &BackfillerConfig) -> BpResult<ApiKeyCrede
     );
     let secrets = Secrets::load(&sdk_config, timeouts, deadline, &config.ssm).await?;
     let names = BackfillerConfig::exchange_secret_names(config.trading_mode);
-    let api_key = names
-        .iter()
-        .find_map(|names| secrets.get(names.api_key).ok())
-        .ok_or_else(|| BpError::config_missing(names[0].api_key))?;
-    let api_secret = names
-        .iter()
-        .find_map(|names| secrets.get(names.api_secret).ok())
-        .ok_or_else(|| BpError::config_missing(names[0].api_secret))?;
+    let api_key = secrets.get(names.api_key)?;
+    let api_secret = secrets.get(names.api_secret)?;
     Ok(ApiKeyCredentials {
         api_key,
         secret: SecretString::from(api_secret),

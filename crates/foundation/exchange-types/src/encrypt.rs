@@ -51,14 +51,14 @@ impl FromStr for EncryptionAlgorithm {
     type Err = ExchangeError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
-        let algorithm = match value.trim().to_ascii_lowercase().replace('-', "_").as_str() {
+        let algorithm = match value.trim().to_ascii_lowercase().as_str() {
             "null" => Self::Null,
-            "ecdsa_p256" | "ecdsap256" => Self::EcdsaP256,
-            "ecdsa_p384" | "ecdsap384" => Self::EcdsaP384,
+            "ecdsa_p256" => Self::EcdsaP256,
+            "ecdsa_p384" => Self::EcdsaP384,
             "ed25519" => Self::Ed25519,
-            "hmac_sha256" | "hmacsha256" => Self::HmacSha256,
-            "hmac_sha512" | "hmacsha512" => Self::HmacSha512,
-            "rsa_sha256" | "rsasha256" => Self::RsaSha256,
+            "hmac_sha256" => Self::HmacSha256,
+            "hmac_sha512" => Self::HmacSha512,
+            "rsa_sha256" => Self::RsaSha256,
             _ => {
                 return Err(ExchangeError::BadValue {
                     name: "signing algorithm".to_string(),

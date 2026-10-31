@@ -19,8 +19,8 @@ impl FromStr for TradingMode {
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         match value.trim().to_ascii_lowercase().as_str() {
-            "real" | "production" | "prod" | "live" | "mainnet" => Ok(Self::Real),
-            "paper" | "testnet" | "sandbox" => Ok(Self::Paper),
+            "real" => Ok(Self::Real),
+            "paper" => Ok(Self::Paper),
             _ => Err(ExchangeError::UnsupportedTradingMode {
                 trading_mode: value.to_string(),
             }),

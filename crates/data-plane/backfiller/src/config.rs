@@ -11,27 +11,15 @@ const BACKFILLER_GAP_SUBJECT_PREFIX: &str = "BACKFILLER_GAP_SUBJECT_PREFIX";
 const BACKFILLER_EVENT_SUBJECT_PREFIX: &str = "BACKFILLER_EVENT_SUBJECT_PREFIX";
 const BACKFILLER_EXCHANGE_HTTP_URL: &str = "BACKFILLER_EXCHANGE_HTTP_URL";
 const BACKFILLER_EXCHANGE_TRADING_MODE: &str = "BACKFILLER_EXCHANGE_TRADING_MODE";
-const BACKFILLER_TRADING_MODE: &str = "BACKFILLER_TRADING_MODE";
 const BACKFILLER_EXCHANGE_SIGNING_ALGORITHM: &str = "BACKFILLER_EXCHANGE_SIGNING_ALGORITHM";
-const BACKFILLER_SIGNING_ALGORITHM: &str = "BACKFILLER_SIGNING_ALGORITHM";
 
-const TRADING_MODE_VARS: &[&str] = &[BACKFILLER_EXCHANGE_TRADING_MODE, BACKFILLER_TRADING_MODE];
-const SIGNING_ALGORITHM_VARS: &[&str] = &[
-    BACKFILLER_EXCHANGE_SIGNING_ALGORITHM,
-    BACKFILLER_SIGNING_ALGORITHM,
-];
-
-/// SSM parameter name holding the exchange API key used for historical trades.
-pub const EXCHANGE_API_KEY_SECRET: &str = "BACKFILLER_EXCHANGE_API_KEY";
-/// SSM parameter name holding the exchange API secret or private signing key.
-pub const EXCHANGE_API_SECRET: &str = "BACKFILLER_EXCHANGE_API_SECRET";
-pub const EXCHANGE_PRODUCTION_API_KEY_SECRET: &str = "BACKFILLER_EXCHANGE_PRODUCTION_API_KEY";
-pub const EXCHANGE_PRODUCTION_API_SECRET: &str = "BACKFILLER_EXCHANGE_PRODUCTION_API_SECRET";
-pub const EXCHANGE_TESTNET_API_KEY_SECRET: &str = "BACKFILLER_EXCHANGE_TESTNET_API_KEY";
-pub const EXCHANGE_TESTNET_API_SECRET: &str = "BACKFILLER_EXCHANGE_TESTNET_API_SECRET";
+/// SSM parameter name holding the exchange API key used for real trading.
 pub const EXCHANGE_REAL_API_KEY_SECRET: &str = "BACKFILLER_EXCHANGE_REAL_API_KEY";
+/// SSM parameter name holding the exchange API secret or private signing key used for real trading.
 pub const EXCHANGE_REAL_API_SECRET: &str = "BACKFILLER_EXCHANGE_REAL_API_SECRET";
+/// SSM parameter name holding the exchange API key used for paper trading.
 pub const EXCHANGE_PAPER_API_KEY_SECRET: &str = "BACKFILLER_EXCHANGE_PAPER_API_KEY";
+/// SSM parameter name holding the exchange API secret or private signing key used for paper trading.
 pub const EXCHANGE_PAPER_API_SECRET: &str = "BACKFILLER_EXCHANGE_PAPER_API_SECRET";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,35 +28,15 @@ pub struct ExchangeSecretNames {
     pub api_secret: &'static str,
 }
 
-const REAL_EXCHANGE_SECRETS: [ExchangeSecretNames; 3] = [
-    ExchangeSecretNames {
-        api_key: EXCHANGE_PRODUCTION_API_KEY_SECRET,
-        api_secret: EXCHANGE_PRODUCTION_API_SECRET,
-    },
-    ExchangeSecretNames {
-        api_key: EXCHANGE_REAL_API_KEY_SECRET,
-        api_secret: EXCHANGE_REAL_API_SECRET,
-    },
-    ExchangeSecretNames {
-        api_key: EXCHANGE_API_KEY_SECRET,
-        api_secret: EXCHANGE_API_SECRET,
-    },
-];
+const REAL_EXCHANGE_SECRETS: ExchangeSecretNames = ExchangeSecretNames {
+    api_key: EXCHANGE_REAL_API_KEY_SECRET,
+    api_secret: EXCHANGE_REAL_API_SECRET,
+};
 
-const PAPER_EXCHANGE_SECRETS: [ExchangeSecretNames; 3] = [
-    ExchangeSecretNames {
-        api_key: EXCHANGE_TESTNET_API_KEY_SECRET,
-        api_secret: EXCHANGE_TESTNET_API_SECRET,
-    },
-    ExchangeSecretNames {
-        api_key: EXCHANGE_PAPER_API_KEY_SECRET,
-        api_secret: EXCHANGE_PAPER_API_SECRET,
-    },
-    ExchangeSecretNames {
-        api_key: EXCHANGE_API_KEY_SECRET,
-        api_secret: EXCHANGE_API_SECRET,
-    },
-];
+const PAPER_EXCHANGE_SECRETS: ExchangeSecretNames = ExchangeSecretNames {
+    api_key: EXCHANGE_PAPER_API_KEY_SECRET,
+    api_secret: EXCHANGE_PAPER_API_SECRET,
+};
 
 #[derive(Debug, Clone)]
 pub struct BackfillerConfig {
@@ -91,19 +59,13 @@ impl BackfillerConfig {
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let exchange = Config::required_exchange(vars, BACKFILLER_EXCHANGE)?;
-        let (trading_mode_name, trading_mode_value) = Self::required_any(vars, TRADING_MODE_VARS)?;
-        let trading_mode = trading_mode_value
-            .parse::<TradingMode>()
-            .map_err(|error| BpError::config_invalid_source(trading_mode_name, error))?;
-        let (signing_algorithm_name, signing_algorithm_value) =
-            Self::required_any(vars, SIGNING_ALGORITHM_VARS)?;
-        let signing_algorithm = signing_algorithm_value
-            .parse::<EncryptionAlgorithm>()
-            .map_err(|error| BpError::config_invalid_source(signing_algorithm_name, error))?;
+        let trading_mode = vars.required_parsed::<TradingMode>(BACKFILLER_EXCHANGE_TRADING_MODE)?;
+        let signing_algorithm =
+            vars.required_parsed::<EncryptionAlgorithm>(BACKFILLER_EXCHANGE_SIGNING_ALGORITHM)?;
         if signing_algorithm != EncryptionAlgorithm::Ed25519 {
             return Err(BpError::config_invalid(
-                signing_algorithm_name,
-                format!("only ed25519 is supported, got {}", signing_algorithm_value),
+                BACKFILLER_EXCHANGE_SIGNING_ALGORITHM,
+                "only ed25519 is supported",
             ));
         }
         let nats_url = Config::required_nats_url(vars, BACKFILLER_NATS_URL)?;
@@ -131,23 +93,11 @@ impl BackfillerConfig {
         })
     }
 
-    pub fn exchange_secret_names(trading_mode: TradingMode) -> &'static [ExchangeSecretNames] {
+    pub fn exchange_secret_names(trading_mode: TradingMode) -> ExchangeSecretNames {
         match trading_mode {
-            TradingMode::Real => &REAL_EXCHANGE_SECRETS,
-            TradingMode::Paper => &PAPER_EXCHANGE_SECRETS,
+            TradingMode::Real => REAL_EXCHANGE_SECRETS,
+            TradingMode::Paper => PAPER_EXCHANGE_SECRETS,
         }
-    }
-
-    fn required_any(
-        vars: &EnvVars,
-        names: &'static [&'static str],
-    ) -> BpResult<(&'static str, String)> {
-        for name in names {
-            if let Some(value) = vars.optional(name)? {
-                return Ok((name, value));
-            }
-        }
-        Err(BpError::config_missing(names[0]))
     }
 }
 
@@ -194,12 +144,14 @@ mod tests {
     }
 
     #[test]
-    fn accepts_testnet_as_a_paper_trading_mode() {
-        let config =
-            BackfillerConfig::from_vars(&vars(&[("BACKFILLER_EXCHANGE_TRADING_MODE", "testnet")]))
-                .unwrap();
+    fn trading_mode_aliases_are_rejected() {
+        for alias in ["production", "testnet", "sandbox"] {
+            let error =
+                BackfillerConfig::from_vars(&vars(&[("BACKFILLER_EXCHANGE_TRADING_MODE", alias)]))
+                    .unwrap_err();
 
-        assert_eq!(config.trading_mode, TradingMode::Paper);
+            assert!(error.to_string().contains("Unsupported trading mode"));
+        }
     }
 
     #[test]
@@ -223,14 +175,14 @@ mod tests {
     }
 
     #[test]
-    fn production_and_paper_use_separate_secret_parameters() {
+    fn real_and_paper_use_separate_secret_parameters() {
         assert_eq!(
-            BackfillerConfig::exchange_secret_names(TradingMode::Real)[0].api_key,
-            EXCHANGE_PRODUCTION_API_KEY_SECRET
+            BackfillerConfig::exchange_secret_names(TradingMode::Real).api_key,
+            EXCHANGE_REAL_API_KEY_SECRET
         );
         assert_eq!(
-            BackfillerConfig::exchange_secret_names(TradingMode::Paper)[0].api_key,
-            EXCHANGE_TESTNET_API_KEY_SECRET
+            BackfillerConfig::exchange_secret_names(TradingMode::Paper).api_key,
+            EXCHANGE_PAPER_API_KEY_SECRET
         );
     }
 }
