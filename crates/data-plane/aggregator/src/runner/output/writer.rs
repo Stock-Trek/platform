@@ -375,7 +375,7 @@ impl CandleOutputWriter {
         let mut keys = update
             .closed
             .iter()
-            .map(|closed| &closed.candle.key)
+            .map(|closed| &closed.candle().key)
             .filter(|key| state.open_candle(key).is_none())
             .cloned()
             .collect::<Vec<_>>();

@@ -101,7 +101,7 @@ impl ArchiveRecord {
     pub fn timestamp(&self) -> TimestampMilliseconds {
         match self {
             Self::MarketEvent(event) => event.exchange_timestamp.unwrap_or(event.received_at),
-            Self::ClosedCandle(closed) => closed.candle.start_time(),
+            Self::ClosedCandle(closed) => closed.candle().start_time(),
         }
     }
 
@@ -119,10 +119,10 @@ impl ArchiveRecord {
                 state_epoch: event.state_epoch,
             },
             Self::ClosedCandle(closed) => ArchiveSortKey::ClosedCandle {
-                start_time: closed.candle.start_time().0,
-                close_watermark: closed.revision.close_watermark.0,
-                source_offset: closed.revision.source_offset,
-                state_epoch: closed.revision.state_epoch,
+                start_time: closed.candle().start_time().0,
+                close_watermark: closed.revision().close_watermark.0,
+                source_offset: closed.revision().source_offset,
+                state_epoch: closed.revision().state_epoch,
             },
         }
     }
@@ -131,9 +131,10 @@ impl ArchiveRecord {
     pub fn routing_key(&self) -> RoutingKey {
         match self {
             Self::MarketEvent(event) => event.routing_key(),
-            Self::ClosedCandle(closed) => {
-                RoutingKey::for_pair(closed.candle.key.exchange, &closed.candle.key.trading_pair)
-            }
+            Self::ClosedCandle(closed) => RoutingKey::for_pair(
+                closed.candle().key.exchange,
+                &closed.candle().key.trading_pair,
+            ),
         }
     }
 
@@ -150,7 +151,7 @@ impl ArchiveRecord {
                 stream: event.stream.clone(),
             },
             Self::ClosedCandle(closed) => ArchivePartition::Candles {
-                candle: closed.candle.key.clone(),
+                candle: closed.candle().key.clone(),
             },
         }
     }

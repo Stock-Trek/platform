@@ -136,12 +136,12 @@ fn closed_candle_revisions_are_deterministic() {
     let first = closed_candle(7, 0);
     let replay = closed_candle(7, 0);
 
-    assert_eq!(first.revision, replay.revision);
+    assert_eq!(first.revision(), replay.revision());
     assert_eq!(first.message_id(), replay.message_id());
-    assert_eq!(first.revision.window_start, TimestampMilliseconds(60_000));
-    assert_eq!(first.revision.window_end, TimestampMilliseconds(120_000));
+    assert_eq!(first.revision().window_start, TimestampMilliseconds(60_000));
+    assert_eq!(first.revision().window_end, TimestampMilliseconds(120_000));
     assert_eq!(
-        first.revision.close_watermark,
+        first.revision().close_watermark,
         TimestampMilliseconds(121_000)
     );
 }
@@ -152,10 +152,12 @@ fn closed_candle_ids_cover_key_window_epoch_and_revision() {
 
     let other_offset = closed_candle(8, 0);
     let other_epoch = closed_candle(7, 1);
-    let mut other_key = closed_candle(7, 0);
-    let other_interval = CandleInterval::from_label("5m").unwrap();
-    other_key.candle.key.interval = other_interval;
-    other_key.revision.key.interval = other_interval;
+    let other_key = {
+        let interval = CandleInterval::from_label("5m").unwrap();
+        let mut candle = Candle::open(&trade("100", "2", 61_000), interval).unwrap();
+        candle.close();
+        ClosedCandle::new(candle, TimestampMilliseconds(121_000), 7, 0)
+    };
 
     assert_ne!(base.message_id(), other_offset.message_id());
     assert_ne!(base.message_id(), other_epoch.message_id());

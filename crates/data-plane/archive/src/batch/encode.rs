@@ -43,7 +43,7 @@ impl ArchiveBatch {
                 let revisions = candles
                     .iter()
                     .map(|closed| {
-                        let payload = closed.revision.encode()?;
+                        let payload = closed.revision().encode()?;
                         Ok(std::str::from_utf8(&payload)
                             .map_err(BpError::external)?
                             .to_string())
@@ -57,99 +57,101 @@ impl ArchiveBatch {
                     Self::strings(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.key.exchange.to_string()),
+                            .map(|closed| closed.candle().key.exchange.to_string()),
                     ),
                     Self::strings(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.key.trading_pair.base.to_string()),
+                            .map(|closed| closed.candle().key.trading_pair.base.to_string()),
                     ),
                     Self::strings(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.key.trading_pair.quote.to_string()),
+                            .map(|closed| closed.candle().key.trading_pair.quote.to_string()),
                     ),
                     Self::strings(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.key.interval.label()),
+                            .map(|closed| closed.candle().key.interval.label()),
                     ),
                     Arc::new(Int64Array::from_iter_values(candles.iter().map(|closed| {
-                        i64::try_from(closed.candle.market_candle.start_time_millis_inc)
+                        i64::try_from(closed.candle().market_candle.start_time_millis_inc)
                             .unwrap_or(i64::MAX)
                     }))),
                     Arc::new(Int64Array::from_iter_values(candles.iter().map(|closed| {
-                        i64::try_from(closed.candle.market_candle.end_time_millis_exc)
+                        i64::try_from(closed.candle().market_candle.end_time_millis_exc)
                             .unwrap_or(i64::MAX)
                     }))),
                     Arc::new(Int64Array::from_iter_values(candles.iter().map(|closed| {
-                        i64::try_from(closed.candle.market_candle.duration_millis)
+                        i64::try_from(closed.candle().market_candle.duration_millis)
                             .unwrap_or(i64::MAX)
                     }))),
                     Arc::new(BooleanArray::from_iter(candles.iter().map(|closed| {
-                        Some(closed.candle.market_candle.is_candle_closed)
+                        Some(closed.candle().market_candle.is_candle_closed)
                     }))),
                     Arc::new(Float64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.market_candle.ohlcv.open),
+                            .map(|closed| closed.candle().market_candle.ohlcv.open),
                     )),
                     Arc::new(Float64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.market_candle.ohlcv.high),
+                            .map(|closed| closed.candle().market_candle.ohlcv.high),
                     )),
                     Arc::new(Float64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.market_candle.ohlcv.low),
+                            .map(|closed| closed.candle().market_candle.ohlcv.low),
                     )),
                     Arc::new(Float64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.market_candle.ohlcv.close),
+                            .map(|closed| closed.candle().market_candle.ohlcv.close),
                     )),
                     Arc::new(Float64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.market_candle.ohlcv.volume),
+                            .map(|closed| closed.candle().market_candle.ohlcv.volume),
                     )),
                     Arc::new(Float64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.market_candle.ohlcv.quote_volume),
+                            .map(|closed| closed.candle().market_candle.ohlcv.quote_volume),
                     )),
                     Arc::new(Float64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.market_candle.ohlcv.vwap),
+                            .map(|closed| closed.candle().market_candle.ohlcv.vwap),
                     )),
                     Arc::new(UInt64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.candle.market_candle.trade_count),
+                            .map(|closed| closed.candle().market_candle.trade_count),
                     )),
                     Arc::new(Int64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.revision.close_watermark.0),
+                            .map(|closed| closed.revision().close_watermark.0),
                     )),
                     Arc::new(UInt64Array::from_iter_values(
-                        candles.iter().map(|closed| closed.revision.source_offset),
+                        candles.iter().map(|closed| closed.revision().source_offset),
                     )),
                     Arc::new(UInt64Array::from_iter_values(
-                        candles.iter().map(|closed| closed.revision.state_epoch),
+                        candles.iter().map(|closed| closed.revision().state_epoch),
                     )),
                     Self::strings(revision_ids),
                     Self::strings(revisions),
                     Arc::new(BooleanArray::from_iter(
-                        candles.iter().map(|closed| Some(closed.candle.is_complete)),
+                        candles
+                            .iter()
+                            .map(|closed| Some(closed.candle().is_complete)),
                     )),
                     Arc::new(UInt64Array::from_iter_values(candles.iter().map(
                         |closed| {
                             crate::routing::RoutingKey::for_pair(
-                                closed.candle.key.exchange,
-                                &closed.candle.key.trading_pair,
+                                closed.candle().key.exchange,
+                                &closed.candle().key.trading_pair,
                             )
                             .value()
                         },

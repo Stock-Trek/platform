@@ -99,7 +99,7 @@ fn replay_is_deterministic_and_assigns_the_configured_epoch() {
         first
             .candles
             .iter()
-            .all(|candle| candle.revision.state_epoch == 7)
+            .all(|candle| candle.revision().state_epoch == 7)
     );
 }
 
@@ -147,7 +147,7 @@ fn multi_stream_pairs_share_one_processor_and_candle() {
     assert_eq!(result.stats.trades_applied, 2);
     assert_eq!(result.stats.duplicate_events, 0);
     assert_eq!(result.stats.unique_candles, 1);
-    let candle = &result.candles[0].candle;
+    let candle = result.candles[0].candle();
     assert_eq!(candle.market_candle.trade_count, 2);
     assert_eq!(candle.market_candle.ohlcv.high, 200.0);
     assert_eq!(candle.market_candle.ohlcv.low, 100.0);
@@ -254,8 +254,8 @@ fn rebuilt_candles_match_live_processing_for_cap_eviction_and_a_rejected_correct
             .candles
             .iter()
             .all(
-                |candle| candle.candle.start_time() != TimestampMilliseconds(60_000)
-                    || candle.candle.market_candle.trade_count == 1
+                |candle| candle.candle().start_time() != TimestampMilliseconds(60_000)
+                    || candle.candle().market_candle.trade_count == 1
             )
     );
 }

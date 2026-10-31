@@ -125,10 +125,10 @@ impl ArchiveBatch {
                     market_candle,
                     is_complete: is_complete.value(row),
                 };
-                let mut decoded = CandleRevision::decode(revision.value(row).as_bytes())?;
-                if decoded.key != candle.key
-                    || decoded.window_start != candle.start_time()
-                    || decoded.window_end != candle.end_time()
+                let decoded_revision = CandleRevision::decode(revision.value(row).as_bytes())?;
+                if decoded_revision.key != candle.key
+                    || decoded_revision.window_start != candle.start_time()
+                    || decoded_revision.window_end != candle.end_time()
                 {
                     return Err(Self::invalid_value(
                         "revision",
@@ -139,13 +139,12 @@ impl ArchiveBatch {
                 // The explicit columns are the canonical provenance. The JSON
                 // revision may be retained for readers that need the full key,
                 // but it must agree with those columns before the row is used.
-                decoded.close_watermark = TimestampMilliseconds(close_watermark.value(row));
-                decoded.source_offset = source_offset.value(row);
-                decoded.state_epoch = state_epoch.value(row);
-                let decoded = ClosedCandle {
-                    revision: decoded,
+                let decoded = ClosedCandle::new(
                     candle,
-                };
+                    TimestampMilliseconds(close_watermark.value(row)),
+                    source_offset.value(row),
+                    state_epoch.value(row),
+                );
                 if decoded.message_id() != revision_id.value(row) {
                     return Err(Self::invalid_value(
                         "revision_id",
@@ -154,8 +153,8 @@ impl ArchiveBatch {
                     ));
                 }
                 let expected_routing_key = crate::routing::RoutingKey::for_pair(
-                    decoded.candle.key.exchange,
-                    &decoded.candle.key.trading_pair,
+                    decoded.candle().key.exchange,
+                    &decoded.candle().key.trading_pair,
                 );
                 if routing_key.value(row) != expected_routing_key.value() {
                     return Err(Self::invalid_value(

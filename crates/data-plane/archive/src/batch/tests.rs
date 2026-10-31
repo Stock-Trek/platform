@@ -154,18 +154,25 @@ fn candles_round_trip_with_named_columns() {
     let ArchiveRecord::ClosedCandle(actual) = &records[0] else {
         panic!("expected a closed candle");
     };
-    assert_eq!(actual.revision.source_offset, 7);
+    assert_eq!(actual.revision().source_offset, 7);
     assert_eq!(
-        actual.revision.close_watermark,
+        actual.revision().close_watermark,
         TimestampMilliseconds(121_000)
     );
-    assert_eq!(actual.candle.key.trading_pair.base, AssetId::Bitcoin);
+    assert_eq!(actual.candle().key.trading_pair.base, AssetId::Bitcoin);
 }
 
 #[test]
 fn incomplete_candles_round_trip_completeness() {
-    let mut candle = closed_candle(7);
-    candle.mark_incomplete();
+    let closed = closed_candle(7);
+    let mut body = closed.candle().clone();
+    body.mark_incomplete();
+    let candle = ClosedCandle::new(
+        body,
+        closed.revision().close_watermark,
+        closed.revision().source_offset,
+        closed.revision().state_epoch,
+    );
     let batch = ArchiveBatch::new(
         ArchiveKind::Candles,
         vec![ArchiveRecord::ClosedCandle(candle)],
@@ -224,7 +231,12 @@ fn candle_schema_exposes_revision_provenance() {
 #[test]
 fn candles_round_trip_revision_provenance() {
     let candle = closed_candle(7);
-    let candle = ClosedCandle::new(candle.candle, TimestampMilliseconds(222_000), 9, 4);
+    let candle = ClosedCandle::new(
+        candle.candle().clone(),
+        TimestampMilliseconds(222_000),
+        9,
+        4,
+    );
     let expected_id = candle.message_id();
     let batch = ArchiveBatch::new(
         ArchiveKind::Candles,
@@ -238,10 +250,10 @@ fn candles_round_trip_revision_provenance() {
         panic!("expected a closed candle");
     };
     assert_eq!(
-        actual.revision.close_watermark,
+        actual.revision().close_watermark,
         TimestampMilliseconds(222_000)
     );
-    assert_eq!(actual.revision.source_offset, 9);
-    assert_eq!(actual.revision.state_epoch, 4);
+    assert_eq!(actual.revision().source_offset, 9);
+    assert_eq!(actual.revision().state_epoch, 4);
     assert_eq!(actual.message_id(), expected_id);
 }
