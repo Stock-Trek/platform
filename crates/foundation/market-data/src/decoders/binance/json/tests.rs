@@ -1,4 +1,7 @@
 use super::*;
+use crate::event::ParsedMessage;
+use platform_errors::IngesterError;
+use platform_types::new_types::TimestampMilliseconds;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use iris::Codec;
 use serde_json::json;

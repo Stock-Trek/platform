@@ -1,4 +1,5 @@
 use super::*;
+use crate::BpError;
 
 fn source() -> BpError {
     BpError::external("test failure")

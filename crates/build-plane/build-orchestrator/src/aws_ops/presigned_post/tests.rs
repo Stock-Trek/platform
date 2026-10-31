@@ -1,4 +1,9 @@
 use super::*;
+use aws_credential_types::Credentials;
+use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
+use std::collections::BTreeMap;
+use std::num::NonZeroU64;
+use std::time::{Duration, SystemTime};
 
 impl PresignedPost {
     pub(crate) fn for_test(

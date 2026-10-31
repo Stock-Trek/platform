@@ -1,8 +1,14 @@
 use super::*;
-use crate::{fetcher::BackfilledEvent, retry::InMemoryGapRetryStore};
+use crate::{
+    config::BackfillerConfig,
+    fetcher::{BackfilledEvent, MissingEventFetcher},
+    gap_marker_source::GapMarkerSource,
+    retry::InMemoryGapRetryStore,
+};
 use async_trait::async_trait;
 use platform_errors::BpResult;
 use platform_market_data::event::GapMarker;
+use platform_nats::EventPublisher;
 use stock_trek_types::cex::cex_id::CexId;
 
 struct FakeSource;

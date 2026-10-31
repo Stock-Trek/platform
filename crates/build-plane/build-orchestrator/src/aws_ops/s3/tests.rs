@@ -1,7 +1,9 @@
 use super::*;
-use aws_credential_types::Credentials;
-use platform_aws::Region;
-use platform_time::timeouts::Timeout;
+use aws_credential_types::{Credentials, provider::SharedCredentialsProvider};
+use platform_aws::{Region, SdkConfig};
+use platform_time::{deadline::Deadline, timeouts::Timeout, timeouts::Timeouts};
+use std::num::NonZeroU64;
+use std::time::Duration;
 
 fn s3_client() -> (S3, Credentials) {
     let credentials = Credentials::new(

@@ -1,4 +1,7 @@
 use super::*;
+use crate::compactor::BatchCompactor;
+use crate::source::ArchiveBatchSource;
+use platform_errors::BpResult;
 use crate::compactor::CompactionStats;
 use async_trait::async_trait;
 use platform_archive::{ArchiveKind, SourceBatch};

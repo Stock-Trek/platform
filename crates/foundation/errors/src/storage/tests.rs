@@ -1,4 +1,5 @@
 use super::*;
+use crate::Retryability;
 
 fn failure(key: &str, code: &str) -> S3DeleteObjectFailure {
     S3DeleteObjectFailure {

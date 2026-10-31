@@ -1,4 +1,5 @@
 use super::*;
+use crate::{ArchiveBatch, ArchiveKind};
 use crate::record::{ArchiveRecord, ArchivedMarketEvent};
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;

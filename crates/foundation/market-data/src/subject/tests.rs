@@ -1,4 +1,6 @@
 use super::*;
+use platform_nats::NatsSubject;
+use stock_trek_types::cex::cex_id::CexId;
 
 #[test]
 fn builds_event_and_gap_subjects_from_the_same_contract() {

@@ -1,4 +1,5 @@
 use super::*;
+use async_nats::jetstream::consumer::DeliverPolicy;
 
 #[test]
 fn resume_policy_starts_at_the_requested_sequence() {

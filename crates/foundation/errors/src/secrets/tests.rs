@@ -1,4 +1,5 @@
 use super::*;
+use crate::Retryability;
 
 #[test]
 fn empty_secret_path_is_permanent() {

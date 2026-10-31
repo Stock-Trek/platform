@@ -1,4 +1,6 @@
 use super::*;
+use platform_market_data::event::MarketEvent;
+use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 use stock_trek_types::cex::asset_id::AssetId;
 
 fn bitcoin_pair() -> TradingPair {

@@ -1,4 +1,5 @@
 use super::*;
+use platform_exchange_types::binance::klines::BinanceKlinesInterval;
 
 #[test]
 fn parses_trade_streams() {

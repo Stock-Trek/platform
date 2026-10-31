@@ -1,4 +1,5 @@
 use async_trait::async_trait;
+use platform_errors::BpResult;
 use std::{collections::HashMap, sync::Mutex};
 
 /// Sequence state kept in process memory.

@@ -1,4 +1,7 @@
 use super::*;
+use platform_market_data::event::GapMarker;
+use platform_types::new_types::TimestampMilliseconds;
+use stock_trek_types::cex::cex_id::CexId;
 
 impl InMemoryGapRetryStore {
     pub(crate) async fn snapshot(&self) -> Vec<PendingGap> {

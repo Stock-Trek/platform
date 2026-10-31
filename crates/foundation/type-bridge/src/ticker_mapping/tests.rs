@@ -1,5 +1,6 @@
 use super::*;
 use bimap::BiHashMap;
+use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
 fn mapping(symbol_separator: Option<u8>) -> TickerMapping {
     let mut map = BiHashMap::new();

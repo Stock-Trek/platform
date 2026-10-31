@@ -1,4 +1,5 @@
 use super::*;
+use platform_errors::{BpError, GitHubError};
 
 fn allowlist() -> HostAllowlist {
     HostAllowlist::from_hosts([DEFAULT_HOST, "ghe.example.com"]).unwrap()

@@ -1,7 +1,9 @@
 use super::*;
-use platform_market_data::candle::CandleInterval;
+use platform_market_data::candle::{CandleInterval, CandleKey, ClosedCandle};
+use platform_market_data::event::MarketEvent;
+use platform_types::new_types::TimestampMilliseconds;
 use stock_trek::markets::{MarketCandle, MarketOhlcv};
-use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 fn event() -> ArchiveRecord {
     ArchiveRecord::MarketEvent(

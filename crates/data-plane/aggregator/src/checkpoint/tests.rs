@@ -1,4 +1,13 @@
 use async_trait::async_trait;
+use crate::{
+    checkpoint::{CheckpointRecord, NatsStateStore, StateStore},
+    lease::WriterLease,
+    shard::ShardId,
+    state::{AggregatorState, STATE_SCHEMA_VERSION},
+};
+use platform_errors::{BpError, BpResult};
+use platform_nats::Message;
+use platform_types::new_types::TimestampMilliseconds;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 
@@ -56,8 +65,6 @@ impl StateStore for InMemoryStateStore {
     }
 }
 
-use super::*;
-use crate::state::STATE_SCHEMA_VERSION;
 
 fn message() -> Message {
     Message {

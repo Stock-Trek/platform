@@ -1,4 +1,7 @@
 use super::*;
+use platform_types::new_types::{DurationNanoseconds, UsageCount};
+use std::sync::Arc;
+use std::time::{Duration, Instant};
 use std::sync::Mutex;
 
 fn state_with_clock(now: Instant) -> RateLimiterState {

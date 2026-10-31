@@ -1,4 +1,12 @@
 use super::*;
+use crate::{
+    config::AggregatorConfig,
+    shard::ShardId,
+    sink::{ClosedCandlePublisher, OpenCandleStore},
+    source::MarketSource,
+    state::AggregatorState,
+};
+use std::sync::Arc;
 use crate::{checkpoint::tests::InMemoryStateStore, lease::tests::InMemoryLeaseStore};
 
 impl<S, K> ProcessorRunner<S, K>

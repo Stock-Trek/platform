@@ -1,4 +1,5 @@
 use super::*;
+use async_nats::jetstream::stream;
 
 #[test]
 fn market_data_streams_have_bounded_retention_and_storage() {

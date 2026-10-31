@@ -1,5 +1,7 @@
 use super::*;
-use platform_errors::ConfigError;
+use platform_errors::{BpError, ConfigError};
+use std::ffi::OsString;
+use std::time::Duration;
 
 fn env_vars<I, K, V>(values: I) -> EnvVars
 where

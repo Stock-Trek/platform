@@ -1,4 +1,5 @@
 use super::*;
+use platform_archive::ArchiveRecord;
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;

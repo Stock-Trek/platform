@@ -1,4 +1,11 @@
 use super::*;
+use platform_aggregator::processor::{CandleProcessor, ProcessorConfig};
+use platform_market_data::candle::ClosedCandle;
+use platform_market_data::decoders::trade::TradeDecoderFactory;
+use platform_market_data::event::MarketEvent;
+use platform_types::new_types::TimestampMilliseconds;
+use std::collections::BTreeMap;
+use stock_trek_types::cex::cex_id::CexId;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_market_data::candle::CandleInterval;
 use platform_types::new_types::DurationMilliseconds;

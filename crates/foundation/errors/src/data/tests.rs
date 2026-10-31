@@ -1,4 +1,5 @@
 use super::*;
+use crate::BpError;
 use crate::{ConfigError, TimeoutError};
 use std::time::Duration;
 

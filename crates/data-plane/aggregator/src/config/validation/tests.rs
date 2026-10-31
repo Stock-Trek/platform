@@ -1,4 +1,10 @@
-use super::*;
+use super::super::AggregatorConfig;
+use super::validation::{ESTIMATED_BYTES_PER_CLOSED_CANDLE, RetentionLimits};
+use platform_market_data::candle::CandleInterval;
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
+use strum::EnumCount;
+use std::collections::BTreeMap;
+use std::time::Duration;
 
 fn intervals() -> Vec<CandleInterval> {
     vec![

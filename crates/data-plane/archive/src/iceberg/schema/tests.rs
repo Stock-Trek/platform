@@ -1,4 +1,6 @@
 use super::*;
+use crate::ArchiveKind;
+use iceberg::spec::{PrimitiveType, Type};
 
 #[test]
 fn tables_are_named_per_layer_and_kind() {

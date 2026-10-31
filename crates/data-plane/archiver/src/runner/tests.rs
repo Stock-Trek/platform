@@ -1,4 +1,8 @@
 use super::*;
+use crate::config::ArchiverConfig;
+use crate::sink::ArchiveSink;
+use crate::source::ArchiveSource;
+use platform_errors::BpResult;
 use async_trait::async_trait;
 use platform_archive::ArchiveRecord;
 use platform_market_data::event::MarketEvent;

@@ -1,10 +1,19 @@
 use super::*;
-use crate::{BinanceConverter, MinMaxStep};
+use crate::{BinanceConverter, MinMaxStep, TBExchangeInfo, TradingPrecision};
+use platform_errors::{BpError, ValidationError};
+use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 use std::collections::HashMap;
 use stock_trek_types::cex::{
-    activation::Activation, preferences::CexRoundingPreferences, quantity::Quantity, side::Side,
-    tag::Tag, time_in_force::TimeInForce,
+    activation::Activation,
+    asset_id::AssetId,
+    order_request::OrderRequest,
+    preferences::{CexPreferences, CexRoundingPreferences},
+    quantity::Quantity,
+    side::Side,
+    tag::Tag,
+    time_in_force::TimeInForce,
+    trading_pair::TradingPair,
 };
 
 fn precision() -> TradingPrecision {

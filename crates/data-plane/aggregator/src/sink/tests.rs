@@ -1,4 +1,5 @@
 use super::*;
+use platform_market_data::candle::{Candle, ClosedCandle};
 use platform_market_data::{candle::CandleInterval, decoders::trade::Trade};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;

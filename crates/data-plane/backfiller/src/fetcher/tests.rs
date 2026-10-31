@@ -1,5 +1,10 @@
 use super::*;
-use std::sync::Mutex;
+use async_trait::async_trait;
+use platform_errors::BpResult;
+use platform_market_data::event::GapMarker;
+use platform_types::new_types::TimestampMilliseconds;
+use std::sync::{Arc, Mutex};
+use stock_trek_types::cex::cex_id::CexId;
 
 struct StubFetcher {
     event: BackfilledEvent,

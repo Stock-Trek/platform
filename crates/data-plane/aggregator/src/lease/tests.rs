@@ -1,4 +1,11 @@
 use async_trait::async_trait;
+use crate::{
+    lease::{LeaseStore, WriterLease},
+    shard::ShardId,
+};
+use platform_errors::BpResult;
+use platform_types::new_types::TimestampMilliseconds;
+use std::time::Duration;
 use parking_lot::Mutex;
 use std::collections::HashMap;
 
@@ -78,7 +85,6 @@ impl LeaseStore for InMemoryLeaseStore {
     }
 }
 
-use super::*;
 
 fn shard() -> ShardId {
     ShardId::new(3)

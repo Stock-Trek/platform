@@ -1,4 +1,6 @@
-use super::*;
+use platform_market_data::envelope::EnvelopeCodec;
+use platform_market_data::event::GapMarker;
+use platform_nats::Message;
 
 #[test]
 fn decodes_valid_gap_markers() {
