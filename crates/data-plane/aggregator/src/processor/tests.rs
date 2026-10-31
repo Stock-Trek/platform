@@ -50,8 +50,9 @@ fn gap(detected_at: i64) -> GapMarker {
 
 #[test]
 fn configured_schema_version_is_used_for_new_and_restored_state() {
-    let config = ProcessorConfig::new(vec![one_minute()], DurationMilliseconds::ZERO)
-        .with_state_schema_version(9);
+    let config =
+        ProcessorConfig::retention_disabled(vec![one_minute()], DurationMilliseconds::ZERO)
+            .with_state_schema_version(9);
 
     let processor = CandleProcessor::with_config(config.clone());
     assert_eq!(processor.state().schema_version, 9);
@@ -171,7 +172,7 @@ fn replaying_the_same_events_produces_identical_state() {
 
 #[test]
 fn trades_inside_the_allowed_lateness_update_the_older_window() {
-    let mut processor = CandleProcessor::with_config(ProcessorConfig::new(
+    let mut processor = CandleProcessor::with_config(ProcessorConfig::retention_disabled(
         vec![one_minute()],
         DurationMilliseconds(5_000),
     ));
@@ -194,7 +195,7 @@ fn trades_inside_the_allowed_lateness_update_the_older_window() {
 
 #[test]
 fn trades_after_allowed_lateness_correct_the_closed_candle() {
-    let mut processor = CandleProcessor::with_config(ProcessorConfig::new(
+    let mut processor = CandleProcessor::with_config(ProcessorConfig::retention_disabled(
         vec![one_minute()],
         DurationMilliseconds(5_000),
     ));
@@ -494,4 +495,204 @@ fn late_trades_do_not_reopen_a_closed_candle() {
     assert!(update.open.is_empty());
     assert_eq!(update.closed.len(), 1);
     assert_eq!(processor.state().open_candles_len(), 1);
+}
+
+fn retention_config(
+    max_closed_candles_per_key: usize,
+    correction_cutoff: i64,
+    allowed_lateness: i64,
+) -> ProcessorConfig {
+    ProcessorConfig::new(
+        vec![one_minute()],
+        DurationMilliseconds(allowed_lateness),
+        max_closed_candles_per_key,
+        DurationMilliseconds(correction_cutoff),
+    )
+}
+
+fn bitcoin_key() -> CandleKey {
+    CandleKey::new(
+        CexId::Binance,
+        TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+        one_minute(),
+    )
+}
+
+#[test]
+fn a_late_trade_inside_the_cutoff_revises_the_full_retained_candle() {
+    let mut processor = CandleProcessor::with_config(retention_config(10, 120_000, 5_000));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.apply_trade(&trade("101", 131_000));
+
+    let update = processor.apply_trade(&trade("90", 61_500));
+
+    assert_eq!(update.late_trades, 1);
+    assert_eq!(update.out_of_contract_trades, 0);
+    assert_eq!(update.closed.len(), 1);
+    assert_eq!(update.closed[0].candle.market_candle.trade_count, 2);
+    assert_eq!(update.closed[0].candle.market_candle.ohlcv.low, 90.0);
+    let retained = processor
+        .state()
+        .closed_candle(&bitcoin_key(), TimestampMilliseconds(60_000))
+        .unwrap();
+    assert_eq!(retained.market_candle.trade_count, 2);
+}
+
+#[test]
+fn a_late_trade_outside_the_cutoff_publishes_nothing_and_keeps_the_candle_intact() {
+    let mut processor = CandleProcessor::with_config(retention_config(10, 60_000, 5_000));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.apply_trade(&trade("101", 301_000));
+
+    let update = processor.apply_trade(&trade("90", 61_500));
+
+    assert_eq!(update.late_trades, 0);
+    assert_eq!(update.out_of_contract_trades, 1);
+    assert!(update.closed.is_empty());
+    assert!(update.open.is_empty());
+    let retained = processor
+        .state()
+        .closed_candle(&bitcoin_key(), TimestampMilliseconds(60_000))
+        .unwrap();
+    assert_eq!(retained.market_candle.trade_count, 1);
+    assert_eq!(retained.market_candle.ohlcv.low, 100.0);
+    assert_eq!(processor.state().closed_candles_len(), 1);
+}
+
+#[test]
+fn a_correction_for_a_cap_evicted_window_publishes_nothing() {
+    let mut processor = CandleProcessor::with_config(retention_config(2, 600_000, 5_000));
+    for timestamp in [61_000, 131_000, 191_000] {
+        processor.apply_trade(&trade("100", timestamp));
+    }
+    let eviction = processor.apply_trade(&trade("101", 251_000));
+    assert_eq!(eviction.evicted_closed_candles, 1);
+    assert_eq!(processor.state().closed_candles_len(), 2);
+
+    let update = processor.apply_trade(&trade("90", 61_500));
+
+    assert_eq!(update.late_trades, 0);
+    assert_eq!(update.out_of_contract_trades, 1);
+    assert_eq!(update.evicted_closed_candles, 0);
+    assert!(update.closed.is_empty());
+    assert!(update.open.is_empty());
+    assert_eq!(processor.state().closed_candles_len(), 2);
+    assert!(
+        processor
+            .state()
+            .closed_candle(&bitcoin_key(), TimestampMilliseconds(60_000))
+            .is_none()
+    );
+    assert!(
+        processor
+            .state()
+            .closed_candle(&bitcoin_key(), TimestampMilliseconds(120_000))
+            .is_some()
+    );
+    assert!(
+        processor
+            .state()
+            .closed_candle(&bitcoin_key(), TimestampMilliseconds(180_000))
+            .is_some()
+    );
+}
+
+#[test]
+fn a_gap_inside_the_cutoff_marks_and_republishes_an_old_retained_candle() {
+    let mut processor = CandleProcessor::with_config(retention_config(10, 120_000, 5_000));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.apply_trade(&trade("101", 131_000));
+
+    let update = processor.apply_gap(&gap(65_000));
+
+    assert_eq!(update.out_of_contract_gap_windows, 0);
+    assert_eq!(update.closed.len(), 1);
+    assert!(update.closed[0].is_incomplete());
+    assert_eq!(update.incomplete_windows.len(), 1);
+    let retained = processor
+        .state()
+        .closed_candle(&bitcoin_key(), TimestampMilliseconds(60_000))
+        .unwrap();
+    assert!(retained.is_incomplete());
+}
+
+#[test]
+fn a_gap_outside_the_cutoff_records_the_gap_but_does_not_mark_the_candle() {
+    let mut processor = CandleProcessor::with_config(retention_config(10, 60_000, 5_000));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.apply_trade(&trade("101", 301_000));
+
+    let update = processor.apply_gap(&gap(299_000));
+
+    assert_eq!(update.out_of_contract_gap_windows, 1);
+    assert!(update.closed.is_empty());
+    assert!(update.incomplete_windows.is_empty());
+    let retained = processor
+        .state()
+        .closed_candle(&bitcoin_key(), TimestampMilliseconds(60_000))
+        .unwrap();
+    assert!(retained.is_complete());
+    assert_eq!(processor.state().known_gaps.len(), 1);
+    assert_eq!(processor.state().incomplete_windows.len(), 0);
+}
+
+#[test]
+fn gap_affected_windows_are_published_in_subject_and_start_order() {
+    let mut processor = CandleProcessor::with_config(ProcessorConfig::new(
+        vec![one_minute(), CandleInterval::from_label("5m").unwrap()],
+        DurationMilliseconds(5_000),
+        10,
+        DurationMilliseconds(600_000),
+    ));
+    processor.apply_trade(&trade("100", 61_000));
+    processor.apply_trade(&trade("101", 121_000));
+
+    let update = processor.apply_gap(&gap(302_000));
+
+    let mut sorted = update
+        .incomplete_windows
+        .iter()
+        .map(|window| (window.key.subject_suffix(), window.window_start))
+        .collect::<Vec<_>>();
+    let actual = sorted.clone();
+    sorted.sort();
+    assert_eq!(actual, sorted);
+}
+
+#[test]
+fn replaying_cap_and_cutoff_inputs_produces_identical_state_and_revisions() {
+    let inputs = [
+        trade("100", 61_000),
+        trade("101", 131_000),
+        trade("102", 191_000),
+        trade("103", 251_000),
+        trade("90", 61_500),
+    ];
+
+    let mut first = CandleProcessor::with_config(retention_config(2, 60_000, 5_000));
+    let mut second = CandleProcessor::with_config(retention_config(2, 60_000, 5_000));
+    let mut first_ids = Vec::new();
+    let mut second_ids = Vec::new();
+    let mut first_out_of_contract = 0;
+    let mut second_out_of_contract = 0;
+    let mut first_evicted = 0;
+    let mut second_evicted = 0;
+    for trade in &inputs {
+        let update = first.apply_trade(trade);
+        first_ids.extend(update.closed.iter().map(|candle| candle.message_id()));
+        first_out_of_contract += update.out_of_contract_trades;
+        first_evicted += update.evicted_closed_candles;
+
+        let update = second.apply_trade(trade);
+        second_ids.extend(update.closed.iter().map(|candle| candle.message_id()));
+        second_out_of_contract += update.out_of_contract_trades;
+        second_evicted += update.evicted_closed_candles;
+    }
+
+    assert_eq!(first.state(), second.state());
+    assert_eq!(first_ids, second_ids);
+    assert_eq!(first_out_of_contract, 1);
+    assert_eq!(second_out_of_contract, 1);
+    assert_eq!(first_evicted, 1);
+    assert_eq!(second_evicted, 1);
 }

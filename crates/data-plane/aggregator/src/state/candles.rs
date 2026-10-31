@@ -35,14 +35,84 @@ impl AggregatorState {
         self.closed_candles.values().map(Vec::len).sum()
     }
 
-    pub fn retain_closed_candle(&mut self, candle: Candle) {
-        let candles = self.closed_candles.entry(candle.key.clone()).or_default();
+    /// Retains a closed candle while enforcing the per-key cap.
+    ///
+    /// Replacing an existing window never changes the number of candles for
+    /// the key. Inserting a new window evicts the lowest-start candle whenever
+    /// the key exceeds `max_closed_candles_per_key`. Returns the evicted
+    /// candles in eviction order.
+    pub fn retain_closed_candle(
+        &mut self,
+        candle: Candle,
+        max_closed_candles_per_key: usize,
+    ) -> Vec<Candle> {
+        if max_closed_candles_per_key == 0 {
+            let mut evicted = self.closed_candles.remove(&candle.key).unwrap_or_default();
+            evicted.push(candle);
+            return evicted;
+        }
+
+        let key = candle.key.clone();
+        let candles = self.closed_candles.entry(key.clone()).or_default();
+        let mut evicted = Vec::new();
         match candles
             .binary_search_by_key(&candle.start_time().0, |candidate| candidate.start_time().0)
         {
             Ok(position) => candles[position] = candle,
             Err(position) => candles.insert(position, candle),
         }
+        if candles.len() > max_closed_candles_per_key {
+            let excess = candles.len() - max_closed_candles_per_key;
+            evicted.extend(candles.drain(..excess));
+        }
+        if candles.is_empty() {
+            self.closed_candles.remove(&key);
+        }
+        evicted
+    }
+
+    /// Whether retaining a closed window would immediately evict that same
+    /// candidate because the key is already at its cap.
+    pub fn closed_candle_would_be_evicted(
+        &self,
+        key: &CandleKey,
+        window_start: TimestampMilliseconds,
+        max_closed_candles_per_key: usize,
+    ) -> bool {
+        if max_closed_candles_per_key == 0 {
+            return true;
+        }
+        let Some(candles) = self.closed_candles.get(key) else {
+            return false;
+        };
+        if candles.len() < max_closed_candles_per_key {
+            return false;
+        }
+        let Err(position) =
+            candles.binary_search_by_key(&window_start.0, |candidate| candidate.start_time().0)
+        else {
+            // Replacing an existing window does not evict anything.
+            return false;
+        };
+        // After inserting at `position`, the lowest-start `excess` elements are
+        // evicted. The candidate is outside the contract when it is one of them.
+        let excess = candles.len() + 1 - max_closed_candles_per_key;
+        position < excess
+    }
+
+    /// Drops the oldest closed candles for every key until each key is within
+    /// the current cap. Returns the number of candles removed.
+    pub fn prune_closed_candles_to_cap(&mut self, max_closed_candles_per_key: usize) -> usize {
+        let mut evicted = 0;
+        for candles in self.closed_candles.values_mut() {
+            if candles.len() > max_closed_candles_per_key {
+                let excess = candles.len() - max_closed_candles_per_key;
+                candles.drain(..excess);
+                evicted += excess;
+            }
+        }
+        self.closed_candles.retain(|_, candles| !candles.is_empty());
+        evicted
     }
 }
 

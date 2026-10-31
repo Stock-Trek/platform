@@ -19,6 +19,13 @@ struct RecordedCounter {
 }
 
 impl TestRecorder {
+    /// Runs `f` with a fresh local recorder and returns its captured metrics.
+    pub fn capture<T>(f: impl FnOnce() -> T) -> (T, Self) {
+        let recorder = Self::default();
+        let value = metrics::with_local_recorder(&recorder, f);
+        (value, recorder)
+    }
+
     /// Returns the current value of the counter matching `name` and `labels`.
     ///
     /// Returns `0` when no matching counter has been recorded.

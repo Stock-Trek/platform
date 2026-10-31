@@ -124,6 +124,8 @@ fn options(shard: ShardId, shard_count: usize) -> RestoreOptions {
         intervals: vec![interval()],
         shard_count,
         allowed_lateness: DurationMilliseconds::ZERO,
+        max_closed_candles_per_key: usize::MAX,
+        correction_cutoff: DurationMilliseconds(i64::MAX),
         replay_start_policy: ReplayStartPolicy::Checkpoint,
         expected_schema_version: STATE_SCHEMA_VERSION,
     }
@@ -639,4 +641,90 @@ async fn checkpoint_fallback_without_archive_configuration_fails_fast() {
         BpError::Config(ConfigError::Missing { name })
             if name == AGGREGATOR_ARCHIVE_S3_BUCKET
     ));
+}
+
+fn closed_candle_at(timestamp: i64) -> platform_market_data::candle::Candle {
+    let trade = Trade {
+        exchange: CexId::Binance,
+        trading_pair: pair(),
+        price: Decimal::from_str_exact("100").unwrap(),
+        quantity: Decimal::ONE,
+        timestamp: TimestampMilliseconds(timestamp),
+    };
+    let mut candle = platform_market_data::candle::Candle::open(&trade, interval()).unwrap();
+    candle.close();
+    candle
+}
+
+#[tokio::test]
+async fn an_oversized_restored_checkpoint_is_pruned_to_the_current_cap() {
+    let store = InMemoryStateStore::new();
+    let shard = ShardId::new(0);
+    let mut state = AggregatorState::new();
+    let mut key = None;
+    for timestamp in [61_000, 131_000, 191_000, 251_000] {
+        let candle = closed_candle_at(timestamp);
+        key = Some(candle.key.clone());
+        state.retain_closed_candle(candle, usize::MAX);
+    }
+    let checkpoint = CheckpointRecord::new(shard, "aggregator-shards", 11, state);
+    store.save(&checkpoint).await.unwrap();
+
+    let mut options = options(shard, 1);
+    options.max_closed_candles_per_key = 2;
+    let connects = Arc::new(AtomicUsize::new(0));
+    let restored = restore_shard(
+        &store,
+        counting_archive(Vec::new(), connects.clone()),
+        &options,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(restored.restored_from, RestoreSource::Checkpoint);
+    assert_eq!(connects.load(Ordering::SeqCst), 0);
+    assert_eq!(restored.state.closed_candles_len(), 2);
+    let starts = restored.state.closed_candles[&key.unwrap()]
+        .iter()
+        .map(|candle| candle.start_time().0)
+        .collect::<Vec<_>>();
+    assert_eq!(starts, vec![180_000, 240_000]);
+}
+
+#[tokio::test]
+async fn archive_rebuild_uses_the_same_cap_and_cutoff_as_live_processing() {
+    let events = vec![
+        event(1, 61_000),
+        event(2, 131_000),
+        event(3, 191_000),
+        event(4, 251_000),
+        event(5, 61_500),
+    ];
+    let mut live =
+        crate::processor::CandleProcessor::with_config(crate::processor::ProcessorConfig::new(
+            vec![interval()],
+            DurationMilliseconds(5_000),
+            2,
+            DurationMilliseconds(60_000),
+        ));
+    for event in &events {
+        let decoder = TradeDecoderFactory::for_exchange(event.exchange).unwrap();
+        let trades: Vec<Trade> = decoder.decode(event).unwrap();
+        live.apply_event(event, &trades);
+    }
+
+    let store = InMemoryStateStore::new();
+    let shard = ShardId::new(0);
+    let mut options = options(shard, 1);
+    options.allowed_lateness = DurationMilliseconds(5_000);
+    options.max_closed_candles_per_key = 2;
+    options.correction_cutoff = DurationMilliseconds(60_000);
+    options.replay_start_policy = ReplayStartPolicy::Archive;
+    let restored = restore_shard(&store, archive_source(VecArchive::new(events)), &options)
+        .await
+        .unwrap();
+
+    assert_eq!(restored.restored_from, RestoreSource::Archive);
+    assert_eq!(restored.state, live.state().clone());
+    assert_eq!(restored.state.closed_candles_len(), 2);
 }

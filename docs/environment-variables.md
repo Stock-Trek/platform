@@ -90,12 +90,15 @@ No optional variables.
 | `AGGREGATOR_CHECKPOINT_BUCKET` | NATS KV bucket used for checkpoints and writer leases. |
 | `AGGREGATOR_CHECKPOINT_INTERVAL_SECS` | How often keyed state is checkpointed, in seconds. Must be lower than `AGGREGATOR_LEASE_TTL_SECS`. |
 | `AGGREGATOR_CHECKPOINT_PREFIX` | Key prefix used for checkpoints and leases inside the checkpoint bucket. |
+| `AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES` | Maximum worst-case bytes reserved for hot closed candles across all shards. Startup fails when the full static key ceiling, configured intervals, shard count, and per-key cap exceed it. |
 | `AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX` | NATS subject prefix for closed candles. |
+| `AGGREGATOR_CORRECTION_CUTOFF_MS` | Event-time correction cutoff in milliseconds. Inputs for windows older than `watermark - cutoff` are rejected instead of creating a partial correction. Must not be shorter than `AGGREGATOR_ALLOWED_LATENESS_MS`. |
 | `AGGREGATOR_DURABLE_PREFIX` | Prefix for durable consumer names. The router uses `{prefix}-router`, and each partition uses `{prefix}-shard-{n}`. |
 | `AGGREGATOR_EVENT_SUBJECT_PREFIX` | NATS subject prefix for source market events. |
 | `AGGREGATOR_GAP_SUBJECT_PREFIX` | NATS subject prefix carrying gap markers from the ingester. |
 | `AGGREGATOR_INTERVALS` | Comma-separated candle intervals to generate, for example `1m,5m,1h`. |
 | `AGGREGATOR_LEASE_TTL_SECS` | Lifetime of the single-writer partition lease, in seconds. |
+| `AGGREGATOR_MAX_CLOSED_CANDLES_PER_KEY` | Maximum number of closed candles retained per exchange, trading pair, and interval. The oldest are evicted as newer windows close, even when they are still inside the correction cutoff. |
 | `AGGREGATOR_NATS_URL` | NATS URL used for source, gap, shard, and candle subjects. |
 | `AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX` | NATS subject prefix for open candle updates. |
 | `AGGREGATOR_REPLAY_START_POLICY` | State to start a partition from: `checkpoint`, `archive`, `earliest`, or `latest`. |
@@ -158,9 +161,11 @@ No optional variables.
 | --- | --- |
 | `REBUILDER_ALLOWED_LATENESS_MS` | How late a trade may arrive and still update a candle during the rebuild, in milliseconds. |
 | `REBUILDER_BUCKET_MILLIS` | Output bucket size in milliseconds. |
+| `REBUILDER_CORRECTION_CUTOFF_MS` | Event-time correction cutoff in milliseconds. Must not be shorter than `REBUILDER_ALLOWED_LATENESS_MS`. |
 | `REBUILDER_DRY_RUN` | Whether to rebuild without writing output, parsed as a boolean. |
 | `REBUILDER_FINISH_OPEN_WINDOWS` | Whether to close candles that are still open when the archived input ends, parsed as a boolean. |
 | `REBUILDER_INTERVALS` | Comma-separated candle intervals to regenerate, for example `1m,5m,1h`. |
+| `REBUILDER_MAX_CLOSED_CANDLES_PER_KEY` | Maximum number of closed candles retained per exchange, trading pair, and interval during replay. Must match the aggregator value used for the same data. |
 | `REBUILDER_OUTPUT_LAYER` | Candle output layer: `raw` or `compacted`. |
 | `REBUILDER_OUTPUT_PREFIX` | S3 prefix for rebuilt candle objects. |
 | `REBUILDER_S3_BUCKET` | S3 bucket for rebuilt candle output. |

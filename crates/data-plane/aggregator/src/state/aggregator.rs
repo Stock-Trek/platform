@@ -19,7 +19,7 @@ use std::collections::{BTreeMap, HashMap};
 /// Bump this whenever the persisted shape changes in a way that cannot be read
 /// as the current state. Checkpoints with another version are ignored and the
 /// shard is rebuilt from archived raw events.
-pub const STATE_SCHEMA_VERSION: u32 = 4;
+pub const STATE_SCHEMA_VERSION: u32 = 5;
 
 /// The keyed state of one aggregator shard.
 #[derive(Debug, Clone, Serialize, Deserialize)]

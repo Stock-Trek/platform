@@ -92,6 +92,7 @@ where
                                     &record.input,
                                 );
                                 Self::record_update_metrics(&update);
+                                Self::record_retained_closed_candles(shard, processor);
                                 outputs
                                     .enqueue(update, processor.state())
                                     .await?;
@@ -145,6 +146,7 @@ where
                     if changed {
                         state.dirty = true;
                     }
+                    Self::record_retained_closed_candles(shard, processor);
                     Self::record_watermark_lag(shard, processor);
                     Self::commit(
                         config,
@@ -211,9 +213,21 @@ where
         }
     }
 
-    fn record_update_metrics(update: &ProcessorUpdate) {
+    pub(super) fn record_update_metrics(update: &ProcessorUpdate) {
         AggregatorMetrics::record_duplicate_events(update.duplicates as u64);
         AggregatorMetrics::record_incomplete_windows(update.incomplete_windows.len() as u64);
+        AggregatorMetrics::record_closed_candles_evicted(update.evicted_closed_candles as u64);
+        AggregatorMetrics::record_out_of_contract_trades(update.out_of_contract_trades as u64);
+        AggregatorMetrics::record_out_of_contract_gap_windows(
+            update.out_of_contract_gap_windows as u64,
+        );
+    }
+
+    fn record_retained_closed_candles(shard: ShardId, processor: &CandleProcessor) {
+        AggregatorMetrics::record_retained_closed_candles(
+            shard.get(),
+            processor.state().closed_candles_len() as u64,
+        );
     }
 
     fn record_watermark_lag(shard: ShardId, processor: &CandleProcessor) {

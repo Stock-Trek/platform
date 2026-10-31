@@ -236,7 +236,7 @@ fn state_round_trips_through_json_with_candle_keys() {
         .push(candle.clone());
     let mut closed = candle.clone();
     closed.close();
-    state.retain_closed_candle(closed);
+    state.retain_closed_candle(closed, usize::MAX);
     state.mark_processed(42);
     state.advance_watermark(TimestampMilliseconds(61_000));
     state.observe_sequence(&DeduplicationKey::new(CexId::Binance, "btcusdt@trade", 9));
@@ -295,5 +295,156 @@ fn schema_compatibility_can_be_checked_against_a_configured_version() {
         state
             .ensure_schema_compatible_with(STATE_SCHEMA_VERSION + 1)
             .is_err()
+    );
+}
+
+fn closed_candle_at(timestamp: i64) -> Candle {
+    let mut candle =
+        Candle::open(&trade(timestamp), CandleInterval::from_label("1m").unwrap()).unwrap();
+    candle.close();
+    candle
+}
+
+fn retained_starts(
+    state: &AggregatorState,
+    key: &platform_market_data::candle::CandleKey,
+) -> Vec<i64> {
+    state.closed_candles[key]
+        .iter()
+        .map(|candle| candle.start_time().0)
+        .collect()
+}
+
+#[test]
+fn cap_keeps_exactly_the_newest_candles_for_one_key() {
+    let mut state = AggregatorState::new();
+    let mut key = None;
+    let mut evicted = 0;
+    for timestamp in [61_000, 121_000, 181_000, 241_000, 301_000] {
+        let candle = closed_candle_at(timestamp);
+        key = Some(candle.key.clone());
+        evicted += state.retain_closed_candle(candle, 3).len();
+    }
+
+    assert_eq!(evicted, 2);
+    assert_eq!(
+        retained_starts(&state, &key.unwrap()),
+        vec![180_000, 240_000, 300_000]
+    );
+    assert_eq!(state.closed_candles_len(), 3);
+}
+
+#[test]
+fn replacing_an_existing_window_does_not_evict_anything() {
+    let mut state = AggregatorState::new();
+    let mut key = None;
+    for timestamp in [61_000, 121_000, 181_000] {
+        let candle = closed_candle_at(timestamp);
+        key = Some(candle.key.clone());
+        assert!(state.retain_closed_candle(candle, 3).is_empty());
+    }
+
+    let mut replacement = closed_candle_at(121_000);
+    replacement.market_candle.ohlcv.close = 999.0;
+    let evicted = state.retain_closed_candle(replacement, 3);
+
+    assert!(evicted.is_empty());
+    assert_eq!(state.closed_candles_len(), 3);
+    assert_eq!(
+        retained_starts(&state, &key.unwrap()),
+        vec![60_000, 120_000, 180_000]
+    );
+    let key = state.closed_candles.keys().next().unwrap();
+    assert_eq!(
+        state
+            .closed_candle(key, TimestampMilliseconds(120_000))
+            .unwrap()
+            .market_candle
+            .ohlcv
+            .close,
+        999.0
+    );
+}
+
+#[test]
+fn multiple_keys_each_get_an_independent_cap() {
+    let mut state = AggregatorState::new();
+    let mut bitcoin_key = None;
+    let mut ethereum_key = None;
+    for (timestamp, pair) in [
+        (61_000, pair()),
+        (121_000, pair()),
+        (181_000, pair()),
+        (
+            61_000,
+            TradingPair::new(AssetId::Ethereum, AssetId::TetherUSD),
+        ),
+        (
+            121_000,
+            TradingPair::new(AssetId::Ethereum, AssetId::TetherUSD),
+        ),
+        (
+            181_000,
+            TradingPair::new(AssetId::Ethereum, AssetId::TetherUSD),
+        ),
+    ] {
+        let mut trade = trade(timestamp);
+        trade.trading_pair = pair;
+        let mut candle = Candle::open(&trade, CandleInterval::from_label("1m").unwrap()).unwrap();
+        candle.close();
+        if pair.base == AssetId::Bitcoin {
+            bitcoin_key = Some(candle.key.clone());
+        } else {
+            ethereum_key = Some(candle.key.clone());
+        }
+        state.retain_closed_candle(candle, 2);
+    }
+
+    assert_eq!(
+        retained_starts(&state, &bitcoin_key.unwrap()),
+        vec![120_000, 180_000]
+    );
+    assert_eq!(
+        retained_starts(&state, &ethereum_key.unwrap()),
+        vec![120_000, 180_000]
+    );
+    assert_eq!(state.closed_candles_len(), 4);
+}
+
+#[test]
+fn checkpoint_round_trip_preserves_only_the_retained_set() {
+    let mut state = AggregatorState::new();
+    let mut key = None;
+    for timestamp in [61_000, 121_000, 181_000, 241_000, 301_000] {
+        let candle = closed_candle_at(timestamp);
+        key = Some(candle.key.clone());
+        state.retain_closed_candle(candle, 3);
+    }
+
+    let payload = serde_json::to_vec(&state).unwrap();
+    let decoded: AggregatorState = serde_json::from_slice(&payload).unwrap();
+
+    assert_eq!(decoded, state);
+    assert_eq!(decoded.closed_candles_len(), 3);
+    assert_eq!(
+        retained_starts(&decoded, &key.unwrap()),
+        vec![180_000, 240_000, 300_000]
+    );
+}
+
+#[test]
+fn pruning_an_oversized_restored_state_keeps_the_newest_windows() {
+    let mut state = AggregatorState::new();
+    let mut key = None;
+    for timestamp in [61_000, 121_000, 181_000, 241_000] {
+        let candle = closed_candle_at(timestamp);
+        key = Some(candle.key.clone());
+        state.retain_closed_candle(candle, usize::MAX);
+    }
+
+    assert_eq!(state.prune_closed_candles_to_cap(2), 2);
+    assert_eq!(
+        retained_starts(&state, &key.unwrap()),
+        vec![180_000, 240_000]
     );
 }

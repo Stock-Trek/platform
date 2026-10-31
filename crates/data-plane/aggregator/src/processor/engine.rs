@@ -32,6 +32,7 @@ impl CandleProcessor {
     pub fn from_state(config: ProcessorConfig, mut state: AggregatorState) -> BpResult<Self> {
         state.ensure_schema_compatible_with(config.state_schema_version)?;
         state.prune_stream_dedup();
+        state.prune_closed_candles_to_cap(config.max_closed_candles_per_key);
         Ok(Self { config, state })
     }
 

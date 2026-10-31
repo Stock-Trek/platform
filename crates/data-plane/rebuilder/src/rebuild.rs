@@ -37,6 +37,9 @@ pub struct RebuildStats {
     pub decode_failures: usize,
     pub duplicate_events: usize,
     pub late_trades: usize,
+    pub out_of_contract_trades: usize,
+    pub out_of_contract_gap_windows: usize,
+    pub evicted_closed_candles: usize,
     pub closed_candles: usize,
     pub unique_candles: usize,
 }
@@ -183,6 +186,9 @@ pub fn rebuild_candles(
             stats.trades_applied += replay.trades.len();
             stats.duplicate_events += update.duplicates;
             stats.late_trades += update.late_trades;
+            stats.out_of_contract_trades += update.out_of_contract_trades;
+            stats.out_of_contract_gap_windows += update.out_of_contract_gap_windows;
+            stats.evicted_closed_candles += update.evicted_closed_candles;
             regenerated.extend(update.closed);
         }
 
@@ -255,7 +261,7 @@ mod tests {
 
     fn options() -> RebuildOptions {
         RebuildOptions {
-            processor: ProcessorConfig::new(
+            processor: ProcessorConfig::retention_disabled(
                 vec![CandleInterval::from_label("1m").unwrap()],
                 DurationMilliseconds::ZERO,
             ),
@@ -403,5 +409,56 @@ mod tests {
 
         assert_eq!(finished.candles.len(), 1);
         assert!(unfinished.candles.is_empty());
+    }
+
+    #[test]
+    fn rebuilt_output_matches_live_processing_when_cap_and_cutoff_reject_an_old_correction() {
+        let mut late = stream_event("btcusdt@trade", 5, 61_500, "90", "1");
+        late.exchange_timestamp = Some(TimestampMilliseconds(301_000));
+        late.received_at = TimestampMilliseconds(301_000);
+        let events = vec![
+            stream_event("btcusdt@trade", 1, 61_000, "100", "1"),
+            stream_event("btcusdt@trade", 2, 131_000, "101", "1"),
+            stream_event("btcusdt@trade", 3, 191_000, "102", "1"),
+            stream_event("btcusdt@trade", 4, 251_000, "103", "1"),
+            late,
+        ];
+        let mut options = options();
+        options.processor = ProcessorConfig::new(
+            vec![CandleInterval::from_label("1m").unwrap()],
+            DurationMilliseconds::ZERO,
+            2,
+            DurationMilliseconds(60_000),
+        );
+        options.finish_open_windows = false;
+
+        let rebuilt = rebuild_candles(events.clone(), &options).unwrap();
+
+        let mut live_processor = CandleProcessor::with_config(options.processor.clone());
+        live_processor.state_mut().state_epoch = options.state_epoch;
+        let mut live_candles = Vec::new();
+        for (offset, event) in events.iter().enumerate() {
+            let decoder = TradeDecoderFactory::for_exchange(event.exchange).unwrap();
+            let trades = decoder.decode(event).unwrap();
+            live_processor.state_mut().mark_processed(offset as u64);
+            let update = live_processor.apply_event(event, &trades);
+            live_candles.extend(update.closed);
+        }
+        let mut live_ids = live_candles
+            .iter()
+            .map(ClosedCandle::message_id)
+            .collect::<Vec<_>>();
+        let mut rebuilt_ids = rebuilt
+            .candles
+            .iter()
+            .map(ClosedCandle::message_id)
+            .collect::<Vec<_>>();
+        live_ids.sort();
+        rebuilt_ids.sort();
+
+        assert_eq!(rebuilt_ids, live_ids);
+        assert_eq!(rebuilt.stats.evicted_closed_candles, 2);
+        assert_eq!(rebuilt.stats.out_of_contract_trades, 1);
+        assert_eq!(rebuilt.stats.late_trades, 0);
     }
 }

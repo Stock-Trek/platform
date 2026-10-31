@@ -22,9 +22,9 @@ Idle flushing only closes windows that are already expired at the current event-
 
 ### Closed-candle retention
 
-A closed candle is retained in shard state after it is published so that later inputs can still use the original full candle. A late or backfilled trade revises the retained candle and publishes a new deterministic revision, while a gap marker can mark it incomplete. If the candle had already been discarded, the same input would either create a partial correction candle with only the newly arrived trades or fail to propagate the gap's incompleteness to the published closed candle.
+A closed candle is retained in shard state after it is published so that later inputs can still use the original full candle. A late or backfilled trade revises the retained candle and publishes a new deterministic revision, while a gap marker can mark it incomplete. Inputs for windows that have fallen outside the correction contract are rejected rather than folded into a partial correction candle, and gap markers outside the contract only record and report the gap. Each rejection and eviction is counted so out-of-contract inputs are observable instead of silently degrading candle correctness.
 
-The chosen retention policy is an event-time correction cutoff combined with a hard per-key cap on hot closed candles. Shard state keeps only the newest `N` closed candles for each `CandleKey`. An input whose window end is older than `watermark - correction_cutoff` is rejected, quarantined, or annotated according to the correction contract, even if it falls within the per-key cap. Conversely, when more than `N` candles for a key are inside the cutoff, the oldest are evicted in deterministic event-time order and treated as outside the contract. The effective correction reach for a key is therefore the shorter of the cutoff and its newest `N` windows. Eviction is driven by event time and input order, never wall-clock time or cache access order, and the same rule is applied during live processing, checkpoint restore, archive rebuilds, and rebuilder replay.
+The retention policy is an event-time correction cutoff combined with a hard per-key cap on hot closed candles. Shard state keeps only the newest `N` closed candles for each `CandleKey`. An input whose window end is older than `watermark - correction_cutoff` is rejected, quarantined, or annotated according to the correction contract, even if it falls within the per-key cap. Conversely, when more than `N` candles for a key are inside the cutoff, the oldest are evicted in deterministic event-time order and treated as outside the contract. The effective correction reach for a key is therefore the shorter of the cutoff and its newest `N` windows. Eviction is driven by event time and input order, never wall-clock time or cache access order. The same rule is applied during live processing, checkpoint restore, archive rebuilds, and rebuilder replay. A restored checkpoint that retains more than the configured cap is pruned to the newest `N` windows before it is used, and the rebuilder emits the same accepted corrections and rejections as live processing.
 
 - **Memory bound:** At most `N` closed candles per candle key, so the hot heap, checkpoint payload, and gap scan are bounded by the key count times `N`. This is an absolute shard bound because the key count is fixed before startup by the finite `CexId` and `AssetId` enums and the configured window intervals; new or churning trading pairs can populate more of those keys over time but cannot raise the ceiling. A `CandleKey` is an exchange, an ordered base/quote asset pair, and a configured interval, so the ceiling is the number of `CexId` values times the number of `AssetId` values squared times the number of configured intervals. The cutoff does not bound memory by itself but limits the event-time range over which the per-key cap can be consumed.
 - **Correction correctness and reach:** Full correction and gap propagation are preserved inside the intersection of the cutoff and the newest `N` windows. Reach is `min(correction_cutoff, N × interval)` for each key, so it is predictable in event time when `N` windows cover more than the cutoff, and predictable in window count when the cutoff is generous. Because the same `N` applies to every interval, event-time reach still differs between a 1-second and a daily candle. Outside the reach, inputs are explicitly reported as rejected, quarantined, or incomplete rather than silently folded into a partial correction.
@@ -68,6 +68,9 @@ Archive rebuilds replay raw events through the same deterministic candle process
 | `AGGREGATOR_CHECKPOINT_BUCKET` | required | NATS KV bucket for checkpoints and leases. |
 | `AGGREGATOR_CHECKPOINT_PREFIX` | required | Key prefix inside the checkpoint bucket. |
 | `AGGREGATOR_ALLOWED_LATENESS_MS` | required | How late a trade may arrive and still update a candle. |
+| `AGGREGATOR_MAX_CLOSED_CANDLES_PER_KEY` | required | Maximum closed candles retained per candle key. The oldest are evicted as newer windows close. |
+| `AGGREGATOR_CORRECTION_CUTOFF_MS` | required | Event-time correction cutoff. Must not be shorter than `AGGREGATOR_ALLOWED_LATENESS_MS`. |
+| `AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES` | required | Worst-case hot closed-candle memory budget across all shards. Startup fails if the static key ceiling and cap exceed it. |
 | `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | required | Idle time before expired windows are flushed and state is checkpointed. Idle flushing never advances event time with the wall clock. |
 | `AGGREGATOR_REPLAY_START_POLICY` | required | `checkpoint`, `archive`, `earliest`, or `latest`. |
 | `AGGREGATOR_STATE_SCHEMA_VERSION` | required | State schema version written to new state and required for checkpoint restore. |
@@ -88,7 +91,9 @@ Aggregator metrics are named `market_data_aggregator_*` and cover:
 - replayed events and replay progress;
 - state restore duration by recovery path;
 - writer rebalances/lease acquisition;
-- duplicate events and incomplete candle windows.
+- duplicate events and incomplete candle windows;
+- retained closed candles and closed-candle evictions;
+- trades and gap windows rejected outside the correction contract.
 
 ## Archiver
 
@@ -102,7 +107,7 @@ Each compacted Iceberg snapshot records the raw source object URIs it represents
 
 ## Rebuilder
 
-Rebuilder replays archived market events from Iceberg to deterministically regenerate candles after an aggregator configuration or code change. With `REBUILDER_SOURCE_LAYER=auto` it reads compacted event partitions plus the raw tail that has not been compacted yet, using the same handoff contract as aggregator recovery. Explicit `raw` and `compacted` modes read only that layer. Events are grouped by their decoded exchange and trading pair and replayed through the aggregator's pure candle processor using a new state epoch, so all streams for a pair (such as `@trade` and `@aggTrade`) update the same candles. Regenerated candles can be written either as raw hourly objects in the raw candle table or as candle-key partitions in the compacted candle table.
+Rebuilder replays archived market events from Iceberg to deterministically regenerate candles after an aggregator configuration or code change. With `REBUILDER_SOURCE_LAYER=auto` it reads compacted event partitions plus the raw tail that has not been compacted yet, using the same handoff contract as aggregator recovery. Explicit `raw` and `compacted` modes read only that layer. Events are grouped by their decoded exchange and trading pair and replayed through the aggregator's pure candle processor using a new state epoch, so all streams for a pair (such as `@trade` and `@aggTrade`) update the same candles. Regenerated candles can be written either as raw hourly objects in the raw candle table or as candle-key partitions in the compacted candle table. The closed-candle cap bounds the rebuilder's active processor state; the final output collection still materialises every regenerated candle revision.
 
 ### Configuration
 
@@ -114,6 +119,8 @@ Rebuilder replays archived market events from Iceberg to deterministically regen
 | `REBUILDER_OUTPUT_LAYER` | required | Candle output layer: `raw` or `compacted`. |
 | `REBUILDER_INTERVALS` | required | Comma-separated candle intervals to regenerate. |
 | `REBUILDER_ALLOWED_LATENESS_MS` | required | How late a trade may arrive and still update a candle. |
+| `REBUILDER_MAX_CLOSED_CANDLES_PER_KEY` | required | Maximum closed candles retained per candle key during replay. |
+| `REBUILDER_CORRECTION_CUTOFF_MS` | required | Event-time correction cutoff. Must not be shorter than `REBUILDER_ALLOWED_LATENESS_MS`. |
 | `REBUILDER_STATE_EPOCH` | required | State epoch assigned to regenerated candle revisions. |
 | `REBUILDER_FINISH_OPEN_WINDOWS` | required | Close candles that are still open when archived input ends. |
 | `REBUILDER_BUCKET_MILLIS` | required | Output bucket size in milliseconds. |

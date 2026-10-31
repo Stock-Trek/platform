@@ -10,6 +10,7 @@ use crate::{
     state::{AggregatorState, DeduplicationKey},
 };
 use async_trait::async_trait;
+use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_errors::{BpError, BpResult};
 use platform_market_data::{
     candle::{Candle, CandleKey, ClosedCandle},
@@ -133,6 +134,9 @@ fn config() -> AggregatorConfig {
         shard_index: None,
         intervals: vec![CandleInterval::from_label("1m").unwrap()],
         allowed_lateness: std::time::Duration::from_millis(5_000),
+        max_closed_candles_per_key: 100,
+        correction_cutoff: std::time::Duration::from_secs(60),
+        closed_candle_memory_budget_bytes: u64::MAX,
         checkpoint_interval: std::time::Duration::from_secs(1),
         checkpoint_bucket: "aggregator_shards_checkpoints".to_string(),
         checkpoint_key_prefix: "shard".to_string(),
@@ -147,14 +151,19 @@ fn config() -> AggregatorConfig {
 use platform_market_data::candle::CandleInterval;
 
 fn trade_event(timestamp_ms: i64) -> MarketEvent {
+    trade_event_at(timestamp_ms, timestamp_ms)
+}
+
+fn trade_event_at(exchange_timestamp: i64, trade_timestamp: i64) -> MarketEvent {
     MarketEvent {
         exchange: CexId::Binance,
         stream: "btcusdt@trade".to_string(),
         sequence: Some(1),
-        exchange_timestamp: Some(TimestampMilliseconds(timestamp_ms)),
-        received_at: TimestampMilliseconds(timestamp_ms + 1),
-        payload: "eyJlIjoidHJhZGUiLCJzIjoiQlRDVVNEVCIsInAiOiIxMDAiLCJxIjoiMSIsIlQiOjYxMDAwfQ=="
-            .to_string(),
+        exchange_timestamp: Some(TimestampMilliseconds(exchange_timestamp)),
+        received_at: TimestampMilliseconds(exchange_timestamp + 1),
+        payload: STANDARD.encode(format!(
+            r#"{{"e":"trade","s":"BTCUSDT","p":"100","q":"1","T":{trade_timestamp}}}"#
+        )),
     }
 }
 
@@ -850,4 +859,80 @@ async fn propagates_source_error() {
     let error = runner.run().await.unwrap_err();
 
     assert_eq!(error.to_string(), "source failed");
+}
+
+#[test]
+fn retention_update_counts_are_recorded_as_metrics() {
+    use platform_metrics::descriptions::{
+        MARKET_DATA_AGGREGATOR_CLOSED_CANDLES_EVICTED_TOTAL,
+        MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL,
+        MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL,
+    };
+    use platform_metrics::test_utils::TestRecorder;
+
+    let update = ProcessorUpdate {
+        evicted_closed_candles: 2,
+        out_of_contract_trades: 3,
+        out_of_contract_gap_windows: 4,
+        ..ProcessorUpdate::default()
+    };
+    let ((), metrics) = TestRecorder::capture(|| {
+        ProcessorRunner::<FakeSource, FakeSink>::record_update_metrics(&update);
+    });
+
+    assert_eq!(
+        metrics.counter(MARKET_DATA_AGGREGATOR_CLOSED_CANDLES_EVICTED_TOTAL, &[]),
+        2
+    );
+    assert_eq!(
+        metrics.counter(MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL, &[]),
+        3
+    );
+    assert_eq!(
+        metrics.counter(
+            MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL,
+            &[]
+        ),
+        4
+    );
+}
+
+#[tokio::test]
+async fn a_count_only_out_of_contract_update_publishes_no_candle() {
+    let sink = FakeSink::default();
+    let observed = sink.clone();
+    let gap = GapMarker {
+        exchange: CexId::Binance,
+        stream: "btcusdt@trade".to_string(),
+        previous_sequence: 2,
+        observed_sequence: 4,
+        missing_from: 3,
+        missing_to: 3,
+        detected_at: TimestampMilliseconds(251_000),
+    };
+    let mut first = trade_event(61_000);
+    first.sequence = Some(1);
+    let mut second = trade_event(131_000);
+    second.sequence = Some(2);
+    let mut late = trade_event_at(251_000, 61_500);
+    late.sequence = Some(3);
+    let source = FakeSource {
+        records: vec![
+            record(MarketInput::Event(first), 1),
+            record(MarketInput::Event(second), 2),
+            record(MarketInput::Gap(gap), 3),
+            record(MarketInput::Event(late), 4),
+        ],
+        ..FakeSource::default()
+    };
+
+    ProcessorRunner::new(config(), source, sink)
+        .run()
+        .await
+        .unwrap();
+
+    // The first two events close one candle and the gap closes the next. The
+    // final late trade is outside the correction cutoff and must not add a
+    // partial candle or any other closed-candle publication.
+    assert_eq!(observed.closed_updates(), 2);
 }

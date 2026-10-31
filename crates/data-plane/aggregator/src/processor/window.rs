@@ -10,6 +10,7 @@ use platform_market_data::{candle::ClosedCandle, event::GapMarker};
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::HashSet;
 use stock_trek_types::cex::trading_pair::TradingPair;
+use tracing::warn;
 
 impl CandleProcessor {
     pub(super) fn close_expired(&mut self, update: &mut ProcessorUpdate) {
@@ -66,7 +67,10 @@ impl CandleProcessor {
                 self.state.open_candles.remove(&key);
             }
             candle.close();
-            self.state.retain_closed_candle(candle.clone());
+            let evicted = self
+                .state
+                .retain_closed_candle(candle.clone(), self.config.max_closed_candles_per_key);
+            update.evicted_closed_candles += evicted.len();
             update.closed.push(ClosedCandle::new(
                 candle,
                 watermark,
@@ -129,6 +133,28 @@ impl CandleProcessor {
                 .subject_suffix()
                 .cmp(&right.key.subject_suffix())
                 .then_with(|| left.window_start.cmp(&right.window_start))
+        });
+        affected.retain(|window| {
+            let watermark = self
+                .watermark_for_pair(window.key.exchange, window.key.trading_pair)
+                .or_else(|| self.global_watermark_fallback());
+            if self.is_outside_correction_contract(window.window_end, watermark) {
+                warn!(
+                    exchange = %window.key.exchange,
+                    base = %window.key.trading_pair.base,
+                    quote = %window.key.trading_pair.quote,
+                    interval = %window.key.interval,
+                    window_start_ms = window.window_start.0,
+                    window_end_ms = window.window_end.0,
+                    watermark_ms = watermark.map(|watermark| watermark.0),
+                    correction_cutoff_ms = self.config.correction_cutoff.0,
+                    "skipped out-of-contract gap-affected candle window"
+                );
+                update.out_of_contract_gap_windows += 1;
+                false
+            } else {
+                true
+            }
         });
 
         let close_watermark = self.state.watermark.unwrap_or(gap.detected_at);

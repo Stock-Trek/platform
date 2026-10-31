@@ -270,4 +270,31 @@ impl AggregatorMetrics {
             counter!(MARKET_DATA_AGGREGATOR_INCOMPLETE_WINDOWS_TOTAL).increment(windows);
         }
     }
+
+    /// Records the number of closed candles currently retained for a shard.
+    pub fn record_retained_closed_candles(shard: u32, candles: u64) {
+        gauge!(
+            MARKET_DATA_AGGREGATOR_RETAINED_CLOSED_CANDLES,
+            "shard" => shard.to_string(),
+        )
+        .set(candles as f64);
+    }
+
+    pub fn record_closed_candles_evicted(candles: u64) {
+        if candles > 0 {
+            counter!(MARKET_DATA_AGGREGATOR_CLOSED_CANDLES_EVICTED_TOTAL).increment(candles);
+        }
+    }
+
+    pub fn record_out_of_contract_trades(trades: u64) {
+        if trades > 0 {
+            counter!(MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL).increment(trades);
+        }
+    }
+
+    pub fn record_out_of_contract_gap_windows(windows: u64) {
+        if windows > 0 {
+            counter!(MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL).increment(windows);
+        }
+    }
 }

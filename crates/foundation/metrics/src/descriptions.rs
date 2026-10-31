@@ -61,6 +61,14 @@ pub const MARKET_DATA_AGGREGATOR_DUPLICATE_EVENTS_TOTAL: &str =
     "market_data_aggregator_duplicate_events_total";
 pub const MARKET_DATA_AGGREGATOR_INCOMPLETE_WINDOWS_TOTAL: &str =
     "market_data_aggregator_incomplete_windows_total";
+pub const MARKET_DATA_AGGREGATOR_RETAINED_CLOSED_CANDLES: &str =
+    "market_data_aggregator_retained_closed_candles";
+pub const MARKET_DATA_AGGREGATOR_CLOSED_CANDLES_EVICTED_TOTAL: &str =
+    "market_data_aggregator_closed_candles_evicted_total";
+pub const MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL: &str =
+    "market_data_aggregator_out_of_contract_trades_total";
+pub const MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL: &str =
+    "market_data_aggregator_out_of_contract_gap_windows_total";
 
 pub const STATUS_SUCCESS: &str = "success";
 pub const STATUS_ERROR: &str = "error";
@@ -294,6 +302,22 @@ impl DescriptionsMetrics {
         describe_counter!(
             MARKET_DATA_AGGREGATOR_INCOMPLETE_WINDOWS_TOTAL,
             "Total number of candle windows marked incomplete by aggregator gap markers"
+        );
+        describe_gauge!(
+            MARKET_DATA_AGGREGATOR_RETAINED_CLOSED_CANDLES,
+            "Number of closed candles retained in aggregator hot state, labelled by shard"
+        );
+        describe_counter!(
+            MARKET_DATA_AGGREGATOR_CLOSED_CANDLES_EVICTED_TOTAL,
+            "Total number of closed candles evicted from aggregator hot state by the per-key cap"
+        );
+        describe_counter!(
+            MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL,
+            "Total number of trade corrections rejected by the aggregator correction contract"
+        );
+        describe_counter!(
+            MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL,
+            "Total number of gap-affected candle windows skipped by the aggregator correction contract"
         );
     }
 }

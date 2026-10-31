@@ -78,6 +78,8 @@ pub struct RestoreOptions {
     pub intervals: Vec<CandleInterval>,
     pub shard_count: usize,
     pub allowed_lateness: DurationMilliseconds,
+    pub max_closed_candles_per_key: usize,
+    pub correction_cutoff: DurationMilliseconds,
     pub replay_start_policy: ReplayStartPolicy,
     pub expected_schema_version: u32,
 }
@@ -94,6 +96,8 @@ impl RestoreOptions {
             intervals: config.intervals.clone(),
             shard_count: config.shard_count,
             allowed_lateness: config.processor_config().allowed_lateness,
+            max_closed_candles_per_key: config.processor_config().max_closed_candles_per_key,
+            correction_cutoff: config.processor_config().correction_cutoff,
             replay_start_policy: config.replay_start_policy,
             expected_schema_version: config.state_schema_version,
         }
@@ -124,7 +128,13 @@ where
     let started = Instant::now();
     let result = restore_shard_inner(store, connect_archive, options).await;
     let outcome = match &result {
-        Ok(restored) => restored.restored_from.label(),
+        Ok(restored) => {
+            AggregatorMetrics::record_retained_closed_candles(
+                options.shard.get(),
+                restored.state.closed_candles_len() as u64,
+            );
+            restored.restored_from.label()
+        }
         Err(_) => "error",
     };
     AggregatorMetrics::record_state_restore(options.shard.get(), outcome, started.elapsed());
@@ -178,15 +188,26 @@ where
                     shard.get(),
                     Duration::from_millis(age.0.max(0) as u64),
                 );
+                let mut state = checkpoint.state;
+                let pruned = state.prune_closed_candles_to_cap(options.max_closed_candles_per_key);
+                if pruned > 0 {
+                    warn!(
+                        shard = %shard,
+                        pruned_closed_candles = pruned,
+                        max_closed_candles_per_key = options.max_closed_candles_per_key,
+                        "pruned closed candles from restored checkpoint to the current per-key cap"
+                    );
+                }
                 info!(
                     shard = %shard,
                     next_sequence = checkpoint.next_sequence,
                     watermark = ?checkpoint.watermark,
-                    open_candles = checkpoint.state.open_candles_len(),
+                    open_candles = state.open_candles_len(),
+                    closed_candles = state.closed_candles_len(),
                     "restored aggregator shard from checkpoint"
                 );
                 return Ok(RestoredShard {
-                    state: checkpoint.state,
+                    state,
                     start: ConsumerStart::Sequence(checkpoint.next_sequence),
                     restored_from: RestoreSource::Checkpoint,
                     rebuilt_from_archive: false,
@@ -234,6 +255,8 @@ where
         &options.intervals,
         options.shard_count,
         options.allowed_lateness,
+        options.max_closed_candles_per_key,
+        options.correction_cutoff,
         options.expected_schema_version,
     )
     .await?;
@@ -280,6 +303,8 @@ pub async fn rebuild_state_from_archive(
     intervals: &[CandleInterval],
     shard_count: usize,
     allowed_lateness: DurationMilliseconds,
+    max_closed_candles_per_key: usize,
+    correction_cutoff: DurationMilliseconds,
 ) -> BpResult<AggregatorState> {
     Ok(rebuild_state_from_archive_outcome(
         archive,
@@ -287,6 +312,8 @@ pub async fn rebuild_state_from_archive(
         intervals,
         shard_count,
         allowed_lateness,
+        max_closed_candles_per_key,
+        correction_cutoff,
         STATE_SCHEMA_VERSION,
     )
     .await?
@@ -301,12 +328,15 @@ pub async fn rebuild_state_from_archive(
 /// inputs therefore reproduces the same deterministic output ids; callers that
 /// intentionally regenerate outputs under a new lineage, such as the rebuilder,
 /// must assign a fresh epoch themselves.
+#[allow(clippy::too_many_arguments)]
 pub async fn rebuild_state_from_archive_with_schema(
     archive: &mut dyn ArchivedEventSource,
     shard: ShardId,
     intervals: &[CandleInterval],
     shard_count: usize,
     allowed_lateness: DurationMilliseconds,
+    max_closed_candles_per_key: usize,
+    correction_cutoff: DurationMilliseconds,
     state_schema_version: u32,
 ) -> BpResult<AggregatorState> {
     Ok(rebuild_state_from_archive_outcome(
@@ -315,22 +345,32 @@ pub async fn rebuild_state_from_archive_with_schema(
         intervals,
         shard_count,
         allowed_lateness,
+        max_closed_candles_per_key,
+        correction_cutoff,
         state_schema_version,
     )
     .await?
     .state)
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn rebuild_state_from_archive_outcome(
     archive: &mut dyn ArchivedEventSource,
     shard: ShardId,
     intervals: &[CandleInterval],
     shard_count: usize,
     allowed_lateness: DurationMilliseconds,
+    max_closed_candles_per_key: usize,
+    correction_cutoff: DurationMilliseconds,
     state_schema_version: u32,
 ) -> BpResult<RebuiltArchiveState> {
-    let config = ProcessorConfig::new(intervals.to_vec(), allowed_lateness)
-        .with_state_schema_version(state_schema_version);
+    let config = ProcessorConfig::new(
+        intervals.to_vec(),
+        allowed_lateness,
+        max_closed_candles_per_key,
+        correction_cutoff,
+    )
+    .with_state_schema_version(state_schema_version);
     let mut processor = CandleProcessor::with_config(config);
     let mut decoders = HashMap::new();
     let mut replayed = 0_u64;

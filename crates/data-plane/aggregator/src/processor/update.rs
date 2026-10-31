@@ -15,6 +15,14 @@ pub struct ProcessorUpdate {
     /// Trades that arrived after their candle's allowed-lateness window closed
     /// and were applied as closed-candle corrections.
     pub late_trades: usize,
+    /// Closed-window corrections rejected by the correction cutoff or per-key
+    /// cap before any candle was mutated.
+    pub out_of_contract_trades: usize,
+    /// Gap-affected windows skipped because they are outside the correction
+    /// contract. The source gap itself is still recorded.
+    pub out_of_contract_gap_windows: usize,
+    /// Closed candles evicted from hot state by the per-key cap.
+    pub evicted_closed_candles: usize,
 }
 
 impl ProcessorUpdate {
@@ -24,6 +32,9 @@ impl ProcessorUpdate {
             && self.incomplete_windows.is_empty()
             && self.duplicates == 0
             && self.late_trades == 0
+            && self.out_of_contract_trades == 0
+            && self.out_of_contract_gap_windows == 0
+            && self.evicted_closed_candles == 0
     }
 
     /// Keeps only the last open-candle value for each [`platform_market_data::candle::CandleKey`].

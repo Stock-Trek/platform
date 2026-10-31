@@ -27,6 +27,13 @@ pub struct AggregatorConfig {
     pub intervals: Vec<CandleInterval>,
     /// How long after a candle window ends a late event may still update it.
     pub allowed_lateness: Duration,
+    /// Maximum number of closed candles retained in hot state per candle key.
+    pub max_closed_candles_per_key: usize,
+    /// How far behind the event-time watermark a closed candle may still be
+    /// corrected.
+    pub correction_cutoff: Duration,
+    /// Maximum configured worst-case hot memory for closed candles per shard.
+    pub closed_candle_memory_budget_bytes: u64,
     /// How often keyed state is checkpointed while processing.
     pub checkpoint_interval: Duration,
     /// KV bucket for checkpoints and writer leases.
@@ -71,6 +78,10 @@ impl AggregatorConfig {
             self.intervals.clone(),
             DurationMilliseconds(
                 i64::try_from(self.allowed_lateness.as_millis()).unwrap_or(i64::MAX),
+            ),
+            self.max_closed_candles_per_key,
+            DurationMilliseconds(
+                i64::try_from(self.correction_cutoff.as_millis()).unwrap_or(i64::MAX),
             ),
         )
         .with_state_schema_version(self.state_schema_version)
