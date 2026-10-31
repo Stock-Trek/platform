@@ -7,10 +7,7 @@ use platform_market_data::candle::CandleInterval;
 use platform_types::new_types::DurationMilliseconds;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
-
-pub(super) const CEX_ID_COUNT: u64 = 1;
-
-pub(super) const ASSET_ID_COUNT: u64 = 28;
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 
 pub(super) const ESTIMATED_BYTES_PER_CLOSED_CANDLE: u64 = 512;
 
@@ -202,10 +199,12 @@ impl RetentionLimits {
                 "must be greater than zero",
             ));
         }
-        let asset_pairs = ASSET_ID_COUNT
-            .checked_mul(ASSET_ID_COUNT)
+        let cex_id_count = u64::try_from(CexId::COUNT).map_err(|_| overflow_error())?;
+        let asset_id_count = u64::try_from(AssetId::COUNT).map_err(|_| overflow_error())?;
+        let asset_pairs = asset_id_count
+            .checked_mul(asset_id_count)
             .ok_or_else(overflow_error)?;
-        let static_pair_ceiling = CEX_ID_COUNT
+        let static_pair_ceiling = cex_id_count
             .checked_mul(asset_pairs)
             .ok_or_else(overflow_error)?;
         let static_key_ceiling = static_pair_ceiling

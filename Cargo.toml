@@ -1,6 +1,7 @@
 [workspace]
 resolver = "2"
 members = ["crates/*/*"]
+exclude = ["vendor/stock-trek-types"]
 
 [workspace.package]
 version = "0.2.0"
@@ -117,3 +118,6 @@ zip = "9"
 [profile.release]
 lto = "thin"
 codegen-units = 1
+
+[patch.crates-io]
+stock-trek-types = { path = "vendor/stock-trek-types" }
