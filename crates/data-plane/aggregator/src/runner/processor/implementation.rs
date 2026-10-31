@@ -81,11 +81,6 @@ where
         self
     }
 
-    /// Installs an already-created quiesce receiver.
-    pub fn with_quiesce_receiver(self, receiver: QuiesceReceiver) -> Self {
-        self.with_quiesce_signal(receiver)
-    }
-
     /// Restores keyed state, for example from a checkpoint or archive rebuild.
     pub fn with_state(mut self, state: AggregatorState) -> Self {
         self.state = state;
