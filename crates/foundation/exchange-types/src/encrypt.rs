@@ -8,9 +8,10 @@ use rsa::{
 };
 use secrecy::{ExposeSecret, SecretSlice};
 use sha2::Sha512;
-use strum::Display;
+use strum::{Display, EnumString};
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Display, EnumString, Clone, Copy, PartialEq, Eq, Hash)]
+#[strum(serialize_all = "snake_case")]
 pub enum EncryptionAlgorithm {
     Null,
     EcdsaP256,

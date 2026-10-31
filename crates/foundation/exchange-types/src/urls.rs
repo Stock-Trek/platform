@@ -1,12 +1,13 @@
 pub use platform_types::protocol::Protocol;
 use serde::{Deserialize, Serialize};
-use strum::Display;
+use strum::{Display, EnumString};
 
 pub trait Urls {
     fn default(&self, protocol: Protocol, trading_mode: TradingMode) -> &str;
 }
 
-#[derive(Debug, Display, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Display, EnumString, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[strum(serialize_all = "snake_case")]
 pub enum TradingMode {
     Real,
     Paper,

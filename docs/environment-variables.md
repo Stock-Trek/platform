@@ -71,6 +71,8 @@ sections list the additional variables read by each process.
 | `BACKFILLER_EVENT_SUBJECT_PREFIX` | NATS subject prefix for replayed market events. |
 | `BACKFILLER_EXCHANGE` | Exchange identifier to backfill, for example `binance`. |
 | `BACKFILLER_EXCHANGE_HTTP_URL` | Exchange REST base URL using the `http` or `https` scheme, used to fetch historical trades. |
+| `BACKFILLER_EXCHANGE_SIGNING_ALGORITHM` | Exchange request signing algorithm. Only `ed25519` is currently supported. |
+| `BACKFILLER_EXCHANGE_TRADING_MODE` | Exchange trading mode: `real` for production or `paper` for testnet. |
 | `BACKFILLER_GAP_SUBJECT_PREFIX` | NATS subject prefix carrying gap markers from the ingester. |
 | `BACKFILLER_NATS_URL` | NATS URL used to receive gap markers and publish replayed events. |
 
@@ -236,6 +238,13 @@ environment. The backfiller and Git webhook load every parameter under `SECRETS_
 look up secrets by name:
 
 - The Git webhook expects `GITHUB_WEBHOOK_SECRET`.
-- The backfiller expects `BACKFILLER_EXCHANGE_API_KEY`.
+- The backfiller derives one API key/secret pair per exchange and trading mode from
+  `BACKFILLER_EXCHANGE`, `BACKFILLER_EXCHANGE_TRADING_MODE`, and the mode's canonical
+  `real` or `paper` name. For Binance in real mode it reads
+  `BACKFILLER_EXCHANGE_BINANCE_REAL_API_KEY` and
+  `BACKFILLER_EXCHANGE_BINANCE_REAL_API_SECRET`; in paper mode it reads
+  `BACKFILLER_EXCHANGE_BINANCE_PAPER_API_KEY` and
+  `BACKFILLER_EXCHANGE_BINANCE_PAPER_API_SECRET`. Every exchange uses the same pattern,
+  so multiple exchanges can share one SSM path.
 
 These names are SSM parameter names, not environment variables.
