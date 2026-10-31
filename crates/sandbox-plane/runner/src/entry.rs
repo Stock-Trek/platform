@@ -13,6 +13,11 @@ Usage:
 pub struct Entry;
 
 impl Entry {
+    pub fn run_command(command: Command) -> i32 {
+        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Runner::run(command)))
+            .unwrap_or(ExitCode::BotErrorPanic.code())
+    }
+
     /// # Safety
     /// This is called from the host binary which must ensure correct args
     pub unsafe fn run(argc: i32, argv: *const *const c_char) -> i32 {
@@ -51,8 +56,7 @@ impl Entry {
             }
             _ => return ExitCode::ServerEntryFailedToParseCommand.code(),
         };
-        std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Runner::run(command)))
-            .unwrap_or(ExitCode::BotErrorPanic.code())
+        Self::run_command(command)
     }
 }
 

@@ -26,10 +26,7 @@
 use platform_exit_codes::ExitCode;
 use platform_runner::{command::Command, entry::Entry};
 use serde_json::{Value, json};
-use std::{
-    ffi::{CString, NulError},
-    io::{self, Read},
-};
+use std::io::{self, Read};
 
 struct BuildRunner;
 
@@ -49,13 +46,7 @@ impl BuildRunner {
             }
         };
 
-        match Self::invoke(&command) {
-            Ok(exit_code) => exit_code,
-            Err(error) => {
-                eprintln!("build-runner: invalid argument: {error}");
-                ExitCode::ServerEntryInvalidArgument.code()
-            }
-        }
+        Entry::run_command(command)
     }
 
     /// Deserialise the request body into a `Command`.
@@ -65,62 +56,6 @@ impl BuildRunner {
         }
         serde_json::from_str(body)
             .map_err(|error| format!("body is not a valid run request: {error}"))
-    }
-
-    /// Invoke the algorithm entry point with the resolved arguments.
-    fn invoke(command: &Command) -> Result<i32, String> {
-        let args = Self::args(command)?;
-        let args = args
-            .iter()
-            .map(|arg| Self::cstring(arg))
-            .collect::<Result<Vec<_>, _>>()
-            .map_err(|error| error.to_string())?;
-        let argv = args.iter().map(|arg| arg.as_ptr()).collect::<Vec<_>>();
-
-        // Safety: `argv` holds valid, NUL-terminated C strings for the duration of
-        // the call and its length matches the number of arguments passed to `entry`.
-        Ok(unsafe { Entry::run(argv.len() as i32, argv.as_ptr()) })
-    }
-
-    /// Build the argv layout expected by `entry` for `command`.
-    fn args(command: &Command) -> Result<Vec<&str>, String> {
-        match command {
-            Command::Algorithm { strategy_name } => {
-                Ok(vec!["build-runner", "Algorithm", strategy_name.as_str()])
-            }
-            Command::Execute {
-                strategy_name,
-                strategy_context_path,
-                portfolio_path,
-            } => Ok(vec![
-                "build-runner",
-                "Execute",
-                strategy_name.as_str(),
-                strategy_context_path.as_str(),
-                portfolio_path.as_str(),
-            ]),
-            Command::Metadata { strategy_name } => {
-                Ok(vec!["build-runner", "Metadata", strategy_name.as_str()])
-            }
-            Command::Preferences { strategy_name } => {
-                Ok(vec!["build-runner", "Preferences", strategy_name.as_str()])
-            }
-            Command::Signals {
-                strategy_name,
-                strategy_context_path,
-            } => Ok(vec![
-                "build-runner",
-                "Signals",
-                strategy_name.as_str(),
-                strategy_context_path.as_str(),
-            ]),
-            // `Command` is `#[non_exhaustive]`.
-            _ => Err(format!("unsupported command: {command:?}")),
-        }
-    }
-
-    fn cstring(value: &str) -> Result<CString, NulError> {
-        CString::new(value)
     }
 
     /// Borrow a `(pointer, length)` pair as a byte slice.
