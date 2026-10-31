@@ -7,18 +7,8 @@ use platform_market_data::candle::CandleInterval;
 use platform_types::new_types::DurationMilliseconds;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
-
-/// Number of variants in `stock_trek_types::cex::cex_id::CexId`.
-///
-/// Keep this in sync with the dependency. It can be replaced with
-/// `strum::EnumCount::COUNT` once `stock-trek-types` exposes the derive.
-pub(super) const CEX_ID_COUNT: u64 = 1;
-
-/// Number of variants in `stock_trek_types::cex::asset_id::AssetId`.
-///
-/// Keep this in sync with the dependency. It can be replaced with
-/// `strum::EnumCount::COUNT` once `stock-trek-types` exposes the derive.
-pub(super) const ASSET_ID_COUNT: u64 = 28;
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
+use strum::EnumCount;
 
 pub(super) const ESTIMATED_BYTES_PER_CLOSED_CANDLE: u64 = 512;
 
@@ -210,10 +200,12 @@ impl RetentionLimits {
                 "must be greater than zero",
             ));
         }
-        let asset_pairs = ASSET_ID_COUNT
-            .checked_mul(ASSET_ID_COUNT)
+        let asset_id_count = u64::try_from(AssetId::COUNT).map_err(|_| overflow_error())?;
+        let cex_id_count = u64::try_from(CexId::COUNT).map_err(|_| overflow_error())?;
+        let asset_pairs = asset_id_count
+            .checked_mul(asset_id_count)
             .ok_or_else(overflow_error)?;
-        let static_pair_ceiling = CEX_ID_COUNT
+        let static_pair_ceiling = cex_id_count
             .checked_mul(asset_pairs)
             .ok_or_else(overflow_error)?;
         let static_key_ceiling = static_pair_ceiling
@@ -322,16 +314,23 @@ mod tests {
 
         let limits = RetentionLimits::calculate(&intervals, &caps, 1).unwrap();
 
-        assert_eq!(limits.static_pair_ceiling, 784);
-        assert_eq!(limits.static_key_ceiling, 1_568);
-        assert_eq!(limits.worst_case_retained_candles_per_shard, 3_920);
+        let asset_id_count = u64::try_from(AssetId::COUNT).unwrap();
+        let cex_id_count = u64::try_from(CexId::COUNT).unwrap();
+        let static_pair_ceiling = cex_id_count * asset_id_count * asset_id_count;
+        assert_eq!(limits.static_pair_ceiling, static_pair_ceiling);
+        assert_eq!(limits.static_key_ceiling, static_pair_ceiling * 2);
+        let worst_case = static_pair_ceiling * 5;
+        assert_eq!(limits.worst_case_retained_candles_per_shard, worst_case);
         assert_eq!(
             limits.estimated_memory_bytes,
-            3_920 * ESTIMATED_BYTES_PER_CLOSED_CANDLE
+            worst_case * ESTIMATED_BYTES_PER_CLOSED_CANDLE
         );
 
         let per_shard_two = RetentionLimits::calculate(&intervals, &caps, 2).unwrap();
-        assert_eq!(per_shard_two.worst_case_retained_candles_per_shard, 1_960);
+        assert_eq!(
+            per_shard_two.worst_case_retained_candles_per_shard,
+            worst_case.div_ceil(2)
+        );
     }
 
     #[test]

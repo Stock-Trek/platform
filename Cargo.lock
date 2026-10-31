@@ -4243,6 +4243,7 @@ dependencies = [
  "serde",
  "serde_json",
  "stock-trek-types",
+ "strum 0.28.0",
  "tokio",
  "tracing",
 ]

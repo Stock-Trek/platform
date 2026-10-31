@@ -21,6 +21,7 @@ rust_decimal = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
+strum = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { workspace = true }
 
