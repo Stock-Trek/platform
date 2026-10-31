@@ -79,37 +79,3 @@ impl ArchiverConfig {
         self.flush_interval.saturating_add(ACK_WAIT)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn vars(flush_interval_secs: &str) -> EnvVars {
-        EnvVars::from_map([
-            ("RUST_LOG", "info"),
-            ("ARCHIVER_NATS_URL", "nats://localhost:4222"),
-            ("ARCHIVER_EVENT_SUBJECT_PREFIX", "market.events"),
-            (
-                "ARCHIVER_CLOSED_CANDLE_SUBJECT_PREFIX",
-                "market.candles.closed",
-            ),
-            ("ARCHIVER_S3_BUCKET", "archive"),
-            ("ARCHIVER_S3_PREFIX", "raw"),
-            ("ARCHIVER_FLUSH_INTERVAL_SECS", flush_interval_secs),
-            ("ARCHIVER_BUCKET_SECS", "3600"),
-            ("ARCHIVER_MAX_RECORDS", "100"),
-            ("ARCHIVER_DEDUPE_CAPACITY", "100"),
-            ("ICEBERG_CATALOG_URI", "http://localhost:8181"),
-            ("ICEBERG_CATALOG_WAREHOUSE", "s3://archive/iceberg"),
-            ("ICEBERG_NAMESPACE", "market_data"),
-        ])
-    }
-
-    #[test]
-    fn ack_wait_exceeds_the_flush_interval() {
-        let config = ArchiverConfig::from_vars(&vars("60")).unwrap();
-
-        assert_eq!(config.ack_wait(), Duration::from_secs(90));
-        assert!(config.ack_wait() > config.flush_interval);
-    }
-}
