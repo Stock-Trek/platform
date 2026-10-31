@@ -37,22 +37,6 @@ pub struct Artifacts {
 }
 
 impl Artifacts {
-    #[cfg(test)]
-    pub fn new(
-        signed_post: SignedPost,
-        source_get_url: String,
-        source_dir: PathBuf,
-        build_cache_dir: PathBuf,
-    ) -> BpResult<Self> {
-        Self::with_source_limits(
-            signed_post,
-            source_get_url,
-            source_dir,
-            build_cache_dir,
-            SourceLimits::default(),
-        )
-    }
-
     pub fn with_source_limits(
         signed_post: SignedPost,
         source_get_url: String,
