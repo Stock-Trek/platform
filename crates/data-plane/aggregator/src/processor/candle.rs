@@ -6,7 +6,7 @@
 
 use super::{CandleProcessor, ProcessorUpdate};
 use platform_market_data::{
-    candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
+    candle::{AlignedWindow, AlignedWindowExt, Candle, CandleKey, ClosedCandle},
     decoders::trade::{Trade, TradeDecoderFactory},
 };
 use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
@@ -24,10 +24,7 @@ impl CandleProcessor {
     ) {
         let mut interval_bounds = Vec::with_capacity(self.config.intervals.len());
         for interval in &self.config.intervals {
-            let (Ok(candle_start), Ok(candle_end)) = (
-                interval.start_for(trade.timestamp),
-                interval.end_for(trade.timestamp),
-            ) else {
+            let Ok((candle_start, candle_end)) = interval.bounds_for(trade.timestamp) else {
                 Self::record_invalid_trade();
                 return;
             };
@@ -137,15 +134,12 @@ impl CandleProcessor {
     fn open_closed_correction(
         &mut self,
         trade: &Trade,
-        interval: CandleInterval,
+        interval: AlignedWindow,
         watermark: Option<TimestampMilliseconds>,
         update: &mut ProcessorUpdate,
     ) {
         let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
-        let (Ok(candle_start), Ok(candle_end)) = (
-            interval.start_for(trade.timestamp),
-            interval.end_for(trade.timestamp),
-        ) else {
+        let Ok((candle_start, candle_end)) = interval.bounds_for(trade.timestamp) else {
             Self::record_invalid_trade();
             return;
         };
@@ -198,7 +192,7 @@ impl CandleProcessor {
         ));
     }
 
-    pub(super) fn max_closed_candles(&self, interval: CandleInterval) -> usize {
+    pub(super) fn max_closed_candles(&self, interval: AlignedWindow) -> usize {
         self.config
             .max_closed_candles(interval)
             .unwrap_or(usize::MAX)
@@ -229,7 +223,7 @@ impl CandleProcessor {
         warn!(
             exchange = %trade.exchange,
             trading_pair = ?trade.trading_pair,
-            interval = %key.interval,
+            interval = %key.interval.label(),
             window_start = window_start.0,
             window_end = window_end.0,
             watermark = ?watermark.map(|value| value.0),

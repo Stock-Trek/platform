@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
+    candle::{Candle, CandleKey, ClosedCandle, parse_interval},
     event::{GapMarker, MarketEvent},
 };
 use platform_types::new_types::TimestampMilliseconds;
@@ -23,7 +23,7 @@ fn closed_candle() -> ClosedCandle {
         key: CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-            CandleInterval::from_label("1m").unwrap(),
+            parse_interval("1m").unwrap(),
         ),
         market_candle: MarketCandle::new(
             60_000,

@@ -73,10 +73,10 @@ fn every_interval_for_a_pair_uses_the_same_shard() {
     let first = CandleKey::new(
         CexId::Binance,
         stock_trek_types::cex::trading_pair::TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-        platform_market_data::candle::CandleInterval::from_label("1m").unwrap(),
+        platform_market_data::candle::parse_interval("1m").unwrap(),
     );
     let second = CandleKey {
-        interval: platform_market_data::candle::CandleInterval::from_label("5m").unwrap(),
+        interval: platform_market_data::candle::parse_interval("5m").unwrap(),
         ..first.clone()
     };
 
@@ -148,10 +148,10 @@ async fn router_publishes_to_shard_subject_then_acknowledges() {
         shard_subject_prefix: "aggregator.shards".to_string(),
         shard_count: 4,
         shard_index: None,
-        intervals: vec![platform_market_data::candle::CandleInterval::from_label("1m").unwrap()],
+        intervals: vec![platform_market_data::candle::parse_interval("1m").unwrap()],
         allowed_lateness: std::time::Duration::from_millis(5_000),
         max_closed_candles_per_interval: std::collections::BTreeMap::from([(
-            platform_market_data::candle::CandleInterval::from_label("1m").unwrap(),
+            platform_market_data::candle::parse_interval("1m").unwrap(),
             usize::MAX,
         )]),
         correction_cutoff: platform_types::new_types::DurationMilliseconds(i64::MAX),

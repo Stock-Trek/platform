@@ -357,7 +357,7 @@ fn market_order_book_dto_converts() {
 #[test]
 fn market_rolling_window_converts() {
     let window = MarketRollingWindow::try_from(MarketCandleMap(HashMap::from([(
-        0,
+        RollingWindow::Seconds5 as u32,
         Fixtures::candle_dto(),
     )])))
     .unwrap();
@@ -380,7 +380,7 @@ fn market_rolling_window_rejects_out_of_range_window() {
 #[test]
 fn market_aligned_window_converts() {
     let window = MarketAlignedWindow::try_from(MarketCandlesMap(HashMap::from([(
-        0,
+        AlignedWindow::Seconds5 as u32,
         MarketCandlesDto {
             candles_dto: vec![Fixtures::candle_dto(), Fixtures::candle_dto()],
         },

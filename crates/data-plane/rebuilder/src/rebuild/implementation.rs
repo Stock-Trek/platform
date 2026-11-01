@@ -4,7 +4,7 @@ use platform_aggregator::{
 };
 use platform_errors::BpResult;
 use platform_market_data::{
-    candle::ClosedCandle,
+    candle::{AlignedWindowExt, ClosedCandle},
     decoders::trade::{SharedTradeDecoder, Trade, TradeDecoderFactory},
     event::MarketEvent,
 };

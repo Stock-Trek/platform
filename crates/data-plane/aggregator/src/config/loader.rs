@@ -14,7 +14,7 @@ use super::replay::ReplayStartPolicy;
 use platform_archive::RoutingBucket;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::CandleInterval;
+use platform_market_data::candle::all_intervals;
 use platform_nats::NatsSubject;
 use platform_runtime::Config;
 use std::time::Duration;
@@ -36,7 +36,7 @@ impl AggregatorConfig {
         let closed_candle_subject_prefix =
             Config::required_nats_subject(vars, AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX)?;
 
-        let intervals = CandleInterval::all();
+        let intervals = all_intervals();
 
         let checkpoint_interval =
             Config::required_positive_duration_secs(vars, AGGREGATOR_CHECKPOINT_INTERVAL_SECS)?;

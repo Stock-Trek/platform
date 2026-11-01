@@ -1,8 +1,7 @@
 use super::{ArchiveHour, ArchivePath};
 use crate::{ArchiveKind, ArchivePartition, routing::RoutingBucket};
 use chrono::{TimeZone, Utc};
-use platform_market_data::candle::CandleInterval;
-use platform_market_data::candle::CandleKey;
+use platform_market_data::candle::{CandleKey, parse_interval};
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
@@ -25,7 +24,7 @@ fn candle_partition() -> ArchivePartition {
         candle: CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-            CandleInterval::from_label("1h").unwrap(),
+            parse_interval("1h").unwrap(),
         ),
     }
 }

@@ -4,14 +4,18 @@ use super::super::env::{
     AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
 };
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::CandleInterval;
+use platform_market_data::candle::{AlignedWindow, parse_interval};
 use platform_types::new_types::DurationMilliseconds;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
-use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
-use strum::EnumCount;
 
 pub(in crate::config) const ESTIMATED_BYTES_PER_CLOSED_CANDLE: u64 = 512;
+
+// `stock-trek-types` 0.5 exposes these enums as `#[non_exhaustive]` without
+// `EnumCount`, so keep the cardinalities used by the static memory ceiling
+// explicit. Update them when stock-trek adds an asset or exchange.
+pub(in crate::config) const ASSET_ID_COUNT: u64 = 28;
+pub(in crate::config) const CEX_ID_COUNT: u64 = 1;
 
 impl AggregatorConfig {
     pub(in crate::config) fn validate_kv_bucket(name: &str, bucket: &str) -> BpResult<()> {
@@ -32,8 +36,8 @@ impl AggregatorConfig {
     pub(in crate::config) fn parse_max_closed_candles_per_interval(
         name: &str,
         value: &str,
-        intervals: &[CandleInterval],
-    ) -> BpResult<BTreeMap<CandleInterval, usize>> {
+        intervals: &[AlignedWindow],
+    ) -> BpResult<BTreeMap<AlignedWindow, usize>> {
         let mut caps = BTreeMap::new();
         for entry in value.split(',').map(str::trim).filter(|v| !v.is_empty()) {
             let Some((label, count)) = entry.split_once('=') else {
@@ -42,7 +46,7 @@ impl AggregatorConfig {
                     format!("entry {entry:?} must use <interval>=<count>"),
                 ));
             };
-            let interval = CandleInterval::from_label(label.trim())
+            let interval = parse_interval(label.trim())
                 .map_err(|error| BpError::config_invalid_source(name, error))?;
             if !intervals.contains(&interval) {
                 return Err(BpError::config_invalid(
@@ -104,8 +108,8 @@ impl AggregatorConfig {
 impl AggregatorConfig {
     #[allow(clippy::too_many_arguments)]
     pub(in crate::config) fn validate_retention(
-        intervals: &[CandleInterval],
-        caps: &BTreeMap<CandleInterval, usize>,
+        intervals: &[AlignedWindow],
+        caps: &BTreeMap<AlignedWindow, usize>,
         shard_count: usize,
         allowed_lateness: Duration,
         correction_cutoff_ms: u64,
@@ -192,8 +196,8 @@ pub(in crate::config) struct RetentionLimits {
 
 impl RetentionLimits {
     pub(in crate::config) fn calculate(
-        intervals: &[CandleInterval],
-        caps: &BTreeMap<CandleInterval, usize>,
+        intervals: &[AlignedWindow],
+        caps: &BTreeMap<AlignedWindow, usize>,
         shard_count: usize,
     ) -> BpResult<Self> {
         if shard_count == 0 {
@@ -202,12 +206,10 @@ impl RetentionLimits {
                 "must be greater than zero",
             ));
         }
-        let asset_id_count = u64::try_from(AssetId::COUNT).map_err(|_| Self::overflow_error())?;
-        let cex_id_count = u64::try_from(CexId::COUNT).map_err(|_| Self::overflow_error())?;
-        let asset_pairs = asset_id_count
-            .checked_mul(asset_id_count)
+        let asset_pairs = ASSET_ID_COUNT
+            .checked_mul(ASSET_ID_COUNT)
             .ok_or_else(Self::overflow_error)?;
-        let static_pair_ceiling = cex_id_count
+        let static_pair_ceiling = CEX_ID_COUNT
             .checked_mul(asset_pairs)
             .ok_or_else(Self::overflow_error)?;
         let static_key_ceiling = static_pair_ceiling
@@ -241,7 +243,7 @@ impl RetentionLimits {
 }
 
 impl RetentionLimits {
-    fn format_caps(caps: &BTreeMap<CandleInterval, usize>) -> String {
+    fn format_caps(caps: &BTreeMap<AlignedWindow, usize>) -> String {
         caps.iter()
             .map(|(interval, cap)| format!("{}={cap}", interval.label()))
             .collect::<Vec<_>>()

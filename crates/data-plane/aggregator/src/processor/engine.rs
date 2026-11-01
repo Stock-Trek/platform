@@ -5,7 +5,7 @@ use super::{ProcessorConfig, ProcessorUpdate};
 use crate::state::{AggregatorState, SequenceRange, StreamProgress};
 use platform_errors::BpResult;
 use platform_market_data::{
-    candle::{CandleInterval, ClosedCandle},
+    candle::{AlignedWindow, ClosedCandle},
     decoders::trade::{Trade, TradeDecoderFactory},
     event::{GapMarker, MarketEvent},
 };
@@ -20,7 +20,7 @@ pub struct CandleProcessor {
 }
 
 impl CandleProcessor {
-    pub fn new(intervals: Vec<CandleInterval>) -> Self {
+    pub fn new(intervals: Vec<AlignedWindow>) -> Self {
         Self::with_config(ProcessorConfig::with_intervals(intervals))
     }
 

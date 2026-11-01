@@ -3,7 +3,7 @@
 use super::{CandleProcessor, ProcessorConfig};
 use crate::state::{AggregatorState, SequenceRange};
 use platform_market_data::{
-    candle::{CandleInterval, CandleKey},
+    candle::{AlignedWindow, CandleKey, parse_interval},
     decoders::trade::Trade,
     event::{GapMarker, MarketEvent},
 };
@@ -33,8 +33,8 @@ fn event(sequence: u64, timestamp: i64) -> MarketEvent {
     }
 }
 
-fn one_minute() -> CandleInterval {
-    CandleInterval::from_label("1m").unwrap()
+fn one_minute() -> AlignedWindow {
+    parse_interval("1m").unwrap()
 }
 
 fn gap(detected_at: i64) -> GapMarker {
@@ -599,8 +599,8 @@ fn open_updates_are_coalesced_by_key_keeping_the_last_value() {
 #[test]
 fn update_includes_every_configured_interval() {
     let mut processor = CandleProcessor::new(vec![
-        CandleInterval::from_label("1m").unwrap(),
-        CandleInterval::from_label("5m").unwrap(),
+        parse_interval("1m").unwrap(),
+        parse_interval("5m").unwrap(),
     ]);
     let update = processor.apply_trade(&trade("100", 61_000));
 
@@ -623,8 +623,8 @@ fn late_trades_do_not_reopen_a_closed_candle() {
 }
 
 fn retention_config(
-    intervals: Vec<CandleInterval>,
-    caps: &[(CandleInterval, usize)],
+    intervals: Vec<AlignedWindow>,
+    caps: &[(AlignedWindow, usize)],
     allowed_lateness: DurationMilliseconds,
     correction_cutoff: DurationMilliseconds,
 ) -> ProcessorConfig {
@@ -727,7 +727,7 @@ fn a_correction_for_a_cap_evicted_window_is_rejected() {
 #[test]
 fn different_intervals_apply_their_own_caps() {
     let one_minute = one_minute();
-    let five_minutes = CandleInterval::from_label("5m").unwrap();
+    let five_minutes = parse_interval("5m").unwrap();
     let mut processor = CandleProcessor::with_config(retention_config(
         vec![one_minute, five_minutes],
         &[(one_minute, 1), (five_minutes, 1)],

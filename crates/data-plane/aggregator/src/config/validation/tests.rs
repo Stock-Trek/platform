@@ -1,16 +1,13 @@
 use super::super::AggregatorConfig;
-use super::implementation::{ESTIMATED_BYTES_PER_CLOSED_CANDLE, RetentionLimits};
-use platform_market_data::candle::CandleInterval;
+use super::implementation::{
+    ASSET_ID_COUNT, CEX_ID_COUNT, ESTIMATED_BYTES_PER_CLOSED_CANDLE, RetentionLimits,
+};
+use platform_market_data::candle::{AlignedWindow, parse_interval};
 use std::collections::BTreeMap;
 use std::time::Duration;
-use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
-use strum::EnumCount;
 
-fn intervals() -> Vec<CandleInterval> {
-    vec![
-        CandleInterval::from_label("1m").unwrap(),
-        CandleInterval::from_label("5m").unwrap(),
-    ]
+fn intervals() -> Vec<AlignedWindow> {
+    vec![parse_interval("1m").unwrap(), parse_interval("5m").unwrap()]
 }
 
 #[test]
@@ -50,9 +47,7 @@ fn retention_limits_use_the_full_static_pair_ceiling() {
 
     let limits = RetentionLimits::calculate(&intervals, &caps, 1).unwrap();
 
-    let asset_id_count = u64::try_from(AssetId::COUNT).unwrap();
-    let cex_id_count = u64::try_from(CexId::COUNT).unwrap();
-    let static_pair_ceiling = cex_id_count * asset_id_count * asset_id_count;
+    let static_pair_ceiling = CEX_ID_COUNT * ASSET_ID_COUNT * ASSET_ID_COUNT;
     assert_eq!(limits.static_pair_ceiling, static_pair_ceiling);
     assert_eq!(limits.static_key_ceiling, static_pair_ceiling * 2);
     let worst_case = static_pair_ceiling * 5;
