@@ -3,7 +3,7 @@ use strum::EnumString;
 
 /// What a shard writer does with persisted state when it starts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, EnumString)]
-#[strum(serialize_all = "lowercase", ascii_case_insensitive)]
+#[strum(serialize_all = "snake_case")]
 pub enum ReplayStartPolicy {
     /// Resume from a compatible checkpoint, rebuilding from the archive only
     /// when the checkpoint is missing, stale, or incompatible.
