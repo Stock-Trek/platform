@@ -130,7 +130,7 @@ impl RebuildOptions {
             .processor
             .intervals
             .iter()
-            .map(|interval| interval.duration().0)
+            .map(|interval| i64::try_from(interval.millis_upper_bound()).unwrap_or(i64::MAX))
             .max()
             .unwrap_or_default();
         let allowed_lateness = self.processor.allowed_lateness.0;

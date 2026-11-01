@@ -2,7 +2,7 @@
 
 use super::AggregatorState;
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::{Candle, CandleInterval, CandleKey};
+use platform_market_data::candle::{AlignedWindow, Candle, CandleKey};
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -38,7 +38,7 @@ impl AggregatorState {
 
     pub fn closed_candles_len_by_interval(
         &self,
-    ) -> std::collections::BTreeMap<CandleInterval, usize> {
+    ) -> std::collections::BTreeMap<AlignedWindow, usize> {
         let mut counts = std::collections::BTreeMap::new();
         for (key, candles) in &self.closed_candles {
             *counts.entry(key.interval).or_default() += candles.len();
@@ -92,7 +92,7 @@ impl AggregatorState {
 
     pub fn prune_closed_candles_to_caps(
         &mut self,
-        caps: &std::collections::BTreeMap<CandleInterval, usize>,
+        caps: &std::collections::BTreeMap<AlignedWindow, usize>,
     ) -> BpResult<Vec<Candle>> {
         let mut evicted = Vec::new();
         for (key, candles) in &mut self.closed_candles {
@@ -116,7 +116,7 @@ impl AggregatorState {
         Ok(evicted)
     }
 
-    pub fn candles_use_intervals(&self, intervals: &[CandleInterval]) -> bool {
+    pub fn candles_use_intervals(&self, intervals: &[AlignedWindow]) -> bool {
         self.open_candles
             .keys()
             .chain(self.closed_candles.keys())

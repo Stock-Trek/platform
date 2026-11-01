@@ -6,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::{Candle, CandleInterval, CandleKey, ClosedCandle};
+use platform_market_data::candle::{Candle, CandleKey, ClosedCandle, parse_interval};
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -124,7 +124,7 @@ fn key(interval: &str) -> CandleKey {
     CandleKey::new(
         CexId::Binance,
         TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-        CandleInterval::from_label(interval).unwrap(),
+        parse_interval(interval).unwrap(),
     )
 }
 
@@ -139,7 +139,7 @@ fn candle(interval: &str, close: f64) -> Candle {
         quantity: Decimal::ONE,
         timestamp: TimestampMilliseconds(61_000),
     };
-    Candle::open(&trade, CandleInterval::from_label(interval).unwrap()).unwrap()
+    Candle::open(&trade, parse_interval(interval).unwrap()).unwrap()
 }
 
 fn closed(candle: Candle) -> ClosedCandle {

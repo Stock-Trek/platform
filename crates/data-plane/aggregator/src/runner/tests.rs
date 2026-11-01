@@ -143,10 +143,10 @@ fn config() -> AggregatorConfig {
         shard_subject_prefix: "aggregator.shards".to_string(),
         shard_count: 1,
         shard_index: None,
-        intervals: vec![CandleInterval::from_label("1m").unwrap()],
+        intervals: vec![parse_interval("1m").unwrap()],
         allowed_lateness: std::time::Duration::from_millis(5_000),
         max_closed_candles_per_interval: std::collections::BTreeMap::from([(
-            CandleInterval::from_label("1m").unwrap(),
+            parse_interval("1m").unwrap(),
             usize::MAX,
         )]),
         correction_cutoff: platform_types::new_types::DurationMilliseconds(i64::MAX),
@@ -162,7 +162,7 @@ fn config() -> AggregatorConfig {
     }
 }
 
-use platform_market_data::candle::CandleInterval;
+use platform_market_data::candle::parse_interval;
 
 fn trade_event(timestamp_ms: i64) -> MarketEvent {
     MarketEvent {
@@ -419,11 +419,11 @@ async fn gap_markers_close_expired_candle_windows() {
 
 #[test]
 fn closed_open_keys_keep_a_newer_open_window() {
-    use platform_market_data::{candle::CandleInterval, decoders::trade::Trade};
+    use platform_market_data::{candle::parse_interval, decoders::trade::Trade};
     use rust_decimal::Decimal;
     use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
-    let interval = CandleInterval::from_label("1m").unwrap();
+    let interval = parse_interval("1m").unwrap();
     let pair = TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD);
     let key = CandleKey::new(CexId::Binance, pair, interval);
     let trade_at = |timestamp| Trade {
@@ -871,7 +871,7 @@ async fn propagates_source_error() {
 async fn count_only_retention_updates_reach_metrics_without_publishing_candles() {
     let recorder = TestRecorder::default();
     let processor = CandleProcessor::with_config(config().processor_config());
-    let interval = CandleInterval::from_label("1m").unwrap();
+    let interval = parse_interval("1m").unwrap();
     let update = ProcessorUpdate {
         closed_candle_evictions: 3,
         closed_candle_evictions_by_interval: std::collections::BTreeMap::from([(interval, 3)]),

@@ -1,4 +1,4 @@
-use super::interval::CandleInterval;
+use super::interval::AlignedWindow;
 use super::key::CandleKey;
 use crate::decoders::trade::Trade;
 use platform_errors::{BpError, BpResult};
@@ -71,18 +71,15 @@ impl TryFrom<CandleWire> for Candle {
 }
 
 impl Candle {
-    pub fn open(trade: &Trade, interval: CandleInterval) -> BpResult<Self> {
+    pub fn open(trade: &Trade, interval: AlignedWindow) -> BpResult<Self> {
         let price = Self::to_f64("price", trade.price)?;
         let quantity = Self::to_f64("quantity", trade.quantity)?;
         let quote_volume = price * quantity;
-        let start_time = interval
-            .start_for(trade.timestamp)
+        let bounds = interval
+            .bounds_for(trade.timestamp.0)
             .map_err(|error| BpError::candle_conversion("timestamp", error))?;
-        let end_time = interval
-            .end_for(trade.timestamp)
-            .map_err(|error| BpError::candle_conversion("timestamp", error))?;
-        let start_millis = Self::to_millis(start_time.0)?;
-        let end_millis = Self::to_millis(end_time.0)?;
+        let start_millis = Self::to_millis(bounds.lower)?;
+        let end_millis = Self::to_millis(bounds.upper)?;
         let duration_millis = end_millis - start_millis;
 
         Ok(Self {

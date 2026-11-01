@@ -5,7 +5,7 @@ use crate::{
 };
 use bytes::Bytes;
 use platform_market_data::{
-    candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
+    candle::{Candle, CandleKey, ClosedCandle, parse_interval},
     event::MarketEvent,
 };
 use platform_types::new_types::TimestampMilliseconds;
@@ -29,7 +29,7 @@ fn closed_candle(revision: u64) -> ClosedCandle {
         key: CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-            CandleInterval::from_label("60s").unwrap(),
+            parse_interval("60s").unwrap(),
         ),
         market_candle: MarketCandle::new(
             60_000,

@@ -4,7 +4,7 @@ use super::super::env::{
     AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
 };
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::CandleInterval;
+use platform_market_data::candle::{AlignedWindow, parse_interval};
 use platform_types::new_types::DurationMilliseconds;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
@@ -32,8 +32,8 @@ impl AggregatorConfig {
     pub(in crate::config) fn parse_max_closed_candles_per_interval(
         name: &str,
         value: &str,
-        intervals: &[CandleInterval],
-    ) -> BpResult<BTreeMap<CandleInterval, usize>> {
+        intervals: &[AlignedWindow],
+    ) -> BpResult<BTreeMap<AlignedWindow, usize>> {
         let mut caps = BTreeMap::new();
         for entry in value.split(',').map(str::trim).filter(|v| !v.is_empty()) {
             let Some((label, count)) = entry.split_once('=') else {
@@ -42,7 +42,7 @@ impl AggregatorConfig {
                     format!("entry {entry:?} must use <interval>=<count>"),
                 ));
             };
-            let interval = CandleInterval::from_label(label.trim())
+            let interval = parse_interval(label.trim())
                 .map_err(|error| BpError::config_invalid_source(name, error))?;
             if !intervals.contains(&interval) {
                 return Err(BpError::config_invalid(
@@ -104,8 +104,8 @@ impl AggregatorConfig {
 impl AggregatorConfig {
     #[allow(clippy::too_many_arguments)]
     pub(in crate::config) fn validate_retention(
-        intervals: &[CandleInterval],
-        caps: &BTreeMap<CandleInterval, usize>,
+        intervals: &[AlignedWindow],
+        caps: &BTreeMap<AlignedWindow, usize>,
         shard_count: usize,
         allowed_lateness: Duration,
         correction_cutoff_ms: u64,
@@ -192,8 +192,8 @@ pub(in crate::config) struct RetentionLimits {
 
 impl RetentionLimits {
     pub(in crate::config) fn calculate(
-        intervals: &[CandleInterval],
-        caps: &BTreeMap<CandleInterval, usize>,
+        intervals: &[AlignedWindow],
+        caps: &BTreeMap<AlignedWindow, usize>,
         shard_count: usize,
     ) -> BpResult<Self> {
         if shard_count == 0 {
@@ -241,7 +241,7 @@ impl RetentionLimits {
 }
 
 impl RetentionLimits {
-    fn format_caps(caps: &BTreeMap<CandleInterval, usize>) -> String {
+    fn format_caps(caps: &BTreeMap<AlignedWindow, usize>) -> String {
         caps.iter()
             .map(|(interval, cap)| format!("{}={cap}", interval.label()))
             .collect::<Vec<_>>()

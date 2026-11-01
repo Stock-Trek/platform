@@ -16,7 +16,7 @@ use platform_archive::{ArchiveKind, ArchivePath, ArchivedMarketEvent, Bucket, Ob
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult, ConfigError, Retryability};
 use platform_market_data::{
-    candle::{Candle, CandleInterval, CandleKey},
+    candle::{AlignedWindow, Candle, CandleKey, parse_interval},
     decoders::trade::{Trade, TradeDecoderFactory},
     event::MarketEvent,
 };
@@ -132,8 +132,8 @@ impl StateStore for FailingStateStore {
     }
 }
 
-fn interval() -> CandleInterval {
-    CandleInterval::from_label("1m").unwrap()
+fn interval() -> AlignedWindow {
+    parse_interval("1m").unwrap()
 }
 
 fn options(shard: ShardId, shard_count: usize) -> RestoreOptions {
@@ -732,7 +732,7 @@ async fn restore_prunes_only_the_intervals_whose_cap_shrank() {
     let store = InMemoryStateStore::new();
     let shard = ShardId::new(0);
     let one_minute = interval();
-    let five_minutes = CandleInterval::from_label("5m").unwrap();
+    let five_minutes = parse_interval("5m").unwrap();
     let mut state = AggregatorState::new();
     for (interval, timestamp) in [
         (one_minute, 60_000),

@@ -1,6 +1,6 @@
 use super::*;
 use platform_market_data::candle::{Candle, ClosedCandle};
-use platform_market_data::{candle::CandleInterval, decoders::trade::Trade};
+use platform_market_data::{candle::parse_interval, decoders::trade::Trade};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
@@ -13,7 +13,7 @@ fn closed_candle(source_offset: u64, state_epoch: u64) -> ClosedCandle {
         quantity: Decimal::ONE,
         timestamp: TimestampMilliseconds(61_000),
     };
-    let mut candle = Candle::open(&trade, CandleInterval::from_label("1m").unwrap()).unwrap();
+    let mut candle = Candle::open(&trade, parse_interval("1m").unwrap()).unwrap();
     candle.close();
     ClosedCandle::new(
         candle,

@@ -1,5 +1,5 @@
 use super::*;
-use platform_market_data::candle::{CandleInterval, CandleKey, ClosedCandle};
+use platform_market_data::candle::{CandleKey, ClosedCandle, parse_interval};
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek::markets::{MarketCandle, MarketOhlcv};
@@ -24,7 +24,7 @@ fn closed_candle() -> ArchiveRecord {
         key: CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-            CandleInterval::from_label("1m").unwrap(),
+            parse_interval("1m").unwrap(),
         ),
         market_candle: MarketCandle::new(
             60_000,

@@ -5,7 +5,7 @@ use arrow_array::{
 };
 use platform_errors::{BpError, BpResult};
 use platform_market_data::{
-    candle::{Candle, CandleInterval, CandleKey, CandleRevision, ClosedCandle},
+    candle::{Candle, CandleKey, CandleRevision, ClosedCandle, parse_interval},
     envelope::EnvelopeCodec,
     event::MarketEvent,
 };
@@ -102,7 +102,7 @@ impl ArchiveBatch {
                         "trading pair base and quote must differ",
                     ));
                 }
-                let interval = CandleInterval::from_label(interval.value(row))
+                let interval = parse_interval(interval.value(row))
                     .map_err(|error| Self::invalid_value("interval", interval.value(row), error))?;
                 let market_candle = MarketCandle::new(
                     Self::timestamp(start_time_millis_inc.value(row), "start_time_millis_inc")?,

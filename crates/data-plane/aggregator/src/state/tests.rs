@@ -1,5 +1,5 @@
 use super::*;
-use platform_market_data::candle::{Candle, CandleInterval};
+use platform_market_data::candle::{AlignedWindow, Candle, parse_interval};
 use platform_market_data::decoders::trade::Trade;
 use platform_market_data::event::GapMarker;
 use platform_types::new_types::TimestampMilliseconds;
@@ -22,7 +22,7 @@ fn trade(timestamp: i64) -> Trade {
 }
 
 fn candle() -> Candle {
-    Candle::open(&trade(61_000), CandleInterval::from_label("1m").unwrap()).unwrap()
+    Candle::open(&trade(61_000), parse_interval("1m").unwrap()).unwrap()
 }
 
 #[test]
@@ -303,13 +303,13 @@ fn schema_compatibility_can_be_checked_against_a_configured_version() {
     );
 }
 
-fn candle_for(interval: CandleInterval, timestamp: i64) -> Candle {
+fn candle_for(interval: AlignedWindow, timestamp: i64) -> Candle {
     let mut trade = trade(timestamp);
     trade.timestamp = TimestampMilliseconds(timestamp);
     Candle::open(&trade, interval).unwrap()
 }
 
-fn closed_candle_for(interval: CandleInterval, timestamp: i64) -> Candle {
+fn closed_candle_for(interval: AlignedWindow, timestamp: i64) -> Candle {
     let mut candle = candle_for(interval, timestamp);
     candle.close();
     candle
@@ -318,7 +318,7 @@ fn closed_candle_for(interval: CandleInterval, timestamp: i64) -> Candle {
 #[test]
 fn per_interval_cap_keeps_the_newest_candles() {
     let mut state = AggregatorState::new();
-    let interval = CandleInterval::from_label("1m").unwrap();
+    let interval = parse_interval("1m").unwrap();
     let key = candle_for(interval, 60_000).key.clone();
 
     for timestamp in [60_000, 120_000, 180_000] {
@@ -347,8 +347,8 @@ fn per_interval_cap_keeps_the_newest_candles() {
 #[test]
 fn caps_are_independent_between_intervals() {
     let mut state = AggregatorState::new();
-    let one_minute = CandleInterval::from_label("1m").unwrap();
-    let five_minutes = CandleInterval::from_label("5m").unwrap();
+    let one_minute = parse_interval("1m").unwrap();
+    let five_minutes = parse_interval("5m").unwrap();
     let one_minute_key = candle_for(one_minute, 60_000).key.clone();
     let five_minute_key = candle_for(five_minutes, 60_000).key.clone();
 
@@ -376,7 +376,7 @@ fn caps_are_independent_between_intervals() {
 #[test]
 fn replacing_a_retained_window_does_not_evict() {
     let mut state = AggregatorState::new();
-    let interval = CandleInterval::from_label("1m").unwrap();
+    let interval = parse_interval("1m").unwrap();
     let key = candle_for(interval, 60_000).key.clone();
 
     state.retain_closed_candle(closed_candle_for(interval, 60_000), 1);
@@ -394,7 +394,7 @@ fn replacing_a_retained_window_does_not_evict() {
 #[test]
 fn retaining_an_older_window_at_capacity_would_evict_the_candidate() {
     let mut state = AggregatorState::new();
-    let interval = CandleInterval::from_label("1m").unwrap();
+    let interval = parse_interval("1m").unwrap();
     let key = candle_for(interval, 120_000).key.clone();
 
     state.retain_closed_candle(closed_candle_for(interval, 120_000), 1);
@@ -407,7 +407,7 @@ fn retaining_an_older_window_at_capacity_would_evict_the_candidate() {
 #[test]
 fn multiple_keys_each_keep_their_own_cap() {
     let mut state = AggregatorState::new();
-    let interval = CandleInterval::from_label("1m").unwrap();
+    let interval = parse_interval("1m").unwrap();
     let mut other_trade = trade(61_000);
     other_trade.trading_pair = TradingPair::new(AssetId::Ethereum, AssetId::TetherUSD);
     let other_key = Candle::open(&other_trade, interval).unwrap().key.clone();
