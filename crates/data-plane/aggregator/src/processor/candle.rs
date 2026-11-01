@@ -6,7 +6,7 @@
 
 use super::{CandleProcessor, ProcessorUpdate};
 use platform_market_data::{
-    candle::{AlignedWindow, AlignedWindowExt, Candle, CandleKey, ClosedCandle},
+    candle::{AlignedWindow, Candle, CandleKey, ClosedCandle},
     decoders::trade::{Trade, TradeDecoderFactory},
 };
 use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
@@ -24,11 +24,15 @@ impl CandleProcessor {
     ) {
         let mut interval_bounds = Vec::with_capacity(self.config.intervals.len());
         for interval in &self.config.intervals {
-            let Ok((candle_start, candle_end)) = interval.bounds_for(trade.timestamp) else {
+            let Ok(bounds) = interval.bounds_for(trade.timestamp.0) else {
                 Self::record_invalid_trade();
                 return;
             };
-            interval_bounds.push((*interval, candle_start, candle_end));
+            interval_bounds.push((
+                *interval,
+                TimestampMilliseconds(bounds.lower),
+                TimestampMilliseconds(bounds.upper),
+            ));
         }
 
         for (interval, candle_start, candle_end) in interval_bounds {
@@ -139,10 +143,12 @@ impl CandleProcessor {
         update: &mut ProcessorUpdate,
     ) {
         let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
-        let Ok((candle_start, candle_end)) = interval.bounds_for(trade.timestamp) else {
+        let Ok(bounds) = interval.bounds_for(trade.timestamp.0) else {
             Self::record_invalid_trade();
             return;
         };
+        let candle_start = TimestampMilliseconds(bounds.lower);
+        let candle_end = TimestampMilliseconds(bounds.upper);
         if !self.is_within_correction_contract(candle_end, watermark) {
             self.record_out_of_contract_trade(
                 trade,

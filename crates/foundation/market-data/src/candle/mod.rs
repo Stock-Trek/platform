@@ -16,7 +16,7 @@ mod tests;
 
 pub use body::Candle;
 pub use closed::ClosedCandle;
-pub use interval::{AlignedWindowError, AlignedWindowExt, all_intervals, parse_interval};
+pub use interval::{AlignedWindowError, all_intervals, parse_interval};
 pub use key::CandleKey;
 pub use revision::CandleRevision;
 pub use stock_trek::markets::AlignedWindow;

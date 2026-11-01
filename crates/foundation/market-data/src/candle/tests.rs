@@ -27,15 +27,10 @@ fn intervals_are_parsed_and_aligned() {
     let interval = parse_interval("60s").unwrap();
     assert_eq!(interval, AlignedWindow::Seconds60);
     assert_eq!(interval.label(), "60s");
-    assert_eq!(interval.duration().0, 60_000);
-    assert_eq!(
-        interval.start_for(TimestampMilliseconds(61_234)).unwrap().0,
-        60_000
-    );
-    assert_eq!(
-        interval.end_for(TimestampMilliseconds(61_234)).unwrap().0,
-        120_000
-    );
+    assert_eq!(interval.millis_exact(), Some(60_000));
+    let bounds = interval.bounds_for(61_234).unwrap();
+    assert_eq!(bounds.lower, 60_000);
+    assert_eq!(bounds.upper, 120_000);
 }
 
 #[test]
@@ -57,11 +52,11 @@ fn non_canonical_interval_labels_are_rejected() {
 fn every_aligned_window_is_supported() {
     for window in AlignedWindow::iter() {
         assert!(
-            window.duration().0 > 0,
+            window.millis_exact().is_some() || window.months_exact().is_some(),
             "unsupported AlignedWindow variant {window:?}"
         );
         assert!(
-            window.bounds_for(TimestampMilliseconds(0)).is_ok(),
+            window.bounds_for(0).is_ok(),
             "unsupported AlignedWindow variant {window:?}"
         );
     }
@@ -90,28 +85,15 @@ fn calendar_intervals_use_calendar_bounds() {
     let interval = parse_interval("1mo").unwrap();
 
     assert_eq!(interval.label(), "1mo");
-    assert_eq!(
-        interval
-            .start_for(TimestampMilliseconds(1_704_067_200_000))
-            .unwrap()
-            .0,
-        1_704_067_200_000
-    );
-    assert_eq!(
-        interval
-            .end_for(TimestampMilliseconds(1_704_067_200_000))
-            .unwrap()
-            .0,
-        1_706_745_600_000
-    );
+    let bounds = interval.bounds_for(1_704_067_200_000).unwrap();
+    assert_eq!(bounds.lower, 1_704_067_200_000);
+    assert_eq!(bounds.upper, 1_706_745_600_000);
 }
 
 #[test]
-fn negative_timestamps_are_rejected() {
+fn negative_candle_timestamps_are_rejected() {
     let interval = parse_interval("1m").unwrap();
 
-    assert!(interval.start_for(TimestampMilliseconds(-1)).is_err());
-    assert!(interval.end_for(TimestampMilliseconds(-1)).is_err());
     assert!(Candle::open(&trade("100", "1", -1), interval).is_err());
 }
 
@@ -120,8 +102,8 @@ fn timestamp_bounds_that_overflow_are_rejected() {
     let minute = parse_interval("1m").unwrap();
     let month = parse_interval("1mo").unwrap();
 
-    assert!(minute.end_for(TimestampMilliseconds(i64::MAX)).is_err());
-    assert!(month.start_for(TimestampMilliseconds(i64::MAX)).is_err());
+    assert!(minute.bounds_for(i64::MAX).is_err());
+    assert!(month.bounds_for(i64::MAX).is_err());
     assert!(Candle::open(&trade("100", "1", i64::MAX), minute).is_err());
     assert!(Candle::open(&trade("100", "1", i64::MAX), month).is_err());
 }

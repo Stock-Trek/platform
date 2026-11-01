@@ -1,12 +1,10 @@
 # AlignedWindow gaps
 
-`stock-trek`'s `AlignedWindow` is the source of truth for candle intervals.
-This crate adds only the behaviour the enum does not provide:
+`stock-trek`'s `AlignedWindow` is the source of truth for candle intervals and
+window alignment. As of stock-trek 0.15.3, this repo only needs these additions:
 
 | Missing from `AlignedWindow` | Where this repo handles it |
 | --- | --- |
-| Window bounds containing an arbitrary timestamp | `AlignedWindowExt::bounds_for` returns the inclusive start and exclusive end. The enum only exposes `millis_upper_bound`, `checked_add`, and `checked_sub` relative to a known datetime. |
-| Calendar-aligned month and year flooring | `bounds_for` floors month/year windows to calendar boundaries; `checked_add_months` only advances from an existing datetime. |
-| Explicit rejection of future variants | `AlignedWindow` is `#[non_exhaustive]`, so external matches require a wildcard. `bounds_for` returns `AlignedWindowError::UnsupportedWindow` for any variant it does not explicitly align instead of silently applying a default duration. |
-| Canonical label serialization | `candle::interval::serde_label` serializes candle keys with `AlignedWindow::label()` rather than stock-trek's derived snake_case variant names. |
-| Case-insensitive label parsing | `parse_interval` trims and lowercases labels before `AlignedWindow::try_from`. Only the canonical labels emitted by `AlignedWindow::label` are accepted. |
+| Canonical label serialization | `candle::interval::serde_label` serializes candle keys with `AlignedWindow::label()` because stock-trek's derived serde form uses snake_case variant names such as `seconds60` instead of labels such as `60s`. |
+| Case-insensitive label parsing | `parse_interval` trims and lowercases labels before `AlignedWindow::try_from`, which only accepts exact canonical labels. |
+| Exact duration for calendar windows | `millis_upper_bound` gives an upper bound rather than the actual month or year length. The rebuilder uses it only to size its final flush window; candle bounds come from `AlignedWindow::bounds_for`. |
