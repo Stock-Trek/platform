@@ -21,6 +21,12 @@ impl SequenceRange {
         self.from_sequence <= sequence && sequence <= self.to_sequence
     }
 
+    /// Returns whether this range contains every sequence in the inclusive
+    /// `from_sequence..=to_sequence` interval.
+    pub fn covers(&self, from_sequence: u64, to_sequence: u64) -> bool {
+        self.from_sequence <= from_sequence && to_sequence <= self.to_sequence
+    }
+
     pub fn overlaps_or_adjacent(&self, other: &Self) -> bool {
         self.from_sequence <= other.to_sequence.saturating_add(1)
             && other.from_sequence <= self.to_sequence.saturating_add(1)

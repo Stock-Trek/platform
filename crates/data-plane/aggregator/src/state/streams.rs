@@ -60,6 +60,13 @@ impl StreamProgress {
             .any(|range| range.contains(sequence))
     }
 
+    /// Returns whether every sequence in the inclusive interval has been seen.
+    pub fn covers_sequence_range(&self, from_sequence: u64, to_sequence: u64) -> bool {
+        self.seen_sequences
+            .iter()
+            .any(|range| range.covers(from_sequence, to_sequence))
+    }
+
     /// Records a sequence and returns `false` when it had already been seen.
     pub fn observe_sequence(&mut self, sequence: u64) -> bool {
         if self.is_duplicate(sequence) {

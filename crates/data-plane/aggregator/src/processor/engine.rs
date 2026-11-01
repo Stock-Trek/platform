@@ -46,6 +46,10 @@ impl CandleProcessor {
             );
         }
         state.prune_stream_dedup();
+        if let Some(watermark) = state.watermark {
+            let cutoff = watermark - config.allowed_lateness;
+            state.prune_closed_windows(cutoff);
+        }
         Ok(Self { config, state })
     }
 
@@ -65,7 +69,8 @@ impl CandleProcessor {
         self.state
     }
 
-    /// Applies one decoded market event and closes any expired candle windows.
+    /// Applies one decoded market event, resolves any gaps whose missing
+    /// sequences are now fully covered, and closes expired candle windows.
     ///
     /// The event is deduplicated by `(exchange, stream, sequence)`. The
     /// watermark is advanced from the event's exchange timestamp, bounded by
@@ -88,6 +93,7 @@ impl CandleProcessor {
         for trade in trades {
             self.apply_trade_inner(trade, Some(&event.stream), &mut update);
         }
+        self.resolve_gaps(event.exchange, &event.stream, &mut update);
         self.close_expired(&mut update);
         update.coalesce_open();
         update
@@ -106,7 +112,8 @@ impl CandleProcessor {
 
     /// Records a gap as an incompleteness signal for the affected stream and
     /// candle windows, advances the event-time watermark, and closes windows
-    /// whose allowed-lateness window has elapsed.
+    /// whose allowed-lateness window has elapsed. A gap whose sequences have
+    /// already been observed is resolved immediately.
     pub fn apply_gap(&mut self, gap: &GapMarker) -> ProcessorUpdate {
         let mut update = ProcessorUpdate::default();
         let previous_stream_watermark = self.state.stream_watermark(gap.exchange, &gap.stream);
@@ -118,6 +125,7 @@ impl CandleProcessor {
         self.state.advance_watermark(gap.detected_at);
         self.state.record_gap(gap);
         self.mark_affected_windows(gap, trading_pair, previous_stream_watermark, &mut update);
+        self.resolve_gaps(gap.exchange, &gap.stream, &mut update);
         self.close_expired(&mut update);
         update.coalesce_open();
         update

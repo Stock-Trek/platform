@@ -2,6 +2,7 @@
 
 use super::AggregatorState;
 use super::sequence::SequenceRange;
+use super::streams::StreamProgress;
 use platform_market_data::candle::CandleKey;
 use platform_market_data::event::GapMarker;
 use platform_types::new_types::TimestampMilliseconds;
@@ -54,7 +55,9 @@ pub struct IncompleteWindow {
 
 impl IncompleteWindow {
     fn same_window(&self, other: &Self) -> bool {
-        self.key == other.key && self.window_start == other.window_start
+        self.key == other.key
+            && self.window_start == other.window_start
+            && self.stream == other.stream
     }
 
     fn merge(&mut self, other: &Self) {
@@ -62,6 +65,10 @@ impl IncompleteWindow {
         self.to_sequence = self.to_sequence.max(other.to_sequence);
         self.window_end = self.window_end.max(other.window_end);
         self.detected_at = self.detected_at.max(other.detected_at);
+    }
+
+    fn is_resolved_by(&self, progress: &StreamProgress) -> bool {
+        progress.covers_sequence_range(self.from_sequence, self.to_sequence)
     }
 }
 
@@ -116,16 +123,66 @@ impl AggregatorState {
         });
     }
 
-    /// Drops gap bookkeeping that can no longer affect an open candle.
+    /// Removes incomplete windows for a stream once every missing source
+    /// sequence has been observed, and returns the resolved windows so their
+    /// candles can be marked complete again.
+    pub fn take_resolved_incomplete_windows(
+        &mut self,
+        exchange: CexId,
+        stream: &str,
+    ) -> Vec<IncompleteWindow> {
+        let Some(progress) = self
+            .streams
+            .get(&StreamProgress::stream_id(exchange, stream))
+        else {
+            return Vec::new();
+        };
+        let mut resolved = Vec::new();
+        self.incomplete_windows.retain(|window| {
+            let is_resolved = window.key.exchange == exchange
+                && window.stream == stream
+                && window.is_resolved_by(progress);
+            if is_resolved {
+                resolved.push(window.clone());
+            }
+            !is_resolved
+        });
+        self.known_gaps.retain(|gap| {
+            !(gap.exchange == exchange
+                && gap.stream == stream
+                && progress.covers_sequence_range(gap.from_sequence, gap.to_sequence))
+        });
+        resolved
+    }
+
+    /// Returns whether a candle window still has unresolved source gaps.
+    pub fn has_incomplete_window(
+        &self,
+        key: &CandleKey,
+        window_start: TimestampMilliseconds,
+    ) -> bool {
+        self.incomplete_windows
+            .iter()
+            .any(|window| window.key == *key && window.window_start == window_start)
+    }
+
+    /// Drops gap bookkeeping that can no longer affect a retained candle.
     ///
     /// `cutoff` is the newest window end that has been closed. Candle
-    /// completeness is copied onto the candle before this is called, so the
-    /// records are no longer needed by live processing. Keeping only currently
-    /// relevant entries prevents checkpoints from growing forever.
+    /// completeness is copied onto the candle before this is called. A record
+    /// is retained while its candle is still available for correction so a
+    /// later backfill can restore completeness; it is dropped once the candle
+    /// has been evicted. Keeping only currently relevant entries prevents
+    /// checkpoints from growing forever.
     pub fn prune_closed_windows(&mut self, cutoff: TimestampMilliseconds) {
         self.incomplete_windows.retain(|window| {
             window.window_end > cutoff
                 || self.open_candles.get(&window.key).is_some_and(|candles| {
+                    candles
+                        .iter()
+                        .any(|candle| candle.start_time() == window.window_start)
+                })
+                || self.closed_candles.get(&window.key).is_some_and(|candles| {
                     candles
                         .iter()
                         .any(|candle| candle.start_time() == window.window_start)
