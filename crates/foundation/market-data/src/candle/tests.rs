@@ -47,11 +47,10 @@ fn invalid_intervals_are_rejected() {
 }
 
 #[test]
-fn legacy_interval_labels_still_map_to_windows() {
-    assert_eq!(parse_interval("minutes1").unwrap(), AlignedWindow::Minutes1);
-    assert_eq!(parse_interval("120m").unwrap(), AlignedWindow::Hours2);
-    assert_eq!(parse_interval("14d").unwrap(), AlignedWindow::Weeks2);
-    assert_eq!(parse_interval("1w").unwrap(), AlignedWindow::Weeks1);
+fn non_canonical_interval_labels_are_rejected() {
+    assert!(parse_interval("minutes1").is_err());
+    assert!(parse_interval("120m").is_err());
+    assert!(parse_interval("14d").is_err());
 }
 
 #[test]
@@ -188,7 +187,7 @@ fn candle_keys_serialize_intervals_by_label() {
 }
 
 #[test]
-fn candle_keys_decode_legacy_fixed_duration_intervals() {
+fn candle_keys_reject_non_label_intervals() {
     let key = CandleKey::new(
         CexId::Binance,
         TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
@@ -197,9 +196,7 @@ fn candle_keys_decode_legacy_fixed_duration_intervals() {
     let mut value = serde_json::to_value(key).unwrap();
     value["interval"] = serde_json::json!(60_000);
 
-    let decoded: CandleKey = serde_json::from_value(value).unwrap();
-
-    assert_eq!(decoded.interval, AlignedWindow::Minutes1);
+    assert!(serde_json::from_value::<CandleKey>(value).is_err());
 }
 
 #[test]

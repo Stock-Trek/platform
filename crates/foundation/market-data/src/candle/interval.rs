@@ -27,115 +27,13 @@ pub enum AlignedWindowError {
 
 /// Parse a candle interval label into its stock-trek aligned window.
 ///
-/// Labels are matched case-insensitively. In addition to the labels emitted by
-/// [`AlignedWindow::label`], legacy duration labels such as `120m` are accepted
-/// when they map exactly to a fixed aligned window. Unknown or ambiguous
-/// durations are rejected.
+/// Labels are matched case-insensitively. Only the canonical labels emitted by
+/// [`AlignedWindow::label`] are accepted; unknown labels are rejected.
 pub fn parse_interval(label: &str) -> Result<AlignedWindow, AlignedWindowError> {
     let original = label.trim();
     let normalized = original.to_ascii_lowercase();
     AlignedWindow::try_from(normalized.as_str())
-        .ok()
-        .or_else(|| legacy_window_from_label(&normalized))
-        .ok_or_else(|| AlignedWindowError::InvalidLabel(original.to_string()))
-}
-
-fn legacy_window_from_label(label: &str) -> Option<AlignedWindow> {
-    if let Some(window) = legacy_variant_window(label) {
-        return Some(window);
-    }
-    let split_at = label
-        .find(|character: char| !character.is_ascii_digit())
-        .or_else(|| (!label.is_empty()).then_some(label.len()))?;
-    let (amount, unit) = label.split_at(split_at);
-    let amount: i64 = amount.parse().ok()?;
-    let duration = amount.checked_mul(match unit {
-        "ms" => 1,
-        "s" => 1_000,
-        "m" => 60_000,
-        "h" => 3_600_000,
-        "d" => 86_400_000,
-        _ => return None,
-    })?;
-    if duration <= 0 {
-        return None;
-    }
-    fixed_window_from_duration(duration)
-}
-
-fn legacy_variant_window(label: &str) -> Option<AlignedWindow> {
-    for (prefix, suffix) in [
-        ("seconds", "s"),
-        ("minutes", "m"),
-        ("hours", "h"),
-        ("days", "d"),
-        ("weeks", "w"),
-        ("months", "mo"),
-        ("years", "y"),
-    ] {
-        let Some(amount) = label.strip_prefix(prefix) else {
-            continue;
-        };
-        let amount: u32 = amount.parse().ok()?;
-        let normalized = format!("{amount}{suffix}");
-        return AlignedWindow::try_from(normalized.as_str())
-            .ok()
-            .map(preserve_legacy_identity);
-    }
-    None
-}
-
-fn fixed_window_from_duration(duration: i64) -> Option<AlignedWindow> {
-    AlignedWindow::iter()
-        .find(|window| {
-            is_fixed(*window) && i64::try_from(window.millis_upper_bound()).ok() == Some(duration)
-        })
-        .map(preserve_legacy_identity)
-}
-
-fn preserve_legacy_identity(window: AlignedWindow) -> AlignedWindow {
-    // The previous interval type canonicalized these aliases, so keep decoding
-    // legacy names and durations to the same window.
-    match window {
-        AlignedWindow::Seconds60 => AlignedWindow::Minutes1,
-        AlignedWindow::Minutes60 => AlignedWindow::Hours1,
-        AlignedWindow::Hours24 => AlignedWindow::Days1,
-        AlignedWindow::Weeks1 => AlignedWindow::Days7,
-        window => window,
-    }
-}
-
-fn is_fixed(window: AlignedWindow) -> bool {
-    matches!(
-        window,
-        AlignedWindow::Seconds1
-            | AlignedWindow::Seconds5
-            | AlignedWindow::Seconds10
-            | AlignedWindow::Seconds15
-            | AlignedWindow::Seconds30
-            | AlignedWindow::Seconds60
-            | AlignedWindow::Minutes1
-            | AlignedWindow::Minutes2
-            | AlignedWindow::Minutes3
-            | AlignedWindow::Minutes5
-            | AlignedWindow::Minutes10
-            | AlignedWindow::Minutes15
-            | AlignedWindow::Minutes30
-            | AlignedWindow::Minutes60
-            | AlignedWindow::Hours1
-            | AlignedWindow::Hours2
-            | AlignedWindow::Hours3
-            | AlignedWindow::Hours4
-            | AlignedWindow::Hours6
-            | AlignedWindow::Hours8
-            | AlignedWindow::Hours12
-            | AlignedWindow::Hours24
-            | AlignedWindow::Days1
-            | AlignedWindow::Days7
-            | AlignedWindow::Weeks1
-            | AlignedWindow::Weeks2
-            | AlignedWindow::Weeks4
-    )
+        .map_err(|_| AlignedWindowError::InvalidLabel(original.to_string()))
 }
 
 /// Every candle interval supported by stock-trek.
@@ -298,9 +196,8 @@ fn calendar_bounds(
 /// used by archive records while the in-memory type is stock-trek's
 /// [`AlignedWindow`].
 pub(crate) mod serde_label {
-    use super::{AlignedWindow, fixed_window_from_duration, parse_interval};
-    use serde::{Deserializer, Serializer, de};
-    use std::fmt;
+    use super::{AlignedWindow, parse_interval};
+    use serde::{Deserialize, Deserializer, Serializer};
 
     pub(crate) fn serialize<S>(window: &AlignedWindow, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -313,47 +210,7 @@ pub(crate) mod serde_label {
     where
         D: Deserializer<'de>,
     {
-        struct WindowVisitor;
-
-        impl de::Visitor<'_> for WindowVisitor {
-            type Value = AlignedWindow;
-
-            fn expecting(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-                formatter.write_str("a candle interval label or millisecond duration")
-            }
-
-            fn visit_i64<E>(self, value: i64) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                if value <= 0 {
-                    return Err(E::custom(format!(
-                        "unsupported candle interval duration {value}"
-                    )));
-                }
-                fixed_window_from_duration(value).ok_or_else(|| {
-                    E::custom(format!("unsupported candle interval duration {value}"))
-                })
-            }
-
-            fn visit_u64<E>(self, value: u64) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                let value = i64::try_from(value).map_err(|_| {
-                    E::custom(format!("unsupported candle interval duration {value}"))
-                })?;
-                self.visit_i64(value)
-            }
-
-            fn visit_str<E>(self, value: &str) -> Result<Self::Value, E>
-            where
-                E: de::Error,
-            {
-                parse_interval(value).map_err(E::custom)
-            }
-        }
-
-        deserializer.deserialize_any(WindowVisitor)
+        let label = String::deserialize(deserializer)?;
+        parse_interval(&label).map_err(serde::de::Error::custom)
     }
 }
