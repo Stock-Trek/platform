@@ -103,15 +103,27 @@ impl CandleInterval {
         })
     }
 
-    pub fn start_for(self, timestamp: TimestampMilliseconds) -> TimestampMilliseconds {
-        TimestampMilliseconds(self.bounds_for(timestamp).0)
+    pub fn start_for(
+        self,
+        timestamp: TimestampMilliseconds,
+    ) -> Result<TimestampMilliseconds, CandleIntervalError> {
+        Ok(TimestampMilliseconds(self.bounds_for(timestamp)?.0))
     }
 
-    pub fn end_for(self, timestamp: TimestampMilliseconds) -> TimestampMilliseconds {
-        TimestampMilliseconds(self.bounds_for(timestamp).1)
+    pub fn end_for(
+        self,
+        timestamp: TimestampMilliseconds,
+    ) -> Result<TimestampMilliseconds, CandleIntervalError> {
+        Ok(TimestampMilliseconds(self.bounds_for(timestamp)?.1))
     }
 
-    fn bounds_for(self, timestamp: TimestampMilliseconds) -> (i64, i64) {
+    fn bounds_for(
+        self,
+        timestamp: TimestampMilliseconds,
+    ) -> Result<(i64, i64), CandleIntervalError> {
+        if timestamp.0 < 0 {
+            return Err(CandleIntervalError::InvalidTimestamp(timestamp.0));
+        }
         match self.window {
             AlignedWindow::Months1 => Self::calendar_bounds(timestamp.0, 1),
             AlignedWindow::Months2 => Self::calendar_bounds(timestamp.0, 2),
@@ -124,7 +136,10 @@ impl CandleInterval {
             window => {
                 let duration = Self::fixed_duration(window);
                 let start = timestamp.0.div_euclid(duration) * duration;
-                (start, start + duration)
+                let end = start
+                    .checked_add(duration)
+                    .ok_or(CandleIntervalError::InvalidTimestamp(timestamp.0))?;
+                Ok((start, end))
             }
         }
     }
@@ -267,22 +282,30 @@ impl Ord for CandleInterval {
 }
 
 impl CandleInterval {
-    fn calendar_bounds(timestamp_millis: i64, months: u32) -> (i64, i64) {
+    fn calendar_bounds(
+        timestamp_millis: i64,
+        months: u32,
+    ) -> Result<(i64, i64), CandleIntervalError> {
         let timestamp = DateTime::<Utc>::from_timestamp_millis(timestamp_millis)
-            .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
+            .ok_or(CandleIntervalError::InvalidTimestamp(timestamp_millis))?;
         let month_index = i64::from(timestamp.year()) * 12 + i64::from(timestamp.month0());
         let months = i64::from(months);
         let start_month = month_index.div_euclid(months) * months;
-        let start_year = i32::try_from(start_month.div_euclid(12)).unwrap_or(1970);
-        let start_month_of_year = u32::try_from(start_month.rem_euclid(12) + 1).unwrap_or(1);
+        let start_year = i32::try_from(start_month.div_euclid(12))
+            .map_err(|_| CandleIntervalError::InvalidTimestamp(timestamp_millis))?;
+        let start_month_of_year = u32::try_from(start_month.rem_euclid(12) + 1)
+            .map_err(|_| CandleIntervalError::InvalidTimestamp(timestamp_millis))?;
         let start = Utc
             .with_ymd_and_hms(start_year, start_month_of_year, 1, 0, 0, 0)
             .single()
-            .unwrap_or(DateTime::<Utc>::UNIX_EPOCH);
+            .ok_or(CandleIntervalError::InvalidTimestamp(timestamp_millis))?;
         let end = start
-            .checked_add_months(Months::new(u32::try_from(months).unwrap_or(1)))
-            .unwrap_or(start);
-        (start.timestamp_millis(), end.timestamp_millis())
+            .checked_add_months(Months::new(
+                u32::try_from(months)
+                    .map_err(|_| CandleIntervalError::InvalidTimestamp(timestamp_millis))?,
+            ))
+            .ok_or(CandleIntervalError::InvalidTimestamp(timestamp_millis))?;
+        Ok((start.timestamp_millis(), end.timestamp_millis()))
     }
 }
 
@@ -356,4 +379,6 @@ pub enum CandleIntervalError {
     InvalidLabel(String),
     #[error("candle interval must be greater than zero and representable in milliseconds")]
     ZeroOrOverflow,
+    #[error("timestamp {0} is outside the supported candle range")]
+    InvalidTimestamp(i64),
 }
