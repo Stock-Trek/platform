@@ -1,7 +1,9 @@
 use std::fmt;
+use strum::EnumString;
 
 /// What a shard writer does with persisted state when it starts.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum ReplayStartPolicy {
     /// Resume from a compatible checkpoint, rebuilding from the archive only
     /// when the checkpoint is missing, stale, or incompatible.
@@ -34,17 +36,12 @@ impl ReplayStartPolicy {
         matches!(self, Self::Checkpoint | Self::Archive)
     }
 
-    /// Parses the operator-facing policy name, accepting a few common aliases.
+    /// Parses a canonical operator-facing policy name.
+    ///
+    /// Only the names returned by [`Self::label`] are accepted; aliases are
+    /// intentionally rejected.
     pub fn parse(value: &str) -> Option<Self> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "checkpoint" | "resume" | "checkpoint-first" | "checkpoint_first" => {
-                Some(Self::Checkpoint)
-            }
-            "archive" | "rebuild" | "rebuild-archive" | "rebuild_archive" => Some(Self::Archive),
-            "earliest" | "beginning" | "start" | "all" => Some(Self::Earliest),
-            "latest" | "new" | "now" => Some(Self::Latest),
-            _ => None,
-        }
+        value.trim().parse().ok()
     }
 }
 
