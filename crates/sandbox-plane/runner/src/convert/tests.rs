@@ -44,20 +44,19 @@ impl Fixtures {
     fn ohlcv_dto() -> MarketOhlcvDto {
         MarketOhlcvDto {
             open_dto: Some(Self::decimal_dto(Decimal::new(1, 0))),
-            high_dto: Some(Self::decimal_dto(Decimal::new(2, 0))),
-            low_dto: Some(Self::decimal_dto(Decimal::new(3, 0))),
-            close_dto: Some(Self::decimal_dto(Decimal::new(4, 0))),
+            high_dto: Some(Self::decimal_dto(Decimal::new(4, 0))),
+            low_dto: Some(Self::decimal_dto(Decimal::new(1, 0))),
+            close_dto: Some(Self::decimal_dto(Decimal::new(3, 0))),
             volume_dto: Some(Self::decimal_dto(Decimal::new(5, 0))),
             quote_volume_dto: Some(Self::decimal_dto(Decimal::new(6, 0))),
-            vwap_dto: Some(Self::decimal_dto(Decimal::new(7, 0))),
+            vwap_dto: Some(Self::decimal_dto(Decimal::new(2, 0))),
         }
     }
 
     fn candle_dto() -> MarketCandleDto {
         MarketCandleDto {
+            window: 0,
             start_time_millis_inc: 1_000,
-            end_time_millis_exc: 2_000,
-            duration_millis: 1_000,
             is_candle_closed: true,
             ohlcv_dto: Some(Self::ohlcv_dto()),
             trade_count: 10,
@@ -260,13 +259,13 @@ fn asset_id_dto_errors_for_unknown_asset() {
 #[test]
 fn market_ohlcv_dto_converts() {
     let ohlcv = MarketOhlcv::try_from(Fixtures::ohlcv_dto()).unwrap();
-    assert_eq!(ohlcv.open, 1.0);
-    assert_eq!(ohlcv.high, 2.0);
-    assert_eq!(ohlcv.low, 3.0);
-    assert_eq!(ohlcv.close, 4.0);
-    assert_eq!(ohlcv.volume, 5.0);
-    assert_eq!(ohlcv.quote_volume, 6.0);
-    assert_eq!(ohlcv.vwap, 7.0);
+    assert_eq!(ohlcv.open(), 1.0);
+    assert_eq!(ohlcv.high(), 4.0);
+    assert_eq!(ohlcv.low(), 1.0);
+    assert_eq!(ohlcv.close(), 3.0);
+    assert_eq!(ohlcv.volume(), 5.0);
+    assert_eq!(ohlcv.quote_volume(), 6.0);
+    assert_eq!(ohlcv.vwap(), 2.0);
 }
 
 #[test]
@@ -279,13 +278,13 @@ fn market_ohlcv_dto_requires_all_fields() {
 #[test]
 fn market_candle_dto_converts() {
     let candle = MarketCandle::try_from(Fixtures::candle_dto()).unwrap();
-    assert_eq!(candle.start_time_millis_inc, 1_000);
-    assert_eq!(candle.end_time_millis_exc, 2_000);
-    assert_eq!(candle.duration_millis, 1_000);
-    assert!(candle.is_candle_closed);
-    assert_eq!(candle.trade_count, 10);
-    assert_eq!(candle.ohlcv.open, 1.0);
-    assert_eq!(candle.ohlcv.vwap, 7.0);
+    assert_eq!(candle.start_time_millis_inc().as_millis(), 1_000);
+    assert_eq!(candle.end_time_millis_exc().as_millis(), 2_000);
+    assert_eq!(candle.duration_millis(), 1_000);
+    assert!(candle.is_candle_closed());
+    assert_eq!(candle.trade_count(), 10);
+    assert_eq!(candle.ohlcv().open(), 1.0);
+    assert_eq!(candle.ohlcv().vwap(), 2.0);
 }
 
 #[test]
@@ -298,8 +297,8 @@ fn market_candle_dto_requires_ohlcv() {
 #[test]
 fn market_quote_dto_converts() {
     let quote = MarketQuote::try_from(Fixtures::quote_dto(11, 22)).unwrap();
-    assert_eq!(quote.price, 11.0);
-    assert_eq!(quote.quantity, 22.0);
+    assert_eq!(quote.price(), 11.0);
+    assert_eq!(quote.quantity(), 22.0);
 }
 
 #[test]
@@ -312,13 +311,13 @@ fn market_quote_dto_requires_price_and_quantity() {
 #[test]
 fn market_tick_dto_converts() {
     let tick = MarketTick::try_from(Fixtures::tick_dto(1_234)).unwrap();
-    assert_eq!(tick.timestamp_millis, 1_234);
-    assert_eq!(tick.bid.price, 1.0);
-    assert_eq!(tick.bid.quantity, 2.0);
-    assert_eq!(tick.ask.price, 3.0);
-    assert_eq!(tick.ask.quantity, 4.0);
-    assert_eq!(tick.last.price, 5.0);
-    assert_eq!(tick.last.quantity, 6.0);
+    assert_eq!(tick.timestamp_millis().as_millis(), 1_234);
+    assert_eq!(tick.bid().price(), 1.0);
+    assert_eq!(tick.bid().quantity(), 2.0);
+    assert_eq!(tick.ask().price(), 3.0);
+    assert_eq!(tick.ask().quantity(), 4.0);
+    assert_eq!(tick.last().price(), 5.0);
+    assert_eq!(tick.last().quantity(), 6.0);
 }
 
 #[test]
@@ -335,8 +334,8 @@ fn market_tick_vec_converts() {
         Fixtures::tick_dto(2),
     ]))
     .unwrap();
-    assert_eq!(ticks.ticks.len(), 2);
-    assert_eq!(ticks.ticks[1].timestamp_millis, 2);
+    assert_eq!(ticks.ticks().len(), 2);
+    assert_eq!(ticks.ticks()[1].timestamp_millis().as_millis(), 2);
 }
 
 #[test]
@@ -346,12 +345,12 @@ fn market_order_book_dto_converts() {
         asks_dto: vec![Fixtures::quote_dto(3, 4)],
     })
     .unwrap();
-    assert_eq!(order_book.bids.len(), 1);
-    assert_eq!(order_book.bids[0].price, 1.0);
-    assert_eq!(order_book.bids[0].quantity, 2.0);
-    assert_eq!(order_book.asks.len(), 1);
-    assert_eq!(order_book.asks[0].price, 3.0);
-    assert_eq!(order_book.asks[0].quantity, 4.0);
+    assert_eq!(order_book.bids().len(), 1);
+    assert_eq!(order_book.bids()[0].price(), 1.0);
+    assert_eq!(order_book.bids()[0].quantity(), 2.0);
+    assert_eq!(order_book.asks().len(), 1);
+    assert_eq!(order_book.asks()[0].price(), 3.0);
+    assert_eq!(order_book.asks()[0].quantity(), 4.0);
 }
 
 #[test]
@@ -361,8 +360,8 @@ fn market_rolling_window_converts() {
         Fixtures::candle_dto(),
     )])))
     .unwrap();
-    let candle = window.candles.get(&RollingWindow::Seconds5).unwrap();
-    assert_eq!(candle.trade_count, 10);
+    let candle = window.candles().get(&RollingWindow::Seconds5).unwrap();
+    assert_eq!(candle.trade_count(), 10);
 }
 
 #[test]
@@ -379,15 +378,25 @@ fn market_rolling_window_rejects_out_of_range_window() {
 
 #[test]
 fn market_aligned_window_converts() {
+    let mut first = Fixtures::candle_dto();
+    first.window = RollingWindow::Seconds5 as u32;
+    first.start_time_millis_inc = 0;
+    let mut second = Fixtures::candle_dto();
+    second.window = RollingWindow::Seconds5 as u32;
+    second.start_time_millis_inc = 5_000;
     let window = MarketAlignedWindow::try_from(MarketCandlesMap(HashMap::from([(
         AlignedWindow::Seconds5 as u32,
         MarketCandlesDto {
-            candles_dto: vec![Fixtures::candle_dto(), Fixtures::candle_dto()],
+            candles_dto: vec![first, second],
         },
     )])))
     .unwrap();
     assert_eq!(
-        window.candles.get(&AlignedWindow::Seconds5).unwrap().len(),
+        window
+            .candles()
+            .get(&AlignedWindow::Seconds5)
+            .unwrap()
+            .len(),
         2
     );
 }
@@ -406,14 +415,14 @@ fn market_aligned_window_rejects_unknown_window() {
 #[test]
 fn market_dto_converts() {
     let market = Market::try_from(Fixtures::market_dto()).unwrap();
-    assert_eq!(market.base_increment, 0.01);
-    assert_eq!(market.quote_increment, 0.02);
-    assert_eq!(market.minimum_notional, 0.03);
-    assert_eq!(market.ticks.ticks.len(), 1);
-    assert_eq!(market.rolling.candles.len(), 1);
-    assert_eq!(market.aligned.candles.len(), 1);
-    assert_eq!(market.order_book.bids.len(), 1);
-    assert_eq!(market.order_book.asks.len(), 1);
+    assert_eq!(market.base_increment(), 0.01);
+    assert_eq!(market.quote_increment(), 0.02);
+    assert_eq!(market.minimum_notional(), 0.03);
+    assert_eq!(market.ticks().ticks().len(), 1);
+    assert_eq!(market.rolling().candles().len(), 1);
+    assert_eq!(market.aligned().candles().len(), 1);
+    assert_eq!(market.order_book().bids().len(), 1);
+    assert_eq!(market.order_book().asks().len(), 1);
 }
 
 #[test]
@@ -428,7 +437,7 @@ fn order_request_dto_requires_variant() {
     let dto = OrderRequestDto {
         order_request: None,
     };
-    assert!(OrderRequest::<AssetId, Decimal>::try_from(dto).is_err());
+    assert!(OrderRequest::<AssetId, f64>::try_from(dto).is_err());
 }
 
 #[test]
@@ -452,7 +461,7 @@ fn limit_order_request_converts() {
         )),
     };
 
-    let request: OrderRequest<AssetId, Decimal> = dto.try_into().unwrap();
+    let request: OrderRequest<AssetId, f64> = dto.try_into().unwrap();
     match request {
         OrderRequest::Limit {
             base,
@@ -467,7 +476,7 @@ fn limit_order_request_converts() {
             assert_eq!(base, AssetId::Bitcoin);
             assert_eq!(quote, AssetId::TetherUSD);
             assert_eq!(side, Side::Buy);
-            assert_eq!(limit_price, Decimal::new(100, 0));
+            assert_eq!(limit_price, 100.0);
             assert_eq!(time_in_force, TimeInForce::GoodTillCancelled);
             assert_eq!(tag, Tag::new("my-tag"));
             match activation {
@@ -477,7 +486,7 @@ fn limit_order_request_converts() {
                     direction,
                     mode,
                 } => {
-                    assert_eq!(activation_price, Decimal::new(250, 1));
+                    assert_eq!(activation_price, 25.0);
                     assert_eq!(basis, PriceBasis::Mark);
                     assert_eq!(direction, TriggerDirection::Above);
                     assert_eq!(mode, TriggerMode::Cross);
@@ -485,7 +494,7 @@ fn limit_order_request_converts() {
                 other => panic!("expected price triggered activation, got {other:?}"),
             }
             match quantity {
-                Quantity::OfBase(value) => assert_eq!(value, Decimal::new(5, 0)),
+                Quantity::OfBase(value) => assert_eq!(value, 5.0),
                 Quantity::OfQuote(value) => panic!("expected base quantity, got {value}"),
             }
         }
@@ -507,7 +516,7 @@ fn market_buy_order_request_converts() {
         )),
     };
 
-    let request: OrderRequest<AssetId, Decimal> = dto.try_into().unwrap();
+    let request: OrderRequest<AssetId, f64> = dto.try_into().unwrap();
     match request {
         OrderRequest::MarketBuy {
             base,
@@ -519,7 +528,7 @@ fn market_buy_order_request_converts() {
             assert_eq!(base, AssetId::Ethereum);
             assert_eq!(quote, AssetId::USDCoin);
             assert!(matches!(activation, Activation::Immediate));
-            assert_eq!(quote_quantity, Decimal::new(1000, 0));
+            assert_eq!(quote_quantity, 1000.0);
             assert_eq!(tag, Tag::new("dca"));
         }
         other => panic!("expected market buy order request, got {other:?}"),
@@ -540,7 +549,7 @@ fn market_sell_order_request_converts() {
         )),
     };
 
-    let request: OrderRequest<AssetId, Decimal> = dto.try_into().unwrap();
+    let request: OrderRequest<AssetId, f64> = dto.try_into().unwrap();
     match request {
         OrderRequest::MarketSell {
             base,
@@ -552,7 +561,7 @@ fn market_sell_order_request_converts() {
             assert_eq!(base, AssetId::Solana);
             assert_eq!(quote, AssetId::TetherUSD);
             assert!(matches!(activation, Activation::Immediate));
-            assert_eq!(base_quantity, Decimal::new(2, 0));
+            assert_eq!(base_quantity, 2.0);
             assert_eq!(tag, Tag::new("exit"));
         }
         other => panic!("expected market sell order request, got {other:?}"),
@@ -561,13 +570,13 @@ fn market_sell_order_request_converts() {
 
 #[test]
 fn immediate_activation_dto_converts() {
-    let activation: Activation<Decimal> = Fixtures::immediate_activation_dto().try_into().unwrap();
+    let activation: Activation<f64> = Fixtures::immediate_activation_dto().try_into().unwrap();
     assert!(matches!(activation, Activation::Immediate));
 }
 
 #[test]
 fn trailing_activation_dto_converts() {
-    let activation: Activation<Decimal> = Fixtures::trailing_activation_dto().try_into().unwrap();
+    let activation: Activation<f64> = Fixtures::trailing_activation_dto().try_into().unwrap();
     match activation {
         Activation::Trailing {
             activation_price,
@@ -575,7 +584,7 @@ fn trailing_activation_dto_converts() {
             callback_rate_bps,
             direction,
         } => {
-            assert_eq!(activation_price, Decimal::new(100, 0));
+            assert_eq!(activation_price, 100.0);
             assert_eq!(basis, PriceBasis::Last);
             assert_eq!(callback_rate_bps, 50);
             assert_eq!(direction, TriggerDirection::Below);
@@ -587,7 +596,7 @@ fn trailing_activation_dto_converts() {
 #[test]
 fn activation_dto_requires_variant() {
     let dto = ActivationDto { activation: None };
-    assert!(Activation::<Decimal>::try_from(dto).is_err());
+    assert!(Activation::<f64>::try_from(dto).is_err());
 }
 
 #[test]
@@ -597,9 +606,9 @@ fn quantity_dto_converts_of_quote() {
             Decimal::new(25, 1),
         ))),
     };
-    let quantity: Quantity<Decimal> = dto.try_into().unwrap();
+    let quantity: Quantity<f64> = dto.try_into().unwrap();
     match quantity {
-        Quantity::OfQuote(value) => assert_eq!(value, Decimal::new(25, 1)),
+        Quantity::OfQuote(value) => assert_eq!(value, 2.5),
         Quantity::OfBase(value) => panic!("expected quote quantity, got {value}"),
     }
 }
@@ -607,7 +616,7 @@ fn quantity_dto_converts_of_quote() {
 #[test]
 fn quantity_dto_requires_variant() {
     let dto = QuantityDto { quantity: None };
-    assert!(Quantity::<Decimal>::try_from(dto).is_err());
+    assert!(Quantity::<f64>::try_from(dto).is_err());
 }
 
 #[test]
@@ -615,21 +624,20 @@ fn portfolio_dto_converts() {
     let portfolio = Portfolio::try_from(Fixtures::portfolio_dto()).unwrap();
     let account_id = AccountId::new("primary");
 
-    assert!(portfolio.has_cex_account(&CexId::Binance, &account_id));
-    assert_eq!(portfolio.asset_total(&AssetId::Bitcoin), Decimal::new(3, 0));
+    assert!(portfolio.has_cex_account(CexId::Binance, &account_id));
+    assert_eq!(portfolio.asset_total(AssetId::Bitcoin), 3.0);
     assert_eq!(
-        portfolio.asset_total_in_cex_account(&AssetId::Bitcoin, &CexId::Binance, &account_id),
-        Decimal::new(3, 0)
+        portfolio.asset_total_in_cex_account(CexId::Binance, &account_id, AssetId::Bitcoin),
+        3.0
     );
-    assert_eq!(portfolio.pending_orders(), 1.0);
-    assert_eq!(portfolio.pending_orders_with_tag(&Tag::new("main")), 1.0);
+    assert_eq!(portfolio.pending_orders_count(), 1);
     assert_eq!(
-        portfolio.pending_orders_in_cex_account(&CexId::Binance, &account_id),
-        1.0
+        portfolio.pending_orders_with_tag_count(&Tag::new("main")),
+        1
     );
     assert_eq!(
-        portfolio.asset_reserved(&AssetId::TetherUSD),
-        Decimal::new(400, 0)
+        portfolio.pending_orders_in_cex_account_count(CexId::Binance, &account_id),
+        1
     );
 }
 
@@ -663,13 +671,13 @@ fn strategy_context_dto_converts() {
 
     let context = SignalContext::try_from(dto).unwrap();
     let market = context
-        .cex_market_for(&CexId::Binance, &AssetId::Bitcoin, &AssetId::TetherUSD)
+        .cex_market_for(CexId::Binance, AssetId::Bitcoin, AssetId::TetherUSD)
         .unwrap();
-    assert_eq!(market.base_increment, 0.01);
-    assert_eq!(market.order_book.bids.len(), 1);
+    assert_eq!(market.base_increment(), 0.01);
+    assert_eq!(market.order_book().bids().len(), 1);
     assert!(
         context
-            .cex_market_for(&CexId::Binance, &AssetId::Ethereum, &AssetId::TetherUSD)
+            .cex_market_for(CexId::Binance, AssetId::Ethereum, AssetId::TetherUSD)
             .is_none()
     );
 }

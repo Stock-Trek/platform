@@ -17,6 +17,6 @@ impl TryFrom<MarketOrderBookDto> for MarketOrderBook {
             .into_iter()
             .map(MarketQuote::try_from)
             .collect::<Result<Vec<_>, _>>()?;
-        Ok(MarketOrderBook::new(bids, asks))
+        MarketOrderBook::new(bids, asks)
     }
 }

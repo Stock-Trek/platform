@@ -14,7 +14,7 @@ mod revision;
 #[cfg(test)]
 mod tests;
 
-pub use body::Candle;
+pub use body::{Candle, Ohlcv};
 pub use closed::ClosedCandle;
 pub use interval::{AlignedWindowError, all_intervals, parse_interval};
 pub use key::CandleKey;

@@ -37,17 +37,15 @@ pub struct MarketOhlcvDto {
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct MarketCandleDto {
-    #[prost(uint64, tag = "1")]
-    pub start_time_millis_inc: u64,
+    #[prost(uint32, tag = "1")]
+    pub window: u32,
     #[prost(uint64, tag = "2")]
-    pub end_time_millis_exc: u64,
-    #[prost(uint64, tag = "3")]
-    pub duration_millis: u64,
-    #[prost(bool, tag = "4")]
+    pub start_time_millis_inc: u64,
+    #[prost(bool, tag = "3")]
     pub is_candle_closed: bool,
-    #[prost(message, optional, tag = "5")]
+    #[prost(message, optional, tag = "4")]
     pub ohlcv_dto: ::core::option::Option<MarketOhlcvDto>,
-    #[prost(uint64, tag = "6")]
+    #[prost(uint64, tag = "5")]
     pub trade_count: u64,
 }
 #[derive(Clone, PartialEq, ::prost::Message)]

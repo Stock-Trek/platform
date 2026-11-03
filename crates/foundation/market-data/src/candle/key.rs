@@ -9,7 +9,6 @@ use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 pub struct CandleKey {
     pub exchange: CexId,
     pub trading_pair: TradingPair,
-    #[serde(with = "super::interval::serde_label")]
     pub interval: AlignedWindow,
 }
 

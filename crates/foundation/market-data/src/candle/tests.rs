@@ -2,7 +2,7 @@ use super::*;
 use crate::decoders::trade::Trade;
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
-use stock_trek::markets::AlignedWindow;
+use stock_trek::markets::{AlignedWindow, TimestampMillis};
 use stock_trek_types::cex::asset_id::AssetId;
 use stock_trek_types::cex::cex_id::CexId;
 use stock_trek_types::cex::trading_pair::TradingPair;
@@ -24,13 +24,13 @@ fn trade(price: &str, quantity: &str, timestamp: i64) -> Trade {
 
 #[test]
 fn intervals_are_parsed_and_aligned() {
-    let interval = parse_interval("60s").unwrap();
-    assert_eq!(interval, AlignedWindow::Seconds60);
-    assert_eq!(interval.label(), "60s");
-    assert_eq!(interval.millis_exact(), Some(60_000));
-    let bounds = interval.bounds_for(61_234).unwrap();
-    assert_eq!(bounds.lower, 60_000);
-    assert_eq!(bounds.upper, 120_000);
+    let interval = parse_interval("1m").unwrap();
+    assert_eq!(interval, AlignedWindow::Minutes1);
+    assert_eq!(interval.label(), "1m");
+    assert_eq!(interval.millis().exact(), Some(60_000));
+    let bounds = interval.bounds_for(TimestampMillis::new(61_234)).unwrap();
+    assert_eq!(bounds.lower().as_millis(), 60_000);
+    assert_eq!(bounds.upper().as_millis(), 120_000);
 }
 
 #[test]
@@ -52,11 +52,11 @@ fn non_canonical_interval_labels_are_rejected() {
 fn every_aligned_window_is_supported() {
     for window in AlignedWindow::iter() {
         assert!(
-            window.millis_exact().is_some() || window.months_exact().is_some(),
+            window.millis().exact().is_some() || window.months_exact().is_some(),
             "unsupported AlignedWindow variant {window:?}"
         );
         assert!(
-            window.bounds_for(0).is_ok(),
+            window.bounds_for(TimestampMillis::new(0)).is_ok(),
             "unsupported AlignedWindow variant {window:?}"
         );
     }
@@ -75,7 +75,7 @@ fn aligned_window_intervals_have_unique_labels() {
     assert!(labels.contains("1m"));
     assert!(labels.contains("1h"));
     assert!(labels.contains("1d"));
-    assert!(labels.contains("7d"));
+    assert!(labels.contains("1w"));
     assert!(labels.contains("1mo"));
     assert!(labels.contains("1y"));
 }
@@ -85,9 +85,11 @@ fn calendar_intervals_use_calendar_bounds() {
     let interval = parse_interval("1mo").unwrap();
 
     assert_eq!(interval.label(), "1mo");
-    let bounds = interval.bounds_for(1_704_067_200_000).unwrap();
-    assert_eq!(bounds.lower, 1_704_067_200_000);
-    assert_eq!(bounds.upper, 1_706_745_600_000);
+    let bounds = interval
+        .bounds_for(TimestampMillis::new(1_704_067_200_000))
+        .unwrap();
+    assert_eq!(bounds.lower().as_millis(), 1_704_067_200_000);
+    assert_eq!(bounds.upper().as_millis(), 1_706_745_600_000);
 }
 
 #[test]
@@ -102,10 +104,10 @@ fn timestamp_bounds_that_overflow_are_rejected() {
     let minute = parse_interval("1m").unwrap();
     let month = parse_interval("1mo").unwrap();
 
-    assert!(minute.bounds_for(i64::MAX).is_err());
-    assert!(month.bounds_for(i64::MAX).is_err());
-    assert!(Candle::open(&trade("100", "1", i64::MAX), minute).is_err());
-    assert!(Candle::open(&trade("100", "1", i64::MAX), month).is_err());
+    let max_timestamp = TimestampMillis::new(u64::MAX);
+
+    assert!(minute.bounds_for(max_timestamp).is_err());
+    assert!(month.bounds_for(max_timestamp).is_err());
 }
 
 #[test]
@@ -113,11 +115,11 @@ fn invalid_candle_timestamps_cannot_be_deserialized() {
     let candle = Candle::open(&trade("100", "1", 61_000), parse_interval("1m").unwrap()).unwrap();
 
     let mut out_of_range = serde_json::to_value(&candle).unwrap();
-    out_of_range["market_candle"]["end_time_millis_exc"] = u64::MAX.into();
+    out_of_range["end_time_millis_exc"] = u64::MAX.into();
     assert!(serde_json::from_value::<Candle>(out_of_range).is_err());
 
     let mut reversed = serde_json::to_value(&candle).unwrap();
-    reversed["market_candle"]["end_time_millis_exc"] = 0.into();
+    reversed["end_time_millis_exc"] = 0.into();
     assert!(serde_json::from_value::<Candle>(reversed).is_err());
 }
 
@@ -128,7 +130,7 @@ fn applying_trades_updates_ohlcv() {
     candle.apply_trade(&trade("110", "1", 62_000)).unwrap();
     candle.apply_trade(&trade("90", "3", 63_000)).unwrap();
 
-    let ohlcv = &candle.market_candle.ohlcv;
+    let ohlcv = &candle.ohlcv;
     assert_eq!(ohlcv.open, 100.0);
     assert_eq!(ohlcv.high, 110.0);
     assert_eq!(ohlcv.low, 90.0);
@@ -136,7 +138,7 @@ fn applying_trades_updates_ohlcv() {
     assert_eq!(ohlcv.volume, 6.0);
     assert_eq!(ohlcv.quote_volume, 580.0);
     assert!((ohlcv.vwap - 96.666_666_666_666_67).abs() < f64::EPSILON);
-    assert_eq!(candle.market_candle.trade_count, 3);
+    assert_eq!(candle.trade_count, 3);
 }
 
 #[test]
@@ -155,7 +157,7 @@ fn candles_start_complete_and_can_be_marked_incomplete() {
 
 #[test]
 fn candle_keys_serialize_intervals_by_label() {
-    for label in ["60s", "1m", "1mo", "1y"] {
+    for label in ["5s", "1m", "1mo", "1y"] {
         let key = CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),

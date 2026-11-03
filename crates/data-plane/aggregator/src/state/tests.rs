@@ -267,7 +267,6 @@ fn state_round_trips_through_json_with_candle_keys() {
         decoded
             .closed_candle(&candle.key, candle.start_time())
             .unwrap()
-            .market_candle
             .is_candle_closed
     );
     assert_eq!(decoded.last_processed_sequence, Some(42));

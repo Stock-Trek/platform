@@ -1,8 +1,8 @@
 //! Candle window helpers backed by stock-trek's [`AlignedWindow`].
 //!
-//! [`AlignedWindow`] is the source of truth for candle intervals and window
-//! alignment. This module only adds the label parsing and serialization
-//! helpers that platform needs.
+//! [`AlignedWindow`] is the source of truth for candle intervals, window
+//! alignment, and label-based serialization. This module only adds the label
+//! parsing helper that platform needs.
 
 pub use stock_trek::markets::AlignedWindow;
 use strum::IntoEnumIterator;
@@ -29,29 +29,4 @@ pub fn parse_interval(label: &str) -> Result<AlignedWindow, AlignedWindowError> 
 /// Every candle interval supported by stock-trek.
 pub fn all_intervals() -> Vec<AlignedWindow> {
     AlignedWindow::iter().collect()
-}
-
-/// Serialize an aligned window using its canonical label.
-///
-/// This keeps candle keys and revisions compatible with the label-based format
-/// used by archive records while the in-memory type is stock-trek's
-/// [`AlignedWindow`].
-pub(crate) mod serde_label {
-    use super::{AlignedWindow, parse_interval};
-    use serde::{Deserialize, Deserializer, Serializer};
-
-    pub(crate) fn serialize<S>(window: &AlignedWindow, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        serializer.serialize_str(&window.label())
-    }
-
-    pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<AlignedWindow, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let label = String::deserialize(deserializer)?;
-        parse_interval(&label).map_err(serde::de::Error::custom)
-    }
 }

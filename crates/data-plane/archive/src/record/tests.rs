@@ -1,8 +1,7 @@
 use super::*;
-use platform_market_data::candle::{CandleKey, ClosedCandle, parse_interval};
+use platform_market_data::candle::{CandleKey, ClosedCandle, Ohlcv, parse_interval};
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;
-use stock_trek::markets::{MarketCandle, MarketOhlcv};
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 fn event() -> ArchiveRecord {
@@ -26,14 +25,19 @@ fn closed_candle() -> ArchiveRecord {
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
             parse_interval("1m").unwrap(),
         ),
-        market_candle: MarketCandle::new(
-            60_000,
-            120_000,
-            60_000,
-            true,
-            MarketOhlcv::new(1.0, 2.0, 0.5, 1.5, 10.0, 15.0, 1.5),
-            5,
-        ),
+        start_time_millis_inc: 60_000,
+        end_time_millis_exc: 120_000,
+        is_candle_closed: true,
+        ohlcv: Ohlcv {
+            open: 1.0,
+            high: 2.0,
+            low: 0.5,
+            close: 1.5,
+            volume: 10.0,
+            quote_volume: 15.0,
+            vwap: 1.5,
+        },
+        trade_count: 5,
         is_complete: true,
     };
     ArchiveRecord::ClosedCandle(ClosedCandle::new(

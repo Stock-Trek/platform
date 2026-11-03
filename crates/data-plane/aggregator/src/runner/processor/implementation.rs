@@ -121,7 +121,7 @@ where
         for interval in &processor.config().intervals {
             AggregatorMetrics::record_retained_closed_candles(
                 shard.get(),
-                &interval.label(),
+                interval.label(),
                 processor
                     .state()
                     .closed_candles_len_by_interval()

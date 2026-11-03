@@ -175,7 +175,7 @@ async fn open_mutations_are_coalesced_to_the_last_value_per_key() {
     assert_eq!(observed.calls(), vec!["open"]);
     let open = observed.open.lock().unwrap();
     assert_eq!(open.len(), 1);
-    assert_eq!(open[0].market_candle.ohlcv.close, 105.0);
+    assert_eq!(open[0].ohlcv.close, 105.0);
 }
 
 #[tokio::test]

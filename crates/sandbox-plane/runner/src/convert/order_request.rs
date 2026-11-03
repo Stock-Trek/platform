@@ -7,13 +7,12 @@ use crate::{
         quantity_dto::Quantity as QuantityVariant,
     },
 };
-use rust_decimal::Decimal;
 use stock_trek::{
     errors::StockTrekError,
     types::{Activation, AssetId, OrderRequest, Quantity, Tag},
 };
 
-impl TryFrom<OrderRequestDto> for OrderRequest<AssetId, Decimal> {
+impl TryFrom<OrderRequestDto> for OrderRequest<AssetId, f64> {
     type Error = StockTrekError;
 
     fn try_from(value: OrderRequestDto) -> Result<Self, Self::Error> {
@@ -26,7 +25,7 @@ impl TryFrom<OrderRequestDto> for OrderRequest<AssetId, Decimal> {
     }
 }
 
-impl TryFrom<LimitOrderRequestDto> for OrderRequest<AssetId, Decimal> {
+impl TryFrom<LimitOrderRequestDto> for OrderRequest<AssetId, f64> {
     type Error = StockTrekError;
 
     fn try_from(value: LimitOrderRequestDto) -> Result<Self, Self::Error> {
@@ -53,7 +52,7 @@ impl TryFrom<LimitOrderRequestDto> for OrderRequest<AssetId, Decimal> {
     }
 }
 
-impl TryFrom<MarketBuyOrderRequestDto> for OrderRequest<AssetId, Decimal> {
+impl TryFrom<MarketBuyOrderRequestDto> for OrderRequest<AssetId, f64> {
     type Error = StockTrekError;
 
     fn try_from(value: MarketBuyOrderRequestDto) -> Result<Self, Self::Error> {
@@ -76,7 +75,7 @@ impl TryFrom<MarketBuyOrderRequestDto> for OrderRequest<AssetId, Decimal> {
     }
 }
 
-impl TryFrom<MarketSellOrderRequestDto> for OrderRequest<AssetId, Decimal> {
+impl TryFrom<MarketSellOrderRequestDto> for OrderRequest<AssetId, f64> {
     type Error = StockTrekError;
 
     fn try_from(value: MarketSellOrderRequestDto) -> Result<Self, Self::Error> {
@@ -99,7 +98,7 @@ impl TryFrom<MarketSellOrderRequestDto> for OrderRequest<AssetId, Decimal> {
     }
 }
 
-impl TryFrom<ActivationDto> for Activation<Decimal> {
+impl TryFrom<ActivationDto> for Activation<f64> {
     type Error = StockTrekError;
 
     fn try_from(value: ActivationDto) -> Result<Self, Self::Error> {
@@ -130,7 +129,7 @@ impl TryFrom<ActivationDto> for Activation<Decimal> {
     }
 }
 
-impl TryFrom<QuantityDto> for Quantity<Decimal> {
+impl TryFrom<QuantityDto> for Quantity<f64> {
     type Error = StockTrekError;
 
     fn try_from(value: QuantityDto) -> Result<Self, Self::Error> {

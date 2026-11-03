@@ -21,7 +21,7 @@ impl TryFrom<StrategyContextDto> for SignalContext {
             let cex_id: CexId = JsonString::deserialize(&cex_name)?;
             market_data.insert(cex_id, asset_markets_dto.try_into()?);
         }
-        Ok(SignalContext::new(market_data))
+        SignalContext::new(market_data)
     }
 }
 
@@ -53,11 +53,9 @@ impl TryFrom<AssetMarketsDto> for CexMarketDataByBaseContext {
                 let market = market_dto.required("market_dto")?.try_into()?;
                 markets_by_quote.insert(quote_asset_id, market);
             }
-            markets_by_base.insert(
-                base_asset_id,
-                CexMarketDataByQuoteContext::new(markets_by_quote),
-            );
+            let markets_by_quote = CexMarketDataByQuoteContext::new(markets_by_quote)?;
+            markets_by_base.insert(base_asset_id, markets_by_quote);
         }
-        Ok(CexMarketDataByBaseContext::new(markets_by_base))
+        CexMarketDataByBaseContext::new(markets_by_base)
     }
 }

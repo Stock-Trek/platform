@@ -4,14 +4,12 @@ use arrow_array::{
     Array, ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
 use platform_errors::{BpError, BpResult};
-use platform_market_data::{
-    candle::{Candle, CandleKey, CandleRevision, ClosedCandle, parse_interval},
-    envelope::EnvelopeCodec,
-    event::MarketEvent,
+use platform_market_data::candle::{
+    Candle, CandleKey, CandleRevision, ClosedCandle, Ohlcv, parse_interval,
 };
+use platform_market_data::{envelope::EnvelopeCodec, event::MarketEvent};
 use platform_types::new_types::TimestampMilliseconds;
 use std::{fmt::Display, io::ErrorKind, str::FromStr};
-use stock_trek::markets::{MarketCandle, MarketOhlcv};
 use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
 impl ArchiveBatch {
@@ -104,25 +102,43 @@ impl ArchiveBatch {
                 }
                 let interval = parse_interval(interval.value(row))
                     .map_err(|error| Self::invalid_value("interval", interval.value(row), error))?;
-                let market_candle = MarketCandle::new(
-                    Self::timestamp(start_time_millis_inc.value(row), "start_time_millis_inc")?,
-                    Self::timestamp(end_time_millis_exc.value(row), "end_time_millis_exc")?,
-                    Self::timestamp(duration_millis.value(row), "duration_millis")?,
-                    is_candle_closed.value(row),
-                    MarketOhlcv::new(
-                        open.value(row),
-                        high.value(row),
-                        low.value(row),
-                        close.value(row),
-                        volume.value(row),
-                        quote_volume.value(row),
-                        vwap.value(row),
-                    ),
-                    trade_count.value(row),
-                );
+                let start_time_millis =
+                    Self::timestamp(start_time_millis_inc.value(row), "start_time_millis_inc")?;
+                let end_time_millis =
+                    Self::timestamp(end_time_millis_exc.value(row), "end_time_millis_exc")?;
+                if end_time_millis < start_time_millis {
+                    return Err(Self::invalid_value(
+                        "end_time_millis_exc",
+                        end_time_millis,
+                        "end time precedes start time",
+                    ));
+                }
+                let duration = duration_millis.value(row);
+                if duration
+                    != i64::try_from(end_time_millis - start_time_millis)
+                        .map_err(|error| Self::invalid_value("duration_millis", duration, error))?
+                {
+                    return Err(Self::invalid_value(
+                        "duration_millis",
+                        duration,
+                        "does not match the candle window",
+                    ));
+                }
                 let candle = Candle {
                     key: CandleKey::new(exchange, TradingPair::new(base, quote), interval),
-                    market_candle,
+                    start_time_millis_inc: start_time_millis,
+                    end_time_millis_exc: end_time_millis,
+                    is_candle_closed: is_candle_closed.value(row),
+                    ohlcv: Ohlcv {
+                        open: open.value(row),
+                        high: high.value(row),
+                        low: low.value(row),
+                        close: close.value(row),
+                        volume: volume.value(row),
+                        quote_volume: quote_volume.value(row),
+                        vwap: vwap.value(row),
+                    },
+                    trade_count: trade_count.value(row),
                     is_complete: is_complete.value(row),
                 };
                 let decoded_revision = CandleRevision::decode(revision.value(row).as_bytes())?;

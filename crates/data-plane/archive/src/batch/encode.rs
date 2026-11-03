@@ -72,62 +72,47 @@ impl ArchiveBatch {
                     Self::strings(
                         candles
                             .iter()
-                            .map(|closed| closed.candle().key.interval.label()),
+                            .map(|closed| closed.candle().key.interval.label().to_string()),
                     ),
                     Arc::new(Int64Array::from_iter_values(candles.iter().map(|closed| {
-                        i64::try_from(closed.candle().market_candle.start_time_millis_inc)
-                            .unwrap_or(i64::MAX)
+                        i64::try_from(closed.candle().start_time_millis_inc).unwrap_or(i64::MAX)
                     }))),
                     Arc::new(Int64Array::from_iter_values(candles.iter().map(|closed| {
-                        i64::try_from(closed.candle().market_candle.end_time_millis_exc)
-                            .unwrap_or(i64::MAX)
+                        i64::try_from(closed.candle().end_time_millis_exc).unwrap_or(i64::MAX)
                     }))),
                     Arc::new(Int64Array::from_iter_values(candles.iter().map(|closed| {
-                        i64::try_from(closed.candle().market_candle.duration_millis)
-                            .unwrap_or(i64::MAX)
+                        i64::try_from(closed.candle().duration_millis()).unwrap_or(i64::MAX)
                     }))),
-                    Arc::new(BooleanArray::from_iter(candles.iter().map(|closed| {
-                        Some(closed.candle().market_candle.is_candle_closed)
-                    }))),
-                    Arc::new(Float64Array::from_iter_values(
+                    Arc::new(BooleanArray::from_iter(
                         candles
                             .iter()
-                            .map(|closed| closed.candle().market_candle.ohlcv.open),
+                            .map(|closed| Some(closed.candle().is_candle_closed)),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles.iter().map(|closed| closed.candle().ohlcv.open),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles.iter().map(|closed| closed.candle().ohlcv.high),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles.iter().map(|closed| closed.candle().ohlcv.low),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles.iter().map(|closed| closed.candle().ohlcv.close),
+                    )),
+                    Arc::new(Float64Array::from_iter_values(
+                        candles.iter().map(|closed| closed.candle().ohlcv.volume),
                     )),
                     Arc::new(Float64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.candle().market_candle.ohlcv.high),
+                            .map(|closed| closed.candle().ohlcv.quote_volume),
                     )),
                     Arc::new(Float64Array::from_iter_values(
-                        candles
-                            .iter()
-                            .map(|closed| closed.candle().market_candle.ohlcv.low),
-                    )),
-                    Arc::new(Float64Array::from_iter_values(
-                        candles
-                            .iter()
-                            .map(|closed| closed.candle().market_candle.ohlcv.close),
-                    )),
-                    Arc::new(Float64Array::from_iter_values(
-                        candles
-                            .iter()
-                            .map(|closed| closed.candle().market_candle.ohlcv.volume),
-                    )),
-                    Arc::new(Float64Array::from_iter_values(
-                        candles
-                            .iter()
-                            .map(|closed| closed.candle().market_candle.ohlcv.quote_volume),
-                    )),
-                    Arc::new(Float64Array::from_iter_values(
-                        candles
-                            .iter()
-                            .map(|closed| closed.candle().market_candle.ohlcv.vwap),
+                        candles.iter().map(|closed| closed.candle().ohlcv.vwap),
                     )),
                     Arc::new(UInt64Array::from_iter_values(
-                        candles
-                            .iter()
-                            .map(|closed| closed.candle().market_candle.trade_count),
+                        candles.iter().map(|closed| closed.candle().trade_count),
                     )),
                     Arc::new(Int64Array::from_iter_values(
                         candles
