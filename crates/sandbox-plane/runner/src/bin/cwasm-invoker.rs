@@ -51,15 +51,12 @@ impl CwasmInvoker {
             }
         };
 
-        let _cwasm = match request.cwasm_get_url.as_deref() {
-            Some(url) => match Cwasm::download(url, CwasmLimits::default()).await {
-                Ok(cwasm) => Some(cwasm),
-                Err(error) => {
-                    eprintln!("cwasm-invoker: failed to download cwasm: {error}");
-                    return ExitCode::ServerRunnerConnectionFailed.code();
-                }
-            },
-            None => None,
+        let _cwasm = match Cwasm::download(&request.cwasm_get_url, CwasmLimits::default()).await {
+            Ok(cwasm) => cwasm,
+            Err(error) => {
+                eprintln!("cwasm-invoker: failed to download cwasm: {error}");
+                return ExitCode::ServerRunnerConnectionFailed.code();
+            }
         };
 
         Entry::run_command(request.command)
