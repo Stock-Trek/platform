@@ -21,6 +21,10 @@ pub enum StorageError {
         "extracted source is {size} bytes, exceeding the maximum extracted source size of {max_bytes} bytes"
     )]
     ExtractedSourceTooLarge { size: u64, max_bytes: u64 },
+    #[error(
+        "cwasm artifact is {size} bytes, exceeding the maximum cwasm size of {max_bytes} bytes"
+    )]
+    CwasmTooLarge { size: u64, max_bytes: u64 },
     #[error("failed to load AWS credentials: {0}")]
     Credentials(#[from] CredentialsError),
     #[error("invalid S3 endpoint URL: {source}")]
@@ -106,7 +110,8 @@ impl StorageError {
             | Self::ObjectTooLarge { .. }
             | Self::ArtifactTooLarge { .. }
             | Self::SourceArchiveTooLarge { .. }
-            | Self::ExtractedSourceTooLarge { .. } => Retryability::Permanent,
+            | Self::ExtractedSourceTooLarge { .. }
+            | Self::CwasmTooLarge { .. } => Retryability::Permanent,
             Self::Credentials(error) => Retryability::from_credentials(error),
         }
     }

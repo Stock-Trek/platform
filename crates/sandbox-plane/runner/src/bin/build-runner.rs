@@ -7,6 +7,7 @@
 //! ```json
 //! {
 //!   "command": "execute",
+//!   "cwasmGetUrl": "https://example.com/runner.cwasm",
 //!   "strategyName": "AlgorithmStub",
 //!   "strategyContextPath": "/tmp/strategy-context.bin",
 //!   "portfolioPath": "/tmp/portfolio.bin"
@@ -24,33 +25,48 @@
 //! ```
 
 use platform_exit_codes::ExitCode;
-use platform_runner::{command::Command, entry::Entry};
+use platform_runner::{
+    command::RunRequest,
+    cwasm::{Cwasm, CwasmLimits},
+    entry::Entry,
+};
 use serde_json::{Value, json};
 use std::io::{self, Read};
 
 struct BuildRunner;
 
 impl BuildRunner {
-    fn run() -> i32 {
+    async fn run() -> i32 {
         let mut body = String::new();
         if let Err(error) = io::stdin().read_to_string(&mut body) {
             eprintln!("build-runner: failed to read stdin: {error}");
             return 1;
         }
 
-        let command = match Self::parse_request(&body) {
-            Ok(command) => command,
+        let request = match Self::parse_request(&body) {
+            Ok(request) => request,
             Err(error) => {
                 eprintln!("build-runner: invalid request: {error}");
                 return ExitCode::ServerEntryFailedToParseRequest.code();
             }
         };
 
-        Entry::run_command(command)
+        let _cwasm = match request.cwasm_get_url.as_deref() {
+            Some(url) => match Cwasm::download(url, CwasmLimits::default()).await {
+                Ok(cwasm) => Some(cwasm),
+                Err(error) => {
+                    eprintln!("build-runner: failed to download cwasm: {error}");
+                    return ExitCode::ServerRunnerConnectionFailed.code();
+                }
+            },
+            None => None,
+        };
+
+        Entry::run_command(request.command)
     }
 
-    /// Deserialise the request body into a `Command`.
-    fn parse_request(body: &str) -> Result<Command, String> {
+    /// Deserialise the request body into a `RunRequest`.
+    fn parse_request(body: &str) -> Result<RunRequest, String> {
         if body.trim().is_empty() {
             return Err("body is empty".to_string());
         }
@@ -132,8 +148,9 @@ impl BuildRunner {
     }
 }
 
-fn main() {
-    std::process::exit(BuildRunner::run());
+#[tokio::main]
+async fn main() {
+    std::process::exit(BuildRunner::run().await);
 }
 
 #[unsafe(no_mangle)]

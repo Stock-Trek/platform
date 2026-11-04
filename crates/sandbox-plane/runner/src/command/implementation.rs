@@ -1,5 +1,19 @@
 use serde::Deserialize;
 
+/// A request to run the algorithm.
+///
+/// The pre-signed URL for the compiled runner artifact is provided alongside
+/// the command. It is optional while native algorithm execution remains the
+/// only supported invocation path.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunRequest {
+    #[serde(default)]
+    pub cwasm_get_url: Option<String>,
+    #[serde(flatten)]
+    pub command: Command,
+}
+
 /// A request to run the algorithm, together with the inputs that command
 /// needs. This is the single type that defines a build request: the JSON body
 /// received on stdin deserialises straight into it.
