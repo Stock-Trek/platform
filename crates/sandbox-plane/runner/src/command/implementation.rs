@@ -1,5 +1,14 @@
 use serde::Deserialize;
 
+/// A request to run the algorithm.
+#[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RunRequest {
+    pub cwasm_get_url: String,
+    #[serde(flatten)]
+    pub command: Command,
+}
+
 /// A request to run the algorithm, together with the inputs that command
 /// needs. This is the single type that defines a build request: the JSON body
 /// received on stdin deserialises straight into it.

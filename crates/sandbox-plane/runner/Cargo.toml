@@ -14,3 +14,10 @@ serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 stock-trek = { workspace = true }
 traitreg = { workspace = true }
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+platform-errors = { workspace = true, features = ["http", "storage"] }
+reqwest = { workspace = true, default-features = false, features = ["rustls-tls", "stream"] }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt-multi-thread", "time"] }
+tracing = { workspace = true }
