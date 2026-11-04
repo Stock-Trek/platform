@@ -1,42 +1,42 @@
-//! Native host for the `runner` algorithm.
+//! Native host binary for the runner.
 //!
-//! `build-agent` spawns `cwasm-invoker`, writes the request body to its stdin
-//! and forwards its stdout/stderr to the agent logs. The body is a JSON object
-//! shaped like:
+//! The guest that this binary invokes is the compiled runner itself, which is
+//! not able to talk to the network on its own. Instead, it expects a run
+//! request on stdin with the following shape:
 //!
 //! ```json
 //! {
-//!   "command": "execute",
-//!   "cwasmGetUrl": "https://example.com/runner.cwasm",
-//!   "strategyName": "AlgorithmStub",
-//!   "strategyContextPath": "/tmp/strategy-context.bin",
-//!   "portfolioPath": "/tmp/portfolio.bin"
+//!   "cwasmGetUrl": "<presigned S3 GET url>",
+//!   "command": "metadata",
+//!   "strategyName": "MyStrategy"
 //! }
 //! ```
 //!
-//! The `runner` crate implements an algorithm that imports the `env::queue_*`
-//! functions. This host provides native implementations of those imports and
-//! invokes the algorithm in-process. Every value queued by the algorithm is
-//! written to stdout as a single JSON line:
+//! The URL points at a runner cwasm artifact built for wasm32-wasip1 (see
+//! build-plane for details). This host downloads it, loads it into an
+//! embedded Wasmtime engine, provides native implementations of those imports
+//! and invokes the algorithm in-process. Every value queued by the algorithm
+//! is written to stdout as a single JSON line, e.g.:
 //!
-//! ```text
-//! {"type":"strategy","payload":"{...}"}
-//! {"type":"metadata","payload":{"name":"...","description":"..."}}
+//! ```json
+//! {"type":"metadata","payload":{"name":"MyStrategy","description":"..."}}
 //! ```
+//!
+//! The algorithm's own stdout and stderr are inherited so that log output
+//! shows up in the build runner's logs.
 
 #[path = "../cwasm/mod.rs"]
 mod cwasm;
 
-use cwasm::{Cwasm, CwasmLimits};
+use cwasm::{Cwasm, CwasmLimits, WasmRunner};
 use platform_exit_codes::ExitCode;
-use platform_runner::{command::RunRequest, entry::Entry};
-use serde_json::{Value, json};
+use platform_runner::command::RunRequest;
 use std::io::{self, Read};
 
 struct CwasmInvoker;
 
 impl CwasmInvoker {
-    async fn run() -> i32 {
+    fn run() -> i32 {
         let mut body = String::new();
         if let Err(error) = io::stdin().read_to_string(&mut body) {
             eprintln!("cwasm-invoker: failed to read stdin: {error}");
@@ -51,145 +51,46 @@ impl CwasmInvoker {
             }
         };
 
-        let _cwasm = match Cwasm::download(&request.cwasm_get_url, CwasmLimits::default()).await {
+        let runtime = match tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+        {
+            Ok(runtime) => runtime,
+            Err(error) => {
+                eprintln!("cwasm-invoker: failed to start tokio runtime: {error}");
+                return ExitCode::ServerRunnerConnectionFailed.code();
+            }
+        };
+        let cwasm = match runtime.block_on(Cwasm::download(
+            &request.cwasm_get_url,
+            CwasmLimits::default(),
+        )) {
             Ok(cwasm) => cwasm,
             Err(error) => {
                 eprintln!("cwasm-invoker: failed to download cwasm: {error}");
                 return ExitCode::ServerRunnerConnectionFailed.code();
             }
         };
+        drop(runtime);
 
-        Entry::run_command(request.command)
+        let runner = match WasmRunner::new() {
+            Ok(runner) => runner,
+            Err(error) => {
+                eprintln!("cwasm-invoker: failed to create wasm engine: {error:?}");
+                return ExitCode::ServerRunnerCwasmNotLoaded.code();
+            }
+        };
+
+        let mut arguments = vec!["runner"];
+        arguments.extend(request.command.arguments());
+        runner.execute(cwasm.path(), &arguments)
     }
 
-    /// Deserialise the request body into a `RunRequest`.
-    fn parse_request(body: &str) -> Result<RunRequest, String> {
-        if body.trim().is_empty() {
-            return Err("body is empty".to_string());
-        }
+    fn parse_request(body: &str) -> Result<RunRequest, serde_json::Error> {
         serde_json::from_str(body)
-            .map_err(|error| format!("body is not a valid run request: {error}"))
-    }
-
-    /// Borrow a `(pointer, length)` pair as a byte slice.
-    ///
-    /// # Safety
-    /// When `length` is non-zero, `pointer` must be valid for reads of `length`
-    /// bytes for the duration of the borrow.
-    unsafe fn bytes<'a>(pointer: *const u8, length: usize) -> &'a [u8] {
-        if pointer.is_null() || length == 0 {
-            &[]
-        } else {
-            // Safety: upheld by the caller.
-            unsafe { std::slice::from_raw_parts(pointer, length) }
-        }
-    }
-
-    /// Print a queued value as a JSON line.
-    fn emit(kind: &str, payload: Value) {
-        println!("{}", json!({ "type": kind, "payload": payload }));
-    }
-
-    unsafe fn queue_metadata(
-        name_ptr: *const u8,
-        name_len: usize,
-        description_ptr: *const u8,
-        description_len: usize,
-    ) {
-        // Safety: the ABI guarantees the pointer/length pairs are valid.
-        let name = unsafe { Self::bytes(name_ptr, name_len) };
-        let description = unsafe { Self::bytes(description_ptr, description_len) };
-        Self::emit(
-            "metadata",
-            json!({
-                "name": String::from_utf8_lossy(name),
-                "description": String::from_utf8_lossy(description),
-            }),
-        );
-    }
-
-    unsafe fn queue_preferences(preferences_ptr: *const u8, preferences_len: usize) {
-        // Safety: the ABI guarantees the pointer/length pair is valid.
-        let preferences = unsafe { Self::bytes(preferences_ptr, preferences_len) };
-        Self::emit("preferences", json!(String::from_utf8_lossy(preferences)));
-    }
-
-    unsafe fn queue_signals(signals_ptr: *const u8, signals_len: usize) {
-        // Safety: the ABI guarantees the pointer/length pair is valid.
-        let signals = unsafe { Self::bytes(signals_ptr, signals_len) };
-        Self::emit("signals", json!(String::from_utf8_lossy(signals)));
-    }
-
-    unsafe fn queue_strategy(strategy_ptr: *const u8, strategy_len: usize) {
-        // Safety: the ABI guarantees the pointer/length pair is valid.
-        let strategy = unsafe { Self::bytes(strategy_ptr, strategy_len) };
-        Self::emit("strategy", json!(String::from_utf8_lossy(strategy)));
-    }
-
-    unsafe fn queue_action(
-        action_ptr: *const u8,
-        action_len: usize,
-        recovery_policy_ptr: *const u8,
-        recovery_policy_len: usize,
-    ) {
-        // Safety: the ABI guarantees the pointer/length pairs are valid.
-        let action = unsafe { Self::bytes(action_ptr, action_len) };
-        let recovery_policy = unsafe { Self::bytes(recovery_policy_ptr, recovery_policy_len) };
-        Self::emit(
-            "action",
-            json!({
-                "action": String::from_utf8_lossy(action),
-                "recoveryPolicy": String::from_utf8_lossy(recovery_policy),
-            }),
-        );
     }
 }
 
-#[tokio::main]
-async fn main() {
-    std::process::exit(CwasmInvoker::run().await);
-}
-
-#[unsafe(no_mangle)]
-unsafe extern "C" fn queue_metadata(
-    name_ptr: *const u8,
-    name_len: usize,
-    description_ptr: *const u8,
-    description_len: usize,
-) {
-    unsafe {
-        CwasmInvoker::queue_metadata(name_ptr, name_len, description_ptr, description_len);
-    }
-}
-
-#[unsafe(no_mangle)]
-unsafe extern "C" fn queue_preferences(preferences_ptr: *const u8, preferences_len: usize) {
-    unsafe { CwasmInvoker::queue_preferences(preferences_ptr, preferences_len) };
-}
-
-#[unsafe(no_mangle)]
-unsafe extern "C" fn queue_signals(signals_ptr: *const u8, signals_len: usize) {
-    unsafe { CwasmInvoker::queue_signals(signals_ptr, signals_len) };
-}
-
-#[unsafe(no_mangle)]
-unsafe extern "C" fn queue_strategy(strategy_ptr: *const u8, strategy_len: usize) {
-    unsafe { CwasmInvoker::queue_strategy(strategy_ptr, strategy_len) };
-}
-
-#[unsafe(no_mangle)]
-unsafe extern "C" fn queue_action(
-    action_ptr: *const u8,
-    action_len: usize,
-    recovery_policy_ptr: *const u8,
-    recovery_policy_len: usize,
-) {
-    unsafe {
-        CwasmInvoker::queue_action(
-            action_ptr,
-            action_len,
-            recovery_policy_ptr,
-            recovery_policy_len,
-        );
-    }
+fn main() {
+    std::process::exit(CwasmInvoker::run());
 }

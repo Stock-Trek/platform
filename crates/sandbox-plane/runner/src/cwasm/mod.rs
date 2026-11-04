@@ -5,8 +5,13 @@
 //! temporary file so it does not need to fit in memory.
 
 mod implementation;
+mod runtime;
+
+#[cfg(test)]
+mod runtime_tests;
 
 #[cfg(test)]
 mod tests;
 
 pub use implementation::*;
+pub use runtime::*;
