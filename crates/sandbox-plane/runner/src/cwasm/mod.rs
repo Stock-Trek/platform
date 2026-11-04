@@ -4,8 +4,9 @@
 //! run request as `cwasmGetUrl`. The artifact is streamed to a private
 //! temporary file so it does not need to fit in memory.
 
-#[allow(unused_imports)]
-pub use platform_cwasm::*;
+mod implementation;
 
 #[cfg(test)]
 mod tests;
+
+pub use implementation::*;

@@ -67,7 +67,6 @@ FROM base AS build-agent
 
 WORKDIR ${LAMBDA_RUNTIME_DIR}
 ENV BUILD_AGENT_SOURCE_DIR="${LAMBDA_RUNTIME_DIR}"
-COPY ./crates/sandbox-plane/cwasm ./crates/sandbox-plane/cwasm
 COPY ./crates/sandbox-plane/exit-codes ./crates/sandbox-plane/exit-codes
 COPY ./crates/sandbox-plane/runner ./crates/sandbox-plane/runner
 COPY ./Cargo.lock ./Cargo.lock

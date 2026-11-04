@@ -27,7 +27,7 @@
 use platform_exit_codes::ExitCode;
 use platform_runner::{
     command::RunRequest,
-    cwasm::{Cwasm, CwasmLimits, block_on},
+    cwasm::{Cwasm, CwasmLimits},
     entry::Entry,
 };
 use serde_json::{Value, json};
@@ -148,8 +148,9 @@ impl CwasmInvoker {
     }
 }
 
-fn main() {
-    std::process::exit(block_on(CwasmInvoker::run()));
+#[tokio::main]
+async fn main() {
+    std::process::exit(CwasmInvoker::run().await);
 }
 
 #[unsafe(no_mangle)]

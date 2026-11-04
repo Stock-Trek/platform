@@ -1,6 +1,5 @@
 use platform_errors::{BpError, BpResult, StorageError};
 use std::{
-    future::Future,
     num::NonZeroU64,
     path::{Path, PathBuf},
     time::Duration,
@@ -12,15 +11,6 @@ pub const CWASM_FILE_NAME: &str = "runner.cwasm";
 pub const DEFAULT_CWASM_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 pub const DEFAULT_MAX_CWASM_BYTES: NonZeroU64 =
     NonZeroU64::new(64 * 1024 * 1024).expect("default cwasm limit is non-zero");
-
-/// Run a future to completion on a dedicated multi-threaded runtime.
-pub fn block_on<F: Future>(future: F) -> F::Output {
-    tokio::runtime::Builder::new_multi_thread()
-        .enable_all()
-        .build()
-        .expect("cwasm download runtime should build")
-        .block_on(future)
-}
 
 /// Resource limits applied while downloading a compiled runner artifact.
 ///

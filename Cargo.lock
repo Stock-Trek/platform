@@ -4420,17 +4420,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "platform-cwasm"
-version = "0.2.0"
-dependencies = [
- "platform-errors",
- "reqwest 0.12.28",
- "tempfile",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "platform-errors"
 version = "0.2.0"
 dependencies = [
@@ -4675,15 +4664,17 @@ dependencies = [
 name = "platform-runner"
 version = "0.2.0"
 dependencies = [
- "platform-cwasm",
  "platform-errors",
  "platform-exit-codes",
  "prost",
+ "reqwest 0.12.28",
  "rust_decimal",
  "serde",
  "serde_json",
  "stock-trek",
+ "tempfile",
  "tokio",
+ "tracing",
  "traitreg",
 ]
 

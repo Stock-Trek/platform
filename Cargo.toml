@@ -39,7 +39,6 @@ platform-git = { path = "crates/integrations/git" }
 platform-github = { path = "crates/integrations/github" }
 platform-sqs = { path = "crates/integrations/sqs" }
 
-platform-cwasm = { path = "crates/sandbox-plane/cwasm" }
 platform-exit-codes = { path = "crates/sandbox-plane/exit-codes" }
 platform-runner = { path = "crates/sandbox-plane/runner" }
 
