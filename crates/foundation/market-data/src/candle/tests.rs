@@ -6,7 +6,7 @@ use stock_trek::markets::{AlignedWindow, TimestampMillis};
 use stock_trek_types::cex::asset_id::AssetId;
 use stock_trek_types::cex::cex_id::CexId;
 use stock_trek_types::cex::trading_pair::TradingPair;
-use strum::IntoEnumIterator;
+use strum::{IntoEnumIterator, VariantArray};
 
 fn decimal(value: &str) -> Decimal {
     Decimal::from_str_exact(value).unwrap()
@@ -64,7 +64,7 @@ fn every_aligned_window_is_supported() {
 
 #[test]
 fn aligned_window_intervals_have_unique_labels() {
-    let intervals = all_intervals();
+    let intervals = AlignedWindow::VARIANTS;
     let labels = intervals
         .iter()
         .map(|interval| interval.label())

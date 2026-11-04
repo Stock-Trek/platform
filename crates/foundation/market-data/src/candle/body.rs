@@ -1,4 +1,4 @@
-use super::interval::AlignedWindow;
+use super::AlignedWindow;
 use super::key::CandleKey;
 use crate::decoders::trade::Trade;
 use platform_errors::{BpError, BpResult};

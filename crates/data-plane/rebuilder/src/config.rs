@@ -1,10 +1,11 @@
 use platform_archive::{ArchiveTableLayer, IcebergConfig};
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::{AlignedWindow, all_intervals};
+use platform_market_data::candle::AlignedWindow;
 use platform_runtime::Config;
 use platform_types::new_types::DurationMilliseconds;
 use std::collections::BTreeMap;
+use strum::VariantArray;
 
 const REBUILDER_S3_BUCKET: &str = "REBUILDER_S3_BUCKET";
 const REBUILDER_OUTPUT_PREFIX: &str = "REBUILDER_OUTPUT_PREFIX";
@@ -77,7 +78,7 @@ impl RebuildConfig {
         let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(REBUILDER_S3_BUCKET)?;
         let output_prefix = vars.required(REBUILDER_OUTPUT_PREFIX)?;
-        let intervals = all_intervals();
+        let intervals = AlignedWindow::VARIANTS.to_vec();
         let allowed_lateness =
             DurationMilliseconds(vars.required_parsed(REBUILDER_ALLOWED_LATENESS_MS)?);
         let max_closed_candles_per_interval =

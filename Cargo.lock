@@ -4655,6 +4655,7 @@ dependencies = [
  "platform-runtime",
  "platform-types",
  "stock-trek-types",
+ "strum 0.28.0",
  "tokio",
  "tracing",
 ]
@@ -6088,9 +6089,9 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "stock-trek"
-version = "0.16.0"
+version = "0.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "772027dd4848bcc712838f1e9693b54b41ada3d560ed9260d20d5cdc8926e17d"
+checksum = "22d1042b1eef484d0d5ee205c4297822364108000aff3e4c864706fa7b739598"
 dependencies = [
  "chrono",
  "rust_decimal",
