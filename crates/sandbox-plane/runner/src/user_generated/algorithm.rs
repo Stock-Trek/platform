@@ -30,8 +30,8 @@ impl Algorithm for AlgorithmStub {
             },
         }
     }
-    fn signals(&self, _c: &SignalContext) -> Signals {
-        Signals::new()
+    fn signals(&self, _c: &SignalContext) -> StockTrekResult<Signals> {
+        Ok(Signals::new())
     }
     fn strategy(&self, c: &StrategyContext) -> Command {
         c.commands.no_op()

@@ -3,7 +3,7 @@
 use super::{CandleProcessor, ProcessorConfig};
 use crate::state::{AggregatorState, SequenceRange};
 use platform_market_data::{
-    candle::{CandleInterval, CandleKey},
+    candle::{AlignedWindow, CandleKey},
     decoders::trade::Trade,
     event::{GapMarker, MarketEvent},
 };
@@ -33,8 +33,8 @@ fn event(sequence: u64, timestamp: i64) -> MarketEvent {
     }
 }
 
-fn one_minute() -> CandleInterval {
-    CandleInterval::from_label("1m").unwrap()
+fn one_minute() -> AlignedWindow {
+    AlignedWindow::try_from("1m").unwrap()
 }
 
 fn gap(detected_at: i64) -> GapMarker {
@@ -70,8 +70,8 @@ fn first_trade_opens_a_candle() {
     assert!(update.closed.is_empty());
     assert_eq!(update.open.len(), 1);
     assert_eq!(update.open[0].start_time(), TimestampMilliseconds(60_000));
-    assert_eq!(update.open[0].market_candle.ohlcv.open, 100.0);
-    assert!(!update.open[0].market_candle.is_candle_closed);
+    assert_eq!(update.open[0].ohlcv.open(), 100.0);
+    assert!(!update.open[0].is_candle_closed);
 }
 
 #[test]
@@ -105,7 +105,7 @@ fn crossing_a_boundary_closes_the_previous_candle_from_event_time() {
     );
     assert_eq!(update.closed[0].revision().source_offset, 0);
     assert_eq!(update.closed[0].revision().state_epoch, 0);
-    assert!(update.closed[0].candle().market_candle.is_candle_closed);
+    assert!(update.closed[0].candle().is_candle_closed);
     assert_eq!(
         update.closed[0].candle().start_time(),
         TimestampMilliseconds(60_000)
@@ -144,7 +144,7 @@ fn events_are_deduplicated_by_exchange_stream_and_sequence() {
     let duplicate = processor.apply_event(&event(7, 61_000), &[trade("100", 61_000)]);
     let next = processor.apply_event(&event(8, 62_000), &[trade("101", 62_000)]);
 
-    assert_eq!(first.open[0].market_candle.trade_count, 1);
+    assert_eq!(first.open[0].trade_count, 1);
     assert_eq!(duplicate.duplicates, 1);
     assert!(duplicate.open.is_empty());
     assert_eq!(next.duplicates, 0);
@@ -157,7 +157,6 @@ fn events_are_deduplicated_by_exchange_stream_and_sequence() {
                 one_minute()
             ))
             .unwrap()
-            .market_candle
             .trade_count,
         2
     );
@@ -206,9 +205,9 @@ fn trades_inside_the_allowed_lateness_update_the_older_window() {
             one_minute(),
         ))
         .unwrap();
-    assert_eq!(candle.market_candle.ohlcv.high, 100.0);
-    assert_eq!(candle.market_candle.ohlcv.low, 90.0);
-    assert_eq!(candle.market_candle.trade_count, 2);
+    assert_eq!(candle.ohlcv.high(), 100.0);
+    assert_eq!(candle.ohlcv.low(), 90.0);
+    assert_eq!(candle.trade_count, 2);
 }
 
 #[test]
@@ -224,8 +223,8 @@ fn trades_after_allowed_lateness_correct_the_closed_candle() {
     assert_eq!(update.late_trades, 1);
     assert!(update.open.is_empty());
     assert_eq!(update.closed.len(), 1);
-    assert_eq!(update.closed[0].candle().market_candle.trade_count, 2);
-    assert_eq!(update.closed[0].candle().market_candle.ohlcv.low, 90.0);
+    assert_eq!(update.closed[0].candle().trade_count, 2);
+    assert_eq!(update.closed[0].candle().ohlcv.low(), 90.0);
 }
 
 #[test]
@@ -248,7 +247,7 @@ fn far_future_exchange_timestamps_cannot_advance_the_watermark_past_receipt() {
 
     let update = processor.apply_event(&event(2, 63_000), &[trade("100", 63_000)]);
     assert_eq!(update.late_trades, 0);
-    assert_eq!(update.open[0].market_candle.trade_count, 1);
+    assert_eq!(update.open[0].trade_count, 1);
 }
 
 #[test]
@@ -273,7 +272,7 @@ fn idle_flushes_do_not_push_event_time_stream_watermarks() {
     assert_eq!(update.late_trades, 0);
     assert!(update.closed.is_empty());
     assert_eq!(update.open.len(), 1);
-    assert_eq!(update.open[0].market_candle.trade_count, 2);
+    assert_eq!(update.open[0].trade_count, 2);
 }
 
 #[test]
@@ -312,8 +311,8 @@ fn stream_watermarks_do_not_close_other_pairs_candles() {
     );
     let candle = processor.state().open_candle(&key).unwrap();
     assert_eq!(candle.start_time(), TimestampMilliseconds(60_000));
-    assert_eq!(candle.market_candle.trade_count, 2);
-    assert!(!candle.market_candle.is_candle_closed);
+    assert_eq!(candle.trade_count, 2);
+    assert!(!candle.is_candle_closed);
 }
 
 #[test]
@@ -333,8 +332,8 @@ fn backfilled_trades_revise_closed_candles() {
         update.closed[0].candle().start_time(),
         TimestampMilliseconds(60_000)
     );
-    assert_eq!(update.closed[0].candle().market_candle.trade_count, 2);
-    assert_eq!(update.closed[0].candle().market_candle.ohlcv.close, 105.0);
+    assert_eq!(update.closed[0].candle().trade_count, 2);
+    assert_eq!(update.closed[0].candle().ohlcv.close(), 105.0);
     assert_ne!(
         update.closed[0].message_id(),
         original.closed[0].message_id()
@@ -348,8 +347,8 @@ fn backfilled_trades_revise_closed_candles() {
         .state()
         .closed_candle(&key, TimestampMilliseconds(60_000))
         .unwrap();
-    assert_eq!(retained.market_candle.trade_count, 2);
-    assert_eq!(retained.market_candle.ohlcv.close, 105.0);
+    assert_eq!(retained.trade_count, 2);
+    assert_eq!(retained.ohlcv.close(), 105.0);
 }
 
 #[test]
@@ -365,7 +364,7 @@ fn backfilled_trades_create_candles_for_windows_without_history() {
         update.closed[0].candle().start_time(),
         TimestampMilliseconds(60_000)
     );
-    assert_eq!(update.closed[0].candle().market_candle.trade_count, 1);
+    assert_eq!(update.closed[0].candle().trade_count, 1);
 }
 
 #[test]
@@ -386,7 +385,7 @@ fn a_gap_records_an_incomplete_window_and_closes_expired_candles() {
     let update = processor.apply_gap(&gap(120_000));
 
     assert_eq!(update.closed.len(), 1);
-    assert!(update.closed[0].candle().market_candle.is_candle_closed);
+    assert!(update.closed[0].candle().is_candle_closed);
     assert!(update.closed[0].is_incomplete());
     assert_eq!(update.incomplete_windows.len(), 1);
     assert_eq!(
@@ -592,15 +591,15 @@ fn open_updates_are_coalesced_by_key_keeping_the_last_value() {
     );
 
     assert_eq!(update.open.len(), 1);
-    assert_eq!(update.open[0].market_candle.trade_count, 2);
-    assert_eq!(update.open[0].market_candle.ohlcv.close, 101.0);
+    assert_eq!(update.open[0].trade_count, 2);
+    assert_eq!(update.open[0].ohlcv.close(), 101.0);
 }
 
 #[test]
 fn update_includes_every_configured_interval() {
     let mut processor = CandleProcessor::new(vec![
-        CandleInterval::from_label("1m").unwrap(),
-        CandleInterval::from_label("5m").unwrap(),
+        AlignedWindow::try_from("1m").unwrap(),
+        AlignedWindow::try_from("5m").unwrap(),
     ]);
     let update = processor.apply_trade(&trade("100", 61_000));
 
@@ -623,8 +622,8 @@ fn late_trades_do_not_reopen_a_closed_candle() {
 }
 
 fn retention_config(
-    intervals: Vec<CandleInterval>,
-    caps: &[(CandleInterval, usize)],
+    intervals: Vec<AlignedWindow>,
+    caps: &[(AlignedWindow, usize)],
     allowed_lateness: DurationMilliseconds,
     correction_cutoff: DurationMilliseconds,
 ) -> ProcessorConfig {
@@ -652,8 +651,8 @@ fn a_late_trade_inside_the_correction_cutoff_revises_the_full_candle() {
     assert_eq!(update.late_trades, 1);
     assert_eq!(update.out_of_contract_trades, 0);
     assert_eq!(update.closed.len(), 1);
-    assert_eq!(update.closed[0].candle().market_candle.trade_count, 2);
-    assert_eq!(update.closed[0].candle().market_candle.ohlcv.low, 90.0);
+    assert_eq!(update.closed[0].candle().trade_count, 2);
+    assert_eq!(update.closed[0].candle().ohlcv.low(), 90.0);
 }
 
 #[test]
@@ -683,8 +682,8 @@ fn a_late_trade_outside_the_correction_cutoff_publishes_nothing() {
             TimestampMilliseconds(60_000),
         )
         .unwrap();
-    assert_eq!(candle.market_candle.trade_count, 1);
-    assert_eq!(candle.market_candle.ohlcv.low, 100.0);
+    assert_eq!(candle.trade_count, 1);
+    assert_eq!(candle.ohlcv.low(), 100.0);
 }
 
 #[test]
@@ -727,7 +726,7 @@ fn a_correction_for_a_cap_evicted_window_is_rejected() {
 #[test]
 fn different_intervals_apply_their_own_caps() {
     let one_minute = one_minute();
-    let five_minutes = CandleInterval::from_label("5m").unwrap();
+    let five_minutes = AlignedWindow::try_from("5m").unwrap();
     let mut processor = CandleProcessor::with_config(retention_config(
         vec![one_minute, five_minutes],
         &[(one_minute, 1), (five_minutes, 1)],

@@ -1,10 +1,9 @@
 use super::*;
 use crate::{
-    candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
+    candle::{AlignedWindow, Candle, CandleKey, ClosedCandle},
     event::{GapMarker, MarketEvent},
 };
 use platform_types::new_types::TimestampMilliseconds;
-use stock_trek::markets::{MarketCandle, MarketOhlcv};
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 fn event() -> MarketEvent {
@@ -23,16 +22,13 @@ fn closed_candle() -> ClosedCandle {
         key: CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-            CandleInterval::from_label("1m").unwrap(),
+            AlignedWindow::try_from("1m").unwrap(),
         ),
-        market_candle: MarketCandle::new(
-            60_000,
-            120_000,
-            60_000,
-            true,
-            MarketOhlcv::new(1.0, 2.0, 0.5, 1.5, 10.0, 15.0, 1.5),
-            5,
-        ),
+        start_time_millis_inc: 60_000,
+        end_time_millis_exc: 120_000,
+        is_candle_closed: true,
+        ohlcv: crate::candle::MarketOhlcv::new(1.0, 2.0, 0.5, 1.5, 10.0, 15.0).unwrap(),
+        trade_count: 5,
         is_complete: true,
     };
     ClosedCandle::new(candle, TimestampMilliseconds(121_000), 3, 0)

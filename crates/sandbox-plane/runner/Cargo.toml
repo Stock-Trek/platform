@@ -13,3 +13,4 @@ rust_decimal = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 stock-trek = { workspace = true }
+traitreg = { workspace = true }

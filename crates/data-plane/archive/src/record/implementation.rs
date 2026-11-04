@@ -270,7 +270,7 @@ impl ArchivePartition {
                 Self::segment(&candle.exchange.to_string()),
                 Self::segment(&candle.trading_pair.base.to_string()),
                 Self::segment(&candle.trading_pair.quote.to_string()),
-                Self::segment(&candle.interval.label())
+                Self::segment(candle.interval.label())
             ),
         }
     }

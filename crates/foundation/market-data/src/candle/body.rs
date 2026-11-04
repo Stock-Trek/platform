@@ -1,11 +1,12 @@
-use super::interval::CandleInterval;
+use super::AlignedWindow;
 use super::key::CandleKey;
 use crate::decoders::trade::Trade;
 use platform_errors::{BpError, BpResult};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 use serde::{Deserialize, Serialize};
-use stock_trek::markets::{MarketCandle, MarketOhlcv};
+use stock_trek::markets::MarketOhlcv;
+use stock_trek::markets::TimestampMillis;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -26,19 +27,27 @@ enum CandleTimestampError {
 #[derive(Deserialize)]
 struct CandleWire {
     key: CandleKey,
-    market_candle: MarketCandle,
+    start_time_millis_inc: u64,
+    end_time_millis_exc: u64,
+    is_candle_closed: bool,
+    ohlcv: MarketOhlcv,
+    trade_count: u64,
     is_complete: bool,
 }
 
 /// An aggregated candle together with its exchange and interval identity.
 ///
-/// The candle body reuses the stock-trek market data DTOs so downstream
-/// consumers receive the same representation as other market data producers.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+/// The candle carries stock-trek's [`MarketOhlcv`] body while remaining mutable,
+/// because aggregation folds trades into an open candle in place.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "CandleWire")]
 pub struct Candle {
     pub key: CandleKey,
-    pub market_candle: MarketCandle,
+    pub start_time_millis_inc: u64,
+    pub end_time_millis_exc: u64,
+    pub is_candle_closed: bool,
+    pub ohlcv: MarketOhlcv,
+    pub trade_count: u64,
     /// Whether every source event that belongs to this window was observed.
     ///
     /// Candles start complete. A gap marker that covers the window marks it
@@ -54,8 +63,8 @@ impl TryFrom<CandleWire> for Candle {
     type Error = CandleTimestampError;
 
     fn try_from(wire: CandleWire) -> Result<Self, Self::Error> {
-        let start = wire.market_candle.start_time_millis_inc;
-        let end = wire.market_candle.end_time_millis_exc;
+        let start = wire.start_time_millis_inc;
+        let end = wire.end_time_millis_exc;
         Self::validate_timestamp(start)?;
         Self::validate_timestamp(end)?;
         if end < start {
@@ -64,37 +73,31 @@ impl TryFrom<CandleWire> for Candle {
 
         Ok(Self {
             key: wire.key,
-            market_candle: wire.market_candle,
+            start_time_millis_inc: start,
+            end_time_millis_exc: end,
+            is_candle_closed: wire.is_candle_closed,
+            ohlcv: wire.ohlcv,
+            trade_count: wire.trade_count,
             is_complete: wire.is_complete,
         })
     }
 }
 
 impl Candle {
-    pub fn open(trade: &Trade, interval: CandleInterval) -> BpResult<Self> {
+    pub fn open(trade: &Trade, interval: AlignedWindow) -> BpResult<Self> {
         let price = Self::to_f64("price", trade.price)?;
         let quantity = Self::to_f64("quantity", trade.quantity)?;
         let quote_volume = price * quantity;
-        let start_time = interval
-            .start_for(trade.timestamp)
-            .map_err(|error| BpError::candle_conversion("timestamp", error))?;
-        let end_time = interval
-            .end_for(trade.timestamp)
-            .map_err(|error| BpError::candle_conversion("timestamp", error))?;
-        let start_millis = Self::to_millis(start_time.0)?;
-        let end_millis = Self::to_millis(end_time.0)?;
-        let duration_millis = end_millis - start_millis;
+        let bounds = Self::window_bounds(trade.timestamp, interval)?;
 
         Ok(Self {
             key: CandleKey::new(trade.exchange, trade.trading_pair, interval),
-            market_candle: MarketCandle::new(
-                start_millis,
-                end_millis,
-                duration_millis,
-                false,
-                MarketOhlcv::new(price, price, price, price, quantity, quote_volume, price),
-                1,
-            ),
+            start_time_millis_inc: bounds.0,
+            end_time_millis_exc: bounds.1,
+            is_candle_closed: false,
+            ohlcv: MarketOhlcv::new(price, price, price, price, quantity, quote_volume)
+                .map_err(|error| BpError::candle_conversion("ohlcv", error))?,
+            trade_count: 1,
             is_complete: true,
         })
     }
@@ -122,32 +125,46 @@ impl Candle {
     pub fn apply_trade(&mut self, trade: &Trade) -> BpResult<()> {
         let price = Self::to_f64("price", trade.price)?;
         let quantity = Self::to_f64("quantity", trade.quantity)?;
-        let ohlcv = &mut self.market_candle.ohlcv;
 
-        ohlcv.high = ohlcv.high.max(price);
-        ohlcv.low = ohlcv.low.min(price);
-        ohlcv.close = price;
-        ohlcv.volume += quantity;
-        ohlcv.quote_volume += price * quantity;
-        ohlcv.vwap = if ohlcv.volume == 0.0 {
-            0.0
-        } else {
-            ohlcv.quote_volume / ohlcv.volume
-        };
-        self.market_candle.trade_count = self.market_candle.trade_count.saturating_add(1);
+        self.ohlcv
+            .apply_trade(price, quantity)
+            .map_err(|error| BpError::candle_conversion("trade", error))?;
+        self.trade_count = self.trade_count.saturating_add(1);
         Ok(())
     }
 
     pub fn close(&mut self) {
-        self.market_candle.is_candle_closed = true;
+        self.is_candle_closed = true;
     }
 
     pub fn start_time(&self) -> TimestampMilliseconds {
-        Self::to_timestamp(self.market_candle.start_time_millis_inc)
+        Self::to_timestamp(self.start_time_millis_inc)
     }
 
     pub fn end_time(&self) -> TimestampMilliseconds {
-        Self::to_timestamp(self.market_candle.end_time_millis_exc)
+        Self::to_timestamp(self.end_time_millis_exc)
+    }
+
+    pub fn duration_millis(&self) -> u64 {
+        self.end_time_millis_exc
+            .saturating_sub(self.start_time_millis_inc)
+    }
+
+    fn window_bounds(
+        timestamp: TimestampMilliseconds,
+        interval: AlignedWindow,
+    ) -> BpResult<(u64, u64)> {
+        let timestamp = TimestampMillis::try_from(timestamp.0)
+            .map_err(|error| BpError::candle_conversion("timestamp", error))?;
+        let bounds = interval
+            .bounds_for(timestamp)
+            .map_err(|error| BpError::candle_conversion("timestamp", error))?;
+        let start_millis = bounds.lower().as_millis();
+        let end_millis = bounds.upper().as_millis();
+        Self::validate_timestamp(start_millis)
+            .and_then(|_| Self::validate_timestamp(end_millis))
+            .map_err(|error| BpError::candle_conversion("timestamp", error))?;
+        Ok((start_millis, end_millis))
     }
 
     fn to_f64(field: &'static str, value: Decimal) -> BpResult<f64> {
@@ -157,10 +174,6 @@ impl Candle {
             .ok_or_else(|| {
                 BpError::candle_conversion(field, DecimalConversionError { field, value })
             })
-    }
-
-    fn to_millis(value: i64) -> BpResult<u64> {
-        u64::try_from(value).map_err(|error| BpError::candle_conversion("timestamp", error))
     }
 
     fn validate_timestamp(value: u64) -> Result<(), CandleTimestampError> {

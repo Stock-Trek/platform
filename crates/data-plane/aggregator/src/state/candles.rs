@@ -2,7 +2,7 @@
 
 use super::AggregatorState;
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::{Candle, CandleInterval, CandleKey};
+use platform_market_data::candle::{AlignedWindow, Candle, CandleKey};
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
@@ -38,7 +38,7 @@ impl AggregatorState {
 
     pub fn closed_candles_len_by_interval(
         &self,
-    ) -> std::collections::BTreeMap<CandleInterval, usize> {
+    ) -> std::collections::BTreeMap<AlignedWindow, usize> {
         let mut counts = std::collections::BTreeMap::new();
         for (key, candles) in &self.closed_candles {
             *counts.entry(key.interval).or_default() += candles.len();
@@ -92,7 +92,7 @@ impl AggregatorState {
 
     pub fn prune_closed_candles_to_caps(
         &mut self,
-        caps: &std::collections::BTreeMap<CandleInterval, usize>,
+        caps: &std::collections::BTreeMap<AlignedWindow, usize>,
     ) -> BpResult<Vec<Candle>> {
         let mut evicted = Vec::new();
         for (key, candles) in &mut self.closed_candles {
@@ -116,7 +116,7 @@ impl AggregatorState {
         Ok(evicted)
     }
 
-    pub fn candles_use_intervals(&self, intervals: &[CandleInterval]) -> bool {
+    pub fn candles_use_intervals(&self, intervals: &[AlignedWindow]) -> bool {
         self.open_candles
             .keys()
             .chain(self.closed_candles.keys())
@@ -150,20 +150,7 @@ impl AggregatorState {
     }
 
     fn candle_eq(left: &Candle, right: &Candle) -> bool {
-        left.key == right.key
-            && left.is_complete == right.is_complete
-            && left.market_candle.start_time_millis_inc == right.market_candle.start_time_millis_inc
-            && left.market_candle.end_time_millis_exc == right.market_candle.end_time_millis_exc
-            && left.market_candle.duration_millis == right.market_candle.duration_millis
-            && left.market_candle.is_candle_closed == right.market_candle.is_candle_closed
-            && left.market_candle.trade_count == right.market_candle.trade_count
-            && left.market_candle.ohlcv.open == right.market_candle.ohlcv.open
-            && left.market_candle.ohlcv.high == right.market_candle.ohlcv.high
-            && left.market_candle.ohlcv.low == right.market_candle.ohlcv.low
-            && left.market_candle.ohlcv.close == right.market_candle.ohlcv.close
-            && left.market_candle.ohlcv.volume == right.market_candle.ohlcv.volume
-            && left.market_candle.ohlcv.quote_volume == right.market_candle.ohlcv.quote_volume
-            && left.market_candle.ohlcv.vwap == right.market_candle.ohlcv.vwap
+        left == right
     }
 }
 

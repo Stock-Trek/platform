@@ -27,6 +27,6 @@ impl TryFrom<MarketCandlesMap> for MarketAlignedWindow {
                 .collect::<Result<Vec<_>, _>>()?;
             candles.insert(window, window_candles);
         }
-        Ok(MarketAlignedWindow::new(candles))
+        MarketAlignedWindow::new(candles)
     }
 }

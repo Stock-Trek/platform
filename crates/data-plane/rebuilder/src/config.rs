@@ -1,10 +1,11 @@
 use platform_archive::{ArchiveTableLayer, IcebergConfig};
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::CandleInterval;
+use platform_market_data::candle::AlignedWindow;
 use platform_runtime::Config;
 use platform_types::new_types::DurationMilliseconds;
 use std::collections::BTreeMap;
+use strum::VariantArray;
 
 const REBUILDER_S3_BUCKET: &str = "REBUILDER_S3_BUCKET";
 const REBUILDER_OUTPUT_PREFIX: &str = "REBUILDER_OUTPUT_PREFIX";
@@ -55,9 +56,9 @@ pub struct RebuildConfig {
     pub log_filter: String,
     pub s3_bucket: String,
     pub output_prefix: String,
-    pub intervals: Vec<CandleInterval>,
+    pub intervals: Vec<AlignedWindow>,
     pub allowed_lateness: DurationMilliseconds,
-    pub max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
+    pub max_closed_candles_per_interval: BTreeMap<AlignedWindow, usize>,
     pub correction_cutoff: DurationMilliseconds,
     pub source_layer: RebuildSourceLayer,
     pub output_layer: ArchiveTableLayer,
@@ -77,7 +78,7 @@ impl RebuildConfig {
         let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(REBUILDER_S3_BUCKET)?;
         let output_prefix = vars.required(REBUILDER_OUTPUT_PREFIX)?;
-        let intervals = CandleInterval::all();
+        let intervals = AlignedWindow::VARIANTS.to_vec();
         let allowed_lateness =
             DurationMilliseconds(vars.required_parsed(REBUILDER_ALLOWED_LATENESS_MS)?);
         let max_closed_candles_per_interval =
@@ -131,8 +132,8 @@ impl RebuildConfig {
 
     fn max_closed_candles_per_interval(
         vars: &EnvVars,
-        intervals: &[CandleInterval],
-    ) -> BpResult<BTreeMap<CandleInterval, usize>> {
+        intervals: &[AlignedWindow],
+    ) -> BpResult<BTreeMap<AlignedWindow, usize>> {
         let value = vars.required(REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL)?;
         let mut caps = BTreeMap::new();
         for entry in value
@@ -146,7 +147,7 @@ impl RebuildConfig {
                     format!("entry {entry:?} must use <interval>=<count>"),
                 ));
             };
-            let interval = CandleInterval::from_label(label.trim()).map_err(|error| {
+            let interval = AlignedWindow::try_from(label.trim()).map_err(|error| {
                 BpError::config_invalid_source(REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL, error)
             })?;
             if !intervals.contains(&interval) {

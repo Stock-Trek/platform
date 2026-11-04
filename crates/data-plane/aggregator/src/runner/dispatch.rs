@@ -225,7 +225,7 @@ where
         for (interval, evicted) in &update.closed_candle_evictions_by_interval {
             AggregatorMetrics::record_closed_candle_evictions(
                 shard.get(),
-                &interval.label(),
+                interval.label(),
                 *evicted as u64,
             );
         }
@@ -242,7 +242,7 @@ where
                 .unwrap_or_default();
             AggregatorMetrics::record_retained_closed_candles(
                 shard.get(),
-                &interval.label(),
+                interval.label(),
                 retained,
             );
         }

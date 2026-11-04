@@ -34,6 +34,7 @@ pub enum ExitCode {
     BotErrorCreatingScratchPad = 202,
     BotErrorResolvingAction = 203,
     BotErrorPanic = 204,
+    BotErrorComputingSignals = 205,
 }
 
 impl ExitCode {
@@ -98,6 +99,7 @@ impl ExitCode {
             Self::BotErrorCreatingScratchPad => "failed to create scratch pad",
             Self::BotErrorResolvingAction => "failed to resolve action",
             Self::BotErrorPanic => "build runner panicked",
+            Self::BotErrorComputingSignals => "failed to compute signals",
         }
     }
 }

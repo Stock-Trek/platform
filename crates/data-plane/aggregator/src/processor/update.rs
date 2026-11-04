@@ -1,7 +1,7 @@
 //! Outputs produced by applying one input to the keyed state.
 
 use crate::state::IncompleteWindow;
-use platform_market_data::candle::{Candle, CandleInterval, ClosedCandle};
+use platform_market_data::candle::{AlignedWindow, Candle, ClosedCandle};
 use std::collections::{BTreeMap, HashSet};
 
 /// Outputs produced by applying one input to the keyed state.
@@ -16,7 +16,7 @@ pub struct ProcessorUpdate {
     /// and were applied as closed-candle corrections.
     pub late_trades: usize,
     pub closed_candle_evictions: usize,
-    pub closed_candle_evictions_by_interval: BTreeMap<CandleInterval, usize>,
+    pub closed_candle_evictions_by_interval: BTreeMap<AlignedWindow, usize>,
     pub out_of_contract_trades: usize,
     pub out_of_contract_gap_windows: usize,
 }

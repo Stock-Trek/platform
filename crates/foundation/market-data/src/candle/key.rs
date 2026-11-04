@@ -1,4 +1,4 @@
-use super::interval::CandleInterval;
+use super::AlignedWindow;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
@@ -9,11 +9,11 @@ use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 pub struct CandleKey {
     pub exchange: CexId,
     pub trading_pair: TradingPair,
-    pub interval: CandleInterval,
+    pub interval: AlignedWindow,
 }
 
 impl CandleKey {
-    pub fn new(exchange: CexId, trading_pair: TradingPair, interval: CandleInterval) -> Self {
+    pub fn new(exchange: CexId, trading_pair: TradingPair, interval: AlignedWindow) -> Self {
         Self {
             exchange,
             trading_pair,
@@ -25,7 +25,10 @@ impl CandleKey {
     pub fn subject_suffix(&self) -> String {
         format!(
             "{}.{}.{}.{}",
-            self.exchange, self.trading_pair.base, self.trading_pair.quote, self.interval
+            self.exchange,
+            self.trading_pair.base,
+            self.trading_pair.quote,
+            self.interval.label()
         )
     }
 }

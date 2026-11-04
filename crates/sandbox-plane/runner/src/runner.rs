@@ -6,9 +6,7 @@ use crate::{
 use platform_exit_codes::ExitCode;
 use prost::Message;
 use std::collections::BTreeSet;
-use stock_trek::{
-    Algorithm, ResolvedContext, StrategyContext, prelude::traitreg, signals::SignalContext,
-};
+use stock_trek::{Algorithm, ResolvedContext, StrategyContext, signals::SignalContext, traitreg};
 
 #[traitreg::registry(Algorithm)]
 static ALGORITHM_REGISTRY: () = ();
@@ -93,14 +91,13 @@ impl Runner {
         let portfolio = portfolio_dto
             .try_into()
             .map_err(|_| ExitCode::ServerRunnerPortfolioNotCreated)?;
-        let signals = algorithm.signals(&signal_context);
+        let signals = algorithm
+            .signals(&signal_context)
+            .map_err(|_| ExitCode::BotErrorComputingSignals)?;
         let strategy_context = StrategyContext::new();
         let command = algorithm.strategy(&strategy_context);
-        let mut resolved_context = ResolvedContext {
-            enqueue_action: Box::new(Enqueue::action),
-            portfolio,
-            signals,
-        };
+        let mut resolved_context =
+            ResolvedContext::new(Box::new(Enqueue::action), portfolio, signals);
         command
             .execute(&mut resolved_context)
             .map_err(|_| ExitCode::BotErrorResolvingAction)
@@ -119,7 +116,9 @@ impl Runner {
 
     fn cmd_signals(algorithm: &dyn Algorithm, strategy_context_path: &str) -> Result<(), ExitCode> {
         let signal_context = Self::load_signal_context(strategy_context_path)?;
-        let signals = algorithm.signals(&signal_context);
+        let signals = algorithm
+            .signals(&signal_context)
+            .map_err(|_| ExitCode::BotErrorComputingSignals)?;
         Enqueue::signals(signals).map_err(|_| ExitCode::ServerEntryFailedToEnqueueJson)
     }
 

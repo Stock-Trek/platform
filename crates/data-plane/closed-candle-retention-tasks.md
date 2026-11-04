@@ -37,7 +37,7 @@ checkpoint path and is rebuilt from the archive.
       `crates/data-plane/aggregator/src/config/mod.rs`.
 - [ ] Add the three values to `AggregatorConfig` in
       `crates/data-plane/aggregator/src/config/aggregator.rs`, representing the
-      caps as a lookup from `CandleInterval` to `usize`.
+      caps as a lookup from `AlignedWindow` to `usize`.
 - [ ] Parse them as required positive values in
       `crates/data-plane/aggregator/src/config/loader.rs`. Validate the cap map
       against the stock-trek `AlignedWindow` intervals, convert the cutoff to

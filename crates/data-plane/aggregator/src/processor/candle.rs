@@ -6,12 +6,13 @@
 
 use super::{CandleProcessor, ProcessorUpdate};
 use platform_market_data::{
-    candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
+    candle::{AlignedWindow, Candle, CandleKey, ClosedCandle},
     decoders::trade::{Trade, TradeDecoderFactory},
 };
 use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_types::new_types::TimestampMilliseconds;
+use stock_trek::markets::TimestampMillis;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 use tracing::warn;
 
@@ -24,10 +25,8 @@ impl CandleProcessor {
     ) {
         let mut interval_bounds = Vec::with_capacity(self.config.intervals.len());
         for interval in &self.config.intervals {
-            let (Ok(candle_start), Ok(candle_end)) = (
-                interval.start_for(trade.timestamp),
-                interval.end_for(trade.timestamp),
-            ) else {
+            let Some((candle_start, candle_end)) = Self::window_bounds(trade.timestamp, *interval)
+            else {
                 Self::record_invalid_trade();
                 return;
             };
@@ -137,15 +136,13 @@ impl CandleProcessor {
     fn open_closed_correction(
         &mut self,
         trade: &Trade,
-        interval: CandleInterval,
+        interval: AlignedWindow,
         watermark: Option<TimestampMilliseconds>,
         update: &mut ProcessorUpdate,
     ) {
         let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
-        let (Ok(candle_start), Ok(candle_end)) = (
-            interval.start_for(trade.timestamp),
-            interval.end_for(trade.timestamp),
-        ) else {
+        let Some((candle_start, candle_end)) = Self::window_bounds(trade.timestamp, interval)
+        else {
             Self::record_invalid_trade();
             return;
         };
@@ -198,7 +195,18 @@ impl CandleProcessor {
         ));
     }
 
-    pub(super) fn max_closed_candles(&self, interval: CandleInterval) -> usize {
+    fn window_bounds(
+        timestamp: TimestampMilliseconds,
+        interval: AlignedWindow,
+    ) -> Option<(TimestampMilliseconds, TimestampMilliseconds)> {
+        let timestamp = TimestampMillis::try_from(timestamp.0).ok()?;
+        let bounds = interval.bounds_for(timestamp).ok()?;
+        let start = i64::try_from(bounds.lower().as_millis()).ok()?;
+        let end = i64::try_from(bounds.upper().as_millis()).ok()?;
+        Some((TimestampMilliseconds(start), TimestampMilliseconds(end)))
+    }
+
+    pub(super) fn max_closed_candles(&self, interval: AlignedWindow) -> usize {
         self.config
             .max_closed_candles(interval)
             .unwrap_or(usize::MAX)
@@ -229,7 +237,7 @@ impl CandleProcessor {
         warn!(
             exchange = %trade.exchange,
             trading_pair = ?trade.trading_pair,
-            interval = %key.interval,
+            interval = %key.interval.label(),
             window_start = window_start.0,
             window_end = window_end.0,
             watermark = ?watermark.map(|value| value.0),

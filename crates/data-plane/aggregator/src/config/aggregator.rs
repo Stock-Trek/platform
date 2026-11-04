@@ -1,7 +1,7 @@
 use super::replay::ReplayStartPolicy;
 use crate::processor::ProcessorConfig;
 use crate::shard::ShardId;
-use platform_market_data::candle::CandleInterval;
+use platform_market_data::candle::AlignedWindow;
 use platform_types::new_types::DurationMilliseconds;
 use std::time::Duration;
 
@@ -24,10 +24,10 @@ pub struct AggregatorConfig {
     /// When set, this process only owns that single shard. Otherwise it runs
     /// every shard (useful for local development and tests).
     pub shard_index: Option<usize>,
-    pub intervals: Vec<CandleInterval>,
+    pub intervals: Vec<AlignedWindow>,
     /// How long after a candle window ends a late event may still update it.
     pub allowed_lateness: Duration,
-    pub max_closed_candles_per_interval: std::collections::BTreeMap<CandleInterval, usize>,
+    pub max_closed_candles_per_interval: std::collections::BTreeMap<AlignedWindow, usize>,
     pub correction_cutoff: DurationMilliseconds,
     pub closed_candle_memory_budget_bytes: usize,
     /// How often keyed state is checkpointed while processing.

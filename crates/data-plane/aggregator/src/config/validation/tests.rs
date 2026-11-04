@@ -1,15 +1,15 @@
 use super::super::AggregatorConfig;
 use super::implementation::{ESTIMATED_BYTES_PER_CLOSED_CANDLE, RetentionLimits};
-use platform_market_data::candle::CandleInterval;
+use platform_market_data::candle::AlignedWindow;
 use std::collections::BTreeMap;
 use std::time::Duration;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 use strum::EnumCount;
 
-fn intervals() -> Vec<CandleInterval> {
+fn intervals() -> Vec<AlignedWindow> {
     vec![
-        CandleInterval::from_label("1m").unwrap(),
-        CandleInterval::from_label("5m").unwrap(),
+        AlignedWindow::try_from("1m").unwrap(),
+        AlignedWindow::try_from("5m").unwrap(),
     ]
 }
 

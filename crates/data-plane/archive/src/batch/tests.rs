@@ -4,12 +4,9 @@ use crate::{
     record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent},
 };
 use bytes::Bytes;
-use platform_market_data::{
-    candle::{Candle, CandleInterval, CandleKey, ClosedCandle},
-    event::MarketEvent,
-};
+use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle, MarketOhlcv};
+use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;
-use stock_trek::markets::{MarketCandle, MarketOhlcv};
 use stock_trek_types::cex::cex_id::CexId;
 use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
@@ -29,16 +26,13 @@ fn closed_candle(revision: u64) -> ClosedCandle {
         key: CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-            CandleInterval::from_label("60s").unwrap(),
+            AlignedWindow::try_from("1m").unwrap(),
         ),
-        market_candle: MarketCandle::new(
-            60_000,
-            120_000,
-            60_000,
-            true,
-            MarketOhlcv::new(100.0, 110.0, 90.0, 105.0, 6.0, 580.0, 96.666_666_666_666_67),
-            3,
-        ),
+        start_time_millis_inc: 60_000,
+        end_time_millis_exc: 120_000,
+        is_candle_closed: true,
+        ohlcv: MarketOhlcv::new(100.0, 110.0, 90.0, 105.0, 6.0, 580.0).unwrap(),
+        trade_count: 3,
         is_complete: true,
     };
     ClosedCandle::new(candle, TimestampMilliseconds(121_000), revision, 0)

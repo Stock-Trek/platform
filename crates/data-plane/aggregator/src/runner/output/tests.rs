@@ -6,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::{Candle, CandleInterval, CandleKey, ClosedCandle};
+use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle};
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
@@ -124,7 +124,7 @@ fn key(interval: &str) -> CandleKey {
     CandleKey::new(
         CexId::Binance,
         TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-        CandleInterval::from_label(interval).unwrap(),
+        AlignedWindow::try_from(interval).unwrap(),
     )
 }
 
@@ -139,7 +139,7 @@ fn candle(interval: &str, close: f64) -> Candle {
         quantity: Decimal::ONE,
         timestamp: TimestampMilliseconds(61_000),
     };
-    Candle::open(&trade, CandleInterval::from_label(interval).unwrap()).unwrap()
+    Candle::open(&trade, AlignedWindow::try_from(interval).unwrap()).unwrap()
 }
 
 fn closed(candle: Candle) -> ClosedCandle {
@@ -175,7 +175,7 @@ async fn open_mutations_are_coalesced_to_the_last_value_per_key() {
     assert_eq!(observed.calls(), vec!["open"]);
     let open = observed.open.lock().unwrap();
     assert_eq!(open.len(), 1);
-    assert_eq!(open[0].market_candle.ohlcv.close, 105.0);
+    assert_eq!(open[0].ohlcv.close(), 105.0);
 }
 
 #[tokio::test]

@@ -1,7 +1,7 @@
 use crate::{convert::required::IsRequired, generated::dto::MarketTickDto};
 use stock_trek::{
     errors::StockTrekError,
-    markets::{MarketTick, MarketTicks},
+    markets::{MarketTick, MarketTicks, TimestampMillis},
 };
 
 impl TryFrom<MarketTickDto> for MarketTick {
@@ -17,12 +17,7 @@ impl TryFrom<MarketTickDto> for MarketTick {
         let bid = bid_dto.required("bid_dto")?.try_into()?;
         let ask = ask_dto.required("ask_dto")?.try_into()?;
         let last = last_dto.required("last_dto")?.try_into()?;
-        Ok(MarketTick {
-            timestamp_millis,
-            bid,
-            ask,
-            last,
-        })
+        MarketTick::new(TimestampMillis::new(timestamp_millis), bid, ask, last)
     }
 }
 

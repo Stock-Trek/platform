@@ -14,7 +14,7 @@ use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::shard::ShardId;
 use crate::state::AggregatorState;
 use platform_errors::{BpResult, ErrorType};
-use platform_market_data::candle::CandleInterval;
+use platform_market_data::candle::AlignedWindow;
 use platform_metrics::AggregatorMetrics;
 use platform_metrics::descriptions::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
 use platform_metrics::market_data::MarketDataMetrics;
@@ -77,10 +77,10 @@ impl RestoredShard {
 pub struct RestoreOptions {
     pub shard: ShardId,
     pub source_stream: String,
-    pub intervals: Vec<CandleInterval>,
+    pub intervals: Vec<AlignedWindow>,
     pub shard_count: usize,
     pub allowed_lateness: DurationMilliseconds,
-    pub max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
+    pub max_closed_candles_per_interval: BTreeMap<AlignedWindow, usize>,
     pub correction_cutoff: DurationMilliseconds,
     pub replay_start_policy: ReplayStartPolicy,
     pub expected_schema_version: u32,
@@ -303,10 +303,10 @@ impl AggregatorState {
     pub async fn rebuild_from_archive(
         archive: &mut dyn ArchivedEventSource,
         shard: ShardId,
-        intervals: &[CandleInterval],
+        intervals: &[AlignedWindow],
         shard_count: usize,
         allowed_lateness: DurationMilliseconds,
-        max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
+        max_closed_candles_per_interval: BTreeMap<AlignedWindow, usize>,
         correction_cutoff: DurationMilliseconds,
     ) -> BpResult<Self> {
         let config = ProcessorConfig::new(
@@ -334,10 +334,10 @@ impl AggregatorState {
     pub async fn rebuild_from_archive_with_schema(
         archive: &mut dyn ArchivedEventSource,
         shard: ShardId,
-        intervals: &[CandleInterval],
+        intervals: &[AlignedWindow],
         shard_count: usize,
         allowed_lateness: DurationMilliseconds,
-        max_closed_candles_per_interval: BTreeMap<CandleInterval, usize>,
+        max_closed_candles_per_interval: BTreeMap<AlignedWindow, usize>,
         correction_cutoff: DurationMilliseconds,
         state_schema_version: u32,
     ) -> BpResult<Self> {

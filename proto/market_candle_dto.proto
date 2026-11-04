@@ -4,12 +4,11 @@ package dto;
 import "market_ohlcv_dto.proto";
 
 message MarketCandleDto {
-  uint64 start_time_millis_inc = 1;
-  uint64 end_time_millis_exc = 2;
-  uint64 duration_millis = 3;
-  bool is_candle_closed = 4;
-  MarketOhlcvDto ohlcv_dto = 5;
-  uint64 trade_count = 6;
+  uint32 window = 1;
+  uint64 start_time_millis_inc = 2;
+  bool is_candle_closed = 3;
+  MarketOhlcvDto ohlcv_dto = 4;
+  uint64 trade_count = 5;
 }
 
 message MarketCandlesDto {
