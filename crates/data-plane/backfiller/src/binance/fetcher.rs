@@ -82,11 +82,13 @@ impl MissingEventFetcher for BinanceGapFetcher {
                     .fetch_book_ticker(&stream.symbol, gap.observed_sequence)
                     .await
             }
-            MarketStreamKind::Kline(interval) => {
-                source
-                    .fetch_klines(&stream.symbol, &interval, gap.missing_from, gap.missing_to)
-                    .await
-            }
+            MarketStreamKind::Kline(interval) => Err(BpError::bad_value(
+                "stream",
+                gap.stream.as_str(),
+                format!(
+                    "kline_{interval} gap backfill is not supported because kline events have no sequence"
+                ),
+            )),
         }
     }
 }
