@@ -24,12 +24,12 @@
 //! {"type":"metadata","payload":{"name":"...","description":"..."}}
 //! ```
 
+#[path = "../cwasm/mod.rs"]
+mod cwasm;
+
+use cwasm::{Cwasm, CwasmLimits};
 use platform_exit_codes::ExitCode;
-use platform_runner::{
-    command::RunRequest,
-    cwasm::{Cwasm, CwasmLimits},
-    entry::Entry,
-};
+use platform_runner::{command::RunRequest, entry::Entry};
 use serde_json::{Value, json};
 use std::io::{self, Read};
 

@@ -86,11 +86,16 @@ impl Cwasm {
             BpError::io("write cwasm artifact", path.display().to_string(), source)
         })?;
 
-        info!(bytes = size, "downloaded cwasm artifact");
-        Ok(Self {
+        let cwasm = Self {
             _directory: directory,
             path,
-        })
+        };
+        info!(
+            bytes = size,
+            path = %cwasm.path().display(),
+            "downloaded cwasm artifact"
+        );
+        Ok(cwasm)
     }
 
     pub fn path(&self) -> &Path {
