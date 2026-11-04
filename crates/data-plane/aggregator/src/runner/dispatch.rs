@@ -305,7 +305,9 @@ where
         match decoder.decode(event) {
             Ok(trades) => {
                 let trades = ShardId::trades_for_shard(trades, shard, shard_count);
-                if trades.is_empty() {
+                if trades.is_empty()
+                    && !Self::event_owned_by_shard(decoder, event, shard, shard_count)
+                {
                     return ProcessorUpdate::default();
                 }
                 processor.apply_event(event, &trades)
@@ -318,5 +320,18 @@ where
                 processor.apply_event(event, &[])
             }
         }
+    }
+
+    fn event_owned_by_shard(
+        decoder: &SharedTradeDecoder,
+        event: &MarketEvent,
+        shard: ShardId,
+        shard_count: usize,
+    ) -> bool {
+        decoder
+            .trading_pair_for_stream(&event.stream)
+            .is_ok_and(|trading_pair| {
+                ShardId::for_trading_pair(event.exchange, trading_pair, shard_count) == shard
+            })
     }
 }

@@ -23,6 +23,15 @@ fn trade_event() -> MarketEvent {
     }
 }
 
+fn non_trade_event() -> MarketEvent {
+    MarketEvent {
+        stream: "btcusdt@depth".to_string(),
+        sequence: Some(2),
+        payload: String::new(),
+        ..trade_event()
+    }
+}
+
 fn gap() -> GapMarker {
     GapMarker {
         exchange: CexId::Binance,
@@ -43,6 +52,21 @@ fn events_route_to_the_shard_owning_their_pair() {
 
     assert_eq!(shards.len(), 1);
     assert!(shards[0].get() < 8);
+}
+
+#[test]
+fn non_trade_events_route_to_the_shard_owning_their_pair() {
+    let router = HashRouter::new();
+    let expected = vec![ShardId::for_trading_pair(
+        CexId::Binance,
+        stock_trek_types::cex::trading_pair::TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+        4,
+    )];
+    let shards = router
+        .shards(&MarketInput::Event(non_trade_event()), 4)
+        .unwrap();
+
+    assert_eq!(shards, expected);
 }
 
 #[test]

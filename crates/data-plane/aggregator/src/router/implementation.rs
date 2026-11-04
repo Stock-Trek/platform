@@ -30,9 +30,11 @@ impl HashRouter {
 
     /// Returns the shards that must receive `input`.
     ///
-    /// An event is routed to every shard owning one of its trading pairs.
-    /// Gap markers are routed to the shard owning the trading pair encoded
-    /// in their exchange stream.
+    /// An event is routed to every shard owning one of its decoded trading
+    /// pairs. Events that decode to no trades, such as depth and book-ticker
+    /// updates, are routed by the trading pair encoded in their exchange
+    /// stream. Gap markers are routed by the trading pair encoded in their
+    /// exchange stream.
     pub fn shards(&self, input: &MarketInput, shard_count: usize) -> BpResult<Vec<ShardId>> {
         match input {
             MarketInput::Gap(gap) => self.gap_shards(gap, shard_count),
@@ -48,6 +50,14 @@ impl HashRouter {
             shards.insert(ShardId::for_trading_pair(
                 trade.exchange,
                 trade.trading_pair,
+                shard_count,
+            ));
+        }
+        if shards.is_empty() {
+            let trading_pair = decoder.trading_pair_for_stream(&event.stream)?;
+            shards.insert(ShardId::for_trading_pair(
+                event.exchange,
+                trading_pair,
                 shard_count,
             ));
         }

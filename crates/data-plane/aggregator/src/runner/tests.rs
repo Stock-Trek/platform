@@ -176,6 +176,15 @@ fn trade_event(timestamp_ms: i64) -> MarketEvent {
     }
 }
 
+fn non_trade_event(timestamp_ms: i64) -> MarketEvent {
+    MarketEvent {
+        stream: "btcusdt@depth".to_string(),
+        sequence: Some(2),
+        payload: String::new(),
+        ..trade_event(timestamp_ms)
+    }
+}
+
 fn record(input: MarketInput, sequence: u64) -> SourceRecord {
     SourceRecord::new(
         input,
@@ -341,6 +350,33 @@ async fn checkpoints_before_acknowledging_a_trade() {
     assert_eq!(checkpoint.state.open_candles_len(), 1);
     assert_eq!(checkpoint.fencing_token, 1);
     assert!(!checkpoint.writer_id.is_empty());
+}
+
+#[tokio::test]
+async fn non_trade_events_advance_the_watermark_and_dedup_state() {
+    let acked = Arc::new(Mutex::new(0));
+    let source = FakeSource {
+        records: vec![record(MarketInput::Event(non_trade_event(62_000)), 1)],
+        acked: acked.clone(),
+        ..FakeSource::default()
+    };
+    let checkpoints = Arc::new(InMemoryStateStore::new());
+
+    ProcessorRunner::new(config(), source, FakeSink::default())
+        .with_checkpoint_store(checkpoints.clone(), ShardId::new(0))
+        .run()
+        .await
+        .unwrap();
+
+    let checkpoint = checkpoints.get(ShardId::new(0)).unwrap();
+    assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(62_000)));
+    assert!(checkpoint.state.is_duplicate(&DeduplicationKey::new(
+        CexId::Binance,
+        "btcusdt@depth",
+        2
+    )));
+    assert_eq!(checkpoint.state.open_candles_len(), 0);
+    assert_eq!(*acked.lock().unwrap(), 1);
 }
 
 #[tokio::test]
