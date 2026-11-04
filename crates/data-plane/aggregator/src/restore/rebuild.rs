@@ -373,9 +373,12 @@ impl RebuiltArchiveState {
                 AggregatorMetrics::record_replay_events(shard.get(), "archive", 1_000);
             }
             let event = &archived.event;
-            let trades = match S3ArchivedEventSource::decoder_for(&mut decoders, event.exchange) {
+            let decoded = match S3ArchivedEventSource::decoder_for(&mut decoders, event.exchange) {
                 Ok(decoder) => match decoder.decode(event) {
-                    Ok(trades) => Some(ShardId::trades_for_shard(trades, shard, shard_count)),
+                    Ok(trades) => Some((
+                        decoder,
+                        ShardId::trades_for_shard(trades, shard, shard_count),
+                    )),
                     Err(error) => {
                         MarketDataMetrics::record_decode_failure(
                             STAGE_AGGREGATOR,
@@ -394,20 +397,33 @@ impl RebuiltArchiveState {
                     None
                 }
             };
+            let owned_by_shard = match &decoded {
+                Some((decoder, trades)) if trades.is_empty() => decoder
+                    .trading_pair_for_stream(&event.stream)
+                    .is_ok_and(|trading_pair| {
+                        ShardId::for_trading_pair(event.exchange, trading_pair, shard_count)
+                            == shard
+                    }),
+                _ => true,
+            };
             // Closed candles produced during rebuild are already represented by
             // the archive's candle records; the fold reconstructs the same keyed
             // state, deduplication ranges, gaps, and event-time watermarks. Events
-            // that decode but have no trades for this shard must not move its
-            // watermark. Undecodable events are still folded with no trades so
-            // archive recovery matches live dispatch.
-            if trades.as_ref().is_none_or(|trades| !trades.is_empty()) {
+            // owned by another shard must not move this shard's watermark, while
+            // non-trade events owned through their stream still advance event time.
+            // Undecodable events are folded with no trades so archive recovery
+            // matches live dispatch.
+            if owned_by_shard {
                 // Recovery continues the lineage that produced the archived inputs,
                 // so the same processing step produces the same deterministic
                 // revision ids. A new epoch is reserved for an explicit output
                 // rebuild rather than ordinary state recovery.
                 let state = processor.state_mut();
                 state.state_epoch = state.state_epoch.max(archived.state_epoch);
-                let _ = processor.apply_event(event, trades.as_deref().unwrap_or_default());
+                let trades = decoded
+                    .as_ref()
+                    .map_or(&[][..], |(_, trades)| trades.as_slice());
+                let _ = processor.apply_event(event, trades);
             }
         }
         AggregatorMetrics::record_replay_events(shard.get(), "archive", replayed % 1_000);

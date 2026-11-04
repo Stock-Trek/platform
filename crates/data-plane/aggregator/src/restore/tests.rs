@@ -57,6 +57,14 @@ fn event(sequence: u64, timestamp: i64) -> MarketEvent {
     }
 }
 
+fn non_trade_event(sequence: u64, timestamp: i64) -> MarketEvent {
+    MarketEvent {
+        stream: "btcusdt@depth".to_string(),
+        payload: String::new(),
+        ..event(sequence, timestamp)
+    }
+}
+
 fn undecodable_event(sequence: u64, timestamp: i64) -> MarketEvent {
     MarketEvent {
         payload: STANDARD.encode("not a market event"),
@@ -284,6 +292,31 @@ async fn rebuild_watermark_only_moves_forward_for_events_owned_by_the_shard() {
 
     assert_eq!(restored.state.watermark, None);
     assert_eq!(restored.replay_watermark(), None);
+}
+
+#[tokio::test]
+async fn rebuild_advances_watermark_and_dedup_for_non_trade_events() {
+    let store = InMemoryStateStore::new();
+    let shard = ShardId::new(0);
+    let restored = options(shard, 1)
+        .restore(
+            &store,
+            archive_source(VecArchive::new(vec![non_trade_event(1, 61_000)])),
+        )
+        .await
+        .unwrap();
+
+    assert!(restored.rebuilt_from_archive);
+    assert_eq!(
+        restored.state.watermark,
+        Some(TimestampMilliseconds(61_000))
+    );
+    assert!(restored.state.is_duplicate(&DeduplicationKey::new(
+        CexId::Binance,
+        "btcusdt@depth",
+        1
+    )));
+    assert_eq!(restored.state.open_candles_len(), 0);
 }
 
 #[tokio::test]
