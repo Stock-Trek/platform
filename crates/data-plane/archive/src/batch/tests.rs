@@ -4,7 +4,7 @@ use crate::{
     record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent},
 };
 use bytes::Bytes;
-use platform_market_data::candle::{Candle, CandleKey, ClosedCandle, Ohlcv, parse_interval};
+use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle, Ohlcv};
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
@@ -26,7 +26,7 @@ fn closed_candle(revision: u64) -> ClosedCandle {
         key: CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-            parse_interval("1m").unwrap(),
+            AlignedWindow::try_from("1m").unwrap(),
         ),
         start_time_millis_inc: 60_000,
         end_time_millis_exc: 120_000,

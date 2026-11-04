@@ -1,6 +1,6 @@
 use super::*;
 use crate::{
-    candle::{Candle, CandleKey, ClosedCandle, parse_interval},
+    candle::{AlignedWindow, Candle, CandleKey, ClosedCandle},
     event::{GapMarker, MarketEvent},
 };
 use platform_types::new_types::TimestampMilliseconds;
@@ -22,7 +22,7 @@ fn closed_candle() -> ClosedCandle {
         key: CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-            parse_interval("1m").unwrap(),
+            AlignedWindow::try_from("1m").unwrap(),
         ),
         start_time_millis_inc: 60_000,
         end_time_millis_exc: 120_000,

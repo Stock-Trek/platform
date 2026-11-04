@@ -1,7 +1,7 @@
 use super::*;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_aggregator::processor::{CandleProcessor, ProcessorConfig};
-use platform_market_data::candle::{ClosedCandle, parse_interval};
+use platform_market_data::candle::{AlignedWindow, ClosedCandle};
 use platform_market_data::decoders::trade::TradeDecoderFactory;
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::DurationMilliseconds;
@@ -57,7 +57,7 @@ fn event_with_trade_time(sequence: u64, event_timestamp: i64, trade_timestamp: i
 fn options() -> RebuildOptions {
     RebuildOptions {
         processor: ProcessorConfig::without_retention(
-            vec![parse_interval("1m").unwrap()],
+            vec![AlignedWindow::try_from("1m").unwrap()],
             DurationMilliseconds::ZERO,
         ),
         state_epoch: 7,
@@ -204,7 +204,7 @@ fn finishing_is_optional() {
 
 #[test]
 fn rebuilt_candles_match_live_processing_for_cap_eviction_and_a_rejected_correction() {
-    let interval = parse_interval("1m").unwrap();
+    let interval = AlignedWindow::try_from("1m").unwrap();
     let cutoff = DurationMilliseconds(1_000);
     let processor = ProcessorConfig::new(
         vec![interval],

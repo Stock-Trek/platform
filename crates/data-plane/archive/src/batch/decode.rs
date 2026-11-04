@@ -5,7 +5,7 @@ use arrow_array::{
 };
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::{
-    Candle, CandleKey, CandleRevision, ClosedCandle, Ohlcv, parse_interval,
+    AlignedWindow, Candle, CandleKey, CandleRevision, ClosedCandle, Ohlcv,
 };
 use platform_market_data::{envelope::EnvelopeCodec, event::MarketEvent};
 use platform_types::new_types::TimestampMilliseconds;
@@ -100,7 +100,7 @@ impl ArchiveBatch {
                         "trading pair base and quote must differ",
                     ));
                 }
-                let interval = parse_interval(interval.value(row))
+                let interval = AlignedWindow::try_from(interval.value(row))
                     .map_err(|error| Self::invalid_value("interval", interval.value(row), error))?;
                 let start_time_millis =
                     Self::timestamp(start_time_millis_inc.value(row), "start_time_millis_inc")?;

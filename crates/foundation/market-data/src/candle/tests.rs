@@ -24,7 +24,7 @@ fn trade(price: &str, quantity: &str, timestamp: i64) -> Trade {
 
 #[test]
 fn intervals_are_parsed_and_aligned() {
-    let interval = parse_interval("1m").unwrap();
+    let interval = AlignedWindow::try_from("1m").unwrap();
     assert_eq!(interval, AlignedWindow::Minutes1);
     assert_eq!(interval.label(), "1m");
     assert_eq!(interval.millis().exact(), Some(60_000));
@@ -35,17 +35,17 @@ fn intervals_are_parsed_and_aligned() {
 
 #[test]
 fn invalid_intervals_are_rejected() {
-    assert!(parse_interval("").is_err());
-    assert!(parse_interval("0s").is_err());
-    assert!(parse_interval("45s").is_err());
-    assert!(parse_interval("abc").is_err());
+    assert!(AlignedWindow::try_from("").is_err());
+    assert!(AlignedWindow::try_from("0s").is_err());
+    assert!(AlignedWindow::try_from("45s").is_err());
+    assert!(AlignedWindow::try_from("abc").is_err());
 }
 
 #[test]
 fn non_canonical_interval_labels_are_rejected() {
-    assert!(parse_interval("minutes1").is_err());
-    assert!(parse_interval("120m").is_err());
-    assert!(parse_interval("14d").is_err());
+    assert!(AlignedWindow::try_from("minutes1").is_err());
+    assert!(AlignedWindow::try_from("120m").is_err());
+    assert!(AlignedWindow::try_from("14d").is_err());
 }
 
 #[test]
@@ -82,7 +82,7 @@ fn aligned_window_intervals_have_unique_labels() {
 
 #[test]
 fn calendar_intervals_use_calendar_bounds() {
-    let interval = parse_interval("1mo").unwrap();
+    let interval = AlignedWindow::try_from("1mo").unwrap();
 
     assert_eq!(interval.label(), "1mo");
     let bounds = interval
@@ -94,15 +94,15 @@ fn calendar_intervals_use_calendar_bounds() {
 
 #[test]
 fn negative_candle_timestamps_are_rejected() {
-    let interval = parse_interval("1m").unwrap();
+    let interval = AlignedWindow::try_from("1m").unwrap();
 
     assert!(Candle::open(&trade("100", "1", -1), interval).is_err());
 }
 
 #[test]
 fn timestamp_bounds_that_overflow_are_rejected() {
-    let minute = parse_interval("1m").unwrap();
-    let month = parse_interval("1mo").unwrap();
+    let minute = AlignedWindow::try_from("1m").unwrap();
+    let month = AlignedWindow::try_from("1mo").unwrap();
 
     let max_timestamp = TimestampMillis::new(u64::MAX);
 
@@ -112,7 +112,11 @@ fn timestamp_bounds_that_overflow_are_rejected() {
 
 #[test]
 fn invalid_candle_timestamps_cannot_be_deserialized() {
-    let candle = Candle::open(&trade("100", "1", 61_000), parse_interval("1m").unwrap()).unwrap();
+    let candle = Candle::open(
+        &trade("100", "1", 61_000),
+        AlignedWindow::try_from("1m").unwrap(),
+    )
+    .unwrap();
 
     let mut out_of_range = serde_json::to_value(&candle).unwrap();
     out_of_range["end_time_millis_exc"] = u64::MAX.into();
@@ -125,7 +129,7 @@ fn invalid_candle_timestamps_cannot_be_deserialized() {
 
 #[test]
 fn applying_trades_updates_ohlcv() {
-    let interval = parse_interval("1m").unwrap();
+    let interval = AlignedWindow::try_from("1m").unwrap();
     let mut candle = Candle::open(&trade("100", "2", 61_000), interval).unwrap();
     candle.apply_trade(&trade("110", "1", 62_000)).unwrap();
     candle.apply_trade(&trade("90", "3", 63_000)).unwrap();
@@ -143,7 +147,7 @@ fn applying_trades_updates_ohlcv() {
 
 #[test]
 fn candles_start_complete_and_can_be_marked_incomplete() {
-    let interval = parse_interval("1m").unwrap();
+    let interval = AlignedWindow::try_from("1m").unwrap();
     let mut candle = Candle::open(&trade("100", "2", 61_000), interval).unwrap();
     assert!(candle.is_complete());
     assert!(!candle.is_incomplete());
@@ -161,7 +165,7 @@ fn candle_keys_serialize_intervals_by_label() {
         let key = CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-            parse_interval(label).unwrap(),
+            AlignedWindow::try_from(label).unwrap(),
         );
         let json = serde_json::to_string(&key).unwrap();
         assert!(json.contains(&format!("\"interval\":\"{label}\"")));
@@ -175,7 +179,7 @@ fn candle_keys_reject_non_label_intervals() {
     let key = CandleKey::new(
         CexId::Binance,
         TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-        parse_interval("1m").unwrap(),
+        AlignedWindow::try_from("1m").unwrap(),
     );
     let mut value = serde_json::to_value(key).unwrap();
     value["interval"] = serde_json::json!(60_000);
@@ -188,13 +192,13 @@ fn key_uses_asset_ids_and_window_label() {
     let key = CandleKey::new(
         CexId::Binance,
         TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-        parse_interval("1m").unwrap(),
+        AlignedWindow::try_from("1m").unwrap(),
     );
     assert_eq!(key.subject_suffix(), "binance.bitcoin.tether_usd.1m");
 }
 
 fn closed_candle(offset: u64, epoch: u64) -> ClosedCandle {
-    let interval = parse_interval("1m").unwrap();
+    let interval = AlignedWindow::try_from("1m").unwrap();
     let mut candle = Candle::open(&trade("100", "2", 61_000), interval).unwrap();
     candle.close();
     ClosedCandle::new(candle, TimestampMilliseconds(121_000), offset, epoch)
@@ -222,7 +226,7 @@ fn closed_candle_ids_cover_key_window_epoch_and_revision() {
     let other_offset = closed_candle(8, 0);
     let other_epoch = closed_candle(7, 1);
     let other_key = {
-        let interval = parse_interval("5m").unwrap();
+        let interval = AlignedWindow::try_from("5m").unwrap();
         let mut candle = Candle::open(&trade("100", "2", 61_000), interval).unwrap();
         candle.close();
         ClosedCandle::new(candle, TimestampMilliseconds(121_000), 7, 0)

@@ -4,7 +4,7 @@ use super::super::env::{
     AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
 };
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::{AlignedWindow, parse_interval};
+use platform_market_data::candle::AlignedWindow;
 use platform_types::new_types::DurationMilliseconds;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
@@ -42,7 +42,7 @@ impl AggregatorConfig {
                     format!("entry {entry:?} must use <interval>=<count>"),
                 ));
             };
-            let interval = parse_interval(label.trim())
+            let interval = AlignedWindow::try_from(label.trim())
                 .map_err(|error| BpError::config_invalid_source(name, error))?;
             if !intervals.contains(&interval) {
                 return Err(BpError::config_invalid(

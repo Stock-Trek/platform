@@ -1,7 +1,7 @@
 use platform_archive::{ArchiveTableLayer, IcebergConfig};
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
-use platform_market_data::candle::{AlignedWindow, all_intervals, parse_interval};
+use platform_market_data::candle::{AlignedWindow, all_intervals};
 use platform_runtime::Config;
 use platform_types::new_types::DurationMilliseconds;
 use std::collections::BTreeMap;
@@ -146,7 +146,7 @@ impl RebuildConfig {
                     format!("entry {entry:?} must use <interval>=<count>"),
                 ));
             };
-            let interval = parse_interval(label.trim()).map_err(|error| {
+            let interval = AlignedWindow::try_from(label.trim()).map_err(|error| {
                 BpError::config_invalid_source(REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL, error)
             })?;
             if !intervals.contains(&interval) {
