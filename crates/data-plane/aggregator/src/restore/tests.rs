@@ -207,8 +207,8 @@ async fn a_missing_checkpoint_rebuilds_from_archived_events() {
         .unwrap()
         .last()
         .unwrap();
-    assert_eq!(candle.ohlcv.open, 100.0);
-    assert_eq!(candle.ohlcv.volume, 2.0);
+    assert_eq!(candle.ohlcv.open(), 100.0);
+    assert_eq!(candle.ohlcv.volume(), 2.0);
     assert_eq!(candle.trade_count, 2);
 }
 

@@ -27,15 +27,7 @@ fn closed_candle() -> ClosedCandle {
         start_time_millis_inc: 60_000,
         end_time_millis_exc: 120_000,
         is_candle_closed: true,
-        ohlcv: crate::candle::Ohlcv {
-            open: 1.0,
-            high: 2.0,
-            low: 0.5,
-            close: 1.5,
-            volume: 10.0,
-            quote_volume: 15.0,
-            vwap: 1.5,
-        },
+        ohlcv: crate::candle::MarketOhlcv::new(1.0, 2.0, 0.5, 1.5, 10.0, 15.0).unwrap(),
         trade_count: 5,
         is_complete: true,
     };

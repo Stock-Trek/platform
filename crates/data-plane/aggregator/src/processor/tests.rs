@@ -70,7 +70,7 @@ fn first_trade_opens_a_candle() {
     assert!(update.closed.is_empty());
     assert_eq!(update.open.len(), 1);
     assert_eq!(update.open[0].start_time(), TimestampMilliseconds(60_000));
-    assert_eq!(update.open[0].ohlcv.open, 100.0);
+    assert_eq!(update.open[0].ohlcv.open(), 100.0);
     assert!(!update.open[0].is_candle_closed);
 }
 
@@ -205,8 +205,8 @@ fn trades_inside_the_allowed_lateness_update_the_older_window() {
             one_minute(),
         ))
         .unwrap();
-    assert_eq!(candle.ohlcv.high, 100.0);
-    assert_eq!(candle.ohlcv.low, 90.0);
+    assert_eq!(candle.ohlcv.high(), 100.0);
+    assert_eq!(candle.ohlcv.low(), 90.0);
     assert_eq!(candle.trade_count, 2);
 }
 
@@ -224,7 +224,7 @@ fn trades_after_allowed_lateness_correct_the_closed_candle() {
     assert!(update.open.is_empty());
     assert_eq!(update.closed.len(), 1);
     assert_eq!(update.closed[0].candle().trade_count, 2);
-    assert_eq!(update.closed[0].candle().ohlcv.low, 90.0);
+    assert_eq!(update.closed[0].candle().ohlcv.low(), 90.0);
 }
 
 #[test]
@@ -333,7 +333,7 @@ fn backfilled_trades_revise_closed_candles() {
         TimestampMilliseconds(60_000)
     );
     assert_eq!(update.closed[0].candle().trade_count, 2);
-    assert_eq!(update.closed[0].candle().ohlcv.close, 105.0);
+    assert_eq!(update.closed[0].candle().ohlcv.close(), 105.0);
     assert_ne!(
         update.closed[0].message_id(),
         original.closed[0].message_id()
@@ -348,7 +348,7 @@ fn backfilled_trades_revise_closed_candles() {
         .closed_candle(&key, TimestampMilliseconds(60_000))
         .unwrap();
     assert_eq!(retained.trade_count, 2);
-    assert_eq!(retained.ohlcv.close, 105.0);
+    assert_eq!(retained.ohlcv.close(), 105.0);
 }
 
 #[test]
@@ -592,7 +592,7 @@ fn open_updates_are_coalesced_by_key_keeping_the_last_value() {
 
     assert_eq!(update.open.len(), 1);
     assert_eq!(update.open[0].trade_count, 2);
-    assert_eq!(update.open[0].ohlcv.close, 101.0);
+    assert_eq!(update.open[0].ohlcv.close(), 101.0);
 }
 
 #[test]
@@ -652,7 +652,7 @@ fn a_late_trade_inside_the_correction_cutoff_revises_the_full_candle() {
     assert_eq!(update.out_of_contract_trades, 0);
     assert_eq!(update.closed.len(), 1);
     assert_eq!(update.closed[0].candle().trade_count, 2);
-    assert_eq!(update.closed[0].candle().ohlcv.low, 90.0);
+    assert_eq!(update.closed[0].candle().ohlcv.low(), 90.0);
 }
 
 #[test]
@@ -683,7 +683,7 @@ fn a_late_trade_outside_the_correction_cutoff_publishes_nothing() {
         )
         .unwrap();
     assert_eq!(candle.trade_count, 1);
-    assert_eq!(candle.ohlcv.low, 100.0);
+    assert_eq!(candle.ohlcv.low(), 100.0);
 }
 
 #[test]

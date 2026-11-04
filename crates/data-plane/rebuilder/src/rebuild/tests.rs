@@ -148,9 +148,9 @@ fn multi_stream_pairs_share_one_processor_and_candle() {
     assert_eq!(result.stats.unique_candles, 1);
     let candle = result.candles[0].candle();
     assert_eq!(candle.trade_count, 2);
-    assert_eq!(candle.ohlcv.high, 200.0);
-    assert_eq!(candle.ohlcv.low, 100.0);
-    assert_eq!(candle.ohlcv.volume, 3.0);
+    assert_eq!(candle.ohlcv.high(), 200.0);
+    assert_eq!(candle.ohlcv.low(), 100.0);
+    assert_eq!(candle.ohlcv.volume(), 3.0);
 }
 
 #[test]

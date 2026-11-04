@@ -5,7 +5,7 @@ use arrow_array::{
 };
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::{
-    AlignedWindow, Candle, CandleKey, CandleRevision, ClosedCandle, Ohlcv,
+    AlignedWindow, Candle, CandleKey, CandleRevision, ClosedCandle, MarketOhlcv,
 };
 use platform_market_data::{envelope::EnvelopeCodec, event::MarketEvent};
 use platform_types::new_types::TimestampMilliseconds;
@@ -124,20 +124,28 @@ impl ArchiveBatch {
                         "does not match the candle window",
                     ));
                 }
+                let ohlcv = MarketOhlcv::new(
+                    open.value(row),
+                    high.value(row),
+                    low.value(row),
+                    close.value(row),
+                    volume.value(row),
+                    quote_volume.value(row),
+                )
+                .map_err(|error| Self::invalid_value("ohlcv", "candle row", error))?;
+                if ohlcv.vwap() != vwap.value(row) {
+                    return Err(Self::invalid_value(
+                        "vwap",
+                        vwap.value(row),
+                        format!("does not match the OHLCV-derived VWAP {}", ohlcv.vwap()),
+                    ));
+                }
                 let candle = Candle {
                     key: CandleKey::new(exchange, TradingPair::new(base, quote), interval),
                     start_time_millis_inc: start_time_millis,
                     end_time_millis_exc: end_time_millis,
                     is_candle_closed: is_candle_closed.value(row),
-                    ohlcv: Ohlcv {
-                        open: open.value(row),
-                        high: high.value(row),
-                        low: low.value(row),
-                        close: close.value(row),
-                        volume: volume.value(row),
-                        quote_volume: quote_volume.value(row),
-                        vwap: vwap.value(row),
-                    },
+                    ohlcv,
                     trade_count: trade_count.value(row),
                     is_complete: is_complete.value(row),
                 };

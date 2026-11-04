@@ -1,5 +1,5 @@
 use super::*;
-use platform_market_data::candle::{AlignedWindow, CandleKey, ClosedCandle, Ohlcv};
+use platform_market_data::candle::{AlignedWindow, CandleKey, ClosedCandle, MarketOhlcv};
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
@@ -28,15 +28,7 @@ fn closed_candle() -> ArchiveRecord {
         start_time_millis_inc: 60_000,
         end_time_millis_exc: 120_000,
         is_candle_closed: true,
-        ohlcv: Ohlcv {
-            open: 1.0,
-            high: 2.0,
-            low: 0.5,
-            close: 1.5,
-            volume: 10.0,
-            quote_volume: 15.0,
-            vwap: 1.5,
-        },
+        ohlcv: MarketOhlcv::new(1.0, 2.0, 0.5, 1.5, 10.0, 15.0).unwrap(),
         trade_count: 5,
         is_complete: true,
     };

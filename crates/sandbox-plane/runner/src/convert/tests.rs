@@ -48,7 +48,7 @@ impl Fixtures {
             low_dto: Some(Self::decimal_dto(Decimal::new(1, 0))),
             close_dto: Some(Self::decimal_dto(Decimal::new(3, 0))),
             volume_dto: Some(Self::decimal_dto(Decimal::new(5, 0))),
-            quote_volume_dto: Some(Self::decimal_dto(Decimal::new(6, 0))),
+            quote_volume_dto: Some(Self::decimal_dto(Decimal::new(10, 0))),
             vwap_dto: Some(Self::decimal_dto(Decimal::new(2, 0))),
         }
     }
@@ -264,7 +264,7 @@ fn market_ohlcv_dto_converts() {
     assert_eq!(ohlcv.low(), 1.0);
     assert_eq!(ohlcv.close(), 3.0);
     assert_eq!(ohlcv.volume(), 5.0);
-    assert_eq!(ohlcv.quote_volume(), 6.0);
+    assert_eq!(ohlcv.quote_volume(), 10.0);
     assert_eq!(ohlcv.vwap(), 2.0);
 }
 

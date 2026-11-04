@@ -1,7 +1,7 @@
 # AlignedWindow gaps
 
 `stock-trek`'s `AlignedWindow` is the source of truth for candle intervals,
-window alignment, and label parsing and serialization. As of stock-trek 0.16.1,
+window alignment, and label parsing and serialization. As of stock-trek 0.17.0,
 this repo only needs this addition:
 
 | Missing from `AlignedWindow` | Where this repo handles it |

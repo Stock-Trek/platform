@@ -4,7 +4,7 @@ use crate::{
     record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent},
 };
 use bytes::Bytes;
-use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle, Ohlcv};
+use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle, MarketOhlcv};
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
@@ -31,15 +31,7 @@ fn closed_candle(revision: u64) -> ClosedCandle {
         start_time_millis_inc: 60_000,
         end_time_millis_exc: 120_000,
         is_candle_closed: true,
-        ohlcv: Ohlcv {
-            open: 100.0,
-            high: 110.0,
-            low: 90.0,
-            close: 105.0,
-            volume: 6.0,
-            quote_volume: 580.0,
-            vwap: 96.666_666_666_666_67,
-        },
+        ohlcv: MarketOhlcv::new(100.0, 110.0, 90.0, 105.0, 6.0, 580.0).unwrap(),
         trade_count: 3,
         is_complete: true,
     };

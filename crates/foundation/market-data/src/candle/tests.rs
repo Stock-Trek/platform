@@ -135,13 +135,13 @@ fn applying_trades_updates_ohlcv() {
     candle.apply_trade(&trade("90", "3", 63_000)).unwrap();
 
     let ohlcv = &candle.ohlcv;
-    assert_eq!(ohlcv.open, 100.0);
-    assert_eq!(ohlcv.high, 110.0);
-    assert_eq!(ohlcv.low, 90.0);
-    assert_eq!(ohlcv.close, 90.0);
-    assert_eq!(ohlcv.volume, 6.0);
-    assert_eq!(ohlcv.quote_volume, 580.0);
-    assert!((ohlcv.vwap - 96.666_666_666_666_67).abs() < f64::EPSILON);
+    assert_eq!(ohlcv.open(), 100.0);
+    assert_eq!(ohlcv.high(), 110.0);
+    assert_eq!(ohlcv.low(), 90.0);
+    assert_eq!(ohlcv.close(), 90.0);
+    assert_eq!(ohlcv.volume(), 6.0);
+    assert_eq!(ohlcv.quote_volume(), 580.0);
+    assert!((ohlcv.vwap() - 96.666_666_666_666_67).abs() < f64::EPSILON);
     assert_eq!(candle.trade_count, 3);
 }
 

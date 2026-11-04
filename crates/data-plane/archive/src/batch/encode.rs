@@ -89,27 +89,27 @@ impl ArchiveBatch {
                             .map(|closed| Some(closed.candle().is_candle_closed)),
                     )),
                     Arc::new(Float64Array::from_iter_values(
-                        candles.iter().map(|closed| closed.candle().ohlcv.open),
+                        candles.iter().map(|closed| closed.candle().ohlcv.open()),
                     )),
                     Arc::new(Float64Array::from_iter_values(
-                        candles.iter().map(|closed| closed.candle().ohlcv.high),
+                        candles.iter().map(|closed| closed.candle().ohlcv.high()),
                     )),
                     Arc::new(Float64Array::from_iter_values(
-                        candles.iter().map(|closed| closed.candle().ohlcv.low),
+                        candles.iter().map(|closed| closed.candle().ohlcv.low()),
                     )),
                     Arc::new(Float64Array::from_iter_values(
-                        candles.iter().map(|closed| closed.candle().ohlcv.close),
+                        candles.iter().map(|closed| closed.candle().ohlcv.close()),
                     )),
                     Arc::new(Float64Array::from_iter_values(
-                        candles.iter().map(|closed| closed.candle().ohlcv.volume),
+                        candles.iter().map(|closed| closed.candle().ohlcv.volume()),
                     )),
                     Arc::new(Float64Array::from_iter_values(
                         candles
                             .iter()
-                            .map(|closed| closed.candle().ohlcv.quote_volume),
+                            .map(|closed| closed.candle().ohlcv.quote_volume()),
                     )),
                     Arc::new(Float64Array::from_iter_values(
-                        candles.iter().map(|closed| closed.candle().ohlcv.vwap),
+                        candles.iter().map(|closed| closed.candle().ohlcv.vwap()),
                     )),
                     Arc::new(UInt64Array::from_iter_values(
                         candles.iter().map(|closed| closed.candle().trade_count),

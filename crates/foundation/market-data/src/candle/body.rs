@@ -5,6 +5,7 @@ use platform_errors::{BpError, BpResult};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 use serde::{Deserialize, Serialize};
+use stock_trek::markets::MarketOhlcv;
 use stock_trek::markets::TimestampMillis;
 use thiserror::Error;
 
@@ -23,32 +24,21 @@ enum CandleTimestampError {
     EndBeforeStart { start: u64, end: u64 },
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
-pub struct Ohlcv {
-    pub open: f64,
-    pub high: f64,
-    pub low: f64,
-    pub close: f64,
-    pub volume: f64,
-    pub quote_volume: f64,
-    pub vwap: f64,
-}
-
 #[derive(Deserialize)]
 struct CandleWire {
     key: CandleKey,
     start_time_millis_inc: u64,
     end_time_millis_exc: u64,
     is_candle_closed: bool,
-    ohlcv: Ohlcv,
+    ohlcv: MarketOhlcv,
     trade_count: u64,
     is_complete: bool,
 }
 
 /// An aggregated candle together with its exchange and interval identity.
 ///
-/// The candle body mirrors the stock-trek market candle shape while remaining
-/// mutable, because aggregation folds trades into an open candle in place.
+/// The candle carries stock-trek's [`MarketOhlcv`] body while remaining mutable,
+/// because aggregation folds trades into an open candle in place.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(try_from = "CandleWire")]
 pub struct Candle {
@@ -56,7 +46,7 @@ pub struct Candle {
     pub start_time_millis_inc: u64,
     pub end_time_millis_exc: u64,
     pub is_candle_closed: bool,
-    pub ohlcv: Ohlcv,
+    pub ohlcv: MarketOhlcv,
     pub trade_count: u64,
     /// Whether every source event that belongs to this window was observed.
     ///
@@ -105,15 +95,8 @@ impl Candle {
             start_time_millis_inc: bounds.0,
             end_time_millis_exc: bounds.1,
             is_candle_closed: false,
-            ohlcv: Ohlcv {
-                open: price,
-                high: price,
-                low: price,
-                close: price,
-                volume: quantity,
-                quote_volume,
-                vwap: price,
-            },
+            ohlcv: MarketOhlcv::new(price, price, price, price, quantity, quote_volume)
+                .map_err(|error| BpError::candle_conversion("ohlcv", error))?,
             trade_count: 1,
             is_complete: true,
         })
@@ -143,16 +126,9 @@ impl Candle {
         let price = Self::to_f64("price", trade.price)?;
         let quantity = Self::to_f64("quantity", trade.quantity)?;
 
-        self.ohlcv.high = self.ohlcv.high.max(price);
-        self.ohlcv.low = self.ohlcv.low.min(price);
-        self.ohlcv.close = price;
-        self.ohlcv.volume += quantity;
-        self.ohlcv.quote_volume += price * quantity;
-        self.ohlcv.vwap = if self.ohlcv.volume == 0.0 {
-            0.0
-        } else {
-            self.ohlcv.quote_volume / self.ohlcv.volume
-        };
+        self.ohlcv
+            .apply_trade(price, quantity)
+            .map_err(|error| BpError::candle_conversion("trade", error))?;
         self.trade_count = self.trade_count.saturating_add(1);
         Ok(())
     }
