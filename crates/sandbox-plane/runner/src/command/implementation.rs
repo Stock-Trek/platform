@@ -1,10 +1,6 @@
 use serde::Deserialize;
 
 /// A request to run the algorithm.
-///
-/// The pre-signed URL for the compiled runner artifact is provided alongside
-/// the command. It is required because the runner needs the artifact to know
-/// what to run.
 #[derive(Debug, Clone, PartialEq, Eq, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunRequest {
