@@ -28,7 +28,7 @@ fn message(subject: &str, payload: Vec<u8>) -> Message {
 fn decodes_market_events_from_event_subjects() {
     let expected = event();
     let message = message(
-        "market.events.binance.btcusdt.trade",
+        "market.events.binance.btcusdt-trade",
         expected.encode().unwrap(),
     );
 
@@ -50,7 +50,7 @@ fn decodes_gap_markers_from_gap_subjects() {
         detected_at: TimestampMilliseconds(10),
     };
     let message = message(
-        "market.gaps.binance.btcusdt.trade",
+        "market.gaps.binance.btcusdt-trade",
         expected.encode().unwrap(),
     );
 
@@ -59,7 +59,31 @@ fn decodes_gap_markers_from_gap_subjects() {
         MarketInput::Gap(expected)
     );
     assert!(MarketInput::is_gap_subject(
-        "market.gaps.binance.btcusdt.trade"
+        "market.gaps.binance.btcusdt-trade"
+    ));
+}
+
+#[test]
+fn classifies_subjects_by_category_not_by_any_segment() {
+    assert!(MarketInput::is_gap_subject(
+        "market.gaps.binance.btcusdt-trade"
+    ));
+    assert!(!MarketInput::is_gap_subject("market.events.binance.gaps"));
+    assert!(MarketInput::is_event_subject(
+        "market.events.binance.btcusdt-trade"
+    ));
+    assert!(!MarketInput::is_event_subject("market.gaps.binance.events"));
+    assert!(!MarketInput::is_gap_subject(
+        "gaps.events.binance.btcusdt-trade"
+    ));
+    assert!(MarketInput::is_event_subject(
+        "gaps.events.binance.btcusdt-trade"
+    ));
+    assert!(MarketInput::is_gap_subject(
+        "events.gaps.binance.btcusdt-trade"
+    ));
+    assert!(!MarketInput::is_event_subject(
+        "events.gaps.binance.btcusdt-trade"
     ));
 }
 
@@ -79,7 +103,7 @@ fn routed_inputs_round_trip() {
 
 #[test]
 fn malformed_payloads_are_rejected() {
-    let message = message("market.events.binance.btcusdt.trade", b"not json".to_vec());
+    let message = message("market.events.binance.btcusdt-trade", b"not json".to_vec());
     assert!(MarketInput::from_market_message(&message).is_err());
 }
 

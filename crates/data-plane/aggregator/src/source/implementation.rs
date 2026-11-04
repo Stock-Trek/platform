@@ -14,6 +14,7 @@ use platform_metrics::market_data::MarketDataMetrics;
 use platform_nats::{ConsumerStart, JetStreamConsumer, Message};
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
+use stock_trek_types::cex::cex_id::CexId;
 use tracing::warn;
 
 /// One input record consumed by the router or a shard writer.
@@ -64,11 +65,34 @@ impl MarketInput {
     }
 
     pub fn is_gap_subject(subject: &str) -> bool {
-        subject.split('.').any(|segment| segment == GAP_CATEGORY)
+        Self::subject_category(subject) == Some(GAP_CATEGORY)
     }
 
     pub fn is_event_subject(subject: &str) -> bool {
-        subject.split('.').any(|segment| segment == EVENT_CATEGORY)
+        Self::subject_category(subject) == Some(EVENT_CATEGORY)
+    }
+
+    fn subject_category(subject: &str) -> Option<&str> {
+        let segments: Vec<&str> = subject.split('.').collect();
+        segments
+            .windows(2)
+            .rev()
+            .find_map(|window| {
+                let category = window[0];
+                let exchange = window[1];
+                (Self::is_category(category) && CexId::try_from(exchange).is_ok())
+                    .then_some(category)
+            })
+            .or_else(|| {
+                segments
+                    .get(segments.len().checked_sub(3)?)
+                    .copied()
+                    .filter(|segment| Self::is_category(segment))
+            })
+    }
+
+    fn is_category(segment: &str) -> bool {
+        segment == EVENT_CATEGORY || segment == GAP_CATEGORY
     }
 
     pub fn timestamp(&self) -> TimestampMilliseconds {

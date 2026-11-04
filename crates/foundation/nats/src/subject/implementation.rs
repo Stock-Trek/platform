@@ -3,29 +3,24 @@ use platform_errors::{BpError, BpResult, ValidationError};
 pub struct NatsSubject;
 
 impl NatsSubject {
-    /// Converts an arbitrary value into a safe subject segment.
+    /// Converts an arbitrary value into a safe single-token subject segment.
     ///
-    /// Illegal characters and runs of dots collapse into a single separator so
-    /// normalization can never create empty subject tokens. A value with no
-    /// usable characters becomes `unknown`.
+    /// Runs of characters that are not legal in a subject token collapse into a
+    /// single `-` so normalization can never split the value across tokens. A
+    /// value with no usable characters becomes `unknown`.
     pub fn normalize_segment(value: &str) -> String {
         let mut normalized = String::with_capacity(value.len());
+        let mut separator_pending = false;
         for character in value.chars() {
-            let character = if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
-                character.to_ascii_lowercase()
-            } else {
-                '.'
-            };
-            if character == '.' {
-                if !normalized.is_empty() && !normalized.ends_with('.') {
-                    normalized.push(character);
+            if character.is_ascii_alphanumeric() || matches!(character, '-' | '_') {
+                if separator_pending && !normalized.is_empty() && !matches!(character, '-' | '_') {
+                    normalized.push('-');
                 }
+                separator_pending = false;
+                normalized.push(character.to_ascii_lowercase());
             } else {
-                normalized.push(character);
+                separator_pending = true;
             }
-        }
-        if normalized.ends_with('.') {
-            normalized.pop();
         }
         if normalized.is_empty() {
             normalized.push_str("unknown");

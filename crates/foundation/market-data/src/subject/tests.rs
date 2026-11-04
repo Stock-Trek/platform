@@ -8,20 +8,21 @@ fn builds_event_and_gap_subjects_from_the_same_contract() {
 
     assert_eq!(
         subject.event("btcusdt@trade"),
-        "market.events.binance.btcusdt.trade"
+        "market.events.binance.btcusdt-trade"
     );
     assert_eq!(
         subject.gap("btcusdt@trade"),
-        "market.gaps.binance.btcusdt.trade"
+        "market.gaps.binance.btcusdt-trade"
     );
 }
 
 #[test]
-fn normalizes_stream_segments() {
+fn normalizes_stream_segments_to_one_token() {
     let subject = MarketEventSubject::new("market", CexId::Binance);
 
     let event_subject = subject.event("BTC/USDT @ Trade");
-    assert_eq!(event_subject, "market.events.binance.btc.usdt.trade");
+    assert_eq!(event_subject, "market.events.binance.btc-usdt-trade");
+    assert_eq!(event_subject.split('.').count(), 4);
     assert!(NatsSubject::validate(&event_subject).is_ok());
     assert!(NatsSubject::validate(&subject.gap("BTC/USDT @ Trade")).is_ok());
 }
