@@ -1,18 +1,22 @@
 # Environment variables
 
-This document lists the environment variables read directly by platform processes.
+This document lists the environment variables read directly by platform processes. Each process
+reads and validates its configuration at startup, before doing any work.
 
-Every process reads and validates its configuration at startup. A required variable that is
-missing, empty, or invalid causes the process to fail before it starts work. For optional
-variables, an unset or empty value is treated as if the variable was not provided.
+- Required variables must be present with a non-empty, valid value. A missing or invalid value
+  fails startup.
+- Optional variables are treated as unset when they are absent or empty.
+- Values are read only from the process environment; the only default is an absent optional
+  variable.
 
-Variables used by more than one process are listed once in the shared section. The remaining
-sections list the additional variables read by each process.
+Variables read by more than one process are listed once under [Shared variables](#shared-variables).
+The remaining sections list the additional variables read by each process. When a variable is only
+required in some configurations, the condition is stated in its description.
 
 > The AWS SDK also reads its standard environment variables (for example `AWS_REGION`,
 > `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_PROFILE`) through
-> its default region and credential chain. Those are not listed below because they are not read
-> directly by platform code.
+> its default region and credential chains. Those are not listed below because platform code does
+> not read them directly.
 
 ## Shared variables
 
@@ -20,19 +24,19 @@ sections list the additional variables read by each process.
 
 | Variable | Used by | Description |
 | --- | --- | --- |
-| `AWS_CONNECT_TIMEOUT_SECS` | Build orchestrator, Git webhook | AWS SDK connection timeout, in seconds. |
+| `AWS_CONNECT_TIMEOUT_SECS` | Build orchestrator, Git webhook | Timeout for establishing AWS SDK connections, in seconds. |
 | `AWS_LAMBDA_FUNCTION_NAME` | Build orchestrator, Git webhook, Build agent | Name of the current Lambda function, used as a metric dimension. The Lambda runtime sets this automatically. |
-| `AWS_OPERATION_TIMEOUT_SECS` | Build orchestrator, Git webhook | AWS SDK operation timeout, in seconds. |
+| `AWS_OPERATION_TIMEOUT_SECS` | Build orchestrator, Git webhook | Timeout for AWS SDK operations, in seconds. |
 | `BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS` | Build orchestrator, Build agent | Maximum time the build agent may spend downloading source, in seconds. |
 | `BUILD_AGENT_TIMEOUT_SECS` | Build orchestrator, Build agent | Maximum time the build agent may spend on a build, in seconds. |
 | `DEADLINE_BUFFER_SECS` | Build orchestrator, Git webhook | Time reserved for cleanup before the Lambda invocation deadline, in seconds. |
-| `GITHUB_ENTERPRISE_ALLOWED_HOSTS` | Build orchestrator, Git webhook | Comma-separated list of GitHub hosts allowed for outbound requests. `github.com` is always allowed. |
-| `ICEBERG_CATALOG_URI` | Archiver, Compactor, Rebuilder; optional for Aggregator | Iceberg REST catalog URI using the `http` or `https` scheme. Required by the archiver, compactor, and rebuilder. For the aggregator it is optional and enables the compacted/raw archive handoff when set. |
-| `ICEBERG_CATALOG_WAREHOUSE` | Archiver, Compactor, Rebuilder; Aggregator when a catalog is configured | Iceberg warehouse URI. Must use the `s3://` scheme. |
-| `ICEBERG_NAMESPACE` | Archiver, Compactor, Rebuilder; Aggregator when a catalog is configured | Iceberg namespace. |
+| `GITHUB_ENTERPRISE_ALLOWED_HOSTS` | Build orchestrator, Git webhook | Comma-separated allowlist of GitHub hosts for outbound HTTPS requests, with optional ports (for example `ghe.example.com` or `ghe.example.com:8443`). `github.com` is always allowed. |
+| `ICEBERG_CATALOG_URI` | Archiver, Compactor, Rebuilder; optional for Aggregator | Iceberg REST catalog URI using the `http` or `https` scheme. Required by the archiver, compactor, and rebuilder. Optional for the aggregator, where setting it enables archive recovery through the compacted/raw Iceberg handoff. |
+| `ICEBERG_CATALOG_WAREHOUSE` | Archiver, Compactor, Rebuilder; Aggregator when a catalog is configured | Iceberg warehouse URI. Must use the `s3://` scheme. Required when `ICEBERG_CATALOG_URI` is configured. |
+| `ICEBERG_NAMESPACE` | Archiver, Compactor, Rebuilder; Aggregator when a catalog is configured | Iceberg namespace. Required when `ICEBERG_CATALOG_URI` is configured. |
 | `RUST_LOG` | All services | Tracing filter, for example `info` or `platform_ingester=debug`. |
 | `S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES` | Build orchestrator, Build agent | Maximum accepted source archive size, in bytes. |
-| `SECRETS_SSM_DECRYPT` | Backfiller, Git webhook | Whether SSM parameters are decrypted, parsed as a boolean. |
+| `SECRETS_SSM_DECRYPT` | Backfiller, Git webhook | Whether SSM parameters are decrypted, parsed as `true` or `false`. |
 | `SECRETS_SSM_PATH` | Backfiller, Git webhook | SSM parameter path to load secrets from. A leading `/` is added when missing, and a trailing `/` is rejected. |
 | `SQS_QUEUE_URL` | Build orchestrator, Git webhook | URL of the SQS queue that carries build requests. |
 
@@ -40,7 +44,7 @@ sections list the additional variables read by each process.
 
 | Variable | Used by | Description |
 | --- | --- | --- |
-| `ICEBERG_CATALOG_TOKEN` | Archiver, Compactor, Rebuilder, Aggregator | Optional bearer token used to authenticate with the Iceberg REST catalog. When unset or empty, no token is sent. |
+| `ICEBERG_CATALOG_TOKEN` | Archiver, Compactor, Rebuilder, Aggregator | Bearer token used to authenticate with the Iceberg REST catalog. When unset or empty, no token is sent. |
 
 ## Data plane
 
@@ -53,14 +57,14 @@ sections list the additional variables read by each process.
 | `INGESTER_EXCHANGE` | Exchange identifier to connect to, for example `binance`. |
 | `INGESTER_NATS_SUBJECT_PREFIX` | NATS subject prefix for published market events. |
 | `INGESTER_NATS_URL` | NATS URL used to publish market events. |
-| `INGESTER_STREAM_FORMAT` | Exchange stream format. Supported values are `json`, `binary`, `binance_sbe`, and `binance-sbe`. |
+| `INGESTER_STREAM_FORMAT` | Exchange stream format. Supported values are `json` and `binary`; `binance_sbe` and `binance-sbe` are aliases for `binary`. Binary formats are currently supported only for Binance. |
 | `INGESTER_WEBSOCKET_URL` | Exchange WebSocket URL using the `ws` or `wss` scheme, including the trade streams to subscribe to. The Binance ingester rejects subscriptions that contain both `@trade` and `@aggTrade` for the same symbol. |
 
 #### Optional
 
 | Variable | Description |
 | --- | --- |
-| `INGESTER_WEBSOCKET_API_KEY` | Optional API key sent to the exchange WebSocket endpoint. |
+| `INGESTER_WEBSOCKET_API_KEY` | API key sent as the `X-MBX-APIKEY` header. Currently supported only for Binance. |
 
 ### Backfiller
 
@@ -71,14 +75,14 @@ sections list the additional variables read by each process.
 | `BACKFILLER_EVENT_SUBJECT_PREFIX` | NATS subject prefix for replayed market events. |
 | `BACKFILLER_EXCHANGE` | Exchange identifier to backfill, for example `binance`. |
 | `BACKFILLER_EXCHANGE_HTTP_URL` | Exchange REST base URL using the `http` or `https` scheme, used to fetch historical trades. |
-| `BACKFILLER_EXCHANGE_SIGNING_ALGORITHM` | Exchange request signing algorithm. Only `ed25519` is currently supported. |
+| `BACKFILLER_EXCHANGE_SIGNING_ALGORITHM` | Exchange request signing algorithm. Must be `ed25519`. |
 | `BACKFILLER_EXCHANGE_TRADING_MODE` | Exchange trading mode: `real` for production or `paper` for testnet. |
 | `BACKFILLER_GAP_SUBJECT_PREFIX` | NATS subject prefix carrying gap markers from the ingester. |
 | `BACKFILLER_NATS_URL` | NATS URL used to receive gap markers and publish replayed events. |
 
 #### Optional
 
-No optional variables.
+No process-specific optional variables.
 
 ### Aggregator
 
@@ -87,32 +91,32 @@ No optional variables.
 | Variable | Description |
 | --- | --- |
 | `AGGREGATOR_ALLOWED_LATENESS_MS` | How late a trade may arrive and still update a candle, in milliseconds. |
-| `AGGREGATOR_CHECKPOINT_BUCKET` | NATS KV bucket used for checkpoints and writer leases. |
+| `AGGREGATOR_CHECKPOINT_BUCKET` | NATS KV bucket used for checkpoints and writer leases. Must contain only alphanumeric characters, dashes, and underscores. |
 | `AGGREGATOR_CHECKPOINT_INTERVAL_SECS` | How often keyed state is checkpointed, in seconds. Must be lower than `AGGREGATOR_LEASE_TTL_SECS`. |
-| `AGGREGATOR_CHECKPOINT_PREFIX` | Key prefix used for checkpoints and leases inside the checkpoint bucket. |
-| `AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES` | Startup ceiling for the estimated worst-case closed-candle state per shard. The static pair and interval ceilings, per-shard share, and per-interval caps are checked against this budget. |
+| `AGGREGATOR_CHECKPOINT_PREFIX` | Key prefix used for checkpoints and leases inside the checkpoint bucket. Must be a valid NATS subject prefix. |
+| `AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES` | Startup ceiling, in bytes, for the estimated worst-case retained closed-candle state per shard. The static pair ceiling, per-shard share, and per-interval caps must fit within this budget. |
 | `AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX` | NATS subject prefix for closed candles. |
 | `AGGREGATOR_CORRECTION_CUTOFF_MS` | Event-time correction cutoff in milliseconds. Must be greater than zero and at least `AGGREGATOR_ALLOWED_LATENESS_MS`; inputs whose candle window ended before `watermark - cutoff` are rejected. |
-| `AGGREGATOR_DURABLE_PREFIX` | Prefix for durable consumer names. The router uses `{prefix}-router`, and each partition uses `{prefix}-shard-{n}`. |
+| `AGGREGATOR_DURABLE_PREFIX` | Prefix for durable consumer names. The router uses `{prefix}-router`, and each shard uses `{prefix}-shard-{n}`. Must be a valid NATS subject prefix. |
 | `AGGREGATOR_EVENT_SUBJECT_PREFIX` | NATS subject prefix for source market events. |
 | `AGGREGATOR_GAP_SUBJECT_PREFIX` | NATS subject prefix carrying gap markers from the ingester. |
-| `AGGREGATOR_LEASE_TTL_SECS` | Lifetime of the single-writer partition lease, in seconds. |
-| `AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL` | Per-interval closed-candle caps as comma-separated `<interval>=<count>` entries, for example `1m=1440,5m=288,1h=48`. Requires exactly one positive entry for every distinct interval in stock-trek's `AlignedWindow`; missing, duplicate, unknown, malformed, and non-positive entries are rejected. |
-| `AGGREGATOR_NATS_URL` | NATS URL used for source, gap, shard, and candle subjects. |
+| `AGGREGATOR_LEASE_TTL_SECS` | Lifetime of the single-writer shard lease, in seconds. |
+| `AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL` | Per-interval closed-candle caps as comma-separated `<interval>=<count>` entries, for example `1m=1440,5m=288,1h=48`. Requires exactly one positive entry for every supported interval; missing, duplicate, unknown, malformed, and non-positive entries are rejected. |
+| `AGGREGATOR_NATS_URL` | NATS URL used for source events, gap markers, routed shards, and candle publishing. |
 | `AGGREGATOR_OPEN_CANDLE_SUBJECT_PREFIX` | NATS subject prefix for open candle updates. |
-| `AGGREGATOR_REPLAY_START_POLICY` | State to start a partition from: `checkpoint`, `archive`, `earliest`, or `latest`. |
-| `AGGREGATOR_SHARD_COUNT` | Number of keyed partitions. Must not exceed the archive routing bucket count. |
+| `AGGREGATOR_REPLAY_START_POLICY` | State to start a shard from: `checkpoint`, `archive`, `earliest`, or `latest`. |
+| `AGGREGATOR_SHARD_COUNT` | Number of keyed shards. Must be positive and must not exceed the archive routing bucket count. |
 | `AGGREGATOR_SHARD_SUBJECT_PREFIX` | NATS subject prefix owned by the aggregator for routed shard inputs. |
 | `AGGREGATOR_STATE_SCHEMA_VERSION` | State schema version written to new state and required for checkpoint restore. |
-| `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | Idle time before the wall clock advances the event-time watermark and closes expired windows, in seconds. |
+| `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | How long input may be idle before the aggregator flushes already-expired candle windows, in seconds. Idle flushes do not advance event time. |
 
 #### Optional
 
 | Variable | Description |
 | --- | --- |
-| `AGGREGATOR_ARCHIVE_S3_BUCKET` | S3 bucket containing archived market events. Required when `AGGREGATOR_REPLAY_START_POLICY` is `checkpoint` or `archive`; optional for `earliest` and `latest`. Archive recovery is enabled when set. |
-| `AGGREGATOR_ARCHIVE_S3_PREFIX` | Raw archive prefix used when no Iceberg catalog is configured. Required when `AGGREGATOR_ARCHIVE_S3_BUCKET` is set. |
-| `AGGREGATOR_SHARD_INDEX` | Zero-based partition index to run as a single partition. When unset or empty, the process runs every partition. Must be lower than `AGGREGATOR_SHARD_COUNT`. |
+| `AGGREGATOR_ARCHIVE_S3_BUCKET` | S3 bucket containing archived market events. Required when `AGGREGATOR_REPLAY_START_POLICY` is `checkpoint` or `archive`; optional for `earliest` and `latest`. When set, archive recovery is enabled. |
+| `AGGREGATOR_ARCHIVE_S3_PREFIX` | S3 prefix for raw archive objects. Used to list the archive when no Iceberg catalog is configured; required whenever `AGGREGATOR_ARCHIVE_S3_BUCKET` is set. |
+| `AGGREGATOR_SHARD_INDEX` | Zero-based shard index to run as a single shard. When unset or empty, the process runs every shard. Must be lower than `AGGREGATOR_SHARD_COUNT`. |
 
 ### Archiver
 
@@ -132,7 +136,7 @@ No optional variables.
 
 #### Optional
 
-No optional variables.
+No process-specific optional variables.
 
 ### Compactor
 
@@ -150,7 +154,7 @@ No optional variables.
 
 #### Optional
 
-No optional variables.
+No process-specific optional variables.
 
 ### Rebuilder
 
@@ -159,12 +163,12 @@ No optional variables.
 | Variable | Description |
 | --- | --- |
 | `REBUILDER_ALLOWED_LATENESS_MS` | How late a trade may arrive and still update a candle during the rebuild, in milliseconds. |
-| `REBUILDER_BUCKET_MILLIS` | Output bucket size in milliseconds. |
+| `REBUILDER_BUCKET_MILLIS` | Output archive bucket size in milliseconds. |
+| `REBUILDER_CORRECTION_CUTOFF_MS` | Event-time correction cutoff in milliseconds. Must be greater than zero and at least `REBUILDER_ALLOWED_LATENESS_MS`; inputs whose candle window ended before `watermark - cutoff` are rejected. |
 | `REBUILDER_DRY_RUN` | Whether to rebuild without writing output, parsed as a boolean. |
 | `REBUILDER_FINISH_OPEN_WINDOWS` | Whether to close candles that are still open when the archived input ends, parsed as a boolean. |
-| `REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL` | Per-interval closed-candle caps as comma-separated `<interval>=<count>` entries. Requires exactly one positive entry for every distinct interval in stock-trek's `AlignedWindow`. |
-| `REBUILDER_CORRECTION_CUTOFF_MS` | Event-time correction cutoff in milliseconds. Must be greater than zero and at least `REBUILDER_ALLOWED_LATENESS_MS`. |
-| `REBUILDER_OUTPUT_LAYER` | Candle output layer: `raw` or `compacted`. |
+| `REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL` | Per-interval closed-candle caps as comma-separated `<interval>=<count>` entries. Requires exactly one positive entry for every supported interval; missing, duplicate, unknown, malformed, and non-positive entries are rejected. |
+| `REBUILDER_OUTPUT_LAYER` | Output candle layer: `raw` or `compacted`. |
 | `REBUILDER_OUTPUT_PREFIX` | S3 prefix for rebuilt candle objects. |
 | `REBUILDER_S3_BUCKET` | S3 bucket for rebuilt candle output. |
 | `REBUILDER_SOURCE_LAYER` | Event source layer: `auto`, `raw`, or `compacted`. `auto` reads compacted files plus the un-compacted raw tail. |
@@ -172,7 +176,7 @@ No optional variables.
 
 #### Optional
 
-No optional variables.
+No process-specific optional variables.
 
 ## Build plane
 
@@ -182,7 +186,7 @@ No optional variables.
 
 | Variable | Description |
 | --- | --- |
-| `AWS_ENDPOINT_URL_S3` | S3-compatible endpoint URL using the `http` or `https` scheme, used for source archives and artifact access. |
+| `AWS_ENDPOINT_URL_S3` | S3-compatible endpoint URL using the `http` or `https` scheme, used for source archives and build artifact access. |
 | `BUILD_AGENT_FUNCTION_NAME` | Name of the build agent Lambda function that the orchestrator invokes. |
 | `GITHUB_APP_ID` | GitHub App ID used to authenticate with the GitHub API. |
 | `GITHUB_APP_PRIVATE_KEY` | GitHub App private key in PEM format. Literal `\n` sequences are converted to newlines. |
@@ -201,7 +205,7 @@ No optional variables.
 
 #### Optional
 
-No optional variables.
+No process-specific optional variables.
 
 ### Git webhook
 
@@ -217,7 +221,7 @@ No optional variables.
 
 #### Optional
 
-No optional variables.
+No process-specific optional variables.
 
 ### Build agent
 
@@ -226,28 +230,31 @@ No optional variables.
 | Variable | Description |
 | --- | --- |
 | `BUILD_AGENT_BUILD_CACHE_DIR` | Directory used to cache build dependencies and outputs between builds. |
+| `BUILD_AGENT_FAILURE_PUBLISH_BUDGET_SECS` | Time budget reserved for publishing a failure result before the invocation deadline, in seconds. |
 | `BUILD_AGENT_MAX_EXTRACTED_SOURCE_SIZE_BYTES` | Maximum total size of extracted source, in bytes. |
 | `BUILD_AGENT_SOURCE_DIR` | Working directory where the build agent unpacks and builds source. |
-| `BUILD_AGENT_FAILURE_PUBLISH_BUDGET_SECS` | Time budget reserved for publishing a failure result before the invocation deadline, in seconds. |
 
 #### Optional
 
-No optional variables.
+No process-specific optional variables.
 
 ## Secrets
 
-Some values are read from AWS Systems Manager Parameter Store instead of the process
-environment. The backfiller and Git webhook load every parameter under `SECRETS_SSM_PATH` and
-look up secrets by name:
+Some values are read from AWS Systems Manager Parameter Store instead of the process environment.
+The backfiller and Git webhook load every parameter under `SECRETS_SSM_PATH` and look secrets up by
+their final path segment.
 
-- The Git webhook expects `GITHUB_WEBHOOK_SECRET`.
-- The backfiller derives one API key/secret pair per exchange and trading mode from
-  `BACKFILLER_EXCHANGE`, `BACKFILLER_EXCHANGE_TRADING_MODE`, and the mode's canonical
-  `real` or `paper` name. For Binance in real mode it reads
-  `BACKFILLER_EXCHANGE_BINANCE_REAL_API_KEY` and
-  `BACKFILLER_EXCHANGE_BINANCE_REAL_API_SECRET`; in paper mode it reads
-  `BACKFILLER_EXCHANGE_BINANCE_PAPER_API_KEY` and
-  `BACKFILLER_EXCHANGE_BINANCE_PAPER_API_SECRET`. Every exchange uses the same pattern,
-  so multiple exchanges can share one SSM path.
+| Consumer | Parameter | Description |
+| --- | --- | --- |
+| Git webhook | `GITHUB_WEBHOOK_SECRET` | Secret used to verify GitHub webhook signatures. |
+| Backfiller | `BACKFILLER_EXCHANGE_<EXCHANGE>_<MODE>_API_KEY` | API key for the configured exchange and trading mode. |
+| Backfiller | `BACKFILLER_EXCHANGE_<EXCHANGE>_<MODE>_API_SECRET` | API secret or private signing key for the configured exchange and trading mode. |
+
+For the backfiller, `<EXCHANGE>` is the upper-case exchange name from `BACKFILLER_EXCHANGE` and
+`<MODE>` is `REAL` or `PAPER`, derived from `BACKFILLER_EXCHANGE_TRADING_MODE`. For Binance in real
+mode it reads `BACKFILLER_EXCHANGE_BINANCE_REAL_API_KEY` and
+`BACKFILLER_EXCHANGE_BINANCE_REAL_API_SECRET`; in paper mode it reads
+`BACKFILLER_EXCHANGE_BINANCE_PAPER_API_KEY` and `BACKFILLER_EXCHANGE_BINANCE_PAPER_API_SECRET`.
+Every exchange uses the same pattern, so multiple exchanges can share one SSM path.
 
 These names are SSM parameter names, not environment variables.
