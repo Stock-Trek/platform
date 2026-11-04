@@ -1,8 +1,5 @@
 use crate::{convert::required::IsRequired, generated::dto::MarketOhlcvDto};
-use stock_trek::{
-    errors::{DomainError, StockTrekError},
-    markets::MarketOhlcv,
-};
+use stock_trek::{errors::StockTrekError, markets::MarketOhlcv};
 
 impl TryFrom<MarketOhlcvDto> for MarketOhlcv {
     type Error = StockTrekError;
@@ -15,27 +12,14 @@ impl TryFrom<MarketOhlcvDto> for MarketOhlcv {
             close_dto,
             volume_dto,
             quote_volume_dto,
-            vwap_dto,
         } = value;
-        let ohlcv = MarketOhlcv::new(
+        MarketOhlcv::new(
             open_dto.required("open_dto")?.try_into()?,
             high_dto.required("high_dto")?.try_into()?,
             low_dto.required("low_dto")?.try_into()?,
             close_dto.required("close_dto")?.try_into()?,
             volume_dto.required("volume_dto")?.try_into()?,
             quote_volume_dto.required("quote_volume_dto")?.try_into()?,
-        )?;
-        let vwap: f64 = vwap_dto.required("vwap_dto")?.try_into()?;
-        let tolerance = f64::EPSILON * ohlcv.vwap().abs().max(1.0);
-        if (ohlcv.vwap() - vwap).abs() > tolerance {
-            return Err(StockTrekError::Domain(DomainError {
-                function: "MarketOhlcvDto",
-                message: format!(
-                    "vwap_dto {vwap} does not match the OHLCV-derived VWAP {}",
-                    ohlcv.vwap()
-                ),
-            }));
-        }
-        Ok(ohlcv)
+        )
     }
 }

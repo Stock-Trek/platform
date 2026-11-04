@@ -49,7 +49,6 @@ impl Fixtures {
             close_dto: Some(Self::decimal_dto(Decimal::new(3, 0))),
             volume_dto: Some(Self::decimal_dto(Decimal::new(5, 0))),
             quote_volume_dto: Some(Self::decimal_dto(Decimal::new(10, 0))),
-            vwap_dto: Some(Self::decimal_dto(Decimal::new(2, 0))),
         }
     }
 
@@ -271,7 +270,7 @@ fn market_ohlcv_dto_converts() {
 #[test]
 fn market_ohlcv_dto_requires_all_fields() {
     let mut dto = Fixtures::ohlcv_dto();
-    dto.vwap_dto = None;
+    dto.quote_volume_dto = None;
     assert!(MarketOhlcv::try_from(dto).is_err());
 }
 

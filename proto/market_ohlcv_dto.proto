@@ -10,5 +10,4 @@ message MarketOhlcvDto {
   DecimalDto close_dto = 4;
   DecimalDto volume_dto = 5;
   DecimalDto quote_volume_dto = 6;
-  DecimalDto vwap_dto = 7;
 }
