@@ -835,10 +835,19 @@ async fn archive_rebuild_uses_the_same_caps_and_cutoff_as_live_processing() {
         cutoff,
     );
     let mut live = CandleProcessor::with_config(config);
+    let mut live_evictions = 0;
+    let mut live_out_of_contract = 0;
+    let mut live_closed_ids = Vec::new();
     for event in &events {
-        live.apply_event(event, &[trade(event.exchange_timestamp.unwrap().0)]);
+        let update = live.apply_event(event, &[trade(event.exchange_timestamp.unwrap().0)]);
+        live_evictions += update.closed_candle_evictions;
+        live_out_of_contract += update.out_of_contract_trades;
+        live_closed_ids.extend(update.closed.iter().map(|candle| candle.message_id()));
     }
     let live_state = live.into_state();
+    assert_eq!(live_evictions, 1);
+    assert_eq!(live_out_of_contract, 1);
+    assert_eq!(live_closed_ids.len(), 2);
 
     let archive_state = AggregatorState::rebuild_from_archive(
         &mut VecArchive::new(events),
@@ -858,14 +867,14 @@ async fn archive_rebuild_uses_the_same_caps_and_cutoff_as_live_processing() {
         BTreeMap::from([(interval, 1)])
     );
     let key = CandleKey::new(CexId::Binance, pair(), interval);
-    assert!(
-        archive_state
-            .closed_candle(&key, TimestampMilliseconds(120_000))
-            .is_some()
-    );
+    let retained = archive_state
+        .closed_candle(&key, TimestampMilliseconds(120_000))
+        .expect("the newest candle is retained");
+    assert_eq!(retained.trade_count, 1);
     assert!(
         archive_state
             .closed_candle(&key, TimestampMilliseconds(60_000))
-            .is_none()
+            .is_none(),
+        "the cap-evicted window must not be recreated by the out-of-contract correction"
     );
 }

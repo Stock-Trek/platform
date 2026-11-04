@@ -22,6 +22,16 @@ fn trade(price: &str, timestamp: i64) -> Trade {
     }
 }
 
+fn trade_for(pair: TradingPair, price: &str, timestamp: i64) -> Trade {
+    Trade {
+        exchange: CexId::Binance,
+        trading_pair: pair,
+        price: Decimal::from_str_exact(price).unwrap(),
+        quantity: Decimal::ONE,
+        timestamp: TimestampMilliseconds(timestamp),
+    }
+}
+
 fn event(sequence: u64, timestamp: i64) -> MarketEvent {
     MarketEvent {
         exchange: CexId::Binance,
@@ -633,6 +643,173 @@ fn retention_config(
         caps.iter().copied().collect::<BTreeMap<_, _>>(),
         correction_cutoff,
     )
+}
+
+#[test]
+fn gap_affected_updates_are_ordered_across_keys_intervals_and_windows() {
+    let one_minute = one_minute();
+    let five_minutes = AlignedWindow::try_from("5m").unwrap();
+    let pairs = [
+        TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
+        TradingPair::new(AssetId::Ethereum, AssetId::TetherUSD),
+    ];
+    let config = ProcessorConfig::without_retention(
+        vec![one_minute, five_minutes],
+        DurationMilliseconds::ZERO,
+    );
+
+    let mut first = CandleProcessor::with_config(config.clone());
+    let mut second = CandleProcessor::with_config(config);
+    for pair in pairs {
+        for timestamp in [61_000, 121_000, 181_000] {
+            first.apply_trade(&trade_for(pair, "100", timestamp));
+            second.apply_trade(&trade_for(pair, "100", timestamp));
+        }
+    }
+    first.flush_closed_at_or_before(TimestampMilliseconds(200_000));
+    second.flush_closed_at_or_before(TimestampMilliseconds(200_000));
+
+    let all_pairs_gap = GapMarker {
+        stream: "all@trades".to_string(),
+        detected_at: TimestampMilliseconds(190_000),
+        ..gap(190_000)
+    };
+    let first_update = first.apply_gap(&all_pairs_gap);
+    let second_update = second.apply_gap(&all_pairs_gap);
+
+    assert_eq!(first_update.open, second_update.open);
+    assert_eq!(
+        first_update
+            .closed
+            .iter()
+            .map(|candle| candle.message_id())
+            .collect::<Vec<_>>(),
+        second_update
+            .closed
+            .iter()
+            .map(|candle| candle.message_id())
+            .collect::<Vec<_>>()
+    );
+    assert_eq!(
+        first_update.incomplete_windows,
+        second_update.incomplete_windows
+    );
+    assert_eq!(first.state(), second.state());
+
+    let subject = |pair, interval| CandleKey::new(CexId::Binance, pair, interval).subject_suffix();
+    let closed_order = first_update
+        .closed
+        .iter()
+        .map(|candle| {
+            (
+                candle.candle().key.subject_suffix(),
+                candle.candle().start_time().0,
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        closed_order,
+        vec![
+            (subject(pairs[0], one_minute), 60_000),
+            (subject(pairs[0], one_minute), 120_000),
+            (subject(pairs[1], one_minute), 60_000),
+            (subject(pairs[1], one_minute), 120_000),
+        ]
+    );
+
+    let open_order = first_update
+        .open
+        .iter()
+        .map(|candle| (candle.key.subject_suffix(), candle.start_time().0))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        open_order,
+        vec![
+            (subject(pairs[0], one_minute), 180_000),
+            (subject(pairs[0], five_minutes), 0),
+            (subject(pairs[1], one_minute), 180_000),
+            (subject(pairs[1], five_minutes), 0),
+        ]
+    );
+
+    let affected_order = first_update
+        .incomplete_windows
+        .iter()
+        .map(|window| (window.key.subject_suffix(), window.window_start.0))
+        .collect::<Vec<_>>();
+    assert_eq!(
+        affected_order,
+        vec![
+            (subject(pairs[0], one_minute), 60_000),
+            (subject(pairs[0], one_minute), 120_000),
+            (subject(pairs[0], one_minute), 180_000),
+            (subject(pairs[0], five_minutes), 0),
+            (subject(pairs[1], one_minute), 60_000),
+            (subject(pairs[1], one_minute), 120_000),
+            (subject(pairs[1], one_minute), 180_000),
+            (subject(pairs[1], five_minutes), 0),
+        ]
+    );
+}
+
+#[test]
+fn replay_with_different_caps_per_interval_and_a_cutoff_preserves_state_and_message_ids() {
+    let one_minute = one_minute();
+    let five_minutes = AlignedWindow::try_from("5m").unwrap();
+    let config = retention_config(
+        vec![one_minute, five_minutes],
+        &[(one_minute, 1), (five_minutes, 2)],
+        DurationMilliseconds::ZERO,
+        DurationMilliseconds(60_000),
+    );
+    let events = [
+        (event(1, 61_000), trade("100", 61_000)),
+        (event(2, 121_000), trade("101", 121_000)),
+        (event(3, 181_000), trade("102", 181_000)),
+        (event(4, 241_000), trade("103", 241_000)),
+        (event(5, 301_000), trade("104", 301_000)),
+        (event(6, 601_000), trade("105", 601_000)),
+        (event(7, 602_000), trade("90", 61_500)),
+        (event(8, 605_000), trade("95", 301_500)),
+        (event(9, 901_000), trade("106", 901_000)),
+    ];
+
+    let mut first = CandleProcessor::with_config(config.clone());
+    let mut second = CandleProcessor::with_config(config);
+    let mut first_ids = Vec::new();
+    let mut second_ids = Vec::new();
+    let mut first_evictions = 0;
+    let mut second_evictions = 0;
+    let mut first_out_of_contract = 0;
+    let mut second_out_of_contract = 0;
+    let mut evictions_by_interval = BTreeMap::new();
+
+    for (event, trade) in &events {
+        let update = first.apply_event(event, std::slice::from_ref(trade));
+        first_ids.extend(update.closed.iter().map(|candle| candle.message_id()));
+        first_evictions += update.closed_candle_evictions;
+        first_out_of_contract += update.out_of_contract_trades;
+        for (interval, count) in &update.closed_candle_evictions_by_interval {
+            *evictions_by_interval.entry(*interval).or_default() += count;
+        }
+    }
+    for (event, trade) in &events {
+        let update = second.apply_event(event, std::slice::from_ref(trade));
+        second_ids.extend(update.closed.iter().map(|candle| candle.message_id()));
+        second_evictions += update.closed_candle_evictions;
+        second_out_of_contract += update.out_of_contract_trades;
+    }
+
+    assert_eq!(first.state(), second.state());
+    assert_eq!(first_ids, second_ids);
+    assert_eq!(first_evictions, second_evictions);
+    assert_eq!(first_evictions, 6);
+    assert_eq!(
+        evictions_by_interval,
+        BTreeMap::from([(one_minute, 5), (five_minutes, 1)])
+    );
+    assert_eq!(first_out_of_contract, second_out_of_contract);
+    assert_eq!(first_out_of_contract, 3);
 }
 
 #[test]
