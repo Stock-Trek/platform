@@ -1,7 +1,7 @@
 //! Native host for the `runner` algorithm.
 //!
-//! `build-agent` spawns this binary, writes the request body to its stdin and
-//! forwards its stdout/stderr to the agent logs. The body is a JSON object
+//! `build-agent` spawns `cwasm-invoker`, writes the request body to its stdin
+//! and forwards its stdout/stderr to the agent logs. The body is a JSON object
 //! shaped like:
 //!
 //! ```json
@@ -33,20 +33,20 @@ use platform_runner::{
 use serde_json::{Value, json};
 use std::io::{self, Read};
 
-struct BuildRunner;
+struct CwasmInvoker;
 
-impl BuildRunner {
+impl CwasmInvoker {
     async fn run() -> i32 {
         let mut body = String::new();
         if let Err(error) = io::stdin().read_to_string(&mut body) {
-            eprintln!("build-runner: failed to read stdin: {error}");
+            eprintln!("cwasm-invoker: failed to read stdin: {error}");
             return 1;
         }
 
         let request = match Self::parse_request(&body) {
             Ok(request) => request,
             Err(error) => {
-                eprintln!("build-runner: invalid request: {error}");
+                eprintln!("cwasm-invoker: invalid request: {error}");
                 return ExitCode::ServerEntryFailedToParseRequest.code();
             }
         };
@@ -55,7 +55,7 @@ impl BuildRunner {
             Some(url) => match Cwasm::download(url, CwasmLimits::default()).await {
                 Ok(cwasm) => Some(cwasm),
                 Err(error) => {
-                    eprintln!("build-runner: failed to download cwasm: {error}");
+                    eprintln!("cwasm-invoker: failed to download cwasm: {error}");
                     return ExitCode::ServerRunnerConnectionFailed.code();
                 }
             },
@@ -150,7 +150,7 @@ impl BuildRunner {
 
 #[tokio::main]
 async fn main() {
-    std::process::exit(BuildRunner::run().await);
+    std::process::exit(CwasmInvoker::run().await);
 }
 
 #[unsafe(no_mangle)]
@@ -161,23 +161,23 @@ unsafe extern "C" fn queue_metadata(
     description_len: usize,
 ) {
     unsafe {
-        BuildRunner::queue_metadata(name_ptr, name_len, description_ptr, description_len);
+        CwasmInvoker::queue_metadata(name_ptr, name_len, description_ptr, description_len);
     }
 }
 
 #[unsafe(no_mangle)]
 unsafe extern "C" fn queue_preferences(preferences_ptr: *const u8, preferences_len: usize) {
-    unsafe { BuildRunner::queue_preferences(preferences_ptr, preferences_len) };
+    unsafe { CwasmInvoker::queue_preferences(preferences_ptr, preferences_len) };
 }
 
 #[unsafe(no_mangle)]
 unsafe extern "C" fn queue_signals(signals_ptr: *const u8, signals_len: usize) {
-    unsafe { BuildRunner::queue_signals(signals_ptr, signals_len) };
+    unsafe { CwasmInvoker::queue_signals(signals_ptr, signals_len) };
 }
 
 #[unsafe(no_mangle)]
 unsafe extern "C" fn queue_strategy(strategy_ptr: *const u8, strategy_len: usize) {
-    unsafe { BuildRunner::queue_strategy(strategy_ptr, strategy_len) };
+    unsafe { CwasmInvoker::queue_strategy(strategy_ptr, strategy_len) };
 }
 
 #[unsafe(no_mangle)]
@@ -188,7 +188,7 @@ unsafe extern "C" fn queue_action(
     recovery_policy_len: usize,
 ) {
     unsafe {
-        BuildRunner::queue_action(
+        CwasmInvoker::queue_action(
             action_ptr,
             action_len,
             recovery_policy_ptr,

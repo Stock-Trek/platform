@@ -86,12 +86,12 @@ RUN cargo vendor vendor > /tmp/vendor-config.toml \
 RUN cargo build \
       --manifest-path ./crates/sandbox-plane/runner/Cargo.toml \
       --release \
-      --bin build-runner \
+      --bin cwasm-invoker \
       --locked \
       --offline \
-      --target-dir /tmp/build-runner-target \
- && cp /tmp/build-runner-target/release/build-runner /usr/local/bin/build-runner \
- && rm -rf /tmp/build-runner-target
+      --target-dir /tmp/cwasm-invoker-target \
+ && cp /tmp/cwasm-invoker-target/release/cwasm-invoker /usr/local/bin/cwasm-invoker \
+ && rm -rf /tmp/cwasm-invoker-target
 
 # Prebuild the wasm runner and all of its dependencies. The agent copies this
 # target directory into a fresh /tmp directory for every request, so builds only
