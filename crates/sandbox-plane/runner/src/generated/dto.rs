@@ -32,8 +32,6 @@ pub struct MarketOhlcvDto {
     pub volume_dto: ::core::option::Option<DecimalDto>,
     #[prost(message, optional, tag = "6")]
     pub quote_volume_dto: ::core::option::Option<DecimalDto>,
-    #[prost(message, optional, tag = "7")]
-    pub vwap_dto: ::core::option::Option<DecimalDto>,
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
 pub struct MarketCandleDto {
