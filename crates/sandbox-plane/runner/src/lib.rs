@@ -1,6 +1,5 @@
 pub mod command;
 pub mod convert;
-#[cfg(not(target_arch = "wasm32"))]
 pub mod cwasm;
 pub mod entry;
 pub mod external;
