@@ -12,17 +12,12 @@ use platform_exchange_types::{
         book_ticker::BinanceBookTickerRequest,
         depth::BinanceDepthRequest,
         exchange::BinanceExchange,
-        klines::{BinanceKlineResponse, BinanceKlinesInterval, BinanceKlinesRequest},
-        klines_limit::BinanceKlinesLimit,
-        response::{BinanceResponse, BinanceResponsePayload},
         trades::{BinanceHistoricalTradesRequest, BinanceTradeResponse},
     },
     request::ETHttpRequest,
 };
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::Arc;
-
-const KLINES_PAGE_LIMIT: u32 = BinanceKlinesLimit::MAXIMUM;
 
 /// Reads Binance REST pages used to reconstruct market-data gaps.
 pub struct BinanceEventPageSource {
@@ -88,42 +83,6 @@ impl BinanceEventPageSource {
         )])
     }
 
-    pub async fn fetch_klines(
-        &self,
-        symbol: &str,
-        interval: &BinanceKlinesInterval,
-        missing_from: u64,
-        missing_to: u64,
-    ) -> BpResult<Vec<BackfilledEvent>> {
-        let step = interval.millis().max(1);
-        let mut next = i64::try_from(missing_from).unwrap_or(i64::MAX);
-        let end = i64::try_from(missing_to).unwrap_or(i64::MAX);
-        let mut events = Vec::new();
-        while next <= end {
-            let mut request = BinanceKlinesRequest::new(symbol.to_string(), interval.clone());
-            request.startTime = Some(TimestampMilliseconds(next));
-            request.endTime = Some(TimestampMilliseconds(end));
-            request.limit = Some(BinanceKlinesLimit::try_new(KLINES_PAGE_LIMIT)?);
-            let response = self.submit(request).await?;
-            let klines = Self::raw_klines(response)?;
-            if klines.is_empty() {
-                break;
-            }
-            let mut highest = next.saturating_sub(step);
-            for kline in &klines {
-                highest = highest.max(kline.open_time().0);
-                events.push(BinanceEventParser::kline(symbol, interval, kline));
-            }
-            if highest < next {
-                return Err(BpError::Exchange(ExchangeError::BadResponse(format!(
-                    "{symbol} returned klines before the requested open time {next}"
-                ))));
-            }
-            next = highest.saturating_add(step);
-        }
-        Ok(events)
-    }
-
     async fn fetch_trade_page(
         &self,
         symbol: &str,
@@ -138,23 +97,6 @@ impl BinanceEventPageSource {
             Some(api_key.to_string()),
         );
         self.submit(request).await?.historical_trades()
-    }
-
-    fn raw_klines(
-        response: BinanceResponse<Vec<BinanceKlineResponse>>,
-    ) -> BpResult<Vec<BinanceKlineResponse>> {
-        match response.payload {
-            BinanceResponsePayload::Success(payload) => Ok(payload),
-            BinanceResponsePayload::Failure(error) => {
-                let retry_after = response
-                    .metadata
-                    .retry_after
-                    .or_else(|| error.retry_after());
-                Err(BpError::Exchange(
-                    error.exchange_error(response.metadata.status, retry_after),
-                ))
-            }
-        }
     }
 }
 

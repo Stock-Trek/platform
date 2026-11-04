@@ -1,9 +1,5 @@
 use crate::fetcher::BackfilledEvent;
-use platform_exchange_types::binance::{
-    depth::BinanceDepthResponse,
-    klines::{BinanceKlineResponse, BinanceKlinesInterval},
-    trades::BinanceTradeResponse,
-};
+use platform_exchange_types::binance::{depth::BinanceDepthResponse, trades::BinanceTradeResponse};
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::json;
 
@@ -70,41 +66,6 @@ impl BinanceEventParser {
                 "B": bid_qty,
                 "a": ask_price,
                 "A": ask_qty,
-            }),
-        }
-    }
-
-    pub fn kline(
-        symbol: &str,
-        interval: &BinanceKlinesInterval,
-        kline: &BinanceKlineResponse,
-    ) -> BackfilledEvent {
-        let open_time = kline.open_time();
-        let close_time = kline.close_time();
-        BackfilledEvent {
-            sequence: open_time.0 as u64,
-            exchange_timestamp: close_time,
-            data: json!({
-                "e": "kline",
-                "E": close_time,
-                "s": symbol,
-                "k": {
-                    "t": open_time,
-                    "T": close_time,
-                    "s": symbol,
-                    "i": interval.to_string(),
-                    "o": kline.open(),
-                    "c": kline.close(),
-                    "h": kline.high(),
-                    "l": kline.low(),
-                    "v": kline.volume(),
-                    "n": kline.trades(),
-                    "x": true,
-                    "q": kline.quote_volume(),
-                    "V": kline.taker_buy_base_volume(),
-                    "Q": kline.taker_buy_quote_volume(),
-                    "B": "0",
-                },
             }),
         }
     }
