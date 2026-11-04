@@ -66,3 +66,13 @@ impl Entry {
 pub unsafe extern "C" fn entry(argc: i32, argv: *const *const c_char) -> i32 {
     unsafe { Entry::run(argc, argv) }
 }
+
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn alloc(size: usize) -> *mut u8 {
+    if size == 0 {
+        return std::ptr::null_mut();
+    }
+    let layout = std::alloc::Layout::from_size_align(size, 16).expect("invalid alloc layout");
+    unsafe { std::alloc::alloc(layout) }
+}

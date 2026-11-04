@@ -54,4 +54,26 @@ impl Command {
             | Command::Signals { strategy_name, .. } => strategy_name,
         }
     }
+
+    pub fn arguments(&self) -> Vec<&str> {
+        match self {
+            Command::Algorithm { strategy_name } => vec!["Algorithm", strategy_name],
+            Command::Execute {
+                strategy_name,
+                strategy_context_path,
+                portfolio_path,
+            } => vec![
+                "Execute",
+                strategy_name,
+                strategy_context_path,
+                portfolio_path,
+            ],
+            Command::Metadata { strategy_name } => vec!["Metadata", strategy_name],
+            Command::Preferences { strategy_name } => vec!["Preferences", strategy_name],
+            Command::Signals {
+                strategy_name,
+                strategy_context_path,
+            } => vec!["Signals", strategy_name, strategy_context_path],
+        }
+    }
 }

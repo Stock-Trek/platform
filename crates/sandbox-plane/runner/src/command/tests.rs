@@ -50,3 +50,50 @@ fn rejects_requests_without_a_cwasm_url() {
 
     assert!(result.is_err());
 }
+
+#[test]
+fn builds_entry_arguments_for_every_command() {
+    assert_eq!(
+        Command::Algorithm {
+            strategy_name: "AlgorithmStub".to_string(),
+        }
+        .arguments(),
+        vec!["Algorithm", "AlgorithmStub"]
+    );
+    assert_eq!(
+        Command::Execute {
+            strategy_name: "AlgorithmStub".to_string(),
+            strategy_context_path: "/tmp/strategy-context.bin".to_string(),
+            portfolio_path: "/tmp/portfolio.bin".to_string(),
+        }
+        .arguments(),
+        vec![
+            "Execute",
+            "AlgorithmStub",
+            "/tmp/strategy-context.bin",
+            "/tmp/portfolio.bin"
+        ]
+    );
+    assert_eq!(
+        Command::Metadata {
+            strategy_name: "AlgorithmStub".to_string(),
+        }
+        .arguments(),
+        vec!["Metadata", "AlgorithmStub"]
+    );
+    assert_eq!(
+        Command::Preferences {
+            strategy_name: "AlgorithmStub".to_string(),
+        }
+        .arguments(),
+        vec!["Preferences", "AlgorithmStub"]
+    );
+    assert_eq!(
+        Command::Signals {
+            strategy_name: "AlgorithmStub".to_string(),
+            strategy_context_path: "/tmp/strategy-context.bin".to_string(),
+        }
+        .arguments(),
+        vec!["Signals", "AlgorithmStub", "/tmp/strategy-context.bin"]
+    );
+}

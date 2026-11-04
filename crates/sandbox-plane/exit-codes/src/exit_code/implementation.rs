@@ -28,6 +28,7 @@ pub enum ExitCode {
     ServerRunnerPortfolioNotCreated = 123,
 
     ServerRunnerConnectionFailed = 131,
+    ServerRunnerCwasmNotLoaded = 132,
 
     // bot errors
     BotErrorCreatingResolver = 201,
@@ -95,6 +96,7 @@ impl ExitCode {
             Self::ServerRunnerPortfolioNotDecoded => "portfolio could not be decoded",
             Self::ServerRunnerPortfolioNotCreated => "portfolio could not be created",
             Self::ServerRunnerConnectionFailed => "failed to connect to build runner",
+            Self::ServerRunnerCwasmNotLoaded => "cwasm artifact could not be loaded",
             Self::BotErrorCreatingResolver => "failed to create resolver",
             Self::BotErrorCreatingScratchPad => "failed to create scratch pad",
             Self::BotErrorResolvingAction => "failed to resolve action",
