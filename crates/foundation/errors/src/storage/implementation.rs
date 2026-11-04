@@ -25,6 +25,14 @@ pub enum StorageError {
         "cwasm artifact is {size} bytes, exceeding the maximum cwasm size of {max_bytes} bytes"
     )]
     CwasmTooLarge { size: u64, max_bytes: u64 },
+    #[error("cwasm SHA-256 {value:?} is not a 32-byte hexadecimal digest")]
+    CwasmHashInvalid { value: String },
+    #[error("cwasm artifact SHA-256 was {actual}, expected {expected}")]
+    CwasmHashMismatch { expected: String, actual: String },
+    #[error("cwasm artifact has {actual} bytes, expected {expected} bytes")]
+    CwasmSizeMismatch { expected: u64, actual: u64 },
+    #[error("cwasm artifact targets Wasmtime {expected}, but this runner embeds Wasmtime {actual}")]
+    CwasmWasmtimeVersionMismatch { expected: String, actual: String },
     #[error("failed to load AWS credentials: {0}")]
     Credentials(#[from] CredentialsError),
     #[error("invalid S3 endpoint URL: {source}")]
@@ -111,7 +119,11 @@ impl StorageError {
             | Self::ArtifactTooLarge { .. }
             | Self::SourceArchiveTooLarge { .. }
             | Self::ExtractedSourceTooLarge { .. }
-            | Self::CwasmTooLarge { .. } => Retryability::Permanent,
+            | Self::CwasmTooLarge { .. }
+            | Self::CwasmHashInvalid { .. }
+            | Self::CwasmHashMismatch { .. }
+            | Self::CwasmSizeMismatch { .. }
+            | Self::CwasmWasmtimeVersionMismatch { .. } => Retryability::Permanent,
             Self::Credentials(error) => Retryability::from_credentials(error),
         }
     }

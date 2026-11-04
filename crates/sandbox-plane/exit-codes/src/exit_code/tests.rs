@@ -8,6 +8,11 @@ fn from_code_returns_known_variants() {
         Some(ExitCode::ServerEntryInvalidArgument)
     );
     assert_eq!(ExitCode::from_code(204), Some(ExitCode::BotErrorPanic));
+    assert_eq!(
+        ExitCode::from_code(133),
+        Some(ExitCode::ServerRunnerCwasmDownloadFailed)
+    );
+    assert_eq!(ExitCode::from_code(206), Some(ExitCode::BotErrorTimeout));
 }
 
 #[test]

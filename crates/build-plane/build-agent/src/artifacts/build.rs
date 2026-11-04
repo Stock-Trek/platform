@@ -165,6 +165,8 @@ impl Artifacts {
             .arg("compile")
             .arg("-C")
             .arg("cache=no")
+            .arg("-W")
+            .arg("epoch-interruption=y")
             .arg(module)
             .arg("-o")
             .arg(&output)

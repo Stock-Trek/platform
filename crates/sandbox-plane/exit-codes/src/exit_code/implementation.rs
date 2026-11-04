@@ -29,6 +29,7 @@ pub enum ExitCode {
 
     ServerRunnerConnectionFailed = 131,
     ServerRunnerCwasmNotLoaded = 132,
+    ServerRunnerCwasmDownloadFailed = 133,
 
     // bot errors
     BotErrorCreatingResolver = 201,
@@ -36,6 +37,7 @@ pub enum ExitCode {
     BotErrorResolvingAction = 203,
     BotErrorPanic = 204,
     BotErrorComputingSignals = 205,
+    BotErrorTimeout = 206,
 }
 
 impl ExitCode {
@@ -97,11 +99,13 @@ impl ExitCode {
             Self::ServerRunnerPortfolioNotCreated => "portfolio could not be created",
             Self::ServerRunnerConnectionFailed => "failed to connect to build runner",
             Self::ServerRunnerCwasmNotLoaded => "cwasm artifact could not be loaded",
+            Self::ServerRunnerCwasmDownloadFailed => "cwasm artifact could not be downloaded",
             Self::BotErrorCreatingResolver => "failed to create resolver",
             Self::BotErrorCreatingScratchPad => "failed to create scratch pad",
             Self::BotErrorResolvingAction => "failed to resolve action",
             Self::BotErrorPanic => "build runner panicked",
             Self::BotErrorComputingSignals => "failed to compute signals",
+            Self::BotErrorTimeout => "build runner timed out",
         }
     }
 }
