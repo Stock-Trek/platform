@@ -38,6 +38,7 @@ pub enum ExitCode {
     BotErrorPanic = 204,
     BotErrorComputingSignals = 205,
     BotErrorTimeout = 206,
+    BotErrorResourceLimitExceeded = 207,
 }
 
 impl ExitCode {
@@ -106,6 +107,7 @@ impl ExitCode {
             Self::BotErrorPanic => "build runner panicked",
             Self::BotErrorComputingSignals => "failed to compute signals",
             Self::BotErrorTimeout => "build runner timed out",
+            Self::BotErrorResourceLimitExceeded => "build runner exceeded its resource limits",
         }
     }
 }

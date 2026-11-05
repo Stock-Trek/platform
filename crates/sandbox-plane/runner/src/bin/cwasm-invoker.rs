@@ -71,7 +71,7 @@ impl CwasmInvoker {
             request.cwasm_size,
             request.wasmtime_version.clone(),
         );
-        let cwasm = match runtime.block_on(Cwasm::download_verified(
+        let cwasm = match runtime.block_on(Cwasm::download(
             &request.cwasm_get_url,
             &integrity,
             CwasmLimits::default(),

@@ -190,7 +190,7 @@ fn interrupts_a_guest_that_exceeds_its_memory_limit() {
 
     let code = runner.execute_with(file.path(), &["runner"], &emit);
 
-    assert_eq!(code, ExitCode::BotErrorTimeout.code());
+    assert_eq!(code, ExitCode::BotErrorResourceLimitExceeded.code());
     assert!(lines.lock().unwrap().is_empty());
 }
 

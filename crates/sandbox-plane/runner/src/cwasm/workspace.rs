@@ -13,6 +13,7 @@ pub struct GuestWorkspace {
 }
 
 impl GuestWorkspace {
+    #[cfg(test)]
     pub fn empty() -> Result<Self, ExitCode> {
         let directory = Self::create_directory()?;
         Ok(Self {
@@ -91,6 +92,7 @@ impl GuestWorkspace {
         self._directory.path()
     }
 
+    #[cfg(test)]
     pub fn arguments(&self) -> &[String] {
         &self.arguments
     }

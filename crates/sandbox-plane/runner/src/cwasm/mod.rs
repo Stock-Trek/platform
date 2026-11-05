@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 //! Download a compiled runner artifact from a pre-signed URL.
 //!
 //! The control plane signs an S3 `GetObject` request and passes the URL in the

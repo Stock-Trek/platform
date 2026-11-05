@@ -13,6 +13,10 @@ fn from_code_returns_known_variants() {
         Some(ExitCode::ServerRunnerCwasmDownloadFailed)
     );
     assert_eq!(ExitCode::from_code(206), Some(ExitCode::BotErrorTimeout));
+    assert_eq!(
+        ExitCode::from_code(207),
+        Some(ExitCode::BotErrorResourceLimitExceeded)
+    );
 }
 
 #[test]

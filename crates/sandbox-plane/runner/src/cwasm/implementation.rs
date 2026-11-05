@@ -13,7 +13,12 @@ pub const DEFAULT_CWASM_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
 pub const DEFAULT_MAX_CWASM_BYTES: NonZeroU64 =
     NonZeroU64::new(64 * 1024 * 1024).expect("default cwasm limit is non-zero");
 
-pub const WASMTIME_VERSION: &str = env!("PLATFORM_WASMTIME_VERSION");
+/// The Wasmtime version embedded by the native runner.
+///
+/// Keep this in sync with the pinned `wasmtime` version in the workspace
+/// `Cargo.toml`; the version check turns build-image/runner drift into a clear
+/// diagnostic instead of a runtime deserialization failure.
+pub const WASMTIME_VERSION: &str = "43.0.1";
 
 /// Resource limits applied while downloading a compiled runner artifact.
 ///
@@ -68,42 +73,14 @@ pub struct Cwasm {
 }
 
 impl Cwasm {
-    pub async fn download(url: &str, limits: CwasmLimits) -> BpResult<Self> {
-        Self::download_inner(url, None, limits).await
-    }
-
-    pub async fn download_verified(
+    pub async fn download(
         url: &str,
         integrity: &CwasmIntegrity,
         limits: CwasmLimits,
     ) -> BpResult<Self> {
-        Self::download_inner(url, Some(integrity), limits).await
-    }
-
-    pub async fn download_with_integrity(
-        url: &str,
-        integrity: &CwasmIntegrity,
-        limits: CwasmLimits,
-    ) -> BpResult<Self> {
-        Self::download_verified(url, integrity, limits).await
-    }
-
-    pub fn path(&self) -> &Path {
-        &self.path
-    }
-
-    async fn download_inner(
-        url: &str,
-        integrity: Option<&CwasmIntegrity>,
-        limits: CwasmLimits,
-    ) -> BpResult<Self> {
-        let expected_hash = integrity
-            .map(|integrity| Self::parse_hash(&integrity.sha256))
-            .transpose()?;
-        if let Some(integrity) = integrity {
-            Self::ensure_wasmtime_version(&integrity.wasmtime_version)?;
-            Self::ensure_within_limit(integrity.size, limits.max_bytes)?;
-        }
+        let expected_hash = Self::parse_hash(&integrity.sha256)?;
+        Self::ensure_wasmtime_version(&integrity.wasmtime_version)?;
+        Self::ensure_within_limit(integrity.size, limits.max_bytes)?;
 
         let client = reqwest::Client::builder()
             .timeout(limits.download_timeout)
@@ -129,7 +106,7 @@ impl Cwasm {
             ));
         }
 
-        if let (Some(integrity), Some(length)) = (integrity, response.content_length()) {
+        if let Some(length) = response.content_length() {
             Self::ensure_within_limit(length, limits.max_bytes)?;
             if length != integrity.size {
                 return Err(Self::size_mismatch(integrity.size, length));
@@ -146,30 +123,20 @@ impl Cwasm {
         let mut output = tokio::fs::File::create(&path).await.map_err(|source| {
             BpError::io("create cwasm artifact", path.display().to_string(), source)
         })?;
-        let (size, actual_hash) = Self::write_body(
-            response,
-            url,
-            limits.max_bytes,
-            &mut output,
-            expected_hash.is_some(),
-        )
-        .await?;
+        let (size, actual_hash) = Self::write_body(response, url, limits.max_bytes, &mut output)
+            .await?;
         output.flush().await.map_err(|source| {
             BpError::io("write cwasm artifact", path.display().to_string(), source)
         })?;
 
-        if let Some(integrity) = integrity {
-            if size != integrity.size {
-                return Err(Self::size_mismatch(integrity.size, size));
-            }
-            if let (Some(expected), Some(actual)) = (expected_hash, actual_hash)
-                && actual != expected
-            {
-                return Err(BpError::Storage(StorageError::CwasmHashMismatch {
-                    expected: hex::encode(expected),
-                    actual: hex::encode(actual),
-                }));
-            }
+        if size != integrity.size {
+            return Err(Self::size_mismatch(integrity.size, size));
+        }
+        if actual_hash != expected_hash {
+            return Err(BpError::Storage(StorageError::CwasmHashMismatch {
+                expected: hex::encode(expected_hash),
+                actual: hex::encode(actual_hash),
+            }));
         }
 
         let cwasm = Self {
@@ -182,6 +149,10 @@ impl Cwasm {
             "downloaded cwasm artifact"
         );
         Ok(cwasm)
+    }
+
+    pub fn path(&self) -> &Path {
+        &self.path
     }
 
     fn parse_hash(value: &str) -> BpResult<[u8; 32]> {
@@ -249,13 +220,12 @@ impl Cwasm {
         url: &str,
         max_bytes: NonZeroU64,
         output: &mut tokio::fs::File,
-        hash: bool,
-    ) -> BpResult<(u64, Option<[u8; 32]>)> {
+    ) -> BpResult<(u64, [u8; 32])> {
         if let Some(length) = response.content_length() {
             Self::ensure_within_limit(length, max_bytes)?;
         }
 
-        let mut hasher = hash.then(Sha256::new);
+        let mut hasher = Sha256::new();
         let mut size = 0;
         while let Some(chunk) = response
             .chunk()
@@ -269,13 +239,10 @@ impl Cwasm {
                 .write_all(&chunk)
                 .await
                 .map_err(|source| BpError::io("write cwasm artifact", url.to_string(), source))?;
-            if let Some(hasher) = hasher.as_mut() {
-                hasher.update(&chunk);
-            }
+            hasher.update(&chunk);
             size = next_size;
         }
-        let hash = hasher.map(|hasher| hasher.finalize().into());
-        Ok((size, hash))
+        Ok((size, hasher.finalize().into()))
     }
 
     fn ensure_within_limit(size: u64, max_bytes: NonZeroU64) -> BpResult<()> {

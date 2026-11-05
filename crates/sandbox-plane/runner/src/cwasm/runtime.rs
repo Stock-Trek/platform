@@ -77,7 +77,7 @@ impl Failure {
             }
             Failure::ResourceLimitExceeded { max_memory_bytes } => {
                 eprintln!("cwasm-invoker: guest exceeded the {max_memory_bytes}-byte memory limit");
-                ExitCode::BotErrorTimeout.code()
+                ExitCode::BotErrorResourceLimitExceeded.code()
             }
         }
     }
@@ -337,15 +337,7 @@ impl WasmRunner {
         })
     }
 
-    pub fn engine(&self) -> &Engine {
-        &self.engine
-    }
-
-    pub fn execute(&self, path: &Path, args: &[&str]) -> i32 {
-        let emit: Emit = Arc::new(GuestState::emit_stdout);
-        self.execute_with(path, args, &emit)
-    }
-
+    #[cfg(test)]
     pub fn execute_with(&self, path: &Path, args: &[&str], emit: &Emit) -> i32 {
         let workspace = match GuestWorkspace::empty() {
             Ok(workspace) => workspace,
