@@ -100,7 +100,10 @@ where
                 Err(_) => continue,
                 Ok(nanos) => nanos,
             };
-            let interval_nanos = nanoseconds * i64::from(rate_limit.intervalNum);
+            let Ok(interval_nanos) = nanoseconds.checked_mul(i64::from(rate_limit.intervalNum))
+            else {
+                continue;
+            };
             let restriction = match rate_limit.rateLimitType {
                 BinanceRateLimitType::CONNECTIONS => RateLimitRestriction::Connection,
                 BinanceRateLimitType::ORDERS => RateLimitRestriction::OrderCount,

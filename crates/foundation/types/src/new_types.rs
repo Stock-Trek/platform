@@ -3,9 +3,12 @@ use thiserror::Error;
 
 /// Errors produced by checked arithmetic on the domain newtypes.
 ///
-/// The operators on the newtypes are total: addition, subtraction, and scalar
-/// multiplication saturate. Operations that cannot have a meaningful total
-/// result (division and remainder) are only available through checked methods.
+/// The arithmetic operators on the newtypes panic on overflow instead of
+/// saturating. Callers that need fallible arithmetic use the `checked_*`
+/// methods, which return these errors, and callers that want saturation use
+/// the `saturating_*` methods explicitly. Division and remainder are only
+/// available through checked methods because they cannot produce a
+/// meaningful total result for every input.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Error)]
 pub enum ArithmeticError {
     #[error("attempt to divide by zero")]
@@ -94,7 +97,7 @@ macro_rules! new_type {
                     .ok_or(ArithmeticError::Overflow)
             }
 
-            /// Saturating addition. This is the behaviour of the `+` operator.
+            /// Saturating addition.
             pub fn saturating_add(self, rhs: Self) -> Self {
                 $name(self.0.saturating_add(rhs.0))
             }
@@ -107,7 +110,7 @@ macro_rules! new_type {
                     .ok_or(ArithmeticError::Overflow)
             }
 
-            /// Saturating subtraction. This is the behaviour of the `-` operator.
+            /// Saturating subtraction.
             pub fn saturating_sub(self, rhs: Self) -> Self {
                 $name(self.0.saturating_sub(rhs.0))
             }
@@ -120,7 +123,7 @@ macro_rules! new_type {
                     .ok_or(ArithmeticError::Overflow)
             }
 
-            /// Saturating scalar multiplication. This is the behaviour of the `*` operator.
+            /// Saturating scalar multiplication.
             pub fn saturating_mul(self, rhs: $raw_type) -> Self {
                 $name(self.0.saturating_mul(rhs))
             }
@@ -268,13 +271,13 @@ macro_rules! numeric_ops {
             type Output = $name;
 
             fn add(self, rhs: Self) -> Self::Output {
-                self.saturating_add(rhs)
+                self.checked_add(rhs).expect("arithmetic overflow")
             }
         }
 
         impl std::ops::AddAssign for $name {
             fn add_assign(&mut self, rhs: Self) {
-                *self = self.saturating_add(rhs);
+                *self = self.checked_add(rhs).expect("arithmetic overflow");
             }
         }
 
@@ -282,13 +285,13 @@ macro_rules! numeric_ops {
             type Output = $name;
 
             fn sub(self, rhs: Self) -> Self::Output {
-                self.saturating_sub(rhs)
+                self.checked_sub(rhs).expect("arithmetic overflow")
             }
         }
 
         impl std::ops::SubAssign for $name {
             fn sub_assign(&mut self, rhs: Self) {
-                *self = self.saturating_sub(rhs);
+                *self = self.checked_sub(rhs).expect("arithmetic overflow");
             }
         }
 
@@ -296,13 +299,13 @@ macro_rules! numeric_ops {
             type Output = $name;
 
             fn mul(self, rhs: $raw_type) -> Self::Output {
-                self.saturating_mul(rhs)
+                self.checked_mul(rhs).expect("arithmetic overflow")
             }
         }
 
         impl std::ops::MulAssign<$raw_type> for $name {
             fn mul_assign(&mut self, rhs: $raw_type) {
-                *self = self.saturating_mul(rhs);
+                *self = self.checked_mul(rhs).expect("arithmetic overflow");
             }
         }
     };
@@ -363,13 +366,13 @@ impl std::ops::Add<DurationMilliseconds> for TimestampMilliseconds {
     type Output = TimestampMilliseconds;
 
     fn add(self, rhs: DurationMilliseconds) -> Self::Output {
-        TimestampMilliseconds(self.0.saturating_add(rhs.0))
+        TimestampMilliseconds(self.0.checked_add(rhs.0).expect("arithmetic overflow"))
     }
 }
 
 impl std::ops::AddAssign<DurationMilliseconds> for TimestampMilliseconds {
     fn add_assign(&mut self, rhs: DurationMilliseconds) {
-        self.0 = self.0.saturating_add(rhs.0);
+        self.0 = self.0.checked_add(rhs.0).expect("arithmetic overflow");
     }
 }
 
@@ -377,13 +380,13 @@ impl std::ops::Sub<DurationMilliseconds> for TimestampMilliseconds {
     type Output = TimestampMilliseconds;
 
     fn sub(self, rhs: DurationMilliseconds) -> Self::Output {
-        TimestampMilliseconds(self.0.saturating_sub(rhs.0))
+        TimestampMilliseconds(self.0.checked_sub(rhs.0).expect("arithmetic overflow"))
     }
 }
 
 impl std::ops::SubAssign<DurationMilliseconds> for TimestampMilliseconds {
     fn sub_assign(&mut self, rhs: DurationMilliseconds) {
-        self.0 = self.0.saturating_sub(rhs.0);
+        self.0 = self.0.checked_sub(rhs.0).expect("arithmetic overflow");
     }
 }
 
@@ -391,7 +394,7 @@ impl std::ops::Sub<TimestampMilliseconds> for TimestampMilliseconds {
     type Output = DurationMilliseconds;
 
     fn sub(self, rhs: TimestampMilliseconds) -> Self::Output {
-        DurationMilliseconds(self.0.saturating_sub(rhs.0))
+        DurationMilliseconds(self.0.checked_sub(rhs.0).expect("arithmetic overflow"))
     }
 }
 
@@ -399,7 +402,7 @@ impl std::ops::Add<TimestampMilliseconds> for DurationMilliseconds {
     type Output = TimestampMilliseconds;
 
     fn add(self, rhs: TimestampMilliseconds) -> Self::Output {
-        TimestampMilliseconds(self.0.saturating_add(rhs.0))
+        TimestampMilliseconds(self.0.checked_add(rhs.0).expect("arithmetic overflow"))
     }
 }
 
