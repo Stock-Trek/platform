@@ -107,7 +107,7 @@ impl GitHubEventConverter {
             return false;
         };
         mac.update(body_bytes);
-        let computed = mac.finalize().into_bytes();
+        let computed: &[u8] = &mac.finalize().into_bytes();
         let Ok(expected) = hex::decode(expected_hex) else {
             return false;
         };

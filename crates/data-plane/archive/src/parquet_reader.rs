@@ -98,12 +98,11 @@ impl AsyncFileReader for ParquetReader {
 
     fn get_metadata<'a>(
         &'a mut self,
-        options: Option<&'a ArrowReaderOptions>,
+        _options: Option<&'a ArrowReaderOptions>,
     ) -> BoxFuture<'a, ParquetResult<Arc<ParquetMetaData>>> {
         async move {
             let file_size = self.file_size;
             let metadata = ParquetMetaDataReader::new()
-                .with_arrow_reader_options(options)
                 .load_and_finish(self, file_size)
                 .await?;
             Ok(Arc::new(metadata))
