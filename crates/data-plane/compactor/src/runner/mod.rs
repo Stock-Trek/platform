@@ -1,6 +1,6 @@
-mod implementation;
+mod compactor_runner;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use compactor_runner::*;

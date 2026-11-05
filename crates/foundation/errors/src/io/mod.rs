@@ -1,6 +1,6 @@
-mod implementation;
+mod io_error;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use io_error::*;

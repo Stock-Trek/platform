@@ -1,6 +1,6 @@
-mod implementation;
+mod nats_subject;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use nats_subject::*;

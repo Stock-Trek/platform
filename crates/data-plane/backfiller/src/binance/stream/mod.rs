@@ -1,6 +1,6 @@
-mod implementation;
+mod market_stream;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use market_stream::*;

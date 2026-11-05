@@ -1,6 +1,6 @@
-mod implementation;
+mod delivery_dedup;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use delivery_dedup::*;

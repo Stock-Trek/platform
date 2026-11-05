@@ -5,9 +5,9 @@
 //! acknowledged only after this record has been written, so a crash can replay
 //! work but cannot silently skip it.
 
-mod implementation;
+mod checkpoint_record;
 
 #[cfg(test)]
 pub(crate) mod tests;
 
-pub use implementation::*;
+pub use checkpoint_record::*;

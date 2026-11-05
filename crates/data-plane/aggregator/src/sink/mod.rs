@@ -1,6 +1,6 @@
-mod implementation;
+mod candle_sink;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use candle_sink::*;

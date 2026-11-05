@@ -1,6 +1,6 @@
-mod implementation;
+mod binary_cursor;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use binary_cursor::*;

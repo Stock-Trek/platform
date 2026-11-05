@@ -1,6 +1,6 @@
-mod implementation;
+mod data_error;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use data_error::*;

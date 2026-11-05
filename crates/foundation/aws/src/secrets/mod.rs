@@ -1,6 +1,6 @@
-mod implementation;
+mod ssm_secrets;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use ssm_secrets::*;

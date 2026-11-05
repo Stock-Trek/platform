@@ -1,6 +1,6 @@
-mod implementation;
+mod proto_gen;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use proto_gen::*;

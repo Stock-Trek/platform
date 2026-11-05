@@ -1,6 +1,6 @@
-mod implementation;
+mod limiter_state;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use limiter_state::*;

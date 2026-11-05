@@ -4,9 +4,9 @@
 //! This module only provides the raw, fallible reads; it deliberately has no
 //! knowledge of which variables any particular process needs.
 
-mod implementation;
+mod environment_variables;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use environment_variables::*;

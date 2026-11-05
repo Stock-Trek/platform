@@ -1,6 +1,6 @@
-mod implementation;
+mod content_hash;
 
 #[cfg(test)]
 mod tests;
 
-pub(crate) use implementation::*;
+pub(crate) use content_hash::*;

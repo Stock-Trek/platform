@@ -5,9 +5,9 @@
 //! key, so changing the active shard count only changes which buckets a
 //! shard owns. It never changes the contents of an archive bucket.
 
-mod implementation;
+mod routing_key;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use routing_key::*;

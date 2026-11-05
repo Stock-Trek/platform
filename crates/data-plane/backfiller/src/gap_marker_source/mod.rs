@@ -1,6 +1,6 @@
-mod implementation;
+mod nats_gap_marker_source;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use nats_gap_marker_source::*;

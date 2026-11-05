@@ -1,6 +1,6 @@
-mod implementation;
+mod quantization;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use quantization::*;

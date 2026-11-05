@@ -1,6 +1,6 @@
-mod implementation;
+mod archive_iceberg_table;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use archive_iceberg_table::*;

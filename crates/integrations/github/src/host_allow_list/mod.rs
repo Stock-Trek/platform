@@ -1,6 +1,6 @@
-mod implementation;
+mod host_allowlist;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use host_allowlist::*;

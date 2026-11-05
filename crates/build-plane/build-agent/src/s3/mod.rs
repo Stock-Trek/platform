@@ -11,9 +11,9 @@
 //! field contains the `${filename}` variable, which S3 replaces with the name
 //! of the uploaded file.
 
-mod implementation;
+mod signed_post;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use signed_post::*;

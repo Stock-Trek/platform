@@ -1,6 +1,6 @@
-mod implementation;
+mod message_ingester;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use message_ingester::*;

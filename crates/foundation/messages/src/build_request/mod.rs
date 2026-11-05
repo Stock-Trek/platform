@@ -3,9 +3,9 @@
 //! The payload is the Lambda invocation event, so it contains everything that
 //! changes per build. Process-wide settings remain in the agent's environment.
 
-mod implementation;
+mod request_payload;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use request_payload::*;
