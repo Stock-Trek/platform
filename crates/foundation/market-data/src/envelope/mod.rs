@@ -1,8 +1,8 @@
 //! JSON envelope codec for messages published on the market data subjects.
 
-mod implementation;
+mod envelope_codec;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use envelope_codec::*;

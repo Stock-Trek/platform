@@ -1,6 +1,6 @@
-mod implementation;
+mod iceberg_event_reader;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use iceberg_event_reader::*;

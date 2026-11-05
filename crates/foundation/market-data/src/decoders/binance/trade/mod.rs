@@ -1,6 +1,6 @@
-mod implementation;
+mod binance_trade_decoder;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use binance_trade_decoder::*;

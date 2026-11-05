@@ -1,6 +1,6 @@
-mod implementation;
+mod retry_policy;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use retry_policy::*;

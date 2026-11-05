@@ -1,6 +1,6 @@
-mod implementation;
+mod exit_code;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::ExitCode;
+pub use exit_code::ExitCode;

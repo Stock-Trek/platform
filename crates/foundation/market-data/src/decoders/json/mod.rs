@@ -1,6 +1,6 @@
-mod implementation;
+mod json_mapping;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use json_mapping::*;

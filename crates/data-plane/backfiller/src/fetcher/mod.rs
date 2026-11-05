@@ -1,6 +1,6 @@
-mod implementation;
+mod event_fetcher;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use event_fetcher::*;

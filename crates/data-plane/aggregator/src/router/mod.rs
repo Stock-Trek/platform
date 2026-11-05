@@ -4,9 +4,9 @@
 //! keyed by `(exchange, trading pair)`. Downstream shard writers therefore
 //! see every event for a candle key in order, on exactly one shard.
 
-mod implementation;
+mod hash_router;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use hash_router::*;

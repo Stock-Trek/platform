@@ -1,6 +1,6 @@
-mod implementation;
+mod archive_buffer;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use archive_buffer::*;

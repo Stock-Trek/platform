@@ -1,5 +1,5 @@
 use super::super::AggregatorConfig;
-use super::implementation::{ESTIMATED_BYTES_PER_CLOSED_CANDLE, RetentionLimits};
+use super::config_validation::{ESTIMATED_BYTES_PER_CLOSED_CANDLE, RetentionLimits};
 use platform_market_data::candle::AlignedWindow;
 use std::collections::BTreeMap;
 use std::time::Duration;

@@ -9,7 +9,7 @@
 //! (including the algorithm registry) run before the command is handled.
 
 mod config;
-mod implementation;
+mod cwasm_artifact;
 mod runtime;
 mod workspace;
 
@@ -20,6 +20,6 @@ mod runtime_tests;
 mod tests;
 
 pub use config::*;
-pub use implementation::*;
+pub use cwasm_artifact::*;
 pub use runtime::*;
 pub use workspace::*;

@@ -1,4 +1,4 @@
-mod implementation;
+mod catalog_metadata;
 
 #[cfg(test)]
 mod tests;

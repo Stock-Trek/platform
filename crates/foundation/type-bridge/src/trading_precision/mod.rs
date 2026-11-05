@@ -1,6 +1,6 @@
-mod implementation;
+mod trading_limits;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use trading_limits::*;

@@ -1,6 +1,6 @@
-mod implementation;
+mod resync_connector;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use resync_connector::*;

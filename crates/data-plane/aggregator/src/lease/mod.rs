@@ -1,8 +1,8 @@
 //! Single-writer leases and fencing tokens for shard state.
 
-mod implementation;
+mod writer_lease;
 
 #[cfg(test)]
 pub(crate) mod tests;
 
-pub use implementation::*;
+pub use writer_lease::*;

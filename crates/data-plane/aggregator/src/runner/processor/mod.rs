@@ -1,8 +1,8 @@
 //! Shard processing worker lifecycle.
 
-mod implementation;
+mod processor_runner;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use processor_runner::*;

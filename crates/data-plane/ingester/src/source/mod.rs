@@ -1,6 +1,6 @@
-mod implementation;
+mod websocket_source;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use websocket_source::*;

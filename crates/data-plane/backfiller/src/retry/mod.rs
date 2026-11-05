@@ -1,6 +1,6 @@
-mod implementation;
+mod gap_retry_store;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use gap_retry_store::*;

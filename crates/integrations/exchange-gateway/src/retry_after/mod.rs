@@ -1,6 +1,6 @@
-mod implementation;
+mod retry_after_header;
 
 #[cfg(test)]
 mod tests;
 
-pub(crate) use implementation::*;
+pub(crate) use retry_after_header::*;

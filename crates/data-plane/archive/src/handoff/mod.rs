@@ -12,9 +12,9 @@
 //! between a partially compacted table (which would miss the tail) and the full
 //! raw history (which would duplicate the compacted prefix).
 
-mod implementation;
+mod archive_handoff;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use archive_handoff::*;

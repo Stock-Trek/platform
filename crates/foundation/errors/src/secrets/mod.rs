@@ -1,6 +1,6 @@
-mod implementation;
+mod secrets_error;
 
 #[cfg(test)]
 mod tests;
 
-pub use implementation::*;
+pub use secrets_error::*;
