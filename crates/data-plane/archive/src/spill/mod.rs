@@ -1,3 +1,3 @@
 mod run;
 
-pub use run::{SpillRun, SpillRunReader};
+pub use run::{SpillRun, SpillRunReader, SpillRunWriter};

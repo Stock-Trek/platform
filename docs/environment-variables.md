@@ -7,8 +7,8 @@ reads and validates its configuration at startup, before doing any work.
   fails startup.
 - Optional variables are treated as unset when they are absent or empty.
 - Values are read only from the process environment. The only variables with built-in defaults are
-  the CWASM invoker variables, which fall back to their documented defaults when the variable is
-  not set.
+  the CWASM invoker variables and the optional rebuilder spill variables, which fall back to their
+  documented defaults when the variable is not set.
 
 Variables read by more than one process are listed once under [Shared variables](#shared-variables).
 The remaining sections list the additional variables read by each process. When a variable is only
@@ -177,7 +177,10 @@ No process-specific optional variables.
 
 #### Optional
 
-No process-specific optional variables.
+| Variable | Description |
+| --- | --- |
+| `REBUILDER_SPILL_DIR` | Directory for replay and candle spill runs and for temporary candle output files. Defaults to the system temporary directory. |
+| `REBUILDER_SPILL_RECORDS` | Records staged in memory before spill runs are written during a rebuild. Must be greater than zero. Defaults to `262144`. |
 
 ## Build plane
 

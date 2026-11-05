@@ -18,13 +18,16 @@ pub mod sink;
 use crate::{
     config::RebuildConfig,
     events::IcebergEventReader,
-    rebuild::{RebuildOptions, RebuildStats, candle_spill::CandleSpill, replay_spill::ReplaySpill},
+    rebuild::{
+        RebuildOptions, RebuildStats, SpillUsage, candle_spill::CandleSpill,
+        replay_spill::ReplaySpill,
+    },
     sink::{CandleRecordSource, CandleSink, S3CandleSink},
 };
 use platform_aggregator::processor::ProcessorConfig;
 use platform_archive::IcebergCatalog;
 use platform_errors::{BpError, BpResult};
-use std::{collections::HashMap, sync::Arc};
+use std::{collections::HashMap, path::PathBuf, sync::Arc};
 use tracing::info;
 
 pub use crate::config::RebuildSourceLayer;
@@ -60,6 +63,28 @@ impl CandleRecordSource for RebuildCandles {
 }
 
 impl RebuildConfig {
+    fn work_dir(spill_dir: Option<PathBuf>) -> BpResult<tempfile::TempDir> {
+        let target = spill_dir
+            .clone()
+            .unwrap_or_else(std::env::temp_dir)
+            .display()
+            .to_string();
+        match spill_dir {
+            Some(directory) => {
+                std::fs::create_dir_all(&directory).map_err(|error| {
+                    BpError::io(
+                        "create rebuild spill directory",
+                        directory.display().to_string(),
+                        error,
+                    )
+                })?;
+                tempfile::TempDir::new_in(&directory)
+            }
+            None => tempfile::TempDir::new(),
+        }
+        .map_err(|error| BpError::io("create rebuild temporary directory", target, error))
+    }
+
     /// Runs one rebuild from the configured Iceberg source to the output
     /// archive.
     ///
@@ -83,13 +108,7 @@ impl RebuildConfig {
 
         // Stage: decode archived events and spill one replay record per
         // decoded trading pair. Nothing accumulates beyond `spill_records`.
-        let work_dir = tempfile::tempdir().map_err(|error| {
-            BpError::io(
-                "create rebuild temporary directory",
-                std::env::temp_dir().display().to_string(),
-                error,
-            )
-        })?;
+        let work_dir = Self::work_dir(self.spill_dir.clone())?;
         let mut stats = RebuildStats::default();
         let mut decoders = HashMap::new();
         let mut replay = ReplaySpill::new(work_dir.path().join("replay"), self.spill_records)?;
@@ -102,19 +121,33 @@ impl RebuildConfig {
                 options.push_event(event, &mut decoders, &mut replay, &mut stats)?;
             }
         }
-        stats.events_spilled = replay.spilled_records();
+        let mut spill_usage = SpillUsage::default();
 
         // Replay: consume the merged event stream one pair at a time and spill
         // every closed candle in the sink's object order.
+        let events = replay.finish()?;
+        stats.events_spilled = replay.spilled_records();
+        spill_usage.add(replay.usage());
         let mut candles = CandleSpill::new(
             work_dir.path().join("candles"),
             self.bucket_millis,
             self.output_layer,
             self.spill_records,
         )?;
-        options.replay(replay.finish()?, &mut candles, &mut stats)?;
+        options.replay(events, &mut candles, &mut stats)?;
         stats.candles_spilled = candles.spilled_records();
-        let mut source = RebuildCandles::new(candles.finish()?);
+        let records = candles.finish()?;
+        spill_usage.add(candles.usage());
+        stats.spill_bytes_written = spill_usage.bytes_written;
+        stats.largest_spill_run_bytes = spill_usage.largest_run_bytes;
+        let mut source = RebuildCandles::new(records);
+        info!(
+            events_spilled = stats.events_spilled,
+            candles_spilled = stats.candles_spilled,
+            spill_bytes_written = stats.spill_bytes_written,
+            largest_spill_run_bytes = stats.largest_spill_run_bytes,
+            "staged rebuild spill runs"
+        );
 
         if self.dry_run {
             while source.next_candle()?.is_some() {}

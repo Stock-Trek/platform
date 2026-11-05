@@ -84,7 +84,6 @@ fn rebuild(options: &RebuildOptions, events: Vec<MarketEvent>, spill_records: us
             .push_event(event, &mut decoders, &mut replay, &mut stats)
             .unwrap();
     }
-    stats.events_spilled = replay.spilled_records();
 
     let mut candles = CandleSpill::new(
         directory.path().join("candles"),
@@ -93,23 +92,49 @@ fn rebuild(options: &RebuildOptions, events: Vec<MarketEvent>, spill_records: us
         spill_records,
     )
     .unwrap();
-    options
-        .replay(replay.finish().unwrap(), &mut candles, &mut stats)
-        .unwrap();
+    let merged = replay.finish().unwrap();
+    stats.events_spilled = replay.spilled_records();
+    let mut usage = replay.usage();
+    options.replay(merged, &mut candles, &mut stats).unwrap();
     stats.candles_spilled = candles.spilled_records();
-
     let mut records = candles.finish().unwrap();
+    usage.add(candles.usage());
+    stats.spill_bytes_written = usage.bytes_written;
+    stats.largest_spill_run_bytes = usage.largest_run_bytes;
     let mut candles = Vec::new();
     while let Some(candle) = records.next_candle().unwrap() {
         candles.push(candle);
     }
     stats.unique_candles = candles.len();
-    Rebuilt { stats, candles }
+    Rebuilt {
+        stats,
+        candles,
+        runs: replay_runs(&directory) + candle_runs(&directory),
+    }
+}
+
+fn replay_runs(directory: &tempfile::TempDir) -> usize {
+    directory
+        .path()
+        .join("replay")
+        .read_dir()
+        .map(|entries| entries.count())
+        .unwrap_or(0)
+}
+
+fn candle_runs(directory: &tempfile::TempDir) -> usize {
+    directory
+        .path()
+        .join("candles")
+        .read_dir()
+        .map(|entries| entries.count())
+        .unwrap_or(0)
 }
 
 struct Rebuilt {
     stats: RebuildStats,
     candles: Vec<ClosedCandle>,
+    runs: usize,
 }
 
 /// Every rebuild is run fully in memory and through forced spill runs (two
@@ -271,6 +296,46 @@ fn events_spill_across_runs_and_replay_identically() {
             .map(ClosedCandle::message_id)
             .collect::<Vec<_>>()
     );
+}
+
+#[test]
+fn spilled_runs_are_reduced_to_the_merge_fanin_and_replay_identically() {
+    let events = (0..64)
+        .map(|index| event(index + 1, 1_000 + i64::try_from(index).unwrap() * 61_000))
+        .collect::<Vec<_>>();
+
+    let [in_memory, spilled, single] = rebuild_both_modes(&options(), events);
+
+    let ids = |result: &Rebuilt| {
+        result
+            .candles
+            .iter()
+            .map(ClosedCandle::message_id)
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(in_memory.stats.unique_candles, 64);
+    assert_eq!(ids(&in_memory), ids(&spilled));
+    assert_eq!(ids(&in_memory), ids(&single));
+    assert!(spilled.runs > 2);
+    assert!(spilled.runs <= 4);
+    assert!(single.runs <= 4);
+}
+
+#[test]
+fn spill_usage_reports_written_bytes() {
+    let events = (0..12)
+        .map(|index| event(index + 1, 1_000 + i64::try_from(index).unwrap() * 61_000))
+        .collect::<Vec<_>>();
+
+    let [in_memory, spilled, _] = rebuild_both_modes(&options(), events);
+
+    assert_eq!(spilled.stats.events_spilled, 12);
+    assert_eq!(spilled.stats.candles_spilled, 12);
+    assert!(spilled.stats.spill_bytes_written > 0);
+    assert!(spilled.stats.largest_spill_run_bytes > 0);
+    assert!(spilled.stats.largest_spill_run_bytes <= spilled.stats.spill_bytes_written);
+    assert_eq!(in_memory.stats.spill_bytes_written, 0);
+    assert_eq!(in_memory.stats.largest_spill_run_bytes, 0);
 }
 
 #[test]

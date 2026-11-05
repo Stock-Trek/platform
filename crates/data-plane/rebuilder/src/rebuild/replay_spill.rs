@@ -1,3 +1,4 @@
+use crate::rebuild::{SpillUsage, merge_fanin};
 use platform_errors::{BpError, BpResult};
 use platform_market_data::{decoders::trade::Trade, event::MarketEvent};
 use serde::{Deserialize, Serialize};
@@ -58,7 +59,9 @@ pub struct ReplaySpill {
     limit: usize,
     entries: Vec<(ReplayKey, ReplayRecord)>,
     runs: Vec<PathBuf>,
+    generated: usize,
     spilled: usize,
+    usage: SpillUsage,
 }
 
 impl ReplaySpill {
@@ -76,7 +79,9 @@ impl ReplaySpill {
             limit: limit.max(1),
             entries: Vec::new(),
             runs: Vec::new(),
+            generated: 0,
             spilled: 0,
+            usage: SpillUsage::default(),
         })
     }
 
@@ -93,12 +98,15 @@ impl ReplaySpill {
         self.spilled
     }
 
-    pub fn finish(mut self) -> BpResult<ReplayRecords> {
+    pub fn usage(&self) -> SpillUsage {
+        self.usage
+    }
+
+    pub fn finish(&mut self) -> BpResult<ReplayRecords> {
         if self.runs.is_empty() {
             self.entries
                 .sort_by(|(left, _), (right, _)| left.cmp(right));
-            let records = self
-                .entries
+            let records = std::mem::take(&mut self.entries)
                 .into_iter()
                 .map(|(_, record)| record)
                 .collect::<Vec<_>>();
@@ -106,6 +114,7 @@ impl ReplaySpill {
         }
 
         self.spill()?;
+        self.reduce_runs(merge_fanin(self.limit))?;
         let readers = self
             .runs
             .iter()
@@ -121,9 +130,7 @@ impl ReplaySpill {
 
         self.entries
             .sort_by(|(left, _), (right, _)| left.cmp(right));
-        let path = self
-            .directory
-            .join(format!("event-run-{}.jsonl", self.runs.len()));
+        let path = self.next_run_path("event-run");
         self.write_run(&path)?;
         self.spilled += self.entries.len();
         self.runs.push(path);
@@ -131,7 +138,68 @@ impl ReplaySpill {
         Ok(())
     }
 
-    fn write_run(&self, path: &Path) -> BpResult<()> {
+    fn reduce_runs(&mut self, fan_in: usize) -> BpResult<()> {
+        while self.runs.len() > fan_in {
+            let sources = std::mem::take(&mut self.runs);
+            let mut merged = Vec::new();
+            for chunk in sources.chunks(fan_in) {
+                if chunk.len() == 1 {
+                    merged.push(chunk[0].clone());
+                    continue;
+                }
+                let path = self.next_run_path("event-merge");
+                self.merge_runs(chunk, &path)?;
+                for source in chunk {
+                    std::fs::remove_file(source).map_err(|error| {
+                        BpError::io(
+                            "remove merged rebuild spill run",
+                            source.display().to_string(),
+                            error,
+                        )
+                    })?;
+                }
+                merged.push(path);
+            }
+            self.runs = merged;
+        }
+        Ok(())
+    }
+
+    fn next_run_path(&mut self, label: &str) -> PathBuf {
+        let path = self
+            .directory
+            .join(format!("{label}-{}.jsonl", self.generated));
+        self.generated += 1;
+        path
+    }
+
+    fn merge_runs(&mut self, runs: &[PathBuf], path: &Path) -> BpResult<()> {
+        let readers = runs
+            .iter()
+            .map(|run| ReplayRunReader::open(run))
+            .collect::<BpResult<Vec<_>>>()?;
+        let mut merge = ReplayMerge::new(readers)?;
+        let file = File::create(path).map_err(|error| {
+            BpError::io(
+                "create rebuild spill run",
+                path.display().to_string(),
+                error,
+            )
+        })?;
+        let mut writer = BufWriter::new(file);
+        while let Some(record) = merge.next_record()? {
+            serde_json::to_writer(&mut writer, &record).map_err(BpError::external)?;
+            writer.write_all(b"\n").map_err(|error| {
+                BpError::io("write rebuild spill run", path.display().to_string(), error)
+            })?;
+        }
+        writer.flush().map_err(|error| {
+            BpError::io("flush rebuild spill run", path.display().to_string(), error)
+        })?;
+        self.usage.record(path)
+    }
+
+    fn write_run(&mut self, path: &Path) -> BpResult<()> {
         let file = File::create(path).map_err(|error| {
             BpError::io(
                 "create rebuild spill run",
@@ -149,7 +217,7 @@ impl ReplaySpill {
         writer.flush().map_err(|error| {
             BpError::io("flush rebuild spill run", path.display().to_string(), error)
         })?;
-        Ok(())
+        self.usage.record(path)
     }
 }
 
