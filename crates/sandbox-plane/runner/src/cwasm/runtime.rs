@@ -337,18 +337,6 @@ impl WasmRunner {
         })
     }
 
-    #[cfg(test)]
-    pub fn execute_with(&self, path: &Path, args: &[&str], emit: &Emit) -> i32 {
-        let workspace = match GuestWorkspace::empty() {
-            Ok(workspace) => workspace,
-            Err(code) => return code.code(),
-        };
-        match self.run(path, args, emit, workspace.path()) {
-            Ok(code) => code,
-            Err(failure) => failure.exit_code(),
-        }
-    }
-
     pub fn execute_command(&self, path: &Path, command: &Command) -> i32 {
         let emit: Emit = Arc::new(GuestState::emit_stdout);
         self.execute_command_with(path, command, &emit)

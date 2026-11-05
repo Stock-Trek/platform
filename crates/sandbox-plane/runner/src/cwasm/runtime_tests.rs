@@ -2,8 +2,11 @@ use super::*;
 use platform_exit_codes::ExitCode;
 use platform_runner::command::Command;
 use serde_json::{Value, json};
-use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tempfile::NamedTempFile;
 
 const METADATA_WAT: &str = r#"
@@ -101,6 +104,16 @@ fn artifact(wat: &str) -> NamedTempFile {
     file
 }
 
+fn execute(runner: &WasmRunner, path: &Path, emit: &Emit) -> i32 {
+    runner.execute_command_with(
+        path,
+        &Command::Metadata {
+            strategy_name: "Metadata".to_string(),
+        },
+        emit,
+    )
+}
+
 fn capture() -> (Emit, CapturedLines) {
     let lines: CapturedLines = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&lines);
@@ -116,7 +129,7 @@ fn runs_the_guest_entry_with_host_written_arguments() {
     let file = artifact(METADATA_WAT);
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner", "Metadata", "unused"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::Success.code());
     let lines = lines.lock().unwrap();
@@ -134,7 +147,7 @@ fn passes_the_guest_exit_code_through() {
     let file = artifact(EXIT_WAT);
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, 42);
     assert!(lines.lock().unwrap().is_empty());
@@ -146,7 +159,7 @@ fn reports_a_trapped_guest_as_a_runner_panic() {
     let file = artifact(TRAP_WAT);
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::BotErrorPanic.code());
     assert!(lines.lock().unwrap().is_empty());
@@ -159,7 +172,7 @@ fn reports_an_invalid_artifact_as_not_loaded() {
     std::fs::write(file.path(), b"not a cwasm artifact").unwrap();
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::ServerRunnerCwasmNotLoaded.code());
     assert!(lines.lock().unwrap().is_empty());
@@ -175,7 +188,7 @@ fn interrupts_a_guest_that_exceeds_its_deadline() {
     let file = artifact(LOOP_WAT);
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::BotErrorTimeout.code());
     assert!(lines.lock().unwrap().is_empty());
@@ -188,7 +201,7 @@ fn interrupts_a_guest_that_exceeds_its_memory_limit() {
     let file = artifact(GROW_MEMORY_WAT);
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::BotErrorResourceLimitExceeded.code());
     assert!(lines.lock().unwrap().is_empty());
@@ -200,7 +213,7 @@ fn does_not_expose_host_files_outside_the_guest_workspace() {
     let file = artifact(OPEN_HOST_FILE_WAT);
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::Success.code());
     assert!(lines.lock().unwrap().is_empty());
@@ -222,13 +235,8 @@ fn copies_declared_inputs_into_the_guest_workspace() {
     .unwrap();
 
     assert_eq!(
-        workspace.arguments(),
-        &[
-            "Execute".to_string(),
-            "AlgorithmStub".to_string(),
-            "/strategy-context.bin".to_string(),
-            "/portfolio.bin".to_string()
-        ]
+        workspace.arguments_as_str(),
+        ["Execute", "AlgorithmStub", "/strategy-context.bin", "/portfolio.bin"]
     );
     assert_eq!(
         std::fs::read(workspace.path().join(STRATEGY_CONTEXT_FILE_NAME)).unwrap(),

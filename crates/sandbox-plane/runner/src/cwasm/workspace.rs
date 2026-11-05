@@ -13,15 +13,6 @@ pub struct GuestWorkspace {
 }
 
 impl GuestWorkspace {
-    #[cfg(test)]
-    pub fn empty() -> Result<Self, ExitCode> {
-        let directory = Self::create_directory()?;
-        Ok(Self {
-            _directory: directory,
-            arguments: Vec::new(),
-        })
-    }
-
     pub fn for_command(command: &Command) -> Result<Self, ExitCode> {
         let directory = Self::create_directory()?;
         let arguments = match command {
@@ -90,11 +81,6 @@ impl GuestWorkspace {
 
     pub fn path(&self) -> &Path {
         self._directory.path()
-    }
-
-    #[cfg(test)]
-    pub fn arguments(&self) -> &[String] {
-        &self.arguments
     }
 
     pub fn arguments_as_str(&self) -> Vec<&str> {
