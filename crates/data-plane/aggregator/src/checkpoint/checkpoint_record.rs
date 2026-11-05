@@ -227,6 +227,28 @@ impl NatsStateStore {
         }
         Ok(())
     }
+
+    /// Rejects a write when the stored checkpoint belongs to a newer writer.
+    ///
+    /// The lease check alone is not sufficient: a stalled writer can pass it,
+    /// lose the lease, and then read the revision after a newer writer has
+    /// committed. Comparing fencing tokens from that same read closes the gap.
+    pub(super) fn ensure_fence_allows(
+        existing: &CheckpointRecord,
+        checkpoint: &CheckpointRecord,
+    ) -> BpResult<()> {
+        if existing.is_writable_by(&checkpoint.writer_id, checkpoint.fencing_token) {
+            return Ok(());
+        }
+        Err(BpError::bad_value(
+            "checkpoint fencing token",
+            checkpoint.fencing_token.to_string(),
+            format!(
+                "writer {} is fenced by token {}",
+                checkpoint.writer_id, existing.fencing_token
+            ),
+        ))
+    }
 }
 
 #[async_trait]
@@ -240,13 +262,17 @@ impl StateStore for NatsStateStore {
 
     async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
         self.ensure_lease_holder(checkpoint).await?;
-        // Read the current revision and conditionally update. If another writer
-        // wins the race, `update` fails rather than overwriting its state.
-        let expected_revision = self
-            .load_with_revision(checkpoint.shard)
-            .await?
-            .map(|(_, revision)| revision);
-        self.compare_and_swap(checkpoint, expected_revision).await?;
+        // Load the current checkpoint and revision together. Checking the
+        // stored fencing token prevents a stalled writer that reads the
+        // revision after a newer writer commits from overwriting newer state.
+        let Some((existing, revision)) = self.load_with_revision(checkpoint.shard).await? else {
+            self.compare_and_swap(checkpoint, None).await?;
+            return Ok(());
+        };
+        Self::ensure_fence_allows(&existing, checkpoint)?;
+        // If another writer wins the race after the read, `update` fails
+        // rather than overwriting its state.
+        self.compare_and_swap(checkpoint, Some(revision)).await?;
         Ok(())
     }
 }
