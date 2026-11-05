@@ -22,9 +22,6 @@ const REBUILDER_SPILL_RECORDS: &str = "REBUILDER_SPILL_RECORDS";
 const REBUILDER_SPILL_DIR: &str = "REBUILDER_SPILL_DIR";
 const REBUILDER_DRY_RUN: &str = "REBUILDER_DRY_RUN";
 
-/// Default number of records staged in memory per spill run.
-pub const DEFAULT_SPILL_RECORDS: usize = 256 * 1024;
-
 /// Which Iceberg table the rebuilder reads events from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RebuildSourceLayer {
@@ -73,9 +70,8 @@ pub struct RebuildConfig {
     pub bucket_millis: i64,
     /// Records staged in memory before replay and candle runs spill to disk.
     pub spill_records: usize,
-    /// Directory for spill runs and temporary output files, defaulting to the
-    /// system temporary directory.
-    pub spill_dir: Option<PathBuf>,
+    /// Directory for spill runs and temporary output files.
+    pub spill_dir: PathBuf,
     pub dry_run: bool,
     pub iceberg: IcebergConfig,
 }
@@ -120,15 +116,14 @@ impl RebuildConfig {
             REBUILDER_BUCKET_MILLIS,
         )?)
         .map_err(|error| BpError::config_invalid_source(REBUILDER_BUCKET_MILLIS, error))?;
-        let spill_records =
-            vars.optional_parsed_or(REBUILDER_SPILL_RECORDS, DEFAULT_SPILL_RECORDS)?;
+        let spill_records = vars.required_parsed(REBUILDER_SPILL_RECORDS)?;
         if spill_records == 0 {
             return Err(BpError::config_invalid(
                 REBUILDER_SPILL_RECORDS,
                 "must be greater than zero",
             ));
         }
-        let spill_dir = vars.optional(REBUILDER_SPILL_DIR)?.map(PathBuf::from);
+        let spill_dir = vars.required_path(REBUILDER_SPILL_DIR)?;
         let dry_run = vars.required_parsed(REBUILDER_DRY_RUN)?;
         let iceberg = IcebergConfig::from_vars(vars)?;
 

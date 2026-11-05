@@ -121,8 +121,8 @@ Rebuilder replays archived market events from Iceberg to deterministically regen
 | `REBUILDER_STATE_EPOCH` | required | State epoch assigned to regenerated candle revisions. |
 | `REBUILDER_FINISH_OPEN_WINDOWS` | required | Close candles that are still open when archived input ends. |
 | `REBUILDER_BUCKET_MILLIS` | required | Output bucket size in milliseconds. |
-| `REBUILDER_SPILL_RECORDS` | `262144` | Records staged in memory before replay and candle runs spill to disk. Must be greater than zero. |
-| `REBUILDER_SPILL_DIR` | system temp dir | Directory for spill runs and temporary candle output files. |
+| `REBUILDER_SPILL_RECORDS` | required | Records staged in memory before replay and candle runs spill to disk. Must be greater than zero. |
+| `REBUILDER_SPILL_DIR` | required | Directory for spill runs and temporary candle output files. |
 | `REBUILDER_DRY_RUN` | required | Rebuild without writing output. |
 | `ICEBERG_CATALOG_URI` | required | Iceberg REST catalog URI. |
 | `ICEBERG_CATALOG_WAREHOUSE` | required | Iceberg warehouse URI. |
