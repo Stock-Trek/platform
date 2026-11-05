@@ -32,10 +32,37 @@ fn recv_window_accepts_only_one_to_maximum_milliseconds() {
 }
 
 #[test]
-fn new_type_arithmetic_saturates_instead_of_overflowing() {
-    assert_eq!(UsageCount(u64::MAX) + UsageCount::ONE, UsageCount(u64::MAX));
-    assert_eq!(UsageCount::ZERO - UsageCount::ONE, UsageCount::ZERO);
-    assert_eq!(UsageCount::TWO * u64::MAX, UsageCount(u64::MAX));
+#[should_panic(expected = "arithmetic overflow")]
+fn new_type_addition_panics_on_overflow() {
+    let _ = UsageCount(u64::MAX) + UsageCount::ONE;
+}
+
+#[test]
+#[should_panic(expected = "arithmetic overflow")]
+fn new_type_subtraction_panics_on_underflow() {
+    let _ = UsageCount::ZERO - UsageCount::ONE;
+}
+
+#[test]
+#[should_panic(expected = "arithmetic overflow")]
+fn new_type_scalar_multiplication_panics_on_overflow() {
+    let _ = UsageCount::TWO * u64::MAX;
+}
+
+#[test]
+fn new_type_saturating_arithmetic_is_explicit() {
+    assert_eq!(
+        UsageCount(u64::MAX).saturating_add(UsageCount::ONE),
+        UsageCount(u64::MAX)
+    );
+    assert_eq!(
+        UsageCount::ZERO.saturating_sub(UsageCount::ONE),
+        UsageCount::ZERO
+    );
+    assert_eq!(
+        UsageCount::TWO.saturating_mul(u64::MAX),
+        UsageCount(u64::MAX)
+    );
 }
 
 #[test]

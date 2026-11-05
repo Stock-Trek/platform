@@ -179,7 +179,7 @@ fn http_response_saturates_large_retry_after() {
 }
 
 #[test]
-fn websocket_response_saturates_rate_limit_values() {
+fn websocket_response_ignores_overflowing_rate_limit_values() {
     let frame = json!({
         "id": 1,
         "status": 200,
@@ -196,14 +196,15 @@ fn websocket_response_saturates_rate_limit_values() {
     });
     let parsed = BinanceResponse::<BinanceTimeResponse>::try_from_websocket(frame).unwrap();
     let usage = parsed.rate_limit_usage().unwrap();
-    let rate_usage = usage
-        .get(&RateLimit {
-            restriction: RateLimitRestriction::Weight,
-            interval_nanos: DurationNanoseconds(i64::MAX),
-        })
-        .unwrap();
-    assert_eq!(rate_usage.limit, Some(UsageCount(0)));
-    assert_eq!(rate_usage.used, Some(UsageCount(0)));
+    assert!(
+        usage
+            .get(&RateLimit {
+                restriction: RateLimitRestriction::Weight,
+                interval_nanos: DurationNanoseconds(i64::MAX),
+            })
+            .is_none()
+    );
+    assert!(usage.is_empty());
 }
 
 #[test]

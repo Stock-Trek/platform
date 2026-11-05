@@ -252,7 +252,7 @@ where
         let Some(watermark) = processor.state().watermark else {
             return;
         };
-        let lag = TimestampMilliseconds::now() - watermark;
+        let lag = TimestampMilliseconds::now().saturating_sub(watermark);
         AggregatorMetrics::record_watermark_lag(shard.get(), lag.0.max(0) as f64 / 1_000.0);
     }
 
