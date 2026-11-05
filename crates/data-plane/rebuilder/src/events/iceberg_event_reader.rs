@@ -1,27 +1,25 @@
-use async_trait::async_trait;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{
-    ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind, ArchiveParquet,
-    ArchiveRecord, IcebergDataFile, ParquetReader, S3,
+    ArchiveBatch, ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind, ArchiveParquet,
+    ArchiveParquetStream, IcebergDataFile, ParquetReader, S3,
 };
 use platform_errors::{BpError, BpResult};
-use platform_market_data::event::MarketEvent;
 use tracing::info;
 
 use crate::config::RebuildSourceLayer;
 
-/// A source of archived events for a rebuild.
-#[async_trait]
-pub trait EventSource: Send {
-    /// Returns every event that should be replayed, in a deterministic order.
-    async fn read_events(&mut self) -> BpResult<Vec<MarketEvent>>;
-}
-
 /// Reads events from the compacted archive plus the un-compacted raw tail.
+///
+/// Each selected object is streamed and decoded one bounded batch at a time,
+/// so a rebuild never holds a whole Parquet object in memory.
 pub struct IcebergEventReader {
     transfer_client: TransferClient,
     source_layer: RebuildSourceLayer,
     handoff: ArchiveHandoff,
+    files: Vec<IcebergDataFile>,
+    next_file: usize,
+    stream: Option<ArchiveParquetStream<ParquetReader>>,
+    file_records: usize,
 }
 
 impl IcebergEventReader {
@@ -37,17 +35,22 @@ impl IcebergEventReader {
     ) -> BpResult<Self> {
         let (source_layer, handoff) = Self::discover(catalog, source_layer).await?;
         let transfer_client = S3::transfer_client().await;
+        let files = handoff.files().cloned().collect::<Vec<_>>();
         info!(
             source_layer = source_layer.label(),
             compacted_files = handoff.compacted.len(),
             raw_tail_files = handoff.raw_tail.len(),
-            files = handoff.len(),
+            files = files.len(),
             "discovered rebuild event partitions"
         );
         Ok(Self {
             transfer_client,
             source_layer,
             handoff,
+            files,
+            next_file: 0,
+            stream: None,
+            file_records: 0,
         })
     }
 
@@ -67,51 +70,47 @@ impl IcebergEventReader {
         self.handoff.len()
     }
 
-    /// Reads all events from the selected files.
-    ///
-    /// TODO(#159): stream and externally sort raw events. The first cut keeps
-    /// events in memory because raw hourly files are not globally ordered by
-    /// stream, timestamp, and sequence.
-    pub async fn read_all(&self) -> BpResult<Vec<MarketEvent>> {
-        let mut events = Vec::new();
-        for file in self.handoff.files() {
-            let (bucket, key) = S3::parse_uri(&file.file_path)?;
-            let file_size = u64::try_from(file.file_size_in_bytes).map_err(|error| {
-                BpError::external(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!(
-                        "event file {} has invalid size {}: {error}",
-                        file.file_path, file.file_size_in_bytes
-                    ),
-                ))
-            })?;
-            let reader = ParquetReader::new(&self.transfer_client, &bucket, &key, file_size);
-            let batch = ArchiveParquet::decode_reader(ArchiveKind::Events, reader).await?;
-            let count = batch.len();
-            events.extend(
-                batch
-                    .into_records()
-                    .into_iter()
-                    .filter_map(|record| match record {
-                        ArchiveRecord::MarketEvent(event) => Some(event.event),
-                        ArchiveRecord::ClosedCandle(_) => None,
-                    }),
-            );
-            info!(
-                file = file.file_path,
-                records = count,
-                total_events = events.len(),
-                "read rebuild event partition"
-            );
-        }
-        Ok(events)
-    }
-}
+    pub async fn next_batch(&mut self) -> BpResult<Option<ArchiveBatch>> {
+        loop {
+            let mut stream = match self.stream.take() {
+                Some(stream) => stream,
+                None => {
+                    let Some(file) = self.files.get(self.next_file) else {
+                        return Ok(None);
+                    };
+                    self.next_file += 1;
+                    self.file_records = 0;
+                    let (bucket, key) = S3::parse_uri(&file.file_path)?;
+                    let file_size = u64::try_from(file.file_size_in_bytes).map_err(|error| {
+                        BpError::external(std::io::Error::new(
+                            std::io::ErrorKind::InvalidData,
+                            format!(
+                                "event file {} has invalid size {}: {error}",
+                                file.file_path, file.file_size_in_bytes
+                            ),
+                        ))
+                    })?;
+                    let reader =
+                        ParquetReader::new(&self.transfer_client, &bucket, &key, file_size);
+                    ArchiveParquet::decode_reader_batches(ArchiveKind::Events, reader).await?
+                }
+            };
 
-#[async_trait]
-impl EventSource for IcebergEventReader {
-    async fn read_events(&mut self) -> BpResult<Vec<MarketEvent>> {
-        self.read_all().await
+            match stream.next_batch().await? {
+                Some(batch) => {
+                    self.file_records += batch.len();
+                    self.stream = Some(stream);
+                    return Ok(Some(batch));
+                }
+                None => {
+                    info!(
+                        file = self.files[self.next_file - 1].file_path,
+                        records = self.file_records,
+                        "read rebuild event partition"
+                    );
+                }
+            }
+        }
     }
 }
 

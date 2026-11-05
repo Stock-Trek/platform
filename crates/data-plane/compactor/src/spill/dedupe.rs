@@ -1,14 +1,12 @@
-use super::run::SpillRun;
 use platform_archive::{
-    ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetBatches, ArchiveRecord,
-    ArchiveRecordKey,
+    ArchiveBatch, ArchiveKind, ArchiveRecord, ArchiveRecordKey,
+    spill::{SpillRun, SpillRunReader},
 };
 use platform_errors::{BpError, BpResult};
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap},
-    fs::File,
-    path::{Path, PathBuf},
+    path::PathBuf,
     vec::IntoIter,
 };
 
@@ -67,7 +65,7 @@ impl DedupeSpill {
         let readers = self
             .runs
             .iter()
-            .map(|path| RunReader::open(self.kind, path))
+            .map(|path| SpillRunReader::open(self.kind, path))
             .collect::<BpResult<Vec<_>>>()?;
         Ok(DedupedRecords::Runs(DedupeMerge::new(readers)?))
     }
@@ -106,39 +104,6 @@ impl DedupedRecords {
     }
 }
 
-struct RunReader {
-    batches: ArchiveParquetBatches,
-    buffer: IntoIter<ArchiveRecord>,
-}
-
-impl RunReader {
-    fn open(kind: ArchiveKind, path: &Path) -> BpResult<Self> {
-        let file = File::open(path).map_err(|error| {
-            BpError::io(
-                "open compaction spill run",
-                path.display().to_string(),
-                error,
-            )
-        })?;
-        Ok(Self {
-            batches: ArchiveParquet::decode_batches(kind, file)?,
-            buffer: Vec::new().into_iter(),
-        })
-    }
-
-    fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>> {
-        loop {
-            if let Some(record) = self.buffer.next() {
-                return Ok(Some(record));
-            }
-            match self.batches.next() {
-                Some(batch) => self.buffer = batch?.into_records().into_iter(),
-                None => return Ok(None),
-            }
-        }
-    }
-}
-
 struct DedupeEntry {
     key: ArchiveRecordKey,
     run: usize,
@@ -171,12 +136,12 @@ impl Ord for DedupeEntry {
 }
 
 pub struct DedupeMerge {
-    runs: Vec<RunReader>,
+    runs: Vec<SpillRunReader>,
     heap: BinaryHeap<DedupeEntry>,
 }
 
 impl DedupeMerge {
-    fn new(mut runs: Vec<RunReader>) -> BpResult<Self> {
+    fn new(mut runs: Vec<SpillRunReader>) -> BpResult<Self> {
         let mut heap = BinaryHeap::with_capacity(runs.len());
         for (index, run) in runs.iter_mut().enumerate() {
             if let Some(record) = run.next_record()? {

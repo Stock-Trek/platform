@@ -1,6 +1,5 @@
 mod dedupe;
 mod partition;
-mod run;
 #[cfg(test)]
 mod tests;
 

@@ -1,16 +1,9 @@
-use super::run::SpillRun;
 use platform_archive::{
-    ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetBatches, ArchivePath, ArchiveRecord,
-    ArchiveSortKey,
+    ArchiveBatch, ArchiveKind, ArchivePath, ArchiveRecord, ArchiveSortKey,
+    spill::{SpillRun, SpillRunReader},
 };
 use platform_errors::{BpError, BpResult};
-use std::{
-    cmp::Ordering,
-    collections::BinaryHeap,
-    fs::File,
-    path::{Path, PathBuf},
-    vec::IntoIter,
-};
+use std::{cmp::Ordering, collections::BinaryHeap, path::PathBuf, vec::IntoIter};
 
 /// A record plus the cached values used to order its compaction output.
 pub struct PartitionItem {
@@ -84,7 +77,7 @@ impl PartitionSpill {
         let readers = self
             .runs
             .iter()
-            .map(|path| PartitionRunReader::open(self.kind, path))
+            .map(|path| SpillRunReader::open(self.kind, path))
             .collect::<BpResult<Vec<_>>>()?;
         Ok(PartitionRecords::Runs(PartitionMerge::new(readers)?))
     }
@@ -123,39 +116,6 @@ impl PartitionRecords {
     }
 }
 
-struct PartitionRunReader {
-    batches: ArchiveParquetBatches,
-    buffer: IntoIter<ArchiveRecord>,
-}
-
-impl PartitionRunReader {
-    fn open(kind: ArchiveKind, path: &Path) -> BpResult<Self> {
-        let file = File::open(path).map_err(|error| {
-            BpError::io(
-                "open compaction spill run",
-                path.display().to_string(),
-                error,
-            )
-        })?;
-        Ok(Self {
-            batches: ArchiveParquet::decode_batches(kind, file)?,
-            buffer: Vec::new().into_iter(),
-        })
-    }
-
-    fn next_item(&mut self) -> BpResult<Option<PartitionItem>> {
-        loop {
-            if let Some(record) = self.buffer.next() {
-                return Ok(Some(PartitionItem::new(record)));
-            }
-            match self.batches.next() {
-                Some(batch) => self.buffer = batch?.into_records().into_iter(),
-                None => return Ok(None),
-            }
-        }
-    }
-}
-
 struct PartitionEntry {
     item: PartitionItem,
     run: usize,
@@ -187,24 +147,33 @@ impl Ord for PartitionEntry {
 }
 
 pub struct PartitionMerge {
-    runs: Vec<PartitionRunReader>,
+    runs: Vec<SpillRunReader>,
     heap: BinaryHeap<PartitionEntry>,
 }
 
 impl PartitionMerge {
-    fn new(mut runs: Vec<PartitionRunReader>) -> BpResult<Self> {
-        let mut heap = BinaryHeap::with_capacity(runs.len());
-        for (index, run) in runs.iter_mut().enumerate() {
-            if let Some(item) = run.next_item()? {
-                heap.push(PartitionEntry { item, run: index });
+    fn new(mut readers: Vec<SpillRunReader>) -> BpResult<Self> {
+        let mut heap = BinaryHeap::with_capacity(readers.len());
+        for (index, run) in readers.iter_mut().enumerate() {
+            if let Some(record) = run.next_record()? {
+                heap.push(PartitionEntry {
+                    item: PartitionItem::new(record),
+                    run: index,
+                });
             }
         }
-        Ok(Self { runs, heap })
+        Ok(Self {
+            runs: readers,
+            heap,
+        })
     }
 
     fn advance(&mut self, run: usize) -> BpResult<()> {
-        if let Some(item) = self.runs[run].next_item()? {
-            self.heap.push(PartitionEntry { item, run });
+        if let Some(record) = self.runs[run].next_record()? {
+            self.heap.push(PartitionEntry {
+                item: PartitionItem::new(record),
+                run,
+            });
         }
         Ok(())
     }
