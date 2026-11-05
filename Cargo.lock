@@ -4657,7 +4657,6 @@ dependencies = [
  "platform-market-data",
  "platform-types",
  "serde",
- "stock-trek",
  "stock-trek-types",
  "tokio",
  "tracing",
@@ -4966,7 +4965,6 @@ name = "platform-market-data"
 version = "0.2.0"
 dependencies = [
  "base64 0.23.1",
- "chrono",
  "iris",
  "metrics",
  "platform-errors",
@@ -7121,7 +7119,6 @@ dependencies = [
 name = "traitreg-macros"
 version = "0.4.0"
 dependencies = [
- "proc-macro2",
  "quote",
  "syn 2.0.119",
  "traitreg",

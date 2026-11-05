@@ -8,7 +8,6 @@ test-utils = []
 
 [dependencies]
 base64 = { workspace = true }
-chrono = { workspace = true }
 iris = { workspace = true }
 platform-errors = { workspace = true }
 platform-metrics = { workspace = true }

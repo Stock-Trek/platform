@@ -22,7 +22,6 @@ platform-errors = { workspace = true, features = ["http", "storage"] }
 platform-market-data = { workspace = true }
 platform-types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
-stock-trek = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["fs", "macros", "rt", "rt-multi-thread", "sync", "time"] }
 tracing = { workspace = true }
