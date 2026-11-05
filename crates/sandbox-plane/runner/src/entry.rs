@@ -68,6 +68,28 @@ pub unsafe extern "C" fn entry(argc: i32, argv: *const *const c_char) -> i32 {
 }
 
 #[cfg(target_arch = "wasm32")]
+unsafe extern "C" {
+    fn __wasm_call_ctors();
+}
+
+/// Initializes the registered algorithms.
+///
+/// Rust's wasm linker only emits `__wasm_call_ctors` when a module needs it and
+/// does not export it automatically. The host must call this once before
+/// `alloc`/`entry` so that `traitreg`'s constructors run and populate the
+/// algorithm registry.
+#[cfg(target_arch = "wasm32")]
+#[unsafe(no_mangle)]
+pub extern "C" fn initialize() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+
+    static INITIALIZED: AtomicBool = AtomicBool::new(false);
+    if !INITIALIZED.swap(true, Ordering::SeqCst) {
+        unsafe { __wasm_call_ctors() };
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
 #[unsafe(no_mangle)]
 pub extern "C" fn alloc(size: usize) -> *mut u8 {
     if size == 0 {

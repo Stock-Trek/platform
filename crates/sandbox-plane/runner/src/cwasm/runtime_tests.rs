@@ -9,6 +9,53 @@ use std::{
 };
 use tempfile::NamedTempFile;
 
+const QUEUE_ABI_WAT: &str = r#"
+    (module
+        (import "env" "queue_metadata" (func $queue_metadata (param i32 i32 i32 i32)))
+        (import "env" "queue_preferences" (func $queue_preferences (param i32 i32)))
+        (import "env" "queue_signals" (func $queue_signals (param i32 i32)))
+        (import "env" "queue_strategy" (func $queue_strategy (param i32 i32)))
+        (import "env" "queue_action" (func $queue_action (param i32 i32 i32 i32)))
+        (memory (export "memory") 1)
+        (data (i32.const 64) "TestName")
+        (data (i32.const 128) "TestDescription")
+        (data (i32.const 256) "preferences-json")
+        (data (i32.const 384) "signals-json")
+        (data (i32.const 512) "strategy-json")
+        (data (i32.const 640) "action-json")
+        (data (i32.const 768) "recovery-json")
+        (func $strlen (param $pointer i32) (result i32)
+            (local $length i32)
+            (block
+                (loop
+                    (br_if 1 (i32.eqz (i32.load8_u
+                        (i32.add (local.get $pointer) (local.get $length)))))
+                    (local.set $length (i32.add (local.get $length) (i32.const 1)))
+                    (br 0)))
+            (local.get $length))
+        (func (export "alloc") (param i32) (result i32) (i32.const 8192))
+        (func (export "entry") (param i32 i32) (result i32)
+            (call $queue_metadata
+                (i32.const 64)
+                (call $strlen (i32.const 64))
+                (i32.const 128)
+                (call $strlen (i32.const 128)))
+            (call $queue_preferences
+                (i32.const 256)
+                (call $strlen (i32.const 256)))
+            (call $queue_signals
+                (i32.const 384)
+                (call $strlen (i32.const 384)))
+            (call $queue_strategy
+                (i32.const 512)
+                (call $strlen (i32.const 512)))
+            (call $queue_action
+                (i32.const 640)
+                (call $strlen (i32.const 640))
+                (i32.const 768)
+                (call $strlen (i32.const 768)))
+            (i32.const 0)))"#;
+
 const METADATA_WAT: &str = r#"
     (module
         (import "env" "queue_metadata" (func $queue_metadata (param i32 i32 i32 i32)))
@@ -94,6 +141,19 @@ const OPEN_HOST_FILE_WAT: &str = r#"
                 (then (return (i32.const 99))))
             (i32.const 0)))"#;
 
+const INITIALIZE_WAT: &str = r#"
+    (module
+        (memory (export "memory") 1)
+        (global $initialized (mut i32) (i32.const 0))
+        (func (export "initialize")
+            (global.set $initialized (i32.const 1)))
+        (func (export "alloc") (param i32) (result i32) (i32.const 8192))
+        (func (export "entry") (param i32 i32) (result i32)
+            (if (result i32)
+                (global.get $initialized)
+                (then (i32.const 0))
+                (else (i32.const 99)))))"#;
+
 type CapturedLines = Arc<Mutex<Vec<(String, Value)>>>;
 
 fn artifact(wat: &str) -> NamedTempFile {
@@ -138,6 +198,34 @@ fn runs_the_guest_entry_with_host_written_arguments() {
     assert_eq!(
         lines[0].1,
         json!({"name": "Metadata", "description": "Metadata"})
+    );
+}
+
+#[test]
+fn exposes_the_env_imports_used_by_the_runner() {
+    let runner = WasmRunner::new().unwrap();
+    let file = artifact(QUEUE_ABI_WAT);
+    let (emit, lines) = capture();
+
+    let code = execute(&runner, file.path(), &emit);
+
+    assert_eq!(code, ExitCode::Success.code());
+    let lines = lines.lock().unwrap();
+    assert_eq!(
+        *lines,
+        [
+            (
+                "metadata".to_string(),
+                json!({"name": "TestName", "description": "TestDescription"})
+            ),
+            ("preferences".to_string(), json!("preferences-json")),
+            ("signals".to_string(), json!("signals-json")),
+            ("strategy".to_string(), json!("strategy-json")),
+            (
+                "action".to_string(),
+                json!({"action": "action-json", "recoveryPolicy": "recovery-json"})
+            ),
+        ]
     );
 }
 
@@ -237,6 +325,7 @@ fn copies_declared_inputs_into_the_guest_workspace() {
     assert_eq!(
         workspace.arguments_as_str(),
         [
+            "cwasm-invoker",
             "Execute",
             "AlgorithmStub",
             "/strategy-context.bin",
@@ -252,6 +341,48 @@ fn copies_declared_inputs_into_the_guest_workspace() {
         b"portfolio"
     );
     assert!(!workspace.path().join("strategy-context.bin").is_symlink());
+}
+
+#[test]
+fn includes_the_program_name_expected_by_the_guest_entry() {
+    for (command, name) in [
+        (
+            Command::Algorithm {
+                strategy_name: "AlgorithmStub".to_string(),
+            },
+            "Algorithm",
+        ),
+        (
+            Command::Metadata {
+                strategy_name: "AlgorithmStub".to_string(),
+            },
+            "Metadata",
+        ),
+        (
+            Command::Preferences {
+                strategy_name: "AlgorithmStub".to_string(),
+            },
+            "Preferences",
+        ),
+    ] {
+        let workspace = GuestWorkspace::for_command(&command).unwrap();
+        assert_eq!(
+            workspace.arguments_as_str(),
+            ["cwasm-invoker", name, "AlgorithmStub"]
+        );
+    }
+}
+
+#[test]
+fn initializes_the_guest_before_running_it() {
+    let runner = WasmRunner::new().unwrap();
+    let file = artifact(INITIALIZE_WAT);
+    let (emit, lines) = capture();
+
+    let code = execute(&runner, file.path(), &emit);
+
+    assert_eq!(code, ExitCode::Success.code());
+    assert!(lines.lock().unwrap().is_empty());
 }
 
 #[test]

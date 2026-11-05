@@ -117,6 +117,12 @@ wasmtime = { version = "=43.0.1", default-features = false }
 wasmtime-wasi = { version = "=43.0.1", default-features = false }
 zip = "9"
 
+# traitreg 0.4.0 does not place its registration constructors in the wasm
+# `.init_array`, and builds the registry eagerly at startup. Patch the macro
+# crate until upstream supports wasm so algorithms are visible to the runner.
+[patch.crates-io]
+traitreg-macros = { path = "crates/foundation/traitreg-macros" }
+
 [profile.release]
 lto = "thin"
 codegen-units = 1
