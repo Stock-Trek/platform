@@ -5,6 +5,9 @@ use serde::Deserialize;
 #[serde(rename_all = "camelCase")]
 pub struct RunRequest {
     pub cwasm_get_url: String,
+    pub cwasm_sha256: String,
+    pub cwasm_size: u64,
+    pub wasmtime_version: String,
     #[serde(flatten)]
     pub command: Command,
 }

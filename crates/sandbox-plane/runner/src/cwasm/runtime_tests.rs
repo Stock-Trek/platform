@@ -1,7 +1,12 @@
 use super::*;
 use platform_exit_codes::ExitCode;
+use platform_runner::command::Command;
 use serde_json::{Value, json};
-use std::sync::{Arc, Mutex};
+use std::{
+    path::Path,
+    sync::{Arc, Mutex},
+    time::Duration,
+};
 use tempfile::NamedTempFile;
 
 const METADATA_WAT: &str = r#"
@@ -50,14 +55,63 @@ const TRAP_WAT: &str = r#"
         (func (export "entry") (param i32 i32) (result i32)
             (unreachable)))"#;
 
+const LOOP_WAT: &str = r#"
+    (module
+        (memory (export "memory") 1)
+        (func (export "alloc") (param i32) (result i32) (i32.const 8192))
+        (func (export "entry") (param i32 i32) (result i32)
+            (loop $forever
+                (br $forever))
+            (i32.const 0)))"#;
+
+const GROW_MEMORY_WAT: &str = r#"
+    (module
+        (memory (export "memory") 1)
+        (func (export "alloc") (param i32) (result i32) (i32.const 8192))
+        (func (export "entry") (param i32 i32) (result i32)
+            (drop (memory.grow (i32.const 1024)))
+            (i32.const 0)))"#;
+
+const OPEN_HOST_FILE_WAT: &str = r#"
+    (module
+        (import "wasi_snapshot_preview1" "path_open"
+            (func $path_open (param i32 i32 i32 i32 i32 i64 i64 i32 i32) (result i32)))
+        (memory (export "memory") 1)
+        (data (i32.const 64) "/proc/self/environ")
+        (func (export "alloc") (param i32) (result i32) (i32.const 8192))
+        (func (export "entry") (param i32 i32) (result i32)
+            (if (i32.eqz
+                    (call $path_open
+                        (i32.const 3)
+                        (i32.const 0)
+                        (i32.const 64)
+                        (i32.const 18)
+                        (i32.const 0)
+                        (i64.const 0)
+                        (i64.const 0)
+                        (i32.const 0)
+                        (i32.const 128)))
+                (then (return (i32.const 99))))
+            (i32.const 0)))"#;
+
 type CapturedLines = Arc<Mutex<Vec<(String, Value)>>>;
 
 fn artifact(wat: &str) -> NamedTempFile {
-    let engine = wasmtime::Engine::default();
+    let engine = wasmtime::Engine::new(&execution_config()).unwrap();
     let module = wasmtime::Module::new(&engine, wat).unwrap();
     let file = NamedTempFile::new().unwrap();
     std::fs::write(file.path(), module.serialize().unwrap()).unwrap();
     file
+}
+
+fn execute(runner: &WasmRunner, path: &Path, emit: &Emit) -> i32 {
+    runner.execute_command_with(
+        path,
+        &Command::Metadata {
+            strategy_name: "Metadata".to_string(),
+        },
+        emit,
+    )
 }
 
 fn capture() -> (Emit, CapturedLines) {
@@ -75,7 +129,7 @@ fn runs_the_guest_entry_with_host_written_arguments() {
     let file = artifact(METADATA_WAT);
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner", "Metadata", "unused"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::Success.code());
     let lines = lines.lock().unwrap();
@@ -93,7 +147,7 @@ fn passes_the_guest_exit_code_through() {
     let file = artifact(EXIT_WAT);
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, 42);
     assert!(lines.lock().unwrap().is_empty());
@@ -105,7 +159,7 @@ fn reports_a_trapped_guest_as_a_runner_panic() {
     let file = artifact(TRAP_WAT);
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::BotErrorPanic.code());
     assert!(lines.lock().unwrap().is_empty());
@@ -118,8 +172,97 @@ fn reports_an_invalid_artifact_as_not_loaded() {
     std::fs::write(file.path(), b"not a cwasm artifact").unwrap();
     let (emit, lines) = capture();
 
-    let code = runner.execute_with(file.path(), &["runner"], &emit);
+    let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::ServerRunnerCwasmNotLoaded.code());
     assert!(lines.lock().unwrap().is_empty());
+}
+
+#[test]
+fn interrupts_a_guest_that_exceeds_its_deadline() {
+    let runner = WasmRunner::with_limits(ExecutionLimits::new(
+        Duration::from_millis(100),
+        DEFAULT_MAX_GUEST_MEMORY_BYTES,
+    ))
+    .unwrap();
+    let file = artifact(LOOP_WAT);
+    let (emit, lines) = capture();
+
+    let code = execute(&runner, file.path(), &emit);
+
+    assert_eq!(code, ExitCode::BotErrorTimeout.code());
+    assert!(lines.lock().unwrap().is_empty());
+}
+
+#[test]
+fn interrupts_a_guest_that_exceeds_its_memory_limit() {
+    let runner =
+        WasmRunner::with_limits(ExecutionLimits::new(Duration::from_secs(5), 128 * 1024)).unwrap();
+    let file = artifact(GROW_MEMORY_WAT);
+    let (emit, lines) = capture();
+
+    let code = execute(&runner, file.path(), &emit);
+
+    assert_eq!(code, ExitCode::BotErrorResourceLimitExceeded.code());
+    assert!(lines.lock().unwrap().is_empty());
+}
+
+#[test]
+fn does_not_expose_host_files_outside_the_guest_workspace() {
+    let runner = WasmRunner::new().unwrap();
+    let file = artifact(OPEN_HOST_FILE_WAT);
+    let (emit, lines) = capture();
+
+    let code = execute(&runner, file.path(), &emit);
+
+    assert_eq!(code, ExitCode::Success.code());
+    assert!(lines.lock().unwrap().is_empty());
+}
+
+#[test]
+fn copies_declared_inputs_into_the_guest_workspace() {
+    let source = tempfile::tempdir().unwrap();
+    let strategy_context = source.path().join("strategy-context.bin");
+    let portfolio = source.path().join("portfolio.bin");
+    std::fs::write(&strategy_context, b"context").unwrap();
+    std::fs::write(&portfolio, b"portfolio").unwrap();
+
+    let workspace = GuestWorkspace::for_command(&Command::Execute {
+        strategy_name: "AlgorithmStub".to_string(),
+        strategy_context_path: strategy_context.display().to_string(),
+        portfolio_path: portfolio.display().to_string(),
+    })
+    .unwrap();
+
+    assert_eq!(
+        workspace.arguments_as_str(),
+        [
+            "Execute",
+            "AlgorithmStub",
+            "/strategy-context.bin",
+            "/portfolio.bin"
+        ]
+    );
+    assert_eq!(
+        std::fs::read(workspace.path().join(STRATEGY_CONTEXT_FILE_NAME)).unwrap(),
+        b"context"
+    );
+    assert_eq!(
+        std::fs::read(workspace.path().join(PORTFOLIO_FILE_NAME)).unwrap(),
+        b"portfolio"
+    );
+    assert!(!workspace.path().join("strategy-context.bin").is_symlink());
+}
+
+#[test]
+fn rejects_missing_guest_inputs() {
+    let workspace = GuestWorkspace::for_command(&Command::Signals {
+        strategy_name: "AlgorithmStub".to_string(),
+        strategy_context_path: "/does/not/exist".to_string(),
+    });
+
+    assert!(matches!(
+        workspace,
+        Err(ExitCode::ServerRunnerStrategyContextFileNotFound)
+    ));
 }

@@ -1,18 +1,63 @@
 use platform_exit_codes::ExitCode;
+use platform_runner::command::Command;
 use serde_json::{Value, json};
-use std::path::Path;
-use std::sync::Arc;
-use wasmtime::{Caller, Config, Engine, Linker, Memory, Module, Store, TypedFunc};
+use std::{
+    path::Path,
+    sync::{
+        Arc, Condvar, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread,
+    time::Duration,
+};
+use wasmtime::{
+    Caller, Config, Engine, Linker, Memory, Module, ResourceLimiter, Store, StoreLimits,
+    StoreLimitsBuilder, TypedFunc,
+};
 use wasmtime_wasi::{
     DirPerms, FilePerms, I32Exit, WasiCtxBuilder,
     p1::{WasiP1Ctx, add_to_linker_sync},
 };
 
+use super::GuestWorkspace;
+
+pub const DEFAULT_EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
+pub const DEFAULT_MAX_GUEST_MEMORY_BYTES: usize = 256 * 1024 * 1024;
+
 pub type Emit = Arc<dyn Fn(&str, Value) + Send + Sync>;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ExecutionLimits {
+    pub timeout: Duration,
+    pub max_memory_bytes: usize,
+}
+
+impl ExecutionLimits {
+    pub const fn new(timeout: Duration, max_memory_bytes: usize) -> Self {
+        Self {
+            timeout,
+            max_memory_bytes,
+        }
+    }
+}
+
+impl Default for ExecutionLimits {
+    fn default() -> Self {
+        Self::new(DEFAULT_EXECUTION_TIMEOUT, DEFAULT_MAX_GUEST_MEMORY_BYTES)
+    }
+}
+
+pub fn execution_config() -> Config {
+    let mut config = Config::new();
+    config.epoch_interruption(true);
+    config
+}
 
 enum Failure {
     NotLoaded(wasmtime::Error),
     Trapped(wasmtime::Error),
+    TimedOut(Duration),
+    ResourceLimitExceeded { max_memory_bytes: usize },
 }
 
 impl Failure {
@@ -26,23 +71,117 @@ impl Failure {
                 eprintln!("cwasm-invoker: failed to run cwasm artifact: {error:?}");
                 ExitCode::BotErrorPanic.code()
             }
+            Failure::TimedOut(timeout) => {
+                eprintln!("cwasm-invoker: guest execution exceeded {timeout:?}");
+                ExitCode::BotErrorTimeout.code()
+            }
+            Failure::ResourceLimitExceeded { max_memory_bytes } => {
+                eprintln!("cwasm-invoker: guest exceeded the {max_memory_bytes}-byte memory limit");
+                ExitCode::BotErrorResourceLimitExceeded.code()
+            }
         }
+    }
+}
+
+struct GuestLimits {
+    limits: StoreLimits,
+    exceeded: Arc<AtomicBool>,
+}
+
+impl GuestLimits {
+    fn new(max_memory_bytes: usize) -> Self {
+        Self {
+            limits: StoreLimitsBuilder::new()
+                .memory_size(max_memory_bytes)
+                .instances(1)
+                .memories(1)
+                .tables(1)
+                .build(),
+            exceeded: Arc::new(AtomicBool::new(false)),
+        }
+    }
+
+    fn exceeded(&self) -> bool {
+        self.exceeded.load(Ordering::SeqCst)
+    }
+
+    fn deny(&mut self) -> wasmtime::Result<bool> {
+        self.exceeded.store(true, Ordering::SeqCst);
+        Err(wasmtime::Error::msg("guest exceeded its resource limit"))
+    }
+}
+
+impl ResourceLimiter for GuestLimits {
+    fn memory_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> wasmtime::Result<bool> {
+        if self.limits.memory_growing(current, desired, maximum)? {
+            Ok(true)
+        } else {
+            self.deny()
+        }
+    }
+
+    fn memory_grow_failed(&mut self, error: wasmtime::Error) -> wasmtime::Result<()> {
+        self.exceeded.store(true, Ordering::SeqCst);
+        Err(error)
+    }
+
+    fn table_growing(
+        &mut self,
+        current: usize,
+        desired: usize,
+        maximum: Option<usize>,
+    ) -> wasmtime::Result<bool> {
+        if self.limits.table_growing(current, desired, maximum)? {
+            Ok(true)
+        } else {
+            self.deny()
+        }
+    }
+
+    fn table_grow_failed(&mut self, error: wasmtime::Error) -> wasmtime::Result<()> {
+        self.exceeded.store(true, Ordering::SeqCst);
+        Err(error)
+    }
+
+    fn instances(&self) -> usize {
+        self.limits.instances()
+    }
+
+    fn tables(&self) -> usize {
+        self.limits.tables()
+    }
+
+    fn memories(&self) -> usize {
+        self.limits.memories()
     }
 }
 
 struct GuestState {
     wasi: WasiP1Ctx,
     emit: Emit,
+    limits: GuestLimits,
 }
 
 impl GuestState {
-    fn new(emit: Emit) -> wasmtime::Result<Self> {
+    fn new(
+        emit: Emit,
+        working_directory: &Path,
+        max_memory_bytes: usize,
+    ) -> wasmtime::Result<Self> {
         let mut builder = WasiCtxBuilder::new();
-        builder.inherit_stdio();
-        builder.preopened_dir("/", "/", DirPerms::READ, FilePerms::READ)?;
+        builder.stdin(std::io::empty());
+        builder.stdout(std::io::stderr());
+        builder.stderr(std::io::stderr());
+        builder.preopened_dir(working_directory, "/", DirPerms::READ, FilePerms::READ)?;
         Ok(Self {
             wasi: builder.build_p1(),
             emit,
+            limits: GuestLimits::new(max_memory_bytes),
         })
     }
 
@@ -183,49 +322,83 @@ impl GuestState {
 
 pub struct WasmRunner {
     engine: Engine,
+    limits: ExecutionLimits,
 }
 
 impl WasmRunner {
     pub fn new() -> wasmtime::Result<Self> {
+        Self::with_limits(ExecutionLimits::default())
+    }
+
+    pub fn with_limits(limits: ExecutionLimits) -> wasmtime::Result<Self> {
         Ok(Self {
-            engine: Engine::new(&Config::default())?,
+            engine: Engine::new(&execution_config())?,
+            limits,
         })
     }
 
-    pub fn execute(&self, path: &Path, args: &[&str]) -> i32 {
+    pub fn execute_command(&self, path: &Path, command: &Command) -> i32 {
         let emit: Emit = Arc::new(GuestState::emit_stdout);
-        self.execute_with(path, args, &emit)
+        self.execute_command_with(path, command, &emit)
     }
 
-    pub fn execute_with(&self, path: &Path, args: &[&str], emit: &Emit) -> i32 {
-        match self.run(path, args, emit) {
+    pub fn execute_command_with(&self, path: &Path, command: &Command, emit: &Emit) -> i32 {
+        let workspace = match GuestWorkspace::for_command(command) {
+            Ok(workspace) => workspace,
+            Err(code) => return code.code(),
+        };
+        let args = workspace.arguments_as_str();
+        match self.run(path, &args, emit, workspace.path()) {
             Ok(code) => code,
             Err(failure) => failure.exit_code(),
         }
     }
 
-    fn run(&self, path: &Path, args: &[&str], emit: &Emit) -> Result<i32, Failure> {
+    fn run(
+        &self,
+        path: &Path,
+        args: &[&str],
+        emit: &Emit,
+        working_directory: &Path,
+    ) -> Result<i32, Failure> {
         let module =
             unsafe { Module::deserialize_file(&self.engine, path) }.map_err(Failure::NotLoaded)?;
         let linker = self.linker().map_err(Failure::NotLoaded)?;
-        let state = GuestState::new(emit.clone()).map_err(Failure::NotLoaded)?;
+        let state = GuestState::new(
+            emit.clone(),
+            working_directory,
+            self.limits.max_memory_bytes,
+        )
+        .map_err(Failure::NotLoaded)?;
         let mut store = Store::new(&self.engine, state);
-        let instance = linker
-            .instantiate(&mut store, &module)
-            .map_err(Failure::NotLoaded)?;
-        let alloc = instance
-            .get_typed_func::<i32, i32>(&mut store, "alloc")
-            .map_err(Failure::NotLoaded)?;
-        let entry = instance
-            .get_typed_func::<(i32, i32), i32>(&mut store, "entry")
-            .map_err(Failure::NotLoaded)?;
-        let memory = instance
-            .get_memory(&mut store, "memory")
-            .ok_or_else(|| Failure::NotLoaded(wasmtime::Error::msg("missing exported memory")))?;
-        let argv =
-            Self::write_arguments(&memory, &mut store, &alloc, args).map_err(Failure::NotLoaded)?;
-        match entry.call(&mut store, (args.len() as i32, argv as i32)) {
+        store.limiter(|state| &mut state.limits);
+        store.set_epoch_deadline(1);
+        let watchdog = Watchdog::start(self.engine.clone(), self.limits.timeout);
+
+        let result = (|| -> wasmtime::Result<i32> {
+            let instance = linker.instantiate(&mut store, &module)?;
+            let alloc = instance.get_typed_func::<i32, i32>(&mut store, "alloc")?;
+            let entry = instance.get_typed_func::<(i32, i32), i32>(&mut store, "entry")?;
+            let memory = instance
+                .get_memory(&mut store, "memory")
+                .ok_or_else(|| wasmtime::Error::msg("missing exported memory"))?;
+            let argv = Self::write_arguments(&memory, &mut store, &alloc, args)?;
+            entry.call(&mut store, (args.len() as i32, argv as i32))
+        })();
+
+        let timed_out = watchdog.timed_out();
+        let resource_limit_exceeded = store.data().limits.exceeded();
+        drop(watchdog);
+
+        match result {
+            Ok(_) if resource_limit_exceeded => Err(Failure::ResourceLimitExceeded {
+                max_memory_bytes: self.limits.max_memory_bytes,
+            }),
             Ok(code) => Ok(code),
+            Err(_) if resource_limit_exceeded => Err(Failure::ResourceLimitExceeded {
+                max_memory_bytes: self.limits.max_memory_bytes,
+            }),
+            Err(_) if timed_out => Err(Failure::TimedOut(self.limits.timeout)),
             Err(error) => match error.downcast_ref::<I32Exit>() {
                 Some(exit) => Ok(exit.0),
                 None => Err(Failure::Trapped(error)),
@@ -280,5 +453,51 @@ impl WasmRunner {
             .collect();
         memory.write(&mut *store, base as usize, &argv)?;
         Ok(base)
+    }
+}
+
+struct Watchdog {
+    finished: Arc<(Mutex<bool>, Condvar)>,
+    timed_out: Arc<AtomicBool>,
+    handle: Option<thread::JoinHandle<()>>,
+}
+
+impl Watchdog {
+    fn start(engine: Engine, timeout: Duration) -> Self {
+        let finished = Arc::new((Mutex::new(false), Condvar::new()));
+        let timed_out = Arc::new(AtomicBool::new(false));
+        let thread_finished = Arc::clone(&finished);
+        let thread_timed_out = Arc::clone(&timed_out);
+        let handle = thread::spawn(move || {
+            let (lock, wake) = &*thread_finished;
+            let finished = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
+            let (finished, _) = wake
+                .wait_timeout_while(finished, timeout, |finished| !*finished)
+                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            if !*finished {
+                thread_timed_out.store(true, Ordering::SeqCst);
+                engine.increment_epoch();
+            }
+        });
+        Self {
+            finished,
+            timed_out,
+            handle: Some(handle),
+        }
+    }
+
+    fn timed_out(&self) -> bool {
+        self.timed_out.load(Ordering::SeqCst)
+    }
+}
+
+impl Drop for Watchdog {
+    fn drop(&mut self) {
+        let (lock, wake) = &*self.finished;
+        *lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
+        wake.notify_one();
+        if let Some(handle) = self.handle.take() {
+            let _ = handle.join();
+        }
     }
 }

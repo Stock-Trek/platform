@@ -6,6 +6,7 @@
 
 mod implementation;
 mod runtime;
+mod workspace;
 
 #[cfg(test)]
 mod runtime_tests;
@@ -15,3 +16,4 @@ mod tests;
 
 pub use implementation::*;
 pub use runtime::*;
+pub use workspace::*;
