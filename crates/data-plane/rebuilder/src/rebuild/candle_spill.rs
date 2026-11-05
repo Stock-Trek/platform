@@ -18,23 +18,6 @@ type CandleOrderKey = (
     ArchiveRecordKey,
 );
 
-fn order_key(
-    record: &ArchiveRecord,
-    bucket_millis: i64,
-    layer: ArchiveTableLayer,
-) -> CandleOrderKey {
-    (
-        ArchiveBucket::new(record, bucket_millis),
-        record.routing_bucket(),
-        match layer {
-            ArchiveTableLayer::Raw => None,
-            ArchiveTableLayer::Compacted => Some(record.partition().path()),
-        },
-        record.sort_key(),
-        record.key(),
-    )
-}
-
 /// Bounded external sorter for regenerated candles.
 ///
 /// Once the in-memory entries reach the configured record limit they are
@@ -79,7 +62,7 @@ impl CandleSpill {
 
     pub fn push(&mut self, candle: ClosedCandle) -> BpResult<()> {
         let record = ArchiveRecord::ClosedCandle(candle);
-        let key = order_key(&record, self.bucket_millis, self.layer);
+        let key = Self::order_key(&record, self.bucket_millis, self.layer);
         self.entries.push((key, record));
         if self.entries.len() >= self.limit {
             self.spill()?;
@@ -95,7 +78,7 @@ impl CandleSpill {
         if self.runs.is_empty() {
             self.entries
                 .sort_by(|(left, _), (right, _)| left.cmp(right));
-            let records = keep_latest(self.entries.into_iter().map(|(_, record)| record));
+            let records = Self::keep_latest(self.entries.into_iter().map(|(_, record)| record));
             return Ok(CandleRecords::Memory(records.into_iter()));
         }
 
@@ -119,7 +102,7 @@ impl CandleSpill {
 
         self.entries
             .sort_by(|(left, _), (right, _)| left.cmp(right));
-        let records = keep_latest(self.entries.drain(..).map(|(_, record)| record));
+        let records = Self::keep_latest(self.entries.drain(..).map(|(_, record)| record));
         self.spilled += records.len();
         let path = self
             .directory
@@ -128,29 +111,46 @@ impl CandleSpill {
         self.runs.push(path);
         Ok(())
     }
-}
 
-/// Drops every record whose revision id equals its successor's, keeping the
-/// latest generated revision of each candle.
-fn keep_latest(records: impl Iterator<Item = ArchiveRecord>) -> Vec<ArchiveRecord> {
-    let mut kept = Vec::new();
-    let mut pending: Option<ArchiveRecord> = None;
-    for record in records {
-        match pending.take() {
-            Some(previous) if message_id(&previous) == message_id(&record) => {}
-            Some(previous) => kept.push(previous),
-            None => {}
-        }
-        pending = Some(record);
+    fn order_key(
+        record: &ArchiveRecord,
+        bucket_millis: i64,
+        layer: ArchiveTableLayer,
+    ) -> CandleOrderKey {
+        (
+            ArchiveBucket::new(record, bucket_millis),
+            record.routing_bucket(),
+            match layer {
+                ArchiveTableLayer::Raw => None,
+                ArchiveTableLayer::Compacted => Some(record.partition().path()),
+            },
+            record.sort_key(),
+            record.key(),
+        )
     }
-    kept.extend(pending);
-    kept
-}
 
-fn message_id(record: &ArchiveRecord) -> String {
-    match record {
-        ArchiveRecord::ClosedCandle(candle) => candle.message_id(),
-        ArchiveRecord::MarketEvent(_) => String::new(),
+    /// Drops every record whose revision id equals its successor's, keeping
+    /// the latest generated revision of each candle.
+    fn keep_latest(records: impl Iterator<Item = ArchiveRecord>) -> Vec<ArchiveRecord> {
+        let mut kept = Vec::new();
+        let mut pending: Option<ArchiveRecord> = None;
+        for record in records {
+            match pending.take() {
+                Some(previous) if Self::message_id(&previous) == Self::message_id(&record) => {}
+                Some(previous) => kept.push(previous),
+                None => {}
+            }
+            pending = Some(record);
+        }
+        kept.extend(pending);
+        kept
+    }
+
+    fn message_id(record: &ArchiveRecord) -> String {
+        match record {
+            ArchiveRecord::ClosedCandle(candle) => candle.message_id(),
+            ArchiveRecord::MarketEvent(_) => String::new(),
+        }
     }
 }
 
@@ -234,7 +234,7 @@ impl CandleMerge {
         for (index, run) in runs.iter_mut().enumerate() {
             if let Some(record) = run.next_record()? {
                 heap.push(CandleEntry {
-                    key: order_key(&record, bucket_millis, layer),
+                    key: CandleSpill::order_key(&record, bucket_millis, layer),
                     run: index,
                     record,
                 });
@@ -251,7 +251,7 @@ impl CandleMerge {
     fn advance(&mut self, run: usize) -> BpResult<()> {
         if let Some(record) = self.runs[run].next_record()? {
             self.heap.push(CandleEntry {
-                key: order_key(&record, self.bucket_millis, self.layer),
+                key: CandleSpill::order_key(&record, self.bucket_millis, self.layer),
                 run,
                 record,
             });

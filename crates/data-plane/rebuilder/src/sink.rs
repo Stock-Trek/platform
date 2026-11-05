@@ -117,7 +117,7 @@ impl S3CandleSink {
             buffer.clear();
         }
         file.writer.close()?;
-        let (content_id, length) = hash_file(&file.path)?;
+        let (content_id, length) = Self::hash_file(&file.path)?;
         let key = self.object_key(
             file.bucket,
             &file.partition,
@@ -135,6 +135,37 @@ impl S3CandleSink {
             "wrote rebuilt candle object"
         );
         Ok(())
+    }
+
+    fn hash_file(path: &Path) -> BpResult<(u64, u64)> {
+        let mut file = File::open(path).map_err(|error| {
+            BpError::io(
+                "read rebuilt candle file",
+                path.display().to_string(),
+                error,
+            )
+        })?;
+        let mut hash = CONTENT_ID_OFFSET_BASIS;
+        let mut length = 0_u64;
+        let mut chunk = [0_u8; 64 * 1024];
+        loop {
+            let read = file.read(&mut chunk).map_err(|error| {
+                BpError::io(
+                    "read rebuilt candle file",
+                    path.display().to_string(),
+                    error,
+                )
+            })?;
+            if read == 0 {
+                break;
+            }
+            for byte in &chunk[..read] {
+                hash ^= u64::from(*byte);
+                hash = hash.wrapping_mul(CONTENT_ID_PRIME);
+            }
+            length += u64::try_from(read).unwrap_or(0);
+        }
+        Ok((hash, length))
     }
 
     async fn upload_partition(&self, key: &ObjectKey, path: &Path) -> BpResult<()> {
@@ -157,37 +188,6 @@ impl S3CandleSink {
             .map_err(|error| BpError::s3("put rebuilt candle object", target, error))?;
         Ok(())
     }
-}
-
-fn hash_file(path: &Path) -> BpResult<(u64, u64)> {
-    let mut file = File::open(path).map_err(|error| {
-        BpError::io(
-            "read rebuilt candle file",
-            path.display().to_string(),
-            error,
-        )
-    })?;
-    let mut hash = CONTENT_ID_OFFSET_BASIS;
-    let mut length = 0_u64;
-    let mut chunk = [0_u8; 64 * 1024];
-    loop {
-        let read = file.read(&mut chunk).map_err(|error| {
-            BpError::io(
-                "read rebuilt candle file",
-                path.display().to_string(),
-                error,
-            )
-        })?;
-        if read == 0 {
-            break;
-        }
-        for byte in &chunk[..read] {
-            hash ^= u64::from(*byte);
-            hash = hash.wrapping_mul(CONTENT_ID_PRIME);
-        }
-        length += u64::try_from(read).unwrap_or(0);
-    }
-    Ok((hash, length))
 }
 
 struct PartitionFile {

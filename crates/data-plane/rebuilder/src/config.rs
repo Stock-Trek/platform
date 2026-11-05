@@ -21,7 +21,7 @@ const REBUILDER_SPILL_RECORDS: &str = "REBUILDER_SPILL_RECORDS";
 const REBUILDER_DRY_RUN: &str = "REBUILDER_DRY_RUN";
 
 /// Default number of records staged in memory per spill run.
-pub const DEFAULT_SPILL_RECORDS: usize = 262_144;
+pub const DEFAULT_SPILL_RECORDS: usize = 256 * 1024;
 
 /// Which Iceberg table the rebuilder reads events from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

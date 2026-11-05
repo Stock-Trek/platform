@@ -124,33 +124,33 @@ impl ReplaySpill {
         let path = self
             .directory
             .join(format!("event-run-{}.jsonl", self.runs.len()));
-        write_run(&path, &self.entries)?;
+        self.write_run(&path)?;
         self.spilled += self.entries.len();
         self.runs.push(path);
         self.entries.clear();
         Ok(())
     }
-}
 
-fn write_run(path: &Path, entries: &[(ReplayKey, ReplayRecord)]) -> BpResult<()> {
-    let file = File::create(path).map_err(|error| {
-        BpError::io(
-            "create rebuild spill run",
-            path.display().to_string(),
-            error,
-        )
-    })?;
-    let mut writer = BufWriter::new(file);
-    for (_, record) in entries {
-        serde_json::to_writer(&mut writer, record).map_err(BpError::external)?;
-        writer.write_all(b"\n").map_err(|error| {
-            BpError::io("write rebuild spill run", path.display().to_string(), error)
+    fn write_run(&self, path: &Path) -> BpResult<()> {
+        let file = File::create(path).map_err(|error| {
+            BpError::io(
+                "create rebuild spill run",
+                path.display().to_string(),
+                error,
+            )
         })?;
+        let mut writer = BufWriter::new(file);
+        for (_, record) in &self.entries {
+            serde_json::to_writer(&mut writer, record).map_err(BpError::external)?;
+            writer.write_all(b"\n").map_err(|error| {
+                BpError::io("write rebuild spill run", path.display().to_string(), error)
+            })?;
+        }
+        writer.flush().map_err(|error| {
+            BpError::io("flush rebuild spill run", path.display().to_string(), error)
+        })?;
+        Ok(())
     }
-    writer.flush().map_err(|error| {
-        BpError::io("flush rebuild spill run", path.display().to_string(), error)
-    })?;
-    Ok(())
 }
 
 pub enum ReplayRecords {
