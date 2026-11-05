@@ -186,6 +186,39 @@ async fn an_older_fencing_token_cannot_overwrite_a_newer_checkpoint() {
 }
 
 #[test]
+fn production_store_rejects_a_checkpoint_from_a_stale_writer() {
+    let shard = ShardId::new(1);
+    let mut stored = checkpoint();
+    stored.shard = shard;
+    let stored = stored.with_lease(&WriterLease {
+        shard,
+        owner_id: "writer-b".to_string(),
+        fencing_token: 2,
+        expires_at: TimestampMilliseconds::now(),
+    });
+    let mut stale = checkpoint();
+    stale.shard = shard;
+    let stale = stale.with_lease(&WriterLease {
+        shard,
+        owner_id: "writer-a".to_string(),
+        fencing_token: 1,
+        expires_at: TimestampMilliseconds::now(),
+    });
+
+    assert!(NatsStateStore::ensure_fence_allows(&stored, &stale).is_err());
+
+    let mut same_writer = checkpoint();
+    same_writer.shard = shard;
+    let same_writer = same_writer.with_lease(&WriterLease {
+        shard,
+        owner_id: "writer-b".to_string(),
+        fencing_token: 2,
+        expires_at: TimestampMilliseconds::now(),
+    });
+    assert!(NatsStateStore::ensure_fence_allows(&stored, &same_writer).is_ok());
+}
+
+#[test]
 fn checkpoint_bucket_is_a_valid_kv_name() {
     let bucket = NatsStateStore::bucket_name("aggregator.shards");
     assert_eq!(bucket, "aggregator_shards_checkpoints");
