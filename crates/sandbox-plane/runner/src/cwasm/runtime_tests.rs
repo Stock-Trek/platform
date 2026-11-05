@@ -236,7 +236,12 @@ fn copies_declared_inputs_into_the_guest_workspace() {
 
     assert_eq!(
         workspace.arguments_as_str(),
-        ["Execute", "AlgorithmStub", "/strategy-context.bin", "/portfolio.bin"]
+        [
+            "Execute",
+            "AlgorithmStub",
+            "/strategy-context.bin",
+            "/portfolio.bin"
+        ]
     );
     assert_eq!(
         std::fs::read(workspace.path().join(STRATEGY_CONTEXT_FILE_NAME)).unwrap(),
