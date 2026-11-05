@@ -54,7 +54,9 @@ async fn downloads_the_artifact_to_a_temporary_file() {
     let (url, server) =
         server(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\ncompiled").await;
 
-    let cwasm = Cwasm::download(&url, &integrity(b"compiled"), limits(64)).await.unwrap();
+    let cwasm = Cwasm::download(&url, &integrity(b"compiled"), limits(64))
+        .await
+        .unwrap();
 
     server.await.unwrap();
     assert_eq!(cwasm.path().file_name().unwrap(), CWASM_FILE_NAME);
@@ -66,7 +68,9 @@ async fn removes_the_temporary_file_when_dropped() {
     let (url, server) =
         server(b"HTTP/1.1 200 OK\r\nContent-Length: 8\r\nConnection: close\r\n\r\ncompiled").await;
 
-    let cwasm = Cwasm::download(&url, &integrity(b"compiled"), limits(64)).await.unwrap();
+    let cwasm = Cwasm::download(&url, &integrity(b"compiled"), limits(64))
+        .await
+        .unwrap();
     let path = cwasm.path().to_path_buf();
     drop(cwasm);
 

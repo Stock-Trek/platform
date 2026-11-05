@@ -123,8 +123,8 @@ impl Cwasm {
         let mut output = tokio::fs::File::create(&path).await.map_err(|source| {
             BpError::io("create cwasm artifact", path.display().to_string(), source)
         })?;
-        let (size, actual_hash) = Self::write_body(response, url, limits.max_bytes, &mut output)
-            .await?;
+        let (size, actual_hash) =
+            Self::write_body(response, url, limits.max_bytes, &mut output).await?;
         output.flush().await.map_err(|source| {
             BpError::io("write cwasm artifact", path.display().to_string(), source)
         })?;
