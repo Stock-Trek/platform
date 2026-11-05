@@ -7120,8 +7120,6 @@ dependencies = [
 [[package]]
 name = "traitreg-macros"
 version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e5714b78208e3da0c85d5683a933d843aa275c5fd301d7953b7ae523c7a4ea2a"
 dependencies = [
  "proc-macro2",
  "quote",

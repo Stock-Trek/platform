@@ -217,83 +217,60 @@ impl GuestState {
 
     fn queue_preferences(
         mut caller: Caller<'_, GuestState>,
-        equity_ptr: i32,
-        equity_len: i32,
-        symbols_ptr: i32,
-        symbols_len: i32,
+        preferences_ptr: i32,
+        preferences_len: i32,
     ) -> wasmtime::Result<()> {
         let memory = Self::caller_memory(&mut caller)?;
-        let equity = Self::guest_bytes(&caller, &memory, equity_ptr, equity_len)?;
-        let symbols = Self::guest_bytes(&caller, &memory, symbols_ptr, symbols_len)?;
-        let payload = json!({
-            "equity": String::from_utf8_lossy(equity),
-            "symbols": String::from_utf8_lossy(symbols),
-        });
-        caller.data().emit("preferences", payload);
+        let preferences = Self::guest_bytes(&caller, &memory, preferences_ptr, preferences_len)?;
+        caller
+            .data()
+            .emit("preferences", json!(String::from_utf8_lossy(preferences)));
         Ok(())
     }
 
     fn queue_signals(
         mut caller: Caller<'_, GuestState>,
-        metadata_ptr: i32,
-        metadata_len: i32,
         signals_ptr: i32,
         signals_len: i32,
     ) -> wasmtime::Result<()> {
         let memory = Self::caller_memory(&mut caller)?;
-        let metadata = Self::guest_bytes(&caller, &memory, metadata_ptr, metadata_len)?;
         let signals = Self::guest_bytes(&caller, &memory, signals_ptr, signals_len)?;
-        let payload = json!({
-            "metadata": Self::metadata_json(metadata)?,
-            "signals": Self::signals_json(signals)?,
-        });
-        caller.data().emit("signals", payload);
+        caller
+            .data()
+            .emit("signals", json!(String::from_utf8_lossy(signals)));
         Ok(())
     }
 
     fn queue_strategy(
         mut caller: Caller<'_, GuestState>,
-        source_ptr: i32,
-        source_len: i32,
+        strategy_ptr: i32,
+        strategy_len: i32,
     ) -> wasmtime::Result<()> {
         let memory = Self::caller_memory(&mut caller)?;
-        let source = Self::guest_bytes(&caller, &memory, source_ptr, source_len)?;
-        let payload = json!({ "source": String::from_utf8_lossy(source) });
-        caller.data().emit("strategy", payload);
+        let strategy = Self::guest_bytes(&caller, &memory, strategy_ptr, strategy_len)?;
+        caller
+            .data()
+            .emit("strategy", json!(String::from_utf8_lossy(strategy)));
         Ok(())
     }
 
     fn queue_action(
         mut caller: Caller<'_, GuestState>,
-        metadata_ptr: i32,
-        metadata_len: i32,
         action_ptr: i32,
         action_len: i32,
+        recovery_policy_ptr: i32,
+        recovery_policy_len: i32,
     ) -> wasmtime::Result<()> {
         let memory = Self::caller_memory(&mut caller)?;
-        let metadata = Self::guest_bytes(&caller, &memory, metadata_ptr, metadata_len)?;
         let action = Self::guest_bytes(&caller, &memory, action_ptr, action_len)?;
+        let recovery_policy =
+            Self::guest_bytes(&caller, &memory, recovery_policy_ptr, recovery_policy_len)?;
         let payload = json!({
-            "metadata": Self::metadata_json(metadata)?,
-            "action": Self::action_json(action)?,
+            "action": String::from_utf8_lossy(action),
+            "recoveryPolicy": String::from_utf8_lossy(recovery_policy),
         });
         caller.data().emit("action", payload);
         Ok(())
-    }
-
-    fn metadata_json(bytes: &[u8]) -> wasmtime::Result<Value> {
-        serde_json::from_slice(bytes)
-            .map_err(|error| wasmtime::Error::msg(format!("invalid metadata json: {error}")))
-    }
-
-    fn signals_json(bytes: &[u8]) -> wasmtime::Result<Value> {
-        serde_json::from_slice(bytes)
-            .map_err(|error| wasmtime::Error::msg(format!("invalid signals json: {error}")))
-    }
-
-    fn action_json(bytes: &[u8]) -> wasmtime::Result<Value> {
-        serde_json::from_slice(bytes)
-            .map_err(|error| wasmtime::Error::msg(format!("invalid action json: {error}")))
     }
 
     fn caller_memory(caller: &mut Caller<'_, GuestState>) -> wasmtime::Result<Memory> {
@@ -377,6 +354,11 @@ impl WasmRunner {
 
         let result = (|| -> wasmtime::Result<i32> {
             let instance = linker.instantiate(&mut store, &module)?;
+            if let Some(initialize) = instance.get_func(&mut store, "initialize") {
+                initialize
+                    .typed::<(), ()>(&mut store)?
+                    .call(&mut store, ())?;
+            }
             let alloc = instance.get_typed_func::<i32, i32>(&mut store, "alloc")?;
             let entry = instance.get_typed_func::<(i32, i32), i32>(&mut store, "entry")?;
             let memory = instance

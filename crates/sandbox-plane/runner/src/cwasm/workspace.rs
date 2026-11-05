@@ -6,6 +6,7 @@ pub const STRATEGY_CONTEXT_FILE_NAME: &str = "strategy-context.bin";
 pub const PORTFOLIO_FILE_NAME: &str = "portfolio.bin";
 
 const GUEST_ROOT: &str = "/";
+const PROGRAM_NAME: &str = "cwasm-invoker";
 
 pub struct GuestWorkspace {
     _directory: tempfile::TempDir,
@@ -17,7 +18,11 @@ impl GuestWorkspace {
         let directory = Self::create_directory()?;
         let arguments = match command {
             Command::Algorithm { strategy_name } => {
-                vec!["Algorithm".to_string(), strategy_name.clone()]
+                vec![
+                    PROGRAM_NAME.to_string(),
+                    "Algorithm".to_string(),
+                    strategy_name.clone(),
+                ]
             }
             Command::Execute {
                 strategy_name,
@@ -39,6 +44,7 @@ impl GuestWorkspace {
                     ExitCode::ServerRunnerPortfolioNotCreated,
                 )?;
                 vec![
+                    PROGRAM_NAME.to_string(),
                     "Execute".to_string(),
                     strategy_name.clone(),
                     Self::guest_path(STRATEGY_CONTEXT_FILE_NAME),
@@ -46,10 +52,18 @@ impl GuestWorkspace {
                 ]
             }
             Command::Metadata { strategy_name } => {
-                vec!["Metadata".to_string(), strategy_name.clone()]
+                vec![
+                    PROGRAM_NAME.to_string(),
+                    "Metadata".to_string(),
+                    strategy_name.clone(),
+                ]
             }
             Command::Preferences { strategy_name } => {
-                vec!["Preferences".to_string(), strategy_name.clone()]
+                vec![
+                    PROGRAM_NAME.to_string(),
+                    "Preferences".to_string(),
+                    strategy_name.clone(),
+                ]
             }
             Command::Signals {
                 strategy_name,
@@ -63,6 +77,7 @@ impl GuestWorkspace {
                     ExitCode::ServerRunnerStrategyContextNotCreated,
                 )?;
                 vec![
+                    PROGRAM_NAME.to_string(),
                     "Signals".to_string(),
                     strategy_name.clone(),
                     Self::guest_path(STRATEGY_CONTEXT_FILE_NAME),
