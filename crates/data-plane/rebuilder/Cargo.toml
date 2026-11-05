@@ -5,6 +5,7 @@ edition.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
+aws-sdk-s3 = { workspace = true }
 aws-sdk-s3-transfer-manager = { workspace = true }
 bytes = { workspace = true }
 platform-aggregator = { workspace = true }
@@ -14,8 +15,11 @@ platform-errors = { workspace = true }
 platform-market-data = { workspace = true }
 platform-runtime = { workspace = true }
 platform-types = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 stock-trek-types = { workspace = true }
 strum = { workspace = true }
+tempfile = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 tracing = { workspace = true }
 

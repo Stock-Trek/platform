@@ -10,6 +10,7 @@ pub mod record;
 pub mod routing;
 pub mod s3;
 pub mod source;
+pub mod spill;
 
 pub use batch::ArchiveBatch;
 pub use buffer::ArchiveBuffer;
@@ -30,3 +31,4 @@ pub use record::{
 pub use routing::{ROUTING_BUCKET_COUNT, RoutingBucket, RoutingKey};
 pub use s3::{Bucket, ObjectKey, S3, S3Object};
 pub use source::SourceBatch;
+pub use spill::{SpillRun, SpillRunReader};

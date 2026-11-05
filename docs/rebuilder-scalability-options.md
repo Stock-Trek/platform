@@ -22,6 +22,11 @@ The rebuild must preserve these current invariants no matter which option is cho
 
 ### Option A: External sort plus streaming replay and sink (recommended)
 
+> **Status: implemented.** The rebuilder streams `ArchiveParquetStream` batches, stages replay
+> records and closed candles in shared archive spill runs (`platform-archive::spill`), and uploads
+> candle objects from staging files. `REBUILDER_SPILL_RECORDS` bounds the in-memory stage; the
+> deterministic invariants below are covered by `crates/data-plane/rebuilder/src/rebuild/tests.rs`.
+
 Keep a single rebuilder process, but replace each whole-run collection with a bounded spill/merge pipeline:
 
 1. Stream Parquet objects in bounded batches with `ArchiveParquet::decode_reader_batches` / `ArchiveParquetStream` instead of `decode_reader`.

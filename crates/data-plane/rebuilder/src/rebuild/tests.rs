@@ -1,13 +1,19 @@
 use super::*;
+use crate::rebuild::{
+    candle_spill::CandleSpill, rebuild_options::RebuildStats, replay_spill::ReplaySpill,
+};
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_aggregator::processor::{CandleProcessor, ProcessorConfig};
+use platform_archive::ArchiveTableLayer;
 use platform_market_data::candle::{AlignedWindow, ClosedCandle};
 use platform_market_data::decoders::trade::TradeDecoderFactory;
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::DurationMilliseconds;
 use platform_types::new_types::TimestampMilliseconds;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use stock_trek_types::cex::cex_id::CexId;
+
+const HOUR_MILLIS: i64 = 3_600_000;
 
 fn event(sequence: u64, timestamp: i64) -> MarketEvent {
     stream_event("btcusdt@trade", sequence, timestamp, "100", "1")
@@ -65,6 +71,58 @@ fn options() -> RebuildOptions {
     }
 }
 
+/// Runs the streaming rebuild end to end. `spill_records` bounds how many
+/// events and candles are staged in memory before spilling to disk, so the
+/// same input can be exercised fully in memory or through spill runs.
+fn rebuild(options: &RebuildOptions, events: Vec<MarketEvent>, spill_records: usize) -> Rebuilt {
+    let directory = tempfile::tempdir().unwrap();
+    let mut stats = RebuildStats::default();
+    let mut decoders = HashMap::new();
+    let mut replay = ReplaySpill::new(directory.path().join("replay"), spill_records).unwrap();
+    for event in events {
+        options
+            .push_event(event, &mut decoders, &mut replay, &mut stats)
+            .unwrap();
+    }
+    stats.events_spilled = replay.spilled_records();
+
+    let mut candles = CandleSpill::new(
+        directory.path().join("candles"),
+        HOUR_MILLIS,
+        ArchiveTableLayer::Raw,
+        spill_records,
+    )
+    .unwrap();
+    options
+        .replay(replay.finish().unwrap(), &mut candles, &mut stats)
+        .unwrap();
+    stats.candles_spilled = candles.spilled_records();
+
+    let mut records = candles.finish().unwrap();
+    let mut candles = Vec::new();
+    while let Some(candle) = records.next_candle().unwrap() {
+        candles.push(candle);
+    }
+    stats.unique_candles = candles.len();
+    Rebuilt { stats, candles }
+}
+
+struct Rebuilt {
+    stats: RebuildStats,
+    candles: Vec<ClosedCandle>,
+}
+
+/// Every rebuild is run fully in memory and through forced spill runs (two
+/// records per run, and the degenerate one record per run); all modes must
+/// produce identical output.
+fn rebuild_both_modes(options: &RebuildOptions, events: Vec<MarketEvent>) -> [Rebuilt; 3] {
+    [
+        rebuild(options, events.clone(), usize::MAX),
+        rebuild(options, events.clone(), 2),
+        rebuild(options, events, 1),
+    ]
+}
+
 #[test]
 fn replay_is_deterministic_and_assigns_the_configured_epoch() {
     let events = vec![
@@ -74,47 +132,49 @@ fn replay_is_deterministic_and_assigns_the_configured_epoch() {
         event(4, 183_000),
     ];
 
-    let first = options().rebuild(events.clone()).unwrap();
-    let second = options().rebuild(events).unwrap();
+    let [first, first_spilled, first_single] = rebuild_both_modes(&options(), events.clone());
+    let [second, _, _] = rebuild_both_modes(&options(), events);
 
-    assert_eq!(first.stats.events_read, 4);
-    assert_eq!(first.stats.trade_stream_groups, 1);
-    assert_eq!(first.stats.trades_applied, 4);
-    assert_eq!(first.stats.decode_failures, 0);
-    assert_eq!(first.stats.unique_candles, 4);
-    assert_eq!(
-        first
-            .candles
-            .iter()
-            .map(ClosedCandle::message_id)
-            .collect::<Vec<_>>(),
-        second
+    for result in [&first, &first_spilled, &first_single, &second] {
+        assert_eq!(result.stats.events_read, 4);
+        assert_eq!(result.stats.trade_stream_groups, 1);
+        assert_eq!(result.stats.trades_applied, 4);
+        assert_eq!(result.stats.decode_failures, 0);
+        assert_eq!(result.stats.unique_candles, 4);
+        assert!(
+            result
+                .candles
+                .iter()
+                .all(|candle| candle.revision().state_epoch == 7)
+        );
+    }
+    let ids = |result: &Rebuilt| {
+        result
             .candles
             .iter()
             .map(ClosedCandle::message_id)
             .collect::<Vec<_>>()
-    );
-    assert!(
-        first
-            .candles
-            .iter()
-            .all(|candle| candle.revision().state_epoch == 7)
-    );
+    };
+    assert_eq!(ids(&first), ids(&second));
+    assert_eq!(ids(&first), ids(&first_spilled));
+    assert_eq!(ids(&first), ids(&first_single));
 }
 
 #[test]
 fn duplicate_sequences_do_not_change_the_regenerated_candles() {
-    let unique = options()
-        .rebuild(vec![event(1, 1_000), event(2, 61_000), event(3, 122_000)])
-        .unwrap();
-    let duplicated = options()
-        .rebuild(vec![
+    let [unique, _, _] = rebuild_both_modes(
+        &options(),
+        vec![event(1, 1_000), event(2, 61_000), event(3, 122_000)],
+    );
+    let [duplicated, _, _] = rebuild_both_modes(
+        &options(),
+        vec![
             event(1, 1_000),
             event(2, 61_000),
             event(2, 61_000),
             event(3, 122_000),
-        ])
-        .unwrap();
+        ],
+    );
 
     assert_eq!(duplicated.stats.duplicate_events, 1);
     assert_eq!(
@@ -140,17 +200,17 @@ fn multi_stream_pairs_share_one_processor_and_candle() {
         stream_event("btcusdt@aggTrade", 1, 1_000, "200", "2"),
     ];
 
-    let result = options().rebuild(events).unwrap();
-
-    assert_eq!(result.stats.trade_stream_groups, 1);
-    assert_eq!(result.stats.trades_applied, 2);
-    assert_eq!(result.stats.duplicate_events, 0);
-    assert_eq!(result.stats.unique_candles, 1);
-    let candle = result.candles[0].candle();
-    assert_eq!(candle.trade_count, 2);
-    assert_eq!(candle.ohlcv.high(), 200.0);
-    assert_eq!(candle.ohlcv.low(), 100.0);
-    assert_eq!(candle.ohlcv.volume(), 3.0);
+    for result in rebuild_both_modes(&options(), events) {
+        assert_eq!(result.stats.trade_stream_groups, 1);
+        assert_eq!(result.stats.trades_applied, 2);
+        assert_eq!(result.stats.duplicate_events, 0);
+        assert_eq!(result.stats.unique_candles, 1);
+        let candle = result.candles[0].candle();
+        assert_eq!(candle.trade_count, 2);
+        assert_eq!(candle.ohlcv.high(), 200.0);
+        assert_eq!(candle.ohlcv.low(), 100.0);
+        assert_eq!(candle.ohlcv.volume(), 3.0);
+    }
 }
 
 #[test]
@@ -162,19 +222,19 @@ fn multi_stream_pair_revisions_do_not_collide() {
         stream_event("btcusdt@aggTrade", 2, 61_000, "200", "2"),
     ];
 
-    let result = options().rebuild(events).unwrap();
-
-    assert_eq!(result.stats.trade_stream_groups, 1);
-    assert_eq!(result.stats.unique_candles, 2);
-    assert_eq!(
-        result
-            .candles
-            .iter()
-            .map(ClosedCandle::message_id)
-            .collect::<std::collections::BTreeSet<_>>()
-            .len(),
-        2
-    );
+    for result in rebuild_both_modes(&options(), events) {
+        assert_eq!(result.stats.trade_stream_groups, 1);
+        assert_eq!(result.stats.unique_candles, 2);
+        assert_eq!(
+            result
+                .candles
+                .iter()
+                .map(ClosedCandle::message_id)
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            2
+        );
+    }
 }
 
 #[test]
@@ -182,11 +242,57 @@ fn pairs_are_replayed_independently() {
     let other = stream_event("ethusdt@trade", 1, 1_000, "10", "2");
     let events = vec![event(1, 1_000), event(2, 61_000), other];
 
-    let result = options().rebuild(events).unwrap();
+    for result in rebuild_both_modes(&options(), events) {
+        assert_eq!(result.stats.trade_stream_groups, 2);
+        assert_eq!(result.stats.trades_applied, 3);
+        assert_eq!(result.stats.late_trades, 0);
+    }
+}
 
-    assert_eq!(result.stats.trade_stream_groups, 2);
-    assert_eq!(result.stats.trades_applied, 3);
-    assert_eq!(result.stats.late_trades, 0);
+#[test]
+fn events_spill_across_runs_and_replay_identically() {
+    let events = (0..12)
+        .map(|index| event(index + 1, 1_000 + i64::try_from(index).unwrap() * 61_000))
+        .collect::<Vec<_>>();
+
+    let [in_memory, spilled, _] = rebuild_both_modes(&options(), events);
+
+    assert_eq!(spilled.stats.events_spilled, 12);
+    assert_eq!(spilled.stats.candles_spilled, 12);
+    assert_eq!(
+        in_memory
+            .candles
+            .iter()
+            .map(ClosedCandle::message_id)
+            .collect::<Vec<_>>(),
+        spilled
+            .candles
+            .iter()
+            .map(ClosedCandle::message_id)
+            .collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn pair_groups_replay_independently_of_global_order() {
+    // Interleave two pairs out of order; each pair still replays in its own
+    // timestamp order and the first pair's watermark never marks the other
+    // pair's trades late.
+    let mut events = vec![
+        stream_event("btcusdt@trade", 1, 122_000, "100", "1"),
+        stream_event("ethusdt@trade", 1, 1_000, "10", "2"),
+        stream_event("btcusdt@trade", 2, 1_000, "100", "1"),
+        stream_event("ethusdt@trade", 2, 61_000, "10", "2"),
+        stream_event("btcusdt@trade", 3, 61_000, "100", "1"),
+        stream_event("ethusdt@trade", 3, 122_000, "10", "2"),
+    ];
+    events.reverse();
+
+    for result in rebuild_both_modes(&options(), events) {
+        assert_eq!(result.stats.trade_stream_groups, 2);
+        assert_eq!(result.stats.late_trades, 0);
+        assert_eq!(result.stats.unique_candles, 6);
+    }
 }
 
 #[test]
@@ -195,9 +301,8 @@ fn finishing_is_optional() {
     let mut unfinished = options();
     unfinished.finish_open_windows = false;
 
-    let finished = options().rebuild(events.clone()).unwrap();
-    let unfinished = unfinished.rebuild(events).unwrap();
-
+    let [finished, _, _] = rebuild_both_modes(&options(), events.clone());
+    let [unfinished, _, _] = rebuild_both_modes(&unfinished, events);
     assert_eq!(finished.candles.len(), 1);
     assert!(unfinished.candles.is_empty());
 }
@@ -234,7 +339,7 @@ fn rebuilt_candles_match_live_processing_for_cap_eviction_and_a_rejected_correct
     let mut options = options();
     options.processor = processor;
     options.finish_open_windows = false;
-    let rebuilt = options.rebuild(events).unwrap();
+    let rebuilt = rebuild(&options, events, usize::MAX);
 
     assert_eq!(rebuilt.candles.len(), 2);
     assert_eq!(

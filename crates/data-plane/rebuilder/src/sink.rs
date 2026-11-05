@@ -1,14 +1,23 @@
 use async_trait::async_trait;
-use bytes::Bytes;
+use aws_sdk_s3::primitives::ByteStream;
 use platform_archive::{
-    ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveParquet,
-    ArchivePartition, ArchiveRecord, ArchiveTableLayer, Bucket, IcebergDataFile, ObjectKey,
-    RoutingBucket, S3,
+    ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveKind,
+    ArchiveParquetWriter, ArchivePartition, ArchiveRecord, ArchiveTableLayer, Bucket,
+    IcebergDataFile, ObjectKey, RoutingBucket, S3,
 };
-use platform_errors::BpResult;
+use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::ClosedCandle;
-use std::sync::Arc;
+use std::{
+    fs::File,
+    io::Read,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 use tracing::info;
+
+const OUTPUT_BATCH_SIZE: usize = 8_192;
+const CONTENT_ID_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
+const CONTENT_ID_PRIME: u64 = 0x0000_0100_0000_01b3;
 
 /// Counts the archive objects produced by a rebuild.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -17,19 +26,33 @@ pub struct CandleWriteStats {
     pub records: usize,
 }
 
+/// Supplies closed candles to the sink in its object order: archive bucket,
+/// routing bucket, compacted partition, sort key, and record identity.
+pub trait CandleRecordSource: Send {
+    fn next_candle(&mut self) -> BpResult<Option<ClosedCandle>>;
+}
+
 /// Writes regenerated candles to the archive.
 #[async_trait]
 pub trait CandleSink: Send + Sync {
-    async fn write(&self, candles: &[ClosedCandle]) -> BpResult<CandleWriteStats>;
+    /// Writes every candle from the ordered source, one object per partition
+    /// group, and registers all objects after they are uploaded.
+    async fn write(
+        &self,
+        candles: &mut dyn CandleRecordSource,
+        work_dir: &Path,
+    ) -> BpResult<CandleWriteStats>;
 }
 
 /// Writes regenerated candles to the selected archive layer.
 ///
 /// Raw output is grouped into hourly objects and registered in the raw candle
 /// Iceberg table. Compacted output is additionally partitioned by candle key
-/// and registered in the compacted candle table.
+/// and registered in the compacted candle table. Every object is encoded to a
+/// temporary file and uploaded from that file, so an output object never has
+/// to be buffered in memory.
 pub struct S3CandleSink {
-    transfer_client: aws_sdk_s3_transfer_manager::Client,
+    s3_client: aws_sdk_s3::Client,
     catalog: Arc<dyn ArchiveCatalog>,
     bucket: Bucket,
     prefix: String,
@@ -46,10 +69,10 @@ impl S3CandleSink {
         layer: ArchiveTableLayer,
     ) -> BpResult<Self> {
         Ok(Self {
-            transfer_client: S3::transfer_client().await,
+            s3_client: S3::s3_client().await,
             catalog,
             bucket: Bucket::new(bucket),
-            prefix: prefix.to_string(),
+            prefix: prefix.trim_matches('/').to_string(),
             bucket_millis,
             layer,
         })
@@ -60,9 +83,10 @@ impl S3CandleSink {
         bucket: ArchiveBucket,
         partition: &ArchivePartition,
         routing_bucket: RoutingBucket,
-        bytes: &[u8],
+        content_id: u64,
+        length: u64,
     ) -> BpResult<ObjectKey> {
-        let file_name = format!("{}-{:x}.parquet", Self::content_id(bytes), bytes.len());
+        let file_name = format!("{content_id}-{length:x}.parquet");
         let key = match self.layer {
             ArchiveTableLayer::Raw => bucket.raw_key(&self.prefix, routing_bucket, file_name),
             ArchiveTableLayer::Compacted => {
@@ -72,76 +96,158 @@ impl S3CandleSink {
         Ok(ObjectKey::new(key))
     }
 
-    fn data_file(&self, key: &ObjectKey, bytes: &[u8], records: usize) -> IcebergDataFile {
+    fn data_file(&self, key: &ObjectKey, length: u64, records: usize) -> IcebergDataFile {
         IcebergDataFile::new(
             format!("s3://{}/{key}", self.bucket),
-            i64::try_from(bytes.len()).unwrap_or(i64::MAX),
+            i64::try_from(length).unwrap_or(i64::MAX),
             i64::try_from(records).unwrap_or(i64::MAX),
         )
     }
 
-    fn content_id(bytes: &[u8]) -> u64 {
-        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-        for byte in bytes {
-            hash ^= u64::from(*byte);
-            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    async fn finish_partition(
+        &self,
+        mut file: PartitionFile,
+        buffer: &mut ArchiveBatch,
+        data_files: &mut Vec<IcebergDataFile>,
+        stats: &mut CandleWriteStats,
+    ) -> BpResult<()> {
+        if !buffer.is_empty() {
+            file.writer.write(buffer)?;
+            file.records += buffer.len();
+            buffer.clear();
         }
-        hash
+        file.writer.close()?;
+        let (content_id, length) = hash_file(&file.path)?;
+        let key = self.object_key(
+            file.bucket,
+            &file.partition,
+            file.routing_bucket,
+            content_id,
+            length,
+        )?;
+        self.upload_partition(&key, &file.path).await?;
+        data_files.push(self.data_file(&key, length, file.records));
+        stats.objects += 1;
+        stats.records += file.records;
+        info!(
+            key = %key,
+            records = file.records,
+            "wrote rebuilt candle object"
+        );
+        Ok(())
     }
+
+    async fn upload_partition(&self, key: &ObjectKey, path: &Path) -> BpResult<()> {
+        let target = format!("s3://{}/{}", self.bucket, key);
+        let body = ByteStream::from_path(path).await.map_err(|error| {
+            BpError::io(
+                "read rebuilt candle file",
+                path.display().to_string(),
+                error,
+            )
+        })?;
+        self.s3_client
+            .put_object()
+            .bucket(self.bucket.as_str())
+            .key(key.as_str())
+            .content_type("application/vnd.apache.parquet")
+            .body(body)
+            .send()
+            .await
+            .map_err(|error| BpError::s3("put rebuilt candle object", target, error))?;
+        Ok(())
+    }
+}
+
+fn hash_file(path: &Path) -> BpResult<(u64, u64)> {
+    let mut file = File::open(path).map_err(|error| {
+        BpError::io(
+            "read rebuilt candle file",
+            path.display().to_string(),
+            error,
+        )
+    })?;
+    let mut hash = CONTENT_ID_OFFSET_BASIS;
+    let mut length = 0_u64;
+    let mut chunk = [0_u8; 64 * 1024];
+    loop {
+        let read = file.read(&mut chunk).map_err(|error| {
+            BpError::io(
+                "read rebuilt candle file",
+                path.display().to_string(),
+                error,
+            )
+        })?;
+        if read == 0 {
+            break;
+        }
+        for byte in &chunk[..read] {
+            hash ^= u64::from(*byte);
+            hash = hash.wrapping_mul(CONTENT_ID_PRIME);
+        }
+        length += u64::try_from(read).unwrap_or(0);
+    }
+    Ok((hash, length))
+}
+
+struct PartitionFile {
+    bucket: ArchiveBucket,
+    routing_bucket: RoutingBucket,
+    partition: ArchivePartition,
+    path: PathBuf,
+    writer: ArchiveParquetWriter<File>,
+    records: usize,
 }
 
 #[async_trait]
 impl CandleSink for S3CandleSink {
-    async fn write(&self, candles: &[ClosedCandle]) -> BpResult<CandleWriteStats> {
-        let mut records = candles
-            .iter()
-            .cloned()
-            .map(ArchiveRecord::ClosedCandle)
-            .collect::<Vec<_>>();
-        records.sort_by(|left, right| {
-            ArchiveBucket::new(left, self.bucket_millis)
-                .cmp(&ArchiveBucket::new(right, self.bucket_millis))
-                .then_with(|| left.routing_bucket().cmp(&right.routing_bucket()))
-                .then_with(|| match self.layer {
-                    ArchiveTableLayer::Raw => std::cmp::Ordering::Equal,
-                    ArchiveTableLayer::Compacted => {
-                        left.partition().path().cmp(&right.partition().path())
-                    }
-                })
-                .then_with(|| left.sort_key().cmp(&right.sort_key()))
-                .then_with(|| left.key().cmp(&right.key()))
-        });
-
+    async fn write(
+        &self,
+        candles: &mut dyn CandleRecordSource,
+        work_dir: &Path,
+    ) -> BpResult<CandleWriteStats> {
         let mut stats = CandleWriteStats::default();
         let mut data_files = Vec::new();
-        let mut start = 0;
-        while start < records.len() {
-            let bucket = ArchiveBucket::new(&records[start], self.bucket_millis);
-            let partition = records[start].partition();
-            let routing_bucket = records[start].routing_bucket();
-            let mut end = start + 1;
-            while end < records.len()
-                && ArchiveBucket::new(&records[end], self.bucket_millis) == bucket
-                && records[end].routing_bucket() == routing_bucket
-                && (self.layer == ArchiveTableLayer::Raw || records[end].partition() == partition)
-            {
-                end += 1;
-            }
+        let mut buffer = ArchiveBatch::new(ArchiveKind::Candles, Vec::new())?;
+        let mut current: Option<PartitionFile> = None;
 
-            let batch = ArchiveBatch::new(ArchiveKind::Candles, records[start..end].to_vec())?;
-            let bytes = ArchiveParquet::encode(&batch)?;
-            let key = self.object_key(bucket, &partition, routing_bucket, &bytes)?;
-            S3::upload_bytes(
-                &self.transfer_client,
-                &self.bucket,
-                &key,
-                Bytes::from(bytes.clone()),
-            )
-            .await?;
-            data_files.push(self.data_file(&key, &bytes, end - start));
-            stats.objects += 1;
-            stats.records += end - start;
-            start = end;
+        while let Some(candle) = candles.next_candle()? {
+            let record = ArchiveRecord::ClosedCandle(candle);
+            let bucket = ArchiveBucket::new(&record, self.bucket_millis);
+            let routing_bucket = record.routing_bucket();
+            let partition = record.partition();
+            let continues = current.as_ref().is_some_and(|file| {
+                file.bucket == bucket
+                    && file.routing_bucket == routing_bucket
+                    && (self.layer == ArchiveTableLayer::Raw || file.partition == partition)
+            });
+            if !continues {
+                if let Some(file) = current.take() {
+                    self.finish_partition(file, &mut buffer, &mut data_files, &mut stats)
+                        .await?;
+                }
+                current = Some(PartitionFile::create(
+                    work_dir,
+                    stats.objects,
+                    bucket,
+                    routing_bucket,
+                    partition,
+                )?);
+            }
+            let file = current
+                .as_mut()
+                .expect("partition file created before writing");
+            buffer.push(record)?;
+            if buffer.len() >= OUTPUT_BATCH_SIZE {
+                file.writer.write(&buffer)?;
+                file.records += buffer.len();
+                buffer.clear();
+            }
+        }
+
+        if let Some(file) = current.take() {
+            self.finish_partition(file, &mut buffer, &mut data_files, &mut stats)
+                .await?;
         }
 
         if !data_files.is_empty() {
@@ -160,5 +266,33 @@ impl CandleSink for S3CandleSink {
             "wrote rebuilt candles to the archive"
         );
         Ok(stats)
+    }
+}
+
+impl PartitionFile {
+    fn create(
+        work_dir: &Path,
+        index: usize,
+        bucket: ArchiveBucket,
+        routing_bucket: RoutingBucket,
+        partition: ArchivePartition,
+    ) -> BpResult<Self> {
+        let path = work_dir.join(format!("candles-{index}.parquet"));
+        let file = File::create(&path).map_err(|error| {
+            BpError::io(
+                "create rebuilt candle file",
+                path.display().to_string(),
+                error,
+            )
+        })?;
+        let writer = ArchiveParquetWriter::try_new(ArchiveKind::Candles, file)?;
+        Ok(Self {
+            bucket,
+            routing_bucket,
+            partition,
+            path,
+            writer,
+            records: 0,
+        })
     }
 }

@@ -4884,6 +4884,7 @@ name = "platform-rebuilder"
 version = "0.2.0"
 dependencies = [
  "async-trait",
+ "aws-sdk-s3",
  "aws-sdk-s3-transfer-manager",
  "base64 0.23.1",
  "bytes",
@@ -4894,8 +4895,11 @@ dependencies = [
  "platform-market-data",
  "platform-runtime",
  "platform-types",
+ "serde",
+ "serde_json",
  "stock-trek-types",
  "strum 0.28.0",
+ "tempfile",
  "tokio",
  "tracing",
 ]
