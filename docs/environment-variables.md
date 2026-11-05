@@ -6,8 +6,9 @@ reads and validates its configuration at startup, before doing any work.
 - Required variables must be present with a non-empty, valid value. A missing or invalid value
   fails startup.
 - Optional variables are treated as unset when they are absent or empty.
-- Values are read only from the process environment; the only default is an absent optional
-  variable.
+- Values are read only from the process environment. The only variables with built-in defaults are
+  the CWASM invoker variables, which fall back to their documented defaults when no applicable
+  variable is set.
 
 Variables read by more than one process are listed once under [Shared variables](#shared-variables).
 The remaining sections list the additional variables read by each process. When a variable is only
@@ -244,6 +245,17 @@ No process-specific optional variables.
 
 The native cwasm host reads these optional variables when it starts. Empty values are treated as
 unset, and invalid values fail startup.
+
+Each variable also accepts backward-compatible aliases. The canonical name wins when several are
+set; otherwise the first alias with a non-empty value, in the listed order, is used.
+
+| Variable | Aliases |
+| --- | --- |
+| `CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS` | `CWASM_INVOKER_DOWNLOAD_TIMEOUT_SECS`, `RUNNER_CWASM_DOWNLOAD_TIMEOUT_SECS`, `RUNNER_DOWNLOAD_TIMEOUT_SECS` |
+| `CWASM_INVOKER_EXECUTION_TIMEOUT_SECS` | `RUNNER_EXECUTION_TIMEOUT_SECS` |
+| `CWASM_INVOKER_MAX_CWASM_BYTES` | `CWASM_INVOKER_MAX_DOWNLOAD_BYTES`, `RUNNER_MAX_CWASM_BYTES`, `RUNNER_MAX_DOWNLOAD_BYTES` |
+| `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | `CWASM_INVOKER_MAX_MEMORY_BYTES`, `RUNNER_MAX_GUEST_MEMORY_BYTES`, `RUNNER_MAX_MEMORY_BYTES` |
+| `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | `RUNNER_MAX_TABLE_ELEMENTS` |
 
 #### Optional
 
