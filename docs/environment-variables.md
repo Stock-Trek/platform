@@ -6,8 +6,9 @@ reads and validates its configuration at startup, before doing any work.
 - Required variables must be present with a non-empty, valid value. A missing or invalid value
   fails startup.
 - Optional variables are treated as unset when they are absent or empty.
-- Values are read only from the process environment; the only default is an absent optional
-  variable.
+- Values are read only from the process environment. The only variables with built-in defaults are
+  the CWASM invoker variables, which fall back to their documented defaults when the variable is
+  not set.
 
 Variables read by more than one process are listed once under [Shared variables](#shared-variables).
 The remaining sections list the additional variables read by each process. When a variable is only

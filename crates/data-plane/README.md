@@ -32,8 +32,6 @@ The implemented retention policy is an event-time correction cutoff combined wit
 - **Pros:** Provides a hard per-key memory bound together with an explicit, testable correction contract; lets operators choose different retention depths for fast and slow intervals instead of applying one cap to every window size; requires no cold tier or extra durability boundary; is far simpler to operate than hot state plus a cold store; protects against a single busy key and still evicts when the event-time watermark stalls because the `N_i`-window cap remains effective; and makes out-of-contract inputs observable instead of silently degrading correctness.
 - **Cons:** Cannot reduce the total shard bound below the fixed pair ceiling times `Σ N_i`, so every `N_i` must be chosen against every possible key and may need to be very small when the enum sets or interval list are large; cannot correct deeper than `N_i` windows for interval `i` even when the cutoff is large, so deep backfills beyond that history are lost; each `N_i` and the shared cutoff must be validated so that operators understand the per-interval reach differences; rejected inputs need a repair path and may discard data that could have been corrected; and eviction must remain driven by event time and input order so live processing, checkpoint restore, and archive rebuilds stay reproducible.
 
-Implementation tasks for this policy are listed in [closed-candle-retention-tasks.md](closed-candle-retention-tasks.md).
-
 ### Scaling contract
 
 The aggregator is horizontally scalable by shard, not by sharing a shard between writers. Candle ownership is determined by `(exchange, trading pair)`, so every candle key has exactly one writer for a given shard count. Changing `AGGREGATOR_SHARD_COUNT` changes that mapping and requires a rebuild rather than an in-place rolling change.
@@ -53,7 +51,7 @@ On startup a writer applies `AGGREGATOR_REPLAY_START_POLICY`:
 
 A retryable checkpoint read failure is surfaced to the supervisor instead of silently falling back to the archive. If archive replay finds no events, the shard starts with explicit empty state and is not reported as a successful archive recovery.
 
-Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. When an Iceberg catalog is configured, recovery reads the compacted event files and only the raw objects that are not represented by the compacted snapshot. Without a catalog it falls back to listing `AGGREGATOR_ARCHIVE_S3_PREFIX` and replaying the raw history. Both raw and compacted objects are grouped by a fixed virtual routing bucket, so each shard only reads the objects it owns and every archived event is replayed by exactly one recovery worker. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. Recovery continues the highest state epoch recorded on the replayed events, so rebuilding the same inputs reproduces the same deterministic output ids. Regenerating candles under a changed configuration uses the rebuilder with a new configured epoch instead. See [ADR 0001](../../docs/adr/0001-scalable-aggregator.md) for the event-log, keyed-state, checkpoint, and rebuild contract.
+Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. When an Iceberg catalog is configured, recovery reads the compacted event files and only the raw objects that are not represented by the compacted snapshot. Without a catalog it falls back to listing `AGGREGATOR_ARCHIVE_S3_PREFIX` and replaying the raw history. Both raw and compacted objects are grouped by a fixed virtual routing bucket, so each shard only reads the objects it owns and every archived event is replayed by exactly one recovery worker. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. Recovery continues the highest state epoch recorded on the replayed events, so rebuilding the same inputs reproduces the same deterministic output ids. Regenerating candles under a changed configuration uses the rebuilder with a new configured epoch instead.
 
 ### Configuration
 
@@ -97,11 +95,11 @@ Aggregator metrics are named `market_data_aggregator_*` and cover:
 
 ## Archiver
 
-Archiver will be a durable Jetstream consumer, and periodically flush de-duplicated data to parquet files bucketed by exchange event timestamp and send it using Apache Iceberg to S3. Raw objects are also grouped by a fixed virtual routing bucket derived from the trading pair, so archive layout does not depend on the current aggregator shard count. It will also listen to closed candles and archive those as well.
+Archiver is a durable Jetstream consumer that periodically flushes de-duplicated data to parquet files bucketed by exchange event timestamp and sends it using Apache Iceberg to S3. Raw objects are also grouped by a fixed virtual routing bucket derived from the trading pair, so archive layout does not depend on the current aggregator shard count. It also listens to closed candles and archives those as well.
 
 ## Compactor
 
-Compactor will run regularly converting the raw archived S3 files into clean and tidy files, partitioning by symbol and routing bucket and sorting by timestamp.
+Compactor runs regularly, converting the raw archived S3 files into clean and tidy files, partitioning by symbol and routing bucket and sorting by timestamp.
 
 Each compacted Iceberg snapshot records the raw source object URIs it represents in the same commit as the compacted data files. That snapshot is the explicit compacted/raw handoff: recovery readers replay all live compacted files plus only the raw objects that are absent from the source-object set. A raw object is therefore either fully represented by compacted files or still in the raw tail, never both. Because the compacted files and source-object set are read from one snapshot, a concurrent compaction commit cannot create a gap or a duplicate.
 

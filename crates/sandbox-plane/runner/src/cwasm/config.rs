@@ -6,32 +6,11 @@ use super::{
 use platform_errors::{BpError, BpResult};
 use std::{env::VarError, num::NonZeroU64, time::Duration};
 
-const EXECUTION_TIMEOUT_SECS: &[&str] = &[
-    "CWASM_INVOKER_EXECUTION_TIMEOUT_SECS",
-    "RUNNER_EXECUTION_TIMEOUT_SECS",
-];
-const MAX_GUEST_MEMORY_BYTES: &[&str] = &[
-    "CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES",
-    "CWASM_INVOKER_MAX_MEMORY_BYTES",
-    "RUNNER_MAX_GUEST_MEMORY_BYTES",
-    "RUNNER_MAX_MEMORY_BYTES",
-];
-const MAX_TABLE_ELEMENTS: &[&str] = &[
-    "CWASM_INVOKER_MAX_TABLE_ELEMENTS",
-    "RUNNER_MAX_TABLE_ELEMENTS",
-];
-const CWASM_DOWNLOAD_TIMEOUT_SECS: &[&str] = &[
-    "CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS",
-    "CWASM_INVOKER_DOWNLOAD_TIMEOUT_SECS",
-    "RUNNER_CWASM_DOWNLOAD_TIMEOUT_SECS",
-    "RUNNER_DOWNLOAD_TIMEOUT_SECS",
-];
-const MAX_CWASM_BYTES: &[&str] = &[
-    "CWASM_INVOKER_MAX_CWASM_BYTES",
-    "CWASM_INVOKER_MAX_DOWNLOAD_BYTES",
-    "RUNNER_MAX_CWASM_BYTES",
-    "RUNNER_MAX_DOWNLOAD_BYTES",
-];
+const EXECUTION_TIMEOUT_SECS: &str = "CWASM_INVOKER_EXECUTION_TIMEOUT_SECS";
+const MAX_GUEST_MEMORY_BYTES: &str = "CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES";
+const MAX_TABLE_ELEMENTS: &str = "CWASM_INVOKER_MAX_TABLE_ELEMENTS";
+const CWASM_DOWNLOAD_TIMEOUT_SECS: &str = "CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS";
+const MAX_CWASM_BYTES: &str = "CWASM_INVOKER_MAX_CWASM_BYTES";
 
 /// Runtime and download limits for the native cwasm host.
 ///
@@ -90,27 +69,21 @@ impl InvokerConfig {
         })
     }
 
-    fn read<F>(lookup: &mut F, names: &[&str]) -> BpResult<Option<(String, String)>>
+    fn read<F>(lookup: &mut F, name: &str) -> BpResult<Option<(String, String)>>
     where
         F: FnMut(&str) -> BpResult<Option<String>>,
     {
-        for name in names {
-            let Some(value) = lookup(name)? else {
-                continue;
-            };
-            if value.is_empty() {
-                continue;
-            }
-            return Ok(Some(((*name).to_string(), value)));
+        match lookup(name)? {
+            Some(value) if !value.is_empty() => Ok(Some((name.to_string(), value))),
+            _ => Ok(None),
         }
-        Ok(None)
     }
 
-    fn nonzero_u64<F>(lookup: &mut F, names: &[&str], default: u64) -> BpResult<u64>
+    fn nonzero_u64<F>(lookup: &mut F, name: &str, default: u64) -> BpResult<u64>
     where
         F: FnMut(&str) -> BpResult<Option<String>>,
     {
-        let Some((name, value)) = Self::read(lookup, names)? else {
+        let Some((name, value)) = Self::read(lookup, name)? else {
             return Ok(default);
         };
         let value = value
@@ -122,11 +95,11 @@ impl InvokerConfig {
         Ok(value)
     }
 
-    fn nonzero_usize<F>(lookup: &mut F, names: &[&str], default: usize) -> BpResult<usize>
+    fn nonzero_usize<F>(lookup: &mut F, name: &str, default: usize) -> BpResult<usize>
     where
         F: FnMut(&str) -> BpResult<Option<String>>,
     {
-        let Some((name, value)) = Self::read(lookup, names)? else {
+        let Some((name, value)) = Self::read(lookup, name)? else {
             return Ok(default);
         };
         let value = value
@@ -181,24 +154,6 @@ mod tests {
             ("CWASM_INVOKER_MAX_TABLE_ELEMENTS", "2048"),
             ("CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS", "15"),
             ("CWASM_INVOKER_MAX_CWASM_BYTES", "4096"),
-        ])
-        .unwrap();
-
-        assert_eq!(config.execution.timeout, Duration::from_secs(45));
-        assert_eq!(config.execution.max_memory_bytes, 1024 * 1024);
-        assert_eq!(config.execution.max_table_elements, 2048);
-        assert_eq!(config.cwasm.download_timeout, Duration::from_secs(15));
-        assert_eq!(config.cwasm.max_bytes.get(), 4096);
-    }
-
-    #[test]
-    fn accepts_the_runner_aliases() {
-        let config = config(&[
-            ("RUNNER_EXECUTION_TIMEOUT_SECS", "45"),
-            ("RUNNER_MAX_GUEST_MEMORY_BYTES", "1048576"),
-            ("RUNNER_MAX_TABLE_ELEMENTS", "2048"),
-            ("RUNNER_CWASM_DOWNLOAD_TIMEOUT_SECS", "15"),
-            ("RUNNER_MAX_CWASM_BYTES", "4096"),
         ])
         .unwrap();
 
