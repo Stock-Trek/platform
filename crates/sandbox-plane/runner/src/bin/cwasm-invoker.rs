@@ -32,7 +32,7 @@
 #[path = "../cwasm/mod.rs"]
 mod cwasm;
 
-use cwasm::{Cwasm, CwasmIntegrity, CwasmLimits, WasmRunner};
+use cwasm::{Cwasm, CwasmIntegrity, InvokerConfig, WasmRunner};
 use platform_exit_codes::ExitCode;
 use platform_runner::command::RunRequest;
 use std::io::{self, Read};
@@ -56,6 +56,14 @@ impl CwasmInvoker {
             }
         };
 
+        let config = match InvokerConfig::from_env() {
+            Ok(config) => config,
+            Err(error) => {
+                eprintln!("cwasm-invoker: invalid configuration: {error}");
+                return ExitCode::ServerRunnerConfigurationInvalid.code();
+            }
+        };
+
         let runtime = match tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
@@ -63,7 +71,7 @@ impl CwasmInvoker {
             Ok(runtime) => runtime,
             Err(error) => {
                 eprintln!("cwasm-invoker: failed to start tokio runtime: {error}");
-                return ExitCode::ServerRunnerConnectionFailed.code();
+                return ExitCode::ServerRunnerRuntimeStartFailed.code();
             }
         };
         let integrity = CwasmIntegrity::new(
@@ -74,7 +82,7 @@ impl CwasmInvoker {
         let cwasm = match runtime.block_on(Cwasm::download(
             &request.cwasm_get_url,
             &integrity,
-            CwasmLimits::default(),
+            config.cwasm,
         )) {
             Ok(cwasm) => cwasm,
             Err(error) => {
@@ -84,7 +92,7 @@ impl CwasmInvoker {
         };
         drop(runtime);
 
-        let runner = match WasmRunner::new() {
+        let runner = match WasmRunner::with_limits(config.execution) {
             Ok(runner) => runner,
             Err(error) => {
                 eprintln!("cwasm-invoker: failed to create wasm engine: {error:?}");

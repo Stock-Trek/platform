@@ -119,6 +119,15 @@ const GROW_MEMORY_WAT: &str = r#"
             (drop (memory.grow (i32.const 1024)))
             (i32.const 0)))"#;
 
+const GROW_TABLE_WAT: &str = r#"
+    (module
+        (memory (export "memory") 1)
+        (table 1 funcref)
+        (func (export "alloc") (param i32) (result i32) (i32.const 8192))
+        (func (export "entry") (param i32 i32) (result i32)
+            (drop (table.grow (ref.null func) (i32.const 100000)))
+            (i32.const 0)))"#;
+
 const OPEN_HOST_FILE_WAT: &str = r#"
     (module
         (import "wasi_snapshot_preview1" "path_open"
@@ -287,6 +296,23 @@ fn interrupts_a_guest_that_exceeds_its_memory_limit() {
     let runner =
         WasmRunner::with_limits(ExecutionLimits::new(Duration::from_secs(5), 128 * 1024)).unwrap();
     let file = artifact(GROW_MEMORY_WAT);
+    let (emit, lines) = capture();
+
+    let code = execute(&runner, file.path(), &emit);
+
+    assert_eq!(code, ExitCode::BotErrorResourceLimitExceeded.code());
+    assert!(lines.lock().unwrap().is_empty());
+}
+
+#[test]
+fn interrupts_a_guest_that_exceeds_its_table_limit() {
+    let runner = WasmRunner::with_limits(ExecutionLimits::with_table_elements(
+        Duration::from_secs(5),
+        DEFAULT_MAX_GUEST_MEMORY_BYTES,
+        1_024,
+    ))
+    .unwrap();
+    let file = artifact(GROW_TABLE_WAT);
     let (emit, lines) = capture();
 
     let code = execute(&runner, file.path(), &emit);
