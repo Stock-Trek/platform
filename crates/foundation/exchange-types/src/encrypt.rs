@@ -8,6 +8,7 @@ use rsa::{
 };
 use secrecy::{ExposeSecret, SecretSlice};
 use sha2::Sha512;
+use signature::Signer as RsaSignerTrait;
 use strum::{Display, EnumString};
 
 #[derive(Debug, Display, EnumString, Clone, Copy, PartialEq, Eq, Hash)]

@@ -12,7 +12,7 @@ platform-runtime = { workspace = true }
 base64 = { workspace = true }
 lambda_runtime = { workspace = true }
 metrics_cloudwatch_embedded = { workspace = true, features = ["lambda"] }
-reqwest = { workspace = true, default-features = false, features = ["multipart", "rustls-tls", "stream"] }
+reqwest = { workspace = true, default-features = false, features = ["multipart", "rustls", "stream"] }
 serde_json = { workspace = true }
 stock-trek-check = { workspace = true }
 tempfile = { workspace = true }

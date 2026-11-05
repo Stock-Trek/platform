@@ -25,7 +25,7 @@ http = { workspace = true, optional = true }
 lambda_runtime = { workspace = true, optional = true }
 octocrab = { workspace = true, optional = true }
 parquet = { workspace = true, features = ["async"], optional = true }
-reqwest = { workspace = true, default-features = false, features = ["rustls-tls"], optional = true }
+reqwest = { workspace = true, default-features = false, features = ["rustls"], optional = true }
 rust_decimal = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }

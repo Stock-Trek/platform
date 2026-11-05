@@ -12,7 +12,7 @@ futures-timer = { workspace = true }
 httpdate = { workspace = true }
 iris = { workspace = true }
 parking_lot = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = ["rustls-tls"] }
+reqwest = { workspace = true, default-features = false, features = ["rustls"] }
 serde_json = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
