@@ -12,6 +12,14 @@ fn from_code_returns_known_variants() {
         ExitCode::from_code(133),
         Some(ExitCode::ServerRunnerCwasmDownloadFailed)
     );
+    assert_eq!(
+        ExitCode::from_code(134),
+        Some(ExitCode::ServerRunnerRuntimeStartFailed)
+    );
+    assert_eq!(
+        ExitCode::from_code(135),
+        Some(ExitCode::ServerRunnerConfigurationInvalid)
+    );
     assert_eq!(ExitCode::from_code(206), Some(ExitCode::BotErrorTimeout));
     assert_eq!(
         ExitCode::from_code(207),

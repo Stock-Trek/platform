@@ -23,6 +23,7 @@ use super::GuestWorkspace;
 
 pub const DEFAULT_EXECUTION_TIMEOUT: Duration = Duration::from_secs(30);
 pub const DEFAULT_MAX_GUEST_MEMORY_BYTES: usize = 256 * 1024 * 1024;
+pub const DEFAULT_MAX_TABLE_ELEMENTS: usize = 10_000;
 
 pub type Emit = Arc<dyn Fn(&str, Value) + Send + Sync>;
 
@@ -30,13 +31,23 @@ pub type Emit = Arc<dyn Fn(&str, Value) + Send + Sync>;
 pub struct ExecutionLimits {
     pub timeout: Duration,
     pub max_memory_bytes: usize,
+    pub max_table_elements: usize,
 }
 
 impl ExecutionLimits {
     pub const fn new(timeout: Duration, max_memory_bytes: usize) -> Self {
+        Self::with_table_elements(timeout, max_memory_bytes, DEFAULT_MAX_TABLE_ELEMENTS)
+    }
+
+    pub const fn with_table_elements(
+        timeout: Duration,
+        max_memory_bytes: usize,
+        max_table_elements: usize,
+    ) -> Self {
         Self {
             timeout,
             max_memory_bytes,
+            max_table_elements,
         }
     }
 }
@@ -57,7 +68,10 @@ enum Failure {
     NotLoaded(wasmtime::Error),
     Trapped(wasmtime::Error),
     TimedOut(Duration),
-    ResourceLimitExceeded { max_memory_bytes: usize },
+    ResourceLimitExceeded {
+        max_memory_bytes: usize,
+        max_table_elements: usize,
+    },
 }
 
 impl Failure {
@@ -75,8 +89,13 @@ impl Failure {
                 eprintln!("cwasm-invoker: guest execution exceeded {timeout:?}");
                 ExitCode::BotErrorTimeout.code()
             }
-            Failure::ResourceLimitExceeded { max_memory_bytes } => {
-                eprintln!("cwasm-invoker: guest exceeded the {max_memory_bytes}-byte memory limit");
+            Failure::ResourceLimitExceeded {
+                max_memory_bytes,
+                max_table_elements,
+            } => {
+                eprintln!(
+                    "cwasm-invoker: guest exceeded its resource limits ({max_memory_bytes} bytes of memory or {max_table_elements} table elements)"
+                );
                 ExitCode::BotErrorResourceLimitExceeded.code()
             }
         }
@@ -89,10 +108,11 @@ struct GuestLimits {
 }
 
 impl GuestLimits {
-    fn new(max_memory_bytes: usize) -> Self {
+    fn new(max_memory_bytes: usize, max_table_elements: usize) -> Self {
         Self {
             limits: StoreLimitsBuilder::new()
                 .memory_size(max_memory_bytes)
+                .table_elements(max_table_elements)
                 .instances(1)
                 .memories(1)
                 .tables(1)
@@ -172,6 +192,7 @@ impl GuestState {
         emit: Emit,
         working_directory: &Path,
         max_memory_bytes: usize,
+        max_table_elements: usize,
     ) -> wasmtime::Result<Self> {
         let mut builder = WasiCtxBuilder::new();
         builder.stdin(std::io::empty());
@@ -181,7 +202,7 @@ impl GuestState {
         Ok(Self {
             wasi: builder.build_p1(),
             emit,
-            limits: GuestLimits::new(max_memory_bytes),
+            limits: GuestLimits::new(max_memory_bytes, max_table_elements),
         })
     }
 
@@ -303,6 +324,7 @@ pub struct WasmRunner {
 }
 
 impl WasmRunner {
+    #[allow(dead_code)]
     pub fn new() -> wasmtime::Result<Self> {
         Self::with_limits(ExecutionLimits::default())
     }
@@ -345,6 +367,7 @@ impl WasmRunner {
             emit.clone(),
             working_directory,
             self.limits.max_memory_bytes,
+            self.limits.max_table_elements,
         )
         .map_err(Failure::NotLoaded)?;
         let mut store = Store::new(&self.engine, state);
@@ -375,10 +398,12 @@ impl WasmRunner {
         match result {
             Ok(_) if resource_limit_exceeded => Err(Failure::ResourceLimitExceeded {
                 max_memory_bytes: self.limits.max_memory_bytes,
+                max_table_elements: self.limits.max_table_elements,
             }),
             Ok(code) => Ok(code),
             Err(_) if resource_limit_exceeded => Err(Failure::ResourceLimitExceeded {
                 max_memory_bytes: self.limits.max_memory_bytes,
+                max_table_elements: self.limits.max_table_elements,
             }),
             Err(_) if timed_out => Err(Failure::TimedOut(self.limits.timeout)),
             Err(error) => match error.downcast_ref::<I32Exit>() {

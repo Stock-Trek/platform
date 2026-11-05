@@ -30,6 +30,8 @@ pub enum ExitCode {
     ServerRunnerConnectionFailed = 131,
     ServerRunnerCwasmNotLoaded = 132,
     ServerRunnerCwasmDownloadFailed = 133,
+    ServerRunnerRuntimeStartFailed = 134,
+    ServerRunnerConfigurationInvalid = 135,
 
     // bot errors
     BotErrorCreatingResolver = 201,
@@ -101,6 +103,8 @@ impl ExitCode {
             Self::ServerRunnerConnectionFailed => "failed to connect to build runner",
             Self::ServerRunnerCwasmNotLoaded => "cwasm artifact could not be loaded",
             Self::ServerRunnerCwasmDownloadFailed => "cwasm artifact could not be downloaded",
+            Self::ServerRunnerRuntimeStartFailed => "build runner runtime could not be started",
+            Self::ServerRunnerConfigurationInvalid => "build runner configuration is invalid",
             Self::BotErrorCreatingResolver => "failed to create resolver",
             Self::BotErrorCreatingScratchPad => "failed to create scratch pad",
             Self::BotErrorResolvingAction => "failed to resolve action",

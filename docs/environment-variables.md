@@ -238,6 +238,23 @@ No process-specific optional variables.
 
 No process-specific optional variables.
 
+## Sandbox plane
+
+### CWASM invoker
+
+The native cwasm host reads these optional variables when it starts. Empty values are treated as
+unset, and invalid values fail startup.
+
+#### Optional
+
+| Variable | Description |
+| --- | --- |
+| `CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS` | Maximum time spent downloading a cwasm artifact, in seconds. Defaults to `60`. |
+| `CWASM_INVOKER_EXECUTION_TIMEOUT_SECS` | Maximum guest execution time before the watchdog interrupts it, in seconds. Defaults to `30`. |
+| `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. Defaults to `67108864` (64 MiB). |
+| `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. Defaults to `268435456` (256 MiB). |
+| `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. Defaults to `10000`. |
+
 ## Secrets
 
 Some values are read from AWS Systems Manager Parameter Store instead of the process environment.

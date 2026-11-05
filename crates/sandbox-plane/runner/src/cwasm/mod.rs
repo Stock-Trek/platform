@@ -8,6 +8,7 @@
 //! `initialize`, which the invoker calls before `entry` so wasm constructors
 //! (including the algorithm registry) run before the command is handled.
 
+mod config;
 mod implementation;
 mod runtime;
 mod workspace;
@@ -18,6 +19,7 @@ mod runtime_tests;
 #[cfg(test)]
 mod tests;
 
+pub use config::*;
 pub use implementation::*;
 pub use runtime::*;
 pub use workspace::*;
