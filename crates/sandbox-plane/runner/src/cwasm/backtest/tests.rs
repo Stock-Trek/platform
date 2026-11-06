@@ -7,8 +7,8 @@ use stock_trek::{
     types::{AccountId, AssetId, CexId, OrderRequest, Quantity, Side},
 };
 
-use super::orders::handle_action;
-use super::portfolio::asset_totals;
+use super::orders::OrderProcessor;
+use super::portfolio::Portfolio;
 use super::{Balances, PriceMap};
 
 fn balances() -> Balances {
@@ -47,7 +47,7 @@ fn market_buy_fills_from_quote_balance() {
         account_id: AccountId::new("main"),
         order_request: market_buy(100.0),
     };
-    let event = handle_action(
+    let event = OrderProcessor::handle_action(
         &action,
         &mut balances,
         &prices(),
@@ -79,7 +79,7 @@ fn market_buy_partial_fills_when_quote_is_short() {
         account_id: AccountId::new("main"),
         order_request: market_buy(100.0),
     };
-    let event = handle_action(
+    let event = OrderProcessor::handle_action(
         &action,
         &mut balances,
         &prices(),
@@ -113,7 +113,7 @@ fn limit_buy_fills_only_when_crossed() {
             tag: stock_trek::types::Tag::new("test"),
         },
     };
-    let event = handle_action(
+    let event = OrderProcessor::handle_action(
         &action,
         &mut balances,
         &prices(),
@@ -139,7 +139,7 @@ fn lost_order_changes_nothing() {
     };
     let mut parameters = parameters();
     parameters.lost_order_chance = 1.0;
-    let event = handle_action(
+    let event = OrderProcessor::handle_action(
         &action,
         &mut balances,
         &prices(),
@@ -161,7 +161,7 @@ fn cancel_orders_event_is_recorded() {
     let action = ResolvedAction::CancelAllOrders {
         tag: Some(stock_trek::types::Tag::new("test")),
     };
-    let event = handle_action(
+    let event = OrderProcessor::handle_action(
         &action,
         &mut balances,
         &prices(),
@@ -177,7 +177,7 @@ fn cancel_orders_event_is_recorded() {
 
 #[test]
 fn asset_totals_serialize_cex_accounts_and_assets() {
-    let totals = asset_totals(&balances());
+    let totals = Portfolio::asset_totals(&balances());
     assert_eq!(
         totals["binance"]["main"]["tether_u_s_d"],
         serde_json::json!(1000.0)

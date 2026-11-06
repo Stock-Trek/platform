@@ -11,7 +11,10 @@
 pub mod backtest;
 mod config;
 mod cwasm_artifact;
+mod guest_state;
+mod limits;
 mod runtime;
+mod watchdog;
 mod workspace;
 
 #[cfg(test)]
@@ -22,5 +25,7 @@ mod tests;
 
 pub use config::*;
 pub use cwasm_artifact::*;
+pub use guest_state::Emit;
+pub use limits::*;
 pub use runtime::*;
 pub use workspace::*;

@@ -1,4 +1,4 @@
-use super::{SpillUsage, merge_batch_records, merge_fanin};
+use super::{SpillUsage, spill::SpillMerge};
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveKind, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey,
     ArchiveTableLayer, RoutingBucket,
@@ -96,8 +96,8 @@ impl CandleSpill {
         }
 
         self.spill()?;
-        self.reduce_runs(merge_fanin(self.limit))?;
-        let batch = merge_batch_records(self.limit);
+        self.reduce_runs(SpillMerge::fanin(self.limit))?;
+        let batch = SpillMerge::batch_records(self.limit);
         let readers = self
             .runs
             .iter()
@@ -162,7 +162,7 @@ impl CandleSpill {
     }
 
     fn merge_runs(&mut self, runs: &[PathBuf], path: &Path) -> BpResult<()> {
-        let batch = merge_batch_records(self.limit);
+        let batch = SpillMerge::batch_records(self.limit);
         let readers = runs
             .iter()
             .map(|run| SpillRunReader::open_with_batch_size(ArchiveKind::Candles, run, batch))

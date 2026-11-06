@@ -6,8 +6,10 @@
 //! the runner executes as a WebAssembly guest.
 
 use quote::quote;
-use syn::Ident;
-use syn::parse::{Parse, ParseStream};
+
+use parse::{RegisterAttribute, RegisterItem, RegistryAttribute, RegistryItem};
+
+mod parse;
 
 /// Register an implementation of a trait on a concrete type.
 ///
@@ -68,10 +70,11 @@ pub fn register(
     let item_clone = item.clone();
 
     let parsed_item = syn::parse_macro_input!(item as RegisterItem);
-    let item_impl = parsed_item.item;
 
-    let (trait_not, trait_path, _) = item_impl
+    let (trait_not, trait_path, _) = parsed_item
+        .item
         .trait_
+        .as_ref()
         .expect("Can only register an implementation of a trait, 'impl <Trait> for <Type>'.");
     assert!(
         trait_not.is_none(),
@@ -83,7 +86,7 @@ pub fn register(
         .expect("Expected trait in impl block to have an identifier.");
     let trait_name = format!("{trait_ident}");
 
-    let type_path = get_self_type_path(&item_impl.self_ty);
+    let type_path = parsed_item.self_type_path();
     let type_ident = type_path
         .require_ident()
         .expect("Expected type in impl block to have an identifier.");
@@ -178,83 +181,4 @@ pub fn registry(
             }
         }
     }.into()
-}
-
-#[derive(Debug)]
-struct RegisterAttribute {
-    constructor_fn_ident: Ident,
-}
-
-impl Parse for RegisterAttribute {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(Self {
-            constructor_fn_ident: Ident::parse(input)?,
-        })
-    }
-}
-
-struct RegisterItem {
-    item: syn::ItemImpl,
-}
-
-impl Parse for RegisterItem {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(Self {
-            item: syn::ItemImpl::parse(input)?,
-        })
-    }
-}
-
-#[derive(Debug)]
-struct RegistryAttribute {
-    trait_ident: Ident,
-}
-
-impl Parse for RegistryAttribute {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(Self {
-            trait_ident: Ident::parse(input)?,
-        })
-    }
-}
-
-struct RegistryItem {
-    item: syn::ItemStatic,
-}
-
-impl Parse for RegistryItem {
-    fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(Self {
-            item: syn::ItemStatic::parse(input)?,
-        })
-    }
-}
-
-fn get_self_type_path(self_ty: &syn::Type) -> &syn::Path {
-    if let syn::Type::Path(type_path) = self_ty {
-        return &type_path.path;
-    }
-
-    let error_type = match self_ty {
-        syn::Type::Array(_) => "n array",
-        syn::Type::BareFn(_) => " function",
-        syn::Type::Group(_) => " group",
-        syn::Type::ImplTrait(_) => " trait impl",
-        syn::Type::Infer(_) => "n inferred type (_)",
-        syn::Type::Macro(_) => " macro",
-        syn::Type::Never(_) => " never type",
-        syn::Type::Paren(_) => " parenthesis",
-        syn::Type::Ptr(_) => " pointer",
-        syn::Type::Reference(_) => " reference",
-        syn::Type::Slice(_) => " slice",
-        syn::Type::TraitObject(_) => " trait object",
-        syn::Type::Tuple(_) => " tuple",
-        syn::Type::Verbatim(_) => "n unknown syntax",
-        _ => unreachable!(),
-    };
-
-    panic!(
-        "Cannot register implementation on a{}, expected a struct, enum, union or type alias.",
-        error_type
-    );
 }
