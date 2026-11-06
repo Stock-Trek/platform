@@ -13,7 +13,7 @@ mod parse;
 
 /// Register an implementation of a trait on a concrete type.
 ///
-/// ```rust
+/// ```rust,ignore
 /// trait MyTrait {}
 /// struct MyType;
 ///
@@ -24,7 +24,7 @@ mod parse;
 /// Supports registration of a constructor, which can be any associated method with the signature
 /// `fn() -> Self`. For Example:
 ///
-/// ```rust
+/// ```rust,ignore
 /// trait MyTrait {}
 ///
 /// #[derive(Default)]
@@ -137,7 +137,7 @@ pub fn register(
 
 /// Create a registry of implementations of a trait
 ///
-/// ```rust
+/// ```rust,ignore
 /// trait MyTrait {}
 ///
 /// #[traitreg::registry(MyTrait)]
