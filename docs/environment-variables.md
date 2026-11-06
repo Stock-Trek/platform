@@ -6,8 +6,7 @@ reads and validates its configuration at startup, before doing any work.
 - Required variables must be present with a non-empty, valid value. A missing or invalid value
   fails startup.
 - Optional variables are treated as unset when they are absent or empty.
-- Values are read only from the process environment. No variable falls back to a built-in default
-  value.
+- Values are read only from the process environment.
 
 Variables read by more than one process are listed once under [Shared variables](#shared-variables).
 The remaining sections list the additional variables read by each process. When a variable is only
@@ -15,8 +14,7 @@ required in some configurations, the condition is stated in its description.
 
 > The AWS SDK also reads its standard environment variables (for example `AWS_REGION`,
 > `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_PROFILE`) through
-> its default region and credential chains. Those are not listed below because platform code does
-> not read them directly.
+> its default region and credential chains.
 
 ## Shared variables
 
@@ -80,10 +78,6 @@ required in some configurations, the condition is stated in its description.
 | `BACKFILLER_GAP_SUBJECT_PREFIX` | NATS subject prefix carrying gap markers from the ingester. |
 | `BACKFILLER_NATS_URL` | NATS URL used to receive gap markers and publish replayed events. |
 
-#### Optional
-
-No process-specific optional variables.
-
 ### Aggregator
 
 #### Required
@@ -108,7 +102,7 @@ No process-specific optional variables.
 | `AGGREGATOR_SHARD_COUNT` | Number of keyed shards. Must be positive and must not exceed the archive routing bucket count. |
 | `AGGREGATOR_SHARD_SUBJECT_PREFIX` | NATS subject prefix owned by the aggregator for routed shard inputs. |
 | `AGGREGATOR_STATE_SCHEMA_VERSION` | State schema version written to new state and required for checkpoint restore. |
-| `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | How long input may be idle before the aggregator flushes already-expired candle windows, in seconds. Idle flushes do not advance event time. |
+| `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | How long input may be idle before the aggregator flushes already-expired candle windows, in seconds. |
 
 #### Optional
 
@@ -132,10 +126,6 @@ No process-specific optional variables.
 | `ARCHIVER_S3_BUCKET` | S3 bucket for archived raw objects. |
 | `ARCHIVER_S3_PREFIX` | S3 prefix for archived raw objects. |
 
-#### Optional
-
-No process-specific optional variables.
-
 ### Compactor
 
 #### Required
@@ -149,10 +139,6 @@ No process-specific optional variables.
 | `COMPACTOR_S3_PREFIX` | S3 prefix containing raw archive objects to compact. |
 | `COMPACTOR_SETTLE_SECS` | How long source files must remain unchanged before they are compacted, in seconds. |
 | `COMPACTOR_SPILL_RECORDS` | Number of records buffered before spilling to disk during compaction. |
-
-#### Optional
-
-No process-specific optional variables.
 
 ### Rebuilder
 
@@ -199,10 +185,6 @@ No process-specific optional variables.
 | `SQS_DEDUP_TTL_SECS` | How long SQS message IDs remain in the deduplication cache, in seconds. |
 | `SQS_PROCESS_CONCURRENCY` | Maximum number of SQS messages processed concurrently. |
 
-#### Optional
-
-No process-specific optional variables.
-
 ### Git webhook
 
 #### Required
@@ -215,10 +197,6 @@ No process-specific optional variables.
 | `WEBHOOK_REFRESH_COOLDOWN_SECS` | Minimum interval between webhook secret refreshes, in seconds. |
 | `WEBHOOK_SECRET_FAILURE_BACKOFF_SECS` | Backoff applied after a failed webhook secret refresh, in seconds. |
 
-#### Optional
-
-No process-specific optional variables.
-
 ### Build agent
 
 #### Required
@@ -229,10 +207,6 @@ No process-specific optional variables.
 | `BUILD_AGENT_FAILURE_PUBLISH_BUDGET_SECS` | Time budget reserved for publishing a failure result before the invocation deadline, in seconds. |
 | `BUILD_AGENT_MAX_EXTRACTED_SOURCE_SIZE_BYTES` | Maximum total size of extracted source, in bytes. |
 | `BUILD_AGENT_SOURCE_DIR` | Working directory where the build agent unpacks and builds source. |
-
-#### Optional
-
-No process-specific optional variables.
 
 ## Control plane
 
@@ -251,10 +225,6 @@ their details.
 | `RUN_INVOKER_RUNNER_FUNCTION_NAME` | Name of the runner Lambda function invoked for every due run. |
 | `RUN_INVOKER_TABLE` | DynamoDB table holding the scheduled algorithm runs. |
 | `S3_SIGNED_URL_EXPIRY_SECS` | Lifetime of the pre-signed S3 URLs handed to the runner, in seconds. |
-
-#### Optional
-
-No process-specific optional variables.
 
 ## Sandbox plane
 

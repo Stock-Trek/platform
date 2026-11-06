@@ -146,9 +146,7 @@ impl CandleProcessor {
     /// Closes windows that are already expired at the current event-time
     /// watermark without moving event time forward.
     ///
-    /// This is used by idle ticks. Wall-clock time is not event time: advancing
-    /// the watermark from an idle tick would close windows for which later
-    /// backfilled trades are still expected.
+    /// This is used by idle ticks.
     pub fn flush_expired(&mut self) -> ProcessorUpdate {
         let mut update = ProcessorUpdate::default();
         self.close_expired(&mut update);

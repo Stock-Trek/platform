@@ -83,7 +83,7 @@ impl RebuildConfig {
         };
 
         // Stage: decode archived events and spill one replay record per
-        // decoded trading pair. Nothing accumulates beyond `spill_records`.
+        // decoded trading pair.
         let work_dir = Self::work_dir(&self.spill_dir)?;
         let mut stats = RebuildStats::default();
         let mut decoders = HashMap::new();

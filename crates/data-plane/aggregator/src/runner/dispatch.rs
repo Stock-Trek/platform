@@ -257,9 +257,6 @@ where
     }
 
     fn flush_idle(shard: ShardId, processor: &mut CandleProcessor) -> ProcessorUpdate {
-        // Idle ticks must not advance event time to the wall clock. Doing so
-        // closes old windows early and can make later backfills create
-        // partial correction candles instead of revising the full history.
         let update = processor.flush_expired();
         Self::record_update_metrics(shard, processor, &update);
         update

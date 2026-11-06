@@ -27,8 +27,7 @@ impl IcebergEventReader {
     ///
     /// `Auto` uses the explicit compacted/raw handoff contract: all compacted
     /// event files plus only the raw objects that are not yet represented by
-    /// the compacted snapshot. It never falls back to a full second scan of the
-    /// raw history when compacted data exists.
+    /// the compacted snapshot.
     pub async fn connect(
         catalog: &dyn ArchiveCatalog,
         source_layer: RebuildSourceLayer,

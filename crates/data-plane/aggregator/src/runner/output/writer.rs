@@ -2,8 +2,8 @@
 //!
 //! Open candles and their tombstones are a derived serving projection, so a
 //! single writer task can coalesce them and only write the final value per
-//! [`CandleKey`]. Closed candles are durable outputs and are never coalesced
-//! away. The task is fed by a bounded channel and exposes a flush barrier that
+//! [`CandleKey`]. Closed candles are durable outputs. The task is fed by a
+//! bounded channel and exposes a flush barrier that
 //! completes only after every queued closed candle has been published, allowing
 //! the source checkpoint to advance safely.
 //!
@@ -125,9 +125,6 @@ impl CandleOutputWriter {
 
     /// Waits until every closed candle submitted before this call has been
     /// published.
-    ///
-    /// Pending open projections do not delay the barrier: they are derived
-    /// data and may continue coalescing after the source checkpoint advances.
     pub(crate) async fn barrier(&self) -> BpResult<()> {
         let (reply, receiver) = oneshot::channel();
         self.send(OutputCommand::Barrier { reply }).await?;

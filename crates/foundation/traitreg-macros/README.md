@@ -69,8 +69,7 @@ which run at compile-time but are unsound.
 
 Notably multiple crates (i.e. compilation units) can register implementations independently,
 the registry will pick up all of the impls automatically at runtime. This can be useful for a
-plugin system where shared libraries (`cdylib` crates) are loaded. Currently loading shared
-libraries manually after `main()` is called will not update the registry.
+plugin system where shared libraries (`cdylib` crates) are loaded.
 
 It is possible to build a registry like this purely at compile time using procedural macros
 but as far as I am aware this is unsound. Each proc macro invocation currently reuses the same
@@ -80,8 +79,6 @@ this behaviour may break in the future.
 
 ### Outstanding Issues
 
-* Initialization order is not guaranteed on apple platforms, registered types may be missing from
-  the registry.
 * Registered implementations for traits with the same name will conflict, even if those traits are
   in seperate modules or crates.
 

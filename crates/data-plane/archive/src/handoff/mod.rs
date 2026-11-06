@@ -8,9 +8,7 @@
 //! still part of the raw tail.
 //!
 //! A recovery reader can therefore replay the compacted files followed by the
-//! raw tail and see every archived record exactly once. It never has to choose
-//! between a partially compacted table (which would miss the tail) and the full
-//! raw history (which would duplicate the compacted prefix).
+//! raw tail and see every archived record exactly once.
 
 mod archive_handoff;
 

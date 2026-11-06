@@ -38,7 +38,7 @@ pub struct AggregatorConfig {
     pub checkpoint_key_prefix: String,
     /// How long the input may be idle before expired candle windows are
     /// flushed and state is checkpointed. Idle flushing uses the current
-    /// event-time watermark and never advances it with the wall clock.
+    /// event-time watermark.
     pub watermark_idle_timeout: Duration,
     /// What state a shard starts from.
     pub replay_start_policy: ReplayStartPolicy,

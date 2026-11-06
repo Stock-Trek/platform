@@ -40,8 +40,7 @@ impl ShardId {
     ///
     /// The key is first assigned to a bucket in the archive's fixed virtual hash
     /// space, then that bucket is assigned to the active shard. Increasing the
-    /// shard count only re-distributes whole archive buckets; it never splits
-    /// one bucket across shards.
+    /// shard count only re-distributes whole archive buckets.
     pub fn for_trading_pair(
         exchange: CexId,
         trading_pair: TradingPair,

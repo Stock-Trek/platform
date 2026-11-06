@@ -68,7 +68,7 @@ Archive rebuilds replay raw events through the same deterministic candle process
 | `AGGREGATOR_CHECKPOINT_BUCKET` | required | NATS KV bucket for checkpoints and leases. |
 | `AGGREGATOR_CHECKPOINT_PREFIX` | required | Key prefix inside the checkpoint bucket. |
 | `AGGREGATOR_ALLOWED_LATENESS_MS` | required | How late a trade may arrive and still update a candle. |
-| `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | required | Idle time before expired windows are flushed and state is checkpointed. Idle flushing never advances event time with the wall clock. |
+| `AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS` | required | Idle time before expired windows are flushed and state is checkpointed. |
 | `AGGREGATOR_REPLAY_START_POLICY` | required | `checkpoint`, `archive`, `earliest`, or `latest`. |
 | `AGGREGATOR_STATE_SCHEMA_VERSION` | required | State schema version written to new state and required for checkpoint restore. |
 | `AGGREGATOR_DURABLE_PREFIX` | required | Durable consumer prefix. The router uses `{prefix}-router`; shards use `{prefix}-shard-{n}`. |

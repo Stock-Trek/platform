@@ -44,8 +44,7 @@ pub trait ClosedCandlePublisher: Send + Sync {
 /// Open candles are written per key only so clients can serve the current
 /// partial candle. When the last open window for a key closes, that key is
 /// tombstoned in the bucket so consumers cannot serve a stale partial candle.
-/// They are a derived projection of the checkpointed keyed state; recovery
-/// never reads this bucket back into the aggregator.
+/// They are a derived projection of the checkpointed keyed state.
 ///
 /// Closed candles already carry a deterministic revision derived from the
 /// candle identity, window, close watermark, source offset, and shard state
