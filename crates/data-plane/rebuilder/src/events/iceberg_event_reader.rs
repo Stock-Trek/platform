@@ -1,6 +1,6 @@
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{
-    ArchiveBatch, ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind, ArchiveParquet,
+    ArchiveBatch, ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind,
     ArchiveParquetStream, IcebergDataFile, ParquetReader, S3,
 };
 use platform_errors::{BpError, BpResult};
@@ -92,7 +92,7 @@ impl IcebergEventReader {
                     })?;
                     let reader =
                         ParquetReader::new(&self.transfer_client, &bucket, &key, file_size);
-                    ArchiveParquet::decode_reader_batches(ArchiveKind::Events, reader).await?
+                    ArchiveParquetStream::new(ArchiveKind::Events, reader).await?
                 }
             };
 

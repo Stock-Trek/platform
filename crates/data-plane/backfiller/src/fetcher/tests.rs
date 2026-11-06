@@ -37,15 +37,15 @@ fn event(sequence: u64) -> BackfilledEvent {
 
 #[tokio::test]
 async fn dispatches_to_the_fetcher_registered_for_the_gap_exchange() {
-    let mut registry = FetcherRegistry::new();
-    registry.register(
+    let mut registry = FetcherRegistry::default();
+    registry.insert(
         CexId::Binance,
         StubFetcher {
             event: event(1),
             attempts: Arc::new(Mutex::new(Vec::new())),
         },
     );
-    registry.register(
+    registry.insert(
         CexId::Binance,
         StubFetcher {
             event: event(2),
@@ -63,8 +63,8 @@ async fn dispatches_to_the_fetcher_registered_for_the_gap_exchange() {
 #[tokio::test]
 async fn forwards_retry_attempts_to_the_selected_fetcher() {
     let attempts = Arc::new(Mutex::new(Vec::new()));
-    let mut registry = FetcherRegistry::new();
-    registry.register(
+    let mut registry = FetcherRegistry::default();
+    registry.insert(
         CexId::Binance,
         StubFetcher {
             event: event(2),
@@ -82,7 +82,7 @@ async fn forwards_retry_attempts_to_the_selected_fetcher() {
 
 #[tokio::test]
 async fn rejects_gaps_without_a_registered_fetcher() {
-    let registry = FetcherRegistry::new();
+    let registry = FetcherRegistry::default();
 
     assert!(!registry.supports(CexId::Binance));
     assert!(registry.fetch(&GapMarker::gap(2, 2)).await.is_err());

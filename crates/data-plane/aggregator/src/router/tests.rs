@@ -46,7 +46,7 @@ fn gap() -> GapMarker {
 
 #[test]
 fn events_route_to_the_shard_owning_their_pair() {
-    let router = HashRouter::new();
+    let router = HashRouter::default();
     let event = trade_event();
     let shards = router.shards(&MarketInput::Event(event), 8).unwrap();
 
@@ -56,7 +56,7 @@ fn events_route_to_the_shard_owning_their_pair() {
 
 #[test]
 fn non_trade_events_route_to_the_shard_owning_their_pair() {
-    let router = HashRouter::new();
+    let router = HashRouter::default();
     let expected = vec![ShardId::for_trading_pair(
         CexId::Binance,
         stock_trek_types::cex::trading_pair::TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
@@ -71,7 +71,7 @@ fn non_trade_events_route_to_the_shard_owning_their_pair() {
 
 #[test]
 fn gaps_route_to_the_shard_owning_their_stream_pair() {
-    let router = HashRouter::new();
+    let router = HashRouter::default();
     let gap = gap();
     let expected = vec![ShardId::for_trading_pair(
         CexId::Binance,
@@ -85,7 +85,7 @@ fn gaps_route_to_the_shard_owning_their_stream_pair() {
 
 #[test]
 fn unresolved_gaps_are_rejected_instead_of_broadcast() {
-    let router = HashRouter::new();
+    let router = HashRouter::default();
     let mut gap = gap();
     gap.stream = "unknown@trade".to_string();
 

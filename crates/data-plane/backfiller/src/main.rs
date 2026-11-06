@@ -23,8 +23,8 @@ async fn main() -> BpResult<()> {
     SERVICE.init_logging(&config.log_filter)?;
     let credentials = config.exchange_credentials().await?;
     let source = NatsGapMarkerSource::connect(&config).await?;
-    let mut fetchers = FetcherRegistry::new();
-    fetchers.register(
+    let mut fetchers = FetcherRegistry::default();
+    fetchers.insert(
         config.exchange,
         BinanceGapFetcher::try_new(&config, credentials)?,
     );
@@ -34,6 +34,6 @@ async fn main() -> BpResult<()> {
         .ensure_stream(&config.event_subject_prefix)
         .await?;
     BackfillerRunner::new(config, source, fetchers, publisher)
-        .run_with_retry_store(retries)
+        .run(retries)
         .await
 }

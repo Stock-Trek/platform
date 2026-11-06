@@ -123,10 +123,7 @@ fn keys_parse_back_to_the_same_bucket() {
         let parsed = ArchivePath::parse_key(&key).unwrap();
         assert_eq!(parsed.kind, ArchiveKind::Candles);
         assert_eq!(parsed.bucket_start, bucket);
-        assert_eq!(
-            ArchivePath::routing_bucket_from_key(&key),
-            Some(routing_bucket)
-        );
+        assert_eq!(RoutingBucket::parse(&key), Some(routing_bucket));
         assert_eq!(
             ArchiveHour::parse(&key).unwrap().path(),
             "year=2024/month=01/day=02/hour=03"

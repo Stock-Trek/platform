@@ -111,12 +111,6 @@ pub struct InMemoryGapRetryStore {
     pub(crate) pending: Mutex<HashMap<String, PendingGap>>,
 }
 
-impl InMemoryGapRetryStore {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 #[async_trait]
 impl GapRetryStore for InMemoryGapRetryStore {
     async fn load(&self) -> BpResult<Vec<PendingGap>> {

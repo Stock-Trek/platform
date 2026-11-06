@@ -52,7 +52,7 @@ impl ShardId {
             shard_count as u64 <= RoutingBucket::COUNT,
             "shard count must not exceed the fixed archive bucket count"
         );
-        let bucket = RoutingKey::for_pair(exchange, &trading_pair).bucket();
+        let bucket = RoutingBucket::from_key(RoutingKey::for_pair(exchange, &trading_pair));
         ShardId::new(bucket.shard_index(shard_count))
     }
 

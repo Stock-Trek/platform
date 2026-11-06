@@ -3,8 +3,9 @@
 //! Individual services still own their configuration and wiring, but every
 //! process starts with the same service name and logging setup.
 
-use crate::{Runtime, lambda::LambdaMetrics};
+use crate::lambda::LambdaMetrics;
 use metrics_cloudwatch_embedded::Collector;
+use platform_config::tracing_setup::TracingSetup;
 use platform_errors::BpResult;
 use tracing::info;
 
@@ -27,7 +28,7 @@ impl Service {
 
     /// Installs the global tracing subscriber for this service.
     pub fn init_logging(&self, log_filter: &str) -> BpResult<()> {
-        Runtime::init_logging(log_filter)?;
+        TracingSetup::setup(log_filter)?;
         info!(service = self.name, "service initialised");
         Ok(())
     }

@@ -71,7 +71,7 @@ impl BackfillerConfig {
             SECRETS_LOAD_BUFFER,
         );
         let secrets = Secrets::load(&sdk_config, timeouts, deadline, &self.ssm).await?;
-        let names = Self::exchange_secret_names(self.exchange, self.trading_mode);
+        let names = ExchangeSecretNames::new(self.exchange, self.trading_mode);
         let api_key = secrets.get(&names.api_key)?;
         let api_secret = secrets.get(&names.api_secret)?;
         Ok(ApiKeyCredentials {
@@ -119,12 +119,5 @@ impl BackfillerConfig {
             exchange_http_url,
             ssm,
         })
-    }
-
-    pub fn exchange_secret_names(
-        exchange: CexId,
-        trading_mode: TradingMode,
-    ) -> ExchangeSecretNames {
-        ExchangeSecretNames::new(exchange, trading_mode)
     }
 }

@@ -42,11 +42,6 @@ impl RoutingKey {
     pub fn value(self) -> u64 {
         self.0
     }
-
-    /// The virtual archive bucket for this key.
-    pub fn bucket(self) -> RoutingBucket {
-        RoutingBucket::from_key(self)
-    }
 }
 
 /// One virtual bucket in the archive's fixed hash space.

@@ -95,10 +95,6 @@ fn routed_inputs_round_trip() {
         MarketInput::decode(&input.encode().unwrap()).unwrap(),
         input
     );
-    assert_eq!(
-        NatsShardSource::decode_routed(&input.encode().unwrap()).unwrap(),
-        input
-    );
 }
 
 #[test]

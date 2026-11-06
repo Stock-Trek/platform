@@ -128,7 +128,7 @@ where
             fetcher,
             publisher,
             options,
-            retries: Arc::new(InMemoryGapRetryStore::new()),
+            retries: Arc::new(InMemoryGapRetryStore::default()),
         }
     }
 

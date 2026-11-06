@@ -8,7 +8,8 @@ use crate::config::ReplayStartPolicy;
 use crate::shard::ShardId;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{
-    ArchiveHandoff, ArchiveKind, ArchivePath, Bucket, IcebergCatalog, IcebergConfig, ObjectKey, S3,
+    ArchiveHandoff, ArchiveKind, ArchivePath, Bucket, IcebergCatalog, IcebergConfig, ObjectKey,
+    RoutingBucket, S3,
 };
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
@@ -184,7 +185,7 @@ impl ArchiveObject {
                 if ArchivePath::kind(key) != Some(ArchiveKind::Events) {
                     return false;
                 }
-                ArchivePath::routing_bucket_from_key(key)
+                RoutingBucket::parse(key)
                     .is_some_and(|bucket| bucket.is_owned_by(shard.get(), shard_count))
             })
             .collect()

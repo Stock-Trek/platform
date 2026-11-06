@@ -1,5 +1,5 @@
 use super::*;
-use platform_archive::RoutingKey;
+use platform_archive::{RoutingBucket, RoutingKey};
 use stock_trek_types::cex::asset_id::AssetId;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 
@@ -31,7 +31,7 @@ fn different_pairs_can_land_on_different_shards() {
 
 #[test]
 fn shards_follow_the_fixed_archive_buckets() {
-    let bucket = RoutingKey::for_pair(CexId::Binance, &pair()).bucket();
+    let bucket = RoutingBucket::from_key(RoutingKey::for_pair(CexId::Binance, &pair()));
 
     for shard_count in [1, 2, 8, 16, 100] {
         assert_eq!(

@@ -46,11 +46,6 @@ impl QuiesceSignal {
             receiver: self.sender.subscribe(),
         }
     }
-
-    /// Resolves once quiescence has been requested.
-    pub async fn wait(&self) {
-        self.receiver().wait().await;
-    }
 }
 
 /// Receives a quiesce request from a [`QuiesceSignal`].

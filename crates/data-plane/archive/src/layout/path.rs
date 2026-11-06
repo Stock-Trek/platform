@@ -183,11 +183,6 @@ impl ArchivePath {
         ArchiveHour::parse(path).map(|hour| hour.bucket_start())
     }
 
-    /// Parse the virtual routing bucket from an object key or partition path.
-    pub fn routing_bucket_from_key(path: &str) -> Option<RoutingBucket> {
-        RoutingBucket::parse(path)
-    }
-
     /// Parse both the kind and the hourly bucket from an object key.
     pub fn parse_key(path: &str) -> Option<super::ArchiveBucket> {
         Some(super::ArchiveBucket::from_parts(

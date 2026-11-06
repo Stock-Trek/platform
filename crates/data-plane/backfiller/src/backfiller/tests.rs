@@ -101,7 +101,7 @@ async fn acknowledges_after_processing_a_covered_gap() {
 async fn closes_a_depth_gap_with_a_snapshot_after_the_missing_range() {
     let acked = Arc::new(Mutex::new(Vec::new()));
     let publisher = Arc::new(RecordingPublisher::default());
-    let store = Arc::new(InMemoryGapRetryStore::new());
+    let store = Arc::new(InMemoryGapRetryStore::default());
     let gap = GapMarker {
         stream: "btcusdt@depth".to_string(),
         ..GapMarker::gap(2, 5)
@@ -131,7 +131,7 @@ async fn closes_a_depth_gap_with_a_snapshot_after_the_missing_range() {
 async fn closes_a_book_ticker_gap_with_the_observed_snapshot_sequence() {
     let acked = Arc::new(Mutex::new(Vec::new()));
     let publisher = Arc::new(RecordingPublisher::default());
-    let store = Arc::new(InMemoryGapRetryStore::new());
+    let store = Arc::new(InMemoryGapRetryStore::default());
     let gap = GapMarker {
         stream: "btcusdt@bookTicker".to_string(),
         ..GapMarker::gap(2, 5)
@@ -159,7 +159,7 @@ async fn closes_a_book_ticker_gap_with_the_observed_snapshot_sequence() {
 
 #[tokio::test]
 async fn persists_partial_ranges_instead_of_forgetting_them() {
-    let store = Arc::new(InMemoryGapRetryStore::new());
+    let store = Arc::new(InMemoryGapRetryStore::default());
     let mut service = BackfillService::new(
         OneGapSource {
             gap: Some(GapMarker::gap(2, 5)),
@@ -191,7 +191,7 @@ async fn persists_partial_ranges_instead_of_forgetting_them() {
 
 #[tokio::test]
 async fn retries_pending_ranges_after_the_source_ends() {
-    let store = Arc::new(InMemoryGapRetryStore::new());
+    let store = Arc::new(InMemoryGapRetryStore::default());
     let pending = PendingGap::from_range(
         &GapMarker::gap(2, 3),
         2,

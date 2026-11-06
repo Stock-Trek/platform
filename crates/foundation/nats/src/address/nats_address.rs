@@ -14,10 +14,6 @@ pub struct NatsAddress {
 }
 
 impl NatsAddress {
-    pub fn validate(value: &str) -> BpResult<()> {
-        Self::validate_named("NATS_URL", value)
-    }
-
     /// Validates a NATS address, reporting errors against `name` so callers can
     /// use the environment variable that actually held the value.
     pub fn validate_named(name: &str, value: &str) -> BpResult<()> {

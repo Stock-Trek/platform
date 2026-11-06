@@ -140,7 +140,7 @@ impl ArchiveRecord {
 
     /// The virtual archive bucket that contains this record.
     pub fn routing_bucket(&self) -> RoutingBucket {
-        self.routing_key().bucket()
+        RoutingBucket::from_key(self.routing_key())
     }
 
     /// The output partition for a compacted record.
