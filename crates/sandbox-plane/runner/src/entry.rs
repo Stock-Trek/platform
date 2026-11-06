@@ -2,6 +2,11 @@ use crate::{command::Command, runner::Runner};
 use platform_exit_codes::ExitCode;
 use std::{ffi::CStr, os::raw::c_char};
 
+#[cfg(target_arch = "wasm32")]
+unsafe extern "C" {
+    fn __wasm_call_ctors();
+}
+
 const USAGE: &str = "\
 Usage:
   program Algorithm <strategy_name>
@@ -58,43 +63,38 @@ impl Entry {
         };
         Self::run_command(command)
     }
-}
 
-/// # Safety
-/// This is called from the host binary which must ensure correct args
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn entry(argc: i32, argv: *const *const c_char) -> i32 {
-    unsafe { Entry::run(argc, argv) }
-}
-
-#[cfg(target_arch = "wasm32")]
-unsafe extern "C" {
-    fn __wasm_call_ctors();
-}
-
-/// Initializes the registered algorithms.
-///
-/// Rust's wasm linker only emits `__wasm_call_ctors` when a module needs it and
-/// does not export it automatically. The host must call this once before
-/// `alloc`/`entry` so that `traitreg`'s constructors run and populate the
-/// algorithm registry.
-#[cfg(target_arch = "wasm32")]
-#[unsafe(no_mangle)]
-pub extern "C" fn initialize() {
-    use std::sync::atomic::{AtomicBool, Ordering};
-
-    static INITIALIZED: AtomicBool = AtomicBool::new(false);
-    if !INITIALIZED.swap(true, Ordering::SeqCst) {
-        unsafe { __wasm_call_ctors() };
+    /// # Safety
+    /// This is called from the host binary which must ensure correct args
+    #[unsafe(no_mangle)]
+    pub unsafe extern "C" fn entry(argc: i32, argv: *const *const c_char) -> i32 {
+        unsafe { Self::run(argc, argv) }
     }
-}
 
-#[cfg(target_arch = "wasm32")]
-#[unsafe(no_mangle)]
-pub extern "C" fn alloc(size: usize) -> *mut u8 {
-    if size == 0 {
-        return std::ptr::null_mut();
+    /// Initializes the registered algorithms.
+    ///
+    /// Rust's wasm linker only emits `__wasm_call_ctors` when a module needs it and
+    /// does not export it automatically. The host must call this once before
+    /// `alloc`/`entry` so that `traitreg`'s constructors run and populate the
+    /// algorithm registry.
+    #[cfg(target_arch = "wasm32")]
+    #[unsafe(no_mangle)]
+    pub extern "C" fn initialize() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+
+        static INITIALIZED: AtomicBool = AtomicBool::new(false);
+        if !INITIALIZED.swap(true, Ordering::SeqCst) {
+            unsafe { __wasm_call_ctors() };
+        }
     }
-    let layout = std::alloc::Layout::from_size_align(size, 16).expect("invalid alloc layout");
-    unsafe { std::alloc::alloc(layout) }
+
+    #[cfg(target_arch = "wasm32")]
+    #[unsafe(no_mangle)]
+    pub extern "C" fn alloc(size: usize) -> *mut u8 {
+        if size == 0 {
+            return std::ptr::null_mut();
+        }
+        let layout = std::alloc::Layout::from_size_align(size, 16).expect("invalid alloc layout");
+        unsafe { std::alloc::alloc(layout) }
+    }
 }

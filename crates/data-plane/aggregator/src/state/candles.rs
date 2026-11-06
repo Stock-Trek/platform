@@ -155,10 +155,10 @@ impl AggregatorState {
 }
 
 /// Serializes grouped open candles as one deterministically sorted list.
-pub(super) mod open_candles {
-    use super::*;
+pub(super) struct GroupedCandles;
 
-    pub fn serialize<S>(
+impl GroupedCandles {
+    pub(super) fn serialize<S>(
         candles: &HashMap<CandleKey, Vec<Candle>>,
         serializer: S,
     ) -> Result<S::Ok, S::Error>
@@ -173,7 +173,9 @@ pub(super) mod open_candles {
         values.serialize(serializer)
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<HashMap<CandleKey, Vec<Candle>>, D::Error>
+    pub(super) fn deserialize<'de, D>(
+        deserializer: D,
+    ) -> Result<HashMap<CandleKey, Vec<Candle>>, D::Error>
     where
         D: Deserializer<'de>,
     {

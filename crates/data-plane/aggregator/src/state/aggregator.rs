@@ -39,10 +39,10 @@ pub struct AggregatorState {
     /// A key can hold more than one window while an allowed-lateness window is
     /// still open, so late trades can update the correct candle instead of
     /// reopening a closed one.
-    #[serde(with = "super::candles::open_candles")]
+    #[serde(with = "super::candles::GroupedCandles")]
     pub open_candles: HashMap<CandleKey, Vec<Candle>>,
     /// Closed candles retained so late or backfilled trades can revise them.
-    #[serde(default, with = "super::candles::open_candles")]
+    #[serde(default, with = "super::candles::GroupedCandles")]
     pub closed_candles: HashMap<CandleKey, Vec<Candle>>,
     /// Last routed source sequence whose effects are included in this state.
     pub last_processed_sequence: Option<u64>,

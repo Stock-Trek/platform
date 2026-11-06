@@ -19,7 +19,7 @@ pub struct SequenceTracker {
     ///
     /// Stored as `u128` so the sequence immediately after `u64::MAX` is
     /// representable.
-    #[serde(default, with = "next_sequence")]
+    #[serde(default, with = "NextSequence")]
     pub(super) next: Option<u128>,
 }
 
@@ -64,10 +64,10 @@ impl SequenceStore for NatsSequenceStore {
     }
 }
 
-mod next_sequence {
-    use super::*;
+struct NextSequence;
 
-    pub fn serialize<S>(next: &Option<u128>, serializer: S) -> Result<S::Ok, S::Error>
+impl NextSequence {
+    pub(super) fn serialize<S>(next: &Option<u128>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -77,7 +77,7 @@ mod next_sequence {
         }
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<u128>, D::Error>
+    pub(super) fn deserialize<'de, D>(deserializer: D) -> Result<Option<u128>, D::Error>
     where
         D: Deserializer<'de>,
     {
