@@ -33,14 +33,18 @@ impl SpillUsage {
     }
 }
 
-/// Number of runs merged at once, so the merge buffers stay proportional to
-/// the configured spill limit.
-pub(crate) fn merge_fanin(limit: usize) -> usize {
-    (limit / MERGE_BATCH_RECORDS).clamp(2, MAX_MERGE_FANIN)
-}
+pub(crate) struct SpillMerge;
 
-/// Records decoded or buffered per run during a merge, so the merge buffers
-/// never exceed the configured spill limit even for tiny limits.
-pub(crate) fn merge_batch_records(limit: usize) -> usize {
-    (limit / merge_fanin(limit)).clamp(1, MERGE_BATCH_RECORDS)
+impl SpillMerge {
+    /// Number of runs merged at once, so the merge buffers stay proportional
+    /// to the configured spill limit.
+    pub(crate) fn fanin(limit: usize) -> usize {
+        (limit / MERGE_BATCH_RECORDS).clamp(2, MAX_MERGE_FANIN)
+    }
+
+    /// Records decoded or buffered per run during a merge, so the merge
+    /// buffers never exceed the configured spill limit even for tiny limits.
+    pub(crate) fn batch_records(limit: usize) -> usize {
+        (limit / Self::fanin(limit)).clamp(1, MERGE_BATCH_RECORDS)
+    }
 }

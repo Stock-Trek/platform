@@ -166,7 +166,7 @@ const INITIALIZE_WAT: &str = r#"
 type CapturedLines = Arc<Mutex<Vec<(String, Value)>>>;
 
 fn artifact(wat: &str) -> NamedTempFile {
-    let engine = wasmtime::Engine::new(&execution_config()).unwrap();
+    let engine = wasmtime::Engine::new(&WasmRunner::config()).unwrap();
     let module = wasmtime::Module::new(&engine, wat).unwrap();
     let file = NamedTempFile::new().unwrap();
     std::fs::write(file.path(), module.serialize().unwrap()).unwrap();

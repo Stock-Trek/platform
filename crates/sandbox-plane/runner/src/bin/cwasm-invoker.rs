@@ -101,7 +101,7 @@ impl CwasmInvoker {
         };
 
         if matches!(request.command, Command::BackTest { .. }) {
-            return backtest::run(&runner, cwasm.path(), &request.command);
+            return backtest::BackTest::run(&runner, cwasm.path(), &request.command);
         }
         runner.execute_command(cwasm.path(), &request.command)
     }

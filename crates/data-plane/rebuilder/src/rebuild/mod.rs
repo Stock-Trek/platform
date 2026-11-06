@@ -9,5 +9,3 @@ mod tests;
 pub use rebuild_options::*;
 
 pub use spill::SpillUsage;
-
-use spill::{merge_batch_records, merge_fanin};

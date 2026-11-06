@@ -1,4 +1,4 @@
-use crate::rebuild::{SpillUsage, merge_fanin};
+use crate::rebuild::{SpillUsage, spill::SpillMerge};
 use platform_errors::{BpError, BpResult};
 use platform_market_data::{decoders::trade::Trade, event::MarketEvent};
 use serde::{Deserialize, Serialize};
@@ -114,7 +114,7 @@ impl ReplaySpill {
         }
 
         self.spill()?;
-        self.reduce_runs(merge_fanin(self.limit))?;
+        self.reduce_runs(SpillMerge::fanin(self.limit))?;
         let readers = self
             .runs
             .iter()
