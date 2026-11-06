@@ -23,7 +23,6 @@ impl ByteEncoder {
             ByteEncoder::HexLower => data_encoding::HEXLOWER.encode(bytes),
             ByteEncoder::HexUpper => data_encoding::HEXUPPER.encode(bytes),
             ByteEncoder::Percent => {
-                // Compute capacity
                 // Every unreserved byte contributes 1 byte; every other contributes 3.
                 let mut cap = bytes.len();
                 for &b in bytes {
@@ -32,7 +31,6 @@ impl ByteEncoder {
                     }
                 }
                 let mut out = String::with_capacity(cap);
-                // Second pass: encode.
                 for &b in bytes {
                     if Self::is_unreserved(b) {
                         // Unreserved bytes are ASCII, so this conversion is lossless.

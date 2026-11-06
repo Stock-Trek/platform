@@ -3,13 +3,11 @@
 pub enum ExitCode {
     Success = 0,
 
-    // strategy errors
     StrategyNotFound = 1,
     StrategyHasNoConstructor = 2,
     StrategyCouldNotInstantiate = 3,
     StrategyNameNotUnique = 4,
 
-    // server errors
     ServerEntryIncorrectArgCount = 101,
     ServerEntryFailedToParseCommand = 102,
     ServerEntryFailedToConvertToJson = 103,
@@ -36,7 +34,6 @@ pub enum ExitCode {
     ServerRunnerRuntimeStartFailed = 134,
     ServerRunnerConfigurationInvalid = 135,
 
-    // bot errors
     BotErrorCreatingResolver = 201,
     BotErrorCreatingScratchPad = 202,
     BotErrorResolvingAction = 203,
