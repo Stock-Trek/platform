@@ -1,8 +1,7 @@
-//! Hand-rolled SigV4 presigned POST signing.
+//! Presigned POST signing for build artifacts.
 //!
-//! The AWS SDK can presign individual S3 requests, but it does not expose the
-//! browser-style POST policy used by the build agent. Keep that signing logic
-//! isolated here so ordinary S3 operations can use the SDK client.
+//! The SigV4 POST-policy signing itself lives in `platform-aws`; this module
+//! wraps it with the build plane's artifact key template and size limit.
 
 mod post_policy;
 

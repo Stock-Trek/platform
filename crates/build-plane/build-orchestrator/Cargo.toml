@@ -21,13 +21,9 @@ aws-sdk-s3 = { workspace = true }
 aws-sdk-sqs = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
 base64 = { workspace = true }
 futures = { workspace = true }
-hex = { workspace = true }
-hmac = { workspace = true }
 lambda_runtime = { workspace = true }
 metrics_cloudwatch_embedded = { workspace = true, features = ["lambda"] }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
-time = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tracing = { workspace = true }
 zip = { workspace = true, default-features = false, features = ["deflate"] }
