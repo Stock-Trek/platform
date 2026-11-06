@@ -11,6 +11,9 @@ platform-build-agent = { path = "crates/build-plane/build-agent" }
 platform-build-orchestrator = { path = "crates/build-plane/build-orchestrator" }
 platform-git-webhook = { path = "crates/build-plane/git-webhook" }
 
+platform-run-invoker = { path = "crates/control-plane/run-invoker" }
+platform-run-store = { path = "crates/control-plane/run-store" }
+
 platform-aggregator = { path = "crates/data-plane/aggregator" }
 platform-archive = { path = "crates/data-plane/archive" }
 platform-archiver = { path = "crates/data-plane/archiver" }
@@ -50,6 +53,7 @@ aws-config = "1"
 aws-credential-types = "1"
 aws_lambda_events = "1"
 aws-sdk-lambda = "1"
+aws-sdk-dynamodb = "1"
 aws-sdk-s3 = "1"
 aws-sdk-s3-transfer-manager = "0.3"
 aws-sdk-sqs = "1"

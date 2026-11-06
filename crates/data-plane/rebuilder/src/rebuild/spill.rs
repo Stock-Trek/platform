@@ -38,9 +38,3 @@ impl SpillUsage {
 pub(crate) fn merge_fanin(limit: usize) -> usize {
     (limit / MERGE_BATCH_RECORDS).clamp(2, MAX_MERGE_FANIN)
 }
-
-/// Records decoded or buffered per run during a merge, so the merge buffers
-/// never exceed the configured spill limit even for tiny limits.
-pub(crate) fn merge_batch_records(limit: usize) -> usize {
-    (limit / merge_fanin(limit)).clamp(1, MERGE_BATCH_RECORDS)
-}

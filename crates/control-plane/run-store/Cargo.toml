@@ -1,0 +1,9 @@
+[package]
+name = "platform-run-store"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aws-sdk-dynamodb = { workspace = true }
+chrono = { workspace = true }
+platform-errors = { workspace = true }

@@ -1,4 +1,4 @@
-use super::{SpillUsage, merge_batch_records, merge_fanin};
+use super::{SpillUsage, merge_fanin};
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveKind, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey,
     ArchiveTableLayer, RoutingBucket,
@@ -97,11 +97,10 @@ impl CandleSpill {
 
         self.spill()?;
         self.reduce_runs(merge_fanin(self.limit))?;
-        let batch = merge_batch_records(self.limit);
         let readers = self
             .runs
             .iter()
-            .map(|path| SpillRunReader::open_with_batch_size(ArchiveKind::Candles, path, batch))
+            .map(|path| SpillRunReader::open(ArchiveKind::Candles, path))
             .collect::<BpResult<Vec<_>>>()?;
         Ok(CandleRecords::Runs(CandleMerge::new(
             readers,
@@ -162,13 +161,12 @@ impl CandleSpill {
     }
 
     fn merge_runs(&mut self, runs: &[PathBuf], path: &Path) -> BpResult<()> {
-        let batch = merge_batch_records(self.limit);
         let readers = runs
             .iter()
-            .map(|run| SpillRunReader::open_with_batch_size(ArchiveKind::Candles, run, batch))
+            .map(|run| SpillRunReader::open(ArchiveKind::Candles, run))
             .collect::<BpResult<Vec<_>>>()?;
         let mut merge = CandleMerge::new(readers, self.bucket_millis, self.layer)?;
-        let mut writer = SpillRunWriter::create_with_batch_size(path, ArchiveKind::Candles, batch)?;
+        let mut writer = SpillRunWriter::create(path, ArchiveKind::Candles)?;
         while let Some(record) = merge.next_record()? {
             writer.push(record)?;
         }

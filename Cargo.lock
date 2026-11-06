@@ -520,6 +520,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "aws-sdk-dynamodb"
+version = "1.137.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "41515f51bd2b5608268336bda372065e8fd5d1ca2f684b63e5c25ae4abb62c53"
+dependencies = [
+ "arc-swap",
+ "aws-credential-types",
+ "aws-runtime",
+ "aws-smithy-async",
+ "aws-smithy-http",
+ "aws-smithy-json",
+ "aws-smithy-observability",
+ "aws-smithy-runtime",
+ "aws-smithy-runtime-api",
+ "aws-smithy-schema",
+ "aws-smithy-types",
+ "aws-types",
+ "bytes",
+ "fastrand",
+ "http 1.5.0",
+ "regex-lite",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "aws-sdk-lambda"
 version = "1.156.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4542,6 +4568,7 @@ name = "platform-aws"
 version = "0.2.0"
 dependencies = [
  "aws-config",
+ "aws-sdk-dynamodb",
  "aws-sdk-s3",
  "aws-sdk-s3-transfer-manager",
  "aws-sdk-ssm",
@@ -4902,6 +4929,41 @@ dependencies = [
  "tempfile",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "platform-run-invoker"
+version = "0.2.0"
+dependencies = [
+ "aws-credential-types",
+ "aws-sdk-dynamodb",
+ "aws-sdk-s3",
+ "base64 0.23.1",
+ "chrono",
+ "hex",
+ "hmac 0.13.0",
+ "platform-aws",
+ "platform-config",
+ "platform-errors",
+ "platform-run-store",
+ "platform-runner",
+ "platform-runtime",
+ "platform-time",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tempfile",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
+name = "platform-run-store"
+version = "0.2.0"
+dependencies = [
+ "aws-sdk-dynamodb",
+ "chrono",
+ "platform-errors",
 ]
 
 [[package]]

@@ -25,9 +25,9 @@ required in some configurations, the condition is stated in its description.
 
 | Variable | Used by | Description |
 | --- | --- | --- |
-| `AWS_CONNECT_TIMEOUT_SECS` | Build orchestrator, Git webhook | Timeout for establishing AWS SDK connections, in seconds. |
+| `AWS_CONNECT_TIMEOUT_SECS` | Build orchestrator, Git webhook, Run invoker | Timeout for establishing AWS SDK connections, in seconds. |
 | `AWS_LAMBDA_FUNCTION_NAME` | Build orchestrator, Git webhook, Build agent | Name of the current Lambda function, used as a metric dimension. The Lambda runtime sets this automatically. |
-| `AWS_OPERATION_TIMEOUT_SECS` | Build orchestrator, Git webhook | Timeout for AWS SDK operations, in seconds. |
+| `AWS_OPERATION_TIMEOUT_SECS` | Build orchestrator, Git webhook, Run invoker | Timeout for AWS SDK operations, in seconds. |
 | `BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS` | Build orchestrator, Build agent | Maximum time the build agent may spend downloading source, in seconds. |
 | `BUILD_AGENT_TIMEOUT_SECS` | Build orchestrator, Build agent | Maximum time the build agent may spend on a build, in seconds. |
 | `DEADLINE_BUFFER_SECS` | Build orchestrator, Git webhook | Time reserved for cleanup before the Lambda invocation deadline, in seconds. |
@@ -174,7 +174,7 @@ No process-specific optional variables.
 | `REBUILDER_S3_BUCKET` | S3 bucket for rebuilt candle output. |
 | `REBUILDER_SOURCE_LAYER` | Event source layer: `auto`, `raw`, or `compacted`. `auto` reads compacted files plus the un-compacted raw tail. |
 | `REBUILDER_SPILL_DIR` | Directory for replay and candle spill runs and for temporary candle output files. |
-| `REBUILDER_SPILL_RECORDS` | Records staged in memory before spill runs are written during a rebuild; also bounds the merge read buffers. Must be greater than zero. |
+| `REBUILDER_SPILL_RECORDS` | Records staged in memory before spill runs are written during a rebuild. Must be greater than zero. |
 | `REBUILDER_STATE_EPOCH` | State epoch assigned to regenerated candle revisions. |
 
 ## Build plane
@@ -232,6 +232,29 @@ No process-specific optional variables.
 | `BUILD_AGENT_FAILURE_PUBLISH_BUDGET_SECS` | Time budget reserved for publishing a failure result before the invocation deadline, in seconds. |
 | `BUILD_AGENT_MAX_EXTRACTED_SOURCE_SIZE_BYTES` | Maximum total size of extracted source, in bytes. |
 | `BUILD_AGENT_SOURCE_DIR` | Working directory where the build agent unpacks and builds source. |
+
+#### Optional
+
+No process-specific optional variables.
+
+## Control plane
+
+### Run invoker
+
+The run invoker checks the DynamoDB run store for due algorithm runs and invokes the runner with
+their details.
+
+#### Required
+
+| Variable | Description |
+| --- | --- |
+| `RUN_INVOKER_ARTIFACT_BUCKET` | S3 bucket containing compiled runner cwasm artifacts. |
+| `RUN_INVOKER_LOGS_BUCKET` | S3 bucket that receives the algorithm run logs the runner uploads with its pre-signed POST. |
+| `RUN_INVOKER_MAX_BATCH` | Maximum number of due runs claimed per polling cycle. |
+| `RUN_INVOKER_POLL_INTERVAL_SECS` | How often the run invoker checks the run store for due runs, in seconds. |
+| `RUN_INVOKER_RUNNER_BIN` | Path to the runner binary executed for every due run. |
+| `RUN_INVOKER_TABLE` | DynamoDB table holding the scheduled algorithm runs. |
+| `S3_SIGNED_URL_EXPIRY_SECS` | Lifetime of the pre-signed S3 URLs handed to the runner, in seconds. |
 
 #### Optional
 

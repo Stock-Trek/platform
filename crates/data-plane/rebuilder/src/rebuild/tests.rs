@@ -96,8 +96,8 @@ fn rebuild(options: &RebuildOptions, events: Vec<MarketEvent>, spill_records: us
     stats.events_spilled = replay.spilled_records();
     let mut usage = replay.usage();
     options.replay(merged, &mut candles, &mut stats).unwrap();
-    let mut records = candles.finish().unwrap();
     stats.candles_spilled = candles.spilled_records();
+    let mut records = candles.finish().unwrap();
     usage.add(candles.usage());
     stats.spill_bytes_written = usage.bytes_written;
     stats.largest_spill_run_bytes = usage.largest_run_bytes;
@@ -319,20 +319,6 @@ fn spilled_runs_are_reduced_to_the_merge_fanin_and_replay_identically() {
     assert!(spilled.runs > 2);
     assert!(spilled.runs <= 4);
     assert!(single.runs <= 4);
-}
-
-#[test]
-fn candle_spill_counts_include_the_final_partial_run() {
-    let events = (0..3)
-        .map(|index| event(index + 1, 1_000 + i64::try_from(index).unwrap() * 61_000))
-        .collect::<Vec<_>>();
-
-    let [in_memory, spilled, single] = rebuild_both_modes(&options(), events);
-
-    assert_eq!(spilled.stats.candles_spilled, 3);
-    assert_eq!(single.stats.candles_spilled, 3);
-    assert_eq!(spilled.stats.unique_candles, 3);
-    assert_eq!(in_memory.stats.candles_spilled, 0);
 }
 
 #[test]

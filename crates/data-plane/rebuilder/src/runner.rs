@@ -111,8 +111,8 @@ impl RebuildConfig {
             self.spill_records,
         )?;
         options.replay(events, &mut candles, &mut stats)?;
-        let records = candles.finish()?;
         stats.candles_spilled = candles.spilled_records();
+        let records = candles.finish()?;
         spill_usage.add(candles.usage());
         stats.spill_bytes_written = spill_usage.bytes_written;
         stats.largest_spill_run_bytes = spill_usage.largest_run_bytes;
