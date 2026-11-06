@@ -26,12 +26,15 @@ rm -f \
   "${HOME}/.netrc" \
   "${HOME}/.npmrc" \
   "${HOME}/.pypirc" \
+  "${HOME}/.vault-token" \
   "${HOME}/.config/gh/hosts.yml" \
   "${HOME}/.cargo/credentials" \
   "${HOME}/.cargo/credentials.toml" \
   "${HOME}/.gem/credentials"
 rm -rf \
+  "${HOME}/.azure" \
   "${HOME}/.config/pip" \
+  "${HOME}/.config/rclone" \
   "${HOME}/.terraform.d"
 
 # Remove the runner's per-step command files. They can contain exported

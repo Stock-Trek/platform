@@ -13,7 +13,7 @@ runs:
         bash .github/scripts/remove-credentials.sh
 
     - name: Setup Bun
-      uses: oven-sh/setup-bun@v2.2.0
+      uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
 
     - name: Install pi-coding-agent and json-schema extension
       shell: bash
@@ -50,16 +50,16 @@ runs:
                 "baseUrl": $deepseekBaseUrl,
                 "api": $deepseekApi,
                 "models": [
-                  { "id": "deepseek-flash", "key": "flash" },
-                  { "id": "deepseek-v4-pro", "key": "pro" }
+                  { "id": "deepseek-flash", "key": "flash", "contextWindow": 128000, "maxTokens": 65536 },
+                  { "id": "deepseek-v4-pro", "key": "pro", "contextWindow": 128000, "maxTokens": 65536 }
                 ]
               },
               "eden": {
                 "baseUrl": $edenBaseUrl,
                 "api": $edenApi,
                 "models": [
-                  { "id": "fireworks_ai/accounts/fireworks/models/glm-5p3-flash", "key": "glm" },
-                  { "id": "deepinfra/tencent/Hy3", "key": "hy3" }
+                  { "id": "fireworks_ai/accounts/fireworks/models/glm-5p3-flash", "key": "glm", "contextWindow": 128000, "maxTokens": 65536 },
+                  { "id": "deepinfra/tencent/Hy3", "key": "hy3", "contextWindow": 128000, "maxTokens": 65536 }
                 ]
               }
             }

@@ -118,9 +118,12 @@ runs:
           echo "Error: pi did not produce a response" >&2
           exit 1
         fi
+        # Remove any staged provider key even if pi exited before its
+        # credential command read it. The key must not survive into later steps.
+        /usr/bin/rm -f "${HOME}/.pi/agent/."*"-key"
         # Do not echo the model response: it is untrusted text and could
         # contain secrets the agent encountered, which would then be readable
         # in the workflow logs.
-        PI_RESPONSE_BASE64=$(base64 -w 0 < "${RESPONSE_FILE}")
+        PI_RESPONSE_BASE64=$(/usr/bin/base64 -w 0 < "${RESPONSE_FILE}")
         rm -f "${RESPONSE_FILE}"
         echo "pi-response-base64=${PI_RESPONSE_BASE64}" >> "$GITHUB_OUTPUT"

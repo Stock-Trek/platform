@@ -546,15 +546,16 @@ jobs:
         id: save-extra-information-required
         if: steps.save-response-type.outputs.response-type == 'REQUIRES_MORE_INFORMATION'
         run: |
-          EXTRA_INFORMATION_REQUIRED=$(echo "${{ steps.classify-extra-information-required.outputs.response-base64 }}" | base64 -d | jq -c .information)
+          EXTRA_INFORMATION_REQUIRED=$(echo "${{ steps.classify-extra-information-required.outputs.response-base64 }}" | /usr/bin/base64 -d | /usr/bin/jq -c .information)
           echo "EXTRA_INFORMATION_REQUIRED: ${EXTRA_INFORMATION_REQUIRED}"
-          # Use a random delimiter so a model response containing a line that
-          # reads "EOF" cannot truncate the multi-line output value.
-          DELIM="GHA_EOF_$RANDOM"
+          # Use an unpredictable delimiter so a model response cannot guess
+          # it, end the value early and inject extra step outputs.
+          DELIM="GHA_EOF_$(/usr/bin/od -An -N32 -tx1 /dev/urandom | \
+            /usr/bin/tr -d ' \n')"
           {
-            echo "extra-information-required<<${DELIM}"
-            echo "${EXTRA_INFORMATION_REQUIRED}"
-            echo "${DELIM}"
+            printf 'extra-information-required<<%s\n' "${DELIM}"
+            printf '%s\n' "${EXTRA_INFORMATION_REQUIRED}"
+            printf '%s\n' "${DELIM}"
           } >> "$GITHUB_OUTPUT"
 
 # Already addressed
@@ -754,55 +755,18 @@ jobs:
         id: save-address-issue-summary
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         run: |
-          SUMMARY=$(echo "${{ steps.address-issue.outputs.response-base64 }}" | base64 -d)
-          # Use a random delimiter so a summary containing a line that reads
-          # "EOF" cannot truncate the multi-line output value.
-          DELIM="GHA_EOF_$RANDOM"
+          SUMMARY=$(echo "${{ steps.address-issue.outputs.response-base64 }}" | /usr/bin/base64 -d)
+          # Use an unpredictable delimiter so a summary containing a line that
+          # reads "EOF" cannot truncate the value or inject extra step outputs.
+          DELIM="GHA_EOF_$(/usr/bin/od -An -N32 -tx1 /dev/urandom | \
+            /usr/bin/tr -d ' \n')"
           {
-            echo "summary<<${DELIM}"
-            echo "${SUMMARY}"
-            echo "${DELIM}"
+            printf 'summary<<%s\n' "${DELIM}"
+            printf '%s\n' "${SUMMARY}"
+            printf '%s\n' "${DELIM}"
           } >> "$GITHUB_OUTPUT"
-      - name: Check for code changes
-        id: check-for-code-changes
-        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
-        run: |
-          # quick local check: uncommitted changes made by the agent
-          if ! git diff --quiet || ! git diff --cached --quiet || [ -n "$(git ls-files --others --exclude-standard)" ]; then
-            echo "has-changes=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          # slow network check: committed changes. The agent may commit (and
-          # even push) its own changes, so compare the branch tip against the
-          # BASE branch - never against the issue branch, which the agent may
-          # have just pushed to (comparing against it always shows no diff).
-          ISSUE_BRANCH_BASE="${{ needs.triage.outputs.issue-branch-base }}"
-          git fetch origin "$ISSUE_BRANCH_BASE" 2>/dev/null || true
-          REFERENCE=""
-          for CANDIDATE in "origin/$ISSUE_BRANCH_BASE" "$ISSUE_BRANCH_BASE"; do
-            if git rev-parse --verify --quiet "$CANDIDATE" >/dev/null 2>&1; then
-              REFERENCE="$CANDIDATE"
-              break
-            fi
-          done
-          if [ -n "$REFERENCE" ]; then
-            # If the commit count cannot be determined, be conservative and
-            # treat it as a change so the PR and links are not silently dropped.
-            COMMITS_AHEAD=$(git rev-list --count "$REFERENCE"..HEAD 2>/dev/null || echo 1)
-            if [ "${COMMITS_AHEAD}" -gt 0 ]; then
-              HAS_CHANGES=true
-            else
-              HAS_CHANGES=false
-            fi
-          else
-            # No base reference is available (e.g. the fetch failed or the base
-            # branch was renamed). Be conservative: report a change so the
-            # workflow still commits, raises a PR and posts the links.
-            HAS_CHANGES=true
-          fi
-          echo "has-changes=${HAS_CHANGES}" >> "$GITHUB_OUTPUT"
       - name: Commit code changes
-        if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'true')
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         run: |
           # This step has no credentials in its environment: the App token is
           # only restored in the push step below. The agent controls the
@@ -823,6 +787,47 @@ jobs:
             /usr/bin/git -c core.hooksPath=/dev/null -c commit.gpgSign=false \
               commit -m "Commit changes made by pi"
           fi
+      - name: Check for code changes
+        id: check-for-code-changes
+        if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
+        run: |
+          # Only commits on this branch that are not on the base branch count
+          # as changes. Any uncommitted work was committed by the previous
+          # step, so a branch that is merely behind the base reports no
+          # changes.
+          ISSUE_BRANCH_BASE="${{ needs.triage.outputs.issue-branch-base }}"
+          # The default depth-1 checkout leaves the branch and the base as
+          # unrelated shallow roots. Without their shared history git counts
+          # the branch tip as ahead even when it has no commits of its own.
+          # Unshallow so the comparison only counts real branch commits.
+          if [ "$(git rev-parse --is-shallow-repository)" = "true" ]; then
+            git fetch --unshallow origin "$ISSUE_BRANCH_BASE" \
+              2>/dev/null || true
+          fi
+          git fetch origin "$ISSUE_BRANCH_BASE" 2>/dev/null || true
+          REFERENCE=""
+          for CANDIDATE in "origin/$ISSUE_BRANCH_BASE" "$ISSUE_BRANCH_BASE"; do
+            if git rev-parse --verify --quiet "$CANDIDATE" >/dev/null 2>&1; then
+              REFERENCE="$CANDIDATE"
+              break
+            fi
+          done
+          if [ -n "$REFERENCE" ]; then
+            # If the commit count cannot be determined, be conservative and
+            # treat it as a change so the PR and links are not silently dropped.
+            COMMITS_AHEAD=$(git rev-list --count "$REFERENCE"..HEAD 2>/dev/null || echo 1)
+            if [ "${COMMITS_AHEAD}" -gt 0 ]; then
+              HAS_CHANGES=true
+            else
+              HAS_CHANGES=false
+            fi
+          else
+            # No base reference is available (e.g. the fetch failed or the base
+            # branch was renamed). Be conservative: report a change so the
+            # workflow still raises a PR and posts the links.
+            HAS_CHANGES=true
+          fi
+          echo "has-changes=${HAS_CHANGES}" >> "$GITHUB_OUTPUT"
       - name: Push code changes
         if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'true')
         env:
@@ -833,22 +838,42 @@ jobs:
           # has finished and the changes are committed.
           GIT_AUTH_HEADER=$(printf 'x-access-token:%s' "${GIT_AUTH_TOKEN}")
           GIT_AUTH_HEADER=$(printf '%s' "${GIT_AUTH_HEADER}" | /usr/bin/base64 -w 0)
-          # Drop HTTP/credential-helper settings the agent may have added to
-          # the local config. The token header and remote URL are supplied on
-          # the command line below, so the token is never written to
-          # .git/config and included config files cannot override them.
+          # Use a minimal environment for every git command in this step, not
+          # just the network calls: the agent can write GIT_DIR, GIT_CONFIG_* or
+          # PATH to GITHUB_ENV/GITHUB_PATH after pi exits, which could otherwise
+          # make the cleanup below operate on a different repository or run a
+          # different binary before the token is restored.
+          GIT=(/usr/bin/env -i HOME="$HOME" PATH=/usr/bin:/bin \
+            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
+            /usr/bin/git)
+          # Drop HTTP/credential/URL-rewrite/include settings the agent may
+          # have added to the local config. Missing a url.*.insteadOf entry
+          # could redirect the push to a different repository, and a missing
+          # include.path could reintroduce the settings after they are removed.
+          # The token header and remote URL are supplied on the command line
+          # below, so they take precedence over any remaining local values.
+          while IFS= read -r key; do
+            [ -z "${key}" ] && continue
+            "${GIT[@]}" config --local --unset-all "${key}" 2>/dev/null || true
+          done < <(
+            "${GIT[@]}" config --local --name-only --get-regexp \
+              '^(http|credential|url|include|includeif)\.' 2>/dev/null || true
+          )
           for key in \
-            'http.proxy' \
-            'http.https://github.com.proxy' \
-            'http.https://github.com/.extraheader' \
-            'credential.helper' \
-            'core.askPass'; do
-            /usr/bin/git config --local --unset-all "${key}" 2>/dev/null || true
+            'core.askPass' \
+            'core.fsmonitor' \
+            'core.gitProxy' \
+            'core.sshCommand'; do
+            "${GIT[@]}" config --local --unset-all "${key}" 2>/dev/null || true
           done
           ISSUE_BRANCH="${{ needs.triage.outputs.issue-branch }}"
-          for key in url pushurl receivepack uploadpack proxy fetch; do
-            /usr/bin/git config --local --unset-all "remote.origin.${key}" 2>/dev/null || true
-          done
+          while IFS= read -r key; do
+            [ -z "${key}" ] && continue
+            "${GIT[@]}" config --local --unset-all "${key}" 2>/dev/null || true
+          done < <(
+            "${GIT[@]}" config --local --name-only --get-regexp \
+              '^remote\.origin\.' 2>/dev/null || true
+          )
           # A plain push can be rejected as non-fast-forward when the remote
           # branch has moved since we last fetched it (e.g. a previous run
           # pushed to it, or the agent rebased the branch onto a newer base).
@@ -866,21 +891,17 @@ jobs:
             -c "remote.origin.url=${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
             -c "remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*"
           )
-          env -i HOME="$HOME" PATH=/usr/bin:/bin \
-            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
-            /usr/bin/git "${GIT_CONFIG_ARGS[@]}" \
+          "${GIT[@]}" "${GIT_CONFIG_ARGS[@]}" \
             fetch origin "${ISSUE_BRANCH}" 2>/dev/null || true
-          env -i HOME="$HOME" PATH=/usr/bin:/bin \
-            GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_SYSTEM=/dev/null \
-            /usr/bin/git "${GIT_CONFIG_ARGS[@]}" \
+          "${GIT[@]}" "${GIT_CONFIG_ARGS[@]}" \
             push --force-with-lease origin "HEAD:${ISSUE_BRANCH}"
           # The push deliberately removed the local remote configuration so an
           # agent-injected remote could not redirect the token. Restore a safe
           # origin URL for later steps (notably the gh calls that raise the PR)
           # without restoring any credentials.
-          /usr/bin/git config --local remote.origin.url \
+          "${GIT[@]}" config --local remote.origin.url \
             "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
-          /usr/bin/git config --local remote.origin.fetch \
+          "${GIT[@]}" config --local remote.origin.fetch \
             '+refs/heads/*:refs/remotes/origin/*'
       - name: Reply if no code changes made
         if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'false')
@@ -913,23 +934,29 @@ jobs:
           ISSUE_NUMBER: ${{ github.event.issue.number }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_IS_PR: ${{ github.event.issue.pull_request != null }}
+          SUMMARY: ${{ steps.save-address-issue-summary.outputs.summary }}
         run: |
           # Use the system gh binary, not one the agent could have placed earlier
           # in PATH, and pin the API host so an injected GH_HOST cannot send the
           # token somewhere else.
           GH=/usr/bin/gh
           CAT=/usr/bin/cat
-          # Use a fresh gh config directory and a minimal environment for the
-          # API calls, so config/env values the agent may have left behind
-          # cannot redirect the token or turn on debug logging.
+          # Use fresh temporary files and a minimal environment for the API
+          # calls, so config/env files the agent may have left behind cannot
+          # redirect the token or turn on debug logging. mktemp also prevents
+          # the agent from pre-creating a predictable /tmp path as a symlink.
           GH_CONFIG_DIR=$(/usr/bin/mktemp -d)
-          trap 'rm -rf "$GH_CONFIG_DIR"' EXIT
+          PR_TITLE_FILE=$(/usr/bin/mktemp)
+          PR_BODY_FILE=$(/usr/bin/mktemp)
+          trap '/usr/bin/rm -rf "$GH_CONFIG_DIR" "$PR_TITLE_FILE" "$PR_BODY_FILE"' EXIT
           # Resolve the repository explicitly rather than relying on a git
           # remote: the push step removes remote configuration before pushing
           # with a one-off URL, so the checkout may have no remotes at all.
           REPO="${GITHUB_REPOSITORY}"
-          # Write title and body to temporary files to handle quotes and backticks
-          # Use a random, quoted delimiter so a summary containing "EOF" or shell metacharacters cannot break the heredoc
+          # Write the title and body from environment variables. The summary is
+          # free-form model output, so it must never be interpolated into the
+          # shell script: a crafted line could end a heredoc and run commands in
+          # this step, which has the GitHub App token in its environment.
           # Event data is passed via environment variables so an issue title containing shell metacharacters cannot be injected into the script
           # When the request came from a comment on a pull request, reference rather than "close" it: the number refers to a PR, not an issue
           if [ "${ISSUE_IS_PR}" == "true" ]; then
@@ -937,15 +964,11 @@ jobs:
           else
             REFERENCE="Closes"
           fi
-          printf '%s #%s %s\n' "${REFERENCE}" "${ISSUE_NUMBER}" "${ISSUE_TITLE}" > /tmp/pr_title.txt
-          # shellcheck disable=SC2034 # PR_BODY_DELIM is used as the heredoc delimiter below
-          PR_BODY_DELIM="PR_BODY_EOF_$RANDOM"
-          ${CAT} > /tmp/pr_body.txt << "$PR_BODY_DELIM"
-          ${{ steps.save-address-issue-summary.outputs.summary }}
-          $PR_BODY_DELIM
+          printf '%s #%s %s\n' "${REFERENCE}" "${ISSUE_NUMBER}" "${ISSUE_TITLE}" > "${PR_TITLE_FILE}"
+          printf '%s\n' "${SUMMARY}" > "${PR_BODY_FILE}"
           # Reuse an existing open PR for this branch if one was already created
           # by a previous run, otherwise create a new one.
-          PR_URL=$(env -i HOME="$HOME" PATH=/usr/bin:/bin \
+          PR_URL=$(/usr/bin/env -i HOME="$HOME" PATH=/usr/bin:/bin \
             GH_TOKEN="$GH_TOKEN" GH_HOST=github.com GH_CONFIG_DIR="$GH_CONFIG_DIR" \
             "${GH}" pr list \
             --repo "${REPO}" \
@@ -954,14 +977,14 @@ jobs:
             --json url \
             --jq '.[0].url // empty' 2>/dev/null || true)
           if [ -z "$PR_URL" ]; then
-            PR_URL=$(env -i HOME="$HOME" PATH=/usr/bin:/bin \
+            PR_URL=$(/usr/bin/env -i HOME="$HOME" PATH=/usr/bin:/bin \
               GH_TOKEN="$GH_TOKEN" GH_HOST=github.com GH_CONFIG_DIR="$GH_CONFIG_DIR" \
               "${GH}" pr create \
               --repo "${REPO}" \
               --base "${{ needs.triage.outputs.issue-branch-base }}" \
               --head "${{ needs.triage.outputs.issue-branch }}" \
-              --title "$(${CAT} /tmp/pr_title.txt)" \
-              --body-file /tmp/pr_body.txt)
+              --title "$(${CAT} "${PR_TITLE_FILE}")" \
+              --body-file "${PR_BODY_FILE}")
           fi
           echo "pull-request-url=$PR_URL" >> "$GITHUB_OUTPUT"
       - name: Reply with diff and PR link
