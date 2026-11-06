@@ -986,6 +986,15 @@ jobs:
               --title "$(${CAT} "${PR_TITLE_FILE}")" \
               --body-file "${PR_BODY_FILE}")
           else
+            EXISTING_BODY=$(/usr/bin/env -i HOME="$HOME" PATH=/usr/bin:/bin \
+              GH_TOKEN="$GH_TOKEN" GH_HOST=github.com GH_CONFIG_DIR="$GH_CONFIG_DIR" \
+              "${GH}" pr view "$PR_URL" \
+              --repo "${REPO}" \
+              --json body \
+              --jq '.body // empty' 2>/dev/null || true)
+            if [ -n "${EXISTING_BODY}" ]; then
+              printf '%s\n\n===*Edit*===\n\n%s\n' "${EXISTING_BODY}" "${SUMMARY}" > "${PR_BODY_FILE}"
+            fi
             /usr/bin/env -i HOME="$HOME" PATH=/usr/bin:/bin \
               GH_TOKEN="$GH_TOKEN" GH_HOST=github.com GH_CONFIG_DIR="$GH_CONFIG_DIR" \
               "${GH}" pr edit "$PR_URL" \
