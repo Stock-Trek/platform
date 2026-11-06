@@ -1,4 +1,6 @@
 use super::*;
+use platform_errors::BpError;
+use std::time::Duration;
 
 #[test]
 fn restart_delay_doubles_until_it_reaches_the_cap() {
