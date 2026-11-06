@@ -1,7 +1,4 @@
-use super::catalog::{
-    AGGREGATOR_ARCHIVE_S3_BUCKET, AGGREGATOR_ARCHIVE_S3_PREFIX, ArchiveObject,
-    ArchiveRecoveryConfig,
-};
+use super::catalog::{ArchiveObject, ArchiveRecoveryConfig};
 use super::replay::ArchivedEventSource;
 use super::restored_shard::{RestoreOptions, RestoreSource};
 use crate::checkpoint::tests::InMemoryStateStore;
@@ -12,7 +9,10 @@ use crate::shard::ShardId;
 use crate::state::{AggregatorState, DeduplicationKey, STATE_SCHEMA_VERSION};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use platform_archive::{ArchiveKind, ArchivePath, ArchivedMarketEvent, Bucket, ObjectKey};
+use platform_archive::{
+    ArchiveKind, ArchivePath, ArchivedMarketEvent, Bucket, ICEBERG_CATALOG_URI,
+    ICEBERG_CATALOG_WAREHOUSE, ObjectKey,
+};
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult, ConfigError, Retryability};
 use platform_market_data::{
@@ -612,7 +612,7 @@ fn archive_recovery_config_is_required_for_policies_that_replay_the_archive() {
         assert!(matches!(
             ArchiveRecoveryConfig::from_vars_for_policy(&vars, policy).unwrap_err(),
             BpError::Config(ConfigError::Missing { name })
-                if name == AGGREGATOR_ARCHIVE_S3_BUCKET
+                if name == ICEBERG_CATALOG_URI
         ));
     }
 }
@@ -630,13 +630,16 @@ fn archive_recovery_config_is_optional_for_explicit_empty_starts() {
 }
 
 #[test]
-fn optional_archive_recovery_config_validates_a_configured_bucket() {
-    let vars = EnvVars::from_map([(AGGREGATOR_ARCHIVE_S3_BUCKET, "market-archive")]);
+fn optional_archive_recovery_config_validates_a_configured_catalog() {
+    let vars = EnvVars::from_map([(
+        ICEBERG_CATALOG_URI.to_string(),
+        "http://iceberg-catalog".to_string(),
+    )]);
 
     assert!(matches!(
         ArchiveRecoveryConfig::optional_from_vars(&vars).unwrap_err(),
         BpError::Config(ConfigError::Missing { name })
-            if name == AGGREGATOR_ARCHIVE_S3_PREFIX
+            if name == ICEBERG_CATALOG_WAREHOUSE
     ));
 }
 
@@ -703,13 +706,13 @@ async fn permanent_checkpoint_read_failures_still_rebuild_from_the_archive() {
 }
 
 #[tokio::test]
-async fn checkpoint_fallback_without_archive_configuration_fails_fast() {
+async fn a_failing_archive_connection_fails_fast_during_checkpoint_restore() {
     let store = InMemoryStateStore::new();
     let shard = ShardId::new(0);
 
     let error = options(shard, 1)
         .restore(&store, || async {
-            Err(BpError::config_missing(AGGREGATOR_ARCHIVE_S3_BUCKET))
+            Err(BpError::config_missing(ICEBERG_CATALOG_URI))
         })
         .await
         .unwrap_err();
@@ -717,7 +720,7 @@ async fn checkpoint_fallback_without_archive_configuration_fails_fast() {
     assert!(matches!(
         error,
         BpError::Config(ConfigError::Missing { name })
-            if name == AGGREGATOR_ARCHIVE_S3_BUCKET
+            if name == ICEBERG_CATALOG_URI
     ));
 }
 

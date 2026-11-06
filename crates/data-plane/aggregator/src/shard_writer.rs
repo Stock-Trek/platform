@@ -1,9 +1,9 @@
 use crate::supervisor::Supervisor;
 use platform_aggregator::{
-    AGGREGATOR_ARCHIVE_S3_BUCKET, AggregatorConfig, ArchivedEventSource, LeaseStore,
-    NatsCandleSink, NatsShardSource, ProcessorRunner, RestoreOptions, S3ArchiveRecovery, ShardId,
-    StateStore, WriterLease,
+    AggregatorConfig, ArchivedEventSource, LeaseStore, NatsCandleSink, NatsShardSource,
+    ProcessorRunner, RestoreOptions, S3ArchiveRecovery, ShardId, StateStore, WriterLease,
 };
+use platform_archive::ICEBERG_CATALOG_URI;
 use platform_errors::{BpError, BpResult};
 use platform_nats::JetStream;
 use platform_runtime::Runtime;
@@ -67,7 +67,7 @@ impl ShardWriter {
                                     .await?,
                             )
                                 as Box<dyn ArchivedEventSource>),
-                            None => Err(BpError::config_missing(AGGREGATOR_ARCHIVE_S3_BUCKET)),
+                            None => Err(BpError::config_missing(ICEBERG_CATALOG_URI)),
                         }
                     })
                     .await?;

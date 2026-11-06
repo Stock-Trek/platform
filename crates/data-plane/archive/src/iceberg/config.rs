@@ -1,10 +1,10 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 
-const ICEBERG_CATALOG_URI: &str = "ICEBERG_CATALOG_URI";
-const ICEBERG_CATALOG_WAREHOUSE: &str = "ICEBERG_CATALOG_WAREHOUSE";
-const ICEBERG_CATALOG_TOKEN: &str = "ICEBERG_CATALOG_TOKEN";
-const ICEBERG_NAMESPACE: &str = "ICEBERG_NAMESPACE";
+pub const ICEBERG_CATALOG_URI: &str = "ICEBERG_CATALOG_URI";
+pub const ICEBERG_CATALOG_WAREHOUSE: &str = "ICEBERG_CATALOG_WAREHOUSE";
+pub const ICEBERG_CATALOG_TOKEN: &str = "ICEBERG_CATALOG_TOKEN";
+pub const ICEBERG_NAMESPACE: &str = "ICEBERG_NAMESPACE";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IcebergConfig {
@@ -37,8 +37,8 @@ impl IcebergConfig {
 
     /// Reads catalog configuration when `ICEBERG_CATALOG_URI` is present.
     ///
-    /// Services that can operate without Iceberg use this to enable the
-    /// compacted archive handoff only when a catalog has been configured.
+    /// Used by starts that do not replay the archive; a partially configured
+    /// catalog still fails validation instead of being silently ignored.
     pub fn optional_from_vars(vars: &EnvVars) -> BpResult<Option<Self>> {
         if vars.optional(ICEBERG_CATALOG_URI)?.is_none() {
             return Ok(None);
