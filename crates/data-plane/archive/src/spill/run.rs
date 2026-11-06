@@ -35,10 +35,6 @@ pub struct SpillRunWriter {
 }
 
 impl SpillRunWriter {
-    pub fn create(path: &Path, kind: ArchiveKind) -> BpResult<Self> {
-        Self::create_with_batch_size(path, kind, RUN_BATCH_RECORDS)
-    }
-
     pub fn create_with_batch_size(
         path: &Path,
         kind: ArchiveKind,

@@ -66,18 +66,6 @@ pub struct FetcherRegistry {
 }
 
 impl FetcherRegistry {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn register<F>(&mut self, exchange: CexId, fetcher: F) -> &mut Self
-    where
-        F: MissingEventFetcher + 'static,
-    {
-        self.insert(exchange, fetcher);
-        self
-    }
-
     pub fn insert<F>(&mut self, exchange: CexId, fetcher: F) -> Option<Arc<dyn MissingEventFetcher>>
     where
         F: MissingEventFetcher + 'static,
@@ -85,16 +73,8 @@ impl FetcherRegistry {
         self.fetchers.insert(exchange, Arc::new(fetcher))
     }
 
-    pub fn get(&self, exchange: CexId) -> Option<&Arc<dyn MissingEventFetcher>> {
-        self.fetchers.get(&exchange)
-    }
-
     pub fn fetcher(&self, exchange: CexId) -> Option<&dyn MissingEventFetcher> {
-        self.get(exchange).map(|fetcher| fetcher.as_ref())
-    }
-
-    pub fn contains(&self, exchange: CexId) -> bool {
-        self.fetchers.contains_key(&exchange)
+        self.fetchers.get(&exchange).map(|fetcher| fetcher.as_ref())
     }
 
     fn unsupported_exchange(exchange: CexId) -> BpError {
@@ -107,7 +87,7 @@ impl FetcherRegistry {
 #[async_trait]
 impl MissingEventFetcher for FetcherRegistry {
     fn supports(&self, exchange: CexId) -> bool {
-        self.contains(exchange)
+        self.fetchers.contains_key(&exchange)
     }
 
     async fn fetch(&self, gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>> {

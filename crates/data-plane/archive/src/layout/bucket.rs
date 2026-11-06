@@ -52,8 +52,4 @@ impl ArchiveBucket {
             file_name,
         )
     }
-
-    pub fn parse(path: &str) -> Option<Self> {
-        ArchivePath::parse_key(path)
-    }
 }

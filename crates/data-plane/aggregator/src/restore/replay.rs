@@ -7,7 +7,9 @@ use super::catalog::{ArchiveObject, ArchiveRecoveryConfig, S3ArchiveRecovery};
 use crate::shard::ShardId;
 use async_trait::async_trait;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
-use platform_archive::{ArchiveKind, ArchiveParquet, ArchivedMarketEvent, ParquetReader};
+use platform_archive::{
+    ArchiveKind, ArchiveParquetStream, ArchivedMarketEvent, ParquetReader, RoutingBucket,
+};
 use platform_errors::{BpError, BpResult};
 use platform_market_data::{
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
@@ -131,8 +133,7 @@ impl S3ArchivedEventSource {
                     &object.key,
                     file_size,
                 );
-                self.reader =
-                    Some(ArchiveParquet::decode_reader_batches(ArchiveKind::Events, reader).await?);
+                self.reader = Some(ArchiveParquetStream::new(ArchiveKind::Events, reader).await?);
                 self._reader_permit = Some(permit);
                 info!(
                     key = %object.key,
@@ -182,9 +183,7 @@ impl ArchivedEventSource for S3ArchivedEventSource {
     async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>> {
         loop {
             if let Some(event) = self.events.pop_front() {
-                if event
-                    .routing_key()
-                    .bucket()
+                if RoutingBucket::from_key(event.routing_key())
                     .is_owned_by(self.shard.get(), self.shard_count)
                 {
                     return Ok(Some(event));

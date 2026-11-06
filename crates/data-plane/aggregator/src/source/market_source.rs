@@ -25,14 +25,6 @@ pub enum MarketInput {
 }
 
 impl MarketInput {
-    pub fn event(event: MarketEvent) -> Self {
-        Self::Event(event)
-    }
-
-    pub fn gap(gap: GapMarker) -> Self {
-        Self::Gap(gap)
-    }
-
     pub fn exchange(&self) -> stock_trek_types::cex::cex_id::CexId {
         match self {
             Self::Event(event) => event.exchange,
@@ -252,15 +244,6 @@ impl NatsShardSource {
             in_flight: None,
         })
     }
-
-    pub fn filter_subject(&self) -> &str {
-        self.consumer.filter_subject()
-    }
-
-    /// Decodes a routed input payload. Exposed for source-level tests.
-    pub fn decode_routed(payload: &[u8]) -> BpResult<MarketInput> {
-        MarketInput::decode(payload)
-    }
 }
 
 #[async_trait]
@@ -270,7 +253,7 @@ impl MarketSource for NatsShardSource {
             let Some(message) = self.consumer.next_message_unacked().await else {
                 continue;
             };
-            match Self::decode_routed(&message.payload) {
+            match MarketInput::decode(&message.payload) {
                 Ok(input) => {
                     self.in_flight = Some(message.clone());
                     return Ok(Some(SourceRecord::new(input, message)));

@@ -32,14 +32,11 @@ where
         }
     }
 
-    pub async fn run_with_retry_store<R>(self, retries: R) -> BpResult<()>
+    pub async fn run<R>(self, retries: R) -> BpResult<()>
     where
         R: GapRetryStore + 'static,
     {
-        self.run_inner(Arc::new(retries)).await
-    }
-
-    async fn run_inner(self, retries: Arc<dyn GapRetryStore>) -> BpResult<()> {
+        let retries = Arc::new(retries);
         let Self {
             config,
             source,

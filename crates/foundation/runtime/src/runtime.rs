@@ -1,6 +1,5 @@
 //! Process-level runtime helpers shared by services across the workspace.
 
-use platform_config::tracing_setup::TracingSetup;
 use platform_errors::BpResult;
 use std::future::Future;
 use tracing::info;
@@ -9,11 +8,6 @@ use tracing::info;
 pub struct Runtime;
 
 impl Runtime {
-    /// Installs the global tracing subscriber using an already validated filter.
-    pub fn init_logging(log_filter: &str) -> BpResult<()> {
-        TracingSetup::setup(log_filter)
-    }
-
     /// Resolves once the process receives a shutdown signal.
     ///
     /// Service loops select on this future so every service logs and handles

@@ -24,10 +24,6 @@ pub struct HashRouter {
 }
 
 impl HashRouter {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Returns the shards that must receive `input`.
     ///
     /// An event is routed to every shard owning one of its decoded trading
@@ -103,7 +99,7 @@ where
             config,
             source,
             publisher,
-            router: HashRouter::new(),
+            router: HashRouter::default(),
         }
     }
 

@@ -59,7 +59,7 @@ async fn source_completion_is_an_error() {
     let runner = BackfillerRunner::new(config(), FakeSource, FakeFetcher, FakePublisher);
 
     let error = runner
-        .run_with_retry_store(InMemoryGapRetryStore::new())
+        .run(InMemoryGapRetryStore::default())
         .await
         .unwrap_err();
 

@@ -18,7 +18,7 @@ fn routing_keys_are_stable_and_pair_specific() {
 
     assert_eq!(first, again);
     assert_ne!(first, ethereum);
-    assert!(first.bucket().index() < RoutingBucket::COUNT);
+    assert!(RoutingBucket::from_key(first).index() < RoutingBucket::COUNT);
 }
 
 #[test]
@@ -41,7 +41,7 @@ fn events_and_candles_for_the_same_pair_share_a_routing_key() {
 #[test]
 fn bucket_segments_round_trip() {
     let key = RoutingKey::for_pair(CexId::Binance, &bitcoin_pair());
-    let bucket = key.bucket();
+    let bucket = RoutingBucket::from_key(key);
     let path = format!(
         "events/{}/year=2024/month=01/day=02/hour=03",
         bucket.segment()
@@ -53,7 +53,7 @@ fn bucket_segments_round_trip() {
 
 #[test]
 fn shard_assignment_is_derived_from_the_archive_bucket() {
-    let bucket = RoutingKey::for_pair(CexId::Binance, &bitcoin_pair()).bucket();
+    let bucket = RoutingBucket::from_key(RoutingKey::for_pair(CexId::Binance, &bitcoin_pair()));
 
     for shard_count in [1, 2, 8, 16, 100] {
         assert!(bucket.shard_index(shard_count) < shard_count as u32);

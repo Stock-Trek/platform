@@ -174,23 +174,12 @@ impl ArchiveParquet {
     /// The reader fetches the Parquet footer/metadata and only the column chunks
     /// needed for each record batch through the S3 transfer manager.
     pub async fn decode_reader(kind: ArchiveKind, reader: ParquetReader) -> BpResult<ArchiveBatch> {
-        let mut stream = Self::decode_reader_batches(kind, reader).await?;
+        let mut stream = ArchiveParquetStream::new(kind, reader).await?;
         let mut records = Vec::new();
         while let Some(batch) = stream.next_batch().await? {
             records.extend(batch.into_records());
         }
         ArchiveBatch::new(kind, records)
-    }
-
-    /// Streams an object in bounded batches without downloading it in full.
-    ///
-    /// The reader fetches the Parquet footer/metadata and only the column chunks
-    /// needed for each batch through the S3 transfer manager.
-    pub async fn decode_reader_batches(
-        kind: ArchiveKind,
-        reader: ParquetReader,
-    ) -> BpResult<ArchiveParquetStream<ParquetReader>> {
-        ArchiveParquetStream::new(kind, reader).await
     }
 
     pub(crate) fn writer_properties() -> WriterProperties {
