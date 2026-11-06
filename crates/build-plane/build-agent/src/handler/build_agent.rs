@@ -2,7 +2,7 @@ use crate::handler::Handler;
 use lambda_runtime::LambdaEvent;
 use platform_errors::{BpError, BpResult, ErrorType};
 use platform_messages::build_request::{BuildOutcome, BuildRequest};
-use platform_metrics::build::BuildMetrics;
+use platform_metrics::build_metrics::BuildMetrics;
 use std::time::{Instant, SystemTime};
 
 pub struct BuildAgent;
