@@ -1,6 +1,6 @@
 use crate::config::RunInvokerConfig;
 use crate::presigned_post::{PresignedPost, PresignedPostSigner};
-use crate::process::invoke_runner;
+use crate::process::Runner;
 use crate::run_request::RunRequest;
 use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
 use aws_sdk_s3::Client as S3Client;
@@ -16,6 +16,7 @@ use tracing::{error, info, warn};
 
 pub struct RunInvoker {
     config: RunInvokerConfig,
+    runner: Runner,
     store: RunStore,
     s3: S3Client,
     signer: PresignedPostSigner,
@@ -31,6 +32,7 @@ impl RunInvoker {
         credentials_provider: SharedCredentialsProvider,
     ) -> Self {
         Self {
+            runner: Runner::new(config.runner_bin.clone()),
             config,
             store,
             s3,
@@ -100,7 +102,7 @@ impl RunInvoker {
         let cwasm_get_url = self.presigned_get_url(&record.cwasm_key).await?;
         let logs_post = self.presigned_logs_post(record).await?;
         let request = RunRequest::from_record(record, cwasm_get_url, logs_post);
-        invoke_runner(&self.config.runner_bin, &request.to_json()?).await?;
+        self.runner.invoke(&request.to_json()?).await?;
         info!(
             algorithm_id = %record.algorithm_id,
             log_key = %RunRequest::log_key(record),

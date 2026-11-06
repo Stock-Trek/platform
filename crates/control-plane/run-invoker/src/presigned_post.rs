@@ -2,6 +2,7 @@ use aws_credential_types::Credentials;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use chrono::{DateTime, Utc};
 use hmac::{Hmac, KeyInit, Mac};
+use platform_aws::SdkConfig;
 use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BpError, BpResult};
 use serde::Serialize;
@@ -28,6 +29,15 @@ pub struct PresignedPostSigner {
 }
 
 impl PresignedPostSigner {
+    pub fn from_sdk_config(sdk_config: &SdkConfig, bucket: String) -> Self {
+        let region = sdk_config
+            .region()
+            .map(|region| region.as_ref().to_string())
+            .unwrap_or_else(|| "us-east-1".to_string());
+        let endpoint_url = sdk_config.endpoint_url().map(str::to_string);
+        Self::new(bucket, region, endpoint_url)
+    }
+
     pub fn new(bucket: String, region: String, endpoint_url: Option<String>) -> Self {
         Self {
             bucket,

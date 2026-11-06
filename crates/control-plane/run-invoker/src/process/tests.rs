@@ -1,8 +1,8 @@
-use super::invoke_runner;
+use super::Runner;
 use std::fs;
 use std::io::Write;
 use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::time::Duration;
 use tempfile::{NamedTempFile, tempdir};
 
@@ -32,7 +32,7 @@ async fn writes_the_request_and_returns_without_waiting() {
     let output = directory.path().join("request");
     let script = runner_script(&[format!("cat > '{}'", output.display())]);
 
-    invoke_runner(&script, "request").await.unwrap();
+    Runner::new(script).invoke("request").await.unwrap();
 
     let mut delivered = false;
     for _ in 0..100 {
@@ -47,6 +47,8 @@ async fn writes_the_request_and_returns_without_waiting() {
 
 #[tokio::test]
 async fn fails_when_the_runner_binary_is_missing() {
-    let result = invoke_runner(Path::new("/nonexistent/runner"), "{}").await;
+    let result = Runner::new(PathBuf::from("/nonexistent/runner"))
+        .invoke("{}")
+        .await;
     assert!(result.is_err());
 }

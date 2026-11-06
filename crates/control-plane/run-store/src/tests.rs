@@ -1,7 +1,7 @@
 use crate::RunRecord;
 use crate::run_record::{
-    self, ALGORITHM_ID, COMPLETED_AT, CWASM_KEY, CWASM_SHA256, CWASM_SIZE, ERROR, SCHEDULED_AT,
-    STATUS, STRATEGY_NAME, WASMTIME_VERSION,
+    ALGORITHM_ID, COMPLETED_AT, CWASM_KEY, CWASM_SHA256, CWASM_SIZE, ERROR, SCHEDULED_AT, STATUS,
+    STRATEGY_NAME, WASMTIME_VERSION,
 };
 use crate::run_status::RunStatus;
 use aws_sdk_dynamodb::types::AttributeValue;
@@ -127,9 +127,9 @@ fn parses_run_statuses() {
 fn formats_timestamps_for_lexicographic_sorting() {
     let earlier = record().scheduled_at;
     let later = earlier + chrono::Duration::milliseconds(1);
-    assert!(run_record::format_timestamp(earlier) < run_record::format_timestamp(later));
+    assert!(RunRecord::format_timestamp(earlier) < RunRecord::format_timestamp(later));
     assert_eq!(
-        run_record::parse_timestamp(&run_record::format_timestamp(earlier)).unwrap(),
+        RunRecord::parse_timestamp(&RunRecord::format_timestamp(earlier)).unwrap(),
         earlier
     );
 }

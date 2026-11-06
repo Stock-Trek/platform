@@ -7,7 +7,7 @@ mod run_request;
 mod tests;
 
 use crate::{config::RunInvokerConfig, invoker::RunInvoker, presigned_post::PresignedPostSigner};
-use platform_aws::{Aws, SdkConfig};
+use platform_aws::Aws;
 use platform_errors::{BpError, BpResult, StorageError};
 use platform_run_store::RunStore;
 use platform_runtime::Service;
@@ -24,17 +24,8 @@ async fn main() -> BpResult<()> {
     let credentials_provider = sdk_config
         .credentials_provider()
         .ok_or(BpError::Storage(StorageError::MissingCredentials))?;
-    let signer = log_post_signer(&sdk_config, config.logs_bucket.clone());
+    let signer = PresignedPostSigner::from_sdk_config(&sdk_config, config.logs_bucket.clone());
     RunInvoker::new(config, store, s3, signer, credentials_provider)
         .run()
         .await
-}
-
-fn log_post_signer(sdk_config: &SdkConfig, bucket: String) -> PresignedPostSigner {
-    let region = sdk_config
-        .region()
-        .map(|region| region.as_ref().to_string())
-        .unwrap_or_else(|| "us-east-1".to_string());
-    let endpoint_url = sdk_config.endpoint_url().map(str::to_string);
-    PresignedPostSigner::new(bucket, region, endpoint_url)
 }

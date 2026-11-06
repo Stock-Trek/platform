@@ -1,7 +1,5 @@
 use crate::RunRecord;
-use crate::run_record::{
-    ALGORITHM_ID, COMPLETED_AT, ERROR, SCHEDULED_AT, STATUS, format_timestamp,
-};
+use crate::run_record::{ALGORITHM_ID, COMPLETED_AT, ERROR, SCHEDULED_AT, STATUS};
 use crate::run_status::RunStatus;
 use aws_sdk_dynamodb::Client;
 use aws_sdk_dynamodb::error::SdkError;
@@ -48,7 +46,7 @@ impl RunStore {
                     Err(BpError::external(format!(
                         "run of algorithm {} at {} is already scheduled",
                         record.algorithm_id,
-                        format_timestamp(record.scheduled_at),
+                        RunRecord::format_timestamp(record.scheduled_at),
                     )))
                 } else {
                     Err(BpError::external(error))
@@ -73,7 +71,10 @@ impl RunStore {
                 ":pending",
                 AttributeValue::S(RunStatus::Pending.as_str().to_string()),
             )
-            .expression_attribute_values(":now", AttributeValue::S(format_timestamp(now)))
+            .expression_attribute_values(
+                ":now",
+                AttributeValue::S(RunRecord::format_timestamp(now)),
+            )
             .limit(limit)
             .send()
             .await
@@ -91,7 +92,7 @@ impl RunStore {
             .key(ALGORITHM_ID, AttributeValue::S(record.algorithm_id.clone()))
             .key(
                 SCHEDULED_AT,
-                AttributeValue::S(format_timestamp(record.scheduled_at)),
+                AttributeValue::S(RunRecord::format_timestamp(record.scheduled_at)),
             )
             .update_expression("SET #status = :running")
             .condition_expression("#status = :pending")
@@ -154,14 +155,17 @@ impl RunStore {
             .key(ALGORITHM_ID, AttributeValue::S(record.algorithm_id.clone()))
             .key(
                 SCHEDULED_AT,
-                AttributeValue::S(format_timestamp(record.scheduled_at)),
+                AttributeValue::S(RunRecord::format_timestamp(record.scheduled_at)),
             )
             .update_expression(update_expression)
             .expression_attribute_names("#status", STATUS)
             .expression_attribute_names("#completed_at", COMPLETED_AT)
             .expression_attribute_names("#error", ERROR)
             .expression_attribute_values(":status", AttributeValue::S(status.as_str().to_string()))
-            .expression_attribute_values(":at", AttributeValue::S(format_timestamp(completed_at)));
+            .expression_attribute_values(
+                ":at",
+                AttributeValue::S(RunRecord::format_timestamp(completed_at)),
+            );
         if let Some(error) = error {
             request =
                 request.expression_attribute_values(":error", AttributeValue::S(error.to_string()));

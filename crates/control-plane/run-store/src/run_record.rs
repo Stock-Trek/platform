@@ -65,7 +65,7 @@ impl RunRecord {
         );
         item.insert(
             SCHEDULED_AT.into(),
-            AttributeValue::S(format_timestamp(self.scheduled_at)),
+            AttributeValue::S(Self::format_timestamp(self.scheduled_at)),
         );
         item.insert(CWASM_KEY.into(), AttributeValue::S(self.cwasm_key.clone()));
         item.insert(
@@ -91,7 +91,7 @@ impl RunRecord {
         if let Some(completed_at) = self.completed_at {
             item.insert(
                 COMPLETED_AT.into(),
-                AttributeValue::S(format_timestamp(completed_at)),
+                AttributeValue::S(Self::format_timestamp(completed_at)),
             );
         }
         if let Some(error) = &self.error {
@@ -102,80 +102,89 @@ impl RunRecord {
 
     pub(crate) fn from_item(item: &Item) -> BpResult<Self> {
         Ok(Self {
-            algorithm_id: string(item, ALGORITHM_ID)?,
-            scheduled_at: timestamp(item, SCHEDULED_AT)?,
-            cwasm_key: string(item, CWASM_KEY)?,
-            cwasm_sha256: string(item, CWASM_SHA256)?,
-            cwasm_size: number(item, CWASM_SIZE)?,
-            wasmtime_version: string(item, WASMTIME_VERSION)?,
-            strategy_name: string(item, STRATEGY_NAME)?,
-            status: RunStatus::parse(&string(item, STATUS)?)
-                .ok_or_else(|| invalid_attribute(STATUS, "is not a run status"))?,
+            algorithm_id: Self::string(item, ALGORITHM_ID)?,
+            scheduled_at: Self::timestamp(item, SCHEDULED_AT)?,
+            cwasm_key: Self::string(item, CWASM_KEY)?,
+            cwasm_sha256: Self::string(item, CWASM_SHA256)?,
+            cwasm_size: Self::number(item, CWASM_SIZE)?,
+            wasmtime_version: Self::string(item, WASMTIME_VERSION)?,
+            strategy_name: Self::string(item, STRATEGY_NAME)?,
+            status: RunStatus::parse(&Self::string(item, STATUS)?)
+                .ok_or_else(|| Self::invalid_attribute(STATUS, "is not a run status"))?,
             completed_at: match item.get(COMPLETED_AT) {
-                Some(value) => Some(parse_timestamp(&string_value(COMPLETED_AT, value)?)?),
+                Some(value) => Some(Self::parse_timestamp(&Self::string_value(
+                    COMPLETED_AT,
+                    value,
+                )?)?),
                 None => None,
             },
             error: match item.get(ERROR) {
-                Some(value) => Some(string_value(ERROR, value)?),
+                Some(value) => Some(Self::string_value(ERROR, value)?),
                 None => None,
             },
         })
     }
-}
 
-pub(crate) fn format_timestamp(timestamp: DateTime<Utc>) -> String {
-    timestamp.to_rfc3339_opts(SecondsFormat::Millis, true)
-}
+    pub(crate) fn format_timestamp(timestamp: DateTime<Utc>) -> String {
+        timestamp.to_rfc3339_opts(SecondsFormat::Millis, true)
+    }
 
-pub(crate) fn parse_timestamp(value: &str) -> BpResult<DateTime<Utc>> {
-    DateTime::parse_from_rfc3339(value)
-        .map(|timestamp| timestamp.with_timezone(&Utc))
-        .map_err(|source| invalid_attribute_source(SCHEDULED_AT, &source))
-}
+    pub(crate) fn parse_timestamp(value: &str) -> BpResult<DateTime<Utc>> {
+        DateTime::parse_from_rfc3339(value)
+            .map(|timestamp| timestamp.with_timezone(&Utc))
+            .map_err(|source| Self::invalid_attribute_source(SCHEDULED_AT, &source))
+    }
 
-fn string(item: &Item, name: &str) -> BpResult<String> {
-    let value = item.get(name).ok_or_else(|| missing_attribute(name))?;
-    string_value(name, value)
-}
+    fn string(item: &Item, name: &str) -> BpResult<String> {
+        let value = item
+            .get(name)
+            .ok_or_else(|| Self::missing_attribute(name))?;
+        Self::string_value(name, value)
+    }
 
-fn string_value(name: &str, value: &AttributeValue) -> BpResult<String> {
-    value
-        .as_s()
-        .map_err(|_| invalid_attribute(name, "is not a string"))
-        .and_then(|value| {
-            if value.is_empty() {
-                Err(invalid_attribute(name, "is empty"))
-            } else {
-                Ok(value.clone())
-            }
-        })
-}
+    fn string_value(name: &str, value: &AttributeValue) -> BpResult<String> {
+        value
+            .as_s()
+            .map_err(|_| Self::invalid_attribute(name, "is not a string"))
+            .and_then(|value| {
+                if value.is_empty() {
+                    Err(Self::invalid_attribute(name, "is empty"))
+                } else {
+                    Ok(value.clone())
+                }
+            })
+    }
 
-fn number(item: &Item, name: &str) -> BpResult<u64> {
-    let value = item.get(name).ok_or_else(|| missing_attribute(name))?;
-    let value = value
-        .as_n()
-        .map_err(|_| invalid_attribute(name, "is not a number"))?;
-    value
-        .parse::<u64>()
-        .map_err(|_| invalid_attribute(name, "is not an unsigned integer"))
-}
+    fn number(item: &Item, name: &str) -> BpResult<u64> {
+        let value = item
+            .get(name)
+            .ok_or_else(|| Self::missing_attribute(name))?;
+        let value = value
+            .as_n()
+            .map_err(|_| Self::invalid_attribute(name, "is not a number"))?;
+        value
+            .parse::<u64>()
+            .map_err(|_| Self::invalid_attribute(name, "is not an unsigned integer"))
+    }
 
-fn timestamp(item: &Item, name: &str) -> BpResult<DateTime<Utc>> {
-    let value = item.get(name).ok_or_else(|| missing_attribute(name))?;
-    parse_timestamp(&string_value(name, value)?)
-}
+    fn timestamp(item: &Item, name: &str) -> BpResult<DateTime<Utc>> {
+        let value = item
+            .get(name)
+            .ok_or_else(|| Self::missing_attribute(name))?;
+        Self::parse_timestamp(&Self::string_value(name, value)?)
+    }
 
-fn missing_attribute(name: &str) -> BpError {
-    invalid_attribute(name, "is missing")
-}
+    fn missing_attribute(name: &str) -> BpError {
+        Self::invalid_attribute(name, "is missing")
+    }
 
-fn invalid_attribute(name: &str, reason: &str) -> BpError {
-    BpError::external(format!("run record attribute {name} {reason}"))
-}
+    fn invalid_attribute(name: &str, reason: &str) -> BpError {
+        BpError::external(format!("run record attribute {name} {reason}"))
+    }
 
-fn invalid_attribute_source(name: &str, source: &chrono::ParseError) -> BpError {
-    BpError::external(format!(
-        "run record attribute {name} is not a valid timestamp: {source}"
-    ))
+    fn invalid_attribute_source(name: &str, source: &chrono::ParseError) -> BpError {
+        BpError::external(format!(
+            "run record attribute {name} is not a valid timestamp: {source}"
+        ))
+    }
 }
