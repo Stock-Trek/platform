@@ -16,12 +16,15 @@ stock-trek = { workspace = true }
 traitreg = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+futures = { workspace = true }
 hex = { workspace = true }
 platform-errors = { workspace = true, features = ["http", "storage"] }
+rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["rustls", "stream"] }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt", "time"] }
+tokio-websockets = { workspace = true, features = ["client", "rustls-webpki-roots", "sha1_smol", "rand"] }
 tracing = { workspace = true }
 wasmtime = { workspace = true, features = ["runtime", "std"] }
 wasmtime-wasi = { workspace = true, features = ["p1"] }

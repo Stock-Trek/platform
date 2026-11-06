@@ -8,6 +8,7 @@
 //! `initialize`, which the invoker calls before `entry` so wasm constructors
 //! (including the algorithm registry) run before the command is handled.
 
+pub mod backtest;
 mod config;
 mod cwasm_artifact;
 mod runtime;

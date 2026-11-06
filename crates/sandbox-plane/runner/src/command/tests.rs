@@ -122,3 +122,101 @@ fn builds_entry_arguments_for_every_command() {
         vec!["Signals", "AlgorithmStub", "/tmp/strategy-context.bin"]
     );
 }
+
+#[test]
+fn deserialises_the_back_test_command() {
+    let command: Command = serde_json::from_str(
+        r#"{
+                "command": "backTest",
+                "strategyName": "AlgorithmStub",
+                "strategyContextPath": "/tmp/strategy-context.bin",
+                "portfolioPath": "/tmp/portfolio.bin",
+                "marketDataPath": "/tmp/market-data.bin",
+                "resultsStreamUrl": "wss://example.com/results",
+                "resultsPostUrl": "https://example.com/results",
+                "userId": "user-1",
+                "algorithmId": "algorithm-1",
+                "backTestId": "back-test-1",
+                "simulationCount": 10,
+                "randomSeed": 42,
+                "tradingPairs": [{"base": "Bitcoin", "quote": "TetherUSD"}],
+                "windows": [5, 12],
+                "historicalCandleCount": 300,
+                "openCandleProgressMillis": 30000
+            }"#,
+    )
+    .unwrap();
+
+    assert_eq!(command.strategy_name(), "AlgorithmStub");
+    assert_eq!(command.arguments(), vec!["BackTest", "AlgorithmStub"]);
+    let Command::BackTest {
+        simulation_count,
+        random_seed,
+        trading_pairs,
+        windows,
+        historical_candle_count,
+        open_candle_progress_millis,
+        simulation,
+        ..
+    } = &command
+    else {
+        panic!("expected a back test command");
+    };
+    assert_eq!(*simulation_count, 10);
+    assert_eq!(*random_seed, 42);
+    assert_eq!(
+        trading_pairs,
+        &[TradingPair {
+            base: "Bitcoin".to_string(),
+            quote: "TetherUSD".to_string(),
+        }]
+    );
+    assert_eq!(windows, &[5, 12]);
+    assert_eq!(*historical_candle_count, 300);
+    assert_eq!(*open_candle_progress_millis, 30000);
+    assert_eq!(*simulation, SimulationParameters::default());
+}
+
+#[test]
+fn deserialises_back_test_simulation_parameters() {
+    let command: Command = serde_json::from_str(
+        r#"{
+                "command": "backTest",
+                "strategyName": "AlgorithmStub",
+                "strategyContextPath": "/tmp/strategy-context.bin",
+                "portfolioPath": "/tmp/portfolio.bin",
+                "marketDataPath": "/tmp/market-data.bin",
+                "resultsStreamUrl": "wss://example.com/results",
+                "resultsPostUrl": "https://example.com/results",
+                "userId": "user-1",
+                "algorithmId": "algorithm-1",
+                "backTestId": "back-test-1",
+                "simulationCount": 1,
+                "randomSeed": 42,
+                "tradingPairs": [{"base": "Bitcoin", "quote": "TetherUSD"}],
+                "windows": [5],
+                "historicalCandleCount": 300,
+                "openCandleProgressMillis": 30000,
+                "simulation": {
+                    "candleLossChance": 0.01,
+                    "slippageChance": 0.1,
+                    "slippageProportion": 0.002,
+                    "lostOrderChance": 0.02
+                }
+            }"#,
+    )
+    .unwrap();
+
+    let Command::BackTest { simulation, .. } = &command else {
+        panic!("expected a back test command");
+    };
+    assert_eq!(
+        simulation,
+        &SimulationParameters {
+            candle_loss_chance: 0.01,
+            slippage_chance: 0.1,
+            slippage_proportion: 0.002,
+            lost_order_chance: 0.02,
+        }
+    );
+}

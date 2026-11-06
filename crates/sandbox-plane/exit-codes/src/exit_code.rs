@@ -27,6 +27,9 @@ pub enum ExitCode {
     ServerRunnerPortfolioNotDecoded = 122,
     ServerRunnerPortfolioNotCreated = 123,
 
+    ServerRunnerMarketDataFileNotFound = 124,
+    ServerRunnerMarketDataNotDecoded = 125,
+
     ServerRunnerConnectionFailed = 131,
     ServerRunnerCwasmNotLoaded = 132,
     ServerRunnerCwasmDownloadFailed = 133,
@@ -68,6 +71,8 @@ impl ExitCode {
                 | Self::ServerRunnerPortfolioFileNotFound
                 | Self::ServerRunnerPortfolioNotDecoded
                 | Self::ServerRunnerPortfolioNotCreated
+                | Self::ServerRunnerMarketDataFileNotFound
+                | Self::ServerRunnerMarketDataNotDecoded
         )
     }
 
@@ -100,6 +105,8 @@ impl ExitCode {
             Self::ServerRunnerPortfolioFileNotFound => "portfolio not found",
             Self::ServerRunnerPortfolioNotDecoded => "portfolio could not be decoded",
             Self::ServerRunnerPortfolioNotCreated => "portfolio could not be created",
+            Self::ServerRunnerMarketDataFileNotFound => "market data not found",
+            Self::ServerRunnerMarketDataNotDecoded => "market data could not be decoded",
             Self::ServerRunnerConnectionFailed => "failed to connect to build runner",
             Self::ServerRunnerCwasmNotLoaded => "cwasm artifact could not be loaded",
             Self::ServerRunnerCwasmDownloadFailed => "cwasm artifact could not be downloaded",

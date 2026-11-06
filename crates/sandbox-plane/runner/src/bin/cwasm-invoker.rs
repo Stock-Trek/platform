@@ -32,9 +32,9 @@
 #[path = "../cwasm/mod.rs"]
 mod cwasm;
 
-use cwasm::{Cwasm, CwasmIntegrity, InvokerConfig, WasmRunner};
+use cwasm::{Cwasm, CwasmIntegrity, InvokerConfig, WasmRunner, backtest};
 use platform_exit_codes::ExitCode;
-use platform_runner::command::RunRequest;
+use platform_runner::command::{Command, RunRequest};
 use std::io::{self, Read};
 
 const MAX_RUN_REQUEST_BYTES: u64 = 1024 * 1024;
@@ -100,6 +100,9 @@ impl CwasmInvoker {
             }
         };
 
+        if matches!(request.command, Command::BackTest { .. }) {
+            return backtest::run(&runner, cwasm.path(), &request.command);
+        }
         runner.execute_command(cwasm.path(), &request.command)
     }
 
