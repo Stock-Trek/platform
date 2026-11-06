@@ -2,7 +2,7 @@ use super::catalog::{
     AGGREGATOR_ARCHIVE_S3_BUCKET, AGGREGATOR_ARCHIVE_S3_PREFIX, ArchiveObject,
     ArchiveRecoveryConfig,
 };
-use super::rebuild::{RestoreOptions, RestoreSource};
+use super::restored_shard::{RestoreOptions, RestoreSource};
 use super::replay::ArchivedEventSource;
 use crate::checkpoint::tests::InMemoryStateStore;
 use crate::checkpoint::{CheckpointRecord, StateStore};
