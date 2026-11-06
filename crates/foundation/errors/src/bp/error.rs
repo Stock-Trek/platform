@@ -7,8 +7,8 @@ use crate::lambda::LambdaError;
 #[cfg(feature = "storage")]
 use crate::storage::StorageError;
 use crate::{
-    binance::BinanceError, config::ConfigError, connector::ConnectorError, data::DataError,
-    exchange::ExchangeError, ingester::IngesterError, io::IoError, nats::NatsError,
+    auth::AuthError, binance::BinanceError, config::ConfigError, connector::ConnectorError,
+    data::DataError, exchange::ExchangeError, ingester::IngesterError, io::IoError, nats::NatsError,
     rate_limit::RateLimitError, secrets::SecretsError, sqs::SqsError, system::SystemError,
     timeout::TimeoutError, validation::ValidationError,
 };
@@ -17,6 +17,8 @@ pub type BpResult<T> = Result<T, BpError>;
 
 #[derive(Debug, thiserror::Error)]
 pub enum BpError {
+    #[error(transparent)]
+    Auth(#[from] AuthError),
     #[error(transparent)]
     Binance(#[from] BinanceError),
     #[error(transparent)]
