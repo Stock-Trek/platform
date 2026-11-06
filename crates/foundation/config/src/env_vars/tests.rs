@@ -43,15 +43,15 @@ fn required_parsed_reports_invalid_values() {
 }
 
 #[test]
-fn optional_parsed_uses_defaults_only_for_missing_or_empty_values() {
+fn optional_parsed_treats_missing_and_empty_values_as_none() {
     let vars = env_vars([("COUNT", "42"), ("EMPTY", "")]);
-    assert_eq!(vars.optional_parsed_or("COUNT", 1).unwrap(), 42);
-    assert_eq!(vars.optional_parsed_or("MISSING", 7).unwrap(), 7);
-    assert_eq!(vars.optional_parsed_or("EMPTY", 9).unwrap(), 9);
+    assert_eq!(vars.optional_parsed::<usize>("COUNT").unwrap(), Some(42));
+    assert_eq!(vars.optional_parsed::<usize>("MISSING").unwrap(), None);
+    assert_eq!(vars.optional_parsed::<usize>("EMPTY").unwrap(), None);
 
     let vars = env_vars([("COUNT", "not a number")]);
     assert!(matches!(
-        vars.optional_parsed_or("COUNT", 1).unwrap_err(),
+        vars.optional_parsed::<usize>("COUNT").unwrap_err(),
         BpError::Config(ConfigError::Invalid { name, .. }) if name == "COUNT"
     ));
 }
@@ -80,26 +80,11 @@ fn positive_durations_reject_zero_and_invalid_values() {
             .unwrap(),
         Duration::from_secs(30)
     );
-    assert_eq!(
-        vars.optional_positive_duration_secs("INTERVAL_SECS", 5)
-            .unwrap(),
-        Duration::from_secs(30)
-    );
-    assert_eq!(
-        env_vars(Vec::<(String, String)>::new())
-            .optional_positive_duration_secs("INTERVAL_SECS", 5)
-            .unwrap(),
-        Duration::from_secs(5)
-    );
 
     for value in ["0", "not a number"] {
         let vars = env_vars([("INTERVAL_SECS", value)]);
         assert!(
             vars.required_positive_duration_secs("INTERVAL_SECS")
-                .is_err()
-        );
-        assert!(
-            vars.optional_positive_duration_secs("INTERVAL_SECS", 5)
                 .is_err()
         );
     }

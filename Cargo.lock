@@ -4974,6 +4974,7 @@ version = "0.2.0"
 dependencies = [
  "futures",
  "hex",
+ "platform-config",
  "platform-errors",
  "platform-exit-codes",
  "prost",
