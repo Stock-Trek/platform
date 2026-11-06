@@ -17,6 +17,3 @@ proc-macro = true
 [dependencies]
 quote = { version = "^1.0", default-features = false }
 syn = { version = "^2.0", default-features = false, features = ["parsing", "proc-macro", "printing", "full"] }
-
-[dev-dependencies]
-traitreg = { workspace = true }
