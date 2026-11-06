@@ -151,8 +151,21 @@ impl ArchiveParquet {
     where
         R: ChunkReader + 'static,
     {
+        Self::decode_batches_with_batch_size(kind, source, READ_BATCH_SIZE)
+    }
+
+    /// Decodes a Parquet source in batches of at most `batch_size` records, so
+    /// callers can keep the decoded records under an explicit memory budget.
+    pub fn decode_batches_with_batch_size<R>(
+        kind: ArchiveKind,
+        source: R,
+        batch_size: usize,
+    ) -> BpResult<ArchiveParquetBatches>
+    where
+        R: ChunkReader + 'static,
+    {
         let builder = ParquetRecordBatchReaderBuilder::try_new(source)?;
-        let reader = builder.with_batch_size(READ_BATCH_SIZE).build()?;
+        let reader = builder.with_batch_size(batch_size.max(1)).build()?;
         Ok(ArchiveParquetBatches { kind, reader })
     }
 
