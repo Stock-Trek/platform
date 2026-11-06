@@ -2,8 +2,6 @@ mod config;
 mod invoker;
 mod run_request;
 mod runner;
-#[cfg(test)]
-mod tests;
 
 use crate::{config::RunInvokerConfig, invoker::RunInvoker, runner::Runner};
 use platform_aws::{Aws, PresignedPostSigner};

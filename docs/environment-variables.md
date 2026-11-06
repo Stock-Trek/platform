@@ -250,8 +250,7 @@ their details.
 | --- | --- |
 | `RUN_INVOKER_ARTIFACT_BUCKET` | S3 bucket containing compiled runner cwasm artifacts. |
 | `RUN_INVOKER_LOGS_BUCKET` | S3 bucket that receives the algorithm run logs the runner uploads with its pre-signed POST. |
-| `RUN_INVOKER_MAX_BATCH` | Maximum number of due runs claimed per polling cycle. |
-| `RUN_INVOKER_POLL_INTERVAL_SECS` | How often the run invoker checks the run store for due runs, in seconds. |
+| `RUN_INVOKER_MAX_BATCH` | Maximum number of due runs claimed per invocation. |
 | `RUN_INVOKER_RUNNER_FUNCTION_NAME` | Name of the runner Lambda function invoked for every due run. |
 | `RUN_INVOKER_TABLE` | DynamoDB table holding the scheduled algorithm runs. |
 | `S3_SIGNED_URL_EXPIRY_SECS` | Lifetime of the pre-signed S3 URLs handed to the runner, in seconds. |

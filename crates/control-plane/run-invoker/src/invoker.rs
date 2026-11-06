@@ -9,11 +9,9 @@ use platform_aws::presigned_post::{PresignedPost, PresignedPostSigner};
 use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BpError, BpResult, StorageError};
 use platform_run_store::{RunRecord, RunStore};
-use platform_runtime::Runtime;
 use serde_json::json;
 use std::time::SystemTime;
-use tokio::time::{self, MissedTickBehavior};
-use tracing::{error, info, warn};
+use tracing::{error, info};
 
 pub struct RunInvoker {
     config: RunInvokerConfig,
@@ -44,24 +42,14 @@ impl RunInvoker {
     }
 
     pub async fn run(self) -> BpResult<()> {
-        let mut ticker = time::interval(self.config.poll_interval);
-        ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         info!(
             table = %self.config.table,
             artifact_bucket = %self.config.artifact_bucket,
             logs_bucket = %self.config.logs_bucket,
             runner_function = %self.config.runner_function_name,
-            "run invoker started"
+            "run invoker cycle started"
         );
-        Runtime::run_until_shutdown(async {
-            loop {
-                ticker.tick().await;
-                if let Err(error) = self.run_cycle().await {
-                    warn!(%error, "run cycle failed");
-                }
-            }
-        })
-        .await
+        self.run_cycle().await
     }
 
     async fn run_cycle(&self) -> BpResult<()> {
