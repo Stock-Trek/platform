@@ -7,6 +7,7 @@ use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
 use platform_runtime::Service;
 use std::sync::Arc;
+use tasks::Tasks;
 
 const SERVICE: Service = Service::new("platform-aggregator");
 
@@ -19,5 +20,5 @@ async fn main() -> BpResult<()> {
             .map(S3ArchiveRecovery::new)
             .map(Arc::new);
     SERVICE.init_logging(&config.log_filter)?;
-    tasks::run(config, archive_recovery).await
+    Tasks::run(config, archive_recovery).await
 }
