@@ -23,21 +23,34 @@ impl SpillRun {
 }
 
 /// Streams records into a spill run file without materializing the run.
+///
+/// The buffered records are flushed as one Parquet row group per
+/// `RUN_BATCH_RECORDS` records, matching the reader's decode batch size.
 pub struct SpillRunWriter {
     kind: ArchiveKind,
     writer: ArchiveParquetWriter<File>,
     buffer: Vec<ArchiveRecord>,
+    batch_records: usize,
     records: usize,
 }
 
 impl SpillRunWriter {
     pub fn create(path: &Path, kind: ArchiveKind) -> BpResult<Self> {
+        Self::create_with_batch_size(path, kind, RUN_BATCH_RECORDS)
+    }
+
+    pub fn create_with_batch_size(
+        path: &Path,
+        kind: ArchiveKind,
+        batch_size: usize,
+    ) -> BpResult<Self> {
         let file = File::create(path)
             .map_err(|error| BpError::io("create spill run", path.display().to_string(), error))?;
         Ok(Self {
             kind,
             writer: ArchiveParquetWriter::try_new(kind, file)?,
             buffer: Vec::new(),
+            batch_records: batch_size.max(1),
             records: 0,
         })
     }
@@ -48,7 +61,7 @@ impl SpillRunWriter {
         }
         self.buffer.push(record);
         self.records += 1;
-        if self.buffer.len() >= RUN_BATCH_RECORDS {
+        if self.buffer.len() >= self.batch_records {
             self.flush()?;
         }
         Ok(())
@@ -77,10 +90,18 @@ pub struct SpillRunReader {
 
 impl SpillRunReader {
     pub fn open(kind: ArchiveKind, path: &Path) -> BpResult<Self> {
+        Self::open_with_batch_size(kind, path, RUN_BATCH_RECORDS)
+    }
+
+    pub fn open_with_batch_size(
+        kind: ArchiveKind,
+        path: &Path,
+        batch_size: usize,
+    ) -> BpResult<Self> {
         let file = File::open(path)
             .map_err(|error| BpError::io("open spill run", path.display().to_string(), error))?;
         Ok(Self {
-            batches: ArchiveParquet::decode_batches(kind, file)?,
+            batches: ArchiveParquet::decode_batches_with_batch_size(kind, file, batch_size)?,
             buffer: Vec::new().into_iter(),
         })
     }
