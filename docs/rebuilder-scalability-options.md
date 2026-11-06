@@ -24,8 +24,11 @@ The rebuild must preserve these current invariants no matter which option is cho
 
 > **Status: implemented.** The rebuilder streams `ArchiveParquetStream` batches, stages replay
 > records and closed candles in shared archive spill runs (`platform-archive::spill`), and uploads
-> candle objects from staging files. `REBUILDER_SPILL_RECORDS` bounds the in-memory stage; the
-> deterministic invariants below are covered by `crates/data-plane/rebuilder/src/rebuild/tests.rs`.
+> candle objects from staging files. `REBUILDER_SPILL_RECORDS` bounds the in-memory stage and, via
+> the derived merge fan-in, the k-way merge buffers; `REBUILDER_SPILL_DIR` places the spill and
+> staging files; spilled record counts, temporary bytes written, and the largest spill run are
+> reported on completion. The deterministic invariants below are covered by
+> `crates/data-plane/rebuilder/src/rebuild/tests.rs`.
 
 Keep a single rebuilder process, but replace each whole-run collection with a bounded spill/merge pipeline:
 

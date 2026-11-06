@@ -1,11 +1,12 @@
+use super::{SpillUsage, merge_fanin};
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveKind, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey,
     ArchiveTableLayer, RoutingBucket,
-    spill::{SpillRun, SpillRunReader},
+    spill::{SpillRun, SpillRunReader, SpillRunWriter},
 };
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::ClosedCandle;
-use std::{cmp::Ordering, collections::BinaryHeap, path::PathBuf, vec::IntoIter};
+use std::{cmp::Ordering, collections::BinaryHeap, path::Path, path::PathBuf, vec::IntoIter};
 
 /// The sink's object order: archive bucket, routing bucket, compacted
 /// partition, record sort key, and record identity. Two candle records
@@ -31,7 +32,9 @@ pub struct CandleSpill {
     layer: ArchiveTableLayer,
     entries: Vec<(CandleOrderKey, ArchiveRecord)>,
     runs: Vec<PathBuf>,
+    generated: usize,
     spilled: usize,
+    usage: SpillUsage,
 }
 
 impl CandleSpill {
@@ -56,7 +59,9 @@ impl CandleSpill {
             layer,
             entries: Vec::new(),
             runs: Vec::new(),
+            generated: 0,
             spilled: 0,
+            usage: SpillUsage::default(),
         })
     }
 
@@ -74,15 +79,24 @@ impl CandleSpill {
         self.spilled
     }
 
-    pub fn finish(mut self) -> BpResult<CandleRecords> {
+    pub fn usage(&self) -> SpillUsage {
+        self.usage
+    }
+
+    pub fn finish(&mut self) -> BpResult<CandleRecords> {
         if self.runs.is_empty() {
             self.entries
                 .sort_by(|(left, _), (right, _)| left.cmp(right));
-            let records = Self::keep_latest(self.entries.into_iter().map(|(_, record)| record));
+            let records = Self::keep_latest(
+                std::mem::take(&mut self.entries)
+                    .into_iter()
+                    .map(|(_, record)| record),
+            );
             return Ok(CandleRecords::Memory(records.into_iter()));
         }
 
         self.spill()?;
+        self.reduce_runs(merge_fanin(self.limit))?;
         let readers = self
             .runs
             .iter()
@@ -104,12 +118,60 @@ impl CandleSpill {
             .sort_by(|(left, _), (right, _)| left.cmp(right));
         let records = Self::keep_latest(self.entries.drain(..).map(|(_, record)| record));
         self.spilled += records.len();
-        let path = self
-            .directory
-            .join(format!("candle-run-{}.parquet", self.runs.len()));
+        let path = self.next_run_path("candle-run");
         SpillRun::write(&path, &ArchiveBatch::new(ArchiveKind::Candles, records)?)?;
+        self.usage.record(&path)?;
         self.runs.push(path);
         Ok(())
+    }
+
+    fn reduce_runs(&mut self, fan_in: usize) -> BpResult<()> {
+        while self.runs.len() > fan_in {
+            let sources = std::mem::take(&mut self.runs);
+            let mut merged = Vec::new();
+            for chunk in sources.chunks(fan_in) {
+                if chunk.len() == 1 {
+                    merged.push(chunk[0].clone());
+                    continue;
+                }
+                let path = self.next_run_path("candle-merge");
+                self.merge_runs(chunk, &path)?;
+                for source in chunk {
+                    std::fs::remove_file(source).map_err(|error| {
+                        BpError::io(
+                            "remove merged rebuild spill run",
+                            source.display().to_string(),
+                            error,
+                        )
+                    })?;
+                }
+                merged.push(path);
+            }
+            self.runs = merged;
+        }
+        Ok(())
+    }
+
+    fn next_run_path(&mut self, label: &str) -> PathBuf {
+        let path = self
+            .directory
+            .join(format!("{label}-{}.parquet", self.generated));
+        self.generated += 1;
+        path
+    }
+
+    fn merge_runs(&mut self, runs: &[PathBuf], path: &Path) -> BpResult<()> {
+        let readers = runs
+            .iter()
+            .map(|run| SpillRunReader::open(ArchiveKind::Candles, run))
+            .collect::<BpResult<Vec<_>>>()?;
+        let mut merge = CandleMerge::new(readers, self.bucket_millis, self.layer)?;
+        let mut writer = SpillRunWriter::create(path, ArchiveKind::Candles)?;
+        while let Some(record) = merge.next_record()? {
+            writer.push(record)?;
+        }
+        writer.close()?;
+        self.usage.record(path)
     }
 
     fn order_key(

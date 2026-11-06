@@ -39,6 +39,8 @@ pub struct RebuildStats {
     pub unique_candles: usize,
     pub events_spilled: usize,
     pub candles_spilled: usize,
+    pub spill_bytes_written: u64,
+    pub largest_spill_run_bytes: u64,
 }
 
 /// Replays archived events through the same pure fold used by the live

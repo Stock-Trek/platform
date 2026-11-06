@@ -5,6 +5,7 @@ use platform_market_data::candle::AlignedWindow;
 use platform_runtime::Config;
 use platform_types::new_types::DurationMilliseconds;
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use strum::VariantArray;
 
 const REBUILDER_S3_BUCKET: &str = "REBUILDER_S3_BUCKET";
@@ -18,10 +19,8 @@ const REBUILDER_STATE_EPOCH: &str = "REBUILDER_STATE_EPOCH";
 const REBUILDER_FINISH_OPEN_WINDOWS: &str = "REBUILDER_FINISH_OPEN_WINDOWS";
 const REBUILDER_BUCKET_MILLIS: &str = "REBUILDER_BUCKET_MILLIS";
 const REBUILDER_SPILL_RECORDS: &str = "REBUILDER_SPILL_RECORDS";
+const REBUILDER_SPILL_DIR: &str = "REBUILDER_SPILL_DIR";
 const REBUILDER_DRY_RUN: &str = "REBUILDER_DRY_RUN";
-
-/// Default number of records staged in memory per spill run.
-pub const DEFAULT_SPILL_RECORDS: usize = 256 * 1024;
 
 /// Which Iceberg table the rebuilder reads events from.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -71,6 +70,8 @@ pub struct RebuildConfig {
     pub bucket_millis: i64,
     /// Records staged in memory before replay and candle runs spill to disk.
     pub spill_records: usize,
+    /// Directory for spill runs and temporary output files.
+    pub spill_dir: PathBuf,
     pub dry_run: bool,
     pub iceberg: IcebergConfig,
 }
@@ -115,14 +116,14 @@ impl RebuildConfig {
             REBUILDER_BUCKET_MILLIS,
         )?)
         .map_err(|error| BpError::config_invalid_source(REBUILDER_BUCKET_MILLIS, error))?;
-        let spill_records =
-            vars.optional_parsed_or(REBUILDER_SPILL_RECORDS, DEFAULT_SPILL_RECORDS)?;
+        let spill_records = vars.required_parsed(REBUILDER_SPILL_RECORDS)?;
         if spill_records == 0 {
             return Err(BpError::config_invalid(
                 REBUILDER_SPILL_RECORDS,
                 "must be greater than zero",
             ));
         }
+        let spill_dir = vars.required_path(REBUILDER_SPILL_DIR)?;
         let dry_run = vars.required_parsed(REBUILDER_DRY_RUN)?;
         let iceberg = IcebergConfig::from_vars(vars)?;
 
@@ -140,6 +141,7 @@ impl RebuildConfig {
             finish_open_windows,
             bucket_millis,
             spill_records,
+            spill_dir,
             dry_run,
             iceberg,
         })

@@ -7,6 +7,8 @@ use crate::{
 use platform_errors::{BpError, BpResult};
 use std::{fs::File, path::Path, vec::IntoIter};
 
+const RUN_BATCH_RECORDS: usize = 8_192;
+
 /// Writes one sorted spill run as a Parquet file.
 pub struct SpillRun;
 
@@ -17,6 +19,53 @@ impl SpillRun {
         let mut writer = ArchiveParquetWriter::try_new(batch.kind(), file)?;
         writer.write(batch)?;
         writer.close()
+    }
+}
+
+/// Streams records into a spill run file without materializing the run.
+pub struct SpillRunWriter {
+    kind: ArchiveKind,
+    writer: ArchiveParquetWriter<File>,
+    buffer: Vec<ArchiveRecord>,
+    records: usize,
+}
+
+impl SpillRunWriter {
+    pub fn create(path: &Path, kind: ArchiveKind) -> BpResult<Self> {
+        let file = File::create(path)
+            .map_err(|error| BpError::io("create spill run", path.display().to_string(), error))?;
+        Ok(Self {
+            kind,
+            writer: ArchiveParquetWriter::try_new(kind, file)?,
+            buffer: Vec::new(),
+            records: 0,
+        })
+    }
+
+    pub fn push(&mut self, record: ArchiveRecord) -> BpResult<()> {
+        if record.kind() != self.kind {
+            return Err(ArchiveBatch::kind_mismatch(self.kind, &record));
+        }
+        self.buffer.push(record);
+        self.records += 1;
+        if self.buffer.len() >= RUN_BATCH_RECORDS {
+            self.flush()?;
+        }
+        Ok(())
+    }
+
+    pub fn close(mut self) -> BpResult<()> {
+        self.flush()?;
+        self.writer.close()
+    }
+
+    fn flush(&mut self) -> BpResult<()> {
+        if self.buffer.is_empty() {
+            return Ok(());
+        }
+        let records = std::mem::take(&mut self.buffer);
+        let batch = ArchiveBatch::new(self.kind, records)?;
+        self.writer.write(&batch)
     }
 }
 
