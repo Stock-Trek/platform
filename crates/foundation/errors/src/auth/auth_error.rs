@@ -9,10 +9,7 @@ pub enum AuthError {
     #[error("API token {token_id:?} already exists")]
     TokenExists { token_id: String },
     #[error("invalid {field} for API token: {reason}")]
-    InvalidField {
-        field: &'static str,
-        reason: String,
-    },
+    InvalidField { field: &'static str, reason: String },
     #[error("token store {operation} failed for {target}: {source}")]
     Store {
         operation: &'static str,

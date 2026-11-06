@@ -1,8 +1,6 @@
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
-use rand::{
-    Rng, distributions::Alphanumeric,
-};
+use rand::{Rng, distributions::Alphanumeric};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::Value;
 

@@ -84,7 +84,10 @@ async fn signing_an_unknown_token_fails() {
 
     let error = service.sign_order_request("ghost", ORDER_REQUEST).await;
 
-    assert!(matches!(error, Err(BpError::Auth(AuthError::UnknownToken { .. }))));
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::UnknownToken { .. }))
+    ));
 }
 
 #[tokio::test]
@@ -93,11 +96,12 @@ async fn signing_after_deletion_fails() {
     let token = service.add_token("token-a", "demo-owner").await.unwrap();
     service.delete_token(token.id()).await.unwrap();
 
-    let error = service
-        .sign_order_request(token.id(), ORDER_REQUEST)
-        .await;
+    let error = service.sign_order_request(token.id(), ORDER_REQUEST).await;
 
-    assert!(matches!(error, Err(BpError::Auth(AuthError::UnknownToken { .. }))));
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::UnknownToken { .. }))
+    ));
 }
 
 #[tokio::test]
@@ -107,7 +111,10 @@ async fn adding_a_duplicate_token_fails() {
 
     let error = service.add_token("token-a", "demo-owner").await;
 
-    assert!(matches!(error, Err(BpError::Auth(AuthError::TokenExists { .. }))));
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::TokenExists { .. }))
+    ));
 }
 
 #[tokio::test]
@@ -116,7 +123,10 @@ async fn deleting_a_missing_token_fails() {
 
     let error = service.delete_token("ghost").await;
 
-    assert!(matches!(error, Err(BpError::Auth(AuthError::UnknownToken { .. }))));
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::UnknownToken { .. }))
+    ));
 }
 
 #[tokio::test]
@@ -169,14 +179,20 @@ fn round_trips_through_a_vault_value() {
 fn rejects_invalid_token_ids() {
     let error = ApiToken::generate("not/a/path", "demo-owner");
 
-    assert!(matches!(error, Err(BpError::Auth(AuthError::InvalidField { .. }))));
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField { .. }))
+    ));
 }
 
 #[test]
 fn rejects_missing_vault_value_fields() {
     let error = ApiToken::from_value("token-a", &json!({"owner": "demo-owner"}));
 
-    assert!(matches!(error, Err(BpError::Auth(AuthError::InvalidField { .. }))));
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField { .. }))
+    ));
 }
 
 #[test]

@@ -85,7 +85,12 @@ impl VaultTokenStore {
         if id.is_empty() {
             format!("{}/v1/{}/metadata", self.base_url(), self.config.mount)
         } else {
-            format!("{}/v1/{}/metadata/{}", self.base_url(), self.config.mount, id)
+            format!(
+                "{}/v1/{}/metadata/{}",
+                self.base_url(),
+                self.config.mount,
+                id
+            )
         }
     }
 
@@ -139,32 +144,42 @@ impl VaultTokenStore {
         response: reqwest::Response,
     ) -> BpResult<Value> {
         response.json::<Value>().await.map_err(|e| {
-            BpError::auth_store(operation, target, false, format!("unreadable response: {e}"))
+            BpError::auth_store(
+                operation,
+                target,
+                false,
+                format!("unreadable response: {e}"),
+            )
         })
     }
 
     async fn read(&self, id: &str) -> BpResult<Option<ApiToken>> {
         let response = self
-            .send("read", id, self.request(reqwest::Method::GET, self.data_url(id)))
+            .send(
+                "read",
+                id,
+                self.request(reqwest::Method::GET, self.data_url(id)),
+            )
             .await?;
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(None);
         }
         let response = self.require_success("read", id, response).await?;
         let value = self.parse_json("read", id, response).await?;
-        let data = value
-            .pointer("/data/data")
-            .cloned()
-            .ok_or_else(|| {
-                BpError::auth_store("read", id, false, "malformed Vault response".to_string())
-            })?;
+        let data = value.pointer("/data/data").cloned().ok_or_else(|| {
+            BpError::auth_store("read", id, false, "malformed Vault response".to_string())
+        })?;
         ApiToken::from_value(id, &data).map(Some)
     }
 
     async fn list_ids(&self) -> BpResult<Vec<String>> {
         let url = format!("{}?list=true", self.metadata_url(""));
         let response = self
-            .send("list", url.as_str(), self.request(reqwest::Method::GET, url.clone()))
+            .send(
+                "list",
+                url.as_str(),
+                self.request(reqwest::Method::GET, url.clone()),
+            )
             .await?;
         if response.status() == reqwest::StatusCode::NOT_FOUND {
             return Ok(Vec::new());

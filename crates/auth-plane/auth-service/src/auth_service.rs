@@ -11,7 +11,11 @@ impl AuthService {
         Self { store }
     }
 
-    pub async fn add_token(&self, id: impl Into<String>, owner: impl Into<String>) -> BpResult<ApiToken> {
+    pub async fn add_token(
+        &self,
+        id: impl Into<String>,
+        owner: impl Into<String>,
+    ) -> BpResult<ApiToken> {
         let token = ApiToken::generate(id, owner)?;
         self.store.put(&token).await?;
         Ok(token)

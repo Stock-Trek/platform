@@ -26,10 +26,7 @@ impl OrderRequestSigner {
 
     pub fn verify(&self, order_request: &[u8], signature: &str) -> BpResult<bool> {
         let expected = self.sign(order_request)?;
-        Ok(expected
-            .as_bytes()
-            .ct_eq(signature.as_bytes())
-            .into())
+        Ok(expected.as_bytes().ct_eq(signature.as_bytes()).into())
     }
 }
 
