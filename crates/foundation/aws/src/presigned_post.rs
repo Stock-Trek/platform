@@ -1,27 +1,38 @@
+//! Hand-rolled SigV4 presigned POST signing.
+//!
+//! The AWS SDK can presign individual S3 requests, but it does not expose the
+//! browser-style POST policy used by the build agent and the run invoker. Keep
+//! that signing logic isolated here so ordinary S3 operations can use the SDK
+//! client.
+
+use crate::SdkConfig;
 use aws_credential_types::Credentials;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use chrono::{DateTime, Utc};
 use hmac::{Hmac, KeyInit, Mac};
-use platform_aws::SdkConfig;
 use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BpError, BpResult};
 use serde::Serialize;
-use serde_json::json;
+use serde_json::{Value, json};
 use sha2::Sha256;
 use std::{
     collections::BTreeMap,
     time::{Duration, SystemTime},
 };
+use time::OffsetDateTime;
 
 const ALGORITHM: &str = "AWS4-HMAC-SHA256";
 const SERVICE: &str = "s3";
+const KEY_FIELD: &str = "key";
 
+/// A presigned S3 POST: the upload URL plus the form fields the uploader must
+/// send.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PresignedPost {
     pub url: String,
     pub fields: BTreeMap<String, String>,
 }
 
+/// Signs S3 POST policies with SigV4.
 pub struct PresignedPostSigner {
     bucket: String,
     region: String,
@@ -46,10 +57,15 @@ impl PresignedPostSigner {
         }
     }
 
+    /// Signs a POST policy that restricts uploads to the object key described
+    /// by `key_field` and `key_condition`, appending `extra_conditions` to the
+    /// policy.
     pub fn sign(
         &self,
         credentials: &Credentials,
-        key: &str,
+        key_field: &str,
+        key_condition: Value,
+        extra_conditions: &[Value],
         now: SystemTime,
         expires_in: Duration,
     ) -> BpResult<PresignedPost> {
@@ -69,7 +85,8 @@ impl PresignedPostSigner {
         );
         let policy = Self::policy(
             &self.bucket,
-            key,
+            key_condition,
+            extra_conditions,
             &credential,
             &amz_date,
             expires_at,
@@ -79,7 +96,7 @@ impl PresignedPostSigner {
         let signing_key = Self::signing_key(credentials.secret_access_key(), &date, &self.region);
         let signature = hex::encode(Self::hmac_sha256(&signing_key, policy_base64.as_bytes()));
         let mut fields = BTreeMap::from([
-            ("key".to_string(), key.to_string()),
+            (KEY_FIELD.to_string(), key_field.to_string()),
             ("policy".to_string(), policy_base64),
             ("x-amz-algorithm".to_string(), ALGORITHM.to_string()),
             ("x-amz-credential".to_string(), credential),
@@ -117,19 +134,21 @@ impl PresignedPostSigner {
 
     fn policy(
         bucket: &str,
-        key: &str,
+        key_condition: Value,
+        extra_conditions: &[Value],
         credential: &str,
         amz_date: &str,
         expires_at: SystemTime,
         session_token: Option<&str>,
-    ) -> serde_json::Value {
+    ) -> Value {
         let mut conditions = vec![
             json!({ "bucket": bucket }),
-            json!({ "key": key }),
+            key_condition,
             json!({ "x-amz-algorithm": ALGORITHM }),
             json!({ "x-amz-credential": credential }),
             json!({ "x-amz-date": amz_date }),
         ];
+        conditions.extend(extra_conditions.iter().cloned());
         if let Some(token) = session_token {
             conditions.push(json!({ "x-amz-security-token": token }));
         }
@@ -154,16 +173,34 @@ impl PresignedPostSigner {
     }
 
     fn amz_date(time: SystemTime) -> (String, String) {
-        let date_time = DateTime::<Utc>::from(time);
-        let date = date_time.format("%Y%m%d").to_string();
-        let amz_date = date_time.format("%Y%m%dT%H%M%SZ").to_string();
+        let date_time = OffsetDateTime::from(time);
+        let date = format!(
+            "{:04}{:02}{:02}",
+            date_time.year(),
+            u8::from(date_time.month()),
+            date_time.day()
+        );
+        let amz_date = format!(
+            "{date}T{:02}{:02}{:02}Z",
+            date_time.hour(),
+            date_time.minute(),
+            date_time.second()
+        );
         (date, amz_date)
     }
 
     fn expiration(time: SystemTime) -> String {
-        DateTime::<Utc>::from(time)
-            .format("%Y-%m-%dT%H:%M:%S%.3fZ")
-            .to_string()
+        let date_time = OffsetDateTime::from(time);
+        format!(
+            "{:04}-{:02}-{:02}T{:02}:{:02}:{:02}.{:03}Z",
+            date_time.year(),
+            u8::from(date_time.month()),
+            date_time.day(),
+            date_time.hour(),
+            date_time.minute(),
+            date_time.second(),
+            date_time.millisecond(),
+        )
     }
 }
 

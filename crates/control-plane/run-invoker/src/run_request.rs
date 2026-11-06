@@ -1,4 +1,4 @@
-use crate::presigned_post::PresignedPost;
+use platform_aws::presigned_post::PresignedPost;
 use platform_errors::{BpError, BpResult};
 use platform_run_store::RunRecord;
 use serde::Serialize;

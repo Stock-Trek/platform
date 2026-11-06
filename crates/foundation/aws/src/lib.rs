@@ -6,12 +6,15 @@
 
 pub use aws_config::{Region, SdkConfig};
 
+pub mod presigned_post;
 pub mod secrets;
 
+pub use presigned_post::{PresignedPost, PresignedPostSigner};
 pub use secrets::{SSM_DECRYPT_ENV, SSM_PATH_ENV, Secrets, SsmConfig};
 
 use aws_config::{BehaviorVersion, timeout::TimeoutConfig};
 use aws_sdk_dynamodb::Client as DynamoDbClient;
+use aws_sdk_lambda::Client as LambdaClient;
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use aws_sdk_ssm::Client as SsmClient;
@@ -47,6 +50,11 @@ impl Aws {
     /// Builds a DynamoDB client from shared SDK configuration.
     pub fn dynamodb_client(sdk_config: &SdkConfig) -> DynamoDbClient {
         DynamoDbClient::new(sdk_config)
+    }
+
+    /// Builds a Lambda client from shared SDK configuration.
+    pub fn lambda_client(sdk_config: &SdkConfig) -> LambdaClient {
+        LambdaClient::new(sdk_config)
     }
 
     /// Builds an S3 client that talks to a custom endpoint using path-style

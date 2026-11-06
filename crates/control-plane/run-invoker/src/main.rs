@@ -1,13 +1,12 @@
 mod config;
 mod invoker;
-mod presigned_post;
-mod process;
 mod run_request;
+mod runner;
 #[cfg(test)]
 mod tests;
 
-use crate::{config::RunInvokerConfig, invoker::RunInvoker, presigned_post::PresignedPostSigner};
-use platform_aws::Aws;
+use crate::{config::RunInvokerConfig, invoker::RunInvoker, runner::Runner};
+use platform_aws::{Aws, PresignedPostSigner};
 use platform_errors::{BpError, BpResult, StorageError};
 use platform_run_store::RunStore;
 use platform_runtime::Service;
@@ -25,7 +24,11 @@ async fn main() -> BpResult<()> {
         .credentials_provider()
         .ok_or(BpError::Storage(StorageError::MissingCredentials))?;
     let signer = PresignedPostSigner::from_sdk_config(&sdk_config, config.logs_bucket.clone());
-    RunInvoker::new(config, store, s3, signer, credentials_provider)
+    let runner = Runner::new(
+        Aws::lambda_client(&sdk_config),
+        config.runner_function_name.clone(),
+    );
+    RunInvoker::new(config, store, s3, runner, signer, credentials_provider)
         .run()
         .await
 }

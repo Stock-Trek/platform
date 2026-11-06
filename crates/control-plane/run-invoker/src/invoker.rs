@@ -1,15 +1,16 @@
 use crate::config::RunInvokerConfig;
-use crate::presigned_post::{PresignedPost, PresignedPostSigner};
-use crate::process::Runner;
 use crate::run_request::RunRequest;
+use crate::runner::Runner;
 use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvider};
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::presigning::PresigningConfig;
 use chrono::Utc;
+use platform_aws::presigned_post::{PresignedPost, PresignedPostSigner};
 use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BpError, BpResult, StorageError};
 use platform_run_store::{RunRecord, RunStore};
 use platform_runtime::Runtime;
+use serde_json::json;
 use std::time::SystemTime;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{error, info, warn};
@@ -28,11 +29,12 @@ impl RunInvoker {
         config: RunInvokerConfig,
         store: RunStore,
         s3: S3Client,
+        runner: Runner,
         signer: PresignedPostSigner,
         credentials_provider: SharedCredentialsProvider,
     ) -> Self {
         Self {
-            runner: Runner::new(config.runner_bin.clone()),
+            runner,
             config,
             store,
             s3,
@@ -48,7 +50,7 @@ impl RunInvoker {
             table = %self.config.table,
             artifact_bucket = %self.config.artifact_bucket,
             logs_bucket = %self.config.logs_bucket,
-            runner_bin = %self.config.runner_bin.display(),
+            runner_function = %self.config.runner_function_name,
             "run invoker started"
         );
         Runtime::run_until_shutdown(async {
@@ -132,9 +134,12 @@ impl RunInvoker {
             .provide_credentials()
             .await
             .map_err(|error| BpError::Storage(StorageError::Credentials(error)))?;
+        let log_key = RunRequest::log_key(record);
         self.signer.sign(
             &credentials,
-            &RunRequest::log_key(record),
+            &log_key,
+            json!({ "key": log_key.clone() }),
+            &[],
             SystemTime::now(),
             self.config.signed_url_expiry,
         )

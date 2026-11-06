@@ -19,24 +19,67 @@ fn now() -> SystemTime {
 }
 
 #[test]
-fn signs_post_policy_for_the_log_key() {
+fn signs_post_policy_for_an_exact_key() {
     let signer = PresignedPostSigner::new("run-logs".to_string(), "us-east-1".to_string(), None);
+    let key = "logs/demo-algorithm/20260203T040506.789Z.log";
     let credentials = credentials(Some("token/with+chars=".to_string()));
 
     let post = signer
         .sign(
             &credentials,
-            "logs/demo-algorithm/20260203T040506.789Z.log",
+            key,
+            json!({ "key": key }),
+            &[],
             now(),
             Duration::from_secs(900),
         )
         .unwrap();
 
     assert_eq!(post.url, "https://run-logs.s3.us-east-1.amazonaws.com/");
+    assert_eq!(post.fields["key"], key);
+    assert_eq!(post.fields["x-amz-date"], "20240102T030405Z");
     assert_eq!(
-        post.fields["key"],
-        "logs/demo-algorithm/20260203T040506.789Z.log"
+        post.fields["x-amz-credential"],
+        "AKIAIOSFODNN7EXAMPLE/20240102/us-east-1/s3/aws4_request"
     );
+    assert_eq!(post.fields["x-amz-security-token"], "token/with+chars=");
+    assert_eq!(post.fields["x-amz-signature"].len(), 64);
+
+    let policy: Value =
+        serde_json::from_slice(&BASE64.decode(&post.fields["policy"]).unwrap()).unwrap();
+    assert_eq!(policy["expiration"], "2024-01-02T03:19:05.000Z");
+    assert_eq!(policy["conditions"][1], json!({ "key": key }));
+    assert_eq!(
+        policy["conditions"][5],
+        json!({ "x-amz-security-token": "token/with+chars=" })
+    );
+}
+
+#[test]
+fn signs_post_policy_with_a_key_prefix_and_size_limit() {
+    let credentials = credentials(Some("token/with+chars=".to_string()));
+    let signer = PresignedPostSigner::new(
+        "stock-trek-user-artifacts".to_string(),
+        "us-east-1".to_string(),
+        None,
+    );
+
+    let post = signer
+        .sign(
+            &credentials,
+            "artifacts/42/${filename}",
+            json!(["starts-with", "$key", "artifacts/42/"]),
+            &[json!(["content-length-range", 0, 123])],
+            now(),
+            Duration::from_secs(900),
+        )
+        .unwrap();
+
+    assert_eq!(
+        post.url,
+        "https://stock-trek-user-artifacts.s3.us-east-1.amazonaws.com/"
+    );
+    assert_eq!(post.fields["key"], "artifacts/42/${filename}");
     assert_eq!(post.fields["x-amz-date"], "20240102T030405Z");
     assert_eq!(
         post.fields["x-amz-credential"],
@@ -49,11 +92,11 @@ fn signs_post_policy_for_the_log_key() {
         serde_json::from_slice(&BASE64.decode(&post.fields["policy"]).unwrap()).unwrap();
     assert_eq!(policy["expiration"], "2024-01-02T03:19:05.000Z");
     assert_eq!(
-        policy["conditions"][1],
-        json!({ "key": "logs/demo-algorithm/20260203T040506.789Z.log" })
+        policy["conditions"][5],
+        json!(["content-length-range", 0, 123])
     );
     assert_eq!(
-        policy["conditions"][5],
+        policy["conditions"][6],
         json!({ "x-amz-security-token": "token/with+chars=" })
     );
 }
@@ -71,6 +114,8 @@ fn signs_without_a_session_token_against_a_custom_endpoint() {
         .sign(
             &credentials,
             "logs/demo-algorithm/20260203T040506.789Z.log",
+            json!({ "key": "logs/demo-algorithm/20260203T040506.789Z.log" }),
+            &[],
             now(),
             Duration::from_secs(60),
         )
@@ -98,6 +143,8 @@ fn addresses_chinese_regions_with_the_chinese_dns_suffix() {
         .sign(
             &credentials,
             "logs/a/20260203T040506.789Z.log",
+            json!({ "key": "logs/a/20260203T040506.789Z.log" }),
+            &[],
             now(),
             Duration::from_secs(60),
         )
