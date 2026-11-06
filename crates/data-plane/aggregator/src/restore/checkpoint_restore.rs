@@ -7,8 +7,8 @@
 //! compacted yet.
 
 use super::rebuild::RebuiltArchiveState;
-use super::restored_shard::{RestoreOptions, RestoreSource, RestoredShard};
 use super::replay::ArchivedEventSource;
+use super::restored_shard::{RestoreOptions, RestoreSource, RestoredShard};
 use crate::checkpoint::StateStore;
 use crate::config::ReplayStartPolicy;
 use crate::processor::ProcessorConfig;
