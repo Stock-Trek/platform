@@ -4,12 +4,48 @@ use crate::http::HttpError;
 #[cfg(feature = "storage")]
 use crate::storage::StorageError;
 use crate::{
-    config::ConfigError, connector::ConnectorError, data::DataError, exchange::ExchangeError,
-    io::IoError, system::SystemError, validation::ValidationError,
+    auth::AuthError, config::ConfigError, connector::ConnectorError, data::DataError,
+    exchange::ExchangeError, io::IoError, system::SystemError, validation::ValidationError,
 };
 use std::{path::PathBuf, process::ExitStatus};
 
 impl BpError {
+    pub fn unknown_token(token_id: impl Into<String>) -> Self {
+        Self::Auth(AuthError::UnknownToken {
+            token_id: token_id.into(),
+        })
+    }
+
+    pub fn token_exists(token_id: impl Into<String>) -> Self {
+        Self::Auth(AuthError::TokenExists {
+            token_id: token_id.into(),
+        })
+    }
+
+    pub fn auth_invalid_field(field: &'static str, reason: impl Into<String>) -> Self {
+        Self::Auth(AuthError::InvalidField {
+            field,
+            reason: reason.into(),
+        })
+    }
+
+    pub fn auth_store<E>(
+        operation: &'static str,
+        target: impl Into<String>,
+        retryable: bool,
+        source: E,
+    ) -> Self
+    where
+        E: Into<Box<dyn std::error::Error + Send + Sync>>,
+    {
+        Self::Auth(AuthError::Store {
+            operation,
+            target: target.into(),
+            retryable,
+            source: source.into(),
+        })
+    }
+
     pub fn config_missing(name: impl Into<String>) -> Self {
         Self::Config(ConfigError::Missing { name: name.into() })
     }

@@ -33,6 +33,7 @@ impl BpError {
 
     pub fn retryability(&self) -> Retryability {
         match self {
+            Self::Auth(error) => error.retryability(),
             Self::Binance(error) => error.retryability(),
             Self::Config(error) => error.retryability(),
             Self::Connector(error) => error.retryability(),
@@ -62,6 +63,7 @@ impl BpError {
 impl ErrorType for BpError {
     fn error_type(&self) -> &'static str {
         match self {
+            Self::Auth(error) => error.error_type(),
             Self::Binance(error) => error.error_type(),
             Self::Config(error) => error.error_type(),
             Self::Connector(error) => error.error_type(),
