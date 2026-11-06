@@ -6,9 +6,8 @@ reads and validates its configuration at startup, before doing any work.
 - Required variables must be present with a non-empty, valid value. A missing or invalid value
   fails startup.
 - Optional variables are treated as unset when they are absent or empty.
-- Values are read only from the process environment. The only variables with built-in defaults are
-  the CWASM invoker variables, which fall back to their documented defaults when the variable is
-  not set.
+- Values are read only from the process environment. No variable falls back to a built-in default
+  value.
 
 Variables read by more than one process are listed once under [Shared variables](#shared-variables).
 The remaining sections list the additional variables read by each process. When a variable is only
@@ -263,18 +262,18 @@ No process-specific optional variables.
 
 ### CWASM invoker
 
-The native cwasm host reads these optional variables when it starts. Empty values are treated as
-unset, and invalid values fail startup.
+The native cwasm host reads these required variables when it starts. Missing, empty, and invalid
+values fail startup.
 
-#### Optional
+#### Required
 
 | Variable | Description |
 | --- | --- |
-| `CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS` | Maximum time spent downloading a cwasm artifact, in seconds. Defaults to `60`. |
-| `CWASM_INVOKER_EXECUTION_TIMEOUT_SECS` | Maximum guest execution time before the watchdog interrupts it, in seconds. Defaults to `30`. |
-| `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. Defaults to `67108864` (64 MiB). |
-| `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. Defaults to `268435456` (256 MiB). |
-| `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. Defaults to `10000`. |
+| `CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS` | Maximum time spent downloading a cwasm artifact, in seconds. |
+| `CWASM_INVOKER_EXECUTION_TIMEOUT_SECS` | Maximum guest execution time before the watchdog interrupts it, in seconds. |
+| `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. |
+| `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. |
+| `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. |
 
 ## Secrets
 

@@ -109,16 +109,6 @@ impl EnvVars {
         }
     }
 
-    /// Reads and parses an optional variable, falling back to `default` when it
-    /// is missing or empty.
-    pub fn optional_parsed_or<T>(&self, name: &str, default: T) -> BpResult<T>
-    where
-        T: std::str::FromStr,
-        T::Err: std::error::Error + Send + Sync + 'static,
-    {
-        Ok(self.optional_parsed(name)?.unwrap_or(default))
-    }
-
     /// Reads a required duration expressed as whole seconds.
     pub fn required_duration_secs(&self, name: &str) -> BpResult<Duration> {
         Ok(Duration::from_secs(self.required_parsed(name)?))
@@ -127,17 +117,6 @@ impl EnvVars {
     /// Reads a required duration expressed as a positive number of seconds.
     pub fn required_positive_duration_secs(&self, name: &str) -> BpResult<Duration> {
         let secs = self.required_parsed(name)?;
-        Self::positive_duration_secs(name, secs)
-    }
-
-    /// Reads an optional duration expressed as a positive number of seconds,
-    /// falling back to `default_secs` when the variable is missing or empty.
-    pub fn optional_positive_duration_secs(
-        &self,
-        name: &str,
-        default_secs: u64,
-    ) -> BpResult<Duration> {
-        let secs = self.optional_parsed_or(name, default_secs)?;
         Self::positive_duration_secs(name, secs)
     }
 
