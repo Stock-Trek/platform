@@ -353,6 +353,19 @@ impl WasmRunner {
         }
     }
 
+    pub fn execute_arguments(
+        &self,
+        path: &Path,
+        arguments: &[&str],
+        working_directory: &Path,
+        emit: &Emit,
+    ) -> i32 {
+        match self.run(path, arguments, emit, working_directory) {
+            Ok(code) => code,
+            Err(failure) => failure.exit_code(),
+        }
+    }
+
     fn run(
         &self,
         path: &Path,
