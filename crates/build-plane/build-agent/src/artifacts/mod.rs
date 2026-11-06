@@ -1,5 +1,5 @@
 mod artifact;
-mod build;
+mod compile;
 mod publish;
 #[cfg(test)]
 mod tests;
