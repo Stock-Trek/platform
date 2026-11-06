@@ -16,8 +16,9 @@ pub use batch::ArchiveBatch;
 pub use buffer::ArchiveBuffer;
 pub use handoff::ArchiveHandoff;
 pub use iceberg::{
-    ArchiveCatalog, ArchiveIcebergTable, ArchiveTableLayer, IcebergCatalog, IcebergConfig,
-    IcebergDataFile,
+    ArchiveCatalog, ArchiveIcebergTable, ArchiveTableLayer, ICEBERG_CATALOG_TOKEN,
+    ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE, ICEBERG_NAMESPACE, IcebergCatalog,
+    IcebergConfig, IcebergDataFile,
 };
 pub use layout::{ArchiveBucket, ArchiveHour, ArchivePath};
 pub use parquet::{

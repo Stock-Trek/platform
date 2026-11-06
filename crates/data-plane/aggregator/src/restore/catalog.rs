@@ -1,8 +1,7 @@
 //! Archive catalog discovery for aggregator restore.
 //!
-//! Discovers the archive objects that make up a shard's recovery history,
-//! either through the compacted/raw Iceberg handoff or by listing the raw
-//! prefix.
+//! Discovers the archive objects that make up a shard's recovery history
+//! through the compacted/raw Iceberg handoff.
 
 use super::replay::S3ArchivedEventSource;
 use crate::config::ReplayStartPolicy;
@@ -17,9 +16,6 @@ use std::sync::Arc;
 use tokio::sync::{OnceCell, Semaphore};
 use tracing::info;
 
-pub const AGGREGATOR_ARCHIVE_S3_BUCKET: &str = "AGGREGATOR_ARCHIVE_S3_BUCKET";
-pub const AGGREGATOR_ARCHIVE_S3_PREFIX: &str = "AGGREGATOR_ARCHIVE_S3_PREFIX";
-
 /// Maximum number of archive objects streamed concurrently across all
 /// shards in one aggregator process.
 const MAX_CONCURRENT_ARCHIVE_OBJECTS: usize = 4;
@@ -27,52 +23,26 @@ const MAX_CONCURRENT_ARCHIVE_OBJECTS: usize = 4;
 /// Archive used to rebuild shard state.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveRecoveryConfig {
-    pub bucket: String,
-    pub prefix: String,
-    /// When configured, recovery uses the compacted/raw handoff instead of
-    /// replaying the full raw history.
-    pub iceberg: Option<IcebergConfig>,
+    pub iceberg: IcebergConfig,
 }
 
 impl ArchiveRecoveryConfig {
-    /// Reads the required archive recovery settings from the environment.
-    ///
-    /// The `checkpoint` and `archive` replay policies use this because they
-    /// may need to rebuild state from the archive. Explicit `earliest` and
-    /// `latest` starts use [`Self::optional_from_vars`] instead.
-    pub fn from_env() -> BpResult<Self> {
-        Self::from_vars(&EnvVars::from_env())
-    }
-
     /// Reads the required archive recovery settings from a captured
     /// environment.
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let bucket = vars.required(AGGREGATOR_ARCHIVE_S3_BUCKET)?;
-        if bucket.trim().is_empty() {
-            return Err(BpError::config_invalid(
-                AGGREGATOR_ARCHIVE_S3_BUCKET,
-                "must not be empty",
-            ));
-        }
-        let prefix = vars.required(AGGREGATOR_ARCHIVE_S3_PREFIX)?;
-        let iceberg = IcebergConfig::optional_from_vars(vars)?;
         Ok(Self {
-            bucket,
-            prefix,
-            iceberg,
+            iceberg: IcebergConfig::from_vars(vars)?,
         })
     }
 
     /// Reads archive recovery settings when they are configured.
     ///
     /// Explicit `earliest` and `latest` starts intentionally discard persisted
-    /// state, so they can run without an archive. When a bucket is provided,
-    /// the rest of the archive configuration is still validated.
+    /// state, so they can run without an archive. When a catalog is provided,
+    /// the rest of the catalog configuration is still validated.
     pub fn optional_from_vars(vars: &EnvVars) -> BpResult<Option<Self>> {
-        if vars.optional(AGGREGATOR_ARCHIVE_S3_BUCKET)?.is_none() {
-            return Ok(None);
-        }
-        Self::from_vars(vars).map(Some)
+        IcebergConfig::optional_from_vars(vars)?
+            .map_or(Ok(None), |iceberg| Ok(Some(Self { iceberg })))
     }
 
     /// Reads the archive recovery settings required by `policy` from a
@@ -108,8 +78,6 @@ pub struct S3ArchiveRecovery {
 
 struct ArchiveSnapshot {
     transfer_client: TransferClient,
-    bucket: Bucket,
-    prefix: String,
     compacted_objects: usize,
     raw_tail_objects: usize,
     objects: Vec<ArchiveObject>,
@@ -146,9 +114,8 @@ impl S3ArchiveRecovery {
     /// Builds a shard-specific source from the shared archive snapshot.
     ///
     /// The first call discovers the archive files; later calls reuse the same
-    /// snapshot and only select the objects owned by their shard. With an
-    /// Iceberg catalog configured the snapshot is the compacted/raw handoff,
-    /// otherwise it falls back to listing the raw prefix.
+    /// snapshot and only select the objects owned by their shard. The snapshot
+    /// is the compacted/raw handoff from the configured Iceberg catalog.
     pub async fn connect(
         &self,
         shard: ShardId,
@@ -157,46 +124,18 @@ impl S3ArchiveRecovery {
         let snapshot = self
             .snapshot
             .get_or_try_init(|| async {
-                let (client, transfer_client) = S3::clients().await;
-                let bucket = Bucket::new(self.config.bucket.clone());
-                let prefix = self.config.prefix.trim_matches('/').to_string();
-
-                let (objects, compacted_objects, raw_tail_objects) = if let Some(iceberg) =
-                    &self.config.iceberg
-                {
-                    let catalog = IcebergCatalog::connect(iceberg).await?;
-                    let handoff = ArchiveHandoff::discover(&catalog, ArchiveKind::Events).await?;
-                    let compacted_objects = handoff.compacted.len();
-                    let raw_tail_objects = handoff.raw_tail.len();
-                    let objects = handoff
-                        .files()
-                        .map(ArchiveObject::from_data_file)
-                        .collect::<BpResult<Vec<_>>>()?;
-                    (objects, compacted_objects, raw_tail_objects)
-                } else {
-                    let list_prefix = if prefix.is_empty() {
-                        String::new()
-                    } else {
-                        format!("{prefix}/")
-                    };
-                    let listed =
-                        S3::list_objects(&client, &bucket, &ObjectKey::new(list_prefix)).await?;
-                    let raw_tail_objects = listed.len();
-                    let objects = listed
-                        .into_iter()
-                        .map(|object| ArchiveObject {
-                            bucket: bucket.clone(),
-                            key: object.key,
-                            size: object.size,
-                        })
-                        .collect();
-                    (objects, 0, raw_tail_objects)
-                };
+                let transfer_client = S3::transfer_client().await;
+                let catalog = IcebergCatalog::connect(&self.config.iceberg).await?;
+                let handoff = ArchiveHandoff::discover(&catalog, ArchiveKind::Events).await?;
+                let compacted_objects = handoff.compacted.len();
+                let raw_tail_objects = handoff.raw_tail.len();
+                let objects = handoff
+                    .files()
+                    .map(ArchiveObject::from_data_file)
+                    .collect::<BpResult<Vec<_>>>()?;
 
                 Ok::<_, BpError>(ArchiveSnapshot {
                     transfer_client,
-                    bucket,
-                    prefix,
                     compacted_objects,
                     raw_tail_objects,
                     objects,
@@ -209,8 +148,6 @@ impl S3ArchiveRecovery {
         ArchiveObject::sort(&mut objects);
 
         info!(
-            bucket = %snapshot.bucket,
-            prefix = %snapshot.prefix,
             compacted_objects = snapshot.compacted_objects,
             raw_tail_objects = snapshot.raw_tail_objects,
             selected_objects = objects.len(),

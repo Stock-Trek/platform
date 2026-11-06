@@ -31,9 +31,9 @@ required in some configurations, the condition is stated in its description.
 | `BUILD_AGENT_TIMEOUT_SECS` | Build orchestrator, Build agent | Maximum time the build agent may spend on a build, in seconds. |
 | `DEADLINE_BUFFER_SECS` | Build orchestrator, Git webhook | Time reserved for cleanup before the Lambda invocation deadline, in seconds. |
 | `GITHUB_ENTERPRISE_ALLOWED_HOSTS` | Build orchestrator, Git webhook | Comma-separated allowlist of GitHub hosts for outbound HTTPS requests, with optional ports (for example `ghe.example.com` or `ghe.example.com:8443`). `github.com` is always allowed. |
-| `ICEBERG_CATALOG_URI` | Archiver, Compactor, Rebuilder; optional for Aggregator | Iceberg REST catalog URI using the `http` or `https` scheme. Required by the archiver, compactor, and rebuilder. Optional for the aggregator, where setting it enables archive recovery through the compacted/raw Iceberg handoff. |
-| `ICEBERG_CATALOG_WAREHOUSE` | Archiver, Compactor, Rebuilder; Aggregator when a catalog is configured | Iceberg warehouse URI. Must use the `s3://` scheme. Required when `ICEBERG_CATALOG_URI` is configured. |
-| `ICEBERG_NAMESPACE` | Archiver, Compactor, Rebuilder; Aggregator when a catalog is configured | Iceberg namespace. Required when `ICEBERG_CATALOG_URI` is configured. |
+| `ICEBERG_CATALOG_URI` | Archiver, Compactor, Rebuilder; Aggregator for `checkpoint`/`archive` | Iceberg REST catalog URI using the `http` or `https` scheme. Required by the archiver, compactor, and rebuilder, and by the aggregator when `AGGREGATOR_REPLAY_START_POLICY` is `checkpoint` or `archive`, where archive recovery reads the compacted/raw Iceberg handoff. |
+| `ICEBERG_CATALOG_WAREHOUSE` | Archiver, Compactor, Rebuilder, Aggregator | Iceberg warehouse URI. Must use the `s3://` scheme. Required when `ICEBERG_CATALOG_URI` is configured. |
+| `ICEBERG_NAMESPACE` | Archiver, Compactor, Rebuilder, Aggregator | Iceberg namespace. Required when `ICEBERG_CATALOG_URI` is configured. |
 | `RUST_LOG` | All services | Tracing filter, for example `info` or `platform_ingester=debug`. |
 | `S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES` | Build orchestrator, Build agent | Maximum accepted source archive size, in bytes. |
 | `SECRETS_SSM_DECRYPT` | Backfiller, Git webhook | Whether SSM parameters are decrypted, parsed as `true` or `false`. |
@@ -114,8 +114,6 @@ No process-specific optional variables.
 
 | Variable | Description |
 | --- | --- |
-| `AGGREGATOR_ARCHIVE_S3_BUCKET` | S3 bucket containing archived market events. Required when `AGGREGATOR_REPLAY_START_POLICY` is `checkpoint` or `archive`; optional for `earliest` and `latest`. When set, archive recovery is enabled. |
-| `AGGREGATOR_ARCHIVE_S3_PREFIX` | S3 prefix for raw archive objects. Used to list the archive when no Iceberg catalog is configured; required whenever `AGGREGATOR_ARCHIVE_S3_BUCKET` is set. |
 | `AGGREGATOR_SHARD_INDEX` | Zero-based shard index to run as a single shard. When unset or empty, the process runs every shard. Must be lower than `AGGREGATOR_SHARD_COUNT`. |
 
 ### Archiver

@@ -47,11 +47,11 @@ On startup a writer applies `AGGREGATOR_REPLAY_START_POLICY`:
 | `earliest` | Ignore persisted state and replay the live source from the beginning. |
 | `latest` | Ignore persisted state and process only messages published after startup. |
 
-`checkpoint` and `archive` require archive recovery to be configured because either policy may need to rebuild keyed state. The process fails at startup when `AGGREGATOR_ARCHIVE_S3_BUCKET` is missing for those policies. `earliest` and `latest` explicitly discard persisted state and can run without an archive.
+`checkpoint` and `archive` require archive recovery to be configured because either policy may need to rebuild keyed state. The process fails at startup when the Iceberg catalog is not configured for those policies. `earliest` and `latest` explicitly discard persisted state and can run without an archive.
 
 A retryable checkpoint read failure is surfaced to the supervisor instead of silently falling back to the archive. If archive replay finds no events, the shard starts with explicit empty state and is not reported as a successful archive recovery.
 
-Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. When an Iceberg catalog is configured, recovery reads the compacted event files and only the raw objects that are not represented by the compacted snapshot. Without a catalog it falls back to listing `AGGREGATOR_ARCHIVE_S3_PREFIX` and replaying the raw history. Both raw and compacted objects are grouped by a fixed virtual routing bucket, so each shard only reads the objects it owns and every archived event is replayed by exactly one recovery worker. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. Recovery continues the highest state epoch recorded on the replayed events, so rebuilding the same inputs reproduces the same deterministic output ids. Regenerating candles under a changed configuration uses the rebuilder with a new configured epoch instead.
+Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. Recovery reads the compacted event files and only the raw objects that are not represented by the compacted snapshot. Both raw and compacted objects are grouped by a fixed virtual routing bucket, so each shard only reads the objects it owns and every archived event is replayed by exactly one recovery worker. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. Recovery continues the highest state epoch recorded on the replayed events, so rebuilding the same inputs reproduces the same deterministic output ids. Regenerating candles under a changed configuration uses the rebuilder with a new configured epoch instead.
 
 ### Configuration
 
@@ -73,9 +73,7 @@ Archive rebuilds replay raw events through the same deterministic candle process
 | `AGGREGATOR_STATE_SCHEMA_VERSION` | required | State schema version written to new state and required for checkpoint restore. |
 | `AGGREGATOR_DURABLE_PREFIX` | required | Durable consumer prefix. The router uses `{prefix}-router`; shards use `{prefix}-shard-{n}`. |
 | `AGGREGATOR_LEASE_TTL_SECS` | required | Single-writer lease lifetime. |
-| `AGGREGATOR_ARCHIVE_S3_BUCKET` | required for `checkpoint`/`archive` | S3 bucket containing archived market events. Enables archive recovery. Optional for `earliest`/`latest`. |
-| `AGGREGATOR_ARCHIVE_S3_PREFIX` | required when archive recovery is enabled | Raw archive prefix used when no Iceberg catalog is configured. |
-| `ICEBERG_CATALOG_URI` | unset | Enables the compacted/raw handoff for archive recovery. |
+| `ICEBERG_CATALOG_URI` | required for `checkpoint`/`archive` | Iceberg REST catalog URI used for archive recovery. Optional for `earliest`/`latest`. |
 | `ICEBERG_CATALOG_WAREHOUSE` | required when the catalog is configured | Iceberg warehouse URI. |
 | `ICEBERG_NAMESPACE` | required when the catalog is configured | Iceberg namespace. |
 
