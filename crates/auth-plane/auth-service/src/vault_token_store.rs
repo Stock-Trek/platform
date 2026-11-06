@@ -1,62 +1,12 @@
-use crate::{ApiToken, token_store::TokenStore};
+use crate::{ApiToken, VaultTokenStoreConfig, token_store::TokenStore};
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::ExposeSecret;
 use serde_json::{Value, json};
-use std::time::Duration;
 
 const TOKEN_HEADER: &str = "X-Vault-Token";
 const NOT_MODIFIED: u16 = 412;
 const RATE_LIMITED: u16 = 429;
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
-
-pub struct VaultTokenStoreConfig {
-    address: String,
-    token: SecretString,
-    mount: String,
-    timeout: Duration,
-}
-
-impl VaultTokenStoreConfig {
-    pub fn new(address: impl Into<String>, token: SecretString, mount: impl Into<String>) -> Self {
-        Self {
-            address: address.into(),
-            token,
-            mount: mount.into(),
-            timeout: DEFAULT_TIMEOUT,
-        }
-    }
-
-    pub fn address(&self) -> &str {
-        &self.address
-    }
-
-    pub fn mount(&self) -> &str {
-        &self.mount
-    }
-
-    pub fn timeout(&self) -> Duration {
-        self.timeout
-    }
-
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = timeout;
-        self
-    }
-
-    fn validate(&self) -> BpResult<()> {
-        if self.address.trim().is_empty() {
-            return Err(BpError::config_empty("vault_address"));
-        }
-        if self.token.expose_secret().is_empty() {
-            return Err(BpError::config_empty("vault_token"));
-        }
-        if self.mount.trim().is_empty() {
-            return Err(BpError::config_empty("vault_mount"));
-        }
-        Ok(())
-    }
-}
 
 pub struct VaultTokenStore {
     client: reqwest::Client,
@@ -67,9 +17,9 @@ impl VaultTokenStore {
     pub fn new(config: VaultTokenStoreConfig) -> BpResult<Self> {
         config.validate()?;
         let client = reqwest::Client::builder()
-            .timeout(config.timeout)
+            .timeout(config.timeout())
             .build()
-            .map_err(|e| BpError::auth_store("client build", &config.address, false, e))?;
+            .map_err(|e| BpError::auth_store("client build", config.address(), false, e))?;
         Ok(Self { client, config })
     }
 
