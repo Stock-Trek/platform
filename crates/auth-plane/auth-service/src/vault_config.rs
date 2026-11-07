@@ -71,6 +71,12 @@ impl VaultTokenStoreConfig {
         if self.token.expose_secret().trim().is_empty() {
             return Err(BpError::config_empty("vault_token"));
         }
+        if reqwest::header::HeaderValue::from_str(self.token.expose_secret()).is_err() {
+            return Err(BpError::config_invalid(
+                "vault_token",
+                "must be a valid HTTP header value",
+            ));
+        }
         if self.mount.trim().is_empty() {
             return Err(BpError::config_empty("vault_mount"));
         }

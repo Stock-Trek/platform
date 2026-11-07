@@ -3,7 +3,7 @@ use crate::{
     SignedOrderRequest, TokenAuditAction, TokenAuditEvent, TokenScope,
 };
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::BpResult;
+use platform_errors::{BpError, BpResult};
 
 const CLOCK_SKEW_SECONDS: i64 = 60;
 
@@ -52,10 +52,12 @@ impl AuthService {
     ) -> BpResult<bool> {
         let signature = signature.signature_input();
         let mut token = self.token(token_id).await?;
-        if Self::ensure_active(&token, now).is_err()
-            || Self::ensure_scope(&token, TokenScope::OrdersWrite).is_err()
-        {
-            self.record_signature_rejected(token_id, Some(&token), now, "inactive or unauthorized");
+        if let Err(error) = Self::ensure_active(&token, now) {
+            self.record_signature_rejected(token_id, Some(&token), now, &error.to_string());
+            return Ok(false);
+        }
+        if let Err(error) = Self::ensure_scope(&token, TokenScope::OrdersWrite) {
+            self.record_signature_rejected(token_id, Some(&token), now, &error.to_string());
             return Ok(false);
         }
         let Ok(signed) = SignedOrderRequest::decode(signature) else {
@@ -73,14 +75,23 @@ impl AuthService {
         let latest_issued_at = now
             .checked_add_signed(Duration::seconds(CLOCK_SKEW_SECONDS))
             .unwrap_or(DateTime::<Utc>::MAX_UTC);
-        let latest_expires_at = signed
-            .issued_at()
-            .checked_add_signed(self.signature_validity);
-        if signed.is_expired(now) || signed.issued_at() > latest_issued_at {
+        if signed.is_expired(now) {
             self.record_signature_rejected(token_id, Some(&token), now, "expired signature");
             return Ok(false);
         }
-        if latest_expires_at.is_some_and(|latest| signed.expires_at() > latest) {
+        if signed.issued_at() > latest_issued_at {
+            self.record_signature_rejected(
+                token_id,
+                Some(&token),
+                now,
+                "signature issued in the future",
+            );
+            return Ok(false);
+        }
+        let validity = signed
+            .expires_at()
+            .signed_duration_since(signed.issued_at());
+        if validity > self.signature_validity {
             self.record_signature_rejected(
                 token_id,
                 Some(&token),
@@ -125,21 +136,21 @@ impl AuthService {
         ) {
             Ok(context) => context,
             Err(error) => {
-                let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
-                    .with_token(authenticated.id(), Some(authenticated.owner()))
-                    .failure(error.to_string());
-                self.audit.record(event);
+                self.record_signing_failure(authenticated, now, &error);
                 return Err(error);
             }
         };
-        let signer = OrderRequestSigner::new(authenticated.secret())?;
+        let signer = match OrderRequestSigner::new(authenticated.secret()) {
+            Ok(signer) => signer,
+            Err(error) => {
+                self.record_signing_failure(authenticated, now, &error);
+                return Err(error);
+            }
+        };
         let signature = match signer.sign_order_request(&context, order_request) {
             Ok(signature) => signature,
             Err(error) => {
-                let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
-                    .with_token(authenticated.id(), Some(authenticated.owner()))
-                    .failure(error.to_string());
-                self.audit.record(event);
+                self.record_signing_failure(authenticated, now, &error);
                 return Err(error);
             }
         };
@@ -147,6 +158,13 @@ impl AuthService {
             .with_token(authenticated.id(), Some(authenticated.owner()));
         self.audit.record(event);
         Ok(SignedOrderRequest::from_context(&context, signature))
+    }
+
+    fn record_signing_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {
+        let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
+            .with_token(token.id(), Some(token.owner()))
+            .failure(error.to_string());
+        self.audit.record(event);
     }
 
     fn record_signature_rejected(

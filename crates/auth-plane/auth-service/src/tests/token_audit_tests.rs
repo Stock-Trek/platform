@@ -148,6 +148,49 @@ async fn records_rejected_signatures() {
 }
 
 #[tokio::test]
+async fn keeps_only_the_most_recent_events_at_capacity() {
+    let audit = Arc::new(MemoryTokenAuditLog::new(2));
+    let service = TestFixture::service_with_audit(audit.clone());
+
+    TestFixture::add_token(&service, "token-a", "owner-a").await;
+    TestFixture::add_token(&service, "token-b", "owner-a").await;
+    TestFixture::add_token(&service, "token-c", "owner-a").await;
+
+    let ids: Vec<_> = audit
+        .drain()
+        .into_iter()
+        .map(|event| event.token_id().unwrap().to_string())
+        .collect();
+    assert_eq!(ids, vec!["token-b", "token-c"]);
+}
+
+#[tokio::test]
+async fn records_the_reason_a_future_signature_is_rejected() {
+    let (service, audit) = AuditFixture::service();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
+    let issued_at = now + Duration::minutes(10);
+    let signed = service
+        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, issued_at, now)
+        .await
+        .unwrap();
+    audit.drain();
+
+    let verified = service
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .await
+        .unwrap();
+
+    assert!(!verified);
+    let rejection = audit
+        .drain()
+        .into_iter()
+        .find(|event| event.action == TokenAuditAction::SignatureRejected)
+        .expect("a rejection event should be recorded");
+    assert_eq!(rejection.detail(), Some("signature issued in the future"));
+}
+
+#[tokio::test]
 async fn audit_events_can_be_drained() {
     let (service, audit) = AuditFixture::service();
     TestFixture::add_token(&service, "token-a", "owner-a").await;

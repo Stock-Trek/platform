@@ -5,12 +5,14 @@ use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Map, Value};
 
 const CREATED_AT: &str = "created_at";
+const ID: &str = "id";
 const OWNER: &str = "owner";
 const SECRET: &str = "secret";
 
 impl ApiToken {
     pub fn to_value(&self) -> Value {
         let mut value = Map::new();
+        value.insert(ID.to_string(), Value::String(self.id.clone()));
         value.insert(
             CREATED_AT.to_string(),
             Value::String(self.created_at.to_rfc3339()),
@@ -27,6 +29,13 @@ impl ApiToken {
     }
 
     pub fn from_value(id: &str, value: &Value) -> BpResult<Self> {
+        let stored_id = Self::string_field(value, ID)?;
+        if stored_id != id {
+            return Err(BpError::auth_invalid_field(
+                ID,
+                "does not match the requested token id",
+            ));
+        }
         let owner = Self::string_field(value, OWNER)?;
         let secret = Self::string_field(value, SECRET)?;
         let created_at = Self::string_field(value, CREATED_AT)?;

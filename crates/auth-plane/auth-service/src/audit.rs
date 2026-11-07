@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
-use std::sync::Arc;
+use std::{collections::VecDeque, sync::Arc};
 use strum::{Display, EnumString};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString)]
@@ -70,24 +70,24 @@ pub trait TokenAuditLog: Send + Sync {
 
 #[derive(Debug)]
 pub struct MemoryTokenAuditLog {
-    events: Mutex<Vec<TokenAuditEvent>>,
+    events: Mutex<VecDeque<TokenAuditEvent>>,
     capacity: usize,
 }
 
 impl MemoryTokenAuditLog {
     pub fn new(capacity: usize) -> Self {
         Self {
-            events: Mutex::new(Vec::new()),
+            events: Mutex::new(VecDeque::new()),
             capacity,
         }
     }
 
     pub fn events(&self) -> Vec<TokenAuditEvent> {
-        self.events.lock().clone()
+        self.events.lock().iter().cloned().collect()
     }
 
     pub fn drain(&self) -> Vec<TokenAuditEvent> {
-        std::mem::take(&mut *self.events.lock())
+        std::mem::take(&mut *self.events.lock()).into()
     }
 }
 
@@ -98,9 +98,9 @@ impl TokenAuditLog for MemoryTokenAuditLog {
             return;
         }
         if events.len() >= self.capacity {
-            events.remove(0);
+            events.pop_front();
         }
-        events.push(event);
+        events.push_back(event);
     }
 }
 
