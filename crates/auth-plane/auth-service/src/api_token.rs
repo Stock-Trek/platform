@@ -31,6 +31,19 @@ impl ApiToken {
         if secret.expose_secret().trim().is_empty() {
             return Err(BpError::auth_invalid_field("secret", "must not be empty"));
         }
+        metadata.validate()?;
+        if metadata.rotated_from() == Some(id.as_str()) {
+            return Err(BpError::auth_invalid_field(
+                "rotated_from",
+                "must refer to a different token",
+            ));
+        }
+        if metadata.replaced_by() == Some(id.as_str()) {
+            return Err(BpError::auth_invalid_field(
+                "replaced_by",
+                "must refer to a different token",
+            ));
+        }
         Ok(Self {
             id,
             owner: owner.to_string(),

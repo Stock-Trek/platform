@@ -1,4 +1,4 @@
-use crate::{RevocationReason, RevokedBy, TokenScope};
+use crate::{ApiToken, RevocationReason, RevokedBy, TokenScope};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use std::borrow::Borrow;
@@ -104,6 +104,16 @@ impl TokenMetadata {
     pub(crate) fn validate(&self) -> BpResult<()> {
         if self.scopes.is_empty() {
             return Err(BpError::auth_invalid_field("scopes", "must not be empty"));
+        }
+        if let Some(token_id) = &self.rotated_from {
+            ApiToken::validate_id(token_id).map_err(|_| {
+                BpError::auth_invalid_field("rotated_from", "must be a valid token id")
+            })?;
+        }
+        if let Some(token_id) = &self.replaced_by {
+            ApiToken::validate_id(token_id).map_err(|_| {
+                BpError::auth_invalid_field("replaced_by", "must be a valid token id")
+            })?;
         }
         match (self.revoked_at, self.revocation_reason, self.revoked_by) {
             (None, None, None) | (Some(_), Some(_), Some(_)) => {}

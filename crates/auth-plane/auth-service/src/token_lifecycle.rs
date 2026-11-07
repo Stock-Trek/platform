@@ -113,7 +113,7 @@ impl AuthService {
     pub async fn purge_expired_tokens(&self, now: DateTime<Utc>) -> BpResult<usize> {
         let mut purged = 0;
         for id in self.store.ids().await? {
-            if let Some(token) = self.store.get(&id).await?
+            if let Some(token) = self.stored_token(&id).await?
                 && token.metadata().is_expired(now)
             {
                 self.store.delete(&id).await?;

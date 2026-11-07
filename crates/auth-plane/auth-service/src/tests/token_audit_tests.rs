@@ -108,6 +108,26 @@ async fn records_signing_and_signature_verification() {
 }
 
 #[tokio::test]
+async fn records_signing_failures() {
+    let (service, audit) = AuditFixture::service();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
+    let issued_at = chrono::DateTime::<Utc>::MAX_UTC - Duration::seconds(1);
+
+    let result = service
+        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, issued_at, now)
+        .await;
+
+    assert!(result.is_err());
+    let failure = audit
+        .events()
+        .into_iter()
+        .find(|event| event.action == TokenAuditAction::Signed)
+        .expect("a signing event should be recorded");
+    assert!(!failure.success);
+}
+
+#[tokio::test]
 async fn records_rejected_signatures() {
     let (service, audit) = AuditFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
