@@ -26,10 +26,15 @@ impl AuthService {
             ));
         }
         Self::ensure_active(&original, now)?;
-        let metadata = TokenMetadata::new(
-            now + self.token_lifetime,
-            original.metadata().scopes().iter(),
-        )?;
+        let expires_at = now.checked_add_signed(self.token_lifetime).ok_or_else(|| {
+            BpError::auth_invalid_field("token_lifetime", "is outside the supported range")
+        })?;
+        let overlap_until = now
+            .checked_add_signed(self.rotation_overlap)
+            .ok_or_else(|| {
+                BpError::auth_invalid_field("rotation_overlap", "is outside the supported range")
+            })?;
+        let metadata = TokenMetadata::new(expires_at, original.metadata().scopes().iter())?;
         let mut replacement = ApiToken::generate(replacement_id, original.owner(), now, metadata)?;
         replacement.metadata.rotated_from = Some(original.id().to_string());
         if let Err(error) = self.store.put(&replacement).await {
@@ -42,7 +47,7 @@ impl AuthService {
         let mut retired = original.clone();
         retired
             .metadata
-            .begin_rotation(replacement.id(), now + self.rotation_overlap);
+            .begin_rotation(replacement.id(), overlap_until);
         if let Err(error) = self.store.update(&retired).await {
             let _ = self.store.delete(replacement.id()).await;
             let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
@@ -68,6 +73,9 @@ impl AuthService {
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
         let mut token = self.token(id).await?;
+        if token.metadata.is_revoked() {
+            return Ok(token);
+        }
         token.metadata.revoke(now, reason, revoked_by);
         if let Err(error) = self.store.update(&token).await {
             let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)

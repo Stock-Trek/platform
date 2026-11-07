@@ -1,8 +1,8 @@
 use crate::{
     ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, TokenExpiry, TokenMetadata,
-    TokenOptions,
+    TokenOptions, TokenScope,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use platform_errors::{BpError, BpResult};
 
 impl AuthService {
@@ -15,7 +15,17 @@ impl AuthService {
     ) -> BpResult<ApiToken> {
         let expires_at = match options.expiry() {
             TokenExpiry::At(expires_at) => expires_at,
-            TokenExpiry::After(lifetime) => created_at + lifetime,
+            TokenExpiry::After(lifetime) => {
+                if lifetime <= Duration::zero() {
+                    return Err(BpError::auth_invalid_field(
+                        "expiry",
+                        "must be greater than zero",
+                    ));
+                }
+                created_at.checked_add_signed(lifetime).ok_or_else(|| {
+                    BpError::auth_invalid_field("expiry", "is outside the supported range")
+                })?
+            }
         };
         let metadata = TokenMetadata::new(expires_at, options.scopes())?;
         let token = ApiToken::generate(id, owner, created_at, metadata)?;
@@ -51,7 +61,7 @@ impl AuthService {
     }
 
     pub async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
-        Self::validate_owner(owner)?;
+        let owner = Self::validated_owner(owner)?;
         let mut tokens = Vec::new();
         for id in self.store.ids().await? {
             if let Some(token) = self.store.get(&id).await?
@@ -60,6 +70,7 @@ impl AuthService {
                 tokens.push(token);
             }
         }
+        tokens.sort_by(|left, right| left.id().cmp(right.id()));
         Ok(tokens)
     }
 
@@ -77,24 +88,67 @@ impl AuthService {
     }
 
     pub async fn token_for_owner(&self, owner: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
-        self.tokens_for_owner(owner)
+        self.select_token_for_owner(owner, None, now).await
+    }
+
+    pub async fn token_for_owner_with_scope(
+        &self,
+        owner: &str,
+        scope: TokenScope,
+        now: DateTime<Utc>,
+    ) -> BpResult<ApiToken> {
+        self.select_token_for_owner(owner, Some(scope), now).await
+    }
+
+    async fn select_token_for_owner(
+        &self,
+        owner: &str,
+        scope: Option<TokenScope>,
+        now: DateTime<Utc>,
+    ) -> BpResult<ApiToken> {
+        let tokens: Vec<ApiToken> = self
+            .tokens_for_owner(owner)
             .await?
             .into_iter()
             .filter(|token| token.metadata().is_active(now))
-            .min_by(|left, right| {
-                left.metadata()
-                    .replaced_by()
-                    .is_some()
-                    .cmp(&right.metadata().replaced_by().is_some())
-                    .then_with(|| left.id().cmp(right.id()))
-            })
-            .ok_or_else(|| BpError::auth_invalid_field("owner", "has no active API token"))
+            .collect();
+        if tokens.is_empty() {
+            return Err(BpError::auth_invalid_field(
+                "owner",
+                "has no active API token",
+            ));
+        }
+        match scope {
+            Some(scope) => tokens
+                .into_iter()
+                .filter(|token| token.metadata().has_scope(scope))
+                .min_by(Self::compare_tokens)
+                .ok_or_else(|| {
+                    BpError::auth_invalid_field(
+                        "scope",
+                        format!("owner has no active API token with required scope {scope:?}"),
+                    )
+                }),
+            None => tokens
+                .into_iter()
+                .min_by(Self::compare_tokens)
+                .ok_or_else(|| BpError::auth_invalid_field("owner", "has no active API token")),
+        }
     }
 
-    fn validate_owner(owner: &str) -> BpResult<()> {
-        if owner.trim().is_empty() {
+    fn compare_tokens(left: &ApiToken, right: &ApiToken) -> std::cmp::Ordering {
+        left.metadata()
+            .replaced_by()
+            .is_some()
+            .cmp(&right.metadata().replaced_by().is_some())
+            .then_with(|| left.id().cmp(right.id()))
+    }
+
+    fn validated_owner(owner: &str) -> BpResult<&str> {
+        let owner = owner.trim();
+        if owner.is_empty() {
             return Err(BpError::auth_invalid_field("owner", "must not be empty"));
         }
-        Ok(())
+        Ok(owner)
     }
 }

@@ -21,13 +21,7 @@ pub enum TokenScope {
 }
 
 impl TokenScope {
-    pub const DEFAULT: &'static [Self] = &[
-        Self::OrdersRead,
-        Self::OrdersWrite,
-        Self::TokensRead,
-        Self::TokensWrite,
-        Self::Admin,
-    ];
+    pub const DEFAULT: &'static [Self] = &[Self::OrdersRead, Self::OrdersWrite];
 
     pub fn matches(self, required: Self) -> bool {
         self == Self::All

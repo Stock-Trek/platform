@@ -52,6 +52,15 @@ fn rejects_a_malformed_envelope() {
 }
 
 #[test]
+fn rejects_an_envelope_without_a_signature() {
+    let signed = SignedRequestFixture::signed();
+    let unsigned = signed.signature().rsplit_once('.').unwrap().0;
+    let error = SignedOrderRequest::decode(&format!("{unsigned}."));
+
+    assert!(error.is_err());
+}
+
+#[test]
 fn detects_expiry() {
     let signed = SignedRequestFixture::signed();
 

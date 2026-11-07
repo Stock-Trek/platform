@@ -24,7 +24,8 @@ impl ApiToken {
         let id = id.into();
         Self::validate_id(&id)?;
         let owner = owner.into();
-        if owner.trim().is_empty() {
+        let owner = owner.trim();
+        if owner.is_empty() {
             return Err(BpError::auth_invalid_field("owner", "must not be empty"));
         }
         if secret.expose_secret().is_empty() {
@@ -32,7 +33,7 @@ impl ApiToken {
         }
         Ok(Self {
             id,
-            owner,
+            owner: owner.to_string(),
             secret,
             created_at,
             metadata,

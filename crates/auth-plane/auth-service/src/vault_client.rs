@@ -110,7 +110,8 @@ impl VaultClient {
     }
 
     fn url(&self, suffix: &[&str]) -> BpResult<Url> {
-        let mut url = Url::parse(self.config.address().trim_end_matches('/'))
+        let address = self.config.address().trim();
+        let mut url = Url::parse(address.trim_end_matches('/'))
             .map_err(|e| BpError::config_invalid_source("vault_address", e))?;
         url.set_query(None);
         url.set_fragment(None);

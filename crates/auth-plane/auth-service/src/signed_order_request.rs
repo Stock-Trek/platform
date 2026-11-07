@@ -56,7 +56,7 @@ impl SignedOrderRequest {
             Some(expires_at),
             Some(token_id),
             Some(nonce),
-            Some(_raw_signature),
+            Some(raw_signature),
         ) = (
             version,
             issued_at,
@@ -71,7 +71,7 @@ impl SignedOrderRequest {
                 "is not a supported signed order request envelope",
             ));
         };
-        if version != ENVELOPE_VERSION || parts.next().is_some() {
+        if version != ENVELOPE_VERSION || parts.next().is_some() || raw_signature.is_empty() {
             return Err(BpError::auth_invalid_field(
                 "signature",
                 "is not a supported signed order request envelope",
