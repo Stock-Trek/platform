@@ -22,9 +22,7 @@ impl TokenMetadata {
         scopes: impl IntoIterator<Item = impl Borrow<TokenScope>>,
     ) -> BpResult<Self> {
         let scopes: Vec<TokenScope> = scopes.into_iter().map(|scope| *scope.borrow()).collect();
-        if scopes.is_empty() {
-            return Err(BpError::auth_invalid_field("scopes", "must not be empty"));
-        }
+        Self::validate_scopes(&scopes)?;
         Ok(Self {
             expires_at,
             scopes,
@@ -101,10 +99,25 @@ impl TokenMetadata {
         }
     }
 
-    pub(crate) fn validate(&self) -> BpResult<()> {
-        if self.scopes.is_empty() {
+    fn validate_scopes(scopes: &[TokenScope]) -> BpResult<()> {
+        if scopes.is_empty() {
             return Err(BpError::auth_invalid_field("scopes", "must not be empty"));
         }
+        if scopes
+            .iter()
+            .enumerate()
+            .any(|(index, scope)| scopes[..index].contains(scope))
+        {
+            return Err(BpError::auth_invalid_field(
+                "scopes",
+                "must not contain duplicates",
+            ));
+        }
+        Ok(())
+    }
+
+    pub(crate) fn validate(&self) -> BpResult<()> {
+        Self::validate_scopes(&self.scopes)?;
         if let Some(token_id) = &self.rotated_from {
             ApiToken::validate_id(token_id).map_err(|_| {
                 BpError::auth_invalid_field("rotated_from", "must be a valid token id")

@@ -16,6 +16,7 @@ impl VaultClient {
         config.validate()?;
         let client = reqwest::Client::builder()
             .timeout(config.timeout())
+            .redirect(reqwest::redirect::Policy::none())
             .build()
             .map_err(|e| BpError::auth_store("client build", config.address(), false, e))?;
         Ok(Self { client, config })
