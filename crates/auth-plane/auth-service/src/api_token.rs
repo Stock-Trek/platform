@@ -3,6 +3,7 @@ use platform_errors::{BpError, BpResult};
 use rand::{Rng, distributions::Alphanumeric};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::Value;
+use subtle::ConstantTimeEq;
 
 const SECRET_LENGTH: usize = 32;
 const CREATED_AT: &str = "created_at";
@@ -62,6 +63,14 @@ impl ApiToken {
         &self.secret
     }
 
+    pub fn matches_secret(&self, candidate: &str) -> bool {
+        self.secret
+            .expose_secret()
+            .as_bytes()
+            .ct_eq(candidate.as_bytes())
+            .into()
+    }
+
     pub fn created_at(&self) -> DateTime<Utc> {
         self.created_at
     }
@@ -86,7 +95,7 @@ impl ApiToken {
         Self::new(id, owner, SecretString::from(secret), created_at)
     }
 
-    fn validate_id(id: &str) -> BpResult<()> {
+    pub fn validate_id(id: &str) -> BpResult<()> {
         let valid = !id.is_empty()
             && id
                 .chars()

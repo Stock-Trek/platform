@@ -8,6 +8,8 @@ async-trait = { workspace = true }
 chrono = { workspace = true }
 data-encoding = { workspace = true }
 hmac = { workspace = true }
+httpdate = { workspace = true }
+parking_lot = { workspace = true }
 platform-errors = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json", "rustls"] }
