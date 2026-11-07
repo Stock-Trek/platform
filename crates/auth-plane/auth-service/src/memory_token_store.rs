@@ -20,6 +20,7 @@ impl MemoryTokenStore {
 #[async_trait]
 impl TokenStore for MemoryTokenStore {
     async fn put(&self, token: &ApiToken) -> BpResult<()> {
+        ApiToken::validate_id(token.id())?;
         let mut tokens = self.tokens.lock().expect("poisoned token mutex");
         if tokens.contains_key(token.id()) {
             return Err(BpError::token_exists(token.id()));
@@ -29,16 +30,16 @@ impl TokenStore for MemoryTokenStore {
     }
 
     async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+        ApiToken::validate_id(id)?;
         let tokens = self.tokens.lock().expect("poisoned token mutex");
         Ok(tokens.get(id).cloned())
     }
 
     async fn delete(&self, id: &str) -> BpResult<()> {
+        ApiToken::validate_id(id)?;
         let mut tokens = self.tokens.lock().expect("poisoned token mutex");
-        tokens
-            .remove(id)
-            .map(|_| ())
-            .ok_or_else(|| BpError::unknown_token(id))
+        tokens.remove(id);
+        Ok(())
     }
 
     async fn ids(&self) -> BpResult<Vec<String>> {

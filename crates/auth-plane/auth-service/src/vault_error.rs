@@ -1,0 +1,118 @@
+use platform_errors::{AuthError, BpError};
+use reqwest::{
+    Error, StatusCode,
+    header::{HeaderMap, RETRY_AFTER},
+};
+use std::{
+    fmt,
+    time::{Duration, SystemTime},
+};
+
+pub(crate) struct VaultError;
+
+impl VaultError {
+    pub fn transport(operation: &'static str, target: &str, error: Error) -> BpError {
+        let retryable = Self::retryable_transport(&error);
+        BpError::auth_store(operation, target, retryable, error)
+    }
+
+    pub fn response(
+        operation: &'static str,
+        target: &str,
+        status: StatusCode,
+        headers: &HeaderMap,
+        body: String,
+    ) -> BpError {
+        if let Some(retry_after) = Self::retry_after(headers) {
+            return BpError::Auth(AuthError::Unavailable { retry_after });
+        }
+        if status == StatusCode::TOO_MANY_REQUESTS {
+            return BpError::Auth(AuthError::Unavailable {
+                retry_after: Duration::from_secs(1),
+            });
+        }
+        let retryable = Self::retryable_status(status);
+        BpError::auth_store(
+            operation,
+            target,
+            retryable,
+            VaultStatusError::new(status, body),
+        )
+    }
+
+    pub fn duplicate_write(status: StatusCode) -> bool {
+        status == StatusCode::BAD_REQUEST || status == StatusCode::CONFLICT
+    }
+
+    fn retryable_transport(error: &Error) -> bool {
+        if Self::configuration_transport(error) {
+            return false;
+        }
+        error.is_timeout() || error.is_connect() || error.is_body() || error.is_decode()
+    }
+
+    fn configuration_transport(error: &Error) -> bool {
+        if error.is_builder() || error.is_request() || error.is_redirect() {
+            return true;
+        }
+        let description = format!("{error} {error:?}").to_ascii_lowercase();
+        [
+            "builder error",
+            "invalid url",
+            "certificate",
+            "unknown issuer",
+            "invalid dnsname",
+            "tls",
+        ]
+        .iter()
+        .any(|marker| description.contains(marker))
+    }
+
+    fn retryable_status(status: StatusCode) -> bool {
+        status == StatusCode::REQUEST_TIMEOUT
+            || status == StatusCode::TOO_MANY_REQUESTS
+            || status == StatusCode::TOO_EARLY
+            || status.is_server_error()
+    }
+
+    fn retry_after(headers: &HeaderMap) -> Option<Duration> {
+        let value = headers.get(RETRY_AFTER)?.to_str().ok()?.trim();
+        if let Ok(seconds) = value.parse::<u64>() {
+            return (seconds > 0).then(|| Duration::from_secs(seconds));
+        }
+        let retry_at = httpdate::parse_http_date(value).ok()?;
+        retry_at
+            .duration_since(SystemTime::now())
+            .ok()
+            .filter(|duration| !duration.is_zero())
+    }
+}
+
+struct VaultStatusError {
+    status: StatusCode,
+    body: String,
+}
+
+impl VaultStatusError {
+    fn new(status: StatusCode, body: String) -> Self {
+        Self { status, body }
+    }
+}
+
+impl fmt::Display for VaultStatusError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(formatter, "HTTP {}: {}", self.status, self.body)
+    }
+}
+
+impl fmt::Debug for VaultStatusError {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("VaultStatusError")
+            .field("status", &self.status)
+            .field("body", &self.body)
+            .finish()
+    }
+}
+
+impl std::error::Error for VaultStatusError {}

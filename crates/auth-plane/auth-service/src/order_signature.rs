@@ -1,3 +1,4 @@
+use crate::OrderRequestContext;
 use hmac::{Hmac, KeyInit, Mac};
 use platform_errors::{BpError, BpResult};
 use secrecy::{ExposeSecret, SecretString};
@@ -28,35 +29,41 @@ impl OrderRequestSigner {
         let expected = self.sign(order_request)?;
         Ok(expected.as_bytes().ct_eq(signature.as_bytes()).into())
     }
-}
 
-pub struct SignedOrderRequest {
-    token_id: String,
-    signature: String,
-}
-
-impl SignedOrderRequest {
-    pub fn new(token_id: impl Into<String>, signature: impl Into<String>) -> Self {
-        Self {
-            token_id: token_id.into(),
-            signature: signature.into(),
-        }
+    pub fn sign_order_request(
+        &self,
+        context: &OrderRequestContext,
+        order_request: &[u8],
+    ) -> BpResult<String> {
+        let mut mac = self.mac.clone();
+        mac.update(&context.canonical(order_request));
+        Ok(data_encoding::HEXLOWER.encode(&mac.finalize().into_bytes()))
     }
 
-    pub fn token_id(&self) -> &str {
-        &self.token_id
+    pub fn verify_order_request(
+        &self,
+        context: &OrderRequestContext,
+        order_request: &[u8],
+        signature: &str,
+    ) -> BpResult<bool> {
+        let expected = self.sign_order_request(context, order_request)?;
+        Ok(expected.as_bytes().ct_eq(signature.as_bytes()).into())
     }
 
-    pub fn signature(&self) -> &str {
-        &self.signature
+    pub fn sign_with_context(
+        &self,
+        context: &OrderRequestContext,
+        order_request: &[u8],
+    ) -> BpResult<String> {
+        self.sign_order_request(context, order_request)
     }
-}
 
-impl std::fmt::Debug for SignedOrderRequest {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SignedOrderRequest")
-            .field("token_id", &self.token_id)
-            .field("signature", &"<redacted>")
-            .finish()
+    pub fn verify_with_context(
+        &self,
+        context: &OrderRequestContext,
+        order_request: &[u8],
+        signature: &str,
+    ) -> BpResult<bool> {
+        self.verify_order_request(context, order_request, signature)
     }
 }

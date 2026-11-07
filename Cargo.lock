@@ -4571,6 +4571,7 @@ dependencies = [
  "chrono",
  "data-encoding",
  "hmac 0.13.0",
+ "httpdate",
  "platform-errors",
  "rand 0.8.8",
  "reqwest 0.13.5",
