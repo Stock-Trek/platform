@@ -1,5 +1,6 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
-use chrono::Utc;
+use crate::{TokenExpiry, TokenOptions, TokenScope};
+use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
 use secrecy::ExposeSecret;
 
@@ -94,4 +95,63 @@ async fn chooses_a_deterministic_token_when_an_owner_has_several() {
             .id(),
         first.id()
     );
+}
+
+#[tokio::test]
+async fn owner_lookups_trim_surrounding_whitespace() {
+    let service = TestFixture::service();
+    let added = TestFixture::add_token(&service, "token-a", " owner-a ").await;
+
+    let tokens = service.tokens_for_owner(" owner-a ").await.unwrap();
+
+    assert_eq!(added.owner(), "owner-a");
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(tokens[0].id(), added.id());
+}
+
+#[tokio::test]
+async fn signing_for_an_owner_uses_a_token_with_the_required_scope() {
+    let service = TestFixture::service();
+    let now = Utc::now();
+    let read_options = TokenOptions::new(
+        TokenExpiry::After(Duration::days(30)),
+        [TokenScope::OrdersRead],
+    );
+    let write_options = TokenOptions::new(
+        TokenExpiry::After(Duration::days(30)),
+        [TokenScope::OrdersWrite],
+    );
+    TestFixture::add_token_at(&service, "token-a", "owner-a", now, read_options).await;
+    let writer =
+        TestFixture::add_token_at(&service, "token-z", "owner-a", now, write_options).await;
+
+    let signed = service
+        .sign_order_request_for_owner("owner-a", ORDER_REQUEST, now, now)
+        .await
+        .unwrap();
+
+    assert_eq!(signed.token_id(), writer.id());
+}
+
+#[tokio::test]
+async fn signing_for_an_owner_requires_a_token_with_the_required_scope() {
+    let service = TestFixture::service();
+    let now = Utc::now();
+    let read_options = TokenOptions::new(
+        TokenExpiry::After(Duration::days(30)),
+        [TokenScope::OrdersRead],
+    );
+    TestFixture::add_token_at(&service, "token-a", "owner-a", now, read_options).await;
+
+    let error = service
+        .sign_order_request_for_owner("owner-a", ORDER_REQUEST, now, now)
+        .await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "scope",
+            ..
+        }))
+    ));
 }

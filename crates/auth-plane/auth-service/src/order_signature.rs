@@ -5,17 +5,19 @@ use secrecy::{ExposeSecret, SecretString};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-type HmacSha256 = Hmac<Sha256>;
-
 pub struct OrderRequestSigner {
-    mac: HmacSha256,
+    mac: Hmac<Sha256>,
 }
 
 impl OrderRequestSigner {
     pub fn new(secret: &SecretString) -> BpResult<Self> {
-        let mac = HmacSha256::new_from_slice(secret.expose_secret().as_bytes()).map_err(|e| {
-            BpError::auth_invalid_field("secret", format!("rejected as an HMAC key: {e}"))
-        })?;
+        if secret.expose_secret().is_empty() {
+            return Err(BpError::auth_invalid_field("secret", "must not be empty"));
+        }
+        let mac =
+            Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes()).map_err(|e| {
+                BpError::auth_invalid_field("secret", format!("rejected as an HMAC key: {e}"))
+            })?;
         Ok(Self { mac })
     }
 

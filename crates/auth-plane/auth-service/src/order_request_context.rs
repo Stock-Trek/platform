@@ -59,7 +59,10 @@ impl OrderRequestContext {
             .take(NONCE_LENGTH)
             .map(char::from)
             .collect();
-        Self::new(token_id, issued_at, issued_at + validity, nonce)
+        let expires_at = issued_at.checked_add_signed(validity).ok_or_else(|| {
+            BpError::auth_invalid_field("expires_at", "is outside the supported range")
+        })?;
+        Self::new(token_id, issued_at, expires_at, nonce)
     }
 
     pub fn token_id(&self) -> &str {

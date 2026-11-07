@@ -45,3 +45,21 @@ fn vault_config_rejects_a_zero_timeout() {
 
     assert!(config.validate().is_err());
 }
+
+#[test]
+fn vault_config_normalizes_surrounding_whitespace() {
+    let config = VaultConfigFixture::config(" https://vault.example.com ", " platform-tokens ");
+
+    assert_eq!(config.address(), "https://vault.example.com");
+    assert_eq!(config.mount(), "platform-tokens");
+    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn vault_config_rejects_addresses_with_queries_or_fragments() {
+    let query = VaultConfigFixture::config("https://vault.example.com?trace=1", "tokens");
+    let fragment = VaultConfigFixture::config("https://vault.example.com#section", "tokens");
+
+    assert!(query.validate().is_err());
+    assert!(fragment.validate().is_err());
+}

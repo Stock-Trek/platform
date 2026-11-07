@@ -64,6 +64,24 @@ async fn token_option_lifetimes_are_relative_to_creation_time() {
 }
 
 #[tokio::test]
+async fn rejects_non_positive_relative_lifetimes() {
+    let service = LifecycleFixture::service();
+    let options = TokenOptions::new(TokenExpiry::After(Duration::zero()), TokenScope::DEFAULT);
+
+    let error = service
+        .add_token("token-a", "owner-a", Utc::now(), options)
+        .await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "expiry",
+            ..
+        }))
+    ));
+}
+
+#[tokio::test]
 async fn tracks_the_last_time_a_token_was_used() {
     let service = LifecycleFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;

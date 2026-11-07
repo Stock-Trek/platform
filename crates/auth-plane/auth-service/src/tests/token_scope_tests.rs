@@ -65,6 +65,35 @@ async fn default_tokens_can_read_and_write_orders() {
     );
 }
 
+#[test]
+fn default_scopes_are_limited_to_order_access() {
+    assert_eq!(
+        TokenScope::DEFAULT,
+        &[TokenScope::OrdersRead, TokenScope::OrdersWrite]
+    );
+}
+
+#[tokio::test]
+async fn rejects_tokens_without_scopes() {
+    let service = TestFixture::service();
+    let options = TokenOptions::new(
+        TokenExpiry::After(Duration::days(30)),
+        Vec::<TokenScope>::new(),
+    );
+
+    let error = service
+        .add_token("token-a", "owner-a", Utc::now(), options)
+        .await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "scopes",
+            ..
+        }))
+    ));
+}
+
 #[tokio::test]
 async fn read_only_tokens_cannot_sign_orders() {
     let service = TestFixture::service();

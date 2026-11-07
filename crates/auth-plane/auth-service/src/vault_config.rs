@@ -17,10 +17,12 @@ impl VaultTokenStoreConfig {
         mount: impl Into<String>,
         timeout: Duration,
     ) -> Self {
+        let address = address.into();
+        let mount = mount.into();
         Self {
-            address: address.into(),
+            address: address.trim().to_string(),
             token,
-            mount: mount.into(),
+            mount: mount.trim().to_string(),
             timeout,
         }
     }
@@ -49,7 +51,13 @@ impl VaultTokenStoreConfig {
                 "must be an absolute http or https URL",
             ));
         }
-        if self.token.expose_secret().is_empty() {
+        if address.query().is_some() || address.fragment().is_some() {
+            return Err(BpError::config_invalid(
+                "vault_address",
+                "must not contain a query or fragment",
+            ));
+        }
+        if self.token.expose_secret().trim().is_empty() {
             return Err(BpError::config_empty("vault_token"));
         }
         if self.mount.trim().is_empty() {

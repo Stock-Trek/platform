@@ -1,6 +1,6 @@
 use crate::{RevocationReason, RevokedBy, TokenScope};
 use chrono::{DateTime, Utc};
-use platform_errors::BpResult;
+use platform_errors::{BpError, BpResult};
 use std::borrow::Borrow;
 
 #[derive(Clone, Debug)]
@@ -22,6 +22,9 @@ impl TokenMetadata {
         scopes: impl IntoIterator<Item = impl Borrow<TokenScope>>,
     ) -> BpResult<Self> {
         let scopes: Vec<TokenScope> = scopes.into_iter().map(|scope| *scope.borrow()).collect();
+        if scopes.is_empty() {
+            return Err(BpError::auth_invalid_field("scopes", "must not be empty"));
+        }
         Ok(Self {
             expires_at,
             scopes,
@@ -100,8 +103,8 @@ impl TokenMetadata {
 
     pub fn revoke(&mut self, now: DateTime<Utc>, reason: RevocationReason, revoked_by: RevokedBy) {
         self.revoked_at.get_or_insert(now);
-        self.revocation_reason = Some(reason);
-        self.revoked_by = Some(revoked_by);
+        self.revocation_reason.get_or_insert(reason);
+        self.revoked_by.get_or_insert(revoked_by);
     }
 
     pub fn begin_rotation(

@@ -1,6 +1,7 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::OrderRequestSigner;
 use chrono::{Duration as ChronoDuration, Utc};
+use platform_errors::{AuthError, BpError};
 use secrecy::{ExposeSecret, SecretString};
 
 #[tokio::test]
@@ -145,6 +146,19 @@ async fn rejects_a_replayed_signature() {
 
     assert!(first);
     assert!(!second);
+}
+
+#[test]
+fn rejects_an_empty_signing_secret() {
+    let error = OrderRequestSigner::new(&SecretString::from(""));
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "secret",
+            ..
+        }))
+    ));
 }
 
 #[tokio::test]

@@ -32,7 +32,9 @@ impl AuthService {
         issued_at: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> BpResult<SignedOrderRequest> {
-        let token = self.token_for_owner(owner, now).await?;
+        let token = self
+            .token_for_owner_with_scope(owner, TokenScope::OrdersWrite, now)
+            .await?;
         let secret = token.secret();
         let (_, order_request) = SignatureArguments::split_sign(secret, &order_request)?;
         let authenticated = self
