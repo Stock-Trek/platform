@@ -1,7 +1,7 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
 
-use crate::cwasm::{CwasmLimits, ExecutionLimits};
+use crate::cwasm::{CwasmLimits, ExecutionLimits, OrderRequestSigningConfig};
 
 const EXECUTION_TIMEOUT_SECS: &str = "CWASM_INVOKER_EXECUTION_TIMEOUT_SECS";
 const MAX_GUEST_MEMORY_BYTES: &str = "CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES";
@@ -9,10 +9,11 @@ const MAX_TABLE_ELEMENTS: &str = "CWASM_INVOKER_MAX_TABLE_ELEMENTS";
 const CWASM_DOWNLOAD_TIMEOUT_SECS: &str = "CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS";
 const MAX_CWASM_BYTES: &str = "CWASM_INVOKER_MAX_CWASM_BYTES";
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct InvokerConfig {
     pub execution: ExecutionLimits,
     pub cwasm: CwasmLimits,
+    pub order_request_signing: Option<OrderRequestSigningConfig>,
 }
 
 impl InvokerConfig {
@@ -30,7 +31,12 @@ impl InvokerConfig {
             vars.required_positive_duration_secs(CWASM_DOWNLOAD_TIMEOUT_SECS)?,
             vars.required_nonzero_u64(MAX_CWASM_BYTES)?,
         );
+        let order_request_signing = OrderRequestSigningConfig::from_vars(vars)?;
 
-        Ok(Self { execution, cwasm })
+        Ok(Self {
+            execution,
+            cwasm,
+            order_request_signing,
+        })
     }
 }

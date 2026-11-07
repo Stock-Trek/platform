@@ -32,7 +32,10 @@
 #[path = "../cwasm/mod.rs"]
 mod cwasm;
 
-use cwasm::{Cwasm, CwasmIntegrity, InvokerConfig, WasmRunner, backtest};
+use cwasm::{
+    Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher,
+    OrderRequestSigningConfig, WasmRunner, backtest,
+};
 use platform_exit_codes::ExitCode;
 use platform_runner::command::{Command, RunRequest};
 use std::io::{self, Read};
@@ -64,15 +67,21 @@ impl CwasmInvoker {
             }
         };
 
-        let runtime = match tokio::runtime::Builder::new_current_thread()
-            .enable_all()
-            .build()
-        {
+        let InvokerConfig {
+            execution,
+            cwasm: cwasm_limits,
+            order_request_signing,
+        } = config;
+        let dispatcher = match Self::order_request_dispatcher(
+            request.order_request_url.as_deref(),
+            order_request_signing,
+        ) {
+            Ok(dispatcher) => dispatcher,
+            Err(code) => return code.code(),
+        };
+        let runtime = match Self::runtime() {
             Ok(runtime) => runtime,
-            Err(error) => {
-                eprintln!("cwasm-invoker: failed to start tokio runtime: {error}");
-                return ExitCode::ServerRunnerRuntimeStartFailed.code();
-            }
+            Err(code) => return code.code(),
         };
         let integrity = CwasmIntegrity::new(
             request.cwasm_sha256.clone(),
@@ -82,7 +91,7 @@ impl CwasmInvoker {
         let cwasm = match runtime.block_on(Cwasm::download(
             &request.cwasm_get_url,
             &integrity,
-            config.cwasm,
+            cwasm_limits,
         )) {
             Ok(cwasm) => cwasm,
             Err(error) => {
@@ -92,7 +101,7 @@ impl CwasmInvoker {
         };
         drop(runtime);
 
-        let runner = match WasmRunner::with_limits(config.execution) {
+        let runner = match WasmRunner::with_limits(execution) {
             Ok(runner) => runner,
             Err(error) => {
                 eprintln!("cwasm-invoker: failed to create wasm engine: {error:?}");
@@ -103,7 +112,58 @@ impl CwasmInvoker {
         if matches!(request.command, Command::BackTest { .. }) {
             return backtest::BackTest::run(&runner, cwasm.path(), &request.command);
         }
-        runner.execute_command(cwasm.path(), &request.command)
+
+        let Some(dispatcher) = dispatcher else {
+            return runner.execute_command(cwasm.path(), &request.command);
+        };
+        let actions = GuestActions::new();
+        let code = runner.execute_command_with(cwasm.path(), &request.command, &actions.emit());
+        if code != ExitCode::Success.code() {
+            return code;
+        }
+
+        let runtime = match Self::runtime() {
+            Ok(runtime) => runtime,
+            Err(code) => return code.code(),
+        };
+        match runtime.block_on(dispatcher.dispatch(actions.take())) {
+            Ok(()) => ExitCode::Success.code(),
+            Err(error) => {
+                eprintln!("cwasm-invoker: failed to submit order requests: {error}");
+                ExitCode::ServerRunnerConnectionFailed.code()
+            }
+        }
+    }
+
+    fn order_request_dispatcher(
+        url: Option<&str>,
+        signing: Option<OrderRequestSigningConfig>,
+    ) -> Result<Option<OrderRequestDispatcher>, ExitCode> {
+        let Some(url) = url else {
+            return Ok(None);
+        };
+        let Some(signing) = signing else {
+            eprintln!(
+                "cwasm-invoker: an order request URL requires order request signing configuration"
+            );
+            return Err(ExitCode::ServerRunnerConfigurationInvalid);
+        };
+        OrderRequestDispatcher::new(url, signing.token_id, &signing.secret)
+            .map(Some)
+            .map_err(|error| {
+                eprintln!("cwasm-invoker: invalid order request signing configuration: {error}");
+                ExitCode::ServerRunnerConfigurationInvalid
+            })
+    }
+
+    fn runtime() -> Result<tokio::runtime::Runtime, ExitCode> {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(|error| {
+                eprintln!("cwasm-invoker: failed to start tokio runtime: {error}");
+                ExitCode::ServerRunnerRuntimeStartFailed
+            })
     }
 
     fn read_request() -> Result<String, ExitCode> {

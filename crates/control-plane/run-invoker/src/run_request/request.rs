@@ -10,6 +10,8 @@ pub struct RunRequest {
     pub cwasm_sha256: String,
     pub cwasm_size: u64,
     pub wasmtime_version: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub order_request_url: Option<String>,
     #[serde(flatten)]
     pub command: RunCommand,
     pub logs_post: PresignedPost,
@@ -31,11 +33,21 @@ impl RunRequest {
         cwasm_get_url: String,
         logs_post: PresignedPost,
     ) -> Self {
+        Self::from_record_with_order_request_url(record, cwasm_get_url, None, logs_post)
+    }
+
+    pub fn from_record_with_order_request_url(
+        record: &RunRecord,
+        cwasm_get_url: String,
+        order_request_url: Option<String>,
+        logs_post: PresignedPost,
+    ) -> Self {
         Self {
             cwasm_get_url,
             cwasm_sha256: record.cwasm_sha256.clone(),
             cwasm_size: record.cwasm_size,
             wasmtime_version: record.wasmtime_version.clone(),
+            order_request_url,
             command: RunCommand::Algorithm {
                 strategy_name: record.strategy_name.clone(),
             },

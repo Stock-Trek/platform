@@ -91,7 +91,15 @@ impl RunInvoker {
     async fn invoke_claimed(&self, record: &RunRecord) -> BpResult<()> {
         let cwasm_get_url = self.presigned_get_url(&record.cwasm_key).await?;
         let logs_post = self.presigned_logs_post(record).await?;
-        let request = RunRequest::from_record(record, cwasm_get_url, logs_post);
+        let request = match self.config.order_request_url.clone() {
+            Some(order_request_url) => RunRequest::from_record_with_order_request_url(
+                record,
+                cwasm_get_url,
+                Some(order_request_url),
+                logs_post,
+            ),
+            None => RunRequest::from_record(record, cwasm_get_url, logs_post),
+        };
         self.runner.invoke(&request.to_json()?).await?;
         info!(
             algorithm_id = %record.algorithm_id,

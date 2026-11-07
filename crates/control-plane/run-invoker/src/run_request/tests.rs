@@ -50,6 +50,7 @@ fn serialises_the_runner_contract() {
     );
     assert_eq!(request.cwasm_size, 123456);
     assert_eq!(request.wasmtime_version, "43.0.1");
+    assert_eq!(request.order_request_url, None);
     match request.command {
         platform_runner::command::Command::Algorithm { strategy_name } => {
             assert_eq!(strategy_name, "MyStrategy")
@@ -59,12 +60,29 @@ fn serialises_the_runner_contract() {
 }
 
 #[test]
+fn serialises_the_order_request_url_when_configured() {
+    let request = RunRequest::from_record_with_order_request_url(
+        &record(),
+        "https://bucket.s3.example/runner.cwasm".to_string(),
+        Some("https://orders.example/requests".to_string()),
+        logs_post(),
+    );
+    let json = request.to_json().unwrap();
+    let request: platform_runner::command::RunRequest = serde_json::from_str(&json).unwrap();
+    assert_eq!(
+        request.order_request_url.as_deref(),
+        Some("https://orders.example/requests")
+    );
+}
+
+#[test]
 fn serialises_camel_case_fields() {
     let json = request().to_json().unwrap();
     assert!(json.contains("\"cwasmGetUrl\":"));
     assert!(json.contains("\"cwasmSha256\":"));
     assert!(json.contains("\"cwasmSize\":123456"));
     assert!(json.contains("\"wasmtimeVersion\":"));
+    assert!(!json.contains("\"orderRequestUrl\":"));
     assert!(json.contains("\"command\":\"algorithm\""));
     assert!(json.contains("\"strategyName\":\"MyStrategy\""));
     assert!(json.contains("\"logsPost\":"));

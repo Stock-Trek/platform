@@ -254,7 +254,9 @@ their details.
 
 #### Optional
 
-No process-specific optional variables.
+| Variable | Description |
+| --- | --- |
+| `RUN_INVOKER_ORDER_REQUEST_URL` | URL the runner submits signed order requests to. When unset or empty, the runner does not submit order requests. |
 
 ## Sandbox plane
 
@@ -272,6 +274,13 @@ values fail startup.
 | `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. |
 | `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. |
 | `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. |
+
+#### Optional
+
+| Variable | Description |
+| --- | --- |
+| `CWASM_INVOKER_ORDER_REQUEST_TOKEN_ID` | Auth-service token ID used to sign order requests. Required when `RUN_INVOKER_ORDER_REQUEST_URL` is set, and must be provided together with `CWASM_INVOKER_ORDER_REQUEST_SIGNING_SECRET`. |
+| `CWASM_INVOKER_ORDER_REQUEST_SIGNING_SECRET` | Auth-service token secret used to sign order requests. Required when `RUN_INVOKER_ORDER_REQUEST_URL` is set, and must be provided together with `CWASM_INVOKER_ORDER_REQUEST_TOKEN_ID`. |
 
 ## Secrets
 
