@@ -1,5 +1,5 @@
 use super::support_tests::TestFixture;
-use crate::ApiToken;
+use crate::{ApiToken, api_token::MAX_TOKEN_ID_LENGTH};
 use chrono::Utc;
 use platform_errors::{AuthError, BpError};
 use secrecy::{ExposeSecret, SecretString};
@@ -60,6 +60,20 @@ fn rejects_invalid_token_ids() {
     assert!(matches!(
         error,
         Err(BpError::Auth(AuthError::InvalidField { .. }))
+    ));
+}
+
+#[test]
+fn rejects_overlong_token_ids() {
+    let too_long = "a".repeat(MAX_TOKEN_ID_LENGTH + 1);
+    let error = ApiToken::generate(too_long, "demo-owner", Utc::now(), TestFixture::metadata());
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "token_id",
+            ..
+        }))
     ));
 }
 

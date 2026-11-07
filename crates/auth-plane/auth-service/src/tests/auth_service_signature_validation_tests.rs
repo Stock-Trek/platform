@@ -66,7 +66,7 @@ async fn rejects_an_expired_signature() {
     let service = TestFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
     let now = Utc::now();
-    let issued_at = now - ChronoDuration::minutes(10);
+    let issued_at = now - ChronoDuration::minutes(4);
     let signed = service
         .sign_order_request(
             token.id(),
@@ -79,11 +79,42 @@ async fn rejects_an_expired_signature() {
         .unwrap();
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(
+            token.id(),
+            ORDER_REQUEST,
+            signed.signature(),
+            now + ChronoDuration::minutes(2),
+        )
         .await
         .unwrap();
 
     assert!(!verified);
+}
+
+#[tokio::test]
+async fn signing_rejects_an_already_expired_request() {
+    let service = TestFixture::service();
+    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    let now = Utc::now();
+    let issued_at = now - ChronoDuration::minutes(10);
+
+    let error = service
+        .sign_order_request(
+            token.id(),
+            token.secret().expose_secret(),
+            ORDER_REQUEST,
+            issued_at,
+            now,
+        )
+        .await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "expires_at",
+            ..
+        }))
+    ));
 }
 
 #[tokio::test]

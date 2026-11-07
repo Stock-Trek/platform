@@ -1,5 +1,9 @@
-use crate::{OrderRequestContext, SignedOrderRequest};
+use crate::{
+    OrderRequestContext, SignedOrderRequest, order_request_context::MAX_NONCE_LENGTH,
+    signed_order_request::MAX_ENVELOPE_LENGTH,
+};
 use chrono::{Duration, Utc};
+use platform_errors::{AuthError, BpError};
 
 struct SignedRequestFixture;
 
@@ -58,6 +62,40 @@ fn rejects_an_envelope_without_a_signature() {
     let error = SignedOrderRequest::decode(&format!("{unsigned}."));
 
     assert!(error.is_err());
+}
+
+#[test]
+fn rejects_overlong_nonces() {
+    let issued_at = chrono::DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap();
+    let nonce = "a".repeat(MAX_NONCE_LENGTH + 1);
+    let error = OrderRequestContext::new(
+        "token-a",
+        issued_at,
+        issued_at + Duration::minutes(5),
+        nonce,
+    );
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "nonce",
+            ..
+        }))
+    ));
+}
+
+#[test]
+fn rejects_overlong_envelopes() {
+    let signature = "a".repeat(MAX_ENVELOPE_LENGTH + 1);
+    let error = SignedOrderRequest::decode(&signature);
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "signature",
+            ..
+        }))
+    ));
 }
 
 #[test]

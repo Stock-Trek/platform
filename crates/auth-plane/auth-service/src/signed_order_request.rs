@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 
 const ENVELOPE_VERSION: &str = "v1";
+pub(crate) const MAX_ENVELOPE_LENGTH: usize = 1024;
 
 pub struct SignedOrderRequest {
     token_id: String,
@@ -45,6 +46,12 @@ impl SignedOrderRequest {
     }
 
     pub fn decode(signature: &str) -> BpResult<Self> {
+        if signature.len() > MAX_ENVELOPE_LENGTH {
+            return Err(BpError::auth_invalid_field(
+                "signature",
+                format!("must be at most {MAX_ENVELOPE_LENGTH} characters"),
+            ));
+        }
         let mut parts = signature.split('.');
         let version = parts.next();
         let issued_at = parts.next();
