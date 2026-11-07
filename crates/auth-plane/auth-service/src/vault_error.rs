@@ -4,6 +4,7 @@ use reqwest::{
     header::{HeaderMap, RETRY_AFTER},
 };
 use std::{
+    error::Error as StdError,
     fmt,
     time::{Duration, SystemTime},
 };
@@ -58,17 +59,26 @@ impl VaultError {
         if error.is_builder() || error.is_redirect() {
             return true;
         }
-        let description = format!("{error} {error:?}").to_ascii_lowercase();
-        [
-            "builder error",
-            "invalid url",
-            "certificate",
-            "unknown issuer",
-            "invalid dnsname",
-            "tls",
-        ]
-        .iter()
-        .any(|marker| description.contains(marker))
+        let mut source = error.source();
+        while let Some(current) = source {
+            let description = current.to_string().to_ascii_lowercase();
+            let configuration = [
+                "builder error",
+                "invalid url",
+                "certificate",
+                "unknown issuer",
+                "invalid dnsname",
+                "tls handshake",
+                "tls alert",
+            ]
+            .iter()
+            .any(|marker| description.contains(marker));
+            if configuration {
+                return true;
+            }
+            source = current.source();
+        }
+        false
     }
 
     fn retryable_status(status: StatusCode) -> bool {

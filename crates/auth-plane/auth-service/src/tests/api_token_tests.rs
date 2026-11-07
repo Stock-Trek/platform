@@ -1,5 +1,8 @@
 use super::support_tests::TestFixture;
-use crate::{ApiToken, api_token::MAX_TOKEN_ID_LENGTH};
+use crate::{
+    ApiToken,
+    api_token::{MAX_OWNER_LENGTH, MAX_SECRET_LENGTH, MAX_TOKEN_ID_LENGTH},
+};
 use chrono::Utc;
 use platform_errors::{AuthError, BpError};
 use secrecy::{ExposeSecret, SecretString};
@@ -72,6 +75,53 @@ fn rejects_overlong_token_ids() {
         error,
         Err(BpError::Auth(AuthError::InvalidField {
             field: "token_id",
+            ..
+        }))
+    ));
+}
+
+#[test]
+fn rejects_overlong_owners_and_secrets() {
+    let owner = "a".repeat(MAX_OWNER_LENGTH + 1);
+    let owner_error = ApiToken::generate("token-a", owner, Utc::now(), TestFixture::metadata());
+    assert!(matches!(
+        owner_error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "owner",
+            ..
+        }))
+    ));
+
+    let secret = SecretString::from("a".repeat(MAX_SECRET_LENGTH + 1));
+    let secret_error = ApiToken::from_parts(
+        "token-a",
+        "demo-owner",
+        secret,
+        Utc::now(),
+        TestFixture::metadata(),
+    );
+    assert!(matches!(
+        secret_error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "secret",
+            ..
+        }))
+    ));
+}
+
+#[test]
+fn rejects_control_characters_in_owners() {
+    let error = ApiToken::generate(
+        "token-a",
+        "demo\nowner",
+        Utc::now(),
+        TestFixture::metadata(),
+    );
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "owner",
             ..
         }))
     ));

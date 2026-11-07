@@ -51,7 +51,13 @@ impl AuthService {
         now: DateTime<Utc>,
     ) -> BpResult<bool> {
         let signature = signature.signature_input();
-        let mut token = self.token(token_id).await?;
+        let mut token = match self.token(token_id).await {
+            Ok(token) => token,
+            Err(error) => {
+                self.record_signature_rejected(token_id, None, now, &error.to_string());
+                return Err(error);
+            }
+        };
         if let Err(error) = Self::ensure_active(&token, now) {
             self.record_signature_rejected(token_id, Some(&token), now, &error.to_string());
             return Ok(false);

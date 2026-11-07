@@ -74,7 +74,7 @@ impl AuthService {
     }
 
     pub async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
-        let owner = Self::validated_owner(owner)?;
+        let owner = ApiToken::validated_owner(owner)?;
         let mut ids = self.store.ids().await?;
         ids.sort();
         ids.dedup();
@@ -153,13 +153,5 @@ impl AuthService {
             .is_some()
             .cmp(&right.metadata().replaced_by().is_some())
             .then_with(|| left.id().cmp(right.id()))
-    }
-
-    fn validated_owner(owner: &str) -> BpResult<&str> {
-        let owner = owner.trim();
-        if owner.is_empty() {
-            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
-        }
-        Ok(owner)
     }
 }
