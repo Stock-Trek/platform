@@ -47,16 +47,18 @@ async fn rejects_a_replayed_signature() {
 }
 
 #[test]
-fn rejects_an_empty_signing_secret() {
-    let error = OrderRequestSigner::new(&SecretString::from(""));
+fn rejects_blank_signing_secrets() {
+    for secret in ["", " ", "\t"] {
+        let error = OrderRequestSigner::new(&SecretString::from(secret));
 
-    assert!(matches!(
-        error,
-        Err(BpError::Auth(AuthError::InvalidField {
-            field: "secret",
-            ..
-        }))
-    ));
+        assert!(matches!(
+            error,
+            Err(BpError::Auth(AuthError::InvalidField {
+                field: "secret",
+                ..
+            }))
+        ));
+    }
 }
 
 #[tokio::test]

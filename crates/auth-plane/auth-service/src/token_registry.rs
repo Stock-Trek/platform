@@ -108,12 +108,7 @@ impl AuthService {
         scope: Option<TokenScope>,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
-        let tokens: Vec<ApiToken> = self
-            .tokens_for_owner(owner)
-            .await?
-            .into_iter()
-            .filter(|token| token.metadata().is_active(now))
-            .collect();
+        let tokens = self.active_tokens_for_owner(owner, now).await?;
         if tokens.is_empty() {
             return Err(BpError::auth_invalid_field(
                 "owner",

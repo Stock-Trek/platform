@@ -2,7 +2,7 @@ use super::support_tests::TestFixture;
 use crate::ApiToken;
 use chrono::Utc;
 use platform_errors::{AuthError, BpError};
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
 
 #[test]
@@ -71,6 +71,27 @@ fn rejects_missing_vault_value_fields() {
         error,
         Err(BpError::Auth(AuthError::InvalidField { .. }))
     ));
+}
+
+#[test]
+fn rejects_blank_secrets() {
+    for secret in ["", " ", "\t"] {
+        let error = ApiToken::from_parts(
+            "token-a",
+            "demo-owner",
+            SecretString::from(secret),
+            Utc::now(),
+            TestFixture::metadata(),
+        );
+
+        assert!(matches!(
+            error,
+            Err(BpError::Auth(AuthError::InvalidField {
+                field: "secret",
+                ..
+            }))
+        ));
+    }
 }
 
 #[test]

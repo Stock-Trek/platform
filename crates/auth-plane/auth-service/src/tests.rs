@@ -1,4 +1,5 @@
 mod api_token_tests;
+mod auth_service_config_tests;
 mod auth_service_owner_tests;
 mod auth_service_secret_tests;
 mod auth_service_signature_tests;

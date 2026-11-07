@@ -1,5 +1,5 @@
 use crate::VaultTokenStoreConfig;
-use secrecy::SecretString;
+use secrecy::{ExposeSecret, SecretString};
 use std::time::Duration;
 
 struct VaultConfigFixture;
@@ -48,9 +48,15 @@ fn vault_config_rejects_a_zero_timeout() {
 
 #[test]
 fn vault_config_normalizes_surrounding_whitespace() {
-    let config = VaultConfigFixture::config(" https://vault.example.com ", " platform-tokens ");
+    let config = VaultTokenStoreConfig::new(
+        " https://vault.example.com ",
+        SecretString::from(" vault-token "),
+        " platform-tokens ",
+        Duration::from_secs(10),
+    );
 
     assert_eq!(config.address(), "https://vault.example.com");
+    assert_eq!(config.token().expose_secret(), "vault-token");
     assert_eq!(config.mount(), "platform-tokens");
     assert!(config.validate().is_ok());
 }

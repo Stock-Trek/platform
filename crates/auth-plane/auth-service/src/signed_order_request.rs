@@ -32,8 +32,8 @@ impl SignedOrderRequest {
     ) -> Self {
         let token_id = token_id.into();
         let nonce = nonce.into();
-        let issued_at = Self::whole_seconds(issued_at);
-        let expires_at = Self::whole_seconds(expires_at);
+        let issued_at = OrderRequestContext::whole_seconds(issued_at);
+        let expires_at = OrderRequestContext::whole_seconds(expires_at);
         let signature = Self::encode(&token_id, issued_at, expires_at, &nonce, &signature.into());
         Self {
             token_id,
@@ -128,10 +128,6 @@ impl SignedOrderRequest {
 
     pub fn is_expired(&self, now: DateTime<Utc>) -> bool {
         self.expires_at <= now
-    }
-
-    fn whole_seconds(value: DateTime<Utc>) -> DateTime<Utc> {
-        DateTime::from_timestamp(value.timestamp(), 0).unwrap_or(value)
     }
 
     fn encode(

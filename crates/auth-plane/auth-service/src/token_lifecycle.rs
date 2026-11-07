@@ -8,7 +8,7 @@ use rand::{Rng, distributions::Alphanumeric};
 
 impl AuthService {
     pub async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
-        let replacement_id = self.rotated_token_id(id, now);
+        let replacement_id = Self::rotated_token_id(id, now);
         self.rotate_token_to(id, replacement_id, now).await
     }
 
@@ -126,7 +126,7 @@ impl AuthService {
         Ok(purged)
     }
 
-    fn rotated_token_id(&self, id: &str, now: DateTime<Utc>) -> String {
+    fn rotated_token_id(id: &str, now: DateTime<Utc>) -> String {
         let suffix: String = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(8)

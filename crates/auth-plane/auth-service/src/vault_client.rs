@@ -131,7 +131,7 @@ impl VaultClient {
         url.set_query(None);
         url.set_fragment(None);
         {
-            let mut segments = url.path_segments_mut().map_err(|_| {
+            let mut segments = url.path_segments_mut().map_err(|()| {
                 BpError::config_invalid("vault_address", "must be a hierarchical URL")
             })?;
             segments.pop_if_empty();
