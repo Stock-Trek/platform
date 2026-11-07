@@ -23,7 +23,6 @@ runs:
   using: "composite"
   steps:
     - shell: bash
-      timeout-minutes: 45
       id: pi-response
       env:
         PROVIDER: ${{ inputs.provider }}
@@ -111,7 +110,6 @@ runs:
           --print "${MESSAGE}" \
           > "${RESPONSE_FILE}"
     - shell: bash
-      timeout-minutes: 2
       id: save-response
       env:
         RESPONSE_FILE: ${{ steps.pi-response.outputs.response-file }}

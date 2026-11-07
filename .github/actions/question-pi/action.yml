@@ -26,7 +26,6 @@ runs:
   using: "composite"
   steps:
     - shell: bash
-      timeout-minutes: 10
       id: pi-response
       env:
         PROVIDER: ${{ inputs.provider }}
@@ -88,7 +87,6 @@ runs:
           --print "${MESSAGE}" \
           > "${STDOUT_FILE}"
     - shell: bash
-      timeout-minutes: 2
       id: save-response
       env:
         JSON_OUTPUT_FILE: ${{ steps.pi-response.outputs.json-output-file }}

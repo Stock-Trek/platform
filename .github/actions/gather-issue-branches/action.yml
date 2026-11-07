@@ -19,7 +19,6 @@ runs:
   using: "composite"
   steps:
     - shell: bash
-      timeout-minutes: 2
       id: gather-branches
       run: |
         ISSUE_BRANCH="agent/issue-${{ inputs.issue-number }}"
