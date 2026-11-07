@@ -110,10 +110,6 @@ impl ApiToken {
         }
     }
 
-    pub fn validate_token_id(id: &str) -> BpResult<()> {
-        Self::validate_id(id)
-    }
-
     fn string_field(value: &Value, field: &'static str) -> BpResult<String> {
         value
             .get(field)

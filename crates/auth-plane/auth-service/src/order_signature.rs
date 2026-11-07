@@ -49,21 +49,4 @@ impl OrderRequestSigner {
         let expected = self.sign_order_request(context, order_request)?;
         Ok(expected.as_bytes().ct_eq(signature.as_bytes()).into())
     }
-
-    pub fn sign_with_context(
-        &self,
-        context: &OrderRequestContext,
-        order_request: &[u8],
-    ) -> BpResult<String> {
-        self.sign_order_request(context, order_request)
-    }
-
-    pub fn verify_with_context(
-        &self,
-        context: &OrderRequestContext,
-        order_request: &[u8],
-        signature: &str,
-    ) -> BpResult<bool> {
-        self.verify_order_request(context, order_request, signature)
-    }
 }

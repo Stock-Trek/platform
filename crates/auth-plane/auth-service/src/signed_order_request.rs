@@ -104,10 +104,6 @@ impl SignedOrderRequest {
         self.issued_at
     }
 
-    pub fn timestamp(&self) -> DateTime<Utc> {
-        self.issued_at
-    }
-
     pub fn expires_at(&self) -> DateTime<Utc> {
         self.expires_at
     }
@@ -125,10 +121,6 @@ impl SignedOrderRequest {
             .rsplit_once('.')
             .map(|(_, signature)| signature)
             .unwrap_or(self.signature.as_str())
-    }
-
-    pub fn signature_hex(&self) -> &str {
-        self.raw_signature()
     }
 
     pub fn context(&self) -> BpResult<OrderRequestContext> {

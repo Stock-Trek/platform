@@ -8,6 +8,8 @@ use std::{
     time::{Duration, SystemTime},
 };
 
+const DEFAULT_RETRY_AFTER: Duration = Duration::from_secs(1);
+
 pub(crate) struct VaultError;
 
 impl VaultError {
@@ -23,15 +25,15 @@ impl VaultError {
         headers: &HeaderMap,
         body: String,
     ) -> BpError {
-        if let Some(retry_after) = Self::retry_after(headers) {
+        let retryable = Self::retryable_status(status);
+        if retryable && let Some(retry_after) = Self::retry_after(headers) {
             return BpError::Auth(AuthError::Unavailable { retry_after });
         }
         if status == StatusCode::TOO_MANY_REQUESTS {
             return BpError::Auth(AuthError::Unavailable {
-                retry_after: Duration::from_secs(1),
+                retry_after: DEFAULT_RETRY_AFTER,
             });
         }
-        let retryable = Self::retryable_status(status);
         BpError::auth_store(
             operation,
             target,
@@ -52,7 +54,7 @@ impl VaultError {
     }
 
     fn configuration_transport(error: &Error) -> bool {
-        if error.is_builder() || error.is_request() || error.is_redirect() {
+        if error.is_builder() || error.is_redirect() {
             return true;
         }
         let description = format!("{error} {error:?}").to_ascii_lowercase();

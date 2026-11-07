@@ -104,8 +104,29 @@ impl VaultTokenStore {
             .await
             .map_err(|e| BpError::auth_store(operation, target, false, e))
     }
+}
 
-    async fn read(&self, id: &str) -> BpResult<Option<ApiToken>> {
+#[async_trait]
+impl TokenStore for VaultTokenStore {
+    async fn put(&self, token: &ApiToken) -> BpResult<()> {
+        ApiToken::validate_id(token.id())?;
+        let body = json!({
+            "data": token.to_value(),
+            "options": { "cas": 0 }
+        });
+        let request = self
+            .request(Method::PUT, self.data_url(token.id())?)
+            .json(&body);
+        let response = self.send("write", token.id(), request).await?;
+        if VaultError::duplicate_write(response.status()) {
+            return Err(BpError::token_exists(token.id()));
+        }
+        self.require_success("write", token.id(), response)
+            .await
+            .map(|_| ())
+    }
+
+    async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
         ApiToken::validate_id(id)?;
         let response = self
             .send("read", id, self.request(Method::GET, self.data_url(id)?))
@@ -121,11 +142,28 @@ impl VaultTokenStore {
         ApiToken::from_value(id, &data).map(Some)
     }
 
-    async fn list_ids(&self) -> BpResult<Vec<String>> {
+    async fn delete(&self, id: &str) -> BpResult<()> {
+        ApiToken::validate_id(id)?;
+        let response = self
+            .send(
+                "delete",
+                id,
+                self.request(Method::DELETE, self.metadata_url(id)?),
+            )
+            .await?;
+        if response.status() == StatusCode::NOT_FOUND {
+            return Ok(());
+        }
+        self.require_success("delete", id, response)
+            .await
+            .map(|_| ())
+    }
+
+    async fn ids(&self) -> BpResult<Vec<String>> {
         let mut url = self.metadata_url("")?;
         url.query_pairs_mut().append_pair("list", "true");
         let response = self
-            .send("list", "tokens", self.request(Method::GET, url.clone()))
+            .send("list", "tokens", self.request(Method::GET, url))
             .await?;
         if response.status() == StatusCode::NOT_FOUND {
             return Ok(Vec::new());
@@ -152,51 +190,5 @@ impl VaultTokenStore {
         ids.sort();
         ids.dedup();
         Ok(ids)
-    }
-}
-
-#[async_trait]
-impl TokenStore for VaultTokenStore {
-    async fn put(&self, token: &ApiToken) -> BpResult<()> {
-        ApiToken::validate_id(token.id())?;
-        let body = json!({
-            "data": token.to_value(),
-            "options": { "cas": 0 }
-        });
-        let request = self
-            .request(Method::PUT, self.data_url(token.id())?)
-            .json(&body);
-        let response = self.send("write", token.id(), request).await?;
-        if VaultError::duplicate_write(response.status()) {
-            return Err(BpError::token_exists(token.id()));
-        }
-        self.require_success("write", token.id(), response)
-            .await
-            .map(|_| ())
-    }
-
-    async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
-        self.read(id).await
-    }
-
-    async fn delete(&self, id: &str) -> BpResult<()> {
-        ApiToken::validate_id(id)?;
-        let response = self
-            .send(
-                "delete",
-                id,
-                self.request(Method::DELETE, self.metadata_url(id)?),
-            )
-            .await?;
-        if response.status() == StatusCode::NOT_FOUND {
-            return Ok(());
-        }
-        self.require_success("delete", id, response)
-            .await
-            .map(|_| ())
-    }
-
-    async fn ids(&self) -> BpResult<Vec<String>> {
-        self.list_ids().await
     }
 }

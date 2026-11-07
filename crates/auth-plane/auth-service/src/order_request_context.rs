@@ -70,10 +70,6 @@ impl OrderRequestContext {
         self.issued_at
     }
 
-    pub fn timestamp(&self) -> DateTime<Utc> {
-        self.issued_at
-    }
-
     pub fn expires_at(&self) -> DateTime<Utc> {
         self.expires_at
     }

@@ -1,16 +1,10 @@
 use chrono::{DateTime, Utc};
-use std::{collections::HashMap, sync::Mutex};
+use parking_lot::Mutex;
+use std::collections::HashMap;
 
+#[derive(Default)]
 pub(crate) struct ReplayCache {
     used: Mutex<HashMap<String, DateTime<Utc>>>,
-}
-
-impl Default for ReplayCache {
-    fn default() -> Self {
-        Self {
-            used: Mutex::new(HashMap::new()),
-        }
-    }
 }
 
 impl ReplayCache {
@@ -19,7 +13,7 @@ impl ReplayCache {
     }
 
     pub fn consume(&self, nonce: &str, expires_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
-        let mut used = self.used.lock().expect("poisoned replay mutex");
+        let mut used = self.used.lock();
         used.retain(|_, expiry| *expiry > now);
         if used.contains_key(nonce) {
             return false;

@@ -4,7 +4,6 @@ use crate::{
 };
 use chrono::{Duration, Utc};
 use platform_errors::{BpError, BpResult};
-use secrecy::ExposeSecret;
 use std::{str, sync::Arc};
 
 const DEFAULT_SIGNATURE_VALIDITY_SECONDS: i64 = 300;
@@ -31,10 +30,6 @@ impl AuthService {
             self.signature_validity = validity;
         }
         self
-    }
-
-    pub fn with_signature_ttl(self, validity: std::time::Duration) -> Self {
-        self.with_signature_validity(validity)
     }
 
     pub async fn add_token(
@@ -69,7 +64,6 @@ impl AuthService {
         token_id: &str,
         secret: impl SignatureInput,
     ) -> BpResult<ApiToken> {
-        ApiToken::validate_id(token_id)?;
         let candidate = match secret.signature_argument() {
             crate::SignatureArgument::Text(secret) => secret,
             crate::SignatureArgument::Bytes(secret) => str::from_utf8(secret)
@@ -83,22 +77,6 @@ impl AuthService {
             ));
         }
         Ok(token)
-    }
-
-    pub async fn authenticate_token(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
-    ) -> BpResult<ApiToken> {
-        self.authenticate(token_id, secret).await
-    }
-
-    pub async fn verify_token(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
-    ) -> BpResult<ApiToken> {
-        self.authenticate(token_id, secret).await
     }
 
     pub async fn sign_order_request(
@@ -127,35 +105,6 @@ impl AuthService {
         Ok(SignedOrderRequest::from_context(&context, signature))
     }
 
-    pub async fn sign_order_request_with_secret(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
-        order_request: impl SignatureInput,
-    ) -> BpResult<SignedOrderRequest> {
-        self.sign_order_request(token_id, secret, order_request)
-            .await
-    }
-
-    pub async fn sign_order_request_authenticated(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
-        order_request: impl SignatureInput,
-    ) -> BpResult<SignedOrderRequest> {
-        self.sign_order_request(token_id, secret, order_request)
-            .await
-    }
-
-    pub async fn sign_order_request_with_token(
-        &self,
-        token: &ApiToken,
-        order_request: &[u8],
-    ) -> BpResult<SignedOrderRequest> {
-        self.sign_order_request(token.id(), token.secret().expose_secret(), order_request)
-            .await
-    }
-
     pub async fn verify_order_request(
         &self,
         token_id: &str,
@@ -164,26 +113,6 @@ impl AuthService {
     ) -> BpResult<bool> {
         let (order_request, signature) =
             SignatureArguments::split_verify(&order_request, &signature)?;
-        self.verify_order_request_parts(token_id, order_request, signature)
-            .await
-    }
-
-    pub async fn verify_signed_order_request(
-        &self,
-        signed: &SignedOrderRequest,
-        order_request: &[u8],
-    ) -> BpResult<bool> {
-        self.verify_order_request_parts(signed.token_id(), order_request, signed.signature())
-            .await
-    }
-
-    pub async fn verify_order_request_parts(
-        &self,
-        token_id: &str,
-        order_request: &[u8],
-        signature: &str,
-    ) -> BpResult<bool> {
-        ApiToken::validate_id(token_id)?;
         let token = self.token(token_id).await?;
         let Ok(signed) = SignedOrderRequest::decode(signature) else {
             return Ok(false);
