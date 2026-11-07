@@ -45,6 +45,7 @@ jobs:
       # Infisical action injects every secret in the project/environment into
       # the job, where later steps and actions can read them.
       - name: Fetch GitHub App client ID
+        timeout-minutes: 5
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
@@ -54,6 +55,7 @@ jobs:
           secret-name: "GITHUB_APP_AGENT_HELPER_CLIENT_ID"
 
       - name: Fetch GitHub App private key
+        timeout-minutes: 5
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
@@ -63,6 +65,7 @@ jobs:
           secret-name: "GITHUB_APP_AGENT_HELPER_PRIVATE_KEY"
 
       - name: Generate GitHub App token
+        timeout-minutes: 5
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         env:
@@ -76,6 +79,7 @@ jobs:
           permission-issues: write
 
       - name: Remove GitHub App credentials from the environment
+        timeout-minutes: 2
         run: |
           # The short-lived installation token has now been minted. Remove the
           # long-lived App private key so later steps cannot read it.
@@ -88,11 +92,13 @@ jobs:
           done
 
       - name: Checkout repository
+        timeout-minutes: 10
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Remove all previous reactions from the comment or issue that triggered the workflow
+        timeout-minutes: 5
         uses: ./.github/actions/remove-emoji-reactions
         with:
           comment-id: ${{ github.event.comment.id }}
@@ -100,6 +106,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Acknowledge
+        timeout-minutes: 5
         uses: ./.github/actions/emoji-react
         with:
           comment-id: ${{ github.event.comment.id }}
@@ -108,6 +115,7 @@ jobs:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Gather issue branches
+        timeout-minutes: 5
         id: gather-branches
         uses: ./.github/actions/gather-issue-branches
         with:
@@ -115,6 +123,7 @@ jobs:
           issue-branch-base: ${{ github.event.repository.default_branch }}
 
       - name: Save base64 prompts
+        timeout-minutes: 2
         id: prompts
         run: |
           {
@@ -125,6 +134,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Save base64 schemas
+        timeout-minutes: 2
         id: schemas
         run: |
           {
@@ -134,6 +144,7 @@ jobs:
           } >> "$GITHUB_OUTPUT"
 
       - name: Get last 50 comments
+        timeout-minutes: 5
         id: gather-context
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         with:
@@ -180,9 +191,11 @@ jobs:
             core.setOutput('context-base64', context_base64);
 
       - name: Set up pi models
+        timeout-minutes: 10
         uses: ./.github/actions/set-up-pi-models
 
       - name: Save selected model
+        timeout-minutes: 2
         id: save-model
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         with:
@@ -244,6 +257,7 @@ jobs:
             core.setOutput('model', model);
 
       - name: Fetch selected provider API key
+        timeout-minutes: 5
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
@@ -254,6 +268,7 @@ jobs:
           secret-name: ${{ steps.save-model.outputs.provider == 'eden' && 'EDENAI_API_KEY' || 'DEEPSEEK_API_KEY' }}
 
       - name: Classify request
+        timeout-minutes: 10
         id: classify-request
         uses: ./.github/actions/question-pi
         with:
@@ -264,6 +279,7 @@ jobs:
           model: ${{ steps.save-model.outputs.model }}
 
       - name: Save request type
+        timeout-minutes: 2
         id: save-request-type
         run: |
           REQUEST_TYPE=$(echo "${{ steps.classify-request.outputs.response-base64 }}" | base64 -d | jq -r .request_type)
@@ -289,6 +305,7 @@ jobs:
       # Infisical action injects every secret in the project/environment into
       # the job, where later steps and actions can read them.
       - name: Fetch GitHub App client ID
+        timeout-minutes: 5
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
@@ -298,6 +315,7 @@ jobs:
           secret-name: "GITHUB_APP_AGENT_HELPER_CLIENT_ID"
 
       - name: Fetch GitHub App private key
+        timeout-minutes: 5
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
@@ -307,6 +325,7 @@ jobs:
           secret-name: "GITHUB_APP_AGENT_HELPER_PRIVATE_KEY"
 
       - name: Generate GitHub App token
+        timeout-minutes: 5
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         env:
@@ -320,6 +339,7 @@ jobs:
           permission-issues: write
 
       - name: Remove GitHub App credentials from the environment
+        timeout-minutes: 2
         run: |
           # The short-lived installation token has now been minted. Remove the
           # long-lived App private key so later steps cannot read it.
@@ -332,11 +352,13 @@ jobs:
           done
 
       - name: Checkout repository
+        timeout-minutes: 10
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Thumbs down
+        timeout-minutes: 5
         uses: ./.github/actions/emoji-react
         with:
           comment-id: ${{ github.event.comment.id }}
@@ -358,6 +380,7 @@ jobs:
       # Infisical action injects every secret in the project/environment into
       # the job, where later steps and actions can read them.
       - name: Fetch GitHub App client ID
+        timeout-minutes: 5
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
@@ -367,6 +390,7 @@ jobs:
           secret-name: "GITHUB_APP_AGENT_HELPER_CLIENT_ID"
 
       - name: Fetch GitHub App private key
+        timeout-minutes: 5
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
@@ -376,6 +400,7 @@ jobs:
           secret-name: "GITHUB_APP_AGENT_HELPER_PRIVATE_KEY"
 
       - name: Generate GitHub App token
+        timeout-minutes: 5
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         env:
@@ -389,6 +414,7 @@ jobs:
           permission-issues: write
 
       - name: Remove GitHub App credentials from the environment
+        timeout-minutes: 2
         run: |
           # The short-lived installation token has now been minted. Remove the
           # long-lived App private key so later steps cannot read it.
@@ -401,11 +427,13 @@ jobs:
           done
 
       - name: Checkout repository
+        timeout-minutes: 10
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: React confused
+        timeout-minutes: 5
         uses: ./.github/actions/emoji-react
         with:
           comment-id: ${{ github.event.comment.id }}
@@ -413,6 +441,7 @@ jobs:
           reaction: 'confused'
           token: ${{ steps.app-token.outputs.token }}
       - name: Add comment
+        timeout-minutes: 5
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         with:
           base-url: ${{ github.api_url }}
@@ -440,6 +469,7 @@ jobs:
       # Infisical action injects every secret in the project/environment into
       # the job, where later steps and actions can read them.
       - name: Fetch GitHub App client ID
+        timeout-minutes: 5
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
@@ -449,6 +479,7 @@ jobs:
           secret-name: "GITHUB_APP_AGENT_HELPER_CLIENT_ID"
 
       - name: Fetch GitHub App private key
+        timeout-minutes: 5
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
@@ -458,6 +489,7 @@ jobs:
           secret-name: "GITHUB_APP_AGENT_HELPER_PRIVATE_KEY"
 
       - name: Generate GitHub App token
+        timeout-minutes: 5
         id: app-token
         uses: actions/create-github-app-token@64ab729a6294000f5aa4a4bc0b73d1f32bc45510 # v3.3.0
         env:
@@ -472,6 +504,7 @@ jobs:
           permission-pull-requests: write
 
       - name: Remove GitHub App credentials from the environment
+        timeout-minutes: 2
         run: |
           # The short-lived installation token has now been minted. Remove the
           # long-lived App private key so later steps cannot read it.
@@ -484,11 +517,13 @@ jobs:
           done
 
       - name: Checkout repository
+        timeout-minutes: 10
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           token: ${{ steps.app-token.outputs.token }}
 
       - name: Checkout issue branch if it exists
+        timeout-minutes: 10
         id: checkout-issue-branch
         uses: ./.github/actions/checkout-branch
         with:
@@ -497,9 +532,11 @@ jobs:
           create-if-not-exists: false
 
       - name: Set up pi models
+        timeout-minutes: 10
         uses: ./.github/actions/set-up-pi-models
 
       - name: Fetch selected provider API key
+        timeout-minutes: 5
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
@@ -510,6 +547,7 @@ jobs:
           secret-name: ${{ needs.triage.outputs.provider == 'eden' && 'EDENAI_API_KEY' || 'DEEPSEEK_API_KEY' }}
 
       - name: Classify response
+        timeout-minutes: 10
         id: classify-response
         uses: ./.github/actions/question-pi
         with:
@@ -519,6 +557,7 @@ jobs:
           provider: ${{ needs.triage.outputs.provider }}
           model: ${{ needs.triage.outputs.model }}
       - name: Save response type
+        timeout-minutes: 2
         id: save-response-type
         run: |
           RESPONSE_TYPE=$(echo "${{ steps.classify-response.outputs.response-base64 }}" | base64 -d | jq -r .response_type)
@@ -533,6 +572,7 @@ jobs:
           echo "response-type=${RESPONSE_TYPE}" >> "$GITHUB_OUTPUT"
 
       - name: Classify extra information required
+        timeout-minutes: 10
         id: classify-extra-information-required
         if: steps.save-response-type.outputs.response-type == 'REQUIRES_MORE_INFORMATION'
         uses: ./.github/actions/question-pi
@@ -543,6 +583,7 @@ jobs:
           provider: ${{ needs.triage.outputs.provider }}
           model: ${{ needs.triage.outputs.model }}
       - name: Save extra information required
+        timeout-minutes: 2
         id: save-extra-information-required
         if: steps.save-response-type.outputs.response-type == 'REQUIRES_MORE_INFORMATION'
         run: |
@@ -560,6 +601,7 @@ jobs:
 
 # Already addressed
       - name: Reply as already addressed
+        timeout-minutes: 5
         if: steps.save-response-type.outputs.response-type == 'ALREADY_ADDRESSED'
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         with:
@@ -578,6 +620,7 @@ jobs:
 
 # Require human
       - name: Require human
+        timeout-minutes: 5
         if: steps.save-response-type.outputs.response-type == 'REQUIRES_HUMAN'
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         with:
@@ -593,6 +636,7 @@ jobs:
 
 # Ask for more information
       - name: Add confused reaction
+        timeout-minutes: 5
         if: steps.save-response-type.outputs.response-type == 'REQUIRES_MORE_INFORMATION'
         uses: ./.github/actions/emoji-react
         with:
@@ -601,6 +645,7 @@ jobs:
           reaction: 'confused'
           token: ${{ steps.app-token.outputs.token }}
       - name: Ask for required information
+        timeout-minutes: 5
         if: steps.save-response-type.outputs.response-type == 'REQUIRES_MORE_INFORMATION'
         env:
           EXTRA_INFO: ${{ steps.save-extra-information-required.outputs.extra-information-required }}
@@ -638,6 +683,7 @@ jobs:
 
 # Respond
       - name: Add thumbs up reaction
+        timeout-minutes: 5
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         uses: ./.github/actions/emoji-react
         with:
@@ -646,6 +692,7 @@ jobs:
           reaction: '+1'
           token: ${{ steps.app-token.outputs.token }}
       - name: Configure git credentials for issue branch creation
+        timeout-minutes: 2
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         env:
           GIT_AUTH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -660,6 +707,7 @@ jobs:
           git config --local "http.https://github.com/.extraheader" \
             "AUTHORIZATION: basic ${GIT_AUTH_HEADER}"
       - name: Ensure issue branch
+        timeout-minutes: 10
         if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY')
         uses: ./.github/actions/checkout-branch
         with:
@@ -676,6 +724,7 @@ jobs:
       # afterwards. The PR push below uses HTTPS with the GitHub App token, so
       # no SSH key is needed after the agent has run. See copying.md.
       - name: Configure git identity
+        timeout-minutes: 2
         run: |
           git config --global user.email "agent@stock-trek.com"
           git config --global user.name "Stock-Trek Agent"
@@ -703,6 +752,7 @@ jobs:
       # when the agent is actually going to make changes.
       # ---------------------------------------------------------------------
       - name: Fetch Shipyard read-only registry token
+        timeout-minutes: 5
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
@@ -711,7 +761,9 @@ jobs:
           project-slug: "agents"
           env-slug: "dev"
           secret-name: "CARGO_REGISTRIES_SHIPYARD_TOKEN"
+
       - name: Fetch Shipyard read-only deploy key
+        timeout-minutes: 5
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
@@ -722,6 +774,7 @@ jobs:
           secret-name: "SHIPYARD_SSH_PRIVATE_KEY_READONLY"
 
       - name: Fetch Shipyard known host
+        timeout-minutes: 5
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
@@ -730,7 +783,9 @@ jobs:
           project-slug: "agents"
           env-slug: "dev"
           secret-name: "SHIPYARD_KNOWN_HOST"
+
       - name: Prefetch cargo dependencies
+        timeout-minutes: 20
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         env:
           CARGO_REGISTRIES_SHIPYARD_TOKEN: ${{ env.CARGO_REGISTRIES_SHIPYARD_TOKEN }}
@@ -743,6 +798,7 @@ jobs:
           shipyard-known-host: ${{ env.SHIPYARD_KNOWN_HOST }}
 
       - name: Address issue
+        timeout-minutes: 45
         id: address-issue
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         uses: ./.github/actions/invoke-pi
@@ -752,6 +808,7 @@ jobs:
           provider: ${{ needs.triage.outputs.provider }}
           model: ${{ needs.triage.outputs.model }}
       - name: Save address response
+        timeout-minutes: 2
         id: save-address-issue-summary
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         run: |
@@ -766,6 +823,7 @@ jobs:
             printf '%s\n' "${DELIM}"
           } >> "$GITHUB_OUTPUT"
       - name: Commit code changes
+        timeout-minutes: 5
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         run: |
           # This step has no credentials in its environment: the App token is
@@ -788,6 +846,7 @@ jobs:
               commit -m "Commit changes made by pi"
           fi
       - name: Check for code changes
+        timeout-minutes: 10
         id: check-for-code-changes
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
         run: |
@@ -829,6 +888,7 @@ jobs:
           fi
           echo "has-changes=${HAS_CHANGES}" >> "$GITHUB_OUTPUT"
       - name: Push code changes
+        timeout-minutes: 10
         if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'true')
         env:
           GIT_AUTH_TOKEN: ${{ steps.app-token.outputs.token }}
@@ -904,6 +964,7 @@ jobs:
           "${GIT[@]}" config --local remote.origin.fetch \
             '+refs/heads/*:refs/remotes/origin/*'
       - name: Reply if no code changes made
+        timeout-minutes: 5
         if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'false')
         env:
           SUMMARY: ${{ steps.save-address-issue-summary.outputs.summary }}
@@ -925,6 +986,7 @@ jobs:
               body
             });
       - name: Raise PR if code changes made
+        timeout-minutes: 5
         id: raise-pr
         if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'true')
         env:
@@ -1003,6 +1065,7 @@ jobs:
           fi
           echo "pull-request-url=$PR_URL" >> "$GITHUB_OUTPUT"
       - name: Reply with diff and PR link
+        timeout-minutes: 5
         if: (steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY') && (steps.check-for-code-changes.outputs.has-changes == 'true')
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         with:
@@ -1028,6 +1091,7 @@ jobs:
       issues: write
     steps:
       - name: Comment failure details on the issue
+        timeout-minutes: 5
         uses: actions/github-script@373c709c69115d41ff229c7e5df9f8788daa9553 # v9
         with:
           base-url: ${{ github.api_url }}

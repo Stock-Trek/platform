@@ -17,6 +17,7 @@ runs:
   using: "composite"
   steps:
     - shell: bash
+      timeout-minutes: 10
       id: checkout
       run: |
         git fetch --all

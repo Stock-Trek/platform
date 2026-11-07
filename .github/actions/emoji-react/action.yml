@@ -15,6 +15,7 @@ runs:
   using: "composite"
   steps:
     - shell: bash
+      timeout-minutes: 5
       if: inputs.comment-id != ''
       run: |
         curl -f -L -s \
@@ -25,6 +26,7 @@ runs:
           "https://api.github.com/repos/${GITHUB_REPOSITORY}/issues/comments/${{ inputs.comment-id }}/reactions" \
           -d '{ "content": "${{ inputs.reaction }}" }'
     - shell: bash
+      timeout-minutes: 5
       if: inputs.issue-number != ''
       run: |
         curl -f -L -s \

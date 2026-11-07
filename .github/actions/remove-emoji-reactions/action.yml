@@ -12,6 +12,7 @@ runs:
   using: "composite"
   steps:
     - shell: bash
+      timeout-minutes: 5
       if: inputs.comment-id != ''
       run: |
         # Best-effort cleanup: never fail the workflow because a reaction could
@@ -45,6 +46,7 @@ runs:
         set -e
         exit 0
     - shell: bash
+      timeout-minutes: 5
       if: inputs.issue-number != ''
       run: |
         # Best-effort cleanup: never fail the workflow because a reaction could
