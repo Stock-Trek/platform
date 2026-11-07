@@ -14,6 +14,7 @@ mod signature_policy_tests;
 mod signed_order_request_precision_tests;
 mod signed_order_request_tests;
 mod support_tests;
+mod token_audit_maintenance_tests;
 mod token_audit_tests;
 mod token_lifecycle_tests;
 mod token_metadata_invariant_tests;

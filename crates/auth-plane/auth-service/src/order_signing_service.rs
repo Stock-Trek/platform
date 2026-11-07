@@ -140,6 +140,11 @@ impl AuthService {
                 return Err(error);
             }
         };
+        if context.expires_at() <= now {
+            let error = BpError::auth_invalid_field("expires_at", "has already expired");
+            self.record_signing_failure(authenticated, now, &error);
+            return Err(error);
+        }
         let signer = match OrderRequestSigner::new(authenticated.secret()) {
             Ok(signer) => signer,
             Err(error) => {

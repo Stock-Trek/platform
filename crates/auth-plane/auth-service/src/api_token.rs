@@ -4,6 +4,8 @@ use platform_errors::{BpError, BpResult};
 use secrecy::{ExposeSecret, SecretString};
 use subtle::ConstantTimeEq;
 
+pub(crate) const MAX_TOKEN_ID_LENGTH: usize = 256;
+
 #[derive(Clone)]
 pub struct ApiToken {
     pub(crate) id: String,
@@ -82,16 +84,24 @@ impl ApiToken {
     }
 
     pub fn validate_id(id: &str) -> BpResult<()> {
-        let valid = !id.is_empty()
-            && id
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
+        if id.is_empty() {
+            return Err(BpError::auth_invalid_field("token_id", "must not be empty"));
+        }
+        if id.len() > MAX_TOKEN_ID_LENGTH {
+            return Err(BpError::auth_invalid_field(
+                "token_id",
+                format!("must be at most {MAX_TOKEN_ID_LENGTH} characters"),
+            ));
+        }
+        let valid = id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_');
         if valid {
             Ok(())
         } else {
             Err(BpError::auth_invalid_field(
                 "token_id",
-                format!("{id:?} must only contain ASCII letters, digits, '-' and '_'"),
+                "must only contain ASCII letters, digits, '-' and '_'",
             ))
         }
     }

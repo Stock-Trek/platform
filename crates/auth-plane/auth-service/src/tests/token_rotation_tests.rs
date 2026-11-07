@@ -1,5 +1,5 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::AuthService;
+use crate::{AuthService, api_token::MAX_TOKEN_ID_LENGTH};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
 
@@ -130,6 +130,36 @@ async fn rotation_rejects_reusing_the_original_id() {
             .replaced_by()
             .is_none()
     );
+}
+
+#[tokio::test]
+async fn generated_replacement_ids_respect_the_token_id_limit() {
+    let service = RotationFixture::service(60);
+    let id = "a".repeat(MAX_TOKEN_ID_LENGTH);
+    let token = TestFixture::add_token(&service, &id, "owner-a").await;
+
+    let replacement = service.rotate_token(token.id(), Utc::now()).await.unwrap();
+
+    assert!(replacement.id().len() <= MAX_TOKEN_ID_LENGTH);
+    assert_eq!(replacement.metadata().rotated_from(), Some(token.id()));
+}
+
+#[tokio::test]
+async fn rotation_rejects_an_invalid_replacement_id() {
+    let service = RotationFixture::service(60);
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+
+    let error = service
+        .rotate_token_to(token.id(), "not/a/path", Utc::now())
+        .await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "replacement_id",
+            ..
+        }))
+    ));
 }
 
 #[tokio::test]

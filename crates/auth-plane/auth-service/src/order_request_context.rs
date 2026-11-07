@@ -4,6 +4,7 @@ use platform_errors::{BpError, BpResult};
 use rand::{Rng, distributions::Alphanumeric};
 
 const NONCE_LENGTH: usize = 32;
+pub(crate) const MAX_NONCE_LENGTH: usize = 128;
 const PROTOCOL: &str = "platform-auth-service/order-request";
 const VERSION: &str = "v1";
 const ALGORITHM: &str = "HMAC-SHA256";
@@ -28,13 +29,16 @@ impl OrderRequestContext {
         let expires_at = Self::whole_seconds(expires_at);
         let nonce = nonce.into();
         if nonce.is_empty()
+            || nonce.len() > MAX_NONCE_LENGTH
             || !nonce
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
         {
             return Err(BpError::auth_invalid_field(
                 "nonce",
-                "must only contain ASCII letters, digits, '-' and '_'",
+                format!(
+                    "must be 1-{MAX_NONCE_LENGTH} characters of ASCII letters, digits, '-' and '_'"
+                ),
             ));
         }
         if expires_at <= issued_at {

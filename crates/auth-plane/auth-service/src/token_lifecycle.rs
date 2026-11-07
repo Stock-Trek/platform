@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, AuthService, RevocationReason, RevokedBy, TokenAuditAction, TokenAuditEvent,
-    TokenMetadata,
+    TokenMetadata, api_token::MAX_TOKEN_ID_LENGTH,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
@@ -8,6 +8,7 @@ use rand::{Rng, distributions::Alphanumeric};
 
 impl AuthService {
     pub async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
+        ApiToken::validate_id(id)?;
         let replacement_id = Self::rotated_token_id(id, now);
         self.rotate_token_to(id, replacement_id, now).await
     }
@@ -19,6 +20,9 @@ impl AuthService {
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
         let replacement_id = replacement_id.into();
+        ApiToken::validate_id(&replacement_id).map_err(|_| {
+            BpError::auth_invalid_field("replacement_id", "must be a valid token id")
+        })?;
         if replacement_id == id {
             return Err(BpError::auth_invalid_field(
                 "replacement_id",
@@ -134,11 +138,14 @@ impl AuthService {
     }
 
     fn rotated_token_id(id: &str, now: DateTime<Utc>) -> String {
-        let suffix: String = rand::thread_rng()
+        let random: String = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(8)
             .map(char::from)
             .collect();
-        format!("{id}-{}-{suffix}", now.timestamp_millis())
+        let suffix = format!("-{}-{random}", now.timestamp_millis());
+        let prefix_length = MAX_TOKEN_ID_LENGTH.saturating_sub(suffix.len());
+        let prefix = &id[..id.len().min(prefix_length)];
+        format!("{prefix}{suffix}")
     }
 }
