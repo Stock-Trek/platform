@@ -1,4 +1,5 @@
 use super::support_tests::TestFixture;
+use chrono::Utc;
 use platform_errors::{AuthError, BpError};
 use secrecy::ExposeSecret;
 use std::sync::Arc;
@@ -6,9 +7,11 @@ use std::sync::Arc;
 #[tokio::test]
 async fn adding_a_duplicate_token_fails_without_replacing_it() {
     let service = TestFixture::service();
-    let original = service.add_token("token-a", "demo-owner").await.unwrap();
+    let original = TestFixture::add_token(&service, "token-a", "demo-owner").await;
 
-    let error = service.add_token("token-a", "other-owner").await;
+    let error = service
+        .add_token("token-a", "other-owner", Utc::now(), TestFixture::options())
+        .await;
 
     assert!(matches!(
         error,
@@ -29,37 +32,56 @@ async fn concurrent_duplicate_adds_only_create_one_token() {
     let second_service = Arc::clone(&service);
 
     let (first, second) = tokio::join!(
-        first_service.add_token("token-a", "first-owner"),
-        second_service.add_token("token-a", "second-owner"),
+        first_service.add_token("token-a", "first-owner", Utc::now(), TestFixture::options()),
+        second_service.add_token(
+            "token-a",
+            "second-owner",
+            Utc::now(),
+            TestFixture::options()
+        ),
     );
 
     assert!(first.is_ok() ^ second.is_ok());
-    assert_eq!(service.token_ids().await.unwrap(), vec!["token-a"]);
+    let ids: Vec<String> = service
+        .tokens_for_owner("first-owner")
+        .await
+        .unwrap()
+        .into_iter()
+        .chain(service.tokens_for_owner("second-owner").await.unwrap())
+        .map(|token| token.id().to_string())
+        .collect();
+    assert_eq!(ids, vec!["token-a"]);
 }
 
 #[tokio::test]
 async fn deleting_a_missing_token_is_idempotent() {
     let service = TestFixture::service();
 
-    service.delete_token("ghost").await.unwrap();
-    service.delete_token("ghost").await.unwrap();
+    service.delete_token("ghost", Utc::now()).await.unwrap();
+    service.delete_token("ghost", Utc::now()).await.unwrap();
 }
 
 #[tokio::test]
 async fn token_ids_are_listed_sorted() {
     let service = TestFixture::service();
-    service.add_token("token-b", "demo-owner").await.unwrap();
-    service.add_token("token-a", "demo-owner").await.unwrap();
+    TestFixture::add_token(&service, "token-b", "demo-owner").await;
+    TestFixture::add_token(&service, "token-a", "demo-owner").await;
 
-    let ids = service.token_ids().await.unwrap();
+    let ids: Vec<String> = service
+        .tokens_for_owner("demo-owner")
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|token| token.id().to_string())
+        .collect();
 
-    assert_eq!(ids, vec!["token-a".to_string(), "token-b".to_string()]);
+    assert_eq!(ids, vec!["token-a", "token-b"]);
 }
 
 #[tokio::test]
 async fn looks_up_a_stored_token() {
     let service = TestFixture::service();
-    let added = service.add_token("token-a", "demo-owner").await.unwrap();
+    let added = TestFixture::add_token(&service, "token-a", "demo-owner").await;
 
     let stored = service.token(added.id()).await.unwrap();
 
@@ -82,10 +104,10 @@ async fn looking_up_an_unknown_token_fails() {
 #[tokio::test]
 async fn authenticates_a_token_with_its_secret() {
     let service = TestFixture::service();
-    let added = service.add_token("token-a", "demo-owner").await.unwrap();
+    let added = TestFixture::add_token(&service, "token-a", "demo-owner").await;
 
     let authenticated = service
-        .authenticate(added.id(), added.secret())
+        .authenticate(added.id(), added.secret(), None, Utc::now())
         .await
         .unwrap();
 
@@ -95,9 +117,11 @@ async fn authenticates_a_token_with_its_secret() {
 #[tokio::test]
 async fn authentication_rejects_the_wrong_secret() {
     let service = TestFixture::service();
-    let added = service.add_token("token-a", "demo-owner").await.unwrap();
+    let added = TestFixture::add_token(&service, "token-a", "demo-owner").await;
 
-    let error = service.authenticate(added.id(), "wrong-secret").await;
+    let error = service
+        .authenticate(added.id(), "wrong-secret", None, Utc::now())
+        .await;
 
     assert!(matches!(
         error,
@@ -109,7 +133,9 @@ async fn authentication_rejects_the_wrong_secret() {
 async fn authenticating_an_unknown_token_fails() {
     let service = TestFixture::service();
 
-    let error = service.authenticate("ghost", "secret").await;
+    let error = service
+        .authenticate("ghost", "secret", None, Utc::now())
+        .await;
 
     assert!(matches!(
         error,
@@ -127,12 +153,12 @@ async fn rejects_path_traversal_token_ids_before_store_access() {
             error,
             Err(BpError::Auth(AuthError::InvalidField { .. }))
         ));
-        let error = service.delete_token(id).await;
+        let error = service.delete_token(id, Utc::now()).await;
         assert!(matches!(
             error,
             Err(BpError::Auth(AuthError::InvalidField { .. }))
         ));
-        let error = service.authenticate(id, "secret").await;
+        let error = service.authenticate(id, "secret", None, Utc::now()).await;
         assert!(matches!(
             error,
             Err(BpError::Auth(AuthError::InvalidField { .. }))

@@ -1,29 +1,25 @@
+use crate::TokenMetadata;
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
-use rand::{Rng, distributions::Alphanumeric};
 use secrecy::{ExposeSecret, SecretString};
-use serde_json::Value;
 use subtle::ConstantTimeEq;
-
-const SECRET_LENGTH: usize = 32;
-const CREATED_AT: &str = "created_at";
-const OWNER: &str = "owner";
-const SECRET: &str = "secret";
 
 #[derive(Clone)]
 pub struct ApiToken {
-    id: String,
-    owner: String,
-    secret: SecretString,
-    created_at: DateTime<Utc>,
+    pub(crate) id: String,
+    pub(crate) owner: String,
+    pub(crate) secret: SecretString,
+    pub(crate) created_at: DateTime<Utc>,
+    pub(crate) metadata: TokenMetadata,
 }
 
 impl ApiToken {
-    pub fn new(
+    pub fn from_parts(
         id: impl Into<String>,
         owner: impl Into<String>,
         secret: SecretString,
         created_at: DateTime<Utc>,
+        metadata: TokenMetadata,
     ) -> BpResult<Self> {
         let id = id.into();
         Self::validate_id(&id)?;
@@ -39,16 +35,8 @@ impl ApiToken {
             owner,
             secret,
             created_at,
+            metadata,
         })
-    }
-
-    pub fn generate(id: impl Into<String>, owner: impl Into<String>) -> BpResult<Self> {
-        let secret: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(SECRET_LENGTH)
-            .map(char::from)
-            .collect();
-        Self::new(id, owner, SecretString::from(secret), Utc::now())
     }
 
     pub fn id(&self) -> &str {
@@ -63,36 +51,20 @@ impl ApiToken {
         &self.secret
     }
 
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+
+    pub fn metadata(&self) -> &TokenMetadata {
+        &self.metadata
+    }
+
     pub fn matches_secret(&self, candidate: &str) -> bool {
         self.secret
             .expose_secret()
             .as_bytes()
             .ct_eq(candidate.as_bytes())
             .into()
-    }
-
-    pub fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
-
-    pub fn to_value(&self) -> Value {
-        serde_json::json!({
-            CREATED_AT: self.created_at.to_rfc3339(),
-            OWNER: self.owner,
-            SECRET: self.secret.expose_secret(),
-        })
-    }
-
-    pub fn from_value(id: &str, value: &Value) -> BpResult<Self> {
-        let owner = Self::string_field(value, OWNER)?;
-        let secret = Self::string_field(value, SECRET)?;
-        let created_at = Self::string_field(value, CREATED_AT)?;
-        let created_at = DateTime::parse_from_rfc3339(&created_at)
-            .map_err(|e| {
-                BpError::auth_invalid_field(CREATED_AT, format!("not an RFC 3339 timestamp: {e}"))
-            })?
-            .with_timezone(&Utc);
-        Self::new(id, owner, SecretString::from(secret), created_at)
     }
 
     pub fn validate_id(id: &str) -> BpResult<()> {
@@ -109,16 +81,6 @@ impl ApiToken {
             ))
         }
     }
-
-    fn string_field(value: &Value, field: &'static str) -> BpResult<String> {
-        value
-            .get(field)
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .ok_or_else(|| {
-                BpError::auth_invalid_field(field, "missing from the stored token value")
-            })
-    }
 }
 
 impl std::fmt::Debug for ApiToken {
@@ -128,6 +90,7 @@ impl std::fmt::Debug for ApiToken {
             .field("owner", &self.owner)
             .field("secret", &"<redacted>")
             .field("created_at", &self.created_at)
+            .field("metadata", &self.metadata)
             .finish()
     }
 }

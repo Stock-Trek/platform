@@ -1,3 +1,4 @@
+use chrono::Utc;
 use platform_auth_service::AuthService;
 use platform_errors::{BpError, BpResult};
 use serde_json::json;
@@ -62,9 +63,10 @@ impl OrderRequestDispatcher {
     ) -> BpResult<()> {
         let bytes = serde_json::to_vec(order_request).map_err(BpError::external)?;
         let request_value = serde_json::to_value(order_request).map_err(BpError::external)?;
+        let now = Utc::now();
         let signed = self
             .auth_service
-            .sign_order_request_for_owner(&self.owner, &bytes)
+            .sign_order_request_for_owner(&self.owner, &bytes, now, now)
             .await?;
         let payload = json!({
             "cex": cex_id.to_string(),

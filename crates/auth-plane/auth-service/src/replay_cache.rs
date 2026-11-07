@@ -2,14 +2,15 @@ use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 
-#[derive(Default)]
 pub(crate) struct ReplayCache {
     used: Mutex<HashMap<String, DateTime<Utc>>>,
 }
 
 impl ReplayCache {
     pub fn new() -> Self {
-        Self::default()
+        Self {
+            used: Mutex::new(HashMap::new()),
+        }
     }
 
     pub fn consume(&self, nonce: &str, expires_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {

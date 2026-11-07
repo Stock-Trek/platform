@@ -2,8 +2,6 @@ use platform_errors::{BpError, BpResult};
 use secrecy::{ExposeSecret, SecretString};
 use std::time::Duration;
 
-const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
-
 #[derive(Debug, Clone)]
 pub struct VaultTokenStoreConfig {
     pub(crate) address: String,
@@ -13,12 +11,17 @@ pub struct VaultTokenStoreConfig {
 }
 
 impl VaultTokenStoreConfig {
-    pub fn new(address: impl Into<String>, token: SecretString, mount: impl Into<String>) -> Self {
+    pub fn new(
+        address: impl Into<String>,
+        token: SecretString,
+        mount: impl Into<String>,
+        timeout: Duration,
+    ) -> Self {
         Self {
             address: address.into(),
             token,
             mount: mount.into(),
-            timeout: DEFAULT_TIMEOUT,
+            timeout,
         }
     }
 
@@ -32,11 +35,6 @@ impl VaultTokenStoreConfig {
 
     pub fn timeout(&self) -> Duration {
         self.timeout
-    }
-
-    pub fn with_timeout(mut self, timeout: Duration) -> Self {
-        self.timeout = timeout;
-        self
     }
 
     pub fn validate(&self) -> BpResult<()> {
@@ -61,6 +59,12 @@ impl VaultTokenStoreConfig {
             return Err(BpError::config_invalid(
                 "vault_mount",
                 "must only contain path segments made of ASCII letters, digits, '-' and '_'",
+            ));
+        }
+        if self.timeout.is_zero() {
+            return Err(BpError::config_invalid(
+                "vault_timeout",
+                "must be greater than zero",
             ));
         }
         Ok(())

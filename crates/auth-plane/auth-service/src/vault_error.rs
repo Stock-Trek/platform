@@ -38,7 +38,7 @@ impl VaultError {
             operation,
             target,
             retryable,
-            VaultStatusError::new(status, body),
+            VaultStatusError { status, body },
         )
     }
 
@@ -93,12 +93,6 @@ impl VaultError {
 struct VaultStatusError {
     status: StatusCode,
     body: String,
-}
-
-impl VaultStatusError {
-    fn new(status: StatusCode, body: String) -> Self {
-        Self { status, body }
-    }
 }
 
 impl fmt::Display for VaultStatusError {

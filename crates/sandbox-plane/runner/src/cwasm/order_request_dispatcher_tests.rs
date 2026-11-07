@@ -1,4 +1,8 @@
-use platform_auth_service::{ApiToken, AuthService, MemoryTokenStore, SignedOrderRequest};
+use chrono::{Duration, Utc};
+use platform_auth_service::{
+    ApiToken, AuthService, AuthServiceConfig, MemoryTokenAuditLog, MemoryTokenStore,
+    SignedOrderRequest, TokenExpiry, TokenOptions, TokenScope,
+};
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
 use stock_trek::{
@@ -20,12 +24,26 @@ struct Fixture;
 
 impl Fixture {
     fn auth_service() -> AuthService {
-        AuthService::new(Arc::new(MemoryTokenStore::new()))
+        AuthService::new(
+            Arc::new(MemoryTokenStore::default()),
+            AuthServiceConfig {
+                token_lifetime: Duration::days(30),
+                rotation_overlap: Duration::days(7),
+                signature_validity: Duration::minutes(5),
+                audit: Arc::new(MemoryTokenAuditLog::new(4096)),
+            },
+        )
+        .unwrap()
     }
 
     async fn setup(url: &str) -> (OrderRequestDispatcher, AuthService, ApiToken) {
         let auth_service = Self::auth_service();
-        let token = auth_service.add_token(TOKEN_ID, OWNER).await.unwrap();
+        let options =
+            TokenOptions::new(TokenExpiry::After(Duration::days(30)), TokenScope::DEFAULT);
+        let token = auth_service
+            .add_token(TOKEN_ID, OWNER, Utc::now(), options)
+            .await
+            .unwrap();
         let dispatcher = OrderRequestDispatcher::new(url, OWNER, auth_service.clone()).unwrap();
         (dispatcher, auth_service, token)
     }
@@ -166,7 +184,7 @@ async fn signs_and_submits_place_order_actions() {
     assert_eq!(signed.token_id(), token.id());
     assert!(
         auth_service
-            .verify_order_request(token.id(), &bytes, signed.signature())
+            .verify_order_request(token.id(), &bytes, signed.signature(), Utc::now())
             .await
             .unwrap()
     );
