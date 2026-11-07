@@ -1,22 +1,25 @@
-use crate::RunRecord;
 use crate::run_record::{
-    ALGORITHM_ID, COMPLETED_AT, CWASM_KEY, CWASM_SHA256, CWASM_SIZE, ERROR, SCHEDULED_AT, STATUS,
-    STRATEGY_NAME, WASMTIME_VERSION,
+    ALGORITHM_ID, COMPLETED_AT, CWASM_KEY, CWASM_SHA256, CWASM_SIZE, ERROR, OWNER, SCHEDULED_AT,
+    STATUS, STRATEGY_NAME, WASMTIME_VERSION,
 };
 use crate::run_status::RunStatus;
+use crate::{CwasmArtifact, RunRecord};
 use aws_sdk_dynamodb::types::AttributeValue;
 use chrono::{DateTime, Utc};
 
 fn record() -> RunRecord {
     RunRecord::new(
         "demo-algorithm",
+        "demo-owner",
         DateTime::parse_from_rfc3339("2026-02-03T04:05:06.789Z")
             .unwrap()
             .with_timezone(&Utc),
-        "artifact/github.com/example/repo/heads/main/abc123/runner.cwasm",
-        "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
-        123456,
-        "43.0.1",
+        CwasmArtifact::new(
+            "artifact/github.com/example/repo/heads/main/abc123/runner.cwasm",
+            "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
+            123456,
+            "43.0.1",
+        ),
         "MyStrategy",
     )
 }
@@ -44,6 +47,7 @@ fn writes_the_primary_key_attributes() {
         item.get(ALGORITHM_ID).unwrap().as_s().unwrap(),
         "demo-algorithm"
     );
+    assert_eq!(item.get(OWNER).unwrap().as_s().unwrap(), "demo-owner");
     assert_eq!(item.get(STATUS).unwrap().as_s().unwrap(), "pending");
     assert!(!item.contains_key(COMPLETED_AT));
     assert!(!item.contains_key(ERROR));
@@ -68,6 +72,7 @@ fn rejects_malformed_items() {
     let record = record();
     for (name, value) in [
         (ALGORITHM_ID, AttributeValue::Null(true)),
+        (OWNER, AttributeValue::Null(true)),
         (SCHEDULED_AT, AttributeValue::S("not-a-timestamp".into())),
         (CWASM_KEY, AttributeValue::S(String::new())),
         (CWASM_SHA256, AttributeValue::N("1".into())),
@@ -90,6 +95,7 @@ fn rejects_items_with_missing_attributes() {
     let record = record();
     for name in [
         ALGORITHM_ID,
+        OWNER,
         SCHEDULED_AT,
         CWASM_KEY,
         CWASM_SHA256,

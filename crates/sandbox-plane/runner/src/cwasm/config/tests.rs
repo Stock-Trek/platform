@@ -1,6 +1,5 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult, ConfigError};
-use secrecy::ExposeSecret;
 use std::time::Duration;
 
 use super::invoker::InvokerConfig;
@@ -10,17 +9,19 @@ const MAX_GUEST_MEMORY_BYTES: &str = "CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES";
 const MAX_TABLE_ELEMENTS: &str = "CWASM_INVOKER_MAX_TABLE_ELEMENTS";
 const CWASM_DOWNLOAD_TIMEOUT_SECS: &str = "CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS";
 const MAX_CWASM_BYTES: &str = "CWASM_INVOKER_MAX_CWASM_BYTES";
-const ORDER_REQUEST_TOKEN_ID: &str = "CWASM_INVOKER_ORDER_REQUEST_TOKEN_ID";
-const ORDER_REQUEST_SIGNING_SECRET: &str = "CWASM_INVOKER_ORDER_REQUEST_SIGNING_SECRET";
+const VAULT_ADDRESS: &str = "CWASM_INVOKER_VAULT_ADDRESS";
+const VAULT_TOKEN: &str = "CWASM_INVOKER_VAULT_TOKEN";
+const VAULT_MOUNT: &str = "CWASM_INVOKER_VAULT_MOUNT";
 
-const ALL_VARS: [(&str, &str); 7] = [
+const ALL_VARS: [(&str, &str); 8] = [
     (EXECUTION_TIMEOUT_SECS, "45"),
     (MAX_GUEST_MEMORY_BYTES, "1048576"),
     (MAX_TABLE_ELEMENTS, "2048"),
     (CWASM_DOWNLOAD_TIMEOUT_SECS, "15"),
     (MAX_CWASM_BYTES, "4096"),
-    (ORDER_REQUEST_TOKEN_ID, "runner-token"),
-    (ORDER_REQUEST_SIGNING_SECRET, "runner-secret"),
+    (VAULT_ADDRESS, "https://vault.example.com"),
+    (VAULT_TOKEN, "vault-token"),
+    (VAULT_MOUNT, "platform-tokens"),
 ];
 
 fn config(vars: &[(&str, &str)]) -> BpResult<InvokerConfig> {
@@ -39,28 +40,32 @@ fn reads_every_value_from_the_environment() {
     assert_eq!(config.execution.max_table_elements, 2048);
     assert_eq!(config.cwasm.download_timeout, Duration::from_secs(15));
     assert_eq!(config.cwasm.max_bytes.get(), 4096);
-    assert_eq!(config.order_request_token_id, "runner-token");
-    assert_eq!(
-        config.order_request_signing_secret.expose_secret(),
-        "runner-secret"
-    );
+    assert_eq!(config.vault.address(), "https://vault.example.com");
+    assert_eq!(config.vault.mount(), "platform-tokens");
+    assert_eq!(config.vault.timeout(), Duration::from_secs(10));
 }
 
 #[test]
-fn rejects_invalid_order_request_token_ids() {
-    let vars: Vec<(&str, &str)> = ALL_VARS
-        .iter()
-        .copied()
-        .map(|(name, value)| {
-            if name == ORDER_REQUEST_TOKEN_ID {
-                (name, "not a valid token id")
-            } else {
-                (name, value)
-            }
-        })
-        .collect();
-
-    assert!(config(&vars).is_err());
+fn rejects_invalid_vault_configuration() {
+    for (name, value) in [
+        (VAULT_ADDRESS, "not a url"),
+        (VAULT_ADDRESS, "file:///tmp/vault"),
+        (VAULT_MOUNT, "../sys"),
+        (VAULT_MOUNT, ""),
+    ] {
+        let vars: Vec<(&str, &str)> = ALL_VARS
+            .iter()
+            .copied()
+            .map(|(variable, old)| {
+                if variable == name {
+                    (variable, value)
+                } else {
+                    (variable, old)
+                }
+            })
+            .collect();
+        assert!(config(&vars).is_err(), "{name}={value}");
+    }
 }
 
 #[test]

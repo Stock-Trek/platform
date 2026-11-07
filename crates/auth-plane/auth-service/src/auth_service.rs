@@ -59,6 +59,29 @@ impl AuthService {
         self.store.ids().await
     }
 
+    pub async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
+        if owner.trim().is_empty() {
+            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
+        }
+        let mut tokens = Vec::new();
+        for id in self.store.ids().await? {
+            if let Some(token) = self.store.get(&id).await?
+                && token.owner() == owner
+            {
+                tokens.push(token);
+            }
+        }
+        Ok(tokens)
+    }
+
+    pub async fn token_for_owner(&self, owner: &str) -> BpResult<ApiToken> {
+        self.tokens_for_owner(owner)
+            .await?
+            .into_iter()
+            .next()
+            .ok_or_else(|| BpError::auth_invalid_field("owner", "has no API token"))
+    }
+
     pub async fn authenticate(
         &self,
         token_id: &str,
@@ -87,6 +110,16 @@ impl AuthService {
     ) -> BpResult<SignedOrderRequest> {
         let (secret, order_request) = SignatureArguments::split_sign(&secret, &order_request)?;
         self.sign_order_request_at(token_id, secret, order_request, Utc::now())
+            .await
+    }
+
+    pub async fn sign_order_request_for_owner(
+        &self,
+        owner: &str,
+        order_request: impl SignatureInput,
+    ) -> BpResult<SignedOrderRequest> {
+        let token = self.token_for_owner(owner).await?;
+        self.sign_order_request(token.id(), token.secret(), order_request)
             .await
     }
 

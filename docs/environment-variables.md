@@ -258,7 +258,8 @@ their details.
 ### CWASM invoker
 
 The native cwasm host reads these required variables when it starts. Missing, empty, and invalid
-values fail startup.
+values fail startup. Order requests are signed with the auth-service token owned by the owner in
+the run request.
 
 #### Required
 
@@ -269,8 +270,9 @@ values fail startup.
 | `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. |
 | `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. |
 | `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. |
-| `CWASM_INVOKER_ORDER_REQUEST_SIGNING_SECRET` | Auth-service token secret used to sign order requests. |
-| `CWASM_INVOKER_ORDER_REQUEST_TOKEN_ID` | Auth-service token ID used to sign order requests. |
+| `CWASM_INVOKER_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
+| `CWASM_INVOKER_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
+| `CWASM_INVOKER_VAULT_TOKEN` | Vault token used to read auth-service tokens. |
 
 ## Secrets
 

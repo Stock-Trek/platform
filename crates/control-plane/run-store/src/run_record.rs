@@ -1,10 +1,11 @@
-use crate::run_status::RunStatus;
+use crate::{CwasmArtifact, run_status::RunStatus};
 use aws_sdk_dynamodb::types::AttributeValue;
 use chrono::{DateTime, SecondsFormat, Utc};
 use platform_errors::{BpError, BpResult};
 use std::collections::HashMap;
 
 pub const ALGORITHM_ID: &str = "algorithmId";
+pub const OWNER: &str = "owner";
 pub const SCHEDULED_AT: &str = "scheduledAt";
 pub const CWASM_KEY: &str = "cwasmKey";
 pub const CWASM_SHA256: &str = "cwasmSha256";
@@ -22,6 +23,7 @@ pub type Item = HashMap<String, AttributeValue>;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RunRecord {
     pub algorithm_id: String,
+    pub owner: String,
     pub scheduled_at: DateTime<Utc>,
     pub cwasm_key: String,
     pub cwasm_sha256: String,
@@ -36,20 +38,19 @@ pub struct RunRecord {
 impl RunRecord {
     pub fn new(
         algorithm_id: impl Into<String>,
+        owner: impl Into<String>,
         scheduled_at: DateTime<Utc>,
-        cwasm_key: impl Into<String>,
-        cwasm_sha256: impl Into<String>,
-        cwasm_size: u64,
-        wasmtime_version: impl Into<String>,
+        artifact: CwasmArtifact,
         strategy_name: impl Into<String>,
     ) -> Self {
         Self {
             algorithm_id: algorithm_id.into(),
+            owner: owner.into(),
             scheduled_at,
-            cwasm_key: cwasm_key.into(),
-            cwasm_sha256: cwasm_sha256.into(),
-            cwasm_size,
-            wasmtime_version: wasmtime_version.into(),
+            cwasm_key: artifact.key,
+            cwasm_sha256: artifact.sha256,
+            cwasm_size: artifact.size,
+            wasmtime_version: artifact.wasmtime_version,
             strategy_name: strategy_name.into(),
             status: RunStatus::Pending,
             completed_at: None,
@@ -63,6 +64,7 @@ impl RunRecord {
             ALGORITHM_ID.into(),
             AttributeValue::S(self.algorithm_id.clone()),
         );
+        item.insert(OWNER.into(), AttributeValue::S(self.owner.clone()));
         item.insert(
             SCHEDULED_AT.into(),
             AttributeValue::S(Self::format_timestamp(self.scheduled_at)),
@@ -103,6 +105,7 @@ impl RunRecord {
     pub(crate) fn from_item(item: &Item) -> BpResult<Self> {
         Ok(Self {
             algorithm_id: Self::string(item, ALGORITHM_ID)?,
+            owner: Self::string(item, OWNER)?,
             scheduled_at: Self::timestamp(item, SCHEDULED_AT)?,
             cwasm_key: Self::string(item, CWASM_KEY)?,
             cwasm_sha256: Self::string(item, CWASM_SHA256)?,

@@ -1,26 +1,20 @@
-use chrono::{Duration, Utc};
-use platform_auth_service::{
-    ApiToken, OrderRequestContext, OrderRequestSigner, SignedOrderRequest,
-};
+use platform_auth_service::AuthService;
 use platform_errors::{BpError, BpResult};
-use secrecy::SecretString;
 use serde_json::json;
 use stock_trek::{
     actions::ResolvedAction,
     types::{AccountId, AssetId, CexId, OrderRequest},
 };
 
-const ORDER_SIGNATURE_VALIDITY_SECONDS: i64 = 300;
-
 pub struct OrderRequestDispatcher {
     url: reqwest::Url,
-    token_id: String,
-    signer: OrderRequestSigner,
+    owner: String,
+    auth_service: AuthService,
     client: reqwest::Client,
 }
 
 impl OrderRequestDispatcher {
-    pub fn new(url: &str, token_id: impl Into<String>, secret: &SecretString) -> BpResult<Self> {
+    pub fn new(url: &str, owner: impl Into<String>, auth_service: AuthService) -> BpResult<Self> {
         let url = reqwest::Url::parse(url)
             .map_err(|error| BpError::config_invalid_source("order_request_url", error))?;
         if !matches!(url.scheme(), "http" | "https") {
@@ -29,16 +23,17 @@ impl OrderRequestDispatcher {
                 "must use the http or https scheme",
             ));
         }
-        let token_id = token_id.into();
-        ApiToken::validate_id(&token_id)?;
-        let signer = OrderRequestSigner::new(secret)?;
+        let owner = owner.into();
+        if owner.trim().is_empty() {
+            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
+        }
         let client = reqwest::Client::builder()
             .build()
             .map_err(BpError::external)?;
         Ok(Self {
             url,
-            token_id,
-            signer,
+            owner,
+            auth_service,
             client,
         })
     }
@@ -67,17 +62,14 @@ impl OrderRequestDispatcher {
     ) -> BpResult<()> {
         let bytes = serde_json::to_vec(order_request).map_err(BpError::external)?;
         let request_value = serde_json::to_value(order_request).map_err(BpError::external)?;
-        let context = OrderRequestContext::generate(
-            &self.token_id,
-            Utc::now(),
-            Duration::seconds(ORDER_SIGNATURE_VALIDITY_SECONDS),
-        )?;
-        let signature = self.signer.sign_order_request(&context, &bytes)?;
-        let signed = SignedOrderRequest::from_context(&context, signature);
+        let signed = self
+            .auth_service
+            .sign_order_request_for_owner(&self.owner, &bytes)
+            .await?;
         let payload = json!({
             "cex": cex_id.to_string(),
             "account": account_id.0,
-            "tokenId": self.token_id,
+            "tokenId": signed.token_id(),
             "orderRequest": request_value,
             "signature": signed.signature(),
         });

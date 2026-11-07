@@ -11,6 +11,7 @@
 //!   "cwasmSize": 123456,
 //!   "wasmtimeVersion": "43.0.1",
 //!   "orderRequestUrl": "<order request service url>",
+//!   "owner": "<algorithm owner>",
 //!   "command": "metadata",
 //!   "strategyName": "MyStrategy"
 //! }
@@ -37,9 +38,13 @@ use cwasm::{
     Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher, WasmRunner,
     backtest,
 };
+use platform_auth_service::{AuthService, VaultTokenStore, VaultTokenStoreConfig};
 use platform_exit_codes::ExitCode;
 use platform_runner::command::{Command, RunRequest};
-use std::io::{self, Read};
+use std::{
+    io::{self, Read},
+    sync::Arc,
+};
 
 const MAX_RUN_REQUEST_BYTES: u64 = 1024 * 1024;
 
@@ -71,13 +76,16 @@ impl CwasmInvoker {
         let InvokerConfig {
             execution,
             cwasm: cwasm_limits,
-            order_request_token_id,
-            order_request_signing_secret,
+            vault,
         } = config;
+        let auth_service = match Self::auth_service(vault) {
+            Ok(auth_service) => auth_service,
+            Err(code) => return code.code(),
+        };
         let dispatcher = match OrderRequestDispatcher::new(
             &request.order_request_url,
-            order_request_token_id,
-            &order_request_signing_secret,
+            &request.owner,
+            auth_service,
         ) {
             Ok(dispatcher) => dispatcher,
             Err(error) => {
@@ -145,6 +153,15 @@ impl CwasmInvoker {
             .map_err(|error| {
                 eprintln!("cwasm-invoker: failed to start tokio runtime: {error}");
                 ExitCode::ServerRunnerRuntimeStartFailed
+            })
+    }
+
+    fn auth_service(config: VaultTokenStoreConfig) -> Result<AuthService, ExitCode> {
+        VaultTokenStore::new(config)
+            .map(|store| AuthService::new(Arc::new(store)))
+            .map_err(|error| {
+                eprintln!("cwasm-invoker: invalid auth service configuration: {error}");
+                ExitCode::ServerRunnerConfigurationInvalid
             })
     }
 
