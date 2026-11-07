@@ -1,28 +1,50 @@
 use crate::{
-    ApiToken, OrderRequestContext, OrderRequestSigner, SignatureInput, SignedOrderRequest,
-    replay_cache::ReplayCache, signature_input::SignatureArguments, token_store::TokenStore,
+    ApiToken, MemoryTokenAuditLog, NoopTokenAuditLog, TokenAuditEvent, TokenAuditLog,
+    TokenDuration, TokenExpiry, replay_cache::ReplayCache, token_store::TokenStore,
 };
-use chrono::{Duration, Utc};
-use platform_errors::{BpError, BpResult};
-use std::{str, sync::Arc};
+use chrono::{DateTime, Duration, Utc};
+use platform_errors::BpResult;
+use std::sync::Arc;
 
+pub const DEFAULT_TOKEN_LIFETIME_SECONDS: i64 = 30 * 24 * 60 * 60;
+pub const DEFAULT_ROTATION_OVERLAP_SECONDS: i64 = 7 * 24 * 60 * 60;
 const DEFAULT_SIGNATURE_VALIDITY_SECONDS: i64 = 300;
-const CLOCK_SKEW_SECONDS: i64 = 60;
 
 #[derive(Clone)]
 pub struct AuthService {
-    store: Arc<dyn TokenStore>,
-    replay: Arc<ReplayCache>,
-    signature_validity: Duration,
+    pub(crate) store: Arc<dyn TokenStore>,
+    pub(crate) replay: Arc<ReplayCache>,
+    pub(crate) audit: Arc<dyn TokenAuditLog>,
+    pub(crate) memory_audit: Option<Arc<MemoryTokenAuditLog>>,
+    pub(crate) signature_validity: Duration,
+    pub(crate) default_token_lifetime: Option<Duration>,
+    pub(crate) rotation_overlap: Duration,
 }
 
 impl AuthService {
     pub fn new(store: Arc<dyn TokenStore>) -> Self {
+        let audit = Arc::new(MemoryTokenAuditLog::new());
         Self {
             store,
             replay: Arc::new(ReplayCache::new()),
+            audit: audit.clone(),
+            memory_audit: Some(audit),
             signature_validity: Duration::seconds(DEFAULT_SIGNATURE_VALIDITY_SECONDS),
+            default_token_lifetime: Some(Duration::seconds(DEFAULT_TOKEN_LIFETIME_SECONDS)),
+            rotation_overlap: Duration::seconds(DEFAULT_ROTATION_OVERLAP_SECONDS),
         }
+    }
+
+    pub fn with_audit_log(mut self, audit: Arc<dyn TokenAuditLog>) -> Self {
+        self.audit = audit;
+        self.memory_audit = None;
+        self
+    }
+
+    pub fn with_noop_audit_log(mut self) -> Self {
+        self.audit = Arc::new(NoopTokenAuditLog);
+        self.memory_audit = None;
+        self
     }
 
     pub fn with_signature_validity(mut self, validity: std::time::Duration) -> Self {
@@ -32,142 +54,68 @@ impl AuthService {
         self
     }
 
-    pub async fn add_token(
+    pub fn with_token_lifetime<D: TokenDuration>(mut self, lifetime: D) -> Self {
+        if let Some(lifetime) = lifetime.as_chrono_duration() {
+            self.default_token_lifetime = Some(lifetime.max(Duration::zero()));
+        }
+        self
+    }
+
+    pub fn with_default_token_lifetime<D: TokenDuration>(self, lifetime: D) -> Self {
+        self.with_token_lifetime(lifetime)
+    }
+
+    pub fn without_token_expiry(mut self) -> Self {
+        self.default_token_lifetime = None;
+        self
+    }
+
+    pub fn with_rotation_overlap<D: TokenDuration>(mut self, overlap: D) -> Self {
+        if let Some(overlap) = overlap.as_chrono_duration() {
+            self.rotation_overlap = overlap.max(Duration::zero());
+        }
+        self
+    }
+
+    pub fn audit_events(&self) -> Vec<TokenAuditEvent> {
+        self.memory_audit
+            .as_ref()
+            .map(|audit| audit.events())
+            .unwrap_or_default()
+    }
+
+    pub fn drain_audit_events(&self) -> Vec<TokenAuditEvent> {
+        self.memory_audit
+            .as_ref()
+            .map(|audit| audit.drain())
+            .unwrap_or_default()
+    }
+
+    pub fn audit_log(&self) -> Arc<dyn TokenAuditLog> {
+        Arc::clone(&self.audit)
+    }
+
+    pub(crate) fn record(&self, event: TokenAuditEvent) {
+        self.audit.record(event);
+    }
+
+    pub(crate) fn resolve_expiry(
         &self,
-        id: impl Into<String>,
-        owner: impl Into<String>,
-    ) -> BpResult<ApiToken> {
-        let token = ApiToken::generate(id, owner)?;
-        self.store.put(&token).await?;
+        expiry: TokenExpiry,
+        now: DateTime<Utc>,
+    ) -> Option<DateTime<Utc>> {
+        match expiry {
+            TokenExpiry::Default => self.default_token_lifetime.map(|lifetime| now + lifetime),
+            TokenExpiry::Never => None,
+            TokenExpiry::At(expires_at) => Some(expires_at),
+            TokenExpiry::After(lifetime) => Some(now + lifetime.max(Duration::zero())),
+        }
+    }
+
+    pub(crate) async fn touch(&self, token: &ApiToken, now: DateTime<Utc>) -> BpResult<ApiToken> {
+        let mut token = token.clone();
+        token.record_use(now);
+        self.store.update(&token).await?;
         Ok(token)
-    }
-
-    pub async fn delete_token(&self, id: &str) -> BpResult<()> {
-        ApiToken::validate_id(id)?;
-        self.store.delete(id).await
-    }
-
-    pub async fn token(&self, id: &str) -> BpResult<ApiToken> {
-        ApiToken::validate_id(id)?;
-        self.store
-            .get(id)
-            .await?
-            .ok_or_else(|| BpError::unknown_token(id))
-    }
-
-    pub async fn token_ids(&self) -> BpResult<Vec<String>> {
-        self.store.ids().await
-    }
-
-    pub async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
-        if owner.trim().is_empty() {
-            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
-        }
-        let mut tokens = Vec::new();
-        for id in self.store.ids().await? {
-            if let Some(token) = self.store.get(&id).await?
-                && token.owner() == owner
-            {
-                tokens.push(token);
-            }
-        }
-        Ok(tokens)
-    }
-
-    pub async fn token_for_owner(&self, owner: &str) -> BpResult<ApiToken> {
-        self.tokens_for_owner(owner)
-            .await?
-            .into_iter()
-            .next()
-            .ok_or_else(|| BpError::auth_invalid_field("owner", "has no API token"))
-    }
-
-    pub async fn authenticate(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
-    ) -> BpResult<ApiToken> {
-        let candidate = match secret.signature_argument() {
-            crate::SignatureArgument::Text(secret) => secret,
-            crate::SignatureArgument::Bytes(secret) => str::from_utf8(secret)
-                .map_err(|e| BpError::auth_invalid_field("secret", e.to_string()))?,
-        };
-        let token = self.token(token_id).await?;
-        if !token.matches_secret(candidate) {
-            return Err(BpError::auth_invalid_field(
-                "secret",
-                "does not match the token",
-            ));
-        }
-        Ok(token)
-    }
-
-    pub async fn sign_order_request(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
-        order_request: impl SignatureInput,
-    ) -> BpResult<SignedOrderRequest> {
-        let (secret, order_request) = SignatureArguments::split_sign(&secret, &order_request)?;
-        self.sign_order_request_at(token_id, secret, order_request, Utc::now())
-            .await
-    }
-
-    pub async fn sign_order_request_for_owner(
-        &self,
-        owner: &str,
-        order_request: impl SignatureInput,
-    ) -> BpResult<SignedOrderRequest> {
-        let token = self.token_for_owner(owner).await?;
-        self.sign_order_request(token.id(), token.secret(), order_request)
-            .await
-    }
-
-    pub async fn sign_order_request_at(
-        &self,
-        token_id: &str,
-        secret: &str,
-        order_request: &[u8],
-        issued_at: chrono::DateTime<Utc>,
-    ) -> BpResult<SignedOrderRequest> {
-        let token = self.authenticate(token_id, secret).await?;
-        let context =
-            OrderRequestContext::generate(token.id(), issued_at, self.signature_validity)?;
-        let signer = OrderRequestSigner::new(token.secret())?;
-        let signature = signer.sign_order_request(&context, order_request)?;
-        Ok(SignedOrderRequest::from_context(&context, signature))
-    }
-
-    pub async fn verify_order_request(
-        &self,
-        token_id: &str,
-        order_request: impl SignatureInput,
-        signature: impl SignatureInput,
-    ) -> BpResult<bool> {
-        let (order_request, signature) =
-            SignatureArguments::split_verify(&order_request, &signature)?;
-        let token = self.token(token_id).await?;
-        let Ok(signed) = SignedOrderRequest::decode(signature) else {
-            return Ok(false);
-        };
-        if signed.token_id() != token_id {
-            return Ok(false);
-        }
-        let Ok(context) = signed.context() else {
-            return Ok(false);
-        };
-        let now = Utc::now();
-        if context.expires_at() <= now
-            || context.issued_at() > now + Duration::seconds(CLOCK_SKEW_SECONDS)
-        {
-            return Ok(false);
-        }
-        let signer = OrderRequestSigner::new(token.secret())?;
-        if !signer.verify_order_request(&context, order_request, signed.raw_signature())? {
-            return Ok(false);
-        }
-        Ok(self
-            .replay
-            .consume(context.nonce(), context.expires_at(), now))
     }
 }

@@ -1,21 +1,16 @@
+use crate::{RevocationReason, TokenMetadata};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
-use rand::{Rng, distributions::Alphanumeric};
 use secrecy::{ExposeSecret, SecretString};
-use serde_json::Value;
 use subtle::ConstantTimeEq;
-
-const SECRET_LENGTH: usize = 32;
-const CREATED_AT: &str = "created_at";
-const OWNER: &str = "owner";
-const SECRET: &str = "secret";
 
 #[derive(Clone)]
 pub struct ApiToken {
-    id: String,
-    owner: String,
-    secret: SecretString,
-    created_at: DateTime<Utc>,
+    pub(crate) id: String,
+    pub(crate) owner: String,
+    pub(crate) secret: SecretString,
+    pub(crate) created_at: DateTime<Utc>,
+    pub(crate) metadata: TokenMetadata,
 }
 
 impl ApiToken {
@@ -24,6 +19,17 @@ impl ApiToken {
         owner: impl Into<String>,
         secret: SecretString,
         created_at: DateTime<Utc>,
+    ) -> BpResult<Self> {
+        let metadata = TokenMetadata::new(None, crate::TokenScope::default_scopes())?;
+        Self::from_parts(id, owner, secret, created_at, metadata)
+    }
+
+    pub fn from_parts(
+        id: impl Into<String>,
+        owner: impl Into<String>,
+        secret: SecretString,
+        created_at: DateTime<Utc>,
+        metadata: TokenMetadata,
     ) -> BpResult<Self> {
         let id = id.into();
         Self::validate_id(&id)?;
@@ -39,16 +45,8 @@ impl ApiToken {
             owner,
             secret,
             created_at,
+            metadata,
         })
-    }
-
-    pub fn generate(id: impl Into<String>, owner: impl Into<String>) -> BpResult<Self> {
-        let secret: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(SECRET_LENGTH)
-            .map(char::from)
-            .collect();
-        Self::new(id, owner, SecretString::from(secret), Utc::now())
     }
 
     pub fn id(&self) -> &str {
@@ -63,36 +61,80 @@ impl ApiToken {
         &self.secret
     }
 
+    pub fn created_at(&self) -> DateTime<Utc> {
+        self.created_at
+    }
+
+    pub fn metadata(&self) -> &TokenMetadata {
+        &self.metadata
+    }
+
+    pub fn expires_at(&self) -> Option<DateTime<Utc>> {
+        self.metadata.expires_at()
+    }
+
+    pub fn scopes(&self) -> &[String] {
+        self.metadata.scopes()
+    }
+
+    pub fn revoked_at(&self) -> Option<DateTime<Utc>> {
+        self.metadata.revoked_at()
+    }
+
+    pub fn revocation_reason(&self) -> Option<&str> {
+        self.metadata.revocation_reason()
+    }
+
+    pub fn revoked_by(&self) -> Option<&str> {
+        self.metadata.revoked_by()
+    }
+
+    pub fn last_used_at(&self) -> Option<DateTime<Utc>> {
+        self.metadata.last_used_at()
+    }
+
+    pub fn rotated_from(&self) -> Option<&str> {
+        self.metadata.rotated_from()
+    }
+
+    pub fn replaced_by(&self) -> Option<&str> {
+        self.metadata.replaced_by()
+    }
+
+    pub fn rotation_overlap_until(&self) -> Option<DateTime<Utc>> {
+        self.metadata.rotation_overlap_until()
+    }
+
+    pub fn effective_expires_at(&self) -> Option<DateTime<Utc>> {
+        self.metadata.effective_expires_at()
+    }
+
+    pub fn is_expired(&self, now: DateTime<Utc>) -> bool {
+        self.metadata.is_expired(now)
+    }
+
+    pub fn is_revoked(&self) -> bool {
+        self.metadata.is_revoked()
+    }
+
+    pub fn is_active(&self, now: DateTime<Utc>) -> bool {
+        self.metadata.is_active(now)
+    }
+
+    pub fn has_scope(&self, required: &str) -> bool {
+        self.metadata.has_scope(required)
+    }
+
+    pub fn has_permission(&self, required: &str) -> bool {
+        self.has_scope(required)
+    }
+
     pub fn matches_secret(&self, candidate: &str) -> bool {
         self.secret
             .expose_secret()
             .as_bytes()
             .ct_eq(candidate.as_bytes())
             .into()
-    }
-
-    pub fn created_at(&self) -> DateTime<Utc> {
-        self.created_at
-    }
-
-    pub fn to_value(&self) -> Value {
-        serde_json::json!({
-            CREATED_AT: self.created_at.to_rfc3339(),
-            OWNER: self.owner,
-            SECRET: self.secret.expose_secret(),
-        })
-    }
-
-    pub fn from_value(id: &str, value: &Value) -> BpResult<Self> {
-        let owner = Self::string_field(value, OWNER)?;
-        let secret = Self::string_field(value, SECRET)?;
-        let created_at = Self::string_field(value, CREATED_AT)?;
-        let created_at = DateTime::parse_from_rfc3339(&created_at)
-            .map_err(|e| {
-                BpError::auth_invalid_field(CREATED_AT, format!("not an RFC 3339 timestamp: {e}"))
-            })?
-            .with_timezone(&Utc);
-        Self::new(id, owner, SecretString::from(secret), created_at)
     }
 
     pub fn validate_id(id: &str) -> BpResult<()> {
@@ -110,14 +152,25 @@ impl ApiToken {
         }
     }
 
-    fn string_field(value: &Value, field: &'static str) -> BpResult<String> {
-        value
-            .get(field)
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .ok_or_else(|| {
-                BpError::auth_invalid_field(field, "missing from the stored token value")
-            })
+    pub(crate) fn record_use(&mut self, now: DateTime<Utc>) {
+        self.metadata.record_use(now);
+    }
+
+    pub(crate) fn revoke(
+        &mut self,
+        now: DateTime<Utc>,
+        reason: impl RevocationReason,
+        revoked_by: Option<String>,
+    ) {
+        self.metadata.revoke(now, reason, revoked_by);
+    }
+
+    pub(crate) fn begin_rotation(
+        &mut self,
+        replacement_id: impl Into<String>,
+        overlap_until: DateTime<Utc>,
+    ) {
+        self.metadata.begin_rotation(replacement_id, overlap_until);
     }
 }
 
@@ -128,6 +181,7 @@ impl std::fmt::Debug for ApiToken {
             .field("owner", &self.owner)
             .field("secret", &"<redacted>")
             .field("created_at", &self.created_at)
+            .field("metadata", &self.metadata)
             .finish()
     }
 }

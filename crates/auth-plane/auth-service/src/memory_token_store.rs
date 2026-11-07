@@ -46,4 +46,14 @@ impl TokenStore for MemoryTokenStore {
         ids.sort();
         Ok(ids)
     }
+
+    async fn update(&self, token: &ApiToken) -> BpResult<()> {
+        ApiToken::validate_id(token.id())?;
+        let mut tokens = self.tokens.lock();
+        let Some(stored) = tokens.get_mut(token.id()) else {
+            return Err(BpError::unknown_token(token.id()));
+        };
+        *stored = token.clone();
+        Ok(())
+    }
 }
