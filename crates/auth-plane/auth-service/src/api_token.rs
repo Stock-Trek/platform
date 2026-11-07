@@ -5,6 +5,8 @@ use secrecy::{ExposeSecret, SecretString};
 use subtle::ConstantTimeEq;
 
 pub(crate) const MAX_TOKEN_ID_LENGTH: usize = 256;
+pub(crate) const MAX_OWNER_LENGTH: usize = 256;
+pub(crate) const MAX_SECRET_LENGTH: usize = 256;
 
 #[derive(Clone)]
 pub struct ApiToken {
@@ -26,12 +28,16 @@ impl ApiToken {
         let id = id.into();
         Self::validate_id(&id)?;
         let owner = owner.into();
-        let owner = owner.trim();
-        if owner.is_empty() {
-            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
-        }
-        if secret.expose_secret().trim().is_empty() {
+        let owner = Self::validated_owner(&owner)?;
+        let secret_value = secret.expose_secret();
+        if secret_value.trim().is_empty() {
             return Err(BpError::auth_invalid_field("secret", "must not be empty"));
+        }
+        if secret_value.len() > MAX_SECRET_LENGTH {
+            return Err(BpError::auth_invalid_field(
+                "secret",
+                format!("must be at most {MAX_SECRET_LENGTH} characters"),
+            ));
         }
         metadata.validate()?;
         if metadata.rotated_from() == Some(id.as_str()) {
@@ -81,6 +87,26 @@ impl ApiToken {
             .as_bytes()
             .ct_eq(candidate.as_bytes())
             .into()
+    }
+
+    pub(crate) fn validated_owner(owner: &str) -> BpResult<&str> {
+        let owner = owner.trim();
+        if owner.is_empty() {
+            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
+        }
+        if owner.len() > MAX_OWNER_LENGTH {
+            return Err(BpError::auth_invalid_field(
+                "owner",
+                format!("must be at most {MAX_OWNER_LENGTH} characters"),
+            ));
+        }
+        if owner.chars().any(char::is_control) {
+            return Err(BpError::auth_invalid_field(
+                "owner",
+                "must not contain control characters",
+            ));
+        }
+        Ok(owner)
     }
 
     pub fn validate_id(id: &str) -> BpResult<()> {
