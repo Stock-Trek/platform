@@ -1,9 +1,8 @@
 use crate::OrderRequestContext;
-use chrono::{DateTime, Duration, Utc};
+use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 
 const ENVELOPE_VERSION: &str = "v1";
-const DEFAULT_VALIDITY_SECONDS: i64 = 300;
 
 pub struct SignedOrderRequest {
     token_id: String,
@@ -14,24 +13,6 @@ pub struct SignedOrderRequest {
 }
 
 impl SignedOrderRequest {
-    pub fn new(token_id: impl Into<String>, signature: impl Into<String>) -> Self {
-        let token_id = token_id.into();
-        let signature = signature.into();
-        if let Ok(decoded) = Self::decode(&signature) {
-            return decoded;
-        }
-        let issued_at = Utc::now();
-        let expires_at = issued_at + Duration::seconds(DEFAULT_VALIDITY_SECONDS);
-        let nonce = OrderRequestContext::generate(
-            token_id.clone(),
-            issued_at,
-            Duration::seconds(DEFAULT_VALIDITY_SECONDS),
-        )
-        .map(|context| context.nonce().to_string())
-        .unwrap_or_else(|_| "invalid".to_string());
-        Self::from_parts(token_id, issued_at, expires_at, nonce, signature)
-    }
-
     pub fn from_context(context: &OrderRequestContext, signature: impl Into<String>) -> Self {
         Self::from_parts(
             context.token_id(),
@@ -69,23 +50,35 @@ impl SignedOrderRequest {
         let token_id = parts.next();
         let nonce = parts.next();
         let raw_signature = parts.next();
-        if version != Some(ENVELOPE_VERSION)
-            || parts.next().is_some()
-            || issued_at.is_none()
-            || expires_at.is_none()
-            || nonce.is_none()
-            || token_id.is_none()
-            || raw_signature.is_none()
-        {
+        let (
+            Some(version),
+            Some(issued_at),
+            Some(expires_at),
+            Some(token_id),
+            Some(nonce),
+            Some(_raw_signature),
+        ) = (
+            version,
+            issued_at,
+            expires_at,
+            token_id,
+            nonce,
+            raw_signature,
+        )
+        else {
+            return Err(BpError::auth_invalid_field(
+                "signature",
+                "is not a supported signed order request envelope",
+            ));
+        };
+        if version != ENVELOPE_VERSION || parts.next().is_some() {
             return Err(BpError::auth_invalid_field(
                 "signature",
                 "is not a supported signed order request envelope",
             ));
         }
-        let token_id = token_id.unwrap_or_default();
-        let nonce = nonce.unwrap_or_default();
-        let issued_at = Self::parse_timestamp(issued_at.unwrap_or_default())?;
-        let expires_at = Self::parse_timestamp(expires_at.unwrap_or_default())?;
+        let issued_at = Self::parse_timestamp(issued_at)?;
+        let expires_at = Self::parse_timestamp(expires_at)?;
         OrderRequestContext::new(token_id, issued_at, expires_at, nonce)?;
         Ok(Self {
             token_id: token_id.to_string(),
@@ -119,8 +112,7 @@ impl SignedOrderRequest {
     pub fn raw_signature(&self) -> &str {
         self.signature
             .rsplit_once('.')
-            .map(|(_, signature)| signature)
-            .unwrap_or(self.signature.as_str())
+            .map_or(self.signature.as_str(), |(_, signature)| signature)
     }
 
     pub fn context(&self) -> BpResult<OrderRequestContext> {

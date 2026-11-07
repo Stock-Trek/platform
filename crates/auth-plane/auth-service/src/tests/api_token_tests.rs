@@ -50,7 +50,12 @@ fn round_trips_through_a_vault_value() {
 
 #[test]
 fn rejects_invalid_token_ids() {
-    let error = ApiToken::generate("not/a/path", "demo-owner");
+    let error = ApiToken::generate(
+        "not/a/path",
+        "demo-owner",
+        Utc::now(),
+        TestFixture::metadata(),
+    );
 
     assert!(matches!(
         error,

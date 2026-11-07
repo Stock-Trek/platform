@@ -6,10 +6,11 @@ use secrecy::{ExposeSecret, SecretString};
 #[tokio::test]
 async fn signs_order_requests_with_the_stored_token_secret() {
     let service = TestFixture::service();
-    let token = service.add_token("token-a", "demo-owner").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    let now = Utc::now();
 
     let signed = service
-        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST)
+        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
         .await
         .unwrap();
 
@@ -21,10 +22,11 @@ async fn signs_order_requests_with_the_stored_token_secret() {
 #[tokio::test]
 async fn signs_order_requests_with_the_secret_after_the_request() {
     let service = TestFixture::service();
-    let token = service.add_token("token-a", "demo-owner").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    let now = Utc::now();
 
     let signed = service
-        .sign_order_request(token.id(), ORDER_REQUEST, token.secret())
+        .sign_order_request(token.id(), ORDER_REQUEST, token.secret(), now, now)
         .await
         .unwrap();
 
@@ -48,14 +50,15 @@ async fn signs_the_rfc4231_reference_vector() {
 #[tokio::test]
 async fn verifies_a_matching_signature() {
     let service = TestFixture::service();
-    let token = service.add_token("token-a", "demo-owner").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    let now = Utc::now();
     let signed = service
-        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST)
+        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
         .await
         .unwrap();
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature())
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
         .await
         .unwrap();
 
@@ -66,16 +69,17 @@ async fn verifies_a_matching_signature() {
 async fn rejects_a_tampered_signature() {
     for _ in 0..32 {
         let service = TestFixture::service();
-        let token = service.add_token("token-a", "demo-owner").await.unwrap();
+        let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+        let now = Utc::now();
         let signed = service
-            .sign_order_request(token.id(), token.secret(), ORDER_REQUEST)
+            .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
             .await
             .unwrap();
         let tampered = TestFixture::tampered_signature(signed.signature());
 
         assert_ne!(tampered, signed.signature());
         let verified = service
-            .verify_order_request(token.id(), ORDER_REQUEST, &tampered)
+            .verify_order_request(token.id(), ORDER_REQUEST, &tampered, now)
             .await
             .unwrap();
 
@@ -86,14 +90,15 @@ async fn rejects_a_tampered_signature() {
 #[tokio::test]
 async fn rejects_a_tampered_request() {
     let service = TestFixture::service();
-    let token = service.add_token("token-a", "demo-owner").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    let now = Utc::now();
     let signed = service
-        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST)
+        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
         .await
         .unwrap();
 
     let verified = service
-        .verify_order_request(token.id(), br#"{"side":"sell"}"#, signed.signature())
+        .verify_order_request(token.id(), br#"{"side":"sell"}"#, signed.signature(), now)
         .await
         .unwrap();
 
@@ -103,15 +108,16 @@ async fn rejects_a_tampered_request() {
 #[tokio::test]
 async fn rejects_a_signature_from_another_token() {
     let service = TestFixture::service();
-    let first = service.add_token("token-a", "demo-owner").await.unwrap();
-    let second = service.add_token("token-b", "demo-owner").await.unwrap();
+    let first = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    let second = TestFixture::add_token(&service, "token-b", "demo-owner").await;
+    let now = Utc::now();
     let signed = service
-        .sign_order_request(first.id(), first.secret(), ORDER_REQUEST)
+        .sign_order_request(first.id(), first.secret(), ORDER_REQUEST, now, now)
         .await
         .unwrap();
 
     let verified = service
-        .verify_order_request(second.id(), ORDER_REQUEST, signed.signature())
+        .verify_order_request(second.id(), ORDER_REQUEST, signed.signature(), now)
         .await
         .unwrap();
 
@@ -121,18 +127,19 @@ async fn rejects_a_signature_from_another_token() {
 #[tokio::test]
 async fn rejects_a_replayed_signature() {
     let service = TestFixture::service();
-    let token = service.add_token("token-a", "demo-owner").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    let now = Utc::now();
     let signed = service
-        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST)
+        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
         .await
         .unwrap();
 
     let first = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature())
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
         .await
         .unwrap();
     let second = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature())
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
         .await
         .unwrap();
 
@@ -143,20 +150,22 @@ async fn rejects_a_replayed_signature() {
 #[tokio::test]
 async fn rejects_an_expired_signature() {
     let service = TestFixture::service();
-    let token = service.add_token("token-a", "demo-owner").await.unwrap();
-    let issued_at = Utc::now() - ChronoDuration::minutes(10);
+    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    let now = Utc::now();
+    let issued_at = now - ChronoDuration::minutes(10);
     let signed = service
-        .sign_order_request_at(
+        .sign_order_request(
             token.id(),
             token.secret().expose_secret(),
             ORDER_REQUEST,
             issued_at,
+            now,
         )
         .await
         .unwrap();
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature())
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
         .await
         .unwrap();
 
@@ -166,20 +175,22 @@ async fn rejects_an_expired_signature() {
 #[tokio::test]
 async fn rejects_a_signature_issued_in_the_future() {
     let service = TestFixture::service();
-    let token = service.add_token("token-a", "demo-owner").await.unwrap();
-    let issued_at = Utc::now() + ChronoDuration::minutes(10);
+    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    let now = Utc::now();
+    let issued_at = now + ChronoDuration::minutes(10);
     let signed = service
-        .sign_order_request_at(
+        .sign_order_request(
             token.id(),
             token.secret().expose_secret(),
             ORDER_REQUEST,
             issued_at,
+            now,
         )
         .await
         .unwrap();
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature())
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
         .await
         .unwrap();
 

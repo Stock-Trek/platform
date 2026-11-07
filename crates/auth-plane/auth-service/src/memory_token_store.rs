@@ -9,12 +9,6 @@ pub struct MemoryTokenStore {
     tokens: Arc<Mutex<HashMap<String, ApiToken>>>,
 }
 
-impl MemoryTokenStore {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 #[async_trait]
 impl TokenStore for MemoryTokenStore {
     async fn put(&self, token: &ApiToken) -> BpResult<()> {
@@ -45,5 +39,15 @@ impl TokenStore for MemoryTokenStore {
         let mut ids: Vec<String> = tokens.keys().cloned().collect();
         ids.sort();
         Ok(ids)
+    }
+
+    async fn update(&self, token: &ApiToken) -> BpResult<()> {
+        ApiToken::validate_id(token.id())?;
+        let mut tokens = self.tokens.lock();
+        let Some(stored) = tokens.get_mut(token.id()) else {
+            return Err(BpError::unknown_token(token.id()));
+        };
+        *stored = token.clone();
+        Ok(())
     }
 }

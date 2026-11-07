@@ -34,11 +34,14 @@
 #[path = "../cwasm/mod.rs"]
 mod cwasm;
 
+use chrono::Duration;
 use cwasm::{
     Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher, WasmRunner,
     backtest,
 };
-use platform_auth_service::{AuthService, VaultTokenStore, VaultTokenStoreConfig};
+use platform_auth_service::{
+    AuthService, AuthServiceConfig, MemoryTokenAuditLog, VaultTokenStore, VaultTokenStoreConfig,
+};
 use platform_exit_codes::ExitCode;
 use platform_runner::command::{Command, RunRequest};
 use std::{
@@ -157,12 +160,23 @@ impl CwasmInvoker {
     }
 
     fn auth_service(config: VaultTokenStoreConfig) -> Result<AuthService, ExitCode> {
-        VaultTokenStore::new(config)
-            .map(|store| AuthService::new(Arc::new(store)))
-            .map_err(|error| {
-                eprintln!("cwasm-invoker: invalid auth service configuration: {error}");
-                ExitCode::ServerRunnerConfigurationInvalid
-            })
+        let store = VaultTokenStore::new(config).map_err(|error| {
+            eprintln!("cwasm-invoker: invalid auth service configuration: {error}");
+            ExitCode::ServerRunnerConfigurationInvalid
+        })?;
+        AuthService::new(
+            Arc::new(store),
+            AuthServiceConfig {
+                token_lifetime: Duration::days(30),
+                rotation_overlap: Duration::days(7),
+                signature_validity: Duration::minutes(5),
+                audit: Arc::new(MemoryTokenAuditLog::new(4096)),
+            },
+        )
+        .map_err(|error| {
+            eprintln!("cwasm-invoker: invalid auth service configuration: {error}");
+            ExitCode::ServerRunnerConfigurationInvalid
+        })
     }
 
     fn read_request() -> Result<String, ExitCode> {
