@@ -44,8 +44,10 @@ impl VaultError {
     }
 
     pub fn duplicate_write(status: StatusCode, body: &str) -> bool {
-        matches!(status, StatusCode::BAD_REQUEST | StatusCode::CONFLICT)
-            && (body.contains("check-and-set") || body.contains("did not match"))
+        matches!(
+            status,
+            StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED
+        ) && (body.contains("check-and-set") || body.contains("did not match"))
     }
 
     fn retryable_transport(error: &Error) -> bool {

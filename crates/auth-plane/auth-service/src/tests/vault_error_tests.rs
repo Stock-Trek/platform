@@ -85,6 +85,10 @@ fn check_and_set_conflicts_are_duplicates() {
     let body = r#"{"errors":["check-and-set parameter did not match the current version"]}"#;
 
     assert!(VaultError::duplicate_write(StatusCode::BAD_REQUEST, body));
+    assert!(VaultError::duplicate_write(
+        StatusCode::PRECONDITION_FAILED,
+        body
+    ));
 }
 
 #[test]

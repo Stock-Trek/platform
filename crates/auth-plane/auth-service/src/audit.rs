@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
-use std::{collections::VecDeque, sync::Arc};
+use std::collections::VecDeque;
 use strum::{Display, EnumString};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString)]
@@ -109,10 +109,4 @@ pub struct NoopTokenAuditLog;
 
 impl TokenAuditLog for NoopTokenAuditLog {
     fn record(&self, _event: TokenAuditEvent) {}
-}
-
-impl TokenAuditLog for Arc<dyn TokenAuditLog> {
-    fn record(&self, event: TokenAuditEvent) {
-        self.as_ref().record(event);
-    }
 }

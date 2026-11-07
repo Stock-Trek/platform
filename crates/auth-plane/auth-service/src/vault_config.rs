@@ -1,4 +1,5 @@
 use platform_errors::{BpError, BpResult};
+use reqwest::Url;
 use secrecy::{ExposeSecret, SecretString};
 use std::time::Duration;
 
@@ -93,6 +94,28 @@ impl VaultTokenStoreConfig {
             ));
         }
         Ok(())
+    }
+
+    pub(crate) fn url(&self, suffix: &[&str]) -> BpResult<Url> {
+        let address = self.address.trim();
+        let mut url = Url::parse(address.trim_end_matches('/'))
+            .map_err(|e| BpError::config_invalid_source("vault_address", e))?;
+        url.set_query(None);
+        url.set_fragment(None);
+        {
+            let mut segments = url.path_segments_mut().map_err(|()| {
+                BpError::config_invalid("vault_address", "must be a hierarchical URL")
+            })?;
+            segments.pop_if_empty();
+            segments.push("v1");
+            for segment in self.mount.split('/') {
+                segments.push(segment);
+            }
+            for segment in suffix {
+                segments.push(segment);
+            }
+        }
+        Ok(url)
     }
 
     fn valid_segment(segment: &str) -> bool {

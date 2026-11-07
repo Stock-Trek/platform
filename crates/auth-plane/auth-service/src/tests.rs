@@ -11,6 +11,7 @@ mod revocation_tests;
 mod revoked_by_tests;
 mod signature_clock_skew_tests;
 mod signature_policy_tests;
+mod signature_retry_tests;
 mod signed_order_request_precision_tests;
 mod signed_order_request_tests;
 mod support_tests;
