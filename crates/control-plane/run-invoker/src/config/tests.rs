@@ -10,6 +10,10 @@ fn full_vars() -> Vec<(&'static str, &'static str)> {
         ("RUN_INVOKER_TABLE", "runs"),
         ("RUN_INVOKER_ARTIFACT_BUCKET", "artifacts"),
         ("RUN_INVOKER_LOGS_BUCKET", "run-logs"),
+        (
+            "RUN_INVOKER_ORDER_REQUEST_URL",
+            "https://orders.example/requests",
+        ),
         ("RUN_INVOKER_RUNNER_FUNCTION_NAME", "platform-runner"),
         ("RUN_INVOKER_MAX_BATCH", "10"),
         ("S3_SIGNED_URL_EXPIRY_SECS", "900"),
@@ -52,7 +56,7 @@ fn reads_a_complete_configuration() {
     assert_eq!(config.table, "runs");
     assert_eq!(config.artifact_bucket, "artifacts");
     assert_eq!(config.logs_bucket, "run-logs");
-    assert_eq!(config.order_request_url, None);
+    assert_eq!(config.order_request_url, "https://orders.example/requests");
     assert_eq!(config.runner_function_name, "platform-runner");
     assert_eq!(config.max_batch, 10);
     assert_eq!(config.signed_url_expiry, Duration::from_secs(900));
@@ -63,20 +67,6 @@ fn reads_a_complete_configuration() {
     assert_eq!(
         config.aws_timeouts.operation.duration(),
         Some(Duration::from_secs(30))
-    );
-}
-
-#[test]
-fn reads_an_order_request_url_when_present() {
-    let mut entries = full_vars();
-    entries.push((
-        "RUN_INVOKER_ORDER_REQUEST_URL",
-        "https://orders.example/requests",
-    ));
-    let config = RunInvokerConfig::from_vars(&vars(&entries)).unwrap();
-    assert_eq!(
-        config.order_request_url.as_deref(),
-        Some("https://orders.example/requests")
     );
 }
 
@@ -100,6 +90,7 @@ fn rejects_invalid_values() {
         ("RUN_INVOKER_TABLE", ""),
         ("RUN_INVOKER_ARTIFACT_BUCKET", ""),
         ("RUN_INVOKER_LOGS_BUCKET", ""),
+        ("RUN_INVOKER_ORDER_REQUEST_URL", ""),
         ("RUN_INVOKER_RUNNER_FUNCTION_NAME", ""),
         ("RUN_INVOKER_MAX_BATCH", "0"),
         ("RUN_INVOKER_MAX_BATCH", "ten"),

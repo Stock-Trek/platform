@@ -10,6 +10,7 @@
 //!   "cwasmSha256": "<artifact sha256>",
 //!   "cwasmSize": 123456,
 //!   "wasmtimeVersion": "43.0.1",
+//!   "orderRequestUrl": "<order request service url>",
 //!   "command": "metadata",
 //!   "strategyName": "MyStrategy"
 //! }
@@ -33,8 +34,8 @@
 mod cwasm;
 
 use cwasm::{
-    Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher,
-    OrderRequestSigningConfig, WasmRunner, backtest,
+    Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher, WasmRunner,
+    backtest,
 };
 use platform_exit_codes::ExitCode;
 use platform_runner::command::{Command, RunRequest};
@@ -70,14 +71,19 @@ impl CwasmInvoker {
         let InvokerConfig {
             execution,
             cwasm: cwasm_limits,
-            order_request_signing,
+            order_request_token_id,
+            order_request_signing_secret,
         } = config;
-        let dispatcher = match Self::order_request_dispatcher(
-            request.order_request_url.as_deref(),
-            order_request_signing,
+        let dispatcher = match OrderRequestDispatcher::new(
+            &request.order_request_url,
+            order_request_token_id,
+            &order_request_signing_secret,
         ) {
             Ok(dispatcher) => dispatcher,
-            Err(code) => return code.code(),
+            Err(error) => {
+                eprintln!("cwasm-invoker: invalid order request configuration: {error}");
+                return ExitCode::ServerRunnerConfigurationInvalid.code();
+            }
         };
         let runtime = match Self::runtime() {
             Ok(runtime) => runtime,
@@ -113,9 +119,6 @@ impl CwasmInvoker {
             return backtest::BackTest::run(&runner, cwasm.path(), &request.command);
         }
 
-        let Some(dispatcher) = dispatcher else {
-            return runner.execute_command(cwasm.path(), &request.command);
-        };
         let actions = GuestActions::new();
         let code = runner.execute_command_with(cwasm.path(), &request.command, &actions.emit());
         if code != ExitCode::Success.code() {
@@ -133,27 +136,6 @@ impl CwasmInvoker {
                 ExitCode::ServerRunnerConnectionFailed.code()
             }
         }
-    }
-
-    fn order_request_dispatcher(
-        url: Option<&str>,
-        signing: Option<OrderRequestSigningConfig>,
-    ) -> Result<Option<OrderRequestDispatcher>, ExitCode> {
-        let Some(url) = url else {
-            return Ok(None);
-        };
-        let Some(signing) = signing else {
-            eprintln!(
-                "cwasm-invoker: an order request URL requires order request signing configuration"
-            );
-            return Err(ExitCode::ServerRunnerConfigurationInvalid);
-        };
-        OrderRequestDispatcher::new(url, signing.token_id, &signing.secret)
-            .map(Some)
-            .map_err(|error| {
-                eprintln!("cwasm-invoker: invalid order request signing configuration: {error}");
-                ExitCode::ServerRunnerConfigurationInvalid
-            })
     }
 
     fn runtime() -> Result<tokio::runtime::Runtime, ExitCode> {

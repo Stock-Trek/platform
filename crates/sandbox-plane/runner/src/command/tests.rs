@@ -31,6 +31,7 @@ fn deserialises_the_cwasm_url_alongside_the_command() {
                 "cwasmSha256": "0000000000000000000000000000000000000000000000000000000000000000",
                 "cwasmSize": 8,
                 "wasmtimeVersion": "43.0.1",
+                "orderRequestUrl": "https://orders.example.com/requests",
                 "strategyName": "AlgorithmStub",
                 "strategyContextPath": "/tmp/strategy-context.bin",
                 "portfolioPath": "/tmp/portfolio.bin"
@@ -45,31 +46,27 @@ fn deserialises_the_cwasm_url_alongside_the_command() {
     );
     assert_eq!(request.cwasm_size, 8);
     assert_eq!(request.wasmtime_version, "43.0.1");
-    assert_eq!(request.order_request_url, None);
+    assert_eq!(
+        request.order_request_url,
+        "https://orders.example.com/requests"
+    );
     assert_eq!(request.command.strategy_name(), "AlgorithmStub");
 }
 
 #[test]
-fn deserialises_the_order_request_url() {
-    let request: RunRequest = serde_json::from_str(
+fn rejects_requests_without_an_order_request_url() {
+    let result = serde_json::from_str::<RunRequest>(
         r#"{
-                "command": "execute",
+                "command": "metadata",
                 "cwasmGetUrl": "https://example.com/runner.cwasm",
                 "cwasmSha256": "0000000000000000000000000000000000000000000000000000000000000000",
                 "cwasmSize": 8,
                 "wasmtimeVersion": "43.0.1",
-                "orderRequestUrl": "https://orders.example.com/requests",
-                "strategyName": "AlgorithmStub",
-                "strategyContextPath": "/tmp/strategy-context.bin",
-                "portfolioPath": "/tmp/portfolio.bin"
+                "strategyName": "AlgorithmStub"
             }"#,
-    )
-    .unwrap();
-
-    assert_eq!(
-        request.order_request_url.as_deref(),
-        Some("https://orders.example.com/requests")
     );
+
+    assert!(result.is_err());
 }
 
 #[test]

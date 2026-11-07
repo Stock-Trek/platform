@@ -248,15 +248,10 @@ their details.
 | `RUN_INVOKER_ARTIFACT_BUCKET` | S3 bucket containing compiled runner cwasm artifacts. |
 | `RUN_INVOKER_LOGS_BUCKET` | S3 bucket that receives the algorithm run logs the runner uploads with its pre-signed POST. |
 | `RUN_INVOKER_MAX_BATCH` | Maximum number of due runs claimed per invocation. |
+| `RUN_INVOKER_ORDER_REQUEST_URL` | URL the runner submits signed order requests to. |
 | `RUN_INVOKER_RUNNER_FUNCTION_NAME` | Name of the runner Lambda function invoked for every due run. |
 | `RUN_INVOKER_TABLE` | DynamoDB table holding the scheduled algorithm runs. |
 | `S3_SIGNED_URL_EXPIRY_SECS` | Lifetime of the pre-signed S3 URLs handed to the runner, in seconds. |
-
-#### Optional
-
-| Variable | Description |
-| --- | --- |
-| `RUN_INVOKER_ORDER_REQUEST_URL` | URL the runner submits signed order requests to. When unset or empty, the runner does not submit order requests. |
 
 ## Sandbox plane
 
@@ -274,13 +269,8 @@ values fail startup.
 | `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. |
 | `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. |
 | `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. |
-
-#### Optional
-
-| Variable | Description |
-| --- | --- |
-| `CWASM_INVOKER_ORDER_REQUEST_TOKEN_ID` | Auth-service token ID used to sign order requests. Required when `RUN_INVOKER_ORDER_REQUEST_URL` is set, and must be provided together with `CWASM_INVOKER_ORDER_REQUEST_SIGNING_SECRET`. |
-| `CWASM_INVOKER_ORDER_REQUEST_SIGNING_SECRET` | Auth-service token secret used to sign order requests. Required when `RUN_INVOKER_ORDER_REQUEST_URL` is set, and must be provided together with `CWASM_INVOKER_ORDER_REQUEST_TOKEN_ID`. |
+| `CWASM_INVOKER_ORDER_REQUEST_SIGNING_SECRET` | Auth-service token secret used to sign order requests. |
+| `CWASM_INVOKER_ORDER_REQUEST_TOKEN_ID` | Auth-service token ID used to sign order requests. |
 
 ## Secrets
 

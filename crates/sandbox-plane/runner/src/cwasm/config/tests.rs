@@ -13,12 +13,14 @@ const MAX_CWASM_BYTES: &str = "CWASM_INVOKER_MAX_CWASM_BYTES";
 const ORDER_REQUEST_TOKEN_ID: &str = "CWASM_INVOKER_ORDER_REQUEST_TOKEN_ID";
 const ORDER_REQUEST_SIGNING_SECRET: &str = "CWASM_INVOKER_ORDER_REQUEST_SIGNING_SECRET";
 
-const ALL_VARS: [(&str, &str); 5] = [
+const ALL_VARS: [(&str, &str); 7] = [
     (EXECUTION_TIMEOUT_SECS, "45"),
     (MAX_GUEST_MEMORY_BYTES, "1048576"),
     (MAX_TABLE_ELEMENTS, "2048"),
     (CWASM_DOWNLOAD_TIMEOUT_SECS, "15"),
     (MAX_CWASM_BYTES, "4096"),
+    (ORDER_REQUEST_TOKEN_ID, "runner-token"),
+    (ORDER_REQUEST_SIGNING_SECRET, "runner-secret"),
 ];
 
 fn config(vars: &[(&str, &str)]) -> BpResult<InvokerConfig> {
@@ -29,7 +31,7 @@ fn config(vars: &[(&str, &str)]) -> BpResult<InvokerConfig> {
 }
 
 #[test]
-fn reads_every_limit_from_the_environment() {
+fn reads_every_value_from_the_environment() {
     let config = config(&ALL_VARS).unwrap();
 
     assert_eq!(config.execution.timeout, Duration::from_secs(45));
@@ -37,53 +39,32 @@ fn reads_every_limit_from_the_environment() {
     assert_eq!(config.execution.max_table_elements, 2048);
     assert_eq!(config.cwasm.download_timeout, Duration::from_secs(15));
     assert_eq!(config.cwasm.max_bytes.get(), 4096);
-    assert!(config.order_request_signing.is_none());
-}
-
-#[test]
-fn reads_order_request_signing_configuration() {
-    let mut vars = ALL_VARS.to_vec();
-    vars.push((ORDER_REQUEST_TOKEN_ID, "runner-token"));
-    vars.push((ORDER_REQUEST_SIGNING_SECRET, "runner-secret"));
-
-    let config = config(&vars).unwrap();
-    let signing = config.order_request_signing.unwrap();
-
-    assert_eq!(signing.token_id, "runner-token");
-    assert_eq!(signing.secret.expose_secret(), "runner-secret");
-}
-
-#[test]
-fn requires_both_order_request_signing_values() {
-    for missing in [ORDER_REQUEST_TOKEN_ID, ORDER_REQUEST_SIGNING_SECRET] {
-        let mut vars = ALL_VARS.to_vec();
-        for (name, value) in [
-            (ORDER_REQUEST_TOKEN_ID, "runner-token"),
-            (ORDER_REQUEST_SIGNING_SECRET, "runner-secret"),
-        ] {
-            if name != missing {
-                vars.push((name, value));
-            }
-        }
-
-        assert!(matches!(
-            config(&vars).unwrap_err(),
-            BpError::Config(ConfigError::Missing { name }) if name == missing
-        ));
-    }
+    assert_eq!(config.order_request_token_id, "runner-token");
+    assert_eq!(
+        config.order_request_signing_secret.expose_secret(),
+        "runner-secret"
+    );
 }
 
 #[test]
 fn rejects_invalid_order_request_token_ids() {
-    let mut vars = ALL_VARS.to_vec();
-    vars.push((ORDER_REQUEST_TOKEN_ID, "not a valid token id"));
-    vars.push((ORDER_REQUEST_SIGNING_SECRET, "runner-secret"));
+    let vars: Vec<(&str, &str)> = ALL_VARS
+        .iter()
+        .copied()
+        .map(|(name, value)| {
+            if name == ORDER_REQUEST_TOKEN_ID {
+                (name, "not a valid token id")
+            } else {
+                (name, value)
+            }
+        })
+        .collect();
 
     assert!(config(&vars).is_err());
 }
 
 #[test]
-fn requires_every_limit() {
+fn requires_every_variable() {
     for (name, _) in ALL_VARS {
         let vars: Vec<(&str, &str)> = ALL_VARS
             .iter()
