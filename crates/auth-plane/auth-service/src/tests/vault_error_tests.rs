@@ -81,6 +81,21 @@ fn server_errors_without_retry_after_remain_retryable() {
 }
 
 #[test]
+fn check_and_set_conflicts_are_duplicates() {
+    let body = r#"{"errors":["check-and-set parameter did not match the current version"]}"#;
+
+    assert!(VaultError::duplicate_write(StatusCode::BAD_REQUEST, body));
+}
+
+#[test]
+fn other_bad_requests_are_not_duplicates() {
+    assert!(!VaultError::duplicate_write(
+        StatusCode::BAD_REQUEST,
+        r#"{"errors":["invalid request"]}"#
+    ));
+}
+
+#[test]
 fn client_errors_are_permanent() {
     let error = VaultErrorFixture::response(StatusCode::BAD_REQUEST, HeaderMap::new());
 

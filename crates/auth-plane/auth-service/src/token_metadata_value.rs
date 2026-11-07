@@ -52,18 +52,17 @@ impl TokenMetadata {
             }
             None => return Err(BpError::auth_invalid_field(SCOPES, "is required")),
         };
-        Ok(Self {
-            expires_at: Self::timestamp(value, EXPIRES_AT)?
-                .ok_or_else(|| BpError::auth_invalid_field(EXPIRES_AT, "is required"))?,
-            scopes,
-            revoked_at: Self::timestamp(value, REVOKED_AT)?,
-            revocation_reason: Self::enumeration(value, REVOCATION_REASON)?,
-            revoked_by: Self::enumeration(value, REVOKED_BY)?,
-            last_used_at: Self::timestamp(value, LAST_USED_AT)?,
-            rotated_from: Self::string(value, ROTATED_FROM)?,
-            replaced_by: Self::string(value, REPLACED_BY)?,
-            rotation_overlap_until: Self::timestamp(value, ROTATION_OVERLAP_UNTIL)?,
-        })
+        let expires_at = Self::timestamp(value, EXPIRES_AT)?
+            .ok_or_else(|| BpError::auth_invalid_field(EXPIRES_AT, "is required"))?;
+        let mut metadata = Self::new(expires_at, scopes.iter())?;
+        metadata.revoked_at = Self::timestamp(value, REVOKED_AT)?;
+        metadata.revocation_reason = Self::enumeration(value, REVOCATION_REASON)?;
+        metadata.revoked_by = Self::enumeration(value, REVOKED_BY)?;
+        metadata.last_used_at = Self::timestamp(value, LAST_USED_AT)?;
+        metadata.rotated_from = Self::string(value, ROTATED_FROM)?;
+        metadata.replaced_by = Self::string(value, REPLACED_BY)?;
+        metadata.rotation_overlap_until = Self::timestamp(value, ROTATION_OVERLAP_UNTIL)?;
+        Ok(metadata)
     }
 
     fn enumeration<T>(value: &Value, field: &'static str) -> BpResult<Option<T>>

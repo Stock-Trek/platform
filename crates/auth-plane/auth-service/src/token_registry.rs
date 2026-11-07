@@ -46,9 +46,11 @@ impl AuthService {
         ApiToken::validate_id(id)?;
         let token = self.store.get(id).await?;
         self.store.delete(id).await?;
-        let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
-            .with_token(id, token.as_ref().map(ApiToken::owner));
-        self.audit.record(event);
+        if let Some(token) = token {
+            let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
+                .with_token(token.id(), Some(token.owner()));
+            self.audit.record(event);
+        }
         Ok(())
     }
 

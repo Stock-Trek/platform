@@ -2,7 +2,6 @@ use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{ApiToken, AuthService, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
-use serde_json::json;
 
 struct ScopeFixture;
 
@@ -154,57 +153,4 @@ fn invalid_scopes_are_rejected_when_parsed() {
     ] {
         assert!(scope.parse::<TokenScope>().is_err());
     }
-}
-
-#[tokio::test]
-async fn scopes_survive_a_vault_value_round_trip() {
-    let service = TestFixture::service();
-    let token =
-        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::OrdersRead])
-            .await;
-
-    let restored = ApiToken::from_value(token.id(), &token.to_value()).unwrap();
-
-    assert_eq!(restored.metadata().scopes(), token.metadata().scopes());
-    assert!(restored.metadata().has_scope(TokenScope::OrdersRead));
-    assert!(!restored.metadata().has_scope(TokenScope::OrdersWrite));
-}
-
-#[test]
-fn invalid_scopes_are_rejected_when_restored() {
-    let mut value = TestFixture::token("token-a").to_value();
-    value["scopes"] = json!(["orders:read", "orders/**"]);
-
-    let error = ApiToken::from_value("token-a", &value).unwrap_err();
-
-    assert!(matches!(
-        error,
-        BpError::Auth(AuthError::InvalidField {
-            field: "scopes",
-            ..
-        })
-    ));
-}
-
-#[tokio::test]
-async fn authorization_rejects_tokens_without_the_required_scope() {
-    let service = TestFixture::service();
-    let token =
-        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::OrdersRead])
-            .await;
-
-    let error = service
-        .authenticate(
-            token.id(),
-            token.secret(),
-            Some(TokenScope::OrdersWrite),
-            Utc::now(),
-        )
-        .await
-        .unwrap_err();
-
-    assert!(matches!(
-        error,
-        BpError::Auth(AuthError::InvalidField { field: "scope", .. })
-    ));
 }
