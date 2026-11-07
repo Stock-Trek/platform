@@ -2,6 +2,7 @@ use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{ApiToken, AuthService, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
+use serde_json::json;
 
 struct ScopeFixture;
 
@@ -13,7 +14,7 @@ impl ScopeFixture {
         scopes: I,
     ) -> ApiToken
     where
-        S: AsRef<str>,
+        S: std::borrow::Borrow<TokenScope>,
         I: IntoIterator<Item = S>,
     {
         let options = TokenOptions::new(TokenExpiry::After(Duration::days(30)), scopes);
@@ -22,13 +23,24 @@ impl ScopeFixture {
             .await
             .unwrap()
     }
+}
 
-    fn options<I, S>(scopes: I) -> TokenOptions
-    where
-        S: AsRef<str>,
-        I: IntoIterator<Item = S>,
-    {
-        TokenOptions::new(TokenExpiry::After(Duration::days(30)), scopes)
+#[test]
+fn scopes_have_stable_string_representations() {
+    let expected = [
+        (TokenScope::All, "*"),
+        (TokenScope::OrdersRead, "orders:read"),
+        (TokenScope::OrdersWrite, "orders:write"),
+        (TokenScope::OrdersAll, "orders:*"),
+        (TokenScope::TokensRead, "tokens:read"),
+        (TokenScope::TokensWrite, "tokens:write"),
+        (TokenScope::TokensAll, "tokens:*"),
+        (TokenScope::Admin, "admin"),
+    ];
+
+    for (scope, value) in expected {
+        assert_eq!(scope.to_string(), value);
+        assert_eq!(value.parse::<TokenScope>().unwrap(), scope);
     }
 }
 
@@ -38,14 +50,14 @@ async fn default_tokens_can_read_and_write_orders() {
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
 
-    assert!(token.metadata().has_scope(TokenScope::ORDERS_READ));
-    assert!(token.metadata().has_scope(TokenScope::ORDERS_WRITE));
+    assert!(token.metadata().has_scope(TokenScope::OrdersRead));
+    assert!(token.metadata().has_scope(TokenScope::OrdersWrite));
     assert!(
         service
             .authenticate(
                 token.id(),
                 token.secret(),
-                Some(TokenScope::ORDERS_WRITE),
+                Some(TokenScope::OrdersWrite),
                 now
             )
             .await
@@ -57,7 +69,7 @@ async fn default_tokens_can_read_and_write_orders() {
 async fn read_only_tokens_cannot_sign_orders() {
     let service = TestFixture::service();
     let token =
-        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::ORDERS_READ])
+        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::OrdersRead])
             .await;
     let now = Utc::now();
 
@@ -76,11 +88,11 @@ async fn read_only_tokens_cannot_sign_orders() {
 async fn wildcard_scopes_grant_every_permission() {
     let service = TestFixture::service();
     let token =
-        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::ALL]).await;
+        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::All]).await;
     let now = Utc::now();
 
-    assert!(token.metadata().has_scope(TokenScope::ORDERS_WRITE));
-    assert!(token.metadata().has_scope(TokenScope::ADMIN));
+    assert!(token.metadata().has_scope(TokenScope::OrdersWrite));
+    assert!(token.metadata().has_scope(TokenScope::Admin));
     assert!(
         service
             .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
@@ -92,17 +104,17 @@ async fn wildcard_scopes_grant_every_permission() {
 #[tokio::test]
 async fn namespace_wildcards_match_their_namespace_only() {
     let service = TestFixture::service();
-    let token = ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", ["orders:*"]).await;
+    let token =
+        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::OrdersAll])
+            .await;
 
-    assert!(token.metadata().has_scope(TokenScope::ORDERS_READ));
-    assert!(token.metadata().has_scope(TokenScope::ORDERS_WRITE));
-    assert!(!token.metadata().has_scope(TokenScope::TOKENS_WRITE));
+    assert!(token.metadata().has_scope(TokenScope::OrdersRead));
+    assert!(token.metadata().has_scope(TokenScope::OrdersWrite));
+    assert!(!token.metadata().has_scope(TokenScope::TokensWrite));
 }
 
-#[tokio::test]
-async fn invalid_scopes_are_rejected() {
-    let service = TestFixture::service();
-
+#[test]
+fn invalid_scopes_are_rejected_when_parsed() {
     for scope in [
         "",
         "orders write",
@@ -111,21 +123,7 @@ async fn invalid_scopes_are_rejected() {
         ":",
         "orders::read",
     ] {
-        let error = service
-            .add_token(
-                "token-a",
-                "owner-a",
-                Utc::now(),
-                ScopeFixture::options([scope]),
-            )
-            .await;
-        assert!(matches!(
-            error,
-            Err(BpError::Auth(AuthError::InvalidField {
-                field: "scope",
-                ..
-            }))
-        ));
+        assert!(scope.parse::<TokenScope>().is_err());
     }
 }
 
@@ -133,28 +131,44 @@ async fn invalid_scopes_are_rejected() {
 async fn scopes_survive_a_vault_value_round_trip() {
     let service = TestFixture::service();
     let token =
-        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::ORDERS_READ])
+        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::OrdersRead])
             .await;
 
-    let restored = crate::ApiToken::from_value(token.id(), &token.to_value()).unwrap();
+    let restored = ApiToken::from_value(token.id(), &token.to_value()).unwrap();
 
     assert_eq!(restored.metadata().scopes(), token.metadata().scopes());
-    assert!(restored.metadata().has_scope(TokenScope::ORDERS_READ));
-    assert!(!restored.metadata().has_scope(TokenScope::ORDERS_WRITE));
+    assert!(restored.metadata().has_scope(TokenScope::OrdersRead));
+    assert!(!restored.metadata().has_scope(TokenScope::OrdersWrite));
+}
+
+#[test]
+fn invalid_scopes_are_rejected_when_restored() {
+    let mut value = TestFixture::token("token-a").to_value();
+    value["scopes"] = json!(["orders:read", "orders/**"]);
+
+    let error = ApiToken::from_value("token-a", &value).unwrap_err();
+
+    assert!(matches!(
+        error,
+        BpError::Auth(AuthError::InvalidField {
+            field: "scopes",
+            ..
+        })
+    ));
 }
 
 #[tokio::test]
 async fn authorization_rejects_tokens_without_the_required_scope() {
     let service = TestFixture::service();
     let token =
-        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::ORDERS_READ])
+        ScopeFixture::add_with_scopes(&service, "token-a", "owner-a", [TokenScope::OrdersRead])
             .await;
 
     let error = service
         .authenticate(
             token.id(),
             token.secret(),
-            Some(TokenScope::ORDERS_WRITE),
+            Some(TokenScope::OrdersWrite),
             Utc::now(),
         )
         .await

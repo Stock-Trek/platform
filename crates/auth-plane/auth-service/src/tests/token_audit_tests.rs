@@ -1,5 +1,5 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::{MemoryTokenAuditLog, RevocationReason, TokenAuditAction};
+use crate::{MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction};
 use chrono::Utc;
 use std::sync::Arc;
 
@@ -73,7 +73,7 @@ async fn records_rotation_and_revocation() {
         .revoke_token(
             rotated.id(),
             RevocationReason::NoLongerNeeded,
-            "security-team",
+            RevokedBy::SecurityTeam,
             now,
         )
         .await

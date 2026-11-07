@@ -19,7 +19,7 @@ impl AuthService {
     ) -> BpResult<SignedOrderRequest> {
         let (secret, order_request) = SignatureArguments::split_sign(&secret, &order_request)?;
         let token = self
-            .authenticate(token_id, secret, Some(TokenScope::ORDERS_WRITE), now)
+            .authenticate(token_id, secret, Some(TokenScope::OrdersWrite), now)
             .await?;
         self.sign_with_token_at(&token, order_request, issued_at, now)
             .await
@@ -36,7 +36,7 @@ impl AuthService {
         let secret = token.secret();
         let (_, order_request) = SignatureArguments::split_sign(secret, &order_request)?;
         let authenticated = self
-            .authenticate(token.id(), secret, Some(TokenScope::ORDERS_WRITE), now)
+            .authenticate(token.id(), secret, Some(TokenScope::OrdersWrite), now)
             .await?;
         self.sign_with_token_at(&authenticated, order_request, issued_at, now)
             .await
@@ -53,7 +53,7 @@ impl AuthService {
             SignatureArguments::split_verify(&order_request, &signature)?;
         let mut token = self.token(token_id).await?;
         if Self::ensure_active(&token, now).is_err()
-            || Self::ensure_scope(&token, TokenScope::ORDERS_WRITE).is_err()
+            || Self::ensure_scope(&token, TokenScope::OrdersWrite).is_err()
         {
             self.record_signature_rejected(token_id, Some(&token), now, "inactive or unauthorized");
             return Ok(false);

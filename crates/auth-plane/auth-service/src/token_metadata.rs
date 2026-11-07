@@ -1,14 +1,15 @@
-use crate::{RevocationReason, TokenScope};
+use crate::{RevocationReason, RevokedBy, TokenScope};
 use chrono::{DateTime, Utc};
 use platform_errors::BpResult;
+use std::borrow::Borrow;
 
 #[derive(Clone, Debug)]
 pub struct TokenMetadata {
     pub(crate) expires_at: DateTime<Utc>,
-    pub(crate) scopes: Vec<String>,
+    pub(crate) scopes: Vec<TokenScope>,
     pub(crate) revoked_at: Option<DateTime<Utc>>,
     pub(crate) revocation_reason: Option<RevocationReason>,
-    pub(crate) revoked_by: Option<String>,
+    pub(crate) revoked_by: Option<RevokedBy>,
     pub(crate) last_used_at: Option<DateTime<Utc>>,
     pub(crate) rotated_from: Option<String>,
     pub(crate) replaced_by: Option<String>,
@@ -18,13 +19,9 @@ pub struct TokenMetadata {
 impl TokenMetadata {
     pub fn new(
         expires_at: DateTime<Utc>,
-        scopes: impl IntoIterator<Item = impl AsRef<str>>,
+        scopes: impl IntoIterator<Item = impl Borrow<TokenScope>>,
     ) -> BpResult<Self> {
-        let scopes: Vec<String> = scopes
-            .into_iter()
-            .map(|scope| scope.as_ref().to_string())
-            .collect();
-        TokenScope::validate_all(&scopes)?;
+        let scopes: Vec<TokenScope> = scopes.into_iter().map(|scope| *scope.borrow()).collect();
         Ok(Self {
             expires_at,
             scopes,
@@ -42,7 +39,7 @@ impl TokenMetadata {
         self.expires_at
     }
 
-    pub fn scopes(&self) -> &[String] {
+    pub fn scopes(&self) -> &[TokenScope] {
         &self.scopes
     }
 
@@ -54,8 +51,8 @@ impl TokenMetadata {
         self.revocation_reason
     }
 
-    pub fn revoked_by(&self) -> Option<&str> {
-        self.revoked_by.as_deref()
+    pub fn revoked_by(&self) -> Option<RevokedBy> {
+        self.revoked_by
     }
 
     pub fn last_used_at(&self) -> Option<DateTime<Utc>> {
@@ -91,10 +88,8 @@ impl TokenMetadata {
         !self.is_revoked() && !self.is_expired(now)
     }
 
-    pub fn has_scope(&self, required: &str) -> bool {
-        self.scopes
-            .iter()
-            .any(|granted| TokenScope::matches(granted, required))
+    pub fn has_scope(&self, required: TokenScope) -> bool {
+        self.scopes.iter().any(|granted| granted.matches(required))
     }
 
     pub fn record_use(&mut self, now: DateTime<Utc>) {
@@ -103,7 +98,7 @@ impl TokenMetadata {
         }
     }
 
-    pub fn revoke(&mut self, now: DateTime<Utc>, reason: RevocationReason, revoked_by: String) {
+    pub fn revoke(&mut self, now: DateTime<Utc>, reason: RevocationReason, revoked_by: RevokedBy) {
         self.revoked_at.get_or_insert(now);
         self.revocation_reason = Some(reason);
         self.revoked_by = Some(revoked_by);

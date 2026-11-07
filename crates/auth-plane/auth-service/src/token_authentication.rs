@@ -1,5 +1,6 @@
 use crate::{
     ApiToken, AuthService, SignatureArgument, SignatureInput, TokenAuditAction, TokenAuditEvent,
+    TokenScope,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
@@ -10,7 +11,7 @@ impl AuthService {
         &self,
         token_id: &str,
         secret: impl SignatureInput,
-        scope: Option<&str>,
+        scope: Option<TokenScope>,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
         let candidate = match secret.signature_argument() {
@@ -67,7 +68,7 @@ impl AuthService {
         Ok(())
     }
 
-    pub(crate) fn ensure_scope(token: &ApiToken, required: &str) -> BpResult<()> {
+    pub(crate) fn ensure_scope(token: &ApiToken, required: TokenScope) -> BpResult<()> {
         if token.metadata().has_scope(required) {
             Ok(())
         } else {

@@ -1,4 +1,6 @@
+use crate::TokenScope;
 use chrono::{DateTime, Duration, Utc};
+use std::borrow::Borrow;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenExpiry {
@@ -9,17 +11,17 @@ pub enum TokenExpiry {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct TokenOptions {
     expiry: TokenExpiry,
-    scopes: Vec<String>,
+    scopes: Vec<TokenScope>,
 }
 
 impl TokenOptions {
-    pub fn new(expiry: TokenExpiry, scopes: impl IntoIterator<Item = impl AsRef<str>>) -> Self {
+    pub fn new(
+        expiry: TokenExpiry,
+        scopes: impl IntoIterator<Item = impl Borrow<TokenScope>>,
+    ) -> Self {
         Self {
             expiry,
-            scopes: scopes
-                .into_iter()
-                .map(|scope| scope.as_ref().to_string())
-                .collect(),
+            scopes: scopes.into_iter().map(|scope| *scope.borrow()).collect(),
         }
     }
 
@@ -27,7 +29,7 @@ impl TokenOptions {
         self.expiry
     }
 
-    pub fn scopes(&self) -> &[String] {
+    pub fn scopes(&self) -> &[TokenScope] {
         &self.scopes
     }
 }

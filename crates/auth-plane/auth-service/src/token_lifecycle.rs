@@ -1,5 +1,6 @@
 use crate::{
-    ApiToken, AuthService, RevocationReason, TokenAuditAction, TokenAuditEvent, TokenMetadata,
+    ApiToken, AuthService, RevocationReason, RevokedBy, TokenAuditAction, TokenAuditEvent,
+    TokenMetadata,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
@@ -63,16 +64,9 @@ impl AuthService {
         &self,
         id: &str,
         reason: RevocationReason,
-        revoked_by: impl Into<String>,
+        revoked_by: RevokedBy,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
-        let revoked_by = revoked_by.into();
-        if revoked_by.trim().is_empty() {
-            return Err(BpError::auth_invalid_field(
-                "revoked_by",
-                "must not be empty",
-            ));
-        }
         let mut token = self.token(id).await?;
         token.metadata.revoke(now, reason, revoked_by);
         if let Err(error) = self.store.update(&token).await {
@@ -92,14 +86,13 @@ impl AuthService {
         &self,
         owner: &str,
         reason: RevocationReason,
-        revoked_by: impl Into<String>,
+        revoked_by: RevokedBy,
         now: DateTime<Utc>,
     ) -> BpResult<Vec<ApiToken>> {
-        let revoked_by = revoked_by.into();
         let mut revoked = Vec::new();
         for token in self.active_tokens_for_owner(owner, now).await? {
             revoked.push(
-                self.revoke_token(token.id(), reason, revoked_by.clone(), now)
+                self.revoke_token(token.id(), reason, revoked_by, now)
                     .await?,
             );
         }

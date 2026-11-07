@@ -16,6 +16,7 @@ reqwest = { workspace = true, default-features = false, features = ["json", "rus
 secrecy = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
 subtle = { workspace = true }
 
 [dev-dependencies]

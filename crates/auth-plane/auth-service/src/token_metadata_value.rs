@@ -1,4 +1,4 @@
-use crate::{RevocationReason, TokenMetadata, TokenScope};
+use crate::{TokenMetadata, TokenScope};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use serde_json::{Value, json};
@@ -17,10 +17,10 @@ impl TokenMetadata {
     pub fn to_value(&self) -> Value {
         json!({
             EXPIRES_AT: self.expires_at.to_rfc3339(),
-            SCOPES: self.scopes,
+            SCOPES: self.scopes.iter().map(ToString::to_string).collect::<Vec<_>>(),
             REVOKED_AT: self.revoked_at.map(|value| value.to_rfc3339()),
-            REVOCATION_REASON: self.revocation_reason.map(RevocationReason::as_str),
-            REVOKED_BY: self.revoked_by,
+            REVOCATION_REASON: self.revocation_reason.map(|reason| reason.to_string()),
+            REVOKED_BY: self.revoked_by.map(|actor| actor.to_string()),
             LAST_USED_AT: self.last_used_at.map(|value| value.to_rfc3339()),
             ROTATED_FROM: self.rotated_from,
             REPLACED_BY: self.replaced_by,
@@ -33,8 +33,14 @@ impl TokenMetadata {
             Some(Value::Array(scopes)) => scopes
                 .iter()
                 .map(|scope| {
-                    scope.as_str().map(str::to_string).ok_or_else(|| {
+                    let scope = scope.as_str().ok_or_else(|| {
                         BpError::auth_invalid_field(SCOPES, "must contain only strings")
+                    })?;
+                    scope.parse::<TokenScope>().map_err(|_| {
+                        BpError::auth_invalid_field(
+                            SCOPES,
+                            format!("{scope:?} is not a valid token scope"),
+                        )
                     })
                 })
                 .collect::<BpResult<Vec<_>>>()?,
@@ -46,21 +52,32 @@ impl TokenMetadata {
             }
             None => return Err(BpError::auth_invalid_field(SCOPES, "is required")),
         };
-        TokenScope::validate_all(&scopes)?;
         Ok(Self {
             expires_at: Self::timestamp(value, EXPIRES_AT)?
                 .ok_or_else(|| BpError::auth_invalid_field(EXPIRES_AT, "is required"))?,
             scopes,
             revoked_at: Self::timestamp(value, REVOKED_AT)?,
-            revocation_reason: Self::string(value, REVOCATION_REASON)?
-                .map(|reason| reason.parse::<RevocationReason>())
-                .transpose()?,
-            revoked_by: Self::string(value, REVOKED_BY)?,
+            revocation_reason: Self::enumeration(value, REVOCATION_REASON)?,
+            revoked_by: Self::enumeration(value, REVOKED_BY)?,
             last_used_at: Self::timestamp(value, LAST_USED_AT)?,
             rotated_from: Self::string(value, ROTATED_FROM)?,
             replaced_by: Self::string(value, REPLACED_BY)?,
             rotation_overlap_until: Self::timestamp(value, ROTATION_OVERLAP_UNTIL)?,
         })
+    }
+
+    fn enumeration<T>(value: &Value, field: &'static str) -> BpResult<Option<T>>
+    where
+        T: std::str::FromStr,
+        T::Err: std::fmt::Display,
+    {
+        let Some(value) = Self::string(value, field)? else {
+            return Ok(None);
+        };
+        value
+            .parse::<T>()
+            .map(Some)
+            .map_err(|error| BpError::auth_invalid_field(field, error.to_string()))
     }
 
     fn string(value: &Value, field: &'static str) -> BpResult<Option<String>> {

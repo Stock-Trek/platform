@@ -1,66 +1,41 @@
-use platform_errors::{BpError, BpResult};
+use strum::{Display, EnumString};
 
-pub struct TokenScope;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString)]
+pub enum TokenScope {
+    #[strum(to_string = "*")]
+    All,
+    #[strum(to_string = "orders:read")]
+    OrdersRead,
+    #[strum(to_string = "orders:write")]
+    OrdersWrite,
+    #[strum(to_string = "orders:*")]
+    OrdersAll,
+    #[strum(to_string = "tokens:read")]
+    TokensRead,
+    #[strum(to_string = "tokens:write")]
+    TokensWrite,
+    #[strum(to_string = "tokens:*")]
+    TokensAll,
+    #[strum(to_string = "admin")]
+    Admin,
+}
 
 impl TokenScope {
-    pub const ALL: &'static str = "*";
-    pub const ORDERS_READ: &'static str = "orders:read";
-    pub const ORDERS_WRITE: &'static str = "orders:write";
-    pub const TOKENS_READ: &'static str = "tokens:read";
-    pub const TOKENS_WRITE: &'static str = "tokens:write";
-    pub const ADMIN: &'static str = "admin";
-
-    pub const DEFAULT: &'static [&'static str] = &[
-        Self::ORDERS_READ,
-        Self::ORDERS_WRITE,
-        Self::TOKENS_READ,
-        Self::TOKENS_WRITE,
-        Self::ADMIN,
+    pub const DEFAULT: &'static [Self] = &[
+        Self::OrdersRead,
+        Self::OrdersWrite,
+        Self::TokensRead,
+        Self::TokensWrite,
+        Self::Admin,
     ];
 
-    pub fn validate(scope: &str) -> BpResult<()> {
-        if scope == Self::ALL {
-            return Ok(());
-        }
-        let base = scope.strip_suffix(":*").unwrap_or(scope);
-        let wildcard = scope.ends_with(":*");
-        let segments = base.split(':').collect::<Vec<_>>();
-        let valid = !segments.is_empty()
-            && segments.iter().all(|segment| Self::valid_segment(segment))
-            && scope.matches('*').count() <= usize::from(wildcard);
-        if valid {
-            Ok(())
-        } else {
-            Err(BpError::auth_invalid_field(
-                "scope",
-                format!("{scope:?} is not a valid token scope"),
-            ))
-        }
-    }
-
-    pub fn validate_all<S: AsRef<str>>(scopes: &[S]) -> BpResult<()> {
-        for scope in scopes {
-            Self::validate(scope.as_ref())?;
-        }
-        Ok(())
-    }
-
-    pub fn matches(granted: &str, required: &str) -> bool {
-        if granted == Self::ALL || granted == required {
-            return true;
-        }
-        let Some(prefix) = granted.strip_suffix(":*") else {
-            return false;
-        };
-        required
-            .strip_prefix(prefix)
-            .is_some_and(|suffix| suffix.starts_with(':'))
-    }
-
-    fn valid_segment(segment: &str) -> bool {
-        !segment.is_empty()
-            && segment
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_' || c == '.')
+    pub fn matches(self, required: Self) -> bool {
+        self == Self::All
+            || self == required
+            || matches!(
+                (self, required),
+                (Self::OrdersAll, Self::OrdersRead | Self::OrdersWrite)
+                    | (Self::TokensAll, Self::TokensRead | Self::TokensWrite)
+            )
     }
 }

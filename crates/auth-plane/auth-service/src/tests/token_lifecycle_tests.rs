@@ -1,5 +1,7 @@
 use super::support_tests::TestFixture;
-use crate::{ApiToken, AuthService, RevocationReason, TokenExpiry, TokenOptions, TokenScope};
+use crate::{
+    ApiToken, AuthService, RevocationReason, RevokedBy, TokenExpiry, TokenOptions, TokenScope,
+};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
 use secrecy::ExposeSecret;
@@ -99,7 +101,7 @@ async fn revocation_records_metadata_and_blocks_use() {
         .revoke_token(
             token.id(),
             RevocationReason::Compromised,
-            "security-team",
+            RevokedBy::SecurityTeam,
             now,
         )
         .await
@@ -110,7 +112,10 @@ async fn revocation_records_metadata_and_blocks_use() {
         revoked.metadata().revocation_reason(),
         Some(RevocationReason::Compromised)
     );
-    assert_eq!(revoked.metadata().revoked_by(), Some("security-team"));
+    assert_eq!(
+        revoked.metadata().revoked_by(),
+        Some(RevokedBy::SecurityTeam)
+    );
     assert!(
         service
             .authenticate(token.id(), token.secret(), None, now)
@@ -129,7 +134,7 @@ async fn owner_listing_includes_inactive_tokens() {
         .revoke_token(
             revoked.id(),
             RevocationReason::NoLongerNeeded,
-            "security-team",
+            RevokedBy::SecurityTeam,
             now,
         )
         .await
@@ -169,7 +174,7 @@ async fn signing_updates_last_used_and_requires_an_active_token() {
         .revoke_token(
             token.id(),
             RevocationReason::Compromised,
-            "security-team",
+            RevokedBy::SecurityTeam,
             now,
         )
         .await

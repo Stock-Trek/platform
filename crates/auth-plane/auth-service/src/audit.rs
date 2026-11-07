@@ -1,8 +1,10 @@
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use std::sync::Arc;
+use strum::{Display, EnumString};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString)]
+#[strum(serialize_all = "snake_case")]
 pub enum TokenAuditAction {
     Issued,
     Deleted,
@@ -13,22 +15,6 @@ pub enum TokenAuditAction {
     SignatureRejected,
     Rotated,
     Revoked,
-}
-
-impl TokenAuditAction {
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::Issued => "issued",
-            Self::Deleted => "deleted",
-            Self::Authenticated => "authenticated",
-            Self::AuthenticationFailed => "authentication_failed",
-            Self::Signed => "signed",
-            Self::SignatureVerified => "signature_verified",
-            Self::SignatureRejected => "signature_rejected",
-            Self::Rotated => "rotated",
-            Self::Revoked => "revoked",
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
