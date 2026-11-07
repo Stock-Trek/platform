@@ -64,6 +64,18 @@ fn rejects_invalid_token_ids() {
 }
 
 #[test]
+fn rejects_a_value_for_a_different_token_id() {
+    let token = TestFixture::token("token-a");
+
+    let error = ApiToken::from_value("token-b", &token.to_value()).unwrap_err();
+
+    assert!(matches!(
+        error,
+        BpError::Auth(AuthError::InvalidField { field: "id", .. })
+    ));
+}
+
+#[test]
 fn rejects_missing_vault_value_fields() {
     let error = ApiToken::from_value("token-a", &json!({"owner": "demo-owner"}));
 

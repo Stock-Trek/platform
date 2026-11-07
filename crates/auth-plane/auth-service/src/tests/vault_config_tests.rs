@@ -62,6 +62,18 @@ fn vault_config_normalizes_surrounding_whitespace() {
 }
 
 #[test]
+fn vault_config_rejects_an_invalid_token_header() {
+    let config = VaultTokenStoreConfig::new(
+        "https://vault.example.com",
+        SecretString::from("token\ninvalid"),
+        "platform-tokens",
+        Duration::from_secs(10),
+    );
+
+    assert!(config.validate().is_err());
+}
+
+#[test]
 fn vault_config_rejects_embedded_credentials() {
     let userinfo = VaultConfigFixture::config("https://user:pass@vault.example.com", "tokens");
     let username = VaultConfigFixture::config("https://user@vault.example.com", "tokens");
