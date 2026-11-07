@@ -43,8 +43,7 @@ impl AuthService {
     }
 
     pub async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<()> {
-        ApiToken::validate_id(id)?;
-        let token = self.store.get(id).await?;
+        let token = self.stored_token(id).await?;
         self.store.delete(id).await?;
         if let Some(token) = token {
             let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
@@ -55,18 +54,30 @@ impl AuthService {
     }
 
     pub async fn token(&self, id: &str) -> BpResult<ApiToken> {
-        ApiToken::validate_id(id)?;
-        self.store
-            .get(id)
+        self.stored_token(id)
             .await?
             .ok_or_else(|| BpError::unknown_token(id))
+    }
+
+    pub(crate) async fn stored_token(&self, id: &str) -> BpResult<Option<ApiToken>> {
+        ApiToken::validate_id(id)?;
+        let token = self.store.get(id).await?;
+        if token.as_ref().is_some_and(|token| token.id() != id) {
+            return Err(BpError::auth_store(
+                "read",
+                id,
+                false,
+                "token store returned a token with a different id".to_string(),
+            ));
+        }
+        Ok(token)
     }
 
     pub async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
         let owner = Self::validated_owner(owner)?;
         let mut tokens = Vec::new();
         for id in self.store.ids().await? {
-            if let Some(token) = self.store.get(&id).await?
+            if let Some(token) = self.stored_token(&id).await?
                 && token.owner() == owner
             {
                 tokens.push(token);

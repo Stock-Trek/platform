@@ -73,8 +73,20 @@ impl AuthService {
         let latest_issued_at = now
             .checked_add_signed(Duration::seconds(CLOCK_SKEW_SECONDS))
             .unwrap_or(DateTime::<Utc>::MAX_UTC);
+        let latest_expires_at = signed
+            .issued_at()
+            .checked_add_signed(self.signature_validity);
         if signed.is_expired(now) || signed.issued_at() > latest_issued_at {
             self.record_signature_rejected(token_id, Some(&token), now, "expired signature");
+            return Ok(false);
+        }
+        if latest_expires_at.is_some_and(|latest| signed.expires_at() > latest) {
+            self.record_signature_rejected(
+                token_id,
+                Some(&token),
+                now,
+                "signature validity exceeds policy",
+            );
             return Ok(false);
         }
         let signer = OrderRequestSigner::new(token.secret())?;
@@ -106,8 +118,20 @@ impl AuthService {
         issued_at: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> BpResult<SignedOrderRequest> {
-        let context =
-            OrderRequestContext::generate(authenticated.id(), issued_at, self.signature_validity)?;
+        let context = match OrderRequestContext::generate(
+            authenticated.id(),
+            issued_at,
+            self.signature_validity,
+        ) {
+            Ok(context) => context,
+            Err(error) => {
+                let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
+                    .with_token(authenticated.id(), Some(authenticated.owner()))
+                    .failure(error.to_string());
+                self.audit.record(event);
+                return Err(error);
+            }
+        };
         let signer = OrderRequestSigner::new(authenticated.secret())?;
         let signature = match signer.sign_order_request(&context, order_request) {
             Ok(signature) => signature,

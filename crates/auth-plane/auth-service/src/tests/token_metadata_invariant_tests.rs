@@ -52,3 +52,27 @@ fn rejects_rotation_overlap_without_a_replacement() {
 
     MetadataInvariantFixture::assert_invalid(&value, "replaced_by");
 }
+
+#[test]
+fn rejects_invalid_rotation_lineage_ids() {
+    let mut rotated_from = MetadataInvariantFixture::value();
+    rotated_from["rotated_from"] = json!("../token-b");
+    MetadataInvariantFixture::assert_invalid(&rotated_from, "rotated_from");
+
+    let mut replaced_by = MetadataInvariantFixture::value();
+    replaced_by["replaced_by"] = json!("../token-b");
+    replaced_by["rotation_overlap_until"] = json!((Utc::now() + Duration::minutes(1)).to_rfc3339());
+    MetadataInvariantFixture::assert_invalid(&replaced_by, "replaced_by");
+}
+
+#[test]
+fn rejects_rotation_lineage_pointing_at_the_token_itself() {
+    let mut replaced_by = MetadataInvariantFixture::value();
+    replaced_by["replaced_by"] = json!("token-a");
+    replaced_by["rotation_overlap_until"] = json!((Utc::now() + Duration::minutes(1)).to_rfc3339());
+    MetadataInvariantFixture::assert_invalid(&replaced_by, "replaced_by");
+
+    let mut rotated_from = MetadataInvariantFixture::value();
+    rotated_from["rotated_from"] = json!("token-a");
+    MetadataInvariantFixture::assert_invalid(&rotated_from, "rotated_from");
+}
