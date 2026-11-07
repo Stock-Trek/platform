@@ -1,4 +1,6 @@
-use crate::{ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, TokenMetadata};
+use crate::{
+    ApiToken, AuthService, RevocationReason, TokenAuditAction, TokenAuditEvent, TokenMetadata,
+};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use rand::{Rng, distributions::Alphanumeric};
@@ -60,15 +62,11 @@ impl AuthService {
     pub async fn revoke_token(
         &self,
         id: &str,
-        reason: impl Into<String>,
+        reason: RevocationReason,
         revoked_by: impl Into<String>,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
-        let reason = reason.into();
         let revoked_by = revoked_by.into();
-        if reason.trim().is_empty() {
-            return Err(BpError::auth_invalid_field("reason", "must not be empty"));
-        }
         if revoked_by.trim().is_empty() {
             return Err(BpError::auth_invalid_field(
                 "revoked_by",
@@ -93,16 +91,15 @@ impl AuthService {
     pub async fn revoke_tokens_for_owner(
         &self,
         owner: &str,
-        reason: impl Into<String>,
+        reason: RevocationReason,
         revoked_by: impl Into<String>,
         now: DateTime<Utc>,
     ) -> BpResult<Vec<ApiToken>> {
-        let reason = reason.into();
         let revoked_by = revoked_by.into();
         let mut revoked = Vec::new();
         for token in self.active_tokens_for_owner(owner, now).await? {
             revoked.push(
-                self.revoke_token(token.id(), reason.clone(), revoked_by.clone(), now)
+                self.revoke_token(token.id(), reason, revoked_by.clone(), now)
                     .await?,
             );
         }

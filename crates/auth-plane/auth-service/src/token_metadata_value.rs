@@ -1,4 +1,4 @@
-use crate::{TokenMetadata, TokenScope};
+use crate::{RevocationReason, TokenMetadata, TokenScope};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use serde_json::{Value, json};
@@ -19,7 +19,7 @@ impl TokenMetadata {
             EXPIRES_AT: self.expires_at.to_rfc3339(),
             SCOPES: self.scopes,
             REVOKED_AT: self.revoked_at.map(|value| value.to_rfc3339()),
-            REVOCATION_REASON: self.revocation_reason,
+            REVOCATION_REASON: self.revocation_reason.map(RevocationReason::as_str),
             REVOKED_BY: self.revoked_by,
             LAST_USED_AT: self.last_used_at.map(|value| value.to_rfc3339()),
             ROTATED_FROM: self.rotated_from,
@@ -52,7 +52,9 @@ impl TokenMetadata {
                 .ok_or_else(|| BpError::auth_invalid_field(EXPIRES_AT, "is required"))?,
             scopes,
             revoked_at: Self::timestamp(value, REVOKED_AT)?,
-            revocation_reason: Self::string(value, REVOCATION_REASON)?,
+            revocation_reason: Self::string(value, REVOCATION_REASON)?
+                .map(|reason| reason.parse::<RevocationReason>())
+                .transpose()?,
             revoked_by: Self::string(value, REVOKED_BY)?,
             last_used_at: Self::timestamp(value, LAST_USED_AT)?,
             rotated_from: Self::string(value, ROTATED_FROM)?,

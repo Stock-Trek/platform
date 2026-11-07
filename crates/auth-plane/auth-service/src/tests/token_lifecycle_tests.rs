@@ -1,5 +1,5 @@
 use super::support_tests::TestFixture;
-use crate::{ApiToken, AuthService, TokenExpiry, TokenOptions, TokenScope};
+use crate::{ApiToken, AuthService, RevocationReason, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
 use secrecy::ExposeSecret;
@@ -96,12 +96,20 @@ async fn revocation_records_metadata_and_blocks_use() {
     let now = Utc::now();
 
     let revoked = service
-        .revoke_token(token.id(), "compromised", "security-team", now)
+        .revoke_token(
+            token.id(),
+            RevocationReason::Compromised,
+            "security-team",
+            now,
+        )
         .await
         .unwrap();
 
     assert_eq!(revoked.metadata().revoked_at(), Some(now));
-    assert_eq!(revoked.metadata().revocation_reason(), Some("compromised"));
+    assert_eq!(
+        revoked.metadata().revocation_reason(),
+        Some(RevocationReason::Compromised)
+    );
     assert_eq!(revoked.metadata().revoked_by(), Some("security-team"));
     assert!(
         service
@@ -118,7 +126,12 @@ async fn owner_listing_includes_inactive_tokens() {
     let active = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let revoked = TestFixture::add_token(&service, "token-b", "owner-a").await;
     service
-        .revoke_token(revoked.id(), "no longer needed", "security-team", now)
+        .revoke_token(
+            revoked.id(),
+            RevocationReason::NoLongerNeeded,
+            "security-team",
+            now,
+        )
         .await
         .unwrap();
 
@@ -153,7 +166,12 @@ async fn signing_updates_last_used_and_requires_an_active_token() {
     let used = service.token(token.id()).await.unwrap();
     assert!(used.metadata().last_used_at().is_some());
     let revoked = service
-        .revoke_token(token.id(), "compromised", "security-team", now)
+        .revoke_token(
+            token.id(),
+            RevocationReason::Compromised,
+            "security-team",
+            now,
+        )
         .await
         .unwrap();
     assert!(

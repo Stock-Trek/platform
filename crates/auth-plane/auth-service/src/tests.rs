@@ -3,6 +3,7 @@ mod auth_service_owner_tests;
 mod auth_service_secret_tests;
 mod auth_service_signature_tests;
 mod auth_service_token_tests;
+mod revocation_reason_tests;
 mod signed_order_request_tests;
 mod support_tests;
 mod token_audit_tests;

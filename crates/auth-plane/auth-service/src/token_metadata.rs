@@ -1,4 +1,4 @@
-use crate::TokenScope;
+use crate::{RevocationReason, TokenScope};
 use chrono::{DateTime, Utc};
 use platform_errors::BpResult;
 
@@ -7,7 +7,7 @@ pub struct TokenMetadata {
     pub(crate) expires_at: DateTime<Utc>,
     pub(crate) scopes: Vec<String>,
     pub(crate) revoked_at: Option<DateTime<Utc>>,
-    pub(crate) revocation_reason: Option<String>,
+    pub(crate) revocation_reason: Option<RevocationReason>,
     pub(crate) revoked_by: Option<String>,
     pub(crate) last_used_at: Option<DateTime<Utc>>,
     pub(crate) rotated_from: Option<String>,
@@ -50,8 +50,8 @@ impl TokenMetadata {
         self.revoked_at
     }
 
-    pub fn revocation_reason(&self) -> Option<&str> {
-        self.revocation_reason.as_deref()
+    pub fn revocation_reason(&self) -> Option<RevocationReason> {
+        self.revocation_reason
     }
 
     pub fn revoked_by(&self) -> Option<&str> {
@@ -103,7 +103,7 @@ impl TokenMetadata {
         }
     }
 
-    pub fn revoke(&mut self, now: DateTime<Utc>, reason: String, revoked_by: String) {
+    pub fn revoke(&mut self, now: DateTime<Utc>, reason: RevocationReason, revoked_by: String) {
         self.revoked_at.get_or_insert(now);
         self.revocation_reason = Some(reason);
         self.revoked_by = Some(revoked_by);
