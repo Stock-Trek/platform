@@ -123,7 +123,10 @@ impl AuthService {
 
     pub async fn purge_expired_tokens(&self, now: DateTime<Utc>) -> BpResult<usize> {
         let mut purged = 0;
-        for id in self.store.ids().await? {
+        let mut ids = self.store.ids().await?;
+        ids.sort();
+        ids.dedup();
+        for id in ids {
             if let Some(token) = self.stored_token(&id).await?
                 && token.metadata().is_expired(now)
             {
@@ -143,7 +146,7 @@ impl AuthService {
             .take(8)
             .map(char::from)
             .collect();
-        let suffix = format!("-{}-{random}", now.timestamp_millis());
+        let suffix = format!("-{}-{random}", now.timestamp_millis().unsigned_abs());
         let prefix_length = MAX_TOKEN_ID_LENGTH.saturating_sub(suffix.len());
         let prefix = &id[..id.len().min(prefix_length)];
         format!("{prefix}{suffix}")

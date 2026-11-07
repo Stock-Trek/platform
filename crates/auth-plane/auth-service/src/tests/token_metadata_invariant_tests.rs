@@ -85,3 +85,11 @@ fn rejects_rotation_lineage_pointing_at_the_token_itself() {
     rotated_from["rotated_from"] = json!("token-a");
     MetadataInvariantFixture::assert_invalid(&rotated_from, "rotated_from");
 }
+
+#[test]
+fn rejects_duplicate_scopes() {
+    let mut value = MetadataInvariantFixture::value();
+    value["scopes"] = json!(["orders:read", "orders:read"]);
+
+    MetadataInvariantFixture::assert_invalid(&value, "scopes");
+}

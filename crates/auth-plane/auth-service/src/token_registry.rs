@@ -75,8 +75,11 @@ impl AuthService {
 
     pub async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
         let owner = Self::validated_owner(owner)?;
+        let mut ids = self.store.ids().await?;
+        ids.sort();
+        ids.dedup();
         let mut tokens = Vec::new();
-        for id in self.store.ids().await? {
+        for id in ids {
             if let Some(token) = self.stored_token(&id).await?
                 && token.owner() == owner
             {
