@@ -115,6 +115,12 @@ impl TokenMetadata {
                 BpError::auth_invalid_field("replaced_by", "must be a valid token id")
             })?;
         }
+        if self.rotated_from.is_some() && self.rotated_from == self.replaced_by {
+            return Err(BpError::auth_invalid_field(
+                "rotated_from",
+                "must refer to a different token than replaced_by",
+            ));
+        }
         match (self.revoked_at, self.revocation_reason, self.revoked_by) {
             (None, None, None) | (Some(_), Some(_), Some(_)) => {}
             (None, _, _) => {

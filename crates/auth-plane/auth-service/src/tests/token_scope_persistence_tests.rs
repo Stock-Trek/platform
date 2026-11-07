@@ -4,21 +4,25 @@ use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
 use serde_json::json;
 
-async fn add_read_only_token(service: &AuthService) -> ApiToken {
-    let options = TokenOptions::new(
-        TokenExpiry::After(Duration::days(30)),
-        [TokenScope::OrdersRead],
-    );
-    service
-        .add_token("token-a", "owner-a", Utc::now(), options)
-        .await
-        .unwrap()
+struct ScopePersistenceFixture;
+
+impl ScopePersistenceFixture {
+    async fn add_read_only_token(service: &AuthService) -> ApiToken {
+        let options = TokenOptions::new(
+            TokenExpiry::After(Duration::days(30)),
+            [TokenScope::OrdersRead],
+        );
+        service
+            .add_token("token-a", "owner-a", Utc::now(), options)
+            .await
+            .unwrap()
+    }
 }
 
 #[tokio::test]
 async fn scopes_survive_a_vault_value_round_trip() {
     let service = TestFixture::service();
-    let token = add_read_only_token(&service).await;
+    let token = ScopePersistenceFixture::add_read_only_token(&service).await;
 
     let restored = ApiToken::from_value(token.id(), &token.to_value()).unwrap();
 
@@ -62,7 +66,7 @@ fn invalid_scopes_are_rejected_when_restored() {
 #[tokio::test]
 async fn authorization_rejects_tokens_without_the_required_scope() {
     let service = TestFixture::service();
-    let token = add_read_only_token(&service).await;
+    let token = ScopePersistenceFixture::add_read_only_token(&service).await;
 
     let error = service
         .authenticate(
@@ -83,7 +87,7 @@ async fn authorization_rejects_tokens_without_the_required_scope() {
 #[tokio::test]
 async fn authorization_accepts_tokens_with_the_required_scope() {
     let service = TestFixture::service();
-    let token = add_read_only_token(&service).await;
+    let token = ScopePersistenceFixture::add_read_only_token(&service).await;
 
     let authenticated = service
         .authenticate(

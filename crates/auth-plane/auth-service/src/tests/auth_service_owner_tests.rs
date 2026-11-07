@@ -76,6 +76,26 @@ async fn signs_order_requests_for_the_owner() {
 }
 
 #[tokio::test]
+async fn owner_signing_accepts_text_order_requests() {
+    let service = TestFixture::service();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
+    let request = r#"{"side":"buy","symbol":"AAPL"}"#;
+
+    let signed = service
+        .sign_order_request_for_owner("owner-a", request, now, now)
+        .await
+        .unwrap();
+
+    assert!(
+        service
+            .verify_order_request(token.id(), request.as_bytes(), signed.signature(), now)
+            .await
+            .unwrap()
+    );
+}
+
+#[tokio::test]
 async fn chooses_a_deterministic_token_when_an_owner_has_several() {
     let service = TestFixture::service();
     TestFixture::add_token(&service, "token-b", "owner-a").await;

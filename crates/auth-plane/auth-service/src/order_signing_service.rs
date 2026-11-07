@@ -1,4 +1,4 @@
-use crate::signature_input::SignatureArguments;
+use crate::signature_input::{SignatureArgument, SignatureArguments};
 use crate::{
     ApiToken, AuthService, OrderRequestContext, OrderRequestSigner, SignatureInput,
     SignedOrderRequest, TokenAuditAction, TokenAuditEvent, TokenScope,
@@ -34,10 +34,14 @@ impl AuthService {
         let token = self
             .token_for_owner_with_scope(owner, TokenScope::OrdersWrite, now)
             .await?;
-        let secret = token.secret();
-        let (_, order_request) = SignatureArguments::split_sign(secret, &order_request)?;
+        let order_request = Self::request_payload(&order_request)?;
         let authenticated = self
-            .authenticate(token.id(), secret, Some(TokenScope::OrdersWrite), now)
+            .authenticate(
+                token.id(),
+                token.secret(),
+                Some(TokenScope::OrdersWrite),
+                now,
+            )
             .await?;
         self.sign_with_token_at(&authenticated, order_request, issued_at, now)
     }
@@ -109,6 +113,13 @@ impl AuthService {
             .with_token(token.id(), Some(token.owner()));
         self.audit.record(event);
         Ok(true)
+    }
+
+    fn request_payload(input: &impl SignatureInput) -> BpResult<&[u8]> {
+        match input.signature_argument() {
+            SignatureArgument::Text(request) => Ok(request.as_bytes()),
+            SignatureArgument::Bytes(request) => Ok(request),
+        }
     }
 
     fn sign_with_token_at(

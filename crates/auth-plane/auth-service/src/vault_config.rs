@@ -56,6 +56,12 @@ impl VaultTokenStoreConfig {
                 "must be an absolute http or https URL",
             ));
         }
+        if !address.username().is_empty() || address.password().is_some() {
+            return Err(BpError::config_invalid(
+                "vault_address",
+                "must not contain embedded credentials",
+            ));
+        }
         if address.query().is_some() || address.fragment().is_some() {
             return Err(BpError::config_invalid(
                 "vault_address",

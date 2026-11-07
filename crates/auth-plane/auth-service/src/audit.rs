@@ -97,7 +97,7 @@ impl TokenAuditLog for MemoryTokenAuditLog {
         if self.capacity == 0 {
             return;
         }
-        if events.len() == self.capacity {
+        if events.len() >= self.capacity {
             events.remove(0);
         }
         events.push(event);
