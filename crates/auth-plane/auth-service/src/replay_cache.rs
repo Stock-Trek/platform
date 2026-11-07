@@ -32,4 +32,10 @@ impl ReplayCache {
         used.insert(key, expires_at);
         true
     }
+
+    pub fn release(&self, token_id: &str, nonce: &str) {
+        self.used
+            .lock()
+            .remove(&(token_id.to_string(), nonce.to_string()));
+    }
 }

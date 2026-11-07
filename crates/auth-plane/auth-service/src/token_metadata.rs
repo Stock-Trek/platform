@@ -1,7 +1,7 @@
 use crate::{ApiToken, RevocationReason, RevokedBy, TokenScope};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
-use std::borrow::Borrow;
+use std::{borrow::Borrow, collections::HashSet};
 
 #[derive(Clone, Debug)]
 pub struct TokenMetadata {
@@ -103,11 +103,8 @@ impl TokenMetadata {
         if scopes.is_empty() {
             return Err(BpError::auth_invalid_field("scopes", "must not be empty"));
         }
-        if scopes
-            .iter()
-            .enumerate()
-            .any(|(index, scope)| scopes[..index].contains(scope))
-        {
+        let mut seen = HashSet::new();
+        if scopes.iter().any(|scope| !seen.insert(*scope)) {
             return Err(BpError::auth_invalid_field(
                 "scopes",
                 "must not contain duplicates",

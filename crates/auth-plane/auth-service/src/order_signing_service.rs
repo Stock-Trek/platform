@@ -121,7 +121,10 @@ impl AuthService {
             return Ok(false);
         }
         token.metadata.record_use(now);
-        self.store.update(&token).await?;
+        if let Err(error) = self.store.update(&token).await {
+            self.replay.release(token_id, context.nonce());
+            return Err(error);
+        }
         let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
             .with_token(token.id(), Some(token.owner()));
         self.audit.record(event);

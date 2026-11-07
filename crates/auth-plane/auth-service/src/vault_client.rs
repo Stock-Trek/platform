@@ -29,11 +29,16 @@ impl VaultClient {
             body["options"] = json!({ "cas": 0 });
         }
         let request = self
-            .request(Method::PUT, self.url(&["data", token.id()])?)
+            .request(Method::PUT, self.config.url(&["data", token.id()])?)
             .json(&body);
         let response = self.send("write", token.id(), request).await?;
         let status = response.status();
-        if create_only && matches!(status, StatusCode::BAD_REQUEST | StatusCode::CONFLICT) {
+        if create_only
+            && matches!(
+                status,
+                StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED
+            )
+        {
             let headers = response.headers().clone();
             let body = response
                 .text()
@@ -61,7 +66,7 @@ impl VaultClient {
             .send(
                 "read",
                 id,
-                self.request(Method::GET, self.url(&["data", id])?),
+                self.request(Method::GET, self.config.url(&["data", id])?),
             )
             .await?;
         if response.status() == StatusCode::NOT_FOUND {
@@ -81,7 +86,7 @@ impl VaultClient {
             .send(
                 "delete",
                 id,
-                self.request(Method::DELETE, self.url(&["metadata", id])?),
+                self.request(Method::DELETE, self.config.url(&["metadata", id])?),
             )
             .await?;
         if response.status() == StatusCode::NOT_FOUND {
@@ -93,7 +98,7 @@ impl VaultClient {
     }
 
     pub(crate) async fn ids(&self) -> BpResult<Vec<String>> {
-        let mut url = self.url(&["metadata"])?;
+        let mut url = self.config.url(&["metadata"])?;
         url.query_pairs_mut().append_pair("list", "true");
         let response = self
             .send("list", "tokens", self.request(Method::GET, url))
@@ -118,33 +123,11 @@ impl VaultClient {
         let mut ids: Vec<String> = keys
             .iter()
             .filter_map(|key| key.as_str().map(str::to_string))
-            .filter(|key| !key.ends_with('/'))
+            .filter(|key| !key.ends_with('/') && ApiToken::validate_id(key).is_ok())
             .collect();
         ids.sort();
         ids.dedup();
         Ok(ids)
-    }
-
-    fn url(&self, suffix: &[&str]) -> BpResult<Url> {
-        let address = self.config.address().trim();
-        let mut url = Url::parse(address.trim_end_matches('/'))
-            .map_err(|e| BpError::config_invalid_source("vault_address", e))?;
-        url.set_query(None);
-        url.set_fragment(None);
-        {
-            let mut segments = url.path_segments_mut().map_err(|()| {
-                BpError::config_invalid("vault_address", "must be a hierarchical URL")
-            })?;
-            segments.pop_if_empty();
-            segments.push("v1");
-            for segment in self.config.mount().split('/') {
-                segments.push(segment);
-            }
-            for segment in suffix {
-                segments.push(segment);
-            }
-        }
-        Ok(url)
     }
 
     fn request(&self, method: Method, url: Url) -> reqwest::RequestBuilder {

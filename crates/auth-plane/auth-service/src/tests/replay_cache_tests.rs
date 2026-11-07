@@ -34,6 +34,17 @@ fn nonces_that_have_already_expired_are_rejected() {
 }
 
 #[test]
+fn released_nonces_can_be_used_again() {
+    let cache = ReplayCacheFixture::cache();
+    let now = Utc::now();
+    let expires_at = ReplayCacheFixture::expiry(now);
+
+    assert!(cache.consume("token-a", "nonce-a", expires_at, now));
+    cache.release("token-a", "nonce-a");
+    assert!(cache.consume("token-a", "nonce-a", expires_at, now));
+}
+
+#[test]
 fn expired_nonces_are_evicted() {
     let cache = ReplayCacheFixture::cache();
     let now = Utc::now();
