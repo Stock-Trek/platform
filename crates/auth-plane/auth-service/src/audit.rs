@@ -2,8 +2,6 @@ use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use std::sync::Arc;
 
-const DEFAULT_CAPACITY: usize = 4096;
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum TokenAuditAction {
     Issued,
@@ -61,19 +59,10 @@ impl TokenAuditEvent {
         self
     }
 
-    pub fn success(mut self) -> Self {
-        self.success = true;
-        self
-    }
-
     pub fn failure(mut self, detail: impl Into<String>) -> Self {
         self.success = false;
         self.detail = Some(detail.into());
         self
-    }
-
-    pub fn action(&self) -> TokenAuditAction {
-        self.action
     }
 
     pub fn token_id(&self) -> Option<&str> {
@@ -99,21 +88,11 @@ pub struct MemoryTokenAuditLog {
     capacity: usize,
 }
 
-impl Default for MemoryTokenAuditLog {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
 impl MemoryTokenAuditLog {
-    pub fn new() -> Self {
-        Self::with_capacity(DEFAULT_CAPACITY)
-    }
-
-    pub fn with_capacity(capacity: usize) -> Self {
+    pub fn new(capacity: usize) -> Self {
         Self {
             events: Mutex::new(Vec::new()),
-            capacity: capacity.max(1),
+            capacity,
         }
     }
 
@@ -124,23 +103,14 @@ impl MemoryTokenAuditLog {
     pub fn drain(&self) -> Vec<TokenAuditEvent> {
         std::mem::take(&mut *self.events.lock())
     }
-
-    pub fn clear(&self) {
-        self.events.lock().clear();
-    }
-
-    pub fn len(&self) -> usize {
-        self.events.lock().len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
 }
 
 impl TokenAuditLog for MemoryTokenAuditLog {
     fn record(&self, event: TokenAuditEvent) {
         let mut events = self.events.lock();
+        if self.capacity == 0 {
+            return;
+        }
         if events.len() == self.capacity {
             events.remove(0);
         }

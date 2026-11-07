@@ -1,161 +1,108 @@
-use crate::{
-    ApiToken, AuthService, RevocationReason, TokenAuditAction, TokenAuditEvent, TokenExpiry,
-    TokenMetadata,
-};
+use crate::{ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, TokenMetadata};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use rand::{Rng, distributions::Alphanumeric};
 
 impl AuthService {
-    pub async fn rotate_token(&self, id: &str) -> BpResult<ApiToken> {
-        self.rotate_token_at(id, Utc::now()).await
-    }
-
-    pub async fn rotate_token_at(&self, id: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
+    pub async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
         let replacement_id = self.rotated_token_id(id, now);
-        self.rotate_token_to_at(id, replacement_id, now).await
+        self.rotate_token_to(id, replacement_id, now).await
     }
 
     pub async fn rotate_token_to(
         &self,
         id: &str,
         replacement_id: impl Into<String>,
-    ) -> BpResult<ApiToken> {
-        self.rotate_token_to_at(id, replacement_id, Utc::now())
-            .await
-    }
-
-    pub async fn rotate_token_with_id(
-        &self,
-        id: &str,
-        replacement_id: impl Into<String>,
-    ) -> BpResult<ApiToken> {
-        self.rotate_token_to(id, replacement_id).await
-    }
-
-    pub async fn rotate_token_to_at(
-        &self,
-        id: &str,
-        replacement_id: impl Into<String>,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
         let original = self.token(id).await?;
-        if let Some(replacement) = original.replaced_by() {
+        if let Some(replacement) = original.metadata().replaced_by() {
             return Err(BpError::auth_invalid_field(
                 "token_id",
                 format!("has already been rotated to {replacement:?}"),
             ));
         }
         Self::ensure_active(&original, now)?;
-        let expires_at = self.resolve_expiry(TokenExpiry::Default, now);
-        let metadata = TokenMetadata::new(expires_at, original.scopes().iter())?;
-        let mut replacement =
-            ApiToken::generate_with_metadata(replacement_id, original.owner(), now, metadata)?;
+        let metadata = TokenMetadata::new(
+            now + self.token_lifetime,
+            original.metadata().scopes().iter(),
+        )?;
+        let mut replacement = ApiToken::generate(replacement_id, original.owner(), now, metadata)?;
         replacement.metadata.rotated_from = Some(original.id().to_string());
         if let Err(error) = self.store.put(&replacement).await {
             let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
                 .with_token(original.id(), Some(original.owner()))
                 .failure(error.to_string());
-            self.record(event);
+            self.audit.record(event);
             return Err(error);
         }
         let mut retired = original.clone();
-        retired.begin_rotation(replacement.id(), now + self.rotation_overlap);
+        retired
+            .metadata
+            .begin_rotation(replacement.id(), now + self.rotation_overlap);
         if let Err(error) = self.store.update(&retired).await {
             let _ = self.store.delete(replacement.id()).await;
             let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
                 .with_token(original.id(), Some(original.owner()))
                 .failure(error.to_string());
-            self.record(event);
+            self.audit.record(event);
             return Err(error);
         }
         let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
-            .with_token(original.id(), Some(original.owner()))
-            .success();
-        self.record(event);
+            .with_token(original.id(), Some(original.owner()));
+        self.audit.record(event);
         let issued = TokenAuditEvent::new(TokenAuditAction::Issued, now)
             .with_token(replacement.id(), Some(replacement.owner()));
-        self.record(issued);
+        self.audit.record(issued);
         Ok(replacement)
-    }
-
-    pub async fn rotate_token_for_owner(&self, owner: &str) -> BpResult<ApiToken> {
-        let token = self.token_for_owner(owner).await?;
-        self.rotate_token(token.id()).await
     }
 
     pub async fn revoke_token(
         &self,
         id: &str,
-        reason: impl RevocationReason,
-    ) -> BpResult<ApiToken> {
-        self.revoke_token_at(id, reason, Utc::now()).await
-    }
-
-    pub async fn revoke_token_with_reason(
-        &self,
-        id: &str,
-        reason: impl RevocationReason,
-    ) -> BpResult<ApiToken> {
-        self.revoke_token(id, reason).await
-    }
-
-    pub async fn revoke_token_without_reason(&self, id: &str) -> BpResult<ApiToken> {
-        self.revoke_token(id, Option::<String>::None).await
-    }
-
-    pub async fn revoke_token_at(
-        &self,
-        id: &str,
-        reason: impl RevocationReason,
-        now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
-        self.revoke_token_with_actor_at(id, reason, None, now).await
-    }
-
-    pub async fn revoke_token_with_actor(
-        &self,
-        id: &str,
-        reason: impl RevocationReason,
+        reason: impl Into<String>,
         revoked_by: impl Into<String>,
-    ) -> BpResult<ApiToken> {
-        self.revoke_token_with_actor_at(id, reason, Some(revoked_by.into()), Utc::now())
-            .await
-    }
-
-    pub async fn revoke_token_with_actor_at(
-        &self,
-        id: &str,
-        reason: impl RevocationReason,
-        revoked_by: Option<String>,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
+        let reason = reason.into();
+        let revoked_by = revoked_by.into();
+        if reason.trim().is_empty() {
+            return Err(BpError::auth_invalid_field("reason", "must not be empty"));
+        }
+        if revoked_by.trim().is_empty() {
+            return Err(BpError::auth_invalid_field(
+                "revoked_by",
+                "must not be empty",
+            ));
+        }
         let mut token = self.token(id).await?;
-        token.revoke(now, reason, revoked_by);
+        token.metadata.revoke(now, reason, revoked_by);
         if let Err(error) = self.store.update(&token).await {
             let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)
                 .with_token(token.id(), Some(token.owner()))
                 .failure(error.to_string());
-            self.record(event);
+            self.audit.record(event);
             return Err(error);
         }
         let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)
             .with_token(token.id(), Some(token.owner()));
-        self.record(event);
+        self.audit.record(event);
         Ok(token)
     }
 
     pub async fn revoke_tokens_for_owner(
         &self,
         owner: &str,
-        reason: impl RevocationReason,
+        reason: impl Into<String>,
+        revoked_by: impl Into<String>,
+        now: DateTime<Utc>,
     ) -> BpResult<Vec<ApiToken>> {
-        let reason = reason.into_reason();
-        let now = Utc::now();
+        let reason = reason.into();
+        let revoked_by = revoked_by.into();
         let mut revoked = Vec::new();
-        for token in self.active_tokens_for_owner(owner).await? {
+        for token in self.active_tokens_for_owner(owner, now).await? {
             revoked.push(
-                self.revoke_token_at(token.id(), reason.clone(), now)
+                self.revoke_token(token.id(), reason.clone(), revoked_by.clone(), now)
                     .await?,
             );
         }
@@ -166,7 +113,7 @@ impl AuthService {
         let mut purged = 0;
         for id in self.store.ids().await? {
             if let Some(token) = self.store.get(&id).await?
-                && token.is_expired(now)
+                && token.metadata().is_expired(now)
             {
                 self.store.delete(&id).await?;
                 purged += 1;

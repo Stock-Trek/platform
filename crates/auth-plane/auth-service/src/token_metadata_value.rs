@@ -16,7 +16,7 @@ const ROTATION_OVERLAP_UNTIL: &str = "rotation_overlap_until";
 impl TokenMetadata {
     pub fn to_value(&self) -> Value {
         json!({
-            EXPIRES_AT: self.expires_at.map(|value| value.to_rfc3339()),
+            EXPIRES_AT: self.expires_at.to_rfc3339(),
             SCOPES: self.scopes,
             REVOKED_AT: self.revoked_at.map(|value| value.to_rfc3339()),
             REVOCATION_REASON: self.revocation_reason,
@@ -30,7 +30,6 @@ impl TokenMetadata {
 
     pub fn from_value(value: &Value) -> BpResult<Self> {
         let scopes = match value.get(SCOPES) {
-            None | Some(Value::Null) => TokenScope::default_scopes(),
             Some(Value::Array(scopes)) => scopes
                 .iter()
                 .map(|scope| {
@@ -45,10 +44,12 @@ impl TokenMetadata {
                     "must be an array of strings",
                 ));
             }
+            None => return Err(BpError::auth_invalid_field(SCOPES, "is required")),
         };
         TokenScope::validate_all(&scopes)?;
         Ok(Self {
-            expires_at: Self::timestamp(value, EXPIRES_AT)?,
+            expires_at: Self::timestamp(value, EXPIRES_AT)?
+                .ok_or_else(|| BpError::auth_invalid_field(EXPIRES_AT, "is required"))?,
             scopes,
             revoked_at: Self::timestamp(value, REVOKED_AT)?,
             revocation_reason: Self::string(value, REVOCATION_REASON)?,

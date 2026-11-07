@@ -45,10 +45,6 @@ impl TokenScope {
         Ok(())
     }
 
-    pub fn allows(granted: &str, required: &str) -> bool {
-        Self::matches(granted, required)
-    }
-
     pub fn matches(granted: &str, required: &str) -> bool {
         if granted == Self::ALL || granted == required {
             return true;
@@ -59,13 +55,6 @@ impl TokenScope {
         required
             .strip_prefix(prefix)
             .is_some_and(|suffix| suffix.starts_with(':'))
-    }
-
-    pub fn default_scopes() -> Vec<String> {
-        Self::DEFAULT
-            .iter()
-            .map(|scope| scope.to_string())
-            .collect()
     }
 
     fn valid_segment(segment: &str) -> bool {

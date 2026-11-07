@@ -9,12 +9,6 @@ pub struct MemoryTokenStore {
     tokens: Arc<Mutex<HashMap<String, ApiToken>>>,
 }
 
-impl MemoryTokenStore {
-    pub fn new() -> Self {
-        Self::default()
-    }
-}
-
 #[async_trait]
 impl TokenStore for MemoryTokenStore {
     async fn put(&self, token: &ApiToken) -> BpResult<()> {

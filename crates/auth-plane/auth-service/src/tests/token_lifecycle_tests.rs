@@ -1,5 +1,5 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::{AuthService, TokenOptions};
+use super::support_tests::TestFixture;
+use crate::{ApiToken, AuthService, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
 use secrecy::ExposeSecret;
@@ -10,18 +10,26 @@ impl LifecycleFixture {
     fn service() -> AuthService {
         TestFixture::service()
     }
+
+    async fn add_token_with_expiry(
+        service: &AuthService,
+        id: &str,
+        owner: &str,
+        expires_at: chrono::DateTime<Utc>,
+    ) -> ApiToken {
+        let options = TokenOptions::new(TokenExpiry::At(expires_at), TokenScope::DEFAULT);
+        TestFixture::add_token_at(service, id, owner, Utc::now(), options).await
+    }
 }
 
 #[tokio::test]
 async fn expires_tokens_are_rejected() {
     let service = LifecycleFixture::service();
-    let token = service
-        .add_token_with_expiry("token-a", "owner-a", Utc::now() - Duration::seconds(1))
-        .await
-        .unwrap();
+    let now = Utc::now();
+    let token = LifecycleFixture::add_token_with_expiry(&service, "token-a", "owner-a", now).await;
 
     let error = service
-        .authenticate(token.id(), token.secret())
+        .authenticate(token.id(), token.secret(), None, now)
         .await
         .unwrap_err();
 
@@ -32,80 +40,72 @@ async fn expires_tokens_are_rejected() {
             ..
         })
     ));
-    assert!(token.is_expired(Utc::now()));
-}
-
-#[tokio::test]
-async fn applies_the_configured_default_lifetime() {
-    let service = LifecycleFixture::service().with_token_lifetime(Duration::minutes(5));
-    let created_at = Utc::now();
-
-    let token = service
-        .add_token_at("token-a", "owner-a", created_at)
-        .await
-        .unwrap();
-
-    assert_eq!(token.expires_at(), Some(created_at + Duration::minutes(5)));
-    assert!(token.is_active(created_at + Duration::minutes(4)));
-    assert!(!token.is_active(created_at + Duration::minutes(5)));
+    assert!(token.metadata().is_expired(now));
 }
 
 #[tokio::test]
 async fn token_option_lifetimes_are_relative_to_creation_time() {
     let service = LifecycleFixture::service();
     let created_at = Utc::now();
-    let options = TokenOptions::new().with_lifetime(Duration::minutes(5));
+    let options = TokenOptions::new(
+        TokenExpiry::After(Duration::minutes(5)),
+        TokenScope::DEFAULT,
+    );
 
-    let token = service
-        .add_token_with_options_at("token-a", "owner-a", created_at, options)
-        .await
-        .unwrap();
+    let token =
+        TestFixture::add_token_at(&service, "token-a", "owner-a", created_at, options).await;
 
-    assert_eq!(token.expires_at(), Some(created_at + Duration::minutes(5)));
+    assert_eq!(
+        token.metadata().expires_at(),
+        created_at + Duration::minutes(5)
+    );
 }
 
 #[tokio::test]
 async fn tracks_the_last_time_a_token_was_used() {
     let service = LifecycleFixture::service();
-    let token = service.add_token("token-a", "owner-a").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let used_at = Utc::now();
 
     service
-        .authenticate_at(token.id(), token.secret(), used_at)
+        .authenticate(token.id(), token.secret(), None, used_at)
         .await
         .unwrap();
 
     let stored = service.token(token.id()).await.unwrap();
-    assert_eq!(stored.last_used_at(), Some(used_at));
+    assert_eq!(stored.metadata().last_used_at(), Some(used_at));
 }
 
 #[tokio::test]
 async fn failed_authentication_does_not_update_the_last_used_time() {
     let service = LifecycleFixture::service();
-    let token = service.add_token("token-a", "owner-a").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
 
-    let _ = service.authenticate(token.id(), "wrong-secret").await;
+    let _ = service
+        .authenticate(token.id(), "wrong-secret", None, Utc::now())
+        .await;
 
     let stored = service.token(token.id()).await.unwrap();
-    assert!(stored.last_used_at().is_none());
+    assert!(stored.metadata().last_used_at().is_none());
 }
 
 #[tokio::test]
 async fn revocation_records_metadata_and_blocks_use() {
     let service = LifecycleFixture::service();
-    let token = service.add_token("token-a", "owner-a").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
 
     let revoked = service
-        .revoke_token_with_actor(token.id(), "compromised", "security-team")
+        .revoke_token(token.id(), "compromised", "security-team", now)
         .await
         .unwrap();
 
-    assert!(revoked.revoked_at().is_some());
-    assert_eq!(revoked.revocation_reason(), Some("compromised"));
-    assert_eq!(revoked.revoked_by(), Some("security-team"));
+    assert_eq!(revoked.metadata().revoked_at(), Some(now));
+    assert_eq!(revoked.metadata().revocation_reason(), Some("compromised"));
+    assert_eq!(revoked.metadata().revoked_by(), Some("security-team"));
     assert!(
         service
-            .authenticate(token.id(), token.secret())
+            .authenticate(token.id(), token.secret(), None, now)
             .await
             .is_err()
     );
@@ -114,15 +114,19 @@ async fn revocation_records_metadata_and_blocks_use() {
 #[tokio::test]
 async fn owner_listing_includes_inactive_tokens() {
     let service = LifecycleFixture::service();
-    let active = service.add_token("token-a", "owner-a").await.unwrap();
-    let revoked = service.add_token("token-b", "owner-a").await.unwrap();
+    let now = Utc::now();
+    let active = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let revoked = TestFixture::add_token(&service, "token-b", "owner-a").await;
     service
-        .revoke_token(revoked.id(), "no longer needed")
+        .revoke_token(revoked.id(), "no longer needed", "security-team", now)
         .await
         .unwrap();
 
     let all = service.tokens_for_owner("owner-a").await.unwrap();
-    let active_only = service.active_tokens_for_owner("owner-a").await.unwrap();
+    let active_only = service
+        .active_tokens_for_owner("owner-a", now)
+        .await
+        .unwrap();
 
     assert_eq!(all.len(), 2);
     assert_eq!(active_only.len(), 1);
@@ -132,17 +136,24 @@ async fn owner_listing_includes_inactive_tokens() {
 #[tokio::test]
 async fn signing_updates_last_used_and_requires_an_active_token() {
     let service = LifecycleFixture::service();
-    let token = service.add_token("token-a", "owner-a").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
 
     service
-        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST)
+        .sign_order_request(
+            token.id(),
+            token.secret(),
+            super::support_tests::ORDER_REQUEST,
+            now,
+            now,
+        )
         .await
         .unwrap();
 
     let used = service.token(token.id()).await.unwrap();
-    assert!(used.last_used_at().is_some());
+    assert!(used.metadata().last_used_at().is_some());
     let revoked = service
-        .revoke_token(token.id(), "compromised")
+        .revoke_token(token.id(), "compromised", "security-team", now)
         .await
         .unwrap();
     assert!(
@@ -150,7 +161,9 @@ async fn signing_updates_last_used_and_requires_an_active_token() {
             .sign_order_request(
                 revoked.id(),
                 revoked.secret().expose_secret(),
-                ORDER_REQUEST
+                super::support_tests::ORDER_REQUEST,
+                now,
+                now,
             )
             .await
             .is_err()
@@ -161,17 +174,30 @@ async fn signing_updates_last_used_and_requires_an_active_token() {
 async fn purging_removes_only_expired_tokens() {
     let service = LifecycleFixture::service();
     let now = Utc::now();
-    service
-        .add_token_with_expiry("expired", "owner-a", now - Duration::seconds(1))
-        .await
-        .unwrap();
-    service
-        .add_token_with_expiry("active", "owner-a", now + Duration::minutes(1))
-        .await
-        .unwrap();
+    LifecycleFixture::add_token_with_expiry(
+        &service,
+        "expired",
+        "owner-a",
+        now - Duration::seconds(1),
+    )
+    .await;
+    LifecycleFixture::add_token_with_expiry(
+        &service,
+        "active",
+        "owner-a",
+        now + Duration::minutes(1),
+    )
+    .await;
 
     let purged = service.purge_expired_tokens(now).await.unwrap();
 
     assert_eq!(purged, 1);
-    assert_eq!(service.token_ids().await.unwrap(), vec!["active"]);
+    let ids: Vec<String> = service
+        .tokens_for_owner("owner-a")
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|token| token.id().to_string())
+        .collect();
+    assert_eq!(ids, vec!["active"]);
 }

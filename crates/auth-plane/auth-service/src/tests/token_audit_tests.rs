@@ -1,13 +1,14 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{MemoryTokenAuditLog, TokenAuditAction};
+use chrono::Utc;
 use std::sync::Arc;
 
 struct AuditFixture;
 
 impl AuditFixture {
     fn service() -> (crate::AuthService, Arc<MemoryTokenAuditLog>) {
-        let audit = Arc::new(MemoryTokenAuditLog::new());
-        let service = TestFixture::service().with_audit_log(audit.clone());
+        let audit = Arc::new(MemoryTokenAuditLog::new(4096));
+        let service = TestFixture::service_with_audit(audit.clone());
         (service, audit)
     }
 
@@ -23,10 +24,10 @@ impl AuditFixture {
 #[tokio::test]
 async fn records_token_issuance_and_authentication() {
     let (service, audit) = AuditFixture::service();
-    let token = service.add_token("token-a", "owner-a").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
 
     service
-        .authenticate(token.id(), token.secret())
+        .authenticate(token.id(), token.secret(), None, Utc::now())
         .await
         .unwrap();
 
@@ -42,9 +43,11 @@ async fn records_token_issuance_and_authentication() {
 #[tokio::test]
 async fn records_failed_authentication_without_the_secret() {
     let (service, audit) = AuditFixture::service();
-    let token = service.add_token("token-a", "owner-a").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
 
-    let _ = service.authenticate(token.id(), "wrong-secret").await;
+    let _ = service
+        .authenticate(token.id(), "wrong-secret", None, Utc::now())
+        .await;
 
     let events = audit.events();
     let failure = events
@@ -59,14 +62,15 @@ async fn records_failed_authentication_without_the_secret() {
 #[tokio::test]
 async fn records_rotation_and_revocation() {
     let (service, audit) = AuditFixture::service();
-    let token = service.add_token("token-a", "owner-a").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
     let rotated = service
-        .rotate_token_to(token.id(), "token-b")
+        .rotate_token_to(token.id(), "token-b", now)
         .await
         .unwrap();
 
     service
-        .revoke_token(rotated.id(), "no longer needed")
+        .revoke_token(rotated.id(), "no longer needed", "security-team", now)
         .await
         .unwrap();
 
@@ -78,14 +82,15 @@ async fn records_rotation_and_revocation() {
 #[tokio::test]
 async fn records_signing_and_signature_verification() {
     let (service, audit) = AuditFixture::service();
-    let token = service.add_token("token-a", "owner-a").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
     let signed = service
-        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST)
+        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
         .await
         .unwrap();
 
     service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature())
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
         .await
         .unwrap();
 
@@ -97,15 +102,16 @@ async fn records_signing_and_signature_verification() {
 #[tokio::test]
 async fn records_rejected_signatures() {
     let (service, audit) = AuditFixture::service();
-    let token = service.add_token("token-a", "owner-a").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
     let signed = service
-        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST)
+        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
         .await
         .unwrap();
     let tampered = TestFixture::tampered_signature(signed.signature());
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, tampered)
+        .verify_order_request(token.id(), ORDER_REQUEST, tampered, now)
         .await
         .unwrap();
 
@@ -115,9 +121,9 @@ async fn records_rejected_signatures() {
 
 #[tokio::test]
 async fn audit_events_can_be_drained() {
-    let service = TestFixture::service();
-    service.add_token("token-a", "owner-a").await.unwrap();
+    let (service, audit) = AuditFixture::service();
+    TestFixture::add_token(&service, "token-a", "owner-a").await;
 
-    assert_eq!(service.drain_audit_events().len(), 1);
-    assert!(service.audit_events().is_empty());
+    assert_eq!(audit.drain().len(), 1);
+    assert!(audit.events().is_empty());
 }

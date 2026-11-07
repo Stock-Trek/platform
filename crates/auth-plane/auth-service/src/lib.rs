@@ -6,7 +6,6 @@ mod order_request_context;
 mod order_signature;
 mod order_signing_service;
 mod replay_cache;
-mod revocation_reason;
 mod signature_input;
 mod signed_order_request;
 mod token_authentication;
@@ -31,17 +30,14 @@ pub use api_token::ApiToken;
 pub use audit::{
     MemoryTokenAuditLog, NoopTokenAuditLog, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
 };
-pub use auth_service::{
-    AuthService, DEFAULT_ROTATION_OVERLAP_SECONDS, DEFAULT_TOKEN_LIFETIME_SECONDS,
-};
+pub use auth_service::{AuthService, AuthServiceConfig};
 pub use memory_token_store::MemoryTokenStore;
 pub use order_request_context::OrderRequestContext;
 pub use order_signature::OrderRequestSigner;
-pub use revocation_reason::RevocationReason;
 pub use signature_input::{SignatureArgument, SignatureInput};
 pub use signed_order_request::SignedOrderRequest;
 pub use token_metadata::TokenMetadata;
-pub use token_options::{TokenDuration, TokenExpiry, TokenOptions};
+pub use token_options::{TokenExpiry, TokenOptions};
 pub use token_scope::TokenScope;
 pub use token_store::TokenStore;
 pub use vault_config::VaultTokenStoreConfig;

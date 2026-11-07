@@ -25,11 +25,6 @@ impl OrderRequestSigner {
         Ok(data_encoding::HEXLOWER.encode(&mac.finalize().into_bytes()))
     }
 
-    pub fn verify(&self, order_request: &[u8], signature: &str) -> BpResult<bool> {
-        let expected = self.sign(order_request)?;
-        Ok(expected.as_bytes().ct_eq(signature.as_bytes()).into())
-    }
-
     pub fn sign_order_request(
         &self,
         context: &OrderRequestContext,

@@ -10,54 +10,6 @@ impl AuthService {
         &self,
         token_id: &str,
         secret: impl SignatureInput,
-    ) -> BpResult<ApiToken> {
-        self.authenticate_at(token_id, secret, Utc::now()).await
-    }
-
-    pub async fn authenticate_at(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
-        now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
-        self.authenticate_for_scope_at(token_id, secret, None, now)
-            .await
-    }
-
-    pub async fn authenticate_with_scope(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
-        scope: &str,
-    ) -> BpResult<ApiToken> {
-        self.authenticate_with_scope_at(token_id, secret, scope, Utc::now())
-            .await
-    }
-
-    pub async fn authenticate_with_scope_at(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
-        scope: &str,
-        now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
-        self.authenticate_for_scope_at(token_id, secret, Some(scope), now)
-            .await
-    }
-
-    pub async fn authorize(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
-        scope: &str,
-    ) -> BpResult<ApiToken> {
-        self.authenticate_with_scope(token_id, secret, scope).await
-    }
-
-    pub(crate) async fn authenticate_for_scope_at(
-        &self,
-        token_id: &str,
-        secret: impl SignatureInput,
         scope: Option<&str>,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
@@ -66,7 +18,7 @@ impl AuthService {
             SignatureArgument::Bytes(secret) => str::from_utf8(secret)
                 .map_err(|e| BpError::auth_invalid_field("secret", e.to_string()))?,
         };
-        let token = match self.token(token_id).await {
+        let mut token = match self.token(token_id).await {
             Ok(token) => token,
             Err(error) => {
                 self.record_authentication_failure(token_id, None, now, &error);
@@ -88,27 +40,25 @@ impl AuthService {
             self.record_authentication_failure(token_id, Some(&token), now, &error);
             return Err(error);
         }
-        let token = match self.touch(&token, now).await {
-            Ok(token) => token,
-            Err(error) => {
-                self.record_authentication_failure(token_id, Some(&token), now, &error);
-                return Err(error);
-            }
-        };
+        token.metadata.record_use(now);
+        if let Err(error) = self.store.update(&token).await {
+            self.record_authentication_failure(token_id, Some(&token), now, &error);
+            return Err(error);
+        }
         let event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
             .with_token(token.id(), Some(token.owner()));
-        self.record(event);
+        self.audit.record(event);
         Ok(token)
     }
 
     pub(crate) fn ensure_active(token: &ApiToken, now: DateTime<Utc>) -> BpResult<()> {
-        if token.is_revoked() {
+        if token.metadata().is_revoked() {
             return Err(BpError::auth_invalid_field(
                 "token_id",
                 format!("{:?} has been revoked", token.id()),
             ));
         }
-        if token.is_expired(now) {
+        if token.metadata().is_expired(now) {
             return Err(BpError::auth_invalid_field(
                 "token_id",
                 format!("{:?} has expired", token.id()),
@@ -118,7 +68,7 @@ impl AuthService {
     }
 
     pub(crate) fn ensure_scope(token: &ApiToken, required: &str) -> BpResult<()> {
-        if token.has_scope(required) {
+        if token.metadata().has_scope(required) {
             Ok(())
         } else {
             Err(BpError::auth_invalid_field(
@@ -141,6 +91,6 @@ impl AuthService {
         let event = TokenAuditEvent::new(TokenAuditAction::AuthenticationFailed, now)
             .with_token(token_id, token.map(ApiToken::owner))
             .failure(error.to_string());
-        self.record(event);
+        self.audit.record(event);
     }
 }

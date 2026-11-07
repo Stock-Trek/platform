@@ -7,52 +7,79 @@ struct RotationFixture;
 
 impl RotationFixture {
     fn service(overlap_seconds: i64) -> AuthService {
-        TestFixture::service().with_rotation_overlap(Duration::seconds(overlap_seconds))
+        let mut config = TestFixture::config();
+        config.rotation_overlap = Duration::seconds(overlap_seconds);
+        crate::AuthService::new(
+            std::sync::Arc::new(crate::MemoryTokenStore::default()),
+            config,
+        )
+        .unwrap()
     }
 }
 
 #[tokio::test]
 async fn rotation_keeps_the_old_token_valid_for_the_overlap() {
     let service = RotationFixture::service(60);
-    let old = service.add_token("token-a", "owner-a").await.unwrap();
+    let old = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
 
-    let replacement = service.rotate_token_at(old.id(), now).await.unwrap();
+    let replacement = service.rotate_token(old.id(), now).await.unwrap();
 
-    assert_eq!(replacement.rotated_from(), Some(old.id()));
+    assert_eq!(replacement.metadata().rotated_from(), Some(old.id()));
     let stored = service.token(old.id()).await.unwrap();
-    assert_eq!(stored.replaced_by(), Some(replacement.id()));
+    assert_eq!(stored.metadata().replaced_by(), Some(replacement.id()));
     assert_eq!(
-        stored.rotation_overlap_until(),
+        stored.metadata().rotation_overlap_until(),
         Some(now + Duration::seconds(60))
     );
     assert!(
         service
-            .authenticate_at(old.id(), old.secret(), now + Duration::seconds(30))
+            .authenticate(old.id(), old.secret(), None, now + Duration::seconds(30))
             .await
             .is_ok()
     );
     assert!(
         service
-            .authenticate_at(old.id(), old.secret(), now + Duration::seconds(61))
+            .authenticate(old.id(), old.secret(), None, now + Duration::seconds(61))
             .await
             .is_err()
     );
 }
 
 #[tokio::test]
-async fn a_rotated_token_can_be_used_after_the_overlap_ends() {
-    let service = RotationFixture::service(1);
-    let old = service.add_token("token-a", "owner-a").await.unwrap();
+async fn rotation_applies_the_configured_token_lifetime() {
+    let mut config = TestFixture::config();
+    config.token_lifetime = Duration::minutes(5);
+    let service = crate::AuthService::new(
+        std::sync::Arc::new(crate::MemoryTokenStore::default()),
+        config,
+    )
+    .unwrap();
+    let old = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
 
-    let replacement = service.rotate_token_at(old.id(), now).await.unwrap();
+    let replacement = service.rotate_token(old.id(), now).await.unwrap();
+
+    assert_eq!(
+        replacement.metadata().expires_at(),
+        now + Duration::minutes(5)
+    );
+}
+
+#[tokio::test]
+async fn a_rotated_token_can_be_used_after_the_overlap_ends() {
+    let service = RotationFixture::service(1);
+    let old = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
+
+    let replacement = service.rotate_token(old.id(), now).await.unwrap();
 
     assert!(
         service
-            .authenticate_at(
+            .authenticate(
                 replacement.id(),
                 replacement.secret(),
+                None,
                 now + Duration::seconds(2)
             )
             .await
@@ -63,11 +90,15 @@ async fn a_rotated_token_can_be_used_after_the_overlap_ends() {
 #[tokio::test]
 async fn owner_signing_prefers_the_rotated_token_during_the_overlap() {
     let service = RotationFixture::service(60);
-    let old = service.add_token("token-a", "owner-a").await.unwrap();
-    let replacement = service.rotate_token_to(old.id(), "token-b").await.unwrap();
+    let old = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
+    let replacement = service
+        .rotate_token_to(old.id(), "token-b", now)
+        .await
+        .unwrap();
 
     let signed = service
-        .sign_order_request_for_owner("owner-a", ORDER_REQUEST)
+        .sign_order_request_for_owner("owner-a", ORDER_REQUEST, now, now)
         .await
         .unwrap();
 
@@ -77,13 +108,14 @@ async fn owner_signing_prefers_the_rotated_token_during_the_overlap() {
 #[tokio::test]
 async fn a_token_can_only_be_rotated_once() {
     let service = RotationFixture::service(60);
-    let token = service.add_token("token-a", "owner-a").await.unwrap();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
     service
-        .rotate_token_to(token.id(), "token-b")
+        .rotate_token_to(token.id(), "token-b", now)
         .await
         .unwrap();
 
-    let error = service.rotate_token_to(token.id(), "token-c").await;
+    let error = service.rotate_token_to(token.id(), "token-c", now).await;
 
     assert!(matches!(
         error,

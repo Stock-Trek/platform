@@ -14,9 +14,14 @@ impl AuthService {
         token_id: &str,
         secret: impl SignatureInput,
         order_request: impl SignatureInput,
+        issued_at: DateTime<Utc>,
+        now: DateTime<Utc>,
     ) -> BpResult<SignedOrderRequest> {
         let (secret, order_request) = SignatureArguments::split_sign(&secret, &order_request)?;
-        self.sign_order_request_at(token_id, secret, order_request, Utc::now())
+        let token = self
+            .authenticate(token_id, secret, Some(TokenScope::ORDERS_WRITE), now)
+            .await?;
+        self.sign_with_token_at(&token, order_request, issued_at, now)
             .await
     }
 
@@ -24,57 +29,16 @@ impl AuthService {
         &self,
         owner: &str,
         order_request: impl SignatureInput,
-    ) -> BpResult<SignedOrderRequest> {
-        let now = Utc::now();
-        let token = self.token_for_owner_at(owner, now).await?;
-        let authenticated = self
-            .authenticate_for_scope_at(
-                token.id(),
-                token.secret(),
-                Some(TokenScope::ORDERS_WRITE),
-                now,
-            )
-            .await?;
-        let secret = token.secret();
-        let (_, order_request) = SignatureArguments::split_sign(&secret, &order_request)?;
-        self.sign_with_token_at(&authenticated, order_request, now, now)
-            .await
-    }
-
-    pub async fn sign_order_request_for_owner_at(
-        &self,
-        owner: &str,
-        order_request: impl SignatureInput,
         issued_at: DateTime<Utc>,
+        now: DateTime<Utc>,
     ) -> BpResult<SignedOrderRequest> {
-        let now = Utc::now();
-        let token = self.token_for_owner_at(owner, now).await?;
-        let authenticated = self
-            .authenticate_for_scope_at(
-                token.id(),
-                token.secret(),
-                Some(TokenScope::ORDERS_WRITE),
-                now,
-            )
-            .await?;
+        let token = self.token_for_owner(owner, now).await?;
         let secret = token.secret();
-        let (_, order_request) = SignatureArguments::split_sign(&secret, &order_request)?;
+        let (_, order_request) = SignatureArguments::split_sign(secret, &order_request)?;
+        let authenticated = self
+            .authenticate(token.id(), secret, Some(TokenScope::ORDERS_WRITE), now)
+            .await?;
         self.sign_with_token_at(&authenticated, order_request, issued_at, now)
-            .await
-    }
-
-    pub async fn sign_order_request_at(
-        &self,
-        token_id: &str,
-        secret: &str,
-        order_request: &[u8],
-        issued_at: DateTime<Utc>,
-    ) -> BpResult<SignedOrderRequest> {
-        let now = Utc::now();
-        let token = self
-            .authenticate_for_scope_at(token_id, secret, Some(TokenScope::ORDERS_WRITE), now)
-            .await?;
-        self.sign_with_token_at(&token, order_request, issued_at, now)
             .await
     }
 
@@ -83,21 +47,11 @@ impl AuthService {
         token_id: &str,
         order_request: impl SignatureInput,
         signature: impl SignatureInput,
-    ) -> BpResult<bool> {
-        self.verify_order_request_at(token_id, order_request, signature, Utc::now())
-            .await
-    }
-
-    pub async fn verify_order_request_at(
-        &self,
-        token_id: &str,
-        order_request: impl SignatureInput,
-        signature: impl SignatureInput,
         now: DateTime<Utc>,
     ) -> BpResult<bool> {
         let (order_request, signature) =
             SignatureArguments::split_verify(&order_request, &signature)?;
-        let token = self.token(token_id).await?;
+        let mut token = self.token(token_id).await?;
         if Self::ensure_active(&token, now).is_err()
             || Self::ensure_scope(&token, TokenScope::ORDERS_WRITE).is_err()
         {
@@ -134,10 +88,11 @@ impl AuthService {
             self.record_signature_rejected(token_id, Some(&token), now, "replayed signature");
             return Ok(false);
         }
-        let token = self.touch(&token, now).await?;
+        token.metadata.record_use(now);
+        self.store.update(&token).await?;
         let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
             .with_token(token.id(), Some(token.owner()));
-        self.record(event);
+        self.audit.record(event);
         Ok(true)
     }
 
@@ -157,13 +112,13 @@ impl AuthService {
                 let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
                     .with_token(authenticated.id(), Some(authenticated.owner()))
                     .failure(error.to_string());
-                self.record(event);
+                self.audit.record(event);
                 return Err(error);
             }
         };
         let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
             .with_token(authenticated.id(), Some(authenticated.owner()));
-        self.record(event);
+        self.audit.record(event);
         Ok(SignedOrderRequest::from_context(&context, signature))
     }
 
@@ -177,6 +132,6 @@ impl AuthService {
         let event = TokenAuditEvent::new(TokenAuditAction::SignatureRejected, now)
             .with_token(token_id, token.map(ApiToken::owner))
             .failure(detail);
-        self.record(event);
+        self.audit.record(event);
     }
 }

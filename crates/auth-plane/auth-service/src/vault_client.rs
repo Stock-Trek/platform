@@ -28,7 +28,7 @@ impl VaultClient {
             body["options"] = json!({ "cas": 0 });
         }
         let request = self
-            .request(Method::PUT, self.data_url(token.id())?)
+            .request(Method::PUT, self.url(&["data", token.id()])?)
             .json(&body);
         let response = self.send("write", token.id(), request).await?;
         if create_only && VaultError::duplicate_write(response.status()) {
@@ -42,7 +42,11 @@ impl VaultClient {
     pub(crate) async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
         ApiToken::validate_id(id)?;
         let response = self
-            .send("read", id, self.request(Method::GET, self.data_url(id)?))
+            .send(
+                "read",
+                id,
+                self.request(Method::GET, self.url(&["data", id])?),
+            )
             .await?;
         if response.status() == StatusCode::NOT_FOUND {
             return Ok(None);
@@ -61,7 +65,7 @@ impl VaultClient {
             .send(
                 "delete",
                 id,
-                self.request(Method::DELETE, self.metadata_url(id)?),
+                self.request(Method::DELETE, self.url(&["metadata", id])?),
             )
             .await?;
         if response.status() == StatusCode::NOT_FOUND {
@@ -73,7 +77,7 @@ impl VaultClient {
     }
 
     pub(crate) async fn ids(&self) -> BpResult<Vec<String>> {
-        let mut url = self.metadata_url("")?;
+        let mut url = self.url(&["metadata"])?;
         url.query_pairs_mut().append_pair("list", "true");
         let response = self
             .send("list", "tokens", self.request(Method::GET, url))
@@ -124,18 +128,6 @@ impl VaultClient {
             }
         }
         Ok(url)
-    }
-
-    fn data_url(&self, id: &str) -> BpResult<Url> {
-        self.url(&["data", id])
-    }
-
-    fn metadata_url(&self, id: &str) -> BpResult<Url> {
-        if id.is_empty() {
-            self.url(&["metadata"])
-        } else {
-            self.url(&["metadata", id])
-        }
     }
 
     fn request(&self, method: Method, url: Url) -> reqwest::RequestBuilder {

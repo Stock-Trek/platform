@@ -2,6 +2,7 @@ use platform_auth_service::VaultTokenStoreConfig;
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
 use secrecy::SecretString;
+use std::time::Duration;
 
 use crate::cwasm::{CwasmLimits, ExecutionLimits};
 
@@ -13,6 +14,7 @@ const MAX_CWASM_BYTES: &str = "CWASM_INVOKER_MAX_CWASM_BYTES";
 const VAULT_ADDRESS: &str = "CWASM_INVOKER_VAULT_ADDRESS";
 const VAULT_TOKEN: &str = "CWASM_INVOKER_VAULT_TOKEN";
 const VAULT_MOUNT: &str = "CWASM_INVOKER_VAULT_MOUNT";
+const VAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone)]
 pub struct InvokerConfig {
@@ -40,6 +42,7 @@ impl InvokerConfig {
             vars.required_url(VAULT_ADDRESS, &["http", "https"])?,
             SecretString::from(vars.required(VAULT_TOKEN)?),
             vars.required(VAULT_MOUNT)?,
+            VAULT_TIMEOUT,
         );
         vault.validate()?;
 

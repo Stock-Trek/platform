@@ -1,10 +1,10 @@
-use crate::{RevocationReason, TokenScope};
+use crate::TokenScope;
 use chrono::{DateTime, Utc};
 use platform_errors::BpResult;
 
 #[derive(Clone, Debug)]
 pub struct TokenMetadata {
-    pub(crate) expires_at: Option<DateTime<Utc>>,
+    pub(crate) expires_at: DateTime<Utc>,
     pub(crate) scopes: Vec<String>,
     pub(crate) revoked_at: Option<DateTime<Utc>>,
     pub(crate) revocation_reason: Option<String>,
@@ -17,7 +17,7 @@ pub struct TokenMetadata {
 
 impl TokenMetadata {
     pub fn new(
-        expires_at: Option<DateTime<Utc>>,
+        expires_at: DateTime<Utc>,
         scopes: impl IntoIterator<Item = impl AsRef<str>>,
     ) -> BpResult<Self> {
         let scopes: Vec<String> = scopes
@@ -38,7 +38,7 @@ impl TokenMetadata {
         })
     }
 
-    pub fn expires_at(&self) -> Option<DateTime<Utc>> {
+    pub fn expires_at(&self) -> DateTime<Utc> {
         self.expires_at
     }
 
@@ -74,16 +74,13 @@ impl TokenMetadata {
         self.rotation_overlap_until
     }
 
-    pub fn effective_expires_at(&self) -> Option<DateTime<Utc>> {
-        match (self.expires_at, self.rotation_overlap_until) {
-            (Some(expires_at), Some(overlap)) => Some(expires_at.min(overlap)),
-            (expires_at, overlap) => expires_at.or(overlap),
-        }
+    pub fn effective_expires_at(&self) -> DateTime<Utc> {
+        self.rotation_overlap_until
+            .map_or(self.expires_at, |overlap| self.expires_at.min(overlap))
     }
 
     pub fn is_expired(&self, now: DateTime<Utc>) -> bool {
-        self.effective_expires_at()
-            .is_some_and(|expires_at| expires_at <= now)
+        self.effective_expires_at() <= now
     }
 
     pub fn is_revoked(&self) -> bool {
@@ -100,29 +97,16 @@ impl TokenMetadata {
             .any(|granted| TokenScope::matches(granted, required))
     }
 
-    pub fn has_permission(&self, required: &str) -> bool {
-        self.has_scope(required)
-    }
-
     pub fn record_use(&mut self, now: DateTime<Utc>) {
         if self.last_used_at.is_none_or(|last_used| now > last_used) {
             self.last_used_at = Some(now);
         }
     }
 
-    pub fn revoke(
-        &mut self,
-        now: DateTime<Utc>,
-        reason: impl RevocationReason,
-        revoked_by: Option<String>,
-    ) {
+    pub fn revoke(&mut self, now: DateTime<Utc>, reason: String, revoked_by: String) {
         self.revoked_at.get_or_insert(now);
-        if let Some(reason) = reason.into_reason() {
-            self.revocation_reason = Some(reason);
-        }
-        if revoked_by.is_some() {
-            self.revoked_by = revoked_by;
-        }
+        self.revocation_reason = Some(reason);
+        self.revoked_by = Some(revoked_by);
     }
 
     pub fn begin_rotation(
