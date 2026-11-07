@@ -106,6 +106,33 @@ async fn owner_signing_prefers_the_rotated_token_during_the_overlap() {
 }
 
 #[tokio::test]
+async fn rotation_rejects_reusing_the_original_id() {
+    let service = RotationFixture::service(60);
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+
+    let error = service
+        .rotate_token_to(token.id(), token.id(), Utc::now())
+        .await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "replacement_id",
+            ..
+        }))
+    ));
+    assert!(
+        service
+            .token(token.id())
+            .await
+            .unwrap()
+            .metadata()
+            .replaced_by()
+            .is_none()
+    );
+}
+
+#[tokio::test]
 async fn a_token_can_only_be_rotated_once() {
     let service = RotationFixture::service(60);
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;

@@ -18,6 +18,13 @@ impl AuthService {
         replacement_id: impl Into<String>,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
+        let replacement_id = replacement_id.into();
+        if replacement_id == id {
+            return Err(BpError::auth_invalid_field(
+                "replacement_id",
+                "must refer to a different token",
+            ));
+        }
         let original = self.token(id).await?;
         if let Some(replacement) = original.metadata().replaced_by() {
             return Err(BpError::auth_invalid_field(

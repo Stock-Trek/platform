@@ -1,4 +1,3 @@
-use crate::signature_input::SignatureArguments;
 use crate::{
     ApiToken, AuthService, OrderRequestContext, OrderRequestSigner, SignatureInput,
     SignedOrderRequest, TokenAuditAction, TokenAuditEvent, TokenScope,
@@ -13,11 +12,10 @@ impl AuthService {
         &self,
         token_id: &str,
         secret: impl SignatureInput,
-        order_request: impl SignatureInput,
+        order_request: &[u8],
         issued_at: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> BpResult<SignedOrderRequest> {
-        let (secret, order_request) = SignatureArguments::split_sign(&secret, &order_request)?;
         let token = self
             .authenticate(token_id, secret, Some(TokenScope::OrdersWrite), now)
             .await?;
@@ -27,17 +25,20 @@ impl AuthService {
     pub async fn sign_order_request_for_owner(
         &self,
         owner: &str,
-        order_request: impl SignatureInput,
+        order_request: &[u8],
         issued_at: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> BpResult<SignedOrderRequest> {
         let token = self
             .token_for_owner_with_scope(owner, TokenScope::OrdersWrite, now)
             .await?;
-        let secret = token.secret();
-        let (_, order_request) = SignatureArguments::split_sign(secret, &order_request)?;
         let authenticated = self
-            .authenticate(token.id(), secret, Some(TokenScope::OrdersWrite), now)
+            .authenticate(
+                token.id(),
+                token.secret(),
+                Some(TokenScope::OrdersWrite),
+                now,
+            )
             .await?;
         self.sign_with_token_at(&authenticated, order_request, issued_at, now)
     }
@@ -45,12 +46,11 @@ impl AuthService {
     pub async fn verify_order_request(
         &self,
         token_id: &str,
-        order_request: impl SignatureInput,
+        order_request: &[u8],
         signature: impl SignatureInput,
         now: DateTime<Utc>,
     ) -> BpResult<bool> {
-        let (order_request, signature) =
-            SignatureArguments::split_verify(&order_request, &signature)?;
+        let signature = signature.signature_input();
         let mut token = self.token(token_id).await?;
         if Self::ensure_active(&token, now).is_err()
             || Self::ensure_scope(&token, TokenScope::OrdersWrite).is_err()

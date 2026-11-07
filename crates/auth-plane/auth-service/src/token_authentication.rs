@@ -1,10 +1,6 @@
-use crate::{
-    ApiToken, AuthService, SignatureArgument, SignatureInput, TokenAuditAction, TokenAuditEvent,
-    TokenScope,
-};
+use crate::{ApiToken, AuthService, SignatureInput, TokenAuditAction, TokenAuditEvent, TokenScope};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
-use std::str;
 
 impl AuthService {
     pub async fn authenticate(
@@ -14,11 +10,7 @@ impl AuthService {
         scope: Option<TokenScope>,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
-        let candidate = match secret.signature_argument() {
-            SignatureArgument::Text(secret) => secret,
-            SignatureArgument::Bytes(secret) => str::from_utf8(secret)
-                .map_err(|e| BpError::auth_invalid_field("secret", e.to_string()))?,
-        };
+        let candidate = secret.signature_input();
         let mut token = match self.token(token_id).await {
             Ok(token) => token,
             Err(error) => {

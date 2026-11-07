@@ -66,6 +66,15 @@ fn rejects_invalid_rotation_lineage_ids() {
 }
 
 #[test]
+fn rejects_rotation_lineage_cycles() {
+    let mut value = MetadataInvariantFixture::value();
+    value["rotated_from"] = json!("token-b");
+    value["replaced_by"] = json!("token-b");
+    value["rotation_overlap_until"] = json!((Utc::now() + Duration::minutes(1)).to_rfc3339());
+    MetadataInvariantFixture::assert_invalid(&value, "rotated_from");
+}
+
+#[test]
 fn rejects_rotation_lineage_pointing_at_the_token_itself() {
     let mut replaced_by = MetadataInvariantFixture::value();
     replaced_by["replaced_by"] = json!("token-a");

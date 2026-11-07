@@ -25,6 +25,15 @@ fn nonces_are_scoped_to_a_token() {
 }
 
 #[test]
+fn nonces_that_have_already_expired_are_rejected() {
+    let cache = ReplayCacheFixture::cache();
+    let now = Utc::now();
+
+    assert!(!cache.consume("token-a", "nonce-a", now, now));
+    assert!(!cache.consume("token-a", "nonce-a", now - Duration::seconds(1), now));
+}
+
+#[test]
 fn expired_nonces_are_evicted() {
     let cache = ReplayCacheFixture::cache();
     let now = Utc::now();

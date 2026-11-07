@@ -20,6 +20,9 @@ impl ReplayCache {
         expires_at: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> bool {
+        if expires_at <= now {
+            return false;
+        }
         let mut used = self.used.lock();
         used.retain(|_, expiry| *expiry > now);
         let key = (token_id.to_string(), nonce.to_string());

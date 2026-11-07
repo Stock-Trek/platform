@@ -62,6 +62,15 @@ fn vault_config_normalizes_surrounding_whitespace() {
 }
 
 #[test]
+fn vault_config_rejects_embedded_credentials() {
+    let userinfo = VaultConfigFixture::config("https://user:pass@vault.example.com", "tokens");
+    let username = VaultConfigFixture::config("https://user@vault.example.com", "tokens");
+
+    assert!(userinfo.validate().is_err());
+    assert!(username.validate().is_err());
+}
+
+#[test]
 fn vault_config_rejects_addresses_with_queries_or_fragments() {
     let query = VaultConfigFixture::config("https://vault.example.com?trace=1", "tokens");
     let fragment = VaultConfigFixture::config("https://vault.example.com#section", "tokens");
