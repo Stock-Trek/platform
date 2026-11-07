@@ -62,6 +62,7 @@ impl TokenMetadata {
         metadata.rotated_from = Self::string(value, ROTATED_FROM)?;
         metadata.replaced_by = Self::string(value, REPLACED_BY)?;
         metadata.rotation_overlap_until = Self::timestamp(value, ROTATION_OVERLAP_UNTIL)?;
+        metadata.validate()?;
         Ok(metadata)
     }
 
