@@ -8,6 +8,8 @@ pub struct RunRequest {
     pub cwasm_sha256: String,
     pub cwasm_size: u64,
     pub wasmtime_version: String,
+    pub order_request_url: String,
+    pub owner: String,
     #[serde(flatten)]
     pub command: Command,
 }

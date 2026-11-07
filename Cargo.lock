@@ -4992,8 +4992,10 @@ dependencies = [
 name = "platform-runner"
 version = "0.2.0"
 dependencies = [
+ "chrono",
  "futures",
  "hex",
+ "platform-auth-service",
  "platform-config",
  "platform-errors",
  "platform-exit-codes",
@@ -5001,6 +5003,7 @@ dependencies = [
  "rand 0.8.8",
  "reqwest 0.13.5",
  "rust_decimal",
+ "secrecy",
  "serde",
  "serde_json",
  "sha2 0.11.1",

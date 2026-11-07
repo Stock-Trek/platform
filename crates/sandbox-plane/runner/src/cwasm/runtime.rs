@@ -1,6 +1,6 @@
 use platform_exit_codes::ExitCode;
 use platform_runner::command::Command;
-use std::{path::Path, sync::Arc, time::Duration};
+use std::{path::Path, time::Duration};
 use wasmtime::{Config, Engine, Linker, Memory, Module, Store, TypedFunc};
 use wasmtime_wasi::{I32Exit, p1::add_to_linker_sync};
 
@@ -71,11 +71,6 @@ impl WasmRunner {
         let mut config = Config::new();
         config.epoch_interruption(true);
         config
-    }
-
-    pub fn execute_command(&self, path: &Path, command: &Command) -> i32 {
-        let emit: Emit = Arc::new(GuestState::emit_stdout);
-        self.execute_command_with(path, command, &emit)
     }
 
     pub fn execute_command_with(&self, path: &Path, command: &Command, emit: &Emit) -> i32 {

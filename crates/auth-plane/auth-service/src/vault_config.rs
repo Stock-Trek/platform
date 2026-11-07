@@ -4,6 +4,7 @@ use std::time::Duration;
 
 const DEFAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
+#[derive(Debug, Clone)]
 pub struct VaultTokenStoreConfig {
     pub(crate) address: String,
     pub(crate) token: SecretString,

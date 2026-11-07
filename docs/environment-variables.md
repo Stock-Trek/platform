@@ -248,20 +248,18 @@ their details.
 | `RUN_INVOKER_ARTIFACT_BUCKET` | S3 bucket containing compiled runner cwasm artifacts. |
 | `RUN_INVOKER_LOGS_BUCKET` | S3 bucket that receives the algorithm run logs the runner uploads with its pre-signed POST. |
 | `RUN_INVOKER_MAX_BATCH` | Maximum number of due runs claimed per invocation. |
+| `RUN_INVOKER_ORDER_REQUEST_URL` | URL the runner submits signed order requests to. |
 | `RUN_INVOKER_RUNNER_FUNCTION_NAME` | Name of the runner Lambda function invoked for every due run. |
 | `RUN_INVOKER_TABLE` | DynamoDB table holding the scheduled algorithm runs. |
 | `S3_SIGNED_URL_EXPIRY_SECS` | Lifetime of the pre-signed S3 URLs handed to the runner, in seconds. |
-
-#### Optional
-
-No process-specific optional variables.
 
 ## Sandbox plane
 
 ### CWASM invoker
 
 The native cwasm host reads these required variables when it starts. Missing, empty, and invalid
-values fail startup.
+values fail startup. Order requests are signed with the auth-service token owned by the owner in
+the run request.
 
 #### Required
 
@@ -272,6 +270,9 @@ values fail startup.
 | `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. |
 | `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. |
 | `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. |
+| `CWASM_INVOKER_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
+| `CWASM_INVOKER_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
+| `CWASM_INVOKER_VAULT_TOKEN` | Vault token used to read auth-service tokens. |
 
 ## Secrets
 

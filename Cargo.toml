@@ -7,6 +7,8 @@ version = "0.2.0"
 edition = "2024"
 
 [workspace.dependencies]
+platform-auth-service = { path = "crates/auth-plane/auth-service" }
+
 platform-build-agent = { path = "crates/build-plane/build-agent" }
 platform-build-orchestrator = { path = "crates/build-plane/build-orchestrator" }
 platform-git-webhook = { path = "crates/build-plane/git-webhook" }
