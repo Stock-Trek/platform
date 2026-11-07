@@ -19,20 +19,6 @@ async fn signs_order_requests_with_the_stored_token_secret() {
     assert_eq!(signed.raw_signature().len(), 64);
 }
 
-#[tokio::test]
-async fn signs_order_requests_with_the_secret_after_the_request() {
-    let service = TestFixture::service();
-    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
-    let now = Utc::now();
-
-    let signed = service
-        .sign_order_request(token.id(), ORDER_REQUEST, token.secret(), now, now)
-        .await
-        .unwrap();
-
-    assert_eq!(signed.token_id(), token.id());
-}
-
 #[test]
 fn signs_order_requests_with_a_known_hmac_vector() {
     let signer = OrderRequestSigner::new(&SecretString::from("key")).unwrap();

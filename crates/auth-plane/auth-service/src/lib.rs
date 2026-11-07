@@ -38,7 +38,7 @@ pub use order_request_context::OrderRequestContext;
 pub use order_signature::OrderRequestSigner;
 pub use revocation_reason::RevocationReason;
 pub use revoked_by::RevokedBy;
-pub use signature_input::{SignatureArgument, SignatureInput};
+pub use signature_input::SignatureInput;
 pub use signed_order_request::SignedOrderRequest;
 pub use token_metadata::TokenMetadata;
 pub use token_options::{TokenExpiry, TokenOptions};
