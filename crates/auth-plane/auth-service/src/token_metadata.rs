@@ -101,6 +101,44 @@ impl TokenMetadata {
         }
     }
 
+    pub(crate) fn validate(&self) -> BpResult<()> {
+        if self.scopes.is_empty() {
+            return Err(BpError::auth_invalid_field("scopes", "must not be empty"));
+        }
+        match (self.revoked_at, self.revocation_reason, self.revoked_by) {
+            (None, None, None) | (Some(_), Some(_), Some(_)) => {}
+            (None, _, _) => {
+                return Err(BpError::auth_invalid_field(
+                    "revoked_at",
+                    "is required when revocation metadata is present",
+                ));
+            }
+            (Some(_), None, _) => {
+                return Err(BpError::auth_invalid_field(
+                    "revocation_reason",
+                    "is required for a revoked token",
+                ));
+            }
+            (Some(_), Some(_), None) => {
+                return Err(BpError::auth_invalid_field(
+                    "revoked_by",
+                    "is required for a revoked token",
+                ));
+            }
+        }
+        match (&self.replaced_by, self.rotation_overlap_until) {
+            (None, None) | (Some(_), Some(_)) => Ok(()),
+            (Some(_), None) => Err(BpError::auth_invalid_field(
+                "rotation_overlap_until",
+                "is required when replaced_by is set",
+            )),
+            (None, Some(_)) => Err(BpError::auth_invalid_field(
+                "replaced_by",
+                "is required when rotation_overlap_until is set",
+            )),
+        }
+    }
+
     pub fn revoke(&mut self, now: DateTime<Utc>, reason: RevocationReason, revoked_by: RevokedBy) {
         self.revoked_at.get_or_insert(now);
         self.revocation_reason.get_or_insert(reason);

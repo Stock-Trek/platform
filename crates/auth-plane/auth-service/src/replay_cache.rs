@@ -3,7 +3,7 @@ use parking_lot::Mutex;
 use std::collections::HashMap;
 
 pub(crate) struct ReplayCache {
-    used: Mutex<HashMap<String, DateTime<Utc>>>,
+    used: Mutex<HashMap<(String, String), DateTime<Utc>>>,
 }
 
 impl ReplayCache {
@@ -13,13 +13,20 @@ impl ReplayCache {
         }
     }
 
-    pub fn consume(&self, nonce: &str, expires_at: DateTime<Utc>, now: DateTime<Utc>) -> bool {
+    pub fn consume(
+        &self,
+        token_id: &str,
+        nonce: &str,
+        expires_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> bool {
         let mut used = self.used.lock();
         used.retain(|_, expiry| *expiry > now);
-        if used.contains_key(nonce) {
+        let key = (token_id.to_string(), nonce.to_string());
+        if used.contains_key(&key) {
             return false;
         }
-        used.insert(nonce.to_string(), expires_at);
+        used.insert(key, expires_at);
         true
     }
 }

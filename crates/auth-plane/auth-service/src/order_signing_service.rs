@@ -72,9 +72,10 @@ impl AuthService {
             self.record_signature_rejected(token_id, Some(&token), now, "invalid context");
             return Ok(false);
         };
-        if signed.is_expired(now)
-            || signed.issued_at() > now + Duration::seconds(CLOCK_SKEW_SECONDS)
-        {
+        let latest_issued_at = now
+            .checked_add_signed(Duration::seconds(CLOCK_SKEW_SECONDS))
+            .unwrap_or(DateTime::<Utc>::MAX_UTC);
+        if signed.is_expired(now) || signed.issued_at() > latest_issued_at {
             self.record_signature_rejected(token_id, Some(&token), now, "expired signature");
             return Ok(false);
         }
@@ -83,10 +84,12 @@ impl AuthService {
             self.record_signature_rejected(token_id, Some(&token), now, "signature mismatch");
             return Ok(false);
         }
-        if !self
-            .replay
-            .consume(context.nonce(), context.expires_at(), now)
-        {
+        if !self.replay.consume(
+            context.token_id(),
+            context.nonce(),
+            context.expires_at(),
+            now,
+        ) {
             self.record_signature_rejected(token_id, Some(&token), now, "replayed signature");
             return Ok(false);
         }
