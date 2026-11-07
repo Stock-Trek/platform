@@ -1,5 +1,8 @@
 use super::support_tests::TestFixture;
-use crate::{AuthService, MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction};
+use crate::{
+    AuthService, MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction, TokenExpiry,
+    TokenOptions, TokenScope,
+};
 use chrono::{Duration, Utc};
 use std::sync::Arc;
 
@@ -11,6 +14,46 @@ impl RevocationFixture {
         let service = TestFixture::service_with_audit(audit.clone());
         (service, audit)
     }
+}
+
+#[tokio::test]
+async fn revoking_an_owners_tokens_includes_expired_tokens() {
+    let (service, _) = RevocationFixture::service();
+    let now = Utc::now();
+    let active = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let options = TokenOptions::new(
+        TokenExpiry::At(now - Duration::seconds(1)),
+        TokenScope::DEFAULT,
+    );
+    let expired = TestFixture::add_token_at(&service, "token-b", "owner-a", now, options).await;
+
+    let revoked = service
+        .revoke_tokens_for_owner(
+            "owner-a",
+            RevocationReason::NoLongerNeeded,
+            RevokedBy::Owner,
+            now,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(revoked.len(), 2);
+    assert!(
+        service
+            .token(active.id())
+            .await
+            .unwrap()
+            .metadata()
+            .is_revoked()
+    );
+    assert!(
+        service
+            .token(expired.id())
+            .await
+            .unwrap()
+            .metadata()
+            .is_revoked()
+    );
 }
 
 #[tokio::test]

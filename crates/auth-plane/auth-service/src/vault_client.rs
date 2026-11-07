@@ -31,8 +31,23 @@ impl VaultClient {
             .request(Method::PUT, self.url(&["data", token.id()])?)
             .json(&body);
         let response = self.send("write", token.id(), request).await?;
-        if create_only && VaultError::duplicate_write(response.status()) {
-            return Err(BpError::token_exists(token.id()));
+        let status = response.status();
+        if create_only && matches!(status, StatusCode::BAD_REQUEST | StatusCode::CONFLICT) {
+            let headers = response.headers().clone();
+            let body = response
+                .text()
+                .await
+                .unwrap_or_else(|_| "<unreadable body>".to_string());
+            if VaultError::duplicate_write(status, &body) {
+                return Err(BpError::token_exists(token.id()));
+            }
+            return Err(VaultError::response(
+                "write",
+                token.id(),
+                status,
+                &headers,
+                body,
+            ));
         }
         self.require_success("write", token.id(), response)
             .await

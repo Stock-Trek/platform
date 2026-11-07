@@ -2,7 +2,7 @@ use crate::{ApiToken, TokenMetadata};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use secrecy::{ExposeSecret, SecretString};
-use serde_json::{Map, Value, json};
+use serde_json::{Map, Value};
 
 const CREATED_AT: &str = "created_at";
 const OWNER: &str = "owner";
@@ -10,14 +10,16 @@ const SECRET: &str = "secret";
 
 impl ApiToken {
     pub fn to_value(&self) -> Value {
-        let mut value = match json!({
-            CREATED_AT: self.created_at.to_rfc3339(),
-            OWNER: self.owner,
-            SECRET: self.secret.expose_secret(),
-        }) {
-            Value::Object(value) => value,
-            _ => Map::new(),
-        };
+        let mut value = Map::new();
+        value.insert(
+            CREATED_AT.to_string(),
+            Value::String(self.created_at.to_rfc3339()),
+        );
+        value.insert(OWNER.to_string(), Value::String(self.owner.clone()));
+        value.insert(
+            SECRET.to_string(),
+            Value::String(self.secret.expose_secret().to_string()),
+        );
         if let Value::Object(metadata) = self.metadata.to_value() {
             value.extend(metadata);
         }

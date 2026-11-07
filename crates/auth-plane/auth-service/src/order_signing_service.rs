@@ -72,8 +72,8 @@ impl AuthService {
             self.record_signature_rejected(token_id, Some(&token), now, "invalid context");
             return Ok(false);
         };
-        if context.expires_at() <= now
-            || context.issued_at() > now + Duration::seconds(CLOCK_SKEW_SECONDS)
+        if signed.is_expired(now)
+            || signed.issued_at() > now + Duration::seconds(CLOCK_SKEW_SECONDS)
         {
             self.record_signature_rejected(token_id, Some(&token), now, "expired signature");
             return Ok(false);

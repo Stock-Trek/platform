@@ -42,15 +42,16 @@ impl VaultError {
         )
     }
 
-    pub fn duplicate_write(status: StatusCode) -> bool {
-        status == StatusCode::BAD_REQUEST || status == StatusCode::CONFLICT
+    pub fn duplicate_write(status: StatusCode, body: &str) -> bool {
+        matches!(status, StatusCode::BAD_REQUEST | StatusCode::CONFLICT)
+            && (body.contains("check-and-set") || body.contains("did not match"))
     }
 
     fn retryable_transport(error: &Error) -> bool {
         if Self::configuration_transport(error) {
             return false;
         }
-        error.is_timeout() || error.is_connect() || error.is_body() || error.is_decode()
+        error.is_timeout() || error.is_connect() || error.is_body()
     }
 
     fn configuration_transport(error: &Error) -> bool {

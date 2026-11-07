@@ -98,7 +98,10 @@ impl AuthService {
         now: DateTime<Utc>,
     ) -> BpResult<Vec<ApiToken>> {
         let mut revoked = Vec::new();
-        for token in self.active_tokens_for_owner(owner, now).await? {
+        for token in self.tokens_for_owner(owner).await? {
+            if token.metadata().is_revoked() {
+                continue;
+            }
             revoked.push(
                 self.revoke_token(token.id(), reason, revoked_by, now)
                     .await?,
@@ -114,6 +117,9 @@ impl AuthService {
                 && token.metadata().is_expired(now)
             {
                 self.store.delete(&id).await?;
+                let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
+                    .with_token(token.id(), Some(token.owner()));
+                self.audit.record(event);
                 purged += 1;
             }
         }

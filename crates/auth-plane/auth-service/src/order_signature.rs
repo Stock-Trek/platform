@@ -21,12 +21,6 @@ impl OrderRequestSigner {
         Ok(Self { mac })
     }
 
-    pub fn sign(&self, order_request: &[u8]) -> BpResult<String> {
-        let mut mac = self.mac.clone();
-        mac.update(order_request);
-        Ok(data_encoding::HEXLOWER.encode(&mac.finalize().into_bytes()))
-    }
-
     pub fn sign_order_request(
         &self,
         context: &OrderRequestContext,
