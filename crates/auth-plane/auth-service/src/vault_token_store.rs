@@ -1,6 +1,6 @@
 use crate::{ApiToken, VaultTokenStoreConfig, token_store::TokenStore, vault_client::VaultClient};
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::{BpError, BpResult};
 
 pub struct VaultTokenStore {
     client: VaultClient,
@@ -33,6 +33,9 @@ impl TokenStore for VaultTokenStore {
     }
 
     async fn update(&self, token: &ApiToken) -> BpResult<()> {
+        if self.client.get(token.id()).await?.is_none() {
+            return Err(BpError::unknown_token(token.id()));
+        }
         self.client.put(token, false).await
     }
 }

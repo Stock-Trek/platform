@@ -22,7 +22,6 @@ impl AuthService {
             .authenticate(token_id, secret, Some(TokenScope::OrdersWrite), now)
             .await?;
         self.sign_with_token_at(&token, order_request, issued_at, now)
-            .await
     }
 
     pub async fn sign_order_request_for_owner(
@@ -41,7 +40,6 @@ impl AuthService {
             .authenticate(token.id(), secret, Some(TokenScope::OrdersWrite), now)
             .await?;
         self.sign_with_token_at(&authenticated, order_request, issued_at, now)
-            .await
     }
 
     pub async fn verify_order_request(
@@ -101,7 +99,7 @@ impl AuthService {
         Ok(true)
     }
 
-    async fn sign_with_token_at(
+    fn sign_with_token_at(
         &self,
         authenticated: &ApiToken,
         order_request: &[u8],

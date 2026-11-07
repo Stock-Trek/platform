@@ -18,6 +18,7 @@ impl VaultTokenStoreConfig {
         timeout: Duration,
     ) -> Self {
         let address = address.into();
+        let token = SecretString::from(token.expose_secret().trim());
         let mount = mount.into();
         Self {
             address: address.trim().to_string(),
@@ -29,6 +30,10 @@ impl VaultTokenStoreConfig {
 
     pub fn address(&self) -> &str {
         &self.address
+    }
+
+    pub fn token(&self) -> &SecretString {
+        &self.token
     }
 
     pub fn mount(&self) -> &str {

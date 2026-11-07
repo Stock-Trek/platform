@@ -24,6 +24,8 @@ impl OrderRequestContext {
     ) -> BpResult<Self> {
         let token_id = token_id.into();
         ApiToken::validate_id(&token_id)?;
+        let issued_at = Self::whole_seconds(issued_at);
+        let expires_at = Self::whole_seconds(expires_at);
         let nonce = nonce.into();
         if nonce.is_empty()
             || !nonce
@@ -59,6 +61,7 @@ impl OrderRequestContext {
             .take(NONCE_LENGTH)
             .map(char::from)
             .collect();
+        let issued_at = Self::whole_seconds(issued_at);
         let expires_at = issued_at.checked_add_signed(validity).ok_or_else(|| {
             BpError::auth_invalid_field("expires_at", "is outside the supported range")
         })?;
@@ -115,5 +118,9 @@ impl OrderRequestContext {
         output.push(b':');
         output.extend_from_slice(&(value.len() as u64).to_be_bytes());
         output.extend_from_slice(value);
+    }
+
+    pub(crate) fn whole_seconds(value: DateTime<Utc>) -> DateTime<Utc> {
+        DateTime::from_timestamp(value.timestamp(), 0).unwrap_or(value)
     }
 }

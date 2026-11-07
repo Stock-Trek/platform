@@ -34,10 +34,10 @@ impl AuthService {
                 "must not be negative",
             ));
         }
-        if config.signature_validity <= Duration::zero() {
+        if config.signature_validity < Duration::seconds(1) {
             return Err(BpError::auth_invalid_field(
                 "signature_validity",
-                "must be greater than zero",
+                "must be at least one second",
             ));
         }
         Ok(Self {

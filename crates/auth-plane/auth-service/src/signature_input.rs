@@ -77,10 +77,8 @@ impl SignatureArguments {
         B: SignatureInput + ?Sized,
     {
         match (first.signature_argument(), second.signature_argument()) {
-            (SignatureArgument::Text(secret), SignatureArgument::Bytes(request)) => {
-                Ok((secret, request))
-            }
-            (SignatureArgument::Bytes(request), SignatureArgument::Text(secret)) => {
+            (SignatureArgument::Text(secret), SignatureArgument::Bytes(request))
+            | (SignatureArgument::Bytes(request), SignatureArgument::Text(secret)) => {
                 Ok((secret, request))
             }
             _ => Err(BpError::auth_invalid_field(
@@ -96,10 +94,8 @@ impl SignatureArguments {
         B: SignatureInput + ?Sized,
     {
         match (first.signature_argument(), second.signature_argument()) {
-            (SignatureArgument::Bytes(request), SignatureArgument::Text(signature)) => {
-                Ok((request, signature))
-            }
-            (SignatureArgument::Text(signature), SignatureArgument::Bytes(request)) => {
+            (SignatureArgument::Bytes(request), SignatureArgument::Text(signature))
+            | (SignatureArgument::Text(signature), SignatureArgument::Bytes(request)) => {
                 Ok((request, signature))
             }
             _ => Err(BpError::auth_invalid_field(
