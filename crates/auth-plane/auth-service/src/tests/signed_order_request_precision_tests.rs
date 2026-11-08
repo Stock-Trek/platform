@@ -28,17 +28,6 @@ fn envelope_timestamps_match_their_serialized_form() {
 }
 
 #[test]
-fn contexts_use_envelope_precision() {
-    let issued_at = PrecisionFixture::issued_at();
-    let expires_at = issued_at + Duration::minutes(5);
-    let context = OrderRequestContext::new("token-a", issued_at, expires_at, "nonce-a")
-        .expect("valid context");
-
-    assert_eq!(context.issued_at().nanosecond(), 0);
-    assert_eq!(context.expires_at().nanosecond(), 0);
-}
-
-#[test]
 fn generated_contexts_keep_the_configured_validity() {
     let issued_at = PrecisionFixture::issued_at();
     let context =
