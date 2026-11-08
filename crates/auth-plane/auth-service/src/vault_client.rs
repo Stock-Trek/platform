@@ -23,8 +23,7 @@ impl VaultClient {
     }
 
     pub(crate) async fn put(&self, token: &ApiToken, create_only: bool) -> BpResult<()> {
-        ApiToken::validate_id(token.id())?;
-        token.metadata().validate()?;
+        token.validate()?;
         let mut body = json!({ "data": token.to_value() });
         if create_only {
             body["options"] = json!({ "cas": 0 });

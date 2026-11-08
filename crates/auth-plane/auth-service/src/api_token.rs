@@ -26,39 +26,61 @@ impl ApiToken {
         metadata: TokenMetadata,
     ) -> BpResult<Self> {
         let id = id.into();
-        Self::validate_id(&id)?;
         let owner = owner.into();
-        let owner = Self::validated_owner(&owner)?;
-        let secret_value = secret.expose_secret();
-        if secret_value.trim().is_empty() {
-            return Err(BpError::auth_invalid_field("secret", "must not be empty"));
-        }
-        if secret_value.len() > MAX_SECRET_LENGTH {
+        let owner = Self::validated_owner(&owner)?.to_string();
+        let token = Self {
+            id,
+            owner,
+            secret,
+            created_at,
+            metadata,
+        };
+        token.validate()?;
+        Ok(token)
+    }
+
+    pub(crate) fn validate(&self) -> BpResult<()> {
+        Self::validate_id(&self.id)?;
+        if Self::validated_owner(&self.owner)? != self.owner {
             return Err(BpError::auth_invalid_field(
-                "secret",
-                format!("must be at most {MAX_SECRET_LENGTH} characters"),
+                "owner",
+                "must not have surrounding whitespace",
             ));
         }
-        metadata.validate()?;
-        if metadata.rotated_from() == Some(id.as_str()) {
+        Self::validate_secret(self.secret.expose_secret())?;
+        self.metadata.validate()?;
+        if self.metadata.rotated_from() == Some(self.id.as_str()) {
             return Err(BpError::auth_invalid_field(
                 "rotated_from",
                 "must refer to a different token",
             ));
         }
-        if metadata.replaced_by() == Some(id.as_str()) {
+        if self.metadata.replaced_by() == Some(self.id.as_str()) {
             return Err(BpError::auth_invalid_field(
                 "replaced_by",
                 "must refer to a different token",
             ));
         }
-        Ok(Self {
-            id,
-            owner: owner.to_string(),
-            secret,
-            created_at,
-            metadata,
-        })
+        Ok(())
+    }
+
+    fn validate_secret(secret: &str) -> BpResult<()> {
+        if secret.trim().is_empty() {
+            return Err(BpError::auth_invalid_field("secret", "must not be empty"));
+        }
+        if secret.len() > MAX_SECRET_LENGTH {
+            return Err(BpError::auth_invalid_field(
+                "secret",
+                format!("must be at most {MAX_SECRET_LENGTH} characters"),
+            ));
+        }
+        if secret.chars().any(char::is_control) {
+            return Err(BpError::auth_invalid_field(
+                "secret",
+                "must not contain control characters",
+            ));
+        }
+        Ok(())
     }
 
     pub fn id(&self) -> &str {

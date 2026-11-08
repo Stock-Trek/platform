@@ -12,8 +12,7 @@ pub struct MemoryTokenStore {
 #[async_trait]
 impl TokenStore for MemoryTokenStore {
     async fn put(&self, token: &ApiToken) -> BpResult<()> {
-        ApiToken::validate_id(token.id())?;
-        token.metadata().validate()?;
+        token.validate()?;
         let mut tokens = self.tokens.lock();
         if tokens.contains_key(token.id()) {
             return Err(BpError::token_exists(token.id()));
@@ -43,8 +42,7 @@ impl TokenStore for MemoryTokenStore {
     }
 
     async fn update(&self, token: &ApiToken) -> BpResult<()> {
-        ApiToken::validate_id(token.id())?;
-        token.metadata().validate()?;
+        token.validate()?;
         let mut tokens = self.tokens.lock();
         let Some(stored) = tokens.get_mut(token.id()) else {
             return Err(BpError::unknown_token(token.id()));

@@ -62,13 +62,18 @@ impl AuthService {
     pub(crate) async fn stored_token(&self, id: &str) -> BpResult<Option<ApiToken>> {
         ApiToken::validate_id(id)?;
         let token = self.store.get(id).await?;
-        if token.as_ref().is_some_and(|token| token.id() != id) {
-            return Err(BpError::auth_store(
-                "read",
-                id,
-                false,
-                "token store returned a token with a different id".to_string(),
-            ));
+        if let Some(token) = &token {
+            if token.id() != id {
+                return Err(BpError::auth_store(
+                    "read",
+                    id,
+                    false,
+                    "token store returned a token with a different id".to_string(),
+                ));
+            }
+            token
+                .validate()
+                .map_err(|error| BpError::auth_store("read", id, false, error))?;
         }
         Ok(token)
     }
@@ -86,7 +91,6 @@ impl AuthService {
                 tokens.push(token);
             }
         }
-        tokens.sort_by(|left, right| left.id().cmp(right.id()));
         Ok(tokens)
     }
 

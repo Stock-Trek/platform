@@ -12,6 +12,12 @@ impl StoreValidationFixture {
         token
     }
 
+    fn self_referencing_token() -> ApiToken {
+        let mut token = TestFixture::token("token-a");
+        token.metadata.rotated_from = Some(token.id().to_string());
+        token
+    }
+
     fn assert_invalid_metadata<T>(result: Result<T, BpError>) {
         assert!(matches!(
             result,
@@ -30,6 +36,21 @@ async fn memory_store_rejects_invalid_metadata_on_insert() {
     StoreValidationFixture::assert_invalid_metadata(
         store.put(&StoreValidationFixture::invalid_token()).await,
     );
+}
+
+#[tokio::test]
+async fn memory_store_rejects_self_referencing_lineage() {
+    let result = MemoryTokenStore::default()
+        .put(&StoreValidationFixture::self_referencing_token())
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "rotated_from",
+            ..
+        }))
+    ));
 }
 
 #[tokio::test]

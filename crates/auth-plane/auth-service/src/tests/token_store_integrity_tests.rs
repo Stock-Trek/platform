@@ -61,6 +61,19 @@ async fn rejects_a_token_returned_under_a_different_id() {
     StoreIntegrityFixture::assert_store_error(service.tokens_for_owner(OWNER).await);
 }
 
+#[tokio::test]
+async fn rejects_corrupt_metadata_returned_by_a_store() {
+    let mut token = TestFixture::token("token-a");
+    token.metadata.revoked_at = Some(Utc::now());
+    let service = AuthService::new(
+        Arc::new(MismatchedTokenStore { token }),
+        TestFixture::config(),
+    )
+    .expect("valid service");
+
+    StoreIntegrityFixture::assert_store_error(service.token("token-a").await);
+}
+
 struct DuplicateIdsStore {
     token: ApiToken,
 }
