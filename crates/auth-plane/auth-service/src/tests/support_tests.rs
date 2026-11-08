@@ -51,8 +51,9 @@ impl TestFixture {
     }
 
     pub(crate) async fn add_token(service: &AuthService, id: &str, owner: &str) -> ApiToken {
+        let now = Utc::now();
         service
-            .add_token(id, owner, Utc::now(), Self::options())
+            .add_token(id, owner, now, Self::options(), now)
             .await
             .unwrap()
     }
@@ -65,9 +66,22 @@ impl TestFixture {
         options: TokenOptions,
     ) -> ApiToken {
         service
-            .add_token(id, owner, created_at, options)
+            .add_token(id, owner, created_at, options, created_at)
             .await
             .unwrap()
+    }
+
+    pub(crate) async fn add_expired_token(
+        service: &AuthService,
+        id: &str,
+        owner: &str,
+        created_at: DateTime<Utc>,
+        expires_at: DateTime<Utc>,
+    ) -> ApiToken {
+        let metadata = TokenMetadata::new(expires_at, TokenScope::DEFAULT).unwrap();
+        let token = ApiToken::generate(id, owner, created_at, metadata).unwrap();
+        service.store.put(&token).await.unwrap();
+        token
     }
 
     pub(crate) fn tampered_signature(signature: &str) -> String {

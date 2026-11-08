@@ -1,8 +1,8 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::{TokenExpiry, TokenOptions, TokenScope};
+use crate::{ApiToken, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
-use secrecy::ExposeSecret;
+use secrecy::{ExposeSecret, SecretString};
 
 #[tokio::test]
 async fn finds_tokens_by_owner() {
@@ -54,6 +54,25 @@ async fn rejects_an_empty_owner() {
     ));
 }
 
+#[test]
+fn rejects_owners_with_surrounding_whitespace() {
+    let error = ApiToken::from_parts(
+        "token-a",
+        " demo-owner ",
+        SecretString::from("secret"),
+        Utc::now(),
+        TestFixture::metadata(),
+    );
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "owner",
+            ..
+        }))
+    ));
+}
+
 #[tokio::test]
 async fn signs_order_requests_for_the_owner() {
     let service = TestFixture::service();
@@ -95,18 +114,6 @@ async fn chooses_a_deterministic_token_when_an_owner_has_several() {
             .id(),
         first.id()
     );
-}
-
-#[tokio::test]
-async fn owner_lookups_trim_surrounding_whitespace() {
-    let service = TestFixture::service();
-    let added = TestFixture::add_token(&service, "token-a", " owner-a ").await;
-
-    let tokens = service.tokens_for_owner(" owner-a ").await.unwrap();
-
-    assert_eq!(added.owner(), "owner-a");
-    assert_eq!(tokens.len(), 1);
-    assert_eq!(tokens[0].id(), added.id());
 }
 
 #[tokio::test]

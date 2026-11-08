@@ -71,6 +71,12 @@ impl AuthService {
                 format!("{:?} has expired", token.id()),
             ));
         }
+        if token.metadata().is_rotation_overlap_ended(now) {
+            return Err(BpError::auth_invalid_field(
+                "token_id",
+                format!("{:?} is outside its rotation overlap", token.id()),
+            ));
+        }
         Ok(())
     }
 

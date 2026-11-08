@@ -129,11 +129,12 @@ async fn records_rejected_signatures_for_unknown_tokens() {
     let (service, audit) = AuditFixture::service();
     let now = Utc::now();
 
-    let error = service
+    let verified = service
         .verify_order_request("ghost", ORDER_REQUEST, "v1.0.0.nonce.token.signature", now)
-        .await;
+        .await
+        .unwrap();
 
-    assert!(error.is_err());
+    assert!(!verified);
     let rejection = audit
         .drain()
         .into_iter()

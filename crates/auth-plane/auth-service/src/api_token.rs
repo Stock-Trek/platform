@@ -27,7 +27,6 @@ impl ApiToken {
     ) -> BpResult<Self> {
         let id = id.into();
         let owner = owner.into();
-        let owner = Self::validated_owner(&owner)?.to_string();
         let token = Self {
             id,
             owner,
@@ -41,12 +40,7 @@ impl ApiToken {
 
     pub(crate) fn validate(&self) -> BpResult<()> {
         Self::validate_id(&self.id)?;
-        if Self::validated_owner(&self.owner)? != self.owner {
-            return Err(BpError::auth_invalid_field(
-                "owner",
-                "must not have surrounding whitespace",
-            ));
-        }
+        Self::validated_owner(&self.owner)?;
         Self::validate_secret(self.secret.expose_secret())?;
         self.metadata.validate()?;
         if self.metadata.rotated_from() == Some(self.id.as_str()) {
@@ -112,9 +106,15 @@ impl ApiToken {
     }
 
     pub(crate) fn validated_owner(owner: &str) -> BpResult<&str> {
-        let owner = owner.trim();
-        if owner.is_empty() {
+        let trimmed = owner.trim();
+        if trimmed.is_empty() {
             return Err(BpError::auth_invalid_field("owner", "must not be empty"));
+        }
+        if trimmed != owner {
+            return Err(BpError::auth_invalid_field(
+                "owner",
+                "must not have surrounding whitespace",
+            ));
         }
         if owner.len() > MAX_OWNER_LENGTH {
             return Err(BpError::auth_invalid_field(

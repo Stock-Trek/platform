@@ -91,8 +91,14 @@ async fn signing_updates_last_used_and_requires_an_active_token() {
 async fn purging_removes_only_expired_tokens() {
     let service = UsageFixture::service();
     let now = Utc::now();
-    UsageFixture::add_token_with_expiry(&service, "expired", "owner-a", now - Duration::seconds(1))
-        .await;
+    TestFixture::add_expired_token(
+        &service,
+        "expired",
+        "owner-a",
+        now - Duration::seconds(2),
+        now - Duration::seconds(1),
+    )
+    .await;
     UsageFixture::add_token_with_expiry(&service, "active", "owner-a", now + Duration::minutes(1))
         .await;
 

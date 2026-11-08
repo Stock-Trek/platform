@@ -26,11 +26,12 @@ impl LifecycleFixture {
 #[tokio::test]
 async fn expires_tokens_are_rejected() {
     let service = LifecycleFixture::service();
-    let now = Utc::now();
-    let token = LifecycleFixture::add_token_with_expiry(&service, "token-a", "owner-a", now).await;
+    let expires_at = Utc::now() + Duration::seconds(1);
+    let token =
+        LifecycleFixture::add_token_with_expiry(&service, "token-a", "owner-a", expires_at).await;
 
     let error = service
-        .authenticate(token.id(), token.secret(), None, now)
+        .authenticate(token.id(), token.secret(), None, expires_at)
         .await
         .unwrap_err();
 
@@ -41,7 +42,7 @@ async fn expires_tokens_are_rejected() {
             ..
         })
     ));
-    assert!(token.metadata().is_expired(now));
+    assert!(token.metadata().is_expired(expires_at));
 }
 
 #[tokio::test]
@@ -67,8 +68,46 @@ async fn rejects_non_positive_relative_lifetimes() {
     let service = LifecycleFixture::service();
     let options = TokenOptions::new(TokenExpiry::After(Duration::zero()), TokenScope::DEFAULT);
 
+    let now = Utc::now();
     let error = service
-        .add_token("token-a", "owner-a", Utc::now(), options)
+        .add_token("token-a", "owner-a", now, options, now)
+        .await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "expiry",
+            ..
+        }))
+    ));
+}
+
+#[tokio::test]
+async fn absolute_expiry_is_validated_against_the_injected_now() {
+    let service = LifecycleFixture::service();
+    let now = chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap();
+    let expires_at = now + Duration::hours(1);
+    let options = TokenOptions::new(TokenExpiry::At(expires_at), TokenScope::DEFAULT);
+
+    let token = service
+        .add_token("token-a", "owner-a", now, options, now)
+        .await
+        .unwrap();
+
+    assert_eq!(token.metadata().expires_at(), expires_at);
+}
+
+#[tokio::test]
+async fn rejects_an_already_past_absolute_expiry() {
+    let service = LifecycleFixture::service();
+    let now = Utc::now();
+    let options = TokenOptions::new(
+        TokenExpiry::At(now - Duration::seconds(1)),
+        TokenScope::DEFAULT,
+    );
+
+    let error = service
+        .add_token("token-a", "owner-a", now, options, now)
         .await;
 
     assert!(matches!(

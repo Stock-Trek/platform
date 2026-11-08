@@ -17,8 +17,9 @@ impl ScopeFixture {
         I: IntoIterator<Item = S>,
     {
         let options = TokenOptions::new(TokenExpiry::After(Duration::days(30)), scopes);
+        let now = Utc::now();
         service
-            .add_token(id, owner, Utc::now(), options)
+            .add_token(id, owner, now, options, now)
             .await
             .unwrap()
     }
@@ -80,8 +81,9 @@ async fn rejects_tokens_without_scopes() {
         Vec::<TokenScope>::new(),
     );
 
+    let now = Utc::now();
     let error = service
-        .add_token("token-a", "owner-a", Utc::now(), options)
+        .add_token("token-a", "owner-a", now, options, now)
         .await;
 
     assert!(matches!(

@@ -12,9 +12,24 @@ impl AuthService {
         owner: impl Into<String>,
         created_at: DateTime<Utc>,
         options: TokenOptions,
+        now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
         let expires_at = match options.expiry() {
-            TokenExpiry::At(expires_at) => expires_at,
+            TokenExpiry::At(expires_at) => {
+                if expires_at <= created_at {
+                    return Err(BpError::auth_invalid_field(
+                        "expiry",
+                        "must be after the creation time",
+                    ));
+                }
+                if expires_at <= now {
+                    return Err(BpError::auth_invalid_field(
+                        "expiry",
+                        "must be in the future",
+                    ));
+                }
+                expires_at
+            }
             TokenExpiry::After(lifetime) => {
                 if lifetime <= Duration::zero() {
                     return Err(BpError::auth_invalid_field(

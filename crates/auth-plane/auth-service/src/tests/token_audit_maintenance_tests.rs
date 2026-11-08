@@ -1,5 +1,5 @@
 use super::support_tests::TestFixture;
-use crate::{MemoryTokenAuditLog, TokenAuditAction, TokenExpiry, TokenOptions, TokenScope};
+use crate::{MemoryTokenAuditLog, TokenAuditAction};
 use chrono::{Duration, Utc};
 use std::sync::Arc;
 
@@ -45,11 +45,14 @@ async fn purging_expired_tokens_records_deletions() {
     let audit = Arc::new(MemoryTokenAuditLog::new(4096));
     let service = TestFixture::service_with_audit(audit.clone());
     let now = Utc::now();
-    let options = TokenOptions::new(
-        TokenExpiry::At(now - Duration::seconds(1)),
-        TokenScope::DEFAULT,
-    );
-    TestFixture::add_token_at(&service, "expired", "owner-a", now, options).await;
+    TestFixture::add_expired_token(
+        &service,
+        "expired",
+        "owner-a",
+        now - Duration::seconds(2),
+        now - Duration::seconds(1),
+    )
+    .await;
     audit.drain();
 
     let purged = service.purge_expired_tokens(now).await.unwrap();

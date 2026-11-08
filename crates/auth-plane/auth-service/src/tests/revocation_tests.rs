@@ -1,8 +1,5 @@
 use super::support_tests::TestFixture;
-use crate::{
-    AuthService, MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction, TokenExpiry,
-    TokenOptions, TokenScope,
-};
+use crate::{AuthService, MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction};
 use chrono::{Duration, Utc};
 use std::sync::Arc;
 
@@ -21,11 +18,14 @@ async fn revoking_an_owners_tokens_includes_expired_tokens() {
     let (service, _) = RevocationFixture::service();
     let now = Utc::now();
     let active = TestFixture::add_token(&service, "token-a", "owner-a").await;
-    let options = TokenOptions::new(
-        TokenExpiry::At(now - Duration::seconds(1)),
-        TokenScope::DEFAULT,
-    );
-    let expired = TestFixture::add_token_at(&service, "token-b", "owner-a", now, options).await;
+    let expired = TestFixture::add_expired_token(
+        &service,
+        "token-b",
+        "owner-a",
+        now - Duration::seconds(2),
+        now - Duration::seconds(1),
+    )
+    .await;
 
     let revoked = service
         .revoke_tokens_for_owner(
