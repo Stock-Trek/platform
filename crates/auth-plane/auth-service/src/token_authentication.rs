@@ -1,4 +1,4 @@
-use crate::{ApiToken, AuthService, SignatureInput, TokenAuditAction, TokenAuditEvent, TokenScope};
+use crate::{ApiToken, AuthService, SecretInput, TokenAuditAction, TokenAuditEvent, TokenScope};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 
@@ -6,11 +6,11 @@ impl AuthService {
     pub async fn authenticate(
         &self,
         token_id: &str,
-        secret: impl SignatureInput,
+        secret: impl SecretInput,
         scope: Option<TokenScope>,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
-        let candidate = secret.signature_input();
+        let candidate = secret.secret_input();
         let mut token = match self.token(token_id).await {
             Ok(token) => token,
             Err(error) => {

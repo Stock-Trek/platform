@@ -36,8 +36,8 @@ async fn records_token_issuance_and_authentication() {
         vec![TokenAuditAction::Issued, TokenAuditAction::Authenticated]
     );
     let events = audit.events();
-    assert_eq!(events[0].token_id(), Some("token-a"));
-    assert_eq!(events[0].owner(), Some("owner-a"));
+    assert_eq!(events[0].token_id.as_deref(), Some("token-a"));
+    assert_eq!(events[0].owner.as_deref(), Some("owner-a"));
 }
 
 #[tokio::test]
@@ -55,7 +55,7 @@ async fn records_failed_authentication_without_the_secret() {
         .find(|event| event.action == TokenAuditAction::AuthenticationFailed)
         .unwrap();
     assert!(!failure.success);
-    assert!(failure.detail().is_some());
+    assert!(failure.detail.is_some());
     assert!(!format!("{events:?}").contains("wrong-secret"));
 }
 
@@ -139,8 +139,8 @@ async fn records_rejected_signatures_for_unknown_tokens() {
         .into_iter()
         .find(|event| event.action == TokenAuditAction::SignatureRejected)
         .expect("a rejection event should be recorded");
-    assert_eq!(rejection.token_id(), Some("ghost"));
-    assert_eq!(rejection.owner(), None);
+    assert_eq!(rejection.token_id.as_deref(), Some("ghost"));
+    assert_eq!(rejection.owner, None);
 }
 
 #[tokio::test]
@@ -186,5 +186,8 @@ async fn records_the_reason_a_future_signature_is_rejected() {
         .into_iter()
         .find(|event| event.action == TokenAuditAction::SignatureRejected)
         .expect("a rejection event should be recorded");
-    assert_eq!(rejection.detail(), Some("signature issued in the future"));
+    assert_eq!(
+        rejection.detail.as_deref(),
+        Some("signature issued in the future")
+    );
 }

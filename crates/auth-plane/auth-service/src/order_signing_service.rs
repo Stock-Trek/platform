@@ -1,5 +1,5 @@
 use crate::{
-    ApiToken, AuthService, OrderRequestContext, OrderRequestSigner, SignatureInput,
+    ApiToken, AuthService, OrderRequestContext, OrderRequestSigner, SecretInput, SignatureInput,
     SignedOrderRequest, TokenAuditAction, TokenAuditEvent, TokenScope,
 };
 use chrono::{DateTime, Duration, Utc};
@@ -11,7 +11,7 @@ impl AuthService {
     pub async fn sign_order_request(
         &self,
         token_id: &str,
-        secret: impl SignatureInput,
+        secret: impl SecretInput,
         order_request: &[u8],
         issued_at: DateTime<Utc>,
         now: DateTime<Utc>,
