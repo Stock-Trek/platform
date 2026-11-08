@@ -49,6 +49,41 @@ async fn rejects_rotation_back_to_the_predecessor_id() {
 }
 
 #[tokio::test]
+async fn rejects_rotation_to_a_deeper_lineage_ancestor_id() {
+    let service = RotationLineageFixture::service();
+    let now = Utc::now();
+    let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let replacement = service
+        .rotate_token_to(original.id(), "token-b", now)
+        .await
+        .unwrap();
+    service.delete_token(original.id(), now).await.unwrap();
+    let next = service
+        .rotate_token_to(replacement.id(), "token-c", now)
+        .await
+        .unwrap();
+
+    let error = service.rotate_token_to(next.id(), original.id(), now).await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "replacement_id",
+            ..
+        }))
+    ));
+    assert!(
+        service
+            .token(next.id())
+            .await
+            .unwrap()
+            .metadata()
+            .replaced_by()
+            .is_none()
+    );
+}
+
+#[tokio::test]
 async fn rotates_a_replacement_forward_to_a_new_id() {
     let service = RotationLineageFixture::service();
     let now = Utc::now();

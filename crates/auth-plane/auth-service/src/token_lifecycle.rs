@@ -5,6 +5,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use rand::{Rng, distributions::Alphanumeric};
+use std::collections::HashSet;
 
 impl AuthService {
     pub async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
@@ -40,6 +41,15 @@ impl AuthService {
             return Err(BpError::auth_invalid_field(
                 "replacement_id",
                 "must not refer to the token this token was rotated from",
+            ));
+        }
+        if self
+            .rotation_lineage_contains(&original, &replacement_id)
+            .await?
+        {
+            return Err(BpError::auth_invalid_field(
+                "replacement_id",
+                "must not reuse a token id from this token's rotation lineage",
             ));
         }
         Self::ensure_active(&original, now)?;
@@ -81,6 +91,24 @@ impl AuthService {
             .with_token(replacement.id(), Some(replacement.owner()));
         self.audit.record(issued);
         Ok(replacement)
+    }
+
+    async fn rotation_lineage_contains(&self, token: &ApiToken, candidate: &str) -> BpResult<bool> {
+        let mut next = token.metadata().rotated_from().map(str::to_string);
+        let mut visited = HashSet::new();
+        while let Some(id) = next {
+            if id == candidate {
+                return Ok(true);
+            }
+            if !visited.insert(id.clone()) {
+                return Ok(false);
+            }
+            let Some(ancestor) = self.stored_token(&id).await? else {
+                return Ok(false);
+            };
+            next = ancestor.metadata().rotated_from().map(str::to_string);
+        }
+        Ok(false)
     }
 
     pub async fn revoke_token(

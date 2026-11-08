@@ -171,6 +171,25 @@ fn rejects_blank_secrets() {
 }
 
 #[test]
+fn rejects_control_characters_in_secrets() {
+    let error = ApiToken::from_parts(
+        "token-a",
+        "demo-owner",
+        SecretString::from("secret\nvalue"),
+        Utc::now(),
+        TestFixture::metadata(),
+    );
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "secret",
+            ..
+        }))
+    ));
+}
+
+#[test]
 fn created_at_is_recorded() {
     let before = Utc::now();
     let token = TestFixture::token("token-a");
