@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, AuthService, OrderRequestSigner, SignatureInput, SignedOrderRequest,
-    TokenAuditAction, TokenAuditEvent, TokenScope, auth_service::MAX_UPDATE_ATTEMPTS,
+    ApiToken, AuthService, OrderRequestSigner, SignedOrderRequest, TokenAuditAction,
+    TokenAuditEvent, TokenScope, auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, BpError, BpResult};
@@ -12,10 +12,9 @@ impl AuthService {
         &self,
         token_id: &str,
         order_request: &[u8],
-        signature: impl SignatureInput,
+        signature: &str,
         now: DateTime<Utc>,
     ) -> BpResult<bool> {
-        let signature = signature.signature_input();
         let token = match self.token(token_id).await {
             Ok(token) => token,
             Err(error) if matches!(error, BpError::Auth(AuthError::UnknownToken { .. })) => {
