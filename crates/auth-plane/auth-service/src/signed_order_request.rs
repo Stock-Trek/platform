@@ -14,7 +14,10 @@ pub struct SignedOrderRequest {
 }
 
 impl SignedOrderRequest {
-    pub fn from_context(context: &OrderRequestContext, signature: impl Into<String>) -> Self {
+    pub fn from_context(
+        context: &OrderRequestContext,
+        signature: impl Into<String>,
+    ) -> BpResult<Self> {
         Self::from_parts(
             context.token_id(),
             context.issued_at(),
@@ -30,19 +33,33 @@ impl SignedOrderRequest {
         expires_at: DateTime<Utc>,
         nonce: impl Into<String>,
         signature: impl Into<String>,
-    ) -> Self {
-        let token_id = token_id.into();
-        let nonce = nonce.into();
-        let issued_at = OrderRequestContext::whole_seconds(issued_at);
-        let expires_at = OrderRequestContext::whole_seconds(expires_at);
-        let signature = Self::encode(&token_id, issued_at, expires_at, &nonce, &signature.into());
-        Self {
+    ) -> BpResult<Self> {
+        let raw_signature = signature.into();
+        if raw_signature.is_empty() || raw_signature.contains('.') {
+            return Err(BpError::auth_invalid_field(
+                "signature",
+                "must not be empty or contain '.'",
+            ));
+        }
+        let context = OrderRequestContext::new(token_id, issued_at, expires_at, nonce)?;
+        let token_id = context.token_id().to_string();
+        let nonce = context.nonce().to_string();
+        let issued_at = context.issued_at();
+        let expires_at = context.expires_at();
+        let signature = Self::encode(&token_id, issued_at, expires_at, &nonce, &raw_signature);
+        if signature.len() > MAX_ENVELOPE_LENGTH {
+            return Err(BpError::auth_invalid_field(
+                "signature",
+                format!("must be at most {MAX_ENVELOPE_LENGTH} characters"),
+            ));
+        }
+        Ok(Self {
             token_id,
             issued_at,
             expires_at,
             nonce,
             signature,
-        }
+        })
     }
 
     pub fn decode(signature: &str) -> BpResult<Self> {

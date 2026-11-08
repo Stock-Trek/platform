@@ -14,7 +14,7 @@ impl SignaturePolicyFixture {
         let signature = signer
             .sign_order_request(&context, ORDER_REQUEST)
             .expect("signing succeeds");
-        let signed = SignedOrderRequest::from_context(&context, signature);
+        let signed = SignedOrderRequest::from_context(&context, signature).expect("valid envelope");
         let first = service
             .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
             .await

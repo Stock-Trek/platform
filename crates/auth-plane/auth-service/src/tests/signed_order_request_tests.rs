@@ -17,7 +17,7 @@ impl SignedRequestFixture {
             "nonce-a",
         )
         .unwrap();
-        SignedOrderRequest::from_context(&context, "signature")
+        SignedOrderRequest::from_context(&context, "signature").unwrap()
     }
 }
 
@@ -116,4 +116,65 @@ fn detects_expiry() {
 
     assert!(!signed.is_expired(Utc::now()));
     assert!(signed.is_expired(signed.expires_at()));
+}
+
+#[test]
+fn constructor_rejects_an_invalid_context() {
+    let issued_at = chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap();
+    let error = SignedOrderRequest::from_parts(
+        "not/a/token",
+        issued_at,
+        issued_at + Duration::minutes(5),
+        "nonce-a",
+        "signature",
+    );
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "token_id",
+            ..
+        }))
+    ));
+}
+
+#[test]
+fn constructor_rejects_an_empty_signature() {
+    let issued_at = chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap();
+    let error = SignedOrderRequest::from_parts(
+        "token-a",
+        issued_at,
+        issued_at + Duration::minutes(5),
+        "nonce-a",
+        "",
+    );
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "signature",
+            ..
+        }))
+    ));
+}
+
+#[test]
+fn constructor_rejects_an_oversized_envelope() {
+    let issued_at = chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap();
+    let signature = "a".repeat(MAX_ENVELOPE_LENGTH);
+    let error = SignedOrderRequest::from_parts(
+        "token-a",
+        issued_at,
+        issued_at + Duration::minutes(5),
+        "nonce-a",
+        signature,
+    );
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "signature",
+            ..
+        }))
+    ));
 }

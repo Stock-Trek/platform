@@ -25,9 +25,28 @@ impl ApiToken {
         created_at: DateTime<Utc>,
         metadata: TokenMetadata,
     ) -> BpResult<Self> {
-        let id = id.into();
         let owner = owner.into();
         let owner = Self::validated_owner(&owner)?.to_string();
+        Self::build(id.into(), owner, secret, created_at, metadata)
+    }
+
+    pub(crate) fn from_stored_parts(
+        id: impl Into<String>,
+        owner: impl Into<String>,
+        secret: SecretString,
+        created_at: DateTime<Utc>,
+        metadata: TokenMetadata,
+    ) -> BpResult<Self> {
+        Self::build(id.into(), owner.into(), secret, created_at, metadata)
+    }
+
+    fn build(
+        id: String,
+        owner: String,
+        secret: SecretString,
+        created_at: DateTime<Utc>,
+        metadata: TokenMetadata,
+    ) -> BpResult<Self> {
         let token = Self {
             id,
             owner,

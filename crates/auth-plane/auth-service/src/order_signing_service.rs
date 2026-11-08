@@ -168,10 +168,14 @@ impl AuthService {
                 return Err(error);
             }
         };
+        let signed =
+            SignedOrderRequest::from_context(&context, signature).inspect_err(|error| {
+                self.record_signing_failure(authenticated, now, error);
+            })?;
         let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
             .with_token(authenticated.id(), Some(authenticated.owner()));
         self.audit.record(event);
-        Ok(SignedOrderRequest::from_context(&context, signature))
+        Ok(signed)
     }
 
     fn record_signing_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {

@@ -1,5 +1,8 @@
 use super::support_tests::TestFixture;
-use crate::{MemoryTokenAuditLog, TokenAuditAction, TokenExpiry, TokenOptions, TokenScope};
+use crate::{
+    MemoryTokenAuditLog, TokenAuditAction, TokenAuditEvent, TokenExpiry, TokenOptions, TokenScope,
+    api_token::MAX_TOKEN_ID_LENGTH, audit::MAX_AUDIT_DETAIL_LENGTH,
+};
 use chrono::{Duration, Utc};
 use std::sync::Arc;
 
@@ -28,6 +31,36 @@ async fn audit_events_can_be_drained() {
 
     assert_eq!(audit.drain().len(), 1);
     assert!(audit.events().is_empty());
+}
+
+#[test]
+fn audit_events_bound_untrusted_fields() {
+    let event = TokenAuditEvent::new(TokenAuditAction::AuthenticationFailed, Utc::now())
+        .with_token("bad/id", Some("bad\nowner"))
+        .failure("x".repeat(MAX_AUDIT_DETAIL_LENGTH + 10));
+
+    assert_eq!(event.token_id(), None);
+    assert_eq!(event.owner(), None);
+    assert_eq!(
+        event.detail().unwrap().chars().count(),
+        MAX_AUDIT_DETAIL_LENGTH
+    );
+}
+
+#[tokio::test]
+async fn invalid_token_ids_are_not_copied_into_audit_events() {
+    let audit = Arc::new(MemoryTokenAuditLog::new(4096));
+    let service = TestFixture::service_with_audit(audit.clone());
+    let token_id = "a".repeat(MAX_TOKEN_ID_LENGTH + 1);
+
+    let error = service
+        .authenticate(&token_id, "secret", None, Utc::now())
+        .await;
+
+    assert!(error.is_err());
+    let event = audit.events().pop().expect("an audit event");
+    assert_eq!(event.action, TokenAuditAction::AuthenticationFailed);
+    assert_eq!(event.token_id(), None);
 }
 
 #[tokio::test]

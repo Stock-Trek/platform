@@ -165,7 +165,13 @@ impl AuthService {
             if let Some(token) = self.stored_token(&id).await?
                 && token.metadata().is_expired(now)
             {
-                self.store.delete(&id).await?;
+                if let Err(error) = self.store.delete(&id).await {
+                    let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
+                        .with_token(token.id(), Some(token.owner()))
+                        .failure(error.to_string());
+                    self.audit.record(event);
+                    return Err(error);
+                }
                 let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
                     .with_token(token.id(), Some(token.owner()));
                 self.audit.record(event);

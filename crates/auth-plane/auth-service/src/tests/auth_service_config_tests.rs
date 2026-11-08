@@ -39,3 +39,27 @@ fn accepts_one_second_signature_validity() {
 
     assert!(AuthService::new(Arc::new(MemoryTokenStore::default()), config).is_ok());
 }
+
+#[test]
+fn rejects_rotation_overlap_longer_than_the_token_lifetime() {
+    let mut config = ConfigFixture::config();
+    config.rotation_overlap = config.token_lifetime + Duration::seconds(1);
+
+    let error = AuthService::new(Arc::new(MemoryTokenStore::default()), config);
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "rotation_overlap",
+            ..
+        }))
+    ));
+}
+
+#[test]
+fn accepts_rotation_overlap_equal_to_the_token_lifetime() {
+    let mut config = ConfigFixture::config();
+    config.rotation_overlap = config.token_lifetime;
+
+    assert!(AuthService::new(Arc::new(MemoryTokenStore::default()), config).is_ok());
+}

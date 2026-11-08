@@ -44,7 +44,16 @@ impl AuthService {
 
     pub async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<()> {
         let token = self.stored_token(id).await?;
-        self.store.delete(id).await?;
+        if let Err(error) = self.store.delete(id).await {
+            let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
+                .with_token(
+                    token.as_ref().map_or(id, ApiToken::id),
+                    token.as_ref().map(ApiToken::owner),
+                )
+                .failure(error.to_string());
+            self.audit.record(event);
+            return Err(error);
+        }
         if let Some(token) = token {
             let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
                 .with_token(token.id(), Some(token.owner()));

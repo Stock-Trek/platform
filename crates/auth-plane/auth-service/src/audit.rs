@@ -1,7 +1,10 @@
+use crate::ApiToken;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use std::collections::VecDeque;
 use strum::{Display, EnumString};
+
+pub(crate) const MAX_AUDIT_DETAIL_LENGTH: usize = 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString)]
 #[strum(serialize_all = "snake_case")]
@@ -40,15 +43,26 @@ impl TokenAuditEvent {
     }
 
     pub fn with_token(mut self, token_id: impl Into<String>, owner: Option<&str>) -> Self {
-        self.token_id = Some(token_id.into());
-        self.owner = owner.map(str::to_string);
+        let token_id = token_id.into();
+        self.token_id = ApiToken::validate_id(&token_id).ok().map(|()| token_id);
+        self.owner = owner
+            .and_then(|owner| ApiToken::validated_owner(owner).ok())
+            .map(str::to_string);
         self
     }
 
     pub fn failure(mut self, detail: impl Into<String>) -> Self {
         self.success = false;
-        self.detail = Some(detail.into());
+        self.detail = Some(Self::truncate(detail.into(), MAX_AUDIT_DETAIL_LENGTH));
         self
+    }
+
+    fn truncate(value: String, max_chars: usize) -> String {
+        if value.chars().count() <= max_chars {
+            value
+        } else {
+            value.chars().take(max_chars).collect()
+        }
     }
 
     pub fn token_id(&self) -> Option<&str> {

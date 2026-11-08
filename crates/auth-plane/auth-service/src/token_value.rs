@@ -45,7 +45,7 @@ impl ApiToken {
             })?
             .with_timezone(&Utc);
         let metadata = TokenMetadata::from_value(value)?;
-        Self::from_parts(id, owner, SecretString::from(secret), created_at, metadata)
+        Self::from_stored_parts(id, owner, SecretString::from(secret), created_at, metadata)
     }
 
     fn string_field(value: &Value, field: &'static str) -> BpResult<String> {
