@@ -12,8 +12,5 @@ pub trait TokenStore: Send + Sync {
 
     async fn ids(&self) -> BpResult<Vec<String>>;
 
-    /// Atomically replaces `expected` with `token` when the stored token still
-    /// matches `expected`. Stores must reject the write with a conflict error
-    /// when the current value has changed.
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()>;
 }

@@ -1,11 +1,9 @@
 use crate::{
-    ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, TokenMetadata,
-    api_token::MAX_TOKEN_ID_LENGTH, auth_service::MAX_UPDATE_ATTEMPTS,
+    ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, api_token::MAX_TOKEN_ID_LENGTH,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use rand::{Rng, distributions::Alphanumeric};
-use std::collections::HashSet;
 
 impl AuthService {
     pub async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
@@ -31,28 +29,46 @@ impl AuthService {
             ));
         }
         let original = self.token(id).await?;
+        if original.metadata().replaced_by() == Some(replacement_id.as_str()) {
+            return self.completed_rotation(&original, &replacement_id).await;
+        }
         let replacement = self
             .replacement_for(&original, &replacement_id, now)
             .await?;
         let overlap_until = self.rotation_overlap_until(now)?;
-        if let Err(error) = self.store.put(&replacement).await {
-            self.record_rotation_failure(&original, now, &error);
-            return Err(error);
-        }
+        let replacement = match self.store.put(&replacement).await {
+            Ok(()) => replacement,
+            Err(error) if Self::is_duplicate(&error) => {
+                self.reuse_existing_replacement(&original, &replacement_id, error, now)
+                    .await?
+            }
+            Err(error) => {
+                self.record_rotation_failure(&original, now, &error);
+                return Err(error);
+            }
+        };
         match self
             .retire_rotated_token(&original, replacement.id(), overlap_until, now)
             .await
         {
-            Ok(_) => {
-                let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
-                    .with_token(original.id(), Some(original.owner()));
-                self.audit.record(event);
-                let issued = TokenAuditEvent::new(TokenAuditAction::Issued, now)
-                    .with_token(replacement.id(), Some(replacement.owner()));
-                self.audit.record(issued);
+            Ok(()) => {
+                self.record_rotation_success(&original, &replacement, now);
                 Ok(replacement)
             }
             Err(error) => {
+                match self.stored_token(original.id()).await {
+                    Ok(Some(current))
+                        if current.metadata().replaced_by() == Some(replacement.id()) =>
+                    {
+                        self.record_rotation_success(&original, &replacement, now);
+                        return Ok(replacement);
+                    }
+                    Ok(_) => {}
+                    Err(_) => {
+                        self.record_rotation_failure(&original, now, &error);
+                        return Err(error);
+                    }
+                }
                 let rollback = self.store.delete(replacement.id()).await;
                 self.record_rotation_failure(&original, now, &error);
                 match rollback {
@@ -67,103 +83,42 @@ impl AuthService {
         }
     }
 
-    async fn replacement_for(
+    async fn completed_rotation(
         &self,
         original: &ApiToken,
         replacement_id: &str,
-        now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
-        self.ensure_rotation_allowed(original, replacement_id, now)
-            .await?;
-        let expires_at = now.checked_add_signed(self.token_lifetime).ok_or_else(|| {
-            BpError::auth_invalid_field("token_lifetime", "is outside the supported range")
-        })?;
-        let metadata = TokenMetadata::new(expires_at, original.metadata().scopes().iter())?;
-        let mut replacement = ApiToken::generate(replacement_id, original.owner(), now, metadata)?;
-        replacement.metadata.rotated_from = Some(original.id().to_string());
+        let replacement = self
+            .stored_token(replacement_id)
+            .await?
+            .ok_or_else(|| BpError::unknown_token(replacement_id))?;
+        Self::ensure_replacement_matches(original, &replacement)?;
         Ok(replacement)
     }
 
-    async fn retire_rotated_token(
+    async fn reuse_existing_replacement(
         &self,
         original: &ApiToken,
         replacement_id: &str,
-        overlap_until: DateTime<Utc>,
+        conflict: BpError,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
-        let mut current = original.clone();
-        for _ in 0..MAX_UPDATE_ATTEMPTS {
-            self.ensure_rotation_allowed(&current, replacement_id, now)
-                .await?;
-            let mut retired = current.clone();
-            retired
-                .metadata
-                .begin_rotation(replacement_id, overlap_until);
-            retired.metadata.validate()?;
-            match self.store.update(&current, &retired).await {
-                Ok(()) => return Ok(retired),
-                Err(error) if Self::is_conflict(&error) => {
-                    current = self.token(original.id()).await?;
-                }
-                Err(error) => return Err(error),
+        let existing = match self.stored_token(replacement_id).await {
+            Ok(Some(existing)) => existing,
+            Ok(None) => {
+                self.record_rotation_failure(original, now, &conflict);
+                return Err(conflict);
             }
-        }
-        Err(BpError::token_conflict(original.id()))
-    }
-
-    async fn ensure_rotation_allowed(
-        &self,
-        original: &ApiToken,
-        replacement_id: &str,
-        now: DateTime<Utc>,
-    ) -> BpResult<()> {
-        if let Some(replacement) = original.metadata().replaced_by() {
-            return Err(BpError::auth_invalid_field(
-                "token_id",
-                format!("has already been rotated to {replacement:?}"),
-            ));
-        }
-        if original.metadata().rotated_from() == Some(replacement_id) {
-            return Err(BpError::auth_invalid_field(
-                "replacement_id",
-                "must not refer to the token this token was rotated from",
-            ));
-        }
-        if self
-            .rotation_lineage_contains(original, replacement_id)
-            .await?
-        {
-            return Err(BpError::auth_invalid_field(
-                "replacement_id",
-                "must not reuse a token id from this token's rotation lineage",
-            ));
-        }
-        Self::ensure_active(original, now)
-    }
-
-    async fn rotation_lineage_contains(&self, token: &ApiToken, candidate: &str) -> BpResult<bool> {
-        let mut next = token.metadata().rotated_from().map(str::to_string);
-        let mut visited = HashSet::new();
-        while let Some(id) = next {
-            if id == candidate {
-                return Ok(true);
+            Err(error) => {
+                self.record_rotation_failure(original, now, &error);
+                return Err(error);
             }
-            if !visited.insert(id.clone()) {
-                return Ok(false);
-            }
-            let Some(ancestor) = self.stored_token(&id).await? else {
-                return Ok(false);
-            };
-            next = ancestor.metadata().rotated_from().map(str::to_string);
+        };
+        if let Err(error) = Self::ensure_replacement_matches(original, &existing) {
+            self.record_rotation_failure(original, now, &error);
+            return Err(error);
         }
-        Ok(false)
-    }
-
-    fn rotation_overlap_until(&self, now: DateTime<Utc>) -> BpResult<DateTime<Utc>> {
-        now.checked_add_signed(self.rotation_overlap)
-            .ok_or_else(|| {
-                BpError::auth_invalid_field("rotation_overlap", "is outside the supported range")
-            })
+        Ok(existing)
     }
 
     fn rotated_token_id(id: &str, now: DateTime<Utc>) -> String {
@@ -176,6 +131,20 @@ impl AuthService {
         let prefix_length = MAX_TOKEN_ID_LENGTH.saturating_sub(suffix.len());
         let prefix = &id[..id.len().min(prefix_length)];
         format!("{prefix}{suffix}")
+    }
+
+    fn record_rotation_success(
+        &self,
+        original: &ApiToken,
+        replacement: &ApiToken,
+        now: DateTime<Utc>,
+    ) {
+        let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
+            .with_token(original.id(), Some(original.owner()));
+        self.audit.record(event);
+        let issued = TokenAuditEvent::new(TokenAuditAction::Issued, now)
+            .with_token(replacement.id(), Some(replacement.owner()));
+        self.audit.record(issued);
     }
 
     fn record_rotation_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {

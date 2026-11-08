@@ -30,6 +30,14 @@ impl FailingRotationStore {
     fn fail_delete(&self) {
         self.fail_delete.store(true, Ordering::SeqCst);
     }
+
+    fn allow_update(&self) {
+        self.fail_update.store(false, Ordering::SeqCst);
+    }
+
+    fn allow_delete(&self) {
+        self.fail_delete.store(false, Ordering::SeqCst);
+    }
 }
 
 #[async_trait]
@@ -137,5 +145,64 @@ async fn failed_rotation_reports_a_failed_rollback() {
             .metadata()
             .replaced_by()
             .is_none()
+    );
+}
+
+#[tokio::test]
+async fn failed_rotation_can_be_retried_after_the_replacement_was_written() {
+    let (service, store) = RotationRollbackFixture::service();
+    let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    store.fail_update();
+    store.fail_delete();
+    let now = Utc::now();
+
+    service
+        .rotate_token_to(original.id(), "token-b", now)
+        .await
+        .unwrap_err();
+
+    store.allow_update();
+    store.allow_delete();
+    let replacement = service
+        .rotate_token_to(original.id(), "token-b", now)
+        .await
+        .unwrap();
+
+    assert_eq!(replacement.id(), "token-b");
+    assert_eq!(
+        service
+            .token(original.id())
+            .await
+            .unwrap()
+            .metadata()
+            .replaced_by(),
+        Some(replacement.id())
+    );
+}
+
+#[tokio::test]
+async fn retrying_a_completed_rotation_returns_the_same_replacement() {
+    let (service, _) = RotationRollbackFixture::service();
+    let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
+
+    let first = service
+        .rotate_token_to(original.id(), "token-b", now)
+        .await
+        .unwrap();
+    let second = service
+        .rotate_token_to(original.id(), "token-b", now)
+        .await
+        .unwrap();
+
+    assert_eq!(first.id(), second.id());
+    assert_eq!(
+        service
+            .token(original.id())
+            .await
+            .unwrap()
+            .metadata()
+            .replaced_by(),
+        Some(second.id())
     );
 }

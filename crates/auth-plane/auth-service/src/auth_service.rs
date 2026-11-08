@@ -55,4 +55,8 @@ impl AuthService {
     pub(crate) fn is_conflict(error: &BpError) -> bool {
         matches!(error, BpError::Auth(AuthError::Conflict { .. }))
     }
+
+    pub(crate) fn is_duplicate(error: &BpError) -> bool {
+        matches!(error, BpError::Auth(AuthError::TokenExists { .. }))
+    }
 }
