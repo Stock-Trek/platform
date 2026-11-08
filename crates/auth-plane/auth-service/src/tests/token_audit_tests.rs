@@ -156,7 +156,7 @@ async fn records_rejected_signatures() {
     let tampered = TestFixture::tampered_signature(signed.signature());
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, tampered, now)
+        .verify_order_request(token.id(), ORDER_REQUEST, &tampered, now)
         .await
         .unwrap();
 
