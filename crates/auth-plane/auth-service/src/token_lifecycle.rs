@@ -36,6 +36,12 @@ impl AuthService {
                 format!("has already been rotated to {replacement:?}"),
             ));
         }
+        if original.metadata().rotated_from() == Some(replacement_id.as_str()) {
+            return Err(BpError::auth_invalid_field(
+                "replacement_id",
+                "must not refer to the token this token was rotated from",
+            ));
+        }
         Self::ensure_active(&original, now)?;
         let expires_at = now.checked_add_signed(self.token_lifetime).ok_or_else(|| {
             BpError::auth_invalid_field("token_lifetime", "is outside the supported range")
@@ -48,6 +54,11 @@ impl AuthService {
         let metadata = TokenMetadata::new(expires_at, original.metadata().scopes().iter())?;
         let mut replacement = ApiToken::generate(replacement_id, original.owner(), now, metadata)?;
         replacement.metadata.rotated_from = Some(original.id().to_string());
+        let mut retired = original.clone();
+        retired
+            .metadata
+            .begin_rotation(replacement.id(), overlap_until);
+        retired.metadata.validate()?;
         if let Err(error) = self.store.put(&replacement).await {
             let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
                 .with_token(original.id(), Some(original.owner()))
@@ -55,10 +66,6 @@ impl AuthService {
             self.audit.record(event);
             return Err(error);
         }
-        let mut retired = original.clone();
-        retired
-            .metadata
-            .begin_rotation(replacement.id(), overlap_until);
         if let Err(error) = self.store.update(&retired).await {
             let _ = self.store.delete(replacement.id()).await;
             let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)

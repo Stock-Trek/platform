@@ -65,6 +65,18 @@ fn rejects_an_envelope_without_a_signature() {
 }
 
 #[test]
+fn rejects_non_canonical_timestamp_encodings() {
+    let signed = SignedRequestFixture::signed();
+    let mut parts = signed.signature().split('.');
+    let version = parts.next().unwrap();
+    let issued_at = parts.next().unwrap();
+    let rest = parts.collect::<Vec<_>>().join(".");
+    let non_canonical = format!("{version}.0{issued_at}.{rest}");
+
+    assert!(SignedOrderRequest::decode(&non_canonical).is_err());
+}
+
+#[test]
 fn rejects_overlong_nonces() {
     let issued_at = chrono::DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap();
     let nonce = "a".repeat(MAX_NONCE_LENGTH + 1);

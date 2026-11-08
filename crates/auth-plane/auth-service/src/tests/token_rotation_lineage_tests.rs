@@ -1,0 +1,76 @@
+use super::support_tests::TestFixture;
+use crate::AuthService;
+use chrono::Utc;
+use platform_errors::{AuthError, BpError};
+
+struct RotationLineageFixture;
+
+impl RotationLineageFixture {
+    fn service() -> AuthService {
+        TestFixture::service()
+    }
+}
+
+#[tokio::test]
+async fn rejects_rotation_back_to_the_predecessor_id() {
+    let service = RotationLineageFixture::service();
+    let now = Utc::now();
+    let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let replacement = service
+        .rotate_token_to(original.id(), "token-b", now)
+        .await
+        .unwrap();
+    service.delete_token(original.id(), now).await.unwrap();
+
+    let error = service
+        .rotate_token_to(replacement.id(), original.id(), now)
+        .await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "replacement_id",
+            ..
+        }))
+    ));
+    assert!(
+        service
+            .token(replacement.id())
+            .await
+            .unwrap()
+            .metadata()
+            .replaced_by()
+            .is_none()
+    );
+    assert!(matches!(
+        service.token(original.id()).await,
+        Err(BpError::Auth(AuthError::UnknownToken { .. }))
+    ));
+}
+
+#[tokio::test]
+async fn rotates_a_replacement_forward_to_a_new_id() {
+    let service = RotationLineageFixture::service();
+    let now = Utc::now();
+    let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let replacement = service
+        .rotate_token_to(original.id(), "token-b", now)
+        .await
+        .unwrap();
+
+    let next = service
+        .rotate_token_to(replacement.id(), "token-c", now)
+        .await
+        .unwrap();
+
+    assert_eq!(next.metadata().rotated_from(), Some(replacement.id()));
+    assert_eq!(
+        service
+            .token(replacement.id())
+            .await
+            .unwrap()
+            .metadata()
+            .replaced_by(),
+        Some(next.id())
+    );
+}

@@ -89,13 +89,20 @@ impl SignedOrderRequest {
         let issued_at = Self::parse_timestamp(issued_at)?;
         let expires_at = Self::parse_timestamp(expires_at)?;
         OrderRequestContext::new(token_id, issued_at, expires_at, nonce)?;
-        Ok(Self {
+        let signed = Self {
             token_id: token_id.to_string(),
             issued_at,
             expires_at,
             nonce: nonce.to_string(),
-            signature: signature.to_string(),
-        })
+            signature: Self::encode(token_id, issued_at, expires_at, nonce, raw_signature),
+        };
+        if signed.signature != signature {
+            return Err(BpError::auth_invalid_field(
+                "signature",
+                "must use canonical timestamp encodings",
+            ));
+        }
+        Ok(signed)
     }
 
     pub fn token_id(&self) -> &str {
