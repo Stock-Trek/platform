@@ -21,6 +21,15 @@ fn duplicate_token_is_permanent() {
 }
 
 #[test]
+fn concurrent_modification_is_retryable() {
+    let error = AuthError::Conflict {
+        token_id: "token-a".to_string(),
+    };
+
+    assert_eq!(error.retryability(), Retryability::Retryable);
+}
+
+#[test]
 fn invalid_field_is_permanent() {
     let error = AuthError::InvalidField {
         field: "owner",

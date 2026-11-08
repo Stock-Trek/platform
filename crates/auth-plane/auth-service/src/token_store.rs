@@ -12,5 +12,5 @@ pub trait TokenStore: Send + Sync {
 
     async fn ids(&self) -> BpResult<Vec<String>>;
 
-    async fn update(&self, token: &ApiToken) -> BpResult<()>;
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()>;
 }

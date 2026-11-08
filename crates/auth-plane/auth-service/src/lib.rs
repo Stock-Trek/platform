@@ -18,6 +18,8 @@ mod token_metadata;
 mod token_metadata_value;
 mod token_options;
 mod token_registry;
+mod token_rotation;
+mod token_rotation_plan;
 mod token_scope;
 mod token_store;
 mod token_value;

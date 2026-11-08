@@ -61,5 +61,5 @@ async fn memory_store_rejects_invalid_metadata_on_update() {
     let mut invalid = token.clone();
     invalid.metadata.revoked_at = Some(Utc::now());
 
-    StoreValidationFixture::assert_invalid_metadata(store.update(&invalid).await);
+    StoreValidationFixture::assert_invalid_metadata(store.update(&token, &invalid).await);
 }

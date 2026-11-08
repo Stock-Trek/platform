@@ -44,7 +44,7 @@ impl TokenStore for FailingStore {
         self.inner.ids().await
     }
 
-    async fn update(&self, token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
         if self.fail_next_update.swap(false, Ordering::SeqCst) {
             return Err(BpError::auth_store(
                 "update",
@@ -53,7 +53,7 @@ impl TokenStore for FailingStore {
                 "transient failure".to_string(),
             ));
         }
-        self.inner.update(token).await
+        self.inner.update(expected, token).await
     }
 }
 

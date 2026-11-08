@@ -1,4 +1,7 @@
-use crate::{ApiToken, AuthService, SecretInput, TokenAuditAction, TokenAuditEvent, TokenScope};
+use crate::{
+    ApiToken, AuthService, SecretInput, TokenAuditAction, TokenAuditEvent, TokenScope,
+    auth_service::MAX_UPDATE_ATTEMPTS,
+};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 
@@ -11,37 +14,48 @@ impl AuthService {
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
         let candidate = secret.secret_input();
-        let mut token = match self.token(token_id).await {
-            Ok(token) => token,
-            Err(error) => {
-                self.record_authentication_failure(token_id, None, now, &error);
+        for _ in 0..MAX_UPDATE_ATTEMPTS {
+            let mut token = match self.token(token_id).await {
+                Ok(token) => token,
+                Err(error) => {
+                    self.record_authentication_failure(token_id, None, now, &error);
+                    return Err(error);
+                }
+            };
+            if !token.matches_secret(candidate) {
+                let error = BpError::auth_invalid_field("secret", "does not match the token");
+                self.record_authentication_failure(token_id, Some(&token), now, &error);
                 return Err(error);
             }
-        };
-        if !token.matches_secret(candidate) {
-            let error = BpError::auth_invalid_field("secret", "does not match the token");
-            self.record_authentication_failure(token_id, Some(&token), now, &error);
-            return Err(error);
+            if let Err(error) = Self::ensure_active(&token, now) {
+                self.record_authentication_failure(token_id, Some(&token), now, &error);
+                return Err(error);
+            }
+            if let Some(scope) = scope
+                && let Err(error) = Self::ensure_scope(&token, scope)
+            {
+                self.record_authentication_failure(token_id, Some(&token), now, &error);
+                return Err(error);
+            }
+            let original = token.clone();
+            token.metadata.record_use(now);
+            match self.store.update(&original, &token).await {
+                Ok(()) => {
+                    let event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
+                        .with_token(token.id(), Some(token.owner()));
+                    self.audit.record(event);
+                    return Ok(token);
+                }
+                Err(error) if Self::is_conflict(&error) => continue,
+                Err(error) => {
+                    self.record_authentication_failure(token_id, Some(&token), now, &error);
+                    return Err(error);
+                }
+            }
         }
-        if let Err(error) = Self::ensure_active(&token, now) {
-            self.record_authentication_failure(token_id, Some(&token), now, &error);
-            return Err(error);
-        }
-        if let Some(scope) = scope
-            && let Err(error) = Self::ensure_scope(&token, scope)
-        {
-            self.record_authentication_failure(token_id, Some(&token), now, &error);
-            return Err(error);
-        }
-        token.metadata.record_use(now);
-        if let Err(error) = self.store.update(&token).await {
-            self.record_authentication_failure(token_id, Some(&token), now, &error);
-            return Err(error);
-        }
-        let event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
-            .with_token(token.id(), Some(token.owner()));
-        self.audit.record(event);
-        Ok(token)
+        let error = BpError::token_conflict(token_id);
+        self.record_authentication_failure(token_id, None, now, &error);
+        Err(error)
     }
 
     pub(crate) fn ensure_active(token: &ApiToken, now: DateTime<Utc>) -> BpResult<()> {
