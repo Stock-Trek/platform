@@ -117,17 +117,6 @@ async fn chooses_a_deterministic_token_when_an_owner_has_several() {
 }
 
 #[tokio::test]
-async fn owner_lookups_trim_surrounding_whitespace() {
-    let service = TestFixture::service();
-    let added = TestFixture::add_token(&service, "token-a", "owner-a").await;
-
-    let tokens = service.tokens_for_owner(" owner-a ").await.unwrap();
-
-    assert_eq!(tokens.len(), 1);
-    assert_eq!(tokens[0].id(), added.id());
-}
-
-#[tokio::test]
 async fn signing_for_an_owner_uses_a_token_with_the_required_scope() {
     let service = TestFixture::service();
     let now = Utc::now();

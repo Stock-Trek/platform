@@ -40,8 +40,9 @@ impl Fixture {
         let auth_service = Self::auth_service();
         let options =
             TokenOptions::new(TokenExpiry::After(Duration::days(30)), TokenScope::DEFAULT);
+        let now = Utc::now();
         let token = auth_service
-            .add_token(TOKEN_ID, OWNER, Utc::now(), options)
+            .add_token(TOKEN_ID, OWNER, now, options, now)
             .await
             .unwrap();
         let dispatcher = OrderRequestDispatcher::new(url, OWNER, auth_service.clone()).unwrap();

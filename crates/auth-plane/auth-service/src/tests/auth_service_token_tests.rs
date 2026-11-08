@@ -9,8 +9,9 @@ async fn adding_a_duplicate_token_fails_without_replacing_it() {
     let service = TestFixture::service();
     let original = TestFixture::add_token(&service, "token-a", "demo-owner").await;
 
+    let now = Utc::now();
     let error = service
-        .add_token("token-a", "other-owner", Utc::now(), TestFixture::options())
+        .add_token("token-a", "other-owner", now, TestFixture::options(), now)
         .await;
 
     assert!(matches!(
@@ -31,15 +32,12 @@ async fn concurrent_duplicate_adds_only_create_one_token() {
     let first_service = Arc::clone(&service);
     let second_service = Arc::clone(&service);
 
-    let (first, second) = tokio::join!(
-        first_service.add_token("token-a", "first-owner", Utc::now(), TestFixture::options()),
-        second_service.add_token(
-            "token-a",
-            "second-owner",
-            Utc::now(),
-            TestFixture::options()
-        ),
-    );
+    let now = Utc::now();
+    let first_add =
+        first_service.add_token("token-a", "first-owner", now, TestFixture::options(), now);
+    let second_add =
+        second_service.add_token("token-a", "second-owner", now, TestFixture::options(), now);
+    let (first, second) = tokio::join!(first_add, second_add);
 
     assert!(first.is_ok() ^ second.is_ok());
     let ids: Vec<String> = service

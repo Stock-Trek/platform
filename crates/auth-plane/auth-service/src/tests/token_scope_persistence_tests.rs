@@ -12,8 +12,9 @@ impl ScopePersistenceFixture {
             TokenExpiry::After(Duration::days(30)),
             [TokenScope::OrdersRead],
         );
+        let now = Utc::now();
         service
-            .add_token("token-a", "owner-a", Utc::now(), options)
+            .add_token("token-a", "owner-a", now, options, now)
             .await
             .unwrap()
     }

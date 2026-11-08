@@ -51,8 +51,9 @@ impl TestFixture {
     }
 
     pub(crate) async fn add_token(service: &AuthService, id: &str, owner: &str) -> ApiToken {
+        let now = Utc::now();
         service
-            .add_token(id, owner, Utc::now(), Self::options())
+            .add_token(id, owner, now, Self::options(), now)
             .await
             .unwrap()
     }
@@ -65,7 +66,7 @@ impl TestFixture {
         options: TokenOptions,
     ) -> ApiToken {
         service
-            .add_token(id, owner, created_at, options)
+            .add_token(id, owner, created_at, options, created_at)
             .await
             .unwrap()
     }
