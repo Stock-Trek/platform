@@ -1,9 +1,13 @@
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
+use platform_errors::BpResult;
+use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use strum::{Display, EnumString};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum TokenAuditAction {
     Issued,
@@ -17,7 +21,8 @@ pub enum TokenAuditAction {
     Revoked,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub struct TokenAuditEvent {
     pub timestamp: DateTime<Utc>,
     pub action: TokenAuditAction,
@@ -52,8 +57,13 @@ impl TokenAuditEvent {
     }
 }
 
+/// Receives token audit events.
+///
+/// Delivery is awaited so implementations can provide backpressure and report
+/// failures to the operation that produced the event.
+#[async_trait]
 pub trait TokenAuditLog: Send + Sync {
-    fn record(&self, event: TokenAuditEvent);
+    async fn record(&self, event: TokenAuditEvent) -> BpResult<()>;
 }
 
 #[derive(Debug)]
@@ -79,22 +89,27 @@ impl MemoryTokenAuditLog {
     }
 }
 
+#[async_trait]
 impl TokenAuditLog for MemoryTokenAuditLog {
-    fn record(&self, event: TokenAuditEvent) {
+    async fn record(&self, event: TokenAuditEvent) -> BpResult<()> {
         let mut events = self.events.lock();
         if self.capacity == 0 {
-            return;
+            return Ok(());
         }
         if events.len() >= self.capacity {
             events.pop_front();
         }
         events.push_back(event);
+        Ok(())
     }
 }
 
 #[derive(Debug, Clone, Copy, Default)]
 pub struct NoopTokenAuditLog;
 
+#[async_trait]
 impl TokenAuditLog for NoopTokenAuditLog {
-    fn record(&self, _event: TokenAuditEvent) {}
+    async fn record(&self, _event: TokenAuditEvent) -> BpResult<()> {
+        Ok(())
+    }
 }

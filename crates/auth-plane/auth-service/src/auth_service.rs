@@ -1,4 +1,4 @@
-use crate::{TokenAuditLog, replay_cache::ReplayCache, token_store::TokenStore};
+use crate::{TokenAuditEvent, TokenAuditLog, replay_cache::ReplayCache, token_store::TokenStore};
 use chrono::Duration;
 use platform_errors::{AuthError, BpError, BpResult};
 use std::sync::Arc;
@@ -50,6 +50,19 @@ impl AuthService {
             token_lifetime: config.token_lifetime,
             rotation_overlap: config.rotation_overlap,
         })
+    }
+
+    pub(crate) async fn record_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+        self.audit.record(event).await
+    }
+
+    /// Records an event for an operation that is already failing. The original
+    /// failure is more useful to the caller, so audit delivery errors are logged
+    /// instead of replacing it.
+    pub(crate) async fn record_audit_failure(&self, event: TokenAuditEvent) {
+        if let Err(error) = self.audit.record(event).await {
+            tracing::error!(%error, "failed to record token audit event");
+        }
     }
 
     pub(crate) fn is_conflict(error: &BpError) -> bool {

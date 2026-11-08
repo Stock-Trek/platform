@@ -4574,14 +4574,18 @@ dependencies = [
  "httpdate",
  "parking_lot",
  "platform-errors",
+ "platform-sqs",
+ "platform-time",
  "rand 0.8.8",
  "reqwest 0.13.5",
  "secrecy",
+ "serde",
  "serde_json",
  "sha2 0.11.1",
  "strum 0.28.0",
  "subtle",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -4993,13 +4997,17 @@ dependencies = [
 name = "platform-runner"
 version = "0.2.0"
 dependencies = [
+ "aws-sdk-sqs",
  "chrono",
  "futures",
  "hex",
  "platform-auth-service",
+ "platform-aws",
  "platform-config",
  "platform-errors",
  "platform-exit-codes",
+ "platform-sqs",
+ "platform-time",
  "prost",
  "rand 0.8.8",
  "reqwest 0.13.5",
@@ -5043,6 +5051,7 @@ dependencies = [
  "platform-messages",
  "platform-metrics",
  "platform-time",
+ "serde",
  "serde_json",
  "tokio",
 ]

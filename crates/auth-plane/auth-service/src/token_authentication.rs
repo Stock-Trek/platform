@@ -18,23 +18,27 @@ impl AuthService {
             let mut token = match self.token(token_id).await {
                 Ok(token) => token,
                 Err(error) => {
-                    self.record_authentication_failure(token_id, None, now, &error);
+                    self.record_authentication_failure(token_id, None, now, &error)
+                        .await;
                     return Err(error);
                 }
             };
             if !token.matches_secret(candidate) {
                 let error = BpError::auth_invalid_secret(token.id());
-                self.record_authentication_failure(token_id, Some(&token), now, &error);
+                self.record_authentication_failure(token_id, Some(&token), now, &error)
+                    .await;
                 return Err(error);
             }
             if let Err(error) = Self::ensure_active(&token, now) {
-                self.record_authentication_failure(token_id, Some(&token), now, &error);
+                self.record_authentication_failure(token_id, Some(&token), now, &error)
+                    .await;
                 return Err(error);
             }
             if let Some(scope) = scope
                 && let Err(error) = Self::ensure_scope(&token, scope)
             {
-                self.record_authentication_failure(token_id, Some(&token), now, &error);
+                self.record_authentication_failure(token_id, Some(&token), now, &error)
+                    .await;
                 return Err(error);
             }
             let original = token.clone();
@@ -43,18 +47,20 @@ impl AuthService {
                 Ok(()) => {
                     let event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
                         .with_token(token.id(), Some(token.owner()));
-                    self.audit.record(event);
+                    self.record_audit(event).await?;
                     return Ok(token);
                 }
                 Err(error) if Self::is_conflict(&error) => continue,
                 Err(error) => {
-                    self.record_authentication_failure(token_id, Some(&token), now, &error);
+                    self.record_authentication_failure(token_id, Some(&token), now, &error)
+                        .await;
                     return Err(error);
                 }
             }
         }
         let error = BpError::token_conflict(token_id);
-        self.record_authentication_failure(token_id, None, now, &error);
+        self.record_authentication_failure(token_id, None, now, &error)
+            .await;
         Err(error)
     }
 
@@ -82,7 +88,7 @@ impl AuthService {
         }
     }
 
-    fn record_authentication_failure(
+    async fn record_authentication_failure(
         &self,
         token_id: &str,
         token: Option<&ApiToken>,
@@ -92,6 +98,6 @@ impl AuthService {
         let event = TokenAuditEvent::new(TokenAuditAction::AuthenticationFailed, now)
             .with_token(token_id, token.map(ApiToken::owner))
             .failure(error.to_string());
-        self.audit.record(event);
+        self.record_audit_failure(event).await;
     }
 }

@@ -14,13 +14,31 @@ const MAX_CWASM_BYTES: &str = "CWASM_INVOKER_MAX_CWASM_BYTES";
 const VAULT_ADDRESS: &str = "CWASM_INVOKER_VAULT_ADDRESS";
 const VAULT_TOKEN: &str = "CWASM_INVOKER_VAULT_TOKEN";
 const VAULT_MOUNT: &str = "CWASM_INVOKER_VAULT_MOUNT";
+const AUDIT_QUEUE_URL: &str = "CWASM_INVOKER_AUDIT_QUEUE_URL";
+const AUDIT_TIMEOUT_SECS: &str = "CWASM_INVOKER_AUDIT_TIMEOUT_SECS";
 const VAULT_TIMEOUT: Duration = Duration::from_secs(10);
+
+#[derive(Debug, Clone)]
+pub struct AuditConfig {
+    pub queue_url: String,
+    pub timeout: Duration,
+}
+
+impl AuditConfig {
+    fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+        Ok(Self {
+            queue_url: vars.required_url(AUDIT_QUEUE_URL, &["http", "https"])?,
+            timeout: vars.required_positive_duration_secs(AUDIT_TIMEOUT_SECS)?,
+        })
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct InvokerConfig {
     pub execution: ExecutionLimits,
     pub cwasm: CwasmLimits,
     pub vault: VaultTokenStoreConfig,
+    pub audit: AuditConfig,
 }
 
 impl InvokerConfig {
@@ -44,11 +62,13 @@ impl InvokerConfig {
             vars.required(VAULT_MOUNT)?,
             VAULT_TIMEOUT,
         )?;
+        let audit = AuditConfig::from_vars(vars)?;
 
         Ok(Self {
             execution,
             cwasm,
             vault,
+            audit,
         })
     }
 }

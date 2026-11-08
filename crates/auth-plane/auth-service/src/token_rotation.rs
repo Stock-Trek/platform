@@ -43,7 +43,7 @@ impl AuthService {
                     .await?
             }
             Err(error) => {
-                self.record_rotation_failure(&original, now, &error);
+                self.record_rotation_failure(&original, now, &error).await;
                 return Err(error);
             }
         };
@@ -52,7 +52,8 @@ impl AuthService {
             .await
         {
             Ok(()) => {
-                self.record_rotation_success(&original, &replacement, now);
+                self.record_rotation_success(&original, &replacement, now)
+                    .await?;
                 Ok(replacement)
             }
             Err(error) => {
@@ -60,17 +61,18 @@ impl AuthService {
                     Ok(Some(current))
                         if current.metadata().replaced_by() == Some(replacement.id()) =>
                     {
-                        self.record_rotation_success(&original, &replacement, now);
+                        self.record_rotation_success(&original, &replacement, now)
+                            .await?;
                         return Ok(replacement);
                     }
                     Ok(_) => {}
                     Err(_) => {
-                        self.record_rotation_failure(&original, now, &error);
+                        self.record_rotation_failure(&original, now, &error).await;
                         return Err(error);
                     }
                 }
                 let rollback = self.store.delete(replacement.id()).await;
-                self.record_rotation_failure(&original, now, &error);
+                self.record_rotation_failure(&original, now, &error).await;
                 match rollback {
                     Ok(()) => Err(error),
                     Err(rollback_error) => Err(Self::rotation_rollback_error(
@@ -106,16 +108,16 @@ impl AuthService {
         let existing = match self.stored_token(replacement_id).await {
             Ok(Some(existing)) => existing,
             Ok(None) => {
-                self.record_rotation_failure(original, now, &conflict);
+                self.record_rotation_failure(original, now, &conflict).await;
                 return Err(conflict);
             }
             Err(error) => {
-                self.record_rotation_failure(original, now, &error);
+                self.record_rotation_failure(original, now, &error).await;
                 return Err(error);
             }
         };
         if let Err(error) = Self::ensure_replacement_matches(original, &existing) {
-            self.record_rotation_failure(original, now, &error);
+            self.record_rotation_failure(original, now, &error).await;
             return Err(error);
         }
         Ok(existing)
@@ -133,25 +135,25 @@ impl AuthService {
         format!("{prefix}{suffix}")
     }
 
-    fn record_rotation_success(
+    async fn record_rotation_success(
         &self,
         original: &ApiToken,
         replacement: &ApiToken,
         now: DateTime<Utc>,
-    ) {
+    ) -> BpResult<()> {
         let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
             .with_token(original.id(), Some(original.owner()));
-        self.audit.record(event);
+        self.record_audit(event).await?;
         let issued = TokenAuditEvent::new(TokenAuditAction::Issued, now)
             .with_token(replacement.id(), Some(replacement.owner()));
-        self.audit.record(issued);
+        self.record_audit(issued).await
     }
 
-    fn record_rotation_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {
+    async fn record_rotation_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {
         let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
             .with_token(token.id(), Some(token.owner()))
             .failure(error.to_string());
-        self.audit.record(event);
+        self.record_audit_failure(event).await;
     }
 
     fn rotation_rollback_error(

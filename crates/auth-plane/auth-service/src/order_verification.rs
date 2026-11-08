@@ -18,39 +18,47 @@ impl AuthService {
         let token = match self.token(token_id).await {
             Ok(token) => token,
             Err(error) if matches!(error, BpError::Auth(AuthError::UnknownToken { .. })) => {
-                self.record_signature_rejected(token_id, None, now, &error.to_string());
+                self.record_signature_rejected(token_id, None, now, &error.to_string())
+                    .await;
                 return Ok(false);
             }
             Err(error) => {
-                self.record_signature_rejected(token_id, None, now, &error.to_string());
+                self.record_signature_rejected(token_id, None, now, &error.to_string())
+                    .await;
                 return Err(error);
             }
         };
         if let Err(error) = Self::ensure_active(&token, now) {
-            self.record_signature_rejected(token_id, Some(&token), now, &error.to_string());
+            self.record_signature_rejected(token_id, Some(&token), now, &error.to_string())
+                .await;
             return Ok(false);
         }
         if let Err(error) = Self::ensure_scope(&token, TokenScope::OrdersWrite) {
-            self.record_signature_rejected(token_id, Some(&token), now, &error.to_string());
+            self.record_signature_rejected(token_id, Some(&token), now, &error.to_string())
+                .await;
             return Ok(false);
         }
         let Ok(signed) = SignedOrderRequest::decode(signature) else {
-            self.record_signature_rejected(token_id, Some(&token), now, "malformed signature");
+            self.record_signature_rejected(token_id, Some(&token), now, "malformed signature")
+                .await;
             return Ok(false);
         };
         if signed.token_id() != token_id {
-            self.record_signature_rejected(token_id, Some(&token), now, "token mismatch");
+            self.record_signature_rejected(token_id, Some(&token), now, "token mismatch")
+                .await;
             return Ok(false);
         }
         let Ok(context) = signed.context() else {
-            self.record_signature_rejected(token_id, Some(&token), now, "invalid context");
+            self.record_signature_rejected(token_id, Some(&token), now, "invalid context")
+                .await;
             return Ok(false);
         };
         let latest_issued_at = now
             .checked_add_signed(Duration::seconds(CLOCK_SKEW_SECONDS))
             .unwrap_or(DateTime::<Utc>::MAX_UTC);
         if signed.is_expired(now) {
-            self.record_signature_rejected(token_id, Some(&token), now, "expired signature");
+            self.record_signature_rejected(token_id, Some(&token), now, "expired signature")
+                .await;
             return Ok(false);
         }
         if signed.issued_at() > latest_issued_at {
@@ -59,7 +67,8 @@ impl AuthService {
                 Some(&token),
                 now,
                 "signature issued in the future",
-            );
+            )
+            .await;
             return Ok(false);
         }
         let validity = signed
@@ -71,12 +80,14 @@ impl AuthService {
                 Some(&token),
                 now,
                 "signature validity exceeds policy",
-            );
+            )
+            .await;
             return Ok(false);
         }
         let signer = OrderRequestSigner::new(token.secret())?;
         if !signer.verify_order_request(&context, order_request, signed.signature())? {
-            self.record_signature_rejected(token_id, Some(&token), now, "signature mismatch");
+            self.record_signature_rejected(token_id, Some(&token), now, "signature mismatch")
+                .await;
             return Ok(false);
         }
         if !self.replay.consume(
@@ -85,7 +96,8 @@ impl AuthService {
             context.expires_at(),
             now,
         ) {
-            self.record_signature_rejected(token_id, Some(&token), now, "replayed signature");
+            self.record_signature_rejected(token_id, Some(&token), now, "replayed signature")
+                .await;
             return Ok(false);
         }
         let mut latest = token;
@@ -96,7 +108,7 @@ impl AuthService {
                 Ok(()) => {
                     let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
                         .with_token(updated.id(), Some(updated.owner()));
-                    self.audit.record(event);
+                    self.record_audit(event).await?;
                     return Ok(true);
                 }
                 Err(error) if Self::is_conflict(&error) => {
@@ -114,7 +126,8 @@ impl AuthService {
                             Some(&latest),
                             now,
                             &error.to_string(),
-                        );
+                        )
+                        .await;
                         return Ok(false);
                     }
                     if let Err(error) = Self::ensure_scope(&latest, TokenScope::OrdersWrite) {
@@ -124,7 +137,8 @@ impl AuthService {
                             Some(&latest),
                             now,
                             &error.to_string(),
-                        );
+                        )
+                        .await;
                         return Ok(false);
                     }
                 }
@@ -138,7 +152,7 @@ impl AuthService {
         Err(BpError::token_conflict(token_id))
     }
 
-    fn record_signature_rejected(
+    async fn record_signature_rejected(
         &self,
         token_id: &str,
         token: Option<&ApiToken>,
@@ -148,6 +162,6 @@ impl AuthService {
         let event = TokenAuditEvent::new(TokenAuditAction::SignatureRejected, now)
             .with_token(token_id, token.map(ApiToken::owner))
             .failure(detail);
-        self.audit.record(event);
+        self.record_audit_failure(event).await;
     }
 }

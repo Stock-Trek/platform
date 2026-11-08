@@ -259,12 +259,15 @@ their details.
 
 The native cwasm host reads these required variables when it starts. Missing, empty, and invalid
 values fail startup. Order requests are signed with the auth-service token owned by the owner in
-the run request.
+the run request. Token audit events are sent to the configured SQS queue before an auth operation
+completes; delivery failures fail the operation instead of disappearing with the process.
 
 #### Required
 
 | Variable | Description |
 | --- | --- |
+| `CWASM_INVOKER_AUDIT_QUEUE_URL` | SQS queue URL that receives auth-service token audit events. |
+| `CWASM_INVOKER_AUDIT_TIMEOUT_SECS` | Maximum time spent delivering one audit event, in seconds. |
 | `CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS` | Maximum time spent downloading a cwasm artifact, in seconds. |
 | `CWASM_INVOKER_EXECUTION_TIMEOUT_SECS` | Maximum guest execution time before the watchdog interrupts it, in seconds. |
 | `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. |
