@@ -24,6 +24,7 @@ impl VaultClient {
 
     pub(crate) async fn put(&self, token: &ApiToken, create_only: bool) -> BpResult<()> {
         ApiToken::validate_id(token.id())?;
+        token.metadata().validate()?;
         let mut body = json!({ "data": token.to_value() });
         if create_only {
             body["options"] = json!({ "cas": 0 });
@@ -77,7 +78,9 @@ impl VaultClient {
         let data = value.pointer("/data/data").cloned().ok_or_else(|| {
             BpError::auth_store("read", id, false, "malformed Vault response".to_string())
         })?;
-        ApiToken::from_value(id, &data).map(Some)
+        ApiToken::from_value(id, &data)
+            .map(Some)
+            .map_err(|error| BpError::auth_store("read", id, false, error))
     }
 
     pub(crate) async fn delete(&self, id: &str) -> BpResult<()> {

@@ -44,10 +44,14 @@ impl VaultError {
     }
 
     pub fn duplicate_write(status: StatusCode, body: &str) -> bool {
-        matches!(
+        if !matches!(
             status,
             StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED
-        ) && (body.contains("check-and-set") || body.contains("did not match"))
+        ) {
+            return false;
+        }
+        let body = body.to_ascii_lowercase();
+        body.contains("check-and-set") || body.contains("did not match")
     }
 
     fn retryable_transport(error: &Error) -> bool {
