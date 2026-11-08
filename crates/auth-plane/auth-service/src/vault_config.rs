@@ -14,19 +14,21 @@ pub struct VaultTokenStoreConfig {
 impl VaultTokenStoreConfig {
     pub fn new(
         address: impl Into<String>,
-        token: SecretString,
+        token: impl Into<SecretString>,
         mount: impl Into<String>,
         timeout: Duration,
-    ) -> Self {
+    ) -> BpResult<Self> {
         let address = address.into();
-        let token = SecretString::from(token.expose_secret().trim());
+        let token = token.into();
         let mount = mount.into();
-        Self {
+        let config = Self {
             address: address.trim().to_string(),
-            token,
+            token: SecretString::from(token.expose_secret().trim()),
             mount: mount.trim().to_string(),
             timeout,
-        }
+        };
+        config.validate()?;
+        Ok(config)
     }
 
     pub fn address(&self) -> &str {

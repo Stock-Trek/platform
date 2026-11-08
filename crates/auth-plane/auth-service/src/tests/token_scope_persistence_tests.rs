@@ -81,7 +81,10 @@ async fn authorization_rejects_tokens_without_the_required_scope() {
 
     assert!(matches!(
         error,
-        BpError::Auth(AuthError::InvalidField { field: "scope", .. })
+        BpError::Auth(AuthError::MissingScope {
+            ref token_id,
+            ref scope,
+        }) if token_id == token.id() && scope == "orders:write"
     ));
 }
 

@@ -23,7 +23,7 @@ impl AuthService {
                 }
             };
             if !token.matches_secret(candidate) {
-                let error = BpError::auth_invalid_field("secret", "does not match the token");
+                let error = BpError::auth_invalid_secret(token.id());
                 self.record_authentication_failure(token_id, Some(&token), now, &error);
                 return Err(error);
             }
@@ -60,22 +60,13 @@ impl AuthService {
 
     pub(crate) fn ensure_active(token: &ApiToken, now: DateTime<Utc>) -> BpResult<()> {
         if token.metadata().is_revoked() {
-            return Err(BpError::auth_invalid_field(
-                "token_id",
-                format!("{:?} has been revoked", token.id()),
-            ));
+            return Err(BpError::auth_revoked(token.id()));
         }
         if token.metadata().is_expired(now) {
-            return Err(BpError::auth_invalid_field(
-                "token_id",
-                format!("{:?} has expired", token.id()),
-            ));
+            return Err(BpError::auth_expired(token.id()));
         }
         if token.metadata().is_rotation_overlap_ended(now) {
-            return Err(BpError::auth_invalid_field(
-                "token_id",
-                format!("{:?} is outside its rotation overlap", token.id()),
-            ));
+            return Err(BpError::auth_rotation_overlap_ended(token.id()));
         }
         Ok(())
     }
@@ -84,12 +75,9 @@ impl AuthService {
         if token.metadata().has_scope(required) {
             Ok(())
         } else {
-            Err(BpError::auth_invalid_field(
-                "scope",
-                format!(
-                    "token {:?} is missing required scope {required:?}",
-                    token.id()
-                ),
+            Err(BpError::auth_missing_scope(
+                token.id(),
+                required.to_string(),
             ))
         }
     }

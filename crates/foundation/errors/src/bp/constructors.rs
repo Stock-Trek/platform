@@ -35,6 +35,37 @@ impl BpError {
         })
     }
 
+    pub fn auth_invalid_secret(token_id: impl Into<String>) -> Self {
+        Self::Auth(AuthError::InvalidSecret {
+            token_id: token_id.into(),
+        })
+    }
+
+    pub fn auth_revoked(token_id: impl Into<String>) -> Self {
+        Self::Auth(AuthError::Revoked {
+            token_id: token_id.into(),
+        })
+    }
+
+    pub fn auth_expired(token_id: impl Into<String>) -> Self {
+        Self::Auth(AuthError::Expired {
+            token_id: token_id.into(),
+        })
+    }
+
+    pub fn auth_rotation_overlap_ended(token_id: impl Into<String>) -> Self {
+        Self::Auth(AuthError::RotationOverlapEnded {
+            token_id: token_id.into(),
+        })
+    }
+
+    pub fn auth_missing_scope(token_id: impl Into<String>, scope: impl Into<String>) -> Self {
+        Self::Auth(AuthError::MissingScope {
+            token_id: token_id.into(),
+            scope: scope.into(),
+        })
+    }
+
     pub fn auth_store<E>(
         operation: &'static str,
         target: impl Into<String>,

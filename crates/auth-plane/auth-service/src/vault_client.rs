@@ -35,7 +35,6 @@ pub(crate) struct VaultClient {
 
 impl VaultClient {
     pub(crate) fn new(config: VaultTokenStoreConfig) -> BpResult<Self> {
-        config.validate()?;
         let client = reqwest::Client::builder()
             .timeout(config.timeout())
             .redirect(reqwest::redirect::Policy::none())

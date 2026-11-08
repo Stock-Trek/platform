@@ -37,10 +37,7 @@ async fn expires_tokens_are_rejected() {
 
     assert!(matches!(
         error,
-        BpError::Auth(AuthError::InvalidField {
-            field: "token_id",
-            ..
-        })
+        BpError::Auth(AuthError::Expired { ref token_id }) if token_id == token.id()
     ));
     assert!(token.metadata().is_expired(expires_at));
 }
@@ -144,12 +141,15 @@ async fn revocation_records_metadata_and_blocks_use() {
         revoked.metadata().revoked_by(),
         Some(RevokedBy::SecurityTeam)
     );
-    assert!(
-        service
-            .authenticate(token.id(), token.secret(), None, now)
-            .await
-            .is_err()
-    );
+    let error = service
+        .authenticate(token.id(), token.secret(), None, now)
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        BpError::Auth(AuthError::Revoked { ref token_id }) if token_id == token.id()
+    ));
 }
 
 #[tokio::test]

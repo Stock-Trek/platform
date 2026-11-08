@@ -40,6 +40,32 @@ fn invalid_field_is_permanent() {
 }
 
 #[test]
+fn authentication_failures_are_permanent() {
+    let errors = [
+        AuthError::InvalidSecret {
+            token_id: "token-a".to_string(),
+        },
+        AuthError::Revoked {
+            token_id: "token-a".to_string(),
+        },
+        AuthError::Expired {
+            token_id: "token-a".to_string(),
+        },
+        AuthError::RotationOverlapEnded {
+            token_id: "token-a".to_string(),
+        },
+        AuthError::MissingScope {
+            token_id: "token-a".to_string(),
+            scope: "orders:write".to_string(),
+        },
+    ];
+
+    for error in errors {
+        assert_eq!(error.retryability(), Retryability::Permanent);
+    }
+}
+
+#[test]
 fn store_retryability_follows_the_flag() {
     let error = |retryable| AuthError::Store {
         operation: "write",
