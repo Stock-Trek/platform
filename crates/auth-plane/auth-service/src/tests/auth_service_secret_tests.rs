@@ -14,7 +14,7 @@ async fn signing_requires_the_token_secret() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::InvalidField { .. }))
+        Err(BpError::Auth(AuthError::InvalidSecret { .. }))
     ));
 }
 

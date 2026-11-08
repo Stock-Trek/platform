@@ -1,11 +1,12 @@
 use crate::VaultTokenStoreConfig;
+use platform_errors::{BpError, BpResult, ConfigError};
 use secrecy::{ExposeSecret, SecretString};
 use std::time::Duration;
 
 struct VaultConfigFixture;
 
 impl VaultConfigFixture {
-    fn config(address: &str, mount: &str) -> VaultTokenStoreConfig {
+    fn config(address: &str, mount: &str) -> BpResult<VaultTokenStoreConfig> {
         VaultTokenStoreConfig::new(
             address,
             SecretString::from("vault-token"),
@@ -13,27 +14,54 @@ impl VaultConfigFixture {
             Duration::from_secs(10),
         )
     }
+
+    fn assert_invalid(error: BpError, expected: &str) {
+        match error {
+            BpError::Config(ConfigError::Empty { name })
+            | BpError::Config(ConfigError::Invalid { name, .. }) => {
+                assert_eq!(name, expected)
+            }
+            other => panic!("expected {expected} validation error, got {other:?}"),
+        }
+    }
 }
 
 #[test]
 fn vault_config_rejects_invalid_addresses_and_mounts() {
-    let invalid_address = VaultConfigFixture::config("not a url", "platform-tokens");
-    assert!(invalid_address.validate().is_err());
+    VaultConfigFixture::assert_invalid(
+        VaultConfigFixture::config("not a url", "platform-tokens").unwrap_err(),
+        "vault_address",
+    );
+    VaultConfigFixture::assert_invalid(
+        VaultConfigFixture::config("https://vault.example.com", "../sys").unwrap_err(),
+        "vault_mount",
+    );
+}
 
-    let invalid_mount = VaultConfigFixture::config("https://vault.example.com", "../sys");
-    assert!(invalid_mount.validate().is_err());
+#[test]
+fn vault_config_rejects_empty_fields() {
+    for (address, mount, expected) in [
+        ("", "platform-tokens", "vault_address"),
+        ("https://vault.example.com", "", "vault_mount"),
+    ] {
+        VaultConfigFixture::assert_invalid(
+            VaultConfigFixture::config(address, mount).unwrap_err(),
+            expected,
+        );
+    }
 }
 
 #[test]
 fn vault_config_rejects_a_zero_timeout() {
-    let config = VaultTokenStoreConfig::new(
+    let error = VaultTokenStoreConfig::new(
         "https://vault.example.com",
         SecretString::from("vault-token"),
         "platform-tokens",
         Duration::ZERO,
-    );
+    )
+    .unwrap_err();
 
-    assert!(config.validate().is_err());
+    VaultConfigFixture::assert_invalid(error, "vault_timeout");
 }
 
 #[test]
@@ -43,40 +71,62 @@ fn vault_config_normalizes_surrounding_whitespace() {
         SecretString::from(" vault-token "),
         " platform-tokens ",
         Duration::from_secs(10),
-    );
+    )
+    .unwrap();
 
     assert_eq!(config.address(), "https://vault.example.com");
     assert_eq!(config.token().expose_secret(), "vault-token");
     assert_eq!(config.mount(), "platform-tokens");
-    assert!(config.validate().is_ok());
+}
+
+#[test]
+fn vault_config_accepts_string_credentials() {
+    let config = VaultTokenStoreConfig::new(
+        "https://vault.example.com",
+        "vault-token",
+        "platform-tokens",
+        Duration::from_secs(10),
+    )
+    .unwrap();
+
+    assert_eq!(config.token().expose_secret(), "vault-token");
 }
 
 #[test]
 fn vault_config_rejects_an_invalid_token_header() {
-    let config = VaultTokenStoreConfig::new(
+    let error = VaultTokenStoreConfig::new(
         "https://vault.example.com",
         SecretString::from("token\ninvalid"),
         "platform-tokens",
         Duration::from_secs(10),
-    );
+    )
+    .unwrap_err();
 
-    assert!(config.validate().is_err());
+    VaultConfigFixture::assert_invalid(error, "vault_token");
 }
 
 #[test]
 fn vault_config_rejects_embedded_credentials() {
-    let userinfo = VaultConfigFixture::config("https://user:pass@vault.example.com", "tokens");
-    let username = VaultConfigFixture::config("https://user@vault.example.com", "tokens");
-
-    assert!(userinfo.validate().is_err());
-    assert!(username.validate().is_err());
+    for address in [
+        "https://user:pass@vault.example.com",
+        "https://user@vault.example.com",
+    ] {
+        VaultConfigFixture::assert_invalid(
+            VaultConfigFixture::config(address, "tokens").unwrap_err(),
+            "vault_address",
+        );
+    }
 }
 
 #[test]
 fn vault_config_rejects_addresses_with_queries_or_fragments() {
-    let query = VaultConfigFixture::config("https://vault.example.com?trace=1", "tokens");
-    let fragment = VaultConfigFixture::config("https://vault.example.com#section", "tokens");
-
-    assert!(query.validate().is_err());
-    assert!(fragment.validate().is_err());
+    for address in [
+        "https://vault.example.com?trace=1",
+        "https://vault.example.com#section",
+    ] {
+        VaultConfigFixture::assert_invalid(
+            VaultConfigFixture::config(address, "tokens").unwrap_err(),
+            "vault_address",
+        );
+    }
 }

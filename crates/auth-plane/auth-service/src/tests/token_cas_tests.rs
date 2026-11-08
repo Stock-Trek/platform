@@ -124,13 +124,7 @@ async fn authentication_does_not_overwrite_a_concurrent_revocation() {
         .await
         .unwrap_err();
 
-    assert!(matches!(
-        error,
-        BpError::Auth(AuthError::InvalidField {
-            field: "token_id",
-            ..
-        })
-    ));
+    assert!(matches!(error, BpError::Auth(AuthError::Revoked { .. })));
     assert!(
         service
             .token(token.id())

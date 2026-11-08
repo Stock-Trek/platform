@@ -123,7 +123,8 @@ async fn authentication_rejects_the_wrong_secret() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::InvalidField { .. }))
+        Err(BpError::Auth(AuthError::InvalidSecret { ref token_id }))
+            if token_id == added.id()
     ));
 }
 

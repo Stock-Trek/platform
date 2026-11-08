@@ -38,12 +38,16 @@ async fn rotation_keeps_the_old_token_valid_for_the_overlap() {
             .await
             .is_ok()
     );
-    assert!(
-        service
-            .authenticate(old.id(), old.secret(), None, now + Duration::seconds(61))
-            .await
-            .is_err()
-    );
+    let error = service
+        .authenticate(old.id(), old.secret(), None, now + Duration::seconds(61))
+        .await
+        .unwrap_err();
+
+    assert!(matches!(
+        error,
+        BpError::Auth(AuthError::RotationOverlapEnded { ref token_id })
+            if token_id == old.id()
+    ));
 }
 
 #[tokio::test]

@@ -12,6 +12,16 @@ pub enum AuthError {
     Conflict { token_id: String },
     #[error("invalid {field} for API token: {reason}")]
     InvalidField { field: &'static str, reason: String },
+    #[error("secret does not match API token {token_id:?}")]
+    InvalidSecret { token_id: String },
+    #[error("API token {token_id:?} has been revoked")]
+    Revoked { token_id: String },
+    #[error("API token {token_id:?} has expired")]
+    Expired { token_id: String },
+    #[error("API token {token_id:?} is outside its rotation overlap")]
+    RotationOverlapEnded { token_id: String },
+    #[error("API token {token_id:?} is missing required scope {scope}")]
+    MissingScope { token_id: String, scope: String },
     #[error("token store {operation} failed for {target}: {source}")]
     Store {
         operation: &'static str,
@@ -35,6 +45,11 @@ impl AuthError {
             Self::UnknownToken { .. }
             | Self::TokenExists { .. }
             | Self::InvalidField { .. }
+            | Self::InvalidSecret { .. }
+            | Self::Revoked { .. }
+            | Self::Expired { .. }
+            | Self::RotationOverlapEnded { .. }
+            | Self::MissingScope { .. }
             | Self::Store {
                 retryable: false, ..
             } => Retryability::Permanent,

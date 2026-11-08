@@ -43,8 +43,7 @@ impl InvokerConfig {
             SecretString::from(vars.required(VAULT_TOKEN)?),
             vars.required(VAULT_MOUNT)?,
             VAULT_TIMEOUT,
-        );
-        vault.validate()?;
+        )?;
 
         Ok(Self {
             execution,

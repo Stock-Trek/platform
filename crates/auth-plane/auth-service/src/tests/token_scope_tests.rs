@@ -110,7 +110,7 @@ async fn read_only_tokens_cannot_sign_orders() {
 
     assert!(matches!(
         error,
-        BpError::Auth(AuthError::InvalidField { field: "scope", .. })
+        BpError::Auth(AuthError::MissingScope { .. })
     ));
 }
 
