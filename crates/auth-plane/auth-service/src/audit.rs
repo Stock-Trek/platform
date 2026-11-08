@@ -50,18 +50,6 @@ impl TokenAuditEvent {
         self.detail = Some(detail.into());
         self
     }
-
-    pub fn token_id(&self) -> Option<&str> {
-        self.token_id.as_deref()
-    }
-
-    pub fn owner(&self) -> Option<&str> {
-        self.owner.as_deref()
-    }
-
-    pub fn detail(&self) -> Option<&str> {
-        self.detail.as_deref()
-    }
 }
 
 pub trait TokenAuditLog: Send + Sync {

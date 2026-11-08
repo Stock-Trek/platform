@@ -123,7 +123,8 @@ async fn revoking_a_token_twice_records_one_revocation_event() {
         .events()
         .into_iter()
         .filter(|event| {
-            event.action == TokenAuditAction::Revoked && event.token_id() == Some(token.id())
+            event.action == TokenAuditAction::Revoked
+                && event.token_id.as_deref() == Some(token.id())
         })
         .collect();
 

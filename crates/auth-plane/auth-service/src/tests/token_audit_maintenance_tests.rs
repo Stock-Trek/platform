@@ -15,7 +15,7 @@ async fn keeps_only_the_most_recent_events_at_capacity() {
     let ids: Vec<_> = audit
         .drain()
         .into_iter()
-        .map(|event| event.token_id().unwrap().to_string())
+        .map(|event| event.token_id.unwrap())
         .collect();
     assert_eq!(ids, vec!["token-b", "token-c"]);
 }
@@ -58,6 +58,6 @@ async fn purging_expired_tokens_records_deletions() {
     let events = audit.events();
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].action, TokenAuditAction::Deleted);
-    assert_eq!(events[0].token_id(), Some("expired"));
-    assert_eq!(events[0].owner(), Some("owner-a"));
+    assert_eq!(events[0].token_id.as_deref(), Some("expired"));
+    assert_eq!(events[0].owner.as_deref(), Some("owner-a"));
 }
