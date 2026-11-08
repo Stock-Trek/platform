@@ -1,6 +1,7 @@
 use crate::{
     ApiToken, AuthService, OrderRequestContext, OrderRequestSigner, SecretInput, SignatureInput,
     SignedOrderRequest, TokenAuditAction, TokenAuditEvent, TokenScope,
+    auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{BpError, BpResult};
@@ -51,7 +52,7 @@ impl AuthService {
         now: DateTime<Utc>,
     ) -> BpResult<bool> {
         let signature = signature.signature_input();
-        let mut token = match self.token(token_id).await {
+        let token = match self.token(token_id).await {
             Ok(token) => token,
             Err(error) => {
                 self.record_signature_rejected(token_id, None, now, &error.to_string());
@@ -120,15 +121,54 @@ impl AuthService {
             self.record_signature_rejected(token_id, Some(&token), now, "replayed signature");
             return Ok(false);
         }
-        token.metadata.record_use(now);
-        if let Err(error) = self.store.update(&token).await {
-            self.replay.release(token_id, context.nonce());
-            return Err(error);
+        let mut latest = token;
+        for _ in 0..MAX_UPDATE_ATTEMPTS {
+            let mut updated = latest.clone();
+            updated.metadata.record_use(now);
+            match self.store.update(&latest, &updated).await {
+                Ok(()) => {
+                    let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
+                        .with_token(updated.id(), Some(updated.owner()));
+                    self.audit.record(event);
+                    return Ok(true);
+                }
+                Err(error) if Self::is_conflict(&error) => {
+                    latest = match self.token(token_id).await {
+                        Ok(token) => token,
+                        Err(error) => {
+                            self.replay.release(token_id, context.nonce());
+                            return Err(error);
+                        }
+                    };
+                    if let Err(error) = Self::ensure_active(&latest, now) {
+                        self.replay.release(token_id, context.nonce());
+                        self.record_signature_rejected(
+                            token_id,
+                            Some(&latest),
+                            now,
+                            &error.to_string(),
+                        );
+                        return Ok(false);
+                    }
+                    if let Err(error) = Self::ensure_scope(&latest, TokenScope::OrdersWrite) {
+                        self.replay.release(token_id, context.nonce());
+                        self.record_signature_rejected(
+                            token_id,
+                            Some(&latest),
+                            now,
+                            &error.to_string(),
+                        );
+                        return Ok(false);
+                    }
+                }
+                Err(error) => {
+                    self.replay.release(token_id, context.nonce());
+                    return Err(error);
+                }
+            }
         }
-        let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
-            .with_token(token.id(), Some(token.owner()));
-        self.audit.record(event);
-        Ok(true)
+        self.replay.release(token_id, context.nonce());
+        Err(BpError::token_conflict(token_id))
     }
 
     fn sign_with_token_at(

@@ -1,7 +1,9 @@
 use crate::{TokenAuditLog, replay_cache::ReplayCache, token_store::TokenStore};
 use chrono::Duration;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{AuthError, BpError, BpResult};
 use std::sync::Arc;
+
+pub(crate) const MAX_UPDATE_ATTEMPTS: usize = 5;
 
 pub struct AuthServiceConfig {
     pub token_lifetime: Duration,
@@ -48,5 +50,9 @@ impl AuthService {
             token_lifetime: config.token_lifetime,
             rotation_overlap: config.rotation_overlap,
         })
+    }
+
+    pub(crate) fn is_conflict(error: &BpError) -> bool {
+        matches!(error, BpError::Auth(AuthError::Conflict { .. }))
     }
 }

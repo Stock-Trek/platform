@@ -27,7 +27,7 @@ impl TokenStore for MismatchedTokenStore {
         Ok(vec!["token-a".to_string()])
     }
 
-    async fn update(&self, _token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> BpResult<()> {
         Ok(())
     }
 }
@@ -99,7 +99,7 @@ impl TokenStore for DuplicateIdsStore {
         ])
     }
 
-    async fn update(&self, _token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> BpResult<()> {
         Ok(())
     }
 }

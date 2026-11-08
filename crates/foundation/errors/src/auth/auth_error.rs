@@ -8,6 +8,8 @@ pub enum AuthError {
     UnknownToken { token_id: String },
     #[error("API token {token_id:?} already exists")]
     TokenExists { token_id: String },
+    #[error("API token {token_id:?} was modified concurrently")]
+    Conflict { token_id: String },
     #[error("invalid {field} for API token: {reason}")]
     InvalidField { field: &'static str, reason: String },
     #[error("token store {operation} failed for {target}: {source}")]
@@ -28,6 +30,7 @@ impl AuthError {
             Self::Store {
                 retryable: true, ..
             }
+            | Self::Conflict { .. }
             | Self::Unavailable { .. } => Retryability::Retryable,
             Self::UnknownToken { .. }
             | Self::TokenExists { .. }

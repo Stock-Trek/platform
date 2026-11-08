@@ -22,6 +22,12 @@ impl BpError {
         })
     }
 
+    pub fn token_conflict(token_id: impl Into<String>) -> Self {
+        Self::Auth(AuthError::Conflict {
+            token_id: token_id.into(),
+        })
+    }
+
     pub fn auth_invalid_field(field: &'static str, reason: impl Into<String>) -> Self {
         Self::Auth(AuthError::InvalidField {
             field,

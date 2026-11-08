@@ -43,7 +43,7 @@ impl VaultError {
         )
     }
 
-    pub fn duplicate_write(status: StatusCode, body: &str) -> bool {
+    pub fn cas_mismatch(status: StatusCode, body: &str) -> bool {
         if !matches!(
             status,
             StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED

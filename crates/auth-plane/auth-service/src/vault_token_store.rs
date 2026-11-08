@@ -1,4 +1,8 @@
-use crate::{ApiToken, VaultTokenStoreConfig, token_store::TokenStore, vault_client::VaultClient};
+use crate::{
+    ApiToken, VaultTokenStoreConfig,
+    token_store::TokenStore,
+    vault_client::{VaultClient, WriteCondition},
+};
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
 
@@ -17,7 +21,7 @@ impl VaultTokenStore {
 #[async_trait]
 impl TokenStore for VaultTokenStore {
     async fn put(&self, token: &ApiToken) -> BpResult<()> {
-        self.client.put(token, true).await
+        self.client.put(token, WriteCondition::Create).await
     }
 
     async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
@@ -32,10 +36,15 @@ impl TokenStore for VaultTokenStore {
         self.client.ids().await
     }
 
-    async fn update(&self, token: &ApiToken) -> BpResult<()> {
-        if self.client.get(token.id()).await?.is_none() {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
+        let Some((current, version)) = self.client.get_entry(token.id()).await? else {
             return Err(BpError::unknown_token(token.id()));
+        };
+        if current.to_value() != expected.to_value() {
+            return Err(BpError::token_conflict(token.id()));
         }
-        self.client.put(token, false).await
+        self.client
+            .put(token, WriteCondition::Update(version))
+            .await
     }
 }

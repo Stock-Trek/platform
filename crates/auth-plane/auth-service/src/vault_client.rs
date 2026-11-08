@@ -6,6 +6,28 @@ use serde_json::{Value, json};
 
 const TOKEN_HEADER: &str = "X-Vault-Token";
 
+#[derive(Clone, Copy)]
+pub(crate) enum WriteCondition {
+    Create,
+    Update(u64),
+}
+
+impl WriteCondition {
+    fn cas(self) -> u64 {
+        match self {
+            Self::Create => 0,
+            Self::Update(version) => version,
+        }
+    }
+
+    fn conflict(self, token_id: &str) -> BpError {
+        match self {
+            Self::Create => BpError::token_exists(token_id),
+            Self::Update(_) => BpError::token_conflict(token_id),
+        }
+    }
+}
+
 pub(crate) struct VaultClient {
     client: reqwest::Client,
     config: VaultTokenStoreConfig,
@@ -22,30 +44,28 @@ impl VaultClient {
         Ok(Self { client, config })
     }
 
-    pub(crate) async fn put(&self, token: &ApiToken, create_only: bool) -> BpResult<()> {
+    pub(crate) async fn put(&self, token: &ApiToken, condition: WriteCondition) -> BpResult<()> {
         token.validate()?;
-        let mut body = json!({ "data": token.to_value() });
-        if create_only {
-            body["options"] = json!({ "cas": 0 });
-        }
+        let body = json!({
+            "data": token.to_value(),
+            "options": { "cas": condition.cas() },
+        });
         let request = self
             .request(Method::PUT, self.config.url(&["data", token.id()])?)
             .json(&body);
         let response = self.send("write", token.id(), request).await?;
         let status = response.status();
-        if create_only
-            && matches!(
-                status,
-                StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED
-            )
-        {
+        if matches!(
+            status,
+            StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED
+        ) {
             let headers = response.headers().clone();
             let body = response
                 .text()
                 .await
                 .unwrap_or_else(|_| "<unreadable body>".to_string());
-            if VaultError::duplicate_write(status, &body) {
-                return Err(BpError::token_exists(token.id()));
+            if VaultError::cas_mismatch(status, &body) {
+                return Err(condition.conflict(token.id()));
             }
             return Err(VaultError::response(
                 "write",
@@ -61,6 +81,10 @@ impl VaultClient {
     }
 
     pub(crate) async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+        Ok(self.get_entry(id).await?.map(|(token, _)| token))
+    }
+
+    pub(crate) async fn get_entry(&self, id: &str) -> BpResult<Option<(ApiToken, u64)>> {
         ApiToken::validate_id(id)?;
         let response = self
             .send(
@@ -77,9 +101,15 @@ impl VaultClient {
         let data = value.pointer("/data/data").cloned().ok_or_else(|| {
             BpError::auth_store("read", id, false, "malformed Vault response".to_string())
         })?;
-        ApiToken::from_value(id, &data)
-            .map(Some)
-            .map_err(|error| BpError::auth_store("read", id, false, error))
+        let version = value
+            .pointer("/data/metadata/version")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| {
+                BpError::auth_store("read", id, false, "missing Vault version".to_string())
+            })?;
+        let token = ApiToken::from_value(id, &data)
+            .map_err(|error| BpError::auth_store("read", id, false, error))?;
+        Ok(Some((token, version)))
     }
 
     pub(crate) async fn delete(&self, id: &str) -> BpResult<()> {
