@@ -78,7 +78,12 @@ impl TokenMetadata {
     }
 
     pub fn is_expired(&self, now: DateTime<Utc>) -> bool {
-        self.effective_expires_at() <= now
+        self.expires_at <= now
+    }
+
+    pub(crate) fn is_rotation_overlap_ended(&self, now: DateTime<Utc>) -> bool {
+        self.rotation_overlap_until
+            .is_some_and(|overlap_until| overlap_until <= now)
     }
 
     pub fn is_revoked(&self) -> bool {
@@ -86,7 +91,7 @@ impl TokenMetadata {
     }
 
     pub fn is_active(&self, now: DateTime<Utc>) -> bool {
-        !self.is_revoked() && !self.is_expired(now)
+        !self.is_revoked() && !self.is_expired(now) && !self.is_rotation_overlap_ended(now)
     }
 
     pub fn has_scope(&self, required: TokenScope) -> bool {

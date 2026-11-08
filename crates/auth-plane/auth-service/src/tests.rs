@@ -18,6 +18,7 @@ mod support_tests;
 mod token_audit_maintenance_tests;
 mod token_audit_tests;
 mod token_cas_tests;
+mod token_expiry_tests;
 mod token_lifecycle_tests;
 mod token_metadata_invariant_tests;
 mod token_rotation_lineage_tests;

@@ -49,18 +49,16 @@ async fn signing_after_deletion_fails() {
         Err(BpError::Auth(AuthError::UnknownToken { .. }))
     ));
 
-    let error = service
+    let verified = service
         .verify_order_request(
             token.id(),
             ORDER_REQUEST,
             "v1.0.0.nonce.token.signature",
             now,
         )
-        .await;
-    assert!(matches!(
-        error,
-        Err(BpError::Auth(AuthError::UnknownToken { .. }))
-    ));
+        .await
+        .unwrap();
+    assert!(!verified);
 }
 
 #[tokio::test]

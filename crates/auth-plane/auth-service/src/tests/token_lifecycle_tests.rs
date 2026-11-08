@@ -26,11 +26,12 @@ impl LifecycleFixture {
 #[tokio::test]
 async fn expires_tokens_are_rejected() {
     let service = LifecycleFixture::service();
-    let now = Utc::now();
-    let token = LifecycleFixture::add_token_with_expiry(&service, "token-a", "owner-a", now).await;
+    let expires_at = Utc::now() + Duration::seconds(1);
+    let token =
+        LifecycleFixture::add_token_with_expiry(&service, "token-a", "owner-a", expires_at).await;
 
     let error = service
-        .authenticate(token.id(), token.secret(), None, now)
+        .authenticate(token.id(), token.secret(), None, expires_at)
         .await
         .unwrap_err();
 
@@ -41,7 +42,7 @@ async fn expires_tokens_are_rejected() {
             ..
         })
     ));
-    assert!(token.metadata().is_expired(now));
+    assert!(token.metadata().is_expired(expires_at));
 }
 
 #[tokio::test]
@@ -70,6 +71,26 @@ async fn rejects_non_positive_relative_lifetimes() {
     let error = service
         .add_token("token-a", "owner-a", Utc::now(), options)
         .await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "expiry",
+            ..
+        }))
+    ));
+}
+
+#[tokio::test]
+async fn rejects_an_already_past_absolute_expiry() {
+    let service = LifecycleFixture::service();
+    let now = Utc::now();
+    let options = TokenOptions::new(
+        TokenExpiry::At(now - Duration::seconds(1)),
+        TokenScope::DEFAULT,
+    );
+
+    let error = service.add_token("token-a", "owner-a", now, options).await;
 
     assert!(matches!(
         error,

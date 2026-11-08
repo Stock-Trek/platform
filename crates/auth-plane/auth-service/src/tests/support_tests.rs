@@ -70,6 +70,19 @@ impl TestFixture {
             .unwrap()
     }
 
+    pub(crate) async fn add_expired_token(
+        service: &AuthService,
+        id: &str,
+        owner: &str,
+        created_at: DateTime<Utc>,
+        expires_at: DateTime<Utc>,
+    ) -> ApiToken {
+        let metadata = TokenMetadata::new(expires_at, TokenScope::DEFAULT).unwrap();
+        let token = ApiToken::generate(id, owner, created_at, metadata).unwrap();
+        service.store.put(&token).await.unwrap();
+        token
+    }
+
     pub(crate) fn tampered_signature(signature: &str) -> String {
         let mut tampered = signature.to_string();
         let replacement = if signature.ends_with('0') { "1" } else { "0" };

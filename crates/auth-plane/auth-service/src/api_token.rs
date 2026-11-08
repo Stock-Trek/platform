@@ -27,7 +27,6 @@ impl ApiToken {
     ) -> BpResult<Self> {
         let id = id.into();
         let owner = owner.into();
-        let owner = Self::validated_owner(&owner)?.to_string();
         let token = Self {
             id,
             owner,

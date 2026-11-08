@@ -5,6 +5,7 @@ mod memory_token_store;
 mod order_request_context;
 mod order_signature;
 mod order_signing_service;
+mod order_verification;
 mod replay_cache;
 mod revocation_reason;
 mod revoked_by;
