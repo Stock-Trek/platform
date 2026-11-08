@@ -85,35 +85,77 @@ async fn signs_order_requests_for_the_owner() {
         .unwrap();
 
     assert_eq!(signed.token_id(), token.id());
-    assert!(!signed.signature().contains(token.secret().expose_secret()));
+    assert!(!signed.envelope().contains(token.secret().expose_secret()));
     assert!(
         service
-            .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+            .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
             .await
             .unwrap()
     );
 }
 
 #[tokio::test]
-async fn chooses_a_deterministic_token_when_an_owner_has_several() {
+async fn chooses_the_newest_token_when_an_owner_has_several() {
     let service = TestFixture::service();
-    TestFixture::add_token(&service, "token-b", "owner-a").await;
-    let first = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
+    let older = TestFixture::add_token_at(
+        &service,
+        "token-a",
+        "owner-a",
+        now - Duration::minutes(2),
+        TestFixture::options(),
+    )
+    .await;
+    let newer = TestFixture::add_token_at(
+        &service,
+        "token-z",
+        "owner-a",
+        now - Duration::minutes(1),
+        TestFixture::options(),
+    )
+    .await;
 
     let tokens = service.tokens_for_owner("owner-a").await.unwrap();
 
     assert_eq!(
         tokens.iter().map(|token| token.id()).collect::<Vec<_>>(),
-        vec!["token-a", "token-b"]
+        vec![older.id(), newer.id()]
     );
     assert_eq!(
-        service
-            .token_for_owner("owner-a", Utc::now())
-            .await
-            .unwrap()
-            .id(),
-        first.id()
+        service.token_for_owner("owner-a", now).await.unwrap().id(),
+        newer.id()
     );
+}
+
+#[tokio::test]
+async fn chooses_the_most_recently_used_token() {
+    let service = TestFixture::service();
+    let now = Utc::now();
+    let older = TestFixture::add_token_at(
+        &service,
+        "token-a",
+        "owner-a",
+        now - Duration::minutes(2),
+        TestFixture::options(),
+    )
+    .await;
+    let newer = TestFixture::add_token_at(
+        &service,
+        "token-z",
+        "owner-a",
+        now - Duration::minutes(1),
+        TestFixture::options(),
+    )
+    .await;
+    service
+        .authenticate(older.id(), older.secret(), None, now)
+        .await
+        .unwrap();
+
+    let selected = service.token_for_owner("owner-a", now).await.unwrap();
+
+    assert_eq!(selected.id(), older.id());
+    assert_ne!(selected.id(), newer.id());
 }
 
 #[tokio::test]

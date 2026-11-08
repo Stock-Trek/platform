@@ -1,6 +1,7 @@
 use super::support_tests::TestFixture;
 use crate::{AuthService, MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction};
 use chrono::{Duration, Utc};
+use platform_errors::{AuthError, BpError};
 use std::sync::Arc;
 
 struct RevocationFixture;
@@ -72,27 +73,32 @@ async fn revoking_a_token_twice_preserves_the_first_revocation() {
         )
         .await
         .unwrap();
-    let revoked = service
+    let error = service
         .revoke_token(
             token.id(),
             RevocationReason::NoLongerNeeded,
             RevokedBy::Owner,
             second,
         )
-        .await
-        .unwrap();
+        .await;
     let stored = service.token(token.id()).await.unwrap();
 
-    assert_eq!(revoked.metadata().revoked_at(), Some(first));
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "token_id",
+            ..
+        }))
+    ));
+    assert_eq!(stored.metadata().revoked_at(), Some(first));
     assert_eq!(
-        revoked.metadata().revocation_reason(),
+        stored.metadata().revocation_reason(),
         Some(RevocationReason::Compromised)
     );
     assert_eq!(
-        revoked.metadata().revoked_by(),
+        stored.metadata().revoked_by(),
         Some(RevokedBy::SecurityTeam)
     );
-    assert_eq!(stored.metadata().revoked_at(), Some(first));
 }
 
 #[tokio::test]
@@ -110,15 +116,16 @@ async fn revoking_a_token_twice_records_one_revocation_event() {
         )
         .await
         .unwrap();
-    service
+    let error = service
         .revoke_token(
             token.id(),
             RevocationReason::NoLongerNeeded,
             RevokedBy::Owner,
             now,
         )
-        .await
-        .unwrap();
+        .await;
+
+    assert!(error.is_err());
     let events: Vec<_> = audit
         .events()
         .into_iter()

@@ -10,11 +10,14 @@ pub struct SignedOrderRequest {
     issued_at: DateTime<Utc>,
     expires_at: DateTime<Utc>,
     nonce: String,
-    signature: String,
+    envelope: String,
 }
 
 impl SignedOrderRequest {
-    pub fn from_context(context: &OrderRequestContext, signature: impl Into<String>) -> Self {
+    pub fn from_context(
+        context: &OrderRequestContext,
+        signature: impl Into<String>,
+    ) -> BpResult<Self> {
         Self::from_parts(
             context.token_id(),
             context.issued_at(),
@@ -30,19 +33,14 @@ impl SignedOrderRequest {
         expires_at: DateTime<Utc>,
         nonce: impl Into<String>,
         signature: impl Into<String>,
-    ) -> Self {
+    ) -> BpResult<Self> {
         let token_id = token_id.into();
         let nonce = nonce.into();
+        let signature = signature.into();
         let issued_at = OrderRequestContext::whole_seconds(issued_at);
         let expires_at = OrderRequestContext::whole_seconds(expires_at);
-        let signature = Self::encode(&token_id, issued_at, expires_at, &nonce, &signature.into());
-        Self {
-            token_id,
-            issued_at,
-            expires_at,
-            nonce,
-            signature,
-        }
+        let envelope = Self::encode(&token_id, issued_at, expires_at, &nonce, &signature);
+        Self::decode(&envelope)
     }
 
     pub fn decode(signature: &str) -> BpResult<Self> {
@@ -94,9 +92,9 @@ impl SignedOrderRequest {
             issued_at,
             expires_at,
             nonce: nonce.to_string(),
-            signature: Self::encode(token_id, issued_at, expires_at, nonce, raw_signature),
+            envelope: Self::encode(token_id, issued_at, expires_at, nonce, raw_signature),
         };
-        if signed.signature != signature {
+        if signed.envelope != signature {
             return Err(BpError::auth_invalid_field(
                 "signature",
                 "must use canonical timestamp encodings",
@@ -121,14 +119,18 @@ impl SignedOrderRequest {
         &self.nonce
     }
 
+    pub fn envelope(&self) -> &str {
+        &self.envelope
+    }
+
     pub fn signature(&self) -> &str {
-        &self.signature
+        self.envelope
+            .rsplit_once('.')
+            .map_or(self.envelope.as_str(), |(_, signature)| signature)
     }
 
     pub fn raw_signature(&self) -> &str {
-        self.signature
-            .rsplit_once('.')
-            .map_or(self.signature.as_str(), |(_, signature)| signature)
+        self.signature()
     }
 
     pub fn context(&self) -> BpResult<OrderRequestContext> {
@@ -174,7 +176,7 @@ impl std::fmt::Debug for SignedOrderRequest {
             .field("issued_at", &self.issued_at)
             .field("expires_at", &self.expires_at)
             .field("nonce", &self.nonce)
-            .field("signature", &"<redacted>")
+            .field("envelope", &"<redacted>")
             .finish()
     }
 }

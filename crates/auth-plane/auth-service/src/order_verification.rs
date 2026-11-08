@@ -75,7 +75,7 @@ impl AuthService {
             return Ok(false);
         }
         let signer = OrderRequestSigner::new(token.secret())?;
-        if !signer.verify_order_request(&context, order_request, signed.raw_signature())? {
+        if !signer.verify_order_request(&context, order_request, signed.signature())? {
             self.record_signature_rejected(token_id, Some(&token), now, "signature mismatch");
             return Ok(false);
         }

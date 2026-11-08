@@ -80,12 +80,12 @@ async fn retries_a_signature_after_the_token_store_update_fails() {
 
     store.fail_next_update();
     let error = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await;
     assert!(error.is_err());
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .expect("retried verification");
     assert!(verified);

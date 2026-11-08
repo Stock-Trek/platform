@@ -73,7 +73,7 @@ impl OrderRequestDispatcher {
             "account": account_id.0,
             "tokenId": signed.token_id(),
             "orderRequest": request_value,
-            "signature": signed.signature(),
+            "signature": signed.envelope(),
         });
         let response = self
             .client

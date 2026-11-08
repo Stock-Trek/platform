@@ -81,7 +81,7 @@ impl AuthService {
         let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
             .with_token(authenticated.id(), Some(authenticated.owner()));
         self.audit.record(event);
-        Ok(SignedOrderRequest::from_context(&context, signature))
+        SignedOrderRequest::from_context(&context, signature)
     }
 
     fn record_signing_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {

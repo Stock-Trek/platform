@@ -171,6 +171,13 @@ impl AuthService {
             .replaced_by()
             .is_some()
             .cmp(&right.metadata().replaced_by().is_some())
+            .then_with(|| {
+                right
+                    .metadata()
+                    .last_used_at()
+                    .cmp(&left.metadata().last_used_at())
+            })
+            .then_with(|| right.created_at().cmp(&left.created_at()))
             .then_with(|| left.id().cmp(right.id()))
     }
 }
