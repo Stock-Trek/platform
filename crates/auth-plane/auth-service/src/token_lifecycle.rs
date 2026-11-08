@@ -27,12 +27,12 @@ impl AuthService {
                 Ok(()) => {
                     let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)
                         .with_token(token.id(), Some(token.owner()));
-                    self.audit.record(event);
+                    self.record_audit(event).await?;
                     return Ok(token);
                 }
                 Err(error) if Self::is_conflict(&error) => continue,
                 Err(error) => {
-                    self.record_revocation_failure(&token, now, &error);
+                    self.record_revocation_failure(&token, now, &error).await;
                     return Err(error);
                 }
             }
@@ -41,7 +41,7 @@ impl AuthService {
         let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)
             .with_token(id, None)
             .failure(error.to_string());
-        self.audit.record(event);
+        self.record_audit_failure(event).await;
         Err(error)
     }
 
@@ -77,17 +77,22 @@ impl AuthService {
                 self.store.delete(&id).await?;
                 let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
                     .with_token(token.id(), Some(token.owner()));
-                self.audit.record(event);
+                self.record_audit(event).await?;
                 purged += 1;
             }
         }
         Ok(purged)
     }
 
-    fn record_revocation_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {
+    async fn record_revocation_failure(
+        &self,
+        token: &ApiToken,
+        now: DateTime<Utc>,
+        error: &BpError,
+    ) {
         let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)
             .with_token(token.id(), Some(token.owner()))
             .failure(error.to_string());
-        self.audit.record(event);
+        self.record_audit_failure(event).await;
     }
 }

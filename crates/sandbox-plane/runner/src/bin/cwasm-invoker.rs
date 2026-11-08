@@ -34,16 +34,20 @@
 #[path = "../cwasm/mod.rs"]
 mod cwasm;
 
+use aws_sdk_sqs::Client as SqsClient;
 use chrono::Duration;
 use cwasm::{
-    Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher, WasmRunner,
-    backtest,
+    AuditConfig, Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher,
+    WasmRunner, backtest,
 };
 use platform_auth_service::{
-    AuthService, AuthServiceConfig, MemoryTokenAuditLog, VaultTokenStore, VaultTokenStoreConfig,
+    AuthService, AuthServiceConfig, SqsTokenAuditLog, VaultTokenStore, VaultTokenStoreConfig,
 };
+use platform_aws::Aws;
 use platform_exit_codes::ExitCode;
 use platform_runner::command::{Command, RunRequest};
+use platform_sqs::sqs::{Sqs, SqsConfig};
+use platform_time::timeouts::Timeouts;
 use std::{
     io::{self, Read},
     sync::Arc,
@@ -80,8 +84,13 @@ impl CwasmInvoker {
             execution,
             cwasm: cwasm_limits,
             vault,
+            audit,
         } = config;
-        let auth_service = match Self::auth_service(vault) {
+        let runtime = match Self::runtime() {
+            Ok(runtime) => runtime,
+            Err(code) => return code.code(),
+        };
+        let auth_service = match runtime.block_on(Self::auth_service(vault, audit)) {
             Ok(auth_service) => auth_service,
             Err(code) => return code.code(),
         };
@@ -95,10 +104,6 @@ impl CwasmInvoker {
                 eprintln!("cwasm-invoker: invalid order request configuration: {error}");
                 return ExitCode::ServerRunnerConfigurationInvalid.code();
             }
-        };
-        let runtime = match Self::runtime() {
-            Ok(runtime) => runtime,
-            Err(code) => return code.code(),
         };
         let integrity = CwasmIntegrity::new(
             request.cwasm_sha256.clone(),
@@ -116,7 +121,6 @@ impl CwasmInvoker {
                 return ExitCode::ServerRunnerCwasmDownloadFailed.code();
             }
         };
-        drop(runtime);
 
         let runner = match WasmRunner::with_limits(execution) {
             Ok(runner) => runner,
@@ -136,10 +140,6 @@ impl CwasmInvoker {
             return code;
         }
 
-        let runtime = match Self::runtime() {
-            Ok(runtime) => runtime,
-            Err(code) => return code.code(),
-        };
         match runtime.block_on(dispatcher.dispatch(actions.take())) {
             Ok(()) => ExitCode::Success.code(),
             Err(error) => {
@@ -159,18 +159,29 @@ impl CwasmInvoker {
             })
     }
 
-    fn auth_service(config: VaultTokenStoreConfig) -> Result<AuthService, ExitCode> {
+    async fn auth_service(
+        config: VaultTokenStoreConfig,
+        audit: AuditConfig,
+    ) -> Result<AuthService, ExitCode> {
         let store = VaultTokenStore::new(config).map_err(|error| {
             eprintln!("cwasm-invoker: invalid auth service configuration: {error}");
             ExitCode::ServerRunnerConfigurationInvalid
         })?;
+        let timeouts = Timeouts::from_durations(audit.timeout, audit.timeout);
+        let sdk_config = Aws::load_sdk_config(timeouts).await;
+        let sqs = Sqs::new(
+            SqsClient::new(&sdk_config),
+            timeouts,
+            SqsConfig::new(audit.queue_url),
+        );
+        let audit = SqsTokenAuditLog::new(sqs, audit.timeout);
         AuthService::new(
             Arc::new(store),
             AuthServiceConfig {
                 token_lifetime: Duration::days(30),
                 rotation_overlap: Duration::days(7),
                 signature_validity: Duration::minutes(5),
-                audit: Arc::new(MemoryTokenAuditLog::new(4096)),
+                audit: Arc::new(audit),
             },
         )
         .map_err(|error| {

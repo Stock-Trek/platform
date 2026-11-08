@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, AuthService, AuthServiceConfig, MemoryTokenAuditLog, MemoryTokenStore, TokenExpiry,
-    TokenMetadata, TokenOptions, TokenScope,
+    ApiToken, AuthService, AuthServiceConfig, MemoryTokenAuditLog, MemoryTokenStore, TokenAuditLog,
+    TokenExpiry, TokenMetadata, TokenOptions, TokenScope,
 };
 use chrono::{DateTime, Duration, Utc};
 use std::sync::Arc;
@@ -17,7 +17,7 @@ impl TestFixture {
         Self::config_with_audit(Arc::new(MemoryTokenAuditLog::new(4096)))
     }
 
-    pub(crate) fn config_with_audit(audit: Arc<MemoryTokenAuditLog>) -> AuthServiceConfig {
+    pub(crate) fn config_with_audit(audit: Arc<dyn TokenAuditLog>) -> AuthServiceConfig {
         AuthServiceConfig {
             token_lifetime: Duration::days(30),
             rotation_overlap: Duration::days(7),
@@ -30,7 +30,7 @@ impl TestFixture {
         AuthService::new(Arc::new(MemoryTokenStore::default()), Self::config()).unwrap()
     }
 
-    pub(crate) fn service_with_audit(audit: Arc<MemoryTokenAuditLog>) -> AuthService {
+    pub(crate) fn service_with_audit(audit: Arc<dyn TokenAuditLog>) -> AuthService {
         AuthService::new(
             Arc::new(MemoryTokenStore::default()),
             Self::config_with_audit(audit),

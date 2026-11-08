@@ -5,19 +5,23 @@ edition.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
-chrono = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
 data-encoding = { workspace = true }
 hmac = { workspace = true }
 httpdate = { workspace = true }
 parking_lot = { workspace = true }
 platform-errors = { workspace = true }
+platform-sqs = { workspace = true }
+platform-time = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json", "rustls"] }
 secrecy = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 subtle = { workspace = true }
+tracing = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["macros", "rt"] }

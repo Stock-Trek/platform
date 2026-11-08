@@ -48,12 +48,12 @@ impl AuthService {
             let event = TokenAuditEvent::new(TokenAuditAction::Issued, created_at)
                 .with_token(token.id(), Some(token.owner()))
                 .failure(error.to_string());
-            self.audit.record(event);
+            self.record_audit_failure(event).await;
             return Err(error);
         }
         let event = TokenAuditEvent::new(TokenAuditAction::Issued, created_at)
             .with_token(token.id(), Some(token.owner()));
-        self.audit.record(event);
+        self.record_audit(event).await?;
         Ok(token)
     }
 
@@ -63,7 +63,7 @@ impl AuthService {
         if let Some(token) = token {
             let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
                 .with_token(token.id(), Some(token.owner()));
-            self.audit.record(event);
+            self.record_audit(event).await?;
         }
         Ok(())
     }

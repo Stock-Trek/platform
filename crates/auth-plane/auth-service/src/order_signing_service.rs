@@ -18,6 +18,7 @@ impl AuthService {
             .authenticate(token_id, secret, Some(TokenScope::OrdersWrite), now)
             .await?;
         self.sign_with_token_at(&token, order_request, issued_at, now)
+            .await
     }
 
     pub async fn sign_order_request_for_owner(
@@ -39,9 +40,10 @@ impl AuthService {
             )
             .await?;
         self.sign_with_token_at(&authenticated, order_request, issued_at, now)
+            .await
     }
 
-    fn sign_with_token_at(
+    async fn sign_with_token_at(
         &self,
         authenticated: &ApiToken,
         order_request: &[u8],
@@ -55,39 +57,43 @@ impl AuthService {
         ) {
             Ok(context) => context,
             Err(error) => {
-                self.record_signing_failure(authenticated, now, &error);
+                self.record_signing_failure(authenticated, now, &error)
+                    .await;
                 return Err(error);
             }
         };
         if context.expires_at() <= now {
             let error = BpError::auth_invalid_field("expires_at", "has already expired");
-            self.record_signing_failure(authenticated, now, &error);
+            self.record_signing_failure(authenticated, now, &error)
+                .await;
             return Err(error);
         }
         let signer = match OrderRequestSigner::new(authenticated.secret()) {
             Ok(signer) => signer,
             Err(error) => {
-                self.record_signing_failure(authenticated, now, &error);
+                self.record_signing_failure(authenticated, now, &error)
+                    .await;
                 return Err(error);
             }
         };
         let signature = match signer.sign_order_request(&context, order_request) {
             Ok(signature) => signature,
             Err(error) => {
-                self.record_signing_failure(authenticated, now, &error);
+                self.record_signing_failure(authenticated, now, &error)
+                    .await;
                 return Err(error);
             }
         };
         let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
             .with_token(authenticated.id(), Some(authenticated.owner()));
-        self.audit.record(event);
+        self.record_audit(event).await?;
         SignedOrderRequest::from_context(&context, signature)
     }
 
-    fn record_signing_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {
+    async fn record_signing_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {
         let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
             .with_token(token.id(), Some(token.owner()))
             .failure(error.to_string());
-        self.audit.record(event);
+        self.record_audit_failure(event).await;
     }
 }

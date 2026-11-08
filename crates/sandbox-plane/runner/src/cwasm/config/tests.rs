@@ -12,8 +12,10 @@ const MAX_CWASM_BYTES: &str = "CWASM_INVOKER_MAX_CWASM_BYTES";
 const VAULT_ADDRESS: &str = "CWASM_INVOKER_VAULT_ADDRESS";
 const VAULT_TOKEN: &str = "CWASM_INVOKER_VAULT_TOKEN";
 const VAULT_MOUNT: &str = "CWASM_INVOKER_VAULT_MOUNT";
+const AUDIT_QUEUE_URL: &str = "CWASM_INVOKER_AUDIT_QUEUE_URL";
+const AUDIT_TIMEOUT_SECS: &str = "CWASM_INVOKER_AUDIT_TIMEOUT_SECS";
 
-const ALL_VARS: [(&str, &str); 8] = [
+const ALL_VARS: [(&str, &str); 10] = [
     (EXECUTION_TIMEOUT_SECS, "45"),
     (MAX_GUEST_MEMORY_BYTES, "1048576"),
     (MAX_TABLE_ELEMENTS, "2048"),
@@ -22,6 +24,8 @@ const ALL_VARS: [(&str, &str); 8] = [
     (VAULT_ADDRESS, "https://vault.example.com"),
     (VAULT_TOKEN, "vault-token"),
     (VAULT_MOUNT, "platform-tokens"),
+    (AUDIT_QUEUE_URL, "https://sqs.example.com/123/audit"),
+    (AUDIT_TIMEOUT_SECS, "5"),
 ];
 
 fn config(vars: &[(&str, &str)]) -> BpResult<InvokerConfig> {
@@ -43,15 +47,19 @@ fn reads_every_value_from_the_environment() {
     assert_eq!(config.vault.address(), "https://vault.example.com");
     assert_eq!(config.vault.mount(), "platform-tokens");
     assert_eq!(config.vault.timeout(), Duration::from_secs(10));
+    assert_eq!(config.audit.queue_url, "https://sqs.example.com/123/audit");
+    assert_eq!(config.audit.timeout, Duration::from_secs(5));
 }
 
 #[test]
-fn rejects_invalid_vault_configuration() {
+fn rejects_invalid_service_configuration() {
     for (name, value) in [
         (VAULT_ADDRESS, "not a url"),
         (VAULT_ADDRESS, "file:///tmp/vault"),
         (VAULT_MOUNT, "../sys"),
         (VAULT_MOUNT, ""),
+        (AUDIT_QUEUE_URL, "not a url"),
+        (AUDIT_QUEUE_URL, "file:///tmp/audit"),
     ] {
         let vars: Vec<(&str, &str)> = ALL_VARS
             .iter()
@@ -113,6 +121,7 @@ fn rejects_zero_and_invalid_values() {
         (CWASM_DOWNLOAD_TIMEOUT_SECS, "0"),
         (MAX_CWASM_BYTES, "0"),
         (MAX_CWASM_BYTES, "not-a-number"),
+        (AUDIT_TIMEOUT_SECS, "0"),
     ] {
         let vars: Vec<(&str, &str)> = ALL_VARS
             .iter()
