@@ -16,7 +16,7 @@ async fn rejects_a_signature_from_another_token() {
         .unwrap();
 
     let verified = service
-        .verify_order_request(second.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(second.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .unwrap();
 
@@ -34,11 +34,11 @@ async fn rejects_a_replayed_signature() {
         .unwrap();
 
     let first = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .unwrap();
     let second = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .unwrap();
 
@@ -82,7 +82,7 @@ async fn rejects_an_expired_signature() {
         .verify_order_request(
             token.id(),
             ORDER_REQUEST,
-            signed.signature(),
+            signed.envelope(),
             now + Duration::minutes(2),
         )
         .await
@@ -135,7 +135,7 @@ async fn rejects_a_signature_issued_in_the_future() {
         .unwrap();
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .unwrap();
 

@@ -16,7 +16,10 @@ impl AuthService {
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             let mut token = self.token(id).await?;
             if token.metadata.is_revoked() {
-                return Ok(token);
+                return Err(BpError::auth_invalid_field(
+                    "token_id",
+                    "is already revoked",
+                ));
             }
             let original = token.clone();
             token.metadata.revoke(now, reason, revoked_by);

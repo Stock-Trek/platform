@@ -171,7 +171,7 @@ async fn signature_verification_retries_after_a_concurrent_last_used_update() {
     store.race_next_update();
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .unwrap();
 

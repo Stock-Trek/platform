@@ -34,10 +34,11 @@ async fn verification_handles_clock_skew_at_the_timestamp_limit() {
     let signature = signer
         .sign_order_request(&context, ORDER_REQUEST)
         .expect("signing succeeds");
-    let signed = SignedOrderRequest::from_context(&context, signature);
+    let signed =
+        SignedOrderRequest::from_context(&context, signature).expect("valid signed request");
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .expect("verification succeeds");
 

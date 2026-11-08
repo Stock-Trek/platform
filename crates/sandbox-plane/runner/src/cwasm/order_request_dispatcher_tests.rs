@@ -185,7 +185,7 @@ async fn signs_and_submits_place_order_actions() {
     assert_eq!(signed.token_id(), token.id());
     assert!(
         auth_service
-            .verify_order_request(token.id(), &bytes, signed.signature(), Utc::now())
+            .verify_order_request(token.id(), &bytes, signed.envelope(), Utc::now())
             .await
             .unwrap()
     );

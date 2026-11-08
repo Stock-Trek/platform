@@ -15,8 +15,8 @@ async fn signs_order_requests_with_the_stored_token_secret() {
         .unwrap();
 
     assert_eq!(signed.token_id(), token.id());
-    assert!(signed.signature().starts_with("v1."));
-    assert_eq!(signed.raw_signature().len(), 64);
+    assert!(signed.envelope().starts_with("v1."));
+    assert_eq!(signed.signature().len(), 64);
 }
 
 #[test]
@@ -49,7 +49,7 @@ async fn verifies_a_matching_signature() {
         .unwrap();
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .unwrap();
 
@@ -65,9 +65,9 @@ async fn rejects_a_tampered_signature() {
         .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
         .await
         .unwrap();
-    let tampered = TestFixture::tampered_signature(signed.signature());
+    let tampered = TestFixture::tampered_signature(signed.envelope());
 
-    assert_ne!(tampered, signed.signature());
+    assert_ne!(tampered, signed.envelope());
     let verified = service
         .verify_order_request(token.id(), ORDER_REQUEST, &tampered, now)
         .await
@@ -87,7 +87,7 @@ async fn rejects_a_tampered_request() {
         .unwrap();
 
     let verified = service
-        .verify_order_request(token.id(), br#"{"side":"sell"}"#, signed.signature(), now)
+        .verify_order_request(token.id(), br#"{"side":"sell"}"#, signed.envelope(), now)
         .await
         .unwrap();
 

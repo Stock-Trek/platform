@@ -95,7 +95,7 @@ async fn records_signing_and_signature_verification() {
         .unwrap();
 
     service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .unwrap();
 
@@ -153,7 +153,7 @@ async fn records_rejected_signatures() {
         .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
         .await
         .unwrap();
-    let tampered = TestFixture::tampered_signature(signed.signature());
+    let tampered = TestFixture::tampered_signature(signed.envelope());
 
     let verified = service
         .verify_order_request(token.id(), ORDER_REQUEST, &tampered, now)
@@ -177,7 +177,7 @@ async fn records_the_reason_a_future_signature_is_rejected() {
     audit.drain();
 
     let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.signature(), now)
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .unwrap();
 

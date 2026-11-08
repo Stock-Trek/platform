@@ -17,7 +17,7 @@ impl SignedRequestFixture {
             "nonce-a",
         )
         .unwrap();
-        SignedOrderRequest::from_context(&context, "signature")
+        SignedOrderRequest::from_context(&context, "signature").expect("valid signed request")
     }
 }
 
@@ -25,13 +25,13 @@ impl SignedRequestFixture {
 fn round_trips_through_the_signed_envelope() {
     let signed = SignedRequestFixture::signed();
 
-    let decoded = SignedOrderRequest::decode(signed.signature()).unwrap();
+    let decoded = SignedOrderRequest::decode(signed.envelope()).unwrap();
 
     assert_eq!(decoded.token_id(), signed.token_id());
     assert_eq!(decoded.issued_at(), signed.issued_at());
     assert_eq!(decoded.expires_at(), signed.expires_at());
     assert_eq!(decoded.nonce(), signed.nonce());
-    assert_eq!(decoded.raw_signature(), "signature");
+    assert_eq!(decoded.signature(), "signature");
 }
 
 #[test]
@@ -58,7 +58,7 @@ fn rejects_a_malformed_envelope() {
 #[test]
 fn rejects_an_envelope_without_a_signature() {
     let signed = SignedRequestFixture::signed();
-    let unsigned = signed.signature().rsplit_once('.').unwrap().0;
+    let unsigned = signed.envelope().rsplit_once('.').unwrap().0;
     let error = SignedOrderRequest::decode(&format!("{unsigned}."));
 
     assert!(error.is_err());
@@ -67,7 +67,7 @@ fn rejects_an_envelope_without_a_signature() {
 #[test]
 fn rejects_non_canonical_timestamp_encodings() {
     let signed = SignedRequestFixture::signed();
-    let mut parts = signed.signature().split('.');
+    let mut parts = signed.envelope().split('.');
     let version = parts.next().unwrap();
     let issued_at = parts.next().unwrap();
     let rest = parts.collect::<Vec<_>>().join(".");
@@ -108,4 +108,49 @@ fn rejects_overlong_envelopes() {
             ..
         }))
     ));
+}
+
+#[test]
+fn exposes_the_envelope_and_signature_separately() {
+    let signed = SignedRequestFixture::signed();
+
+    assert_eq!(signed.signature(), "signature");
+    assert!(signed.envelope().starts_with("v1."));
+    assert!(signed.envelope().ends_with(".signature"));
+}
+
+#[test]
+fn from_parts_validates_the_context() {
+    let issued_at = chrono::DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap();
+    let error = SignedOrderRequest::from_parts(
+        "invalid token id",
+        issued_at,
+        issued_at + Duration::minutes(5),
+        "nonce-a",
+        "signature",
+    );
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "token_id",
+            ..
+        }))
+    ));
+}
+
+#[test]
+fn from_parts_rejects_invalid_raw_signatures() {
+    let issued_at = chrono::DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap();
+    for signature in ["", "signature.with.separators"] {
+        let error = SignedOrderRequest::from_parts(
+            "token-a",
+            issued_at,
+            issued_at + Duration::minutes(5),
+            "nonce-a",
+            signature,
+        );
+
+        assert!(error.is_err());
+    }
 }

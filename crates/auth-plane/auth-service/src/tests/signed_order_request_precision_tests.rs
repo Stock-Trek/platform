@@ -18,8 +18,9 @@ fn envelope_timestamps_match_their_serialized_form() {
     let context = OrderRequestContext::new("token-a", issued_at, expires_at, "nonce-a")
         .expect("valid context");
 
-    let signed = SignedOrderRequest::from_context(&context, "signature");
-    let decoded = SignedOrderRequest::decode(signed.signature()).expect("valid envelope");
+    let signed =
+        SignedOrderRequest::from_context(&context, "signature").expect("valid signed request");
+    let decoded = SignedOrderRequest::decode(signed.envelope()).expect("valid envelope");
 
     assert_eq!(signed.issued_at(), decoded.issued_at());
     assert_eq!(signed.expires_at(), decoded.expires_at());
