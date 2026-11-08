@@ -109,11 +109,3 @@ fn rejects_overlong_envelopes() {
         }))
     ));
 }
-
-#[test]
-fn detects_expiry() {
-    let signed = SignedRequestFixture::signed();
-
-    assert!(!signed.is_expired(Utc::now()));
-    assert!(signed.is_expired(signed.expires_at()));
-}

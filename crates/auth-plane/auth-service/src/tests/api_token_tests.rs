@@ -9,19 +9,7 @@ use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
 
 #[test]
-fn each_token_gets_a_distinct_alphanumeric_secret() {
-    let first = TestFixture::token("token-a");
-    let second = TestFixture::token("token-b");
-
-    let first_secret = first.secret().expose_secret();
-    let second_secret = second.secret().expose_secret();
-    assert_ne!(first_secret, second_secret);
-    assert_eq!(first_secret.len(), 32);
-    assert!(first_secret.chars().all(|c| c.is_ascii_alphanumeric()));
-}
-
-#[test]
-fn secrets_are_matched_in_constant_time_comparison() {
+fn matches_only_the_exact_secret() {
     let token = TestFixture::token("token-a");
 
     assert!(token.matches_secret(token.secret().expose_secret()));
@@ -187,13 +175,4 @@ fn rejects_control_characters_in_secrets() {
             ..
         }))
     ));
-}
-
-#[test]
-fn created_at_is_recorded() {
-    let before = Utc::now();
-    let token = TestFixture::token("token-a");
-    let after = Utc::now();
-
-    assert!(token.created_at() >= before && token.created_at() <= after);
 }

@@ -1,6 +1,6 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::OrderRequestSigner;
-use chrono::{Duration as ChronoDuration, Utc};
+use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
 use secrecy::{ExposeSecret, SecretString};
 
@@ -66,7 +66,7 @@ async fn rejects_an_expired_signature() {
     let service = TestFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
     let now = Utc::now();
-    let issued_at = now - ChronoDuration::minutes(4);
+    let issued_at = now - Duration::minutes(4);
     let signed = service
         .sign_order_request(
             token.id(),
@@ -83,7 +83,7 @@ async fn rejects_an_expired_signature() {
             token.id(),
             ORDER_REQUEST,
             signed.signature(),
-            now + ChronoDuration::minutes(2),
+            now + Duration::minutes(2),
         )
         .await
         .unwrap();
@@ -96,7 +96,7 @@ async fn signing_rejects_an_already_expired_request() {
     let service = TestFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
     let now = Utc::now();
-    let issued_at = now - ChronoDuration::minutes(10);
+    let issued_at = now - Duration::minutes(10);
 
     let error = service
         .sign_order_request(
@@ -122,7 +122,7 @@ async fn rejects_a_signature_issued_in_the_future() {
     let service = TestFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
     let now = Utc::now();
-    let issued_at = now + ChronoDuration::minutes(10);
+    let issued_at = now + Duration::minutes(10);
     let signed = service
         .sign_order_request(
             token.id(),
