@@ -129,10 +129,6 @@ impl SignedOrderRequest {
             .map_or(self.envelope.as_str(), |(_, signature)| signature)
     }
 
-    pub fn raw_signature(&self) -> &str {
-        self.signature()
-    }
-
     pub fn context(&self) -> BpResult<OrderRequestContext> {
         OrderRequestContext::new(
             self.token_id.clone(),

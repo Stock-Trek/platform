@@ -111,11 +111,10 @@ fn rejects_overlong_envelopes() {
 }
 
 #[test]
-fn exposes_the_envelope_and_raw_signature_separately() {
+fn exposes_the_envelope_and_signature_separately() {
     let signed = SignedRequestFixture::signed();
 
     assert_eq!(signed.signature(), "signature");
-    assert_eq!(signed.raw_signature(), signed.signature());
     assert!(signed.envelope().starts_with("v1."));
     assert!(signed.envelope().ends_with(".signature"));
 }
