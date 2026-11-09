@@ -37,10 +37,6 @@ impl Fixture {
         .unwrap()
     }
 
-    fn auth_service() -> AuthService {
-        Self::auth_service_with_store(Arc::new(MemoryTokenStore::default()))
-    }
-
     async fn setup(url: &str) -> (OrderRequestDispatcher, AuthService, ApiToken) {
         let store = Arc::new(MemoryTokenStore::default());
         let now = Utc::now();
@@ -53,7 +49,8 @@ impl Fixture {
     }
 
     fn dispatcher_without_token(url: &str) -> OrderRequestDispatcher {
-        OrderRequestDispatcher::new(url, OWNER, Self::auth_service()).unwrap()
+        let service = Self::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
+        OrderRequestDispatcher::new(url, OWNER, service).unwrap()
     }
 
     fn order_request() -> OrderRequest<AssetId, f64> {
@@ -144,20 +141,22 @@ impl TestServer {
 
 #[test]
 fn rejects_an_invalid_order_request_url() {
-    let result = OrderRequestDispatcher::new("not a url", OWNER, Fixture::auth_service());
+    let service = Fixture::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
+    let result = OrderRequestDispatcher::new("not a url", OWNER, service);
     assert!(result.is_err());
 }
 
 #[test]
 fn rejects_a_non_http_order_request_url() {
-    let result = OrderRequestDispatcher::new("file:///tmp/orders", OWNER, Fixture::auth_service());
+    let service = Fixture::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
+    let result = OrderRequestDispatcher::new("file:///tmp/orders", OWNER, service);
     assert!(result.is_err());
 }
 
 #[test]
 fn rejects_an_empty_owner() {
-    let result =
-        OrderRequestDispatcher::new("http://127.0.0.1:1/orders", "", Fixture::auth_service());
+    let service = Fixture::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
+    let result = OrderRequestDispatcher::new("http://127.0.0.1:1/orders", "", service);
     assert!(result.is_err());
 }
 
