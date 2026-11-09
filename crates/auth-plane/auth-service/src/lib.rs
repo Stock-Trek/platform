@@ -57,9 +57,7 @@ pub use token_metadata::TokenMetadata;
 pub use token_options::{TokenExpiry, TokenOptions};
 pub use token_scope::TokenScope;
 pub use token_store::TokenStore;
-pub use valkey_config::{
-    DEFAULT_VALKEY_REPLAY_PREFIX, ValkeyConfig, ValkeyReplayConfig, ValkeyReplayStoreConfig,
-};
+pub use valkey_config::{DEFAULT_VALKEY_REPLAY_PREFIX, ValkeyReplayStoreConfig};
 pub use valkey_replay_store::ValkeyReplayStore;
 pub use vault_config::VaultTokenStoreConfig;
 pub use vault_token_store::VaultTokenStore;

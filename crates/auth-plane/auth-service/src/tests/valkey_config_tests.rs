@@ -1,6 +1,4 @@
-use crate::{
-    DEFAULT_VALKEY_REPLAY_PREFIX, ValkeyConfig, ValkeyReplayConfig, ValkeyReplayStoreConfig,
-};
+use crate::{DEFAULT_VALKEY_REPLAY_PREFIX, ValkeyReplayStoreConfig};
 use std::time::Duration;
 
 struct ValkeyConfigFixture;
@@ -120,18 +118,4 @@ fn debug_output_redacts_url_credentials() {
     assert!(!debug.contains("super-secret"));
     assert!(!debug.contains("user"));
     assert!(debug.contains("redacted"));
-}
-
-#[test]
-fn config_aliases_refer_to_the_same_type() {
-    let _: ValkeyReplayConfig = ValkeyConfigFixture::config(
-        "redis://valkey.example.com:6379",
-        "auth-replay",
-        Duration::from_secs(1),
-    );
-    let _: ValkeyConfig = ValkeyConfigFixture::config(
-        "redis://valkey.example.com:6379",
-        "auth-replay",
-        Duration::from_secs(1),
-    );
 }

@@ -154,24 +154,34 @@ fn rejects_zero_and_invalid_values() {
 }
 
 #[test]
-fn accepts_valkey_environment_aliases() {
-    let vars: Vec<(&str, &str)> = ALL_VARS
-        .iter()
-        .copied()
-        .filter(|(name, _)| !matches!(*name, VALKEY_URL | VALKEY_KEY_PREFIX | VALKEY_TIMEOUT_SECS))
-        .chain([
-            (
-                "CWASM_INVOKER_VALKEY_ADDRESS",
-                "rediss://valkey.example.com:6380",
-            ),
-            ("CWASM_INVOKER_REPLAY_PREFIX", "auth-replay:test"),
-            ("CWASM_INVOKER_REPLAY_TIMEOUT_SECS", "3"),
-        ])
-        .collect();
+fn rejects_valkey_environment_aliases() {
+    for (canonical, alias, value) in [
+        (
+            VALKEY_URL,
+            "CWASM_INVOKER_VALKEY_ADDRESS",
+            "rediss://valkey.example.com:6380",
+        ),
+        (
+            VALKEY_KEY_PREFIX,
+            "CWASM_INVOKER_REPLAY_PREFIX",
+            "auth-replay:test",
+        ),
+        (
+            VALKEY_TIMEOUT_SECS,
+            "CWASM_INVOKER_REPLAY_TIMEOUT_SECS",
+            "3",
+        ),
+    ] {
+        let vars: Vec<(&str, &str)> = ALL_VARS
+            .iter()
+            .copied()
+            .filter(|(name, _)| *name != canonical)
+            .chain([(alias, value)])
+            .collect();
 
-    let config = config(&vars).unwrap();
-
-    assert_eq!(config.valkey.url(), "rediss://valkey.example.com:6380");
-    assert_eq!(config.valkey.key_prefix(), "auth-replay:test");
-    assert_eq!(config.valkey.timeout(), Duration::from_secs(3));
+        assert!(matches!(
+            config(&vars).unwrap_err(),
+            BpError::Config(ConfigError::Missing { name: missing }) if missing == canonical
+        ));
+    }
 }

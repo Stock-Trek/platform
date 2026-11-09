@@ -120,6 +120,3 @@ impl ValkeyReplayStoreConfig {
         url.to_string()
     }
 }
-
-pub type ValkeyReplayConfig = ValkeyReplayStoreConfig;
-pub type ValkeyConfig = ValkeyReplayStoreConfig;
