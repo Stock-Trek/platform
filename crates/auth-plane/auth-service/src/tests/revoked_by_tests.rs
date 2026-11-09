@@ -18,7 +18,7 @@ fn actors_have_stable_string_representations() {
     let expected = [
         (RevokedBy::Owner, "owner"),
         (RevokedBy::Admin, "admin"),
-        (RevokedBy::SecurityTeam, "security-team"),
+        (RevokedBy::SecurityTeam, "security_team"),
         (RevokedBy::System, "system"),
     ];
 

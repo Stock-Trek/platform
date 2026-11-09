@@ -41,6 +41,29 @@ async fn records_token_issuance_and_authentication() {
 }
 
 #[tokio::test]
+async fn issuance_events_use_the_operation_time() {
+    let (service, audit) = AuditFixture::service();
+    let created_at = Utc::now() - Duration::hours(1);
+    let now = Utc::now();
+
+    service
+        .add_token(
+            "token-a",
+            "owner-a",
+            created_at,
+            TestFixture::options(),
+            now,
+        )
+        .await
+        .unwrap();
+
+    let events = audit.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].action, TokenAuditAction::Issued);
+    assert_eq!(events[0].timestamp, now);
+}
+
+#[tokio::test]
 async fn records_failed_authentication_without_the_secret() {
     let (service, audit) = AuditFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;

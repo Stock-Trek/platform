@@ -24,13 +24,13 @@ impl AuthService {
             TokenExpiry::At(expires_at) => {
                 if expires_at <= created_at {
                     return Err(BpError::auth_invalid_field(
-                        "expiry",
+                        "expires_at",
                         "must be after the creation time",
                     ));
                 }
                 if expires_at <= now {
                     return Err(BpError::auth_invalid_field(
-                        "expiry",
+                        "expires_at",
                         "must be in the future",
                     ));
                 }
@@ -39,16 +39,16 @@ impl AuthService {
             TokenExpiry::After(lifetime) => {
                 if lifetime <= Duration::zero() {
                     return Err(BpError::auth_invalid_field(
-                        "expiry",
+                        "expires_at",
                         "must be greater than zero",
                     ));
                 }
                 let expires_at = created_at.checked_add_signed(lifetime).ok_or_else(|| {
-                    BpError::auth_invalid_field("expiry", "is outside the supported range")
+                    BpError::auth_invalid_field("expires_at", "is outside the supported range")
                 })?;
                 if expires_at <= now {
                     return Err(BpError::auth_invalid_field(
-                        "expiry",
+                        "expires_at",
                         "must be in the future",
                     ));
                 }
@@ -58,13 +58,13 @@ impl AuthService {
         let metadata = TokenMetadata::new(expires_at, options.scopes())?;
         let token = ApiToken::generate(id, owner, created_at, metadata)?;
         if let Err(error) = self.store.put(&token).await {
-            let event = TokenAuditEvent::new(TokenAuditAction::Issued, created_at)
+            let event = TokenAuditEvent::new(TokenAuditAction::Issued, now)
                 .with_token(token.id(), Some(token.owner()))
                 .failure(error.to_string());
             self.record_audit_failure(event).await;
             return Err(error);
         }
-        let event = TokenAuditEvent::new(TokenAuditAction::Issued, created_at)
+        let event = TokenAuditEvent::new(TokenAuditAction::Issued, now)
             .with_token(token.id(), Some(token.owner()));
         if let Err(error) = self.record_audit(event).await {
             return Err(self.rollback_added_token(&token, error).await);

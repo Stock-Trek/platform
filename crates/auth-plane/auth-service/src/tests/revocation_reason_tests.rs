@@ -62,7 +62,7 @@ fn persists_the_reason_and_actor_through_a_stored_token_value() {
     let restored = ApiToken::from_value(token.id(), &value).unwrap();
 
     assert_eq!(value.get("revocation_reason"), Some(&json!("compromised")));
-    assert_eq!(value.get("revoked_by"), Some(&json!("security-team")));
+    assert_eq!(value.get("revoked_by"), Some(&json!("security_team")));
     assert_eq!(
         restored.metadata().revocation_reason(),
         Some(RevocationReason::Compromised)

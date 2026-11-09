@@ -71,6 +71,15 @@ fn rejects_rotation_overlap_before_creation() {
 }
 
 #[test]
+fn rejects_last_used_before_creation() {
+    let created_at = Utc::now();
+    let mut metadata = TemporalFixture::metadata(created_at + Duration::hours(1));
+    metadata.last_used_at = Some(created_at - Duration::seconds(1));
+
+    TemporalFixture::assert_invalid(TemporalFixture::token(created_at, metadata), "last_used_at");
+}
+
+#[test]
 fn accepts_revocation_at_the_creation_boundary() {
     let created_at = Utc::now();
     let mut metadata = TemporalFixture::metadata(created_at + Duration::hours(1));

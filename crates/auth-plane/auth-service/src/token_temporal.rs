@@ -12,6 +12,11 @@ impl ApiToken {
         }
         Self::ensure_not_before_creation("revoked_at", self.metadata.revoked_at, self.created_at)?;
         Self::ensure_not_before_creation(
+            "last_used_at",
+            self.metadata.last_used_at,
+            self.created_at,
+        )?;
+        Self::ensure_not_before_creation(
             "rotation_overlap_until",
             self.metadata.rotation_overlap_until,
             self.created_at,
