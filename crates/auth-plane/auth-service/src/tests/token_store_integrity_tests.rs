@@ -1,5 +1,5 @@
 use super::support_tests::{OWNER, TestFixture};
-use crate::{ApiToken, AuthService, TokenMetadata, TokenScope, TokenStore};
+use crate::{ApiToken, AuthService, MemoryReplayStore, TokenMetadata, TokenScope, TokenStore};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError, BpResult};
@@ -39,7 +39,12 @@ impl StoreIntegrityFixture {
         let store = MismatchedTokenStore {
             token: TestFixture::token("token-b"),
         };
-        AuthService::new(Arc::new(store), TestFixture::config()).expect("valid service")
+        AuthService::new(
+            Arc::new(store),
+            TestFixture::config(),
+            Arc::new(MemoryReplayStore::default()),
+        )
+        .expect("valid service")
     }
 
     fn assert_store_error<T>(result: BpResult<T>) {
@@ -68,6 +73,7 @@ async fn rejects_corrupt_metadata_returned_by_a_store() {
     let service = AuthService::new(
         Arc::new(MismatchedTokenStore { token }),
         TestFixture::config(),
+        Arc::new(MemoryReplayStore::default()),
     )
     .expect("valid service");
 
@@ -108,8 +114,12 @@ struct DuplicateIdsFixture;
 
 impl DuplicateIdsFixture {
     fn service(token: ApiToken) -> AuthService {
-        AuthService::new(Arc::new(DuplicateIdsStore { token }), TestFixture::config())
-            .expect("valid service")
+        AuthService::new(
+            Arc::new(DuplicateIdsStore { token }),
+            TestFixture::config(),
+            Arc::new(MemoryReplayStore::default()),
+        )
+        .expect("valid service")
     }
 
     fn expired_token() -> ApiToken {

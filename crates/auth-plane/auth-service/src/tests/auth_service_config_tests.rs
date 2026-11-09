@@ -1,4 +1,6 @@
-use crate::{AuthService, AuthServiceConfig, MemoryTokenAuditLog, MemoryTokenStore};
+use crate::{
+    AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenAuditLog, MemoryTokenStore,
+};
 use chrono::Duration;
 use platform_errors::{AuthError, BpError};
 use std::sync::Arc;
@@ -21,7 +23,11 @@ fn rejects_sub_second_signature_validity() {
     let mut config = ConfigFixture::config();
     config.signature_validity = Duration::milliseconds(500);
 
-    let error = AuthService::new(Arc::new(MemoryTokenStore::default()), config);
+    let error = AuthService::new(
+        Arc::new(MemoryTokenStore::default()),
+        config,
+        Arc::new(MemoryReplayStore::default()),
+    );
 
     assert!(matches!(
         error,
@@ -37,5 +43,12 @@ fn accepts_one_second_signature_validity() {
     let mut config = ConfigFixture::config();
     config.signature_validity = Duration::seconds(1);
 
-    assert!(AuthService::new(Arc::new(MemoryTokenStore::default()), config).is_ok());
+    assert!(
+        AuthService::new(
+            Arc::new(MemoryTokenStore::default()),
+            config,
+            Arc::new(MemoryReplayStore::default()),
+        )
+        .is_ok()
+    );
 }

@@ -4,9 +4,10 @@ Status: stage 1 implemented. A shared atomic backend remains future work.
 
 ## Stage 1 implementation
 
-The auth service now accepts an injectable `ReplayStore` through
-`AuthService::new_with_replay_store`. `AuthService::new` keeps the existing
-signature and uses `MemoryReplayStore`, which evicts entries in expiry order,
+The auth service now requires an injectable `ReplayStore` through
+`AuthService::new`. All callers, including production, must supply a store; the
+service does not create a hidden process-local default. `MemoryReplayStore` is
+available for local development and tests. It evicts entries in expiry order,
 enforces a configurable capacity, and rejects new reservations when full rather
 than evicting unexpired nonces. Store results distinguish consumed, replayed,
 and expired outcomes from store failures. Releases carry a reservation identity,
@@ -27,8 +28,8 @@ Relevant implementation:
 - `crates/auth-plane/auth-service/src/tests/auth_service_signature_validation_tests.rs`
 
 Production wiring is in `crates/sandbox-plane/runner/src/bin/cwasm-invoker.rs`,
-which currently uses a Vault-backed `TokenStore` and the default in-memory replay
-store created by `AuthService::new`.
+which explicitly constructs the replay store alongside its Vault-backed
+`TokenStore`.
 
 ## Pre-stage-1 behaviour
 
@@ -110,9 +111,9 @@ trait ReplayStore {
 }
 ```
 
-Provide an in-memory implementation for local development and tests. Add the
-store to `AuthServiceConfig`, or add a constructor so existing callers keep the
-local default while production explicitly selects a shared implementation.
+Provide an in-memory implementation for local development and tests. Require
+callers to pass the store to `AuthService::new` so production cannot
+accidentally rely on process-local state.
 
 This removes the hard-coded dependency, enables shared backends, makes store
 errors explicit, and lets tests model multiple verifier instances. By itself it
@@ -207,7 +208,8 @@ is genuinely idempotent.
 Use a two-stage approach.
 
 **Stage 1: make replay state injectable and remove the current hot-path cost.**
-Add a `ReplayStore` abstraction with an in-memory default, expiry-ordered
+Add a `ReplayStore` abstraction, supplied explicitly by every caller, with an
+in-memory implementation for local development and tests, expiry-ordered
 eviction and a configured capacity bound, metrics for hits/evictions/store
 failures/size, explicit replay-versus-store errors, and reservation-safe release
 semantics.
@@ -231,9 +233,8 @@ usage atomically, plus downstream order idempotency as defence in depth.
 
 ## Implementation notes for a follow-up
 
-- Keep `AuthService::new` source-compatible if practical; adding a required
-  public config field would break callers. Use a new constructor or an
-  optional/defaulted field.
+- Require the replay store at `AuthService` construction; do not add a hidden
+  process-local default for backwards compatibility.
 - Model the replay key as an owned value instead of cloning two `String`s per
   call.
 - Use signed `expires_at` for the backend TTL and cap retention with a

@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, AuthService, AuthServiceConfig, MemoryTokenAuditLog, MemoryTokenStore, TokenAuditLog,
-    TokenExpiry, TokenMetadata, TokenOptions, TokenScope,
+    ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenAuditLog,
+    MemoryTokenStore, TokenAuditLog, TokenExpiry, TokenMetadata, TokenOptions, TokenScope,
 };
 use chrono::{DateTime, Duration, Utc};
 use std::sync::Arc;
@@ -27,13 +27,19 @@ impl TestFixture {
     }
 
     pub(crate) fn service() -> AuthService {
-        AuthService::new(Arc::new(MemoryTokenStore::default()), Self::config()).unwrap()
+        AuthService::new(
+            Arc::new(MemoryTokenStore::default()),
+            Self::config(),
+            Arc::new(MemoryReplayStore::default()),
+        )
+        .unwrap()
     }
 
     pub(crate) fn service_with_audit(audit: Arc<dyn TokenAuditLog>) -> AuthService {
         AuthService::new(
             Arc::new(MemoryTokenStore::default()),
             Self::config_with_audit(audit),
+            Arc::new(MemoryReplayStore::default()),
         )
         .unwrap()
     }

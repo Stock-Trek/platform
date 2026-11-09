@@ -1,5 +1,8 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::{ApiToken, AuthService, MemoryTokenStore, RevocationReason, RevokedBy, TokenStore};
+use crate::{
+    ApiToken, AuthService, MemoryReplayStore, MemoryTokenStore, RevocationReason, RevokedBy,
+    TokenStore,
+};
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::{AuthError, BpError, BpResult};
@@ -80,8 +83,12 @@ struct CasFixture;
 impl CasFixture {
     fn service(mode: RaceMode) -> (AuthService, Arc<RaceStore>) {
         let store = Arc::new(RaceStore::new(mode));
-        let service =
-            AuthService::new(store.clone(), TestFixture::config()).expect("valid service");
+        let service = AuthService::new(
+            store.clone(),
+            TestFixture::config(),
+            Arc::new(MemoryReplayStore::default()),
+        )
+        .expect("valid service");
         (service, store)
     }
 

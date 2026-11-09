@@ -1,10 +1,7 @@
-use crate::{
-    MemoryReplayStore, ReplayStore, TokenAuditEvent, TokenAuditLog,
-    memory_replay_store::DEFAULT_REPLAY_CAPACITY, token_store::TokenStore,
-};
+use crate::{ReplayStore, TokenAuditEvent, TokenAuditLog, token_store::TokenStore};
 use chrono::Duration;
 use platform_errors::{AuthError, BpError, BpResult};
-use std::{num::NonZeroUsize, sync::Arc};
+use std::sync::Arc;
 
 pub(crate) const MAX_UPDATE_ATTEMPTS: usize = 5;
 
@@ -26,14 +23,7 @@ pub struct AuthService {
 }
 
 impl AuthService {
-    pub fn new(store: Arc<dyn TokenStore>, config: AuthServiceConfig) -> BpResult<Self> {
-        let replay = MemoryReplayStore::new(
-            NonZeroUsize::new(DEFAULT_REPLAY_CAPACITY).expect("non-zero default capacity"),
-        );
-        Self::new_with_replay_store(store, config, Arc::new(replay))
-    }
-
-    pub fn new_with_replay_store(
+    pub fn new(
         store: Arc<dyn TokenStore>,
         config: AuthServiceConfig,
         replay: Arc<dyn ReplayStore>,
