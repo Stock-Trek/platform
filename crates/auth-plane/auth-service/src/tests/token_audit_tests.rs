@@ -1,5 +1,5 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::{MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction};
+use crate::{MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction, TokenAuditEvent};
 use chrono::{Duration, Utc};
 use std::sync::Arc;
 
@@ -38,6 +38,23 @@ async fn records_token_issuance_and_authentication() {
     let events = audit.events();
     assert_eq!(events[0].token_id.as_deref(), Some("token-a"));
     assert_eq!(events[0].owner.as_deref(), Some("owner-a"));
+}
+
+#[test]
+fn serializes_audit_events_as_json() {
+    let event = TokenAuditEvent::new(TokenAuditAction::Signed, Utc::now())
+        .with_token("token-a", Some("owner-a"))
+        .failure("signing failed");
+
+    let value = serde_json::to_value(&event).unwrap();
+
+    assert_eq!(value["action"], "signed");
+    assert_eq!(value["token_id"], "token-a");
+    assert_eq!(value["owner"], "owner-a");
+    assert_eq!(value["success"], false);
+    assert_eq!(value["detail"], "signing failed");
+    let decoded: TokenAuditEvent = serde_json::from_value(value).unwrap();
+    assert_eq!(decoded, event);
 }
 
 #[tokio::test]
