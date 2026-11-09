@@ -1,7 +1,7 @@
 use chrono::{Duration, Utc};
 use platform_auth_service::{
     ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenAuditLog,
-    MemoryTokenStore, SignedOrderRequest, TokenExpiry, TokenOptions, TokenScope,
+    MemoryTokenStore, SignedOrderRequest, TokenMetadata, TokenScope, TokenStore,
 };
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
@@ -23,9 +23,9 @@ const OWNER: &str = "runner-owner";
 struct Fixture;
 
 impl Fixture {
-    fn auth_service() -> AuthService {
+    fn auth_service_with_store(store: Arc<MemoryTokenStore>) -> AuthService {
         AuthService::new(
-            Arc::new(MemoryTokenStore::default()),
+            store,
             AuthServiceConfig {
                 token_lifetime: Duration::days(30),
                 rotation_overlap: Duration::days(7),
@@ -37,15 +37,17 @@ impl Fixture {
         .unwrap()
     }
 
+    fn auth_service() -> AuthService {
+        Self::auth_service_with_store(Arc::new(MemoryTokenStore::default()))
+    }
+
     async fn setup(url: &str) -> (OrderRequestDispatcher, AuthService, ApiToken) {
-        let auth_service = Self::auth_service();
-        let options =
-            TokenOptions::new(TokenExpiry::After(Duration::days(30)), TokenScope::DEFAULT);
+        let store = Arc::new(MemoryTokenStore::default());
         let now = Utc::now();
-        let token = auth_service
-            .add_token(TOKEN_ID, OWNER, now, options, now)
-            .await
-            .unwrap();
+        let metadata = TokenMetadata::new(now + Duration::days(30), TokenScope::DEFAULT).unwrap();
+        let token = ApiToken::generate(TOKEN_ID, OWNER, now, metadata).unwrap();
+        store.put(&token).await.unwrap();
+        let auth_service = Self::auth_service_with_store(store);
         let dispatcher = OrderRequestDispatcher::new(url, OWNER, auth_service.clone()).unwrap();
         (dispatcher, auth_service, token)
     }

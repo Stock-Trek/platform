@@ -6,13 +6,13 @@ use platform_errors::{BpError, BpResult};
 use rand::{Rng, distributions::Alphanumeric};
 
 impl AuthService {
-    pub async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
+    pub(crate) async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
         ApiToken::validate_id(id)?;
         let replacement_id = Self::rotated_token_id(id, now);
         self.rotate_token_to(id, replacement_id, now).await
     }
 
-    pub async fn rotate_token_to(
+    pub(crate) async fn rotate_token_to(
         &self,
         id: &str,
         replacement_id: impl Into<String>,

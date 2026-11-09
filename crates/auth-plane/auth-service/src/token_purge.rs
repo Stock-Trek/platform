@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 
 impl AuthService {
-    pub async fn purge_expired_tokens(&self, now: DateTime<Utc>) -> BpResult<usize> {
+    pub(crate) async fn purge_expired_tokens(&self, now: DateTime<Utc>) -> BpResult<usize> {
         let mut ids = self.store.ids().await?;
         ids.sort();
         ids.dedup();
