@@ -26,6 +26,7 @@ platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http", "storage"] }
 platform-sqs = { workspace = true }
 platform-time = { workspace = true }
+platform-types = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["rustls", "stream"] }
 secrecy = { workspace = true }

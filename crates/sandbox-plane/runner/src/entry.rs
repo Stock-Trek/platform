@@ -1,4 +1,7 @@
-use crate::{command::Command, runner::Runner};
+use crate::{
+    command::{Command, CommandName},
+    runner::Runner,
+};
 use platform_exit_codes::ExitCode;
 use std::{ffi::CStr, os::raw::c_char};
 
@@ -31,32 +34,14 @@ impl Entry {
                 unsafe { CStr::from_ptr(arg_ptr).to_string_lossy().into_owned() }
             })
             .collect();
-        let command = match (args[1].as_str(), args.len()) {
-            ("Algorithm", 3) => Command::Algorithm {
-                strategy_name: args[2].clone(),
-            },
-            ("Execute", 5) => Command::Execute {
-                strategy_name: args[2].clone(),
-                strategy_context_path: args[3].clone(),
-                portfolio_path: args[4].clone(),
-            },
-            ("Metadata", 3) => Command::Metadata {
-                strategy_name: args[2].clone(),
-            },
-            ("Preferences", 3) => Command::Preferences {
-                strategy_name: args[2].clone(),
-            },
-            ("Signals", 4) => Command::Signals {
-                strategy_name: args[2].clone(),
-                strategy_context_path: args[3].clone(),
-            },
-            ("Algorithm" | "Execute" | "Metadata" | "Preferences" | "Signals", _) => {
-                eprintln!("{USAGE}");
-                return ExitCode::ServerEntryIncorrectArgCount.code();
-            }
-            _ => return ExitCode::ServerEntryFailedToParseCommand.code(),
+        let Some(command_name) = CommandName::parse(&args[1]) else {
+            return ExitCode::ServerEntryFailedToParseCommand.code();
         };
-        Self::run_command(command)
+        if args.len() != command_name.argument_count() {
+            eprintln!("{USAGE}");
+            return ExitCode::ServerEntryIncorrectArgCount.code();
+        }
+        Self::run_command(command_name.command(&args))
     }
 }
 

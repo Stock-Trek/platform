@@ -9,6 +9,7 @@ platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["github"] }
 platform-git = { workspace = true }
 platform-time = { workspace = true }
+platform-types = { workspace = true }
 jsonwebtoken = { workspace = true, default-features = false, features = ["use_pem"] }
 lru = { workspace = true }
 octocrab = { workspace = true }

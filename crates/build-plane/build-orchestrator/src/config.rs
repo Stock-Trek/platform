@@ -9,6 +9,7 @@ use platform_config::{env_vars::EnvVars, git::DirectoryLimits};
 use platform_errors::{BpError, BpResult};
 use platform_github::{app_config::GitHubAppConfig, host_allow_list::HostAllowlist};
 use platform_time::timeouts::Timeouts;
+use platform_types::url_scheme::UrlScheme;
 use std::{num::NonZeroUsize, time::Duration};
 
 const AWS_ENDPOINT_URL_S3: &str = "AWS_ENDPOINT_URL_S3";
@@ -80,7 +81,7 @@ impl OrchestratorConfig {
         let allowed_hosts =
             HostAllowlist::from_hosts(vars.required_csv(GITHUB_ENTERPRISE_ALLOWED_HOSTS)?)?;
 
-        let endpoint_url = vars.required_url(AWS_ENDPOINT_URL_S3, &["http", "https"])?;
+        let endpoint_url = vars.required_url(AWS_ENDPOINT_URL_S3, &UrlScheme::HTTP)?;
         let build_agent_timeout = vars.required_positive_duration_secs(BUILD_AGENT_TIMEOUT_SECS)?;
         let source_download_timeout =
             vars.required_positive_duration_secs(BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS)?;

@@ -2,6 +2,7 @@ use crate::source::StreamFormat;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_runtime::Config;
+use platform_types::url_scheme::UrlScheme;
 use std::collections::HashMap;
 use stock_trek_types::cex::cex_id::CexId;
 use url::Url;
@@ -32,7 +33,7 @@ impl IngesterConfig {
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let exchange = Config::required_exchange(vars, INGESTER_EXCHANGE)?;
-        let websocket_url = vars.required_url(INGESTER_WEBSOCKET_URL, &["ws", "wss"])?;
+        let websocket_url = vars.required_url(INGESTER_WEBSOCKET_URL, &UrlScheme::WEBSOCKET)?;
         Self::validate_trade_streams(exchange, &websocket_url)?;
         let websocket_api_key = vars.optional(INGESTER_WEBSOCKET_API_KEY)?;
         let stream_format =

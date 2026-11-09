@@ -1,4 +1,5 @@
 use platform_errors::{BpError, BpResult};
+use platform_types::url_scheme::UrlScheme;
 use reqwest::Url;
 use std::{fmt, time::Duration};
 
@@ -49,8 +50,7 @@ impl ValkeyReplayStoreConfig {
         }
         let url = Url::parse(&self.url)
             .map_err(|error| BpError::config_invalid_source("valkey_url", error))?;
-        if !matches!(url.scheme(), "redis" | "rediss" | "valkey" | "valkeys")
-            || url.host_str().is_none()
+        if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_valkey) || url.host_str().is_none()
         {
             return Err(BpError::config_invalid(
                 "valkey_url",

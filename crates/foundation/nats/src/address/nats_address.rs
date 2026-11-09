@@ -1,5 +1,6 @@
 use async_nats::{Client, ConnectOptions};
 use platform_errors::{BpError, BpResult, NatsError};
+use platform_types::url_scheme::UrlScheme;
 use url::Url;
 
 pub(super) const DEFAULT_NATS_PORT: u16 = 4222;
@@ -26,7 +27,7 @@ impl NatsAddress {
 
     fn parse_named(name: &str, value: &str) -> BpResult<Self> {
         let url = Url::parse(value).map_err(|error| BpError::config_invalid_source(name, error))?;
-        if url.scheme() != "nats" {
+        if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_nats) {
             return Err(BpError::config_invalid(
                 name,
                 format!("must use the nats scheme, got {}", url.scheme()),

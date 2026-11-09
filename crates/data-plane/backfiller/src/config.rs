@@ -9,6 +9,7 @@ use platform_exchange_types::{
 };
 use platform_runtime::Config;
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
+use platform_types::url_scheme::UrlScheme;
 use secrecy::SecretString;
 use std::time::{Duration, SystemTime};
 use stock_trek_types::cex::cex_id::CexId;
@@ -102,7 +103,7 @@ impl BackfillerConfig {
         let event_subject_prefix =
             Config::required_nats_subject(vars, BACKFILLER_EVENT_SUBJECT_PREFIX)?;
         let exchange_http_url =
-            vars.required_url(BACKFILLER_EXCHANGE_HTTP_URL, &["http", "https"])?;
+            vars.required_url(BACKFILLER_EXCHANGE_HTTP_URL, &UrlScheme::HTTP)?;
         let ssm = SsmConfig::new(
             vars.required(SSM_PATH_ENV)?,
             vars.required_parsed(SSM_DECRYPT_ENV)?,

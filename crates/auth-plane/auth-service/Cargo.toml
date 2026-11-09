@@ -14,6 +14,7 @@ platform-errors = { workspace = true }
 platform-metrics = { workspace = true }
 platform-sqs = { workspace = true }
 platform-time = { workspace = true }
+platform-types = { workspace = true }
 rand = { workspace = true }
 redis = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json", "rustls"] }

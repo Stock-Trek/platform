@@ -1,5 +1,6 @@
 use platform_config::env_names::GITHUB_ENTERPRISE_ALLOWED_HOSTS;
 use platform_errors::{BpError, BpResult, GitHubError};
+use platform_types::url_scheme::UrlScheme;
 use std::{
     collections::HashMap,
     net::{Ipv4Addr, Ipv6Addr},
@@ -105,7 +106,7 @@ impl HostAllowlist {
                 host: url.to_owned(),
             })
         })?;
-        if parsed.scheme() != "https" {
+        if !UrlScheme::from_url(&parsed).is_some_and(UrlScheme::is_https) {
             return Err(BpError::GitHub(GitHubError::HostInvalid {
                 host: url.to_owned(),
             }));

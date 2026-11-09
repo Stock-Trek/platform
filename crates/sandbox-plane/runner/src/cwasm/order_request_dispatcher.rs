@@ -1,6 +1,7 @@
 use chrono::Utc;
 use platform_auth_service::AuthService;
 use platform_errors::{BpError, BpResult};
+use platform_types::url_scheme::UrlScheme;
 use serde_json::json;
 use stock_trek::{
     actions::ResolvedAction,
@@ -18,7 +19,7 @@ impl OrderRequestDispatcher {
     pub fn new(url: &str, owner: impl Into<String>, auth_service: AuthService) -> BpResult<Self> {
         let url = reqwest::Url::parse(url)
             .map_err(|error| BpError::config_invalid_source("order_request_url", error))?;
-        if !matches!(url.scheme(), "http" | "https") {
+        if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
             return Err(BpError::config_invalid(
                 "order_request_url",
                 "must use the http or https scheme",
