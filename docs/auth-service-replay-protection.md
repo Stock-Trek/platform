@@ -1,25 +1,40 @@
 # Auth-service replay protection investigation
 
-Status: investigation only. No runtime code changes are part of this issue.
+Status: stage 1 implemented. A shared atomic backend remains future work.
+
+## Stage 1 implementation
+
+The auth service now accepts an injectable `ReplayStore` through
+`AuthService::new_with_replay_store`. `AuthService::new` keeps the existing
+signature and uses `MemoryReplayStore`, which evicts entries in expiry order,
+enforces a configurable capacity, and rejects new reservations when full rather
+than evicting unexpired nonces. Store results distinguish consumed, replayed,
+and expired outcomes from store failures. Releases carry a reservation identity,
+so a delayed release cannot remove a newer reservation for the same nonce.
+Metrics cover replay hits, evictions, store failures, capacity rejections, and
+retained entries.
 
 ## Scope
 
 Relevant implementation:
 
 - `crates/auth-plane/auth-service/src/auth_service.rs`
-- `crates/auth-plane/auth-service/src/replay_cache.rs`
+- `crates/auth-plane/auth-service/src/replay_store.rs`
+- `crates/auth-plane/auth-service/src/memory_replay_store.rs`
 - `crates/auth-plane/auth-service/src/order_verification.rs`
-- `crates/auth-plane/auth-service/src/tests/replay_cache_tests.rs`
+- `crates/auth-plane/auth-service/src/tests/replay_store_tests.rs`
+- `crates/auth-plane/auth-service/src/tests/auth_service_replay_tests.rs`
 - `crates/auth-plane/auth-service/src/tests/auth_service_signature_validation_tests.rs`
 
 Production wiring is in `crates/sandbox-plane/runner/src/bin/cwasm-invoker.rs`,
-which currently uses a Vault-backed `TokenStore` and the in-memory replay cache
-created by `AuthService::new`.
+which currently uses a Vault-backed `TokenStore` and the default in-memory replay
+store created by `AuthService::new`.
 
-## Current behaviour
+## Pre-stage-1 behaviour
 
-`AuthService::new` always constructs a new `Arc<ReplayCache>`. The cache is not
-part of `AuthServiceConfig` and cannot be supplied by the caller.
+Before stage 1, `AuthService::new` always constructed a new in-memory replay
+cache. The cache was not part of `AuthServiceConfig` and could not be supplied by
+the caller.
 
 The cache stores `(token_id, nonce) -> expires_at` in a
 `parking_lot::Mutex<HashMap<...>>`. Verification calls `consume` only after the

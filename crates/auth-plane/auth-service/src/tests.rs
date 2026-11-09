@@ -1,11 +1,12 @@
 mod api_token_tests;
 mod auth_service_config_tests;
 mod auth_service_owner_tests;
+mod auth_service_replay_tests;
 mod auth_service_secret_tests;
 mod auth_service_signature_tests;
 mod auth_service_signature_validation_tests;
 mod auth_service_token_tests;
-mod replay_cache_tests;
+mod replay_store_tests;
 mod revocation_reason_tests;
 mod revocation_tests;
 mod revoked_by_tests;

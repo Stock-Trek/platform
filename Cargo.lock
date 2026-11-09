@@ -4574,6 +4574,7 @@ dependencies = [
  "httpdate",
  "parking_lot",
  "platform-errors",
+ "platform-metrics",
  "platform-sqs",
  "platform-time",
  "rand 0.8.8",
@@ -4584,6 +4585,7 @@ dependencies = [
  "sha2 0.11.1",
  "strum 0.28.0",
  "subtle",
+ "thiserror 2.0.21",
  "tokio",
  "tracing",
 ]

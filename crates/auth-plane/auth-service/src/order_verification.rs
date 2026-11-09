@@ -1,9 +1,11 @@
 use crate::{
-    ApiToken, AuthService, OrderRequestSigner, SignedOrderRequest, TokenAuditAction,
-    TokenAuditEvent, TokenScope, auth_service::MAX_UPDATE_ATTEMPTS,
+    ApiToken, AuthService, ConsumeResult, OrderRequestSigner, ReplayKey, ReplayReservation,
+    ReplayStoreError, SignedOrderRequest, TokenAuditAction, TokenAuditEvent, TokenScope,
+    auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, BpError, BpResult};
+use platform_metrics::auth::AuthReplayMetrics;
 
 const CLOCK_SKEW_SECONDS: i64 = 60;
 
@@ -90,16 +92,30 @@ impl AuthService {
                 .await;
             return Ok(false);
         }
-        if !self.replay.consume(
-            context.token_id(),
-            context.nonce(),
-            context.expires_at(),
-            now,
-        ) {
-            self.record_signature_rejected(token_id, Some(&token), now, "replayed signature")
+        let replay_key = ReplayKey::new(context.token_id(), context.nonce());
+        let reservation = match self
+            .replay
+            .consume(replay_key, context.expires_at(), now)
+            .await
+        {
+            Ok(ConsumeResult::Consumed(reservation)) => reservation,
+            Ok(ConsumeResult::Replayed | ConsumeResult::Expired) => {
+                self.record_signature_rejected(
+                    token_id,
+                    Some(&token),
+                    now,
+                    "replayed signature",
+                )
                 .await;
-            return Ok(false);
-        }
+                return Ok(false);
+            }
+            Err(error) => {
+                let error = Self::replay_store_error("consume", error);
+                self.record_signature_rejected(token_id, Some(&token), now, &error.to_string())
+                    .await;
+                return Err(error);
+            }
+        };
         let mut latest = token;
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             let mut updated = latest.clone();
@@ -115,12 +131,12 @@ impl AuthService {
                     latest = match self.token(token_id).await {
                         Ok(token) => token,
                         Err(error) => {
-                            self.replay.release(token_id, context.nonce());
+                            self.release_replay(&reservation).await?;
                             return Err(error);
                         }
                     };
                     if let Err(error) = Self::ensure_active(&latest, now) {
-                        self.replay.release(token_id, context.nonce());
+                        self.release_replay(&reservation).await?;
                         self.record_signature_rejected(
                             token_id,
                             Some(&latest),
@@ -131,7 +147,7 @@ impl AuthService {
                         return Ok(false);
                     }
                     if let Err(error) = Self::ensure_scope(&latest, TokenScope::OrdersWrite) {
-                        self.replay.release(token_id, context.nonce());
+                        self.release_replay(&reservation).await?;
                         self.record_signature_rejected(
                             token_id,
                             Some(&latest),
@@ -143,13 +159,26 @@ impl AuthService {
                     }
                 }
                 Err(error) => {
-                    self.replay.release(token_id, context.nonce());
+                    self.release_replay(&reservation).await?;
                     return Err(error);
                 }
             }
         }
-        self.replay.release(token_id, context.nonce());
+        self.release_replay(&reservation).await?;
         Err(BpError::token_conflict(token_id))
+    }
+
+    fn replay_store_error(operation: &'static str, error: ReplayStoreError) -> BpError {
+        AuthReplayMetrics::record_store_failure(operation);
+        let retryable = error.is_retryable();
+        BpError::auth_store(operation, "replay-store", retryable, error)
+    }
+
+    async fn release_replay(&self, reservation: &ReplayReservation) -> BpResult<()> {
+        self.replay
+            .release(reservation)
+            .await
+            .map_err(|error| Self::replay_store_error("release", error))
     }
 
     async fn record_signature_rejected(
