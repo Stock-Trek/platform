@@ -1,10 +1,13 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::{ApiToken, AuthService, MemoryReplayStore, MemoryTokenStore, TokenStore};
+use crate::{
+    ApiToken, AuthService, MemoryReplayStore, MemoryTokenStore, TokenAuditAction, TokenAuditEvent,
+    TokenAuditLog, TokenStore,
+};
 use async_trait::async_trait;
 use chrono::Utc;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{AuthError, BpError, BpResult};
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -57,6 +60,37 @@ impl TokenStore for FailingStore {
     }
 }
 
+struct FailingSignatureVerifiedAuditLog {
+    failed: AtomicBool,
+    events: Mutex<Vec<TokenAuditEvent>>,
+}
+
+impl FailingSignatureVerifiedAuditLog {
+    fn new() -> Self {
+        Self {
+            failed: AtomicBool::new(false),
+            events: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn events(&self) -> Vec<TokenAuditEvent> {
+        self.events.lock().expect("audit events lock").clone()
+    }
+}
+
+#[async_trait]
+impl TokenAuditLog for FailingSignatureVerifiedAuditLog {
+    async fn record(&self, event: TokenAuditEvent) -> BpResult<()> {
+        if event.action == TokenAuditAction::SignatureVerified
+            && !self.failed.swap(true, Ordering::SeqCst)
+        {
+            return Err(BpError::auth_invalid_field("audit", "queue unavailable"));
+        }
+        self.events.lock().expect("audit events lock").push(event);
+        Ok(())
+    }
+}
+
 struct SignatureRetryFixture;
 
 impl SignatureRetryFixture {
@@ -70,6 +104,39 @@ impl SignatureRetryFixture {
         .expect("valid service");
         (service, store)
     }
+}
+
+#[tokio::test]
+async fn retries_a_signature_after_audit_delivery_fails() {
+    let audit = Arc::new(FailingSignatureVerifiedAuditLog::new());
+    let service = TestFixture::service_with_audit(audit.clone());
+    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    let now = Utc::now();
+    let signed = service
+        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
+        .await
+        .expect("signed request");
+
+    let error = service
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
+        .await
+        .expect_err("audit delivery failure");
+    assert!(matches!(
+        error,
+        BpError::Auth(AuthError::InvalidField { field: "audit", .. })
+    ));
+
+    let verified = service
+        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
+        .await
+        .expect("retried verification");
+    assert!(verified);
+    assert!(
+        audit
+            .events()
+            .iter()
+            .any(|event| event.action == TokenAuditAction::SignatureVerified)
+    );
 }
 
 #[tokio::test]

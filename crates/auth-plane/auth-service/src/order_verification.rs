@@ -124,7 +124,10 @@ impl AuthService {
                 Ok(()) => {
                     let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
                         .with_token(updated.id(), Some(updated.owner()));
-                    self.record_audit(event).await?;
+                    if let Err(error) = self.record_audit(event).await {
+                        self.release_replay(&reservation).await?;
+                        return Err(error);
+                    }
                     return Ok(true);
                 }
                 Err(error) if Self::is_conflict(&error) => {
