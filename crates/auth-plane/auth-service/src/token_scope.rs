@@ -10,8 +10,13 @@ pub enum TokenScope {
     OrdersWrite,
     #[strum(to_string = "orders:*")]
     OrdersAll,
+    /// Allows reading token metadata through a redacted [`crate::TokenView`].
     #[strum(to_string = "tokens:read")]
     TokensRead,
+    /// Allows administering tokens.
+    ///
+    /// This is an admin-level scope: it can mint tokens with arbitrary scopes,
+    /// including [`TokenScope::Admin`], and rotate or revoke any token.
     #[strum(to_string = "tokens:write")]
     TokensWrite,
     #[strum(to_string = "tokens:*")]
