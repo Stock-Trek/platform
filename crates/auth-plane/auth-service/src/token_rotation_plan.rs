@@ -27,11 +27,11 @@ impl AuthService {
         replacement_id: &str,
         overlap_until: DateTime<Utc>,
         now: DateTime<Utc>,
-    ) -> BpResult<()> {
+    ) -> BpResult<ApiToken> {
         let mut current = original.clone();
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             if current.metadata().replaced_by() == Some(replacement_id) {
-                return Ok(());
+                return Ok(current);
             }
             self.ensure_rotation_allowed(&current, replacement_id, now)
                 .await?;
@@ -41,7 +41,7 @@ impl AuthService {
                 .begin_rotation(replacement_id, overlap_until);
             retired.validate()?;
             match self.store.update(&current, &retired).await {
-                Ok(()) => return Ok(()),
+                Ok(()) => return Ok(retired),
                 Err(error) if Self::is_conflict(&error) => {
                     current = self.token(original.id()).await?;
                 }
@@ -49,6 +49,40 @@ impl AuthService {
             }
         }
         Err(BpError::token_conflict(original.id()))
+    }
+
+    pub(crate) async fn rollback_rotation(
+        &self,
+        retired: &ApiToken,
+        replacement_id: &str,
+        remove_replacement: bool,
+    ) -> BpResult<()> {
+        let mut current = retired.clone();
+        for _ in 0..MAX_UPDATE_ATTEMPTS {
+            if current.metadata().replaced_by() != Some(replacement_id) {
+                break;
+            }
+            let expected = current.clone();
+            let mut restored = current.clone();
+            restored.metadata.cancel_rotation();
+            match self.store.update(&expected, &restored).await {
+                Ok(()) => {
+                    current = restored;
+                    break;
+                }
+                Err(error) if Self::is_conflict(&error) => {
+                    current = self.token(retired.id()).await?;
+                }
+                Err(error) => return Err(error),
+            }
+        }
+        if current.metadata().replaced_by() == Some(replacement_id) {
+            return Err(BpError::token_conflict(retired.id()));
+        }
+        if remove_replacement {
+            self.store.delete(replacement_id).await?;
+        }
+        Ok(())
     }
 
     pub(crate) fn ensure_replacement_matches(

@@ -71,6 +71,10 @@ impl AuthService {
         self.audit.record(event).await
     }
 
+    pub(crate) async fn record_audit_batch(&self, events: &[TokenAuditEvent]) -> BpResult<()> {
+        self.audit.record_batch(events).await
+    }
+
     /// Records an event for an operation that is already failing. The original
     /// failure is more useful to the caller, so audit delivery errors are logged
     /// instead of replacing it.
@@ -86,5 +90,22 @@ impl AuthService {
 
     pub(crate) fn is_duplicate(error: &BpError) -> bool {
         matches!(error, BpError::Auth(AuthError::TokenExists { .. }))
+    }
+
+    pub(crate) fn rollback_failure(
+        action: &str,
+        target: &str,
+        failure: &BpError,
+        rollback: BpError,
+    ) -> BpError {
+        BpError::auth_store(
+            "rollback",
+            target,
+            rollback.retryability().is_retryable(),
+            format!(
+                "failed to {action} after audit delivery failed: {rollback}; \
+                 original failure: {failure}"
+            ),
+        )
     }
 }

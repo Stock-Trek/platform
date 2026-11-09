@@ -30,4 +30,12 @@ impl TokenAuditLog for SqsTokenAuditLog {
             .send_json(std::slice::from_ref(&event), deadline)
             .await
     }
+
+    async fn record_batch(&self, events: &[TokenAuditEvent]) -> BpResult<()> {
+        if events.is_empty() {
+            return Ok(());
+        }
+        let deadline = Deadline::new(SystemTime::now() + self.timeout, Duration::ZERO);
+        self.sqs.send_json(events, deadline).await
+    }
 }

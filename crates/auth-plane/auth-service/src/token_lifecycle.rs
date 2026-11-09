@@ -6,6 +6,20 @@ use chrono::{DateTime, Utc};
 use platform_errors::{AuthError, BpError, BpResult};
 
 impl AuthService {
+    pub async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<()> {
+        let token = self.stored_token(id).await?;
+        self.store.delete(id).await?;
+        let Some(token) = token else {
+            return Ok(());
+        };
+        let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
+            .with_token(token.id(), Some(token.owner()));
+        if let Err(error) = self.record_audit(event).await {
+            return Err(self.rollback_deleted_token(&token, error).await);
+        }
+        Ok(())
+    }
+
     pub async fn revoke_token(
         &self,
         id: &str,
@@ -27,7 +41,9 @@ impl AuthService {
                 Ok(()) => {
                     let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)
                         .with_token(token.id(), Some(token.owner()));
-                    self.record_audit(event).await?;
+                    if let Err(error) = self.record_audit(event).await {
+                        return Err(self.rollback_revocation(&token, &original, error).await);
+                    }
                     return Ok(token);
                 }
                 Err(error) if Self::is_conflict(&error) => continue,
@@ -93,23 +109,27 @@ impl AuthService {
         )
     }
 
-    pub async fn purge_expired_tokens(&self, now: DateTime<Utc>) -> BpResult<usize> {
-        let mut purged = 0;
-        let mut ids = self.store.ids().await?;
-        ids.sort();
-        ids.dedup();
-        for id in ids {
-            if let Some(token) = self.stored_token(&id).await?
-                && token.metadata().is_expired(now)
-            {
-                self.store.delete(&id).await?;
-                let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
-                    .with_token(token.id(), Some(token.owner()));
-                self.record_audit(event).await?;
-                purged += 1;
+    async fn rollback_deleted_token(&self, token: &ApiToken, failure: BpError) -> BpError {
+        match self.store.put(token).await {
+            Ok(()) => failure,
+            Err(rollback) => {
+                Self::rollback_failure("restore token", token.id(), &failure, rollback)
             }
         }
-        Ok(purged)
+    }
+
+    async fn rollback_revocation(
+        &self,
+        revoked: &ApiToken,
+        original: &ApiToken,
+        failure: BpError,
+    ) -> BpError {
+        match self.store.update(revoked, original).await {
+            Ok(()) => failure,
+            Err(rollback) => {
+                Self::rollback_failure("restore token", revoked.id(), &failure, rollback)
+            }
+        }
     }
 
     async fn record_revocation_failure(

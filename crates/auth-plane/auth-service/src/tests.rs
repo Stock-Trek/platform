@@ -22,6 +22,7 @@ mod sqs_token_audit_log_tests;
 mod support_tests;
 mod token_administration_tests;
 mod token_audit_maintenance_tests;
+mod token_audit_rollback_tests;
 mod token_audit_tests;
 mod token_cas_tests;
 mod token_expiry_tests;
