@@ -16,6 +16,38 @@ impl ConfigFixture {
             audit: Arc::new(MemoryTokenAuditLog::new(16)),
         }
     }
+
+    fn service(config: AuthServiceConfig) -> platform_errors::BpResult<AuthService> {
+        AuthService::new(
+            Arc::new(MemoryTokenStore::default()),
+            config,
+            Arc::new(MemoryReplayStore::default()),
+        )
+    }
+}
+
+#[test]
+fn rejects_rotation_overlap_longer_than_token_lifetime() {
+    let mut config = ConfigFixture::config();
+    config.rotation_overlap = config.token_lifetime + Duration::seconds(1);
+
+    let error = ConfigFixture::service(config);
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "rotation_overlap",
+            ..
+        }))
+    ));
+}
+
+#[test]
+fn accepts_rotation_overlap_equal_to_token_lifetime() {
+    let mut config = ConfigFixture::config();
+    config.rotation_overlap = config.token_lifetime;
+
+    assert!(ConfigFixture::service(config).is_ok());
 }
 
 #[test]
