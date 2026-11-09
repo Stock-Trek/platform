@@ -41,8 +41,8 @@ use cwasm::{
     WasmRunner, backtest,
 };
 use platform_auth_service::{
-    AuthService, AuthServiceConfig, MemoryReplayStore, SqsTokenAuditLog, VaultTokenStore,
-    VaultTokenStoreConfig,
+    AuthService, AuthServiceConfig, SqsTokenAuditLog, ValkeyReplayStore, ValkeyReplayStoreConfig,
+    VaultTokenStore, VaultTokenStoreConfig,
 };
 use platform_aws::Aws;
 use platform_exit_codes::ExitCode;
@@ -85,13 +85,14 @@ impl CwasmInvoker {
             execution,
             cwasm: cwasm_limits,
             vault,
+            valkey,
             audit,
         } = config;
         let runtime = match Self::runtime() {
             Ok(runtime) => runtime,
             Err(code) => return code.code(),
         };
-        let auth_service = match runtime.block_on(Self::auth_service(vault, audit)) {
+        let auth_service = match runtime.block_on(Self::auth_service(vault, valkey, audit)) {
             Ok(auth_service) => auth_service,
             Err(code) => return code.code(),
         };
@@ -162,6 +163,7 @@ impl CwasmInvoker {
 
     async fn auth_service(
         config: VaultTokenStoreConfig,
+        replay: ValkeyReplayStoreConfig,
         audit: AuditConfig,
     ) -> Result<AuthService, ExitCode> {
         let store = VaultTokenStore::new(config).map_err(|error| {
@@ -176,6 +178,10 @@ impl CwasmInvoker {
             SqsConfig::new(audit.queue_url),
         );
         let audit = SqsTokenAuditLog::new(sqs, audit.timeout);
+        let replay = ValkeyReplayStore::connect(replay).await.map_err(|error| {
+            eprintln!("cwasm-invoker: failed to connect the replay store: {error}");
+            ExitCode::ServerRunnerConnectionFailed
+        })?;
         AuthService::new(
             Arc::new(store),
             AuthServiceConfig {
@@ -184,7 +190,7 @@ impl CwasmInvoker {
                 signature_validity: Duration::minutes(5),
                 audit: Arc::new(audit),
             },
-            Arc::new(MemoryReplayStore::default()),
+            Arc::new(replay),
         )
         .map_err(|error| {
             eprintln!("cwasm-invoker: invalid auth service configuration: {error}");

@@ -95,6 +95,13 @@ prost-build = "0.14"
 protoc-bin-vendored = "3"
 query-params = { version = "2", registry = "shipyard" }
 rand = "0.8"
+redis = { version = "0.32", default-features = false, features = [
+    "connection-manager",
+    "script",
+    "tls-rustls-webpki-roots",
+    "tokio-comp",
+    "tokio-rustls-comp",
+] }
 reqwest = "0.13"
 rsa = "0.9"
 rust_decimal = "1"

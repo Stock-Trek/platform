@@ -273,9 +273,16 @@ completes; delivery failures fail the operation instead of disappearing with the
 | `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. |
 | `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. |
 | `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. |
+| `CWASM_INVOKER_VALKEY_KEY_PREFIX` | Prefix for replay-protection keys in Valkey. |
+| `CWASM_INVOKER_VALKEY_TIMEOUT_SECS` | Connection and command timeout for Valkey, in seconds. |
+| `CWASM_INVOKER_VALKEY_URL` | `redis://`, `rediss://`, `valkey://`, or `valkeys://` URL of the shared Valkey replay backend. |
 | `CWASM_INVOKER_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
 | `CWASM_INVOKER_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
 | `CWASM_INVOKER_VAULT_TOKEN` | Vault token used to read auth-service tokens. |
+
+Replay protection fails closed when Valkey is unavailable. The replay key prefix must contain only
+colon-separated segments of ASCII letters, digits, `-`, and `_`. Signed request expiry controls
+each key's TTL, so Valkey removes stale nonces without a separate cleanup job.
 
 ## Secrets
 

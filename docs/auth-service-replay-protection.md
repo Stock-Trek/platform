@@ -1,6 +1,6 @@
 # Auth-service replay protection investigation
 
-Status: stage 1 implemented. A shared atomic backend remains future work.
+Status: stages 1 and 2 implemented. Valkey is the production shared replay backend.
 
 ## Stage 1 implementation
 
@@ -15,6 +15,28 @@ so a delayed release cannot remove a newer reservation for the same nonce.
 Metrics cover replay hits, evictions, store failures, capacity rejections, and
 retained entries.
 
+## Stage 2 implementation
+
+The production cwasm invoker uses `ValkeyReplayStore`, a shared `ReplayStore`
+implementation backed by Redis-compatible Valkey. `consume` atomically writes a
+unique reservation value with `SET key value NX PX <remaining-ttl>`. A key that
+already exists is a replay, while an already-expired signed request is rejected
+without contacting Valkey. `release` runs a Lua compare-and-delete script, so a
+delayed release can only remove the reservation that created it and cannot
+remove a newer reservation for the same nonce.
+
+The key is `<prefix>:<token-id>:<nonce>`. The signed `expires_at` determines the
+TTL, Valkey removes expired nonces automatically, and a transient store failure
+fails the verification closed with a retryable store error. The shared backend
+is authoritative across verifier instances and restarts; `MemoryReplayStore`
+remains available for local development and tests.
+
+Valkey is configured with the required `CWASM_INVOKER_VALKEY_URL`,
+`CWASM_INVOKER_VALKEY_KEY_PREFIX`, and `CWASM_INVOKER_VALKEY_TIMEOUT_SECS`
+variables. URLs may use `redis://`, `rediss://`, `valkey://`, or `valkeys://`;
+credentials in the URL are redacted from configuration debug output. See
+`docs/environment-variables.md` for details.
+
 ## Scope
 
 Relevant implementation:
@@ -22,13 +44,17 @@ Relevant implementation:
 - `crates/auth-plane/auth-service/src/auth_service.rs`
 - `crates/auth-plane/auth-service/src/replay_store.rs`
 - `crates/auth-plane/auth-service/src/memory_replay_store.rs`
+- `crates/auth-plane/auth-service/src/valkey_config.rs`
+- `crates/auth-plane/auth-service/src/valkey_replay_store.rs`
 - `crates/auth-plane/auth-service/src/order_verification.rs`
 - `crates/auth-plane/auth-service/src/tests/replay_store_tests.rs`
 - `crates/auth-plane/auth-service/src/tests/auth_service_replay_tests.rs`
 - `crates/auth-plane/auth-service/src/tests/auth_service_signature_validation_tests.rs`
+- `crates/auth-plane/auth-service/src/tests/valkey_config_tests.rs`
+- `crates/auth-plane/auth-service/src/tests/valkey_replay_store_tests.rs`
 
 Production wiring is in `crates/sandbox-plane/runner/src/bin/cwasm-invoker.rs`,
-which explicitly constructs the replay store alongside its Vault-backed
+which explicitly constructs the `ValkeyReplayStore` alongside its Vault-backed
 `TokenStore`.
 
 ## Pre-stage-1 behaviour

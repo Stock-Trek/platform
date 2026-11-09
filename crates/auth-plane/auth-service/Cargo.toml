@@ -15,6 +15,7 @@ platform-metrics = { workspace = true }
 platform-sqs = { workspace = true }
 platform-time = { workspace = true }
 rand = { workspace = true }
+redis = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json", "rustls"] }
 secrecy = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -23,8 +24,9 @@ sha2 = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 subtle = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
 platform-metrics = { workspace = true, features = ["test-utils"] }
-tokio = { workspace = true, features = ["macros", "rt"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "time"] }

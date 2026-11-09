@@ -1490,7 +1490,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4356eba6976435498d05a311ee9fc486da3bc81c200d3f0d7dd9703b41913f92"
 dependencies = [
  "bytes",
+ "futures-core",
  "memchr",
+ "pin-project-lite",
+ "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -4578,6 +4582,7 @@ dependencies = [
  "platform-sqs",
  "platform-time",
  "rand 0.8.8",
+ "redis",
  "reqwest 0.13.5",
  "secrecy",
  "serde",
@@ -5576,6 +5581,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "5da7e78a036ce858e8d55b7e7dc8ba3a88b78350fd2155d3591bbd966b58589e"
 dependencies = [
  "rustversion",
+]
+
+[[package]]
+name = "redis"
+version = "0.32.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "014cc767fefab6a3e798ca45112bccad9c6e0e218fbd49720042716c73cfef44"
+dependencies = [
+ "arc-swap",
+ "backon",
+ "bytes",
+ "cfg-if",
+ "combine",
+ "futures-channel",
+ "futures-util",
+ "itoa",
+ "num-bigint",
+ "percent-encoding",
+ "pin-project-lite",
+ "rustls 0.23.46",
+ "rustls-native-certs",
+ "ryu",
+ "sha1_smol",
+ "socket2 0.6.5",
+ "tokio",
+ "tokio-rustls 0.26.6",
+ "tokio-util",
+ "url",
+ "webpki-roots 1.0.10",
 ]
 
 [[package]]

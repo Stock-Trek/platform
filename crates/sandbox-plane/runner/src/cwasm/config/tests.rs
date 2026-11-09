@@ -14,8 +14,11 @@ const VAULT_TOKEN: &str = "CWASM_INVOKER_VAULT_TOKEN";
 const VAULT_MOUNT: &str = "CWASM_INVOKER_VAULT_MOUNT";
 const AUDIT_QUEUE_URL: &str = "CWASM_INVOKER_AUDIT_QUEUE_URL";
 const AUDIT_TIMEOUT_SECS: &str = "CWASM_INVOKER_AUDIT_TIMEOUT_SECS";
+const VALKEY_URL: &str = "CWASM_INVOKER_VALKEY_URL";
+const VALKEY_KEY_PREFIX: &str = "CWASM_INVOKER_VALKEY_KEY_PREFIX";
+const VALKEY_TIMEOUT_SECS: &str = "CWASM_INVOKER_VALKEY_TIMEOUT_SECS";
 
-const ALL_VARS: [(&str, &str); 10] = [
+const ALL_VARS: [(&str, &str); 13] = [
     (EXECUTION_TIMEOUT_SECS, "45"),
     (MAX_GUEST_MEMORY_BYTES, "1048576"),
     (MAX_TABLE_ELEMENTS, "2048"),
@@ -26,6 +29,9 @@ const ALL_VARS: [(&str, &str); 10] = [
     (VAULT_MOUNT, "platform-tokens"),
     (AUDIT_QUEUE_URL, "https://sqs.example.com/123/audit"),
     (AUDIT_TIMEOUT_SECS, "5"),
+    (VALKEY_URL, "redis://valkey.example.com:6379"),
+    (VALKEY_KEY_PREFIX, "auth-replay"),
+    (VALKEY_TIMEOUT_SECS, "2"),
 ];
 
 fn config(vars: &[(&str, &str)]) -> BpResult<InvokerConfig> {
@@ -49,6 +55,9 @@ fn reads_every_value_from_the_environment() {
     assert_eq!(config.vault.timeout(), Duration::from_secs(10));
     assert_eq!(config.audit.queue_url, "https://sqs.example.com/123/audit");
     assert_eq!(config.audit.timeout, Duration::from_secs(5));
+    assert_eq!(config.valkey.url(), "redis://valkey.example.com:6379");
+    assert_eq!(config.valkey.key_prefix(), "auth-replay");
+    assert_eq!(config.valkey.timeout(), Duration::from_secs(2));
 }
 
 #[test]
@@ -60,6 +69,10 @@ fn rejects_invalid_service_configuration() {
         (VAULT_MOUNT, ""),
         (AUDIT_QUEUE_URL, "not a url"),
         (AUDIT_QUEUE_URL, "file:///tmp/audit"),
+        (VALKEY_URL, "not a url"),
+        (VALKEY_URL, "file:///tmp/valkey"),
+        (VALKEY_KEY_PREFIX, "../etc"),
+        (VALKEY_KEY_PREFIX, "auth replay"),
     ] {
         let vars: Vec<(&str, &str)> = ALL_VARS
             .iter()
@@ -122,6 +135,8 @@ fn rejects_zero_and_invalid_values() {
         (MAX_CWASM_BYTES, "0"),
         (MAX_CWASM_BYTES, "not-a-number"),
         (AUDIT_TIMEOUT_SECS, "0"),
+        (VALKEY_TIMEOUT_SECS, "0"),
+        (VALKEY_TIMEOUT_SECS, "not-a-number"),
     ] {
         let vars: Vec<(&str, &str)> = ALL_VARS
             .iter()
@@ -135,5 +150,38 @@ fn rejects_zero_and_invalid_values() {
             })
             .collect();
         assert!(config(&vars).is_err(), "{name}={value}");
+    }
+}
+
+#[test]
+fn rejects_valkey_environment_aliases() {
+    for (canonical, alias, value) in [
+        (
+            VALKEY_URL,
+            "CWASM_INVOKER_VALKEY_ADDRESS",
+            "rediss://valkey.example.com:6380",
+        ),
+        (
+            VALKEY_KEY_PREFIX,
+            "CWASM_INVOKER_REPLAY_PREFIX",
+            "auth-replay:test",
+        ),
+        (
+            VALKEY_TIMEOUT_SECS,
+            "CWASM_INVOKER_REPLAY_TIMEOUT_SECS",
+            "3",
+        ),
+    ] {
+        let vars: Vec<(&str, &str)> = ALL_VARS
+            .iter()
+            .copied()
+            .filter(|(name, _)| *name != canonical)
+            .chain([(alias, value)])
+            .collect();
+
+        assert!(matches!(
+            config(&vars).unwrap_err(),
+            BpError::Config(ConfigError::Missing { name: missing }) if missing == canonical
+        ));
     }
 }
