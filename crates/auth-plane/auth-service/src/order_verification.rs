@@ -17,6 +17,11 @@ impl AuthService {
         signature: &str,
         now: DateTime<Utc>,
     ) -> BpResult<bool> {
+        if let Err(error) = ApiToken::validate_id(token_id) {
+            self.record_signature_rejected(token_id, None, now, &error.to_string())
+                .await;
+            return Ok(false);
+        }
         let token = match self.token(token_id).await {
             Ok(token) => token,
             Err(error) if matches!(error, BpError::Auth(AuthError::UnknownToken { .. })) => {
