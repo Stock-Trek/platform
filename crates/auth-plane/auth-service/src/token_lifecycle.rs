@@ -30,10 +30,7 @@ impl AuthService {
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             let mut token = self.token(id).await?;
             if token.metadata.is_revoked() {
-                return Err(BpError::auth_invalid_field(
-                    "token_id",
-                    "is already revoked",
-                ));
+                return Err(BpError::auth_revoked(token.id()));
             }
             let original = token.clone();
             token.metadata.revoke(now, reason, revoked_by);
@@ -102,11 +99,7 @@ impl AuthService {
     }
 
     fn is_already_revoked(error: &BpError) -> bool {
-        matches!(
-            error,
-            BpError::Auth(AuthError::InvalidField { field: "token_id", reason })
-                if reason == "is already revoked"
-        )
+        matches!(error, BpError::Auth(AuthError::Revoked { .. }))
     }
 
     async fn rollback_deleted_token(&self, token: &ApiToken, failure: BpError) -> BpError {

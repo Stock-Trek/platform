@@ -11,6 +11,23 @@ use std::{
 
 const DEFAULT_RETRY_AFTER: Duration = Duration::from_secs(1);
 
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum VaultWriteOutcome {
+    CasMismatch,
+    Other,
+}
+
+impl VaultWriteOutcome {
+    pub fn from_status(status: StatusCode) -> Self {
+        match status {
+            StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED => {
+                Self::CasMismatch
+            }
+            _ => Self::Other,
+        }
+    }
+}
+
 pub(crate) struct VaultError;
 
 impl VaultError {
@@ -41,17 +58,6 @@ impl VaultError {
             retryable,
             VaultStatusError { status, body },
         )
-    }
-
-    pub fn cas_mismatch(status: StatusCode, body: &str) -> bool {
-        if !matches!(
-            status,
-            StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED
-        ) {
-            return false;
-        }
-        let body = body.to_ascii_lowercase();
-        body.contains("check-and-set") || body.contains("did not match")
     }
 
     fn retryable_transport(error: &Error) -> bool {

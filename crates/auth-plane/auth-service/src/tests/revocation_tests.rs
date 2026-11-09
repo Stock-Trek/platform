@@ -85,10 +85,7 @@ async fn revoking_a_token_twice_preserves_the_first_revocation() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::InvalidField {
-            field: "token_id",
-            ..
-        }))
+        Err(BpError::Auth(AuthError::Revoked { .. }))
     ));
     assert_eq!(stored.metadata().revoked_at(), Some(first));
     assert_eq!(
