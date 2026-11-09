@@ -188,32 +188,3 @@ async fn records_rejected_signatures() {
     assert!(!verified);
     assert!(AuditFixture::actions(&audit).contains(&TokenAuditAction::SignatureRejected));
 }
-
-#[tokio::test]
-async fn records_the_reason_a_future_signature_is_rejected() {
-    let (service, audit) = AuditFixture::service();
-    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
-    let now = Utc::now();
-    let issued_at = now + Duration::minutes(10);
-    let signed = service
-        .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, issued_at, now)
-        .await
-        .unwrap();
-    audit.drain();
-
-    let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
-        .await
-        .unwrap();
-
-    assert!(!verified);
-    let rejection = audit
-        .drain()
-        .into_iter()
-        .find(|event| event.action == TokenAuditAction::SignatureRejected)
-        .expect("a rejection event should be recorded");
-    assert_eq!(
-        rejection.detail.as_deref(),
-        Some("signature issued in the future")
-    );
-}

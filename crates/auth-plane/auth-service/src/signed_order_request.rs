@@ -3,6 +3,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 
 const ENVELOPE_VERSION: &str = "v1";
+const SIGNATURE_LENGTH: usize = 64;
 pub(crate) const MAX_ENVELOPE_LENGTH: usize = 1024;
 
 pub struct SignedOrderRequest {
@@ -87,6 +88,16 @@ impl SignedOrderRequest {
         let issued_at = Self::parse_timestamp(issued_at)?;
         let expires_at = Self::parse_timestamp(expires_at)?;
         OrderRequestContext::new(token_id, issued_at, expires_at, nonce)?;
+        if raw_signature.len() != SIGNATURE_LENGTH
+            || !raw_signature
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
+        {
+            return Err(BpError::auth_invalid_field(
+                "signature",
+                "must be a 64-character lowercase hexadecimal digest",
+            ));
+        }
         let signed = Self {
             token_id: token_id.to_string(),
             issued_at,

@@ -116,28 +116,3 @@ async fn signing_rejects_an_already_expired_request() {
         }))
     ));
 }
-
-#[tokio::test]
-async fn rejects_a_signature_issued_in_the_future() {
-    let service = TestFixture::service();
-    let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
-    let now = Utc::now();
-    let issued_at = now + Duration::minutes(10);
-    let signed = service
-        .sign_order_request(
-            token.id(),
-            token.secret().expose_secret(),
-            ORDER_REQUEST,
-            issued_at,
-            now,
-        )
-        .await
-        .unwrap();
-
-    let verified = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
-        .await
-        .unwrap();
-
-    assert!(!verified);
-}

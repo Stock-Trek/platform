@@ -7,7 +7,7 @@ use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, BpError, BpResult};
 use platform_metrics::auth::AuthReplayMetrics;
 
-const CLOCK_SKEW_SECONDS: i64 = 60;
+pub(crate) const CLOCK_SKEW_SECONDS: i64 = 60;
 
 impl AuthService {
     pub async fn verify_order_request(
