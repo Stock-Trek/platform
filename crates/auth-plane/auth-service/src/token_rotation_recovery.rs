@@ -7,12 +7,13 @@ impl AuthService {
         &self,
         original: &ApiToken,
         replacement_id: &str,
+        now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
         let replacement = self
             .stored_token(replacement_id)
             .await?
             .ok_or_else(|| BpError::unknown_token(replacement_id))?;
-        Self::ensure_replacement_matches(original, &replacement)?;
+        Self::ensure_replacement_usable(original, &replacement, now)?;
         Ok(replacement)
     }
 
@@ -55,7 +56,7 @@ impl AuthService {
                 return Err(error);
             }
         };
-        if let Err(error) = Self::ensure_replacement_matches(original, &existing) {
+        if let Err(error) = Self::ensure_replacement_usable(original, &existing, now) {
             self.record_rotation_failure(original, now, &error).await;
             return Err(error);
         }
@@ -98,7 +99,16 @@ impl AuthService {
     ) -> BpResult<ApiToken> {
         match self.stored_token(original.id()).await {
             Ok(Some(current)) if current.metadata().replaced_by() == Some(replacement.id()) => {
-                Ok(current)
+                match self
+                    .completed_rotation(original, replacement.id(), now)
+                    .await
+                {
+                    Ok(_) => Ok(current),
+                    Err(error) => {
+                        self.record_rotation_failure(original, now, &error).await;
+                        Err(error)
+                    }
+                }
             }
             Ok(_) => {
                 let rollback = if created_replacement {
@@ -122,6 +132,22 @@ impl AuthService {
                 Err(error)
             }
         }
+    }
+
+    pub(crate) fn ensure_replacement_usable(
+        original: &ApiToken,
+        replacement: &ApiToken,
+        now: DateTime<Utc>,
+    ) -> BpResult<()> {
+        Self::ensure_replacement_matches(original, replacement)?;
+        Self::ensure_active(replacement, now)?;
+        if let Some(next) = replacement.metadata().replaced_by() {
+            return Err(BpError::auth_invalid_field(
+                "replacement_id",
+                format!("has already been rotated to {next:?}"),
+            ));
+        }
+        Ok(())
     }
 
     pub(crate) async fn finish_rotation(
