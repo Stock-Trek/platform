@@ -14,6 +14,12 @@ impl AuthService {
         options: TokenOptions,
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
+        if created_at > now {
+            return Err(BpError::auth_invalid_field(
+                "created_at",
+                "must not be in the future",
+            ));
+        }
         let expires_at = match options.expiry() {
             TokenExpiry::At(expires_at) => {
                 if expires_at <= created_at {
@@ -37,9 +43,16 @@ impl AuthService {
                         "must be greater than zero",
                     ));
                 }
-                created_at.checked_add_signed(lifetime).ok_or_else(|| {
+                let expires_at = created_at.checked_add_signed(lifetime).ok_or_else(|| {
                     BpError::auth_invalid_field("expiry", "is outside the supported range")
-                })?
+                })?;
+                if expires_at <= now {
+                    return Err(BpError::auth_invalid_field(
+                        "expiry",
+                        "must be in the future",
+                    ));
+                }
+                expires_at
             }
         };
         let metadata = TokenMetadata::new(expires_at, options.scopes())?;
@@ -118,7 +131,7 @@ impl AuthService {
             .tokens_for_owner(owner)
             .await?
             .into_iter()
-            .filter(|token| token.metadata().is_active(now))
+            .filter(|token| token.is_active(now))
             .collect())
     }
 

@@ -8,6 +8,7 @@ impl SignaturePolicyFixture {
     async fn verify_with_validity(validity: Duration, now: chrono::DateTime<Utc>) -> (bool, bool) {
         let service = TestFixture::service();
         let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+        let now = now.max(token.created_at());
         let context = OrderRequestContext::new(token.id(), now, now + validity, "nonce-a")
             .expect("valid context");
         let signer = OrderRequestSigner::new(token.secret()).expect("valid signer");

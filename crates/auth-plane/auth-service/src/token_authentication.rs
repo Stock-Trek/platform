@@ -68,6 +68,12 @@ impl AuthService {
         if token.metadata().is_revoked() {
             return Err(BpError::auth_revoked(token.id()));
         }
+        if token.created_at() > now {
+            return Err(BpError::auth_invalid_field(
+                "created_at",
+                "must not be in the future",
+            ));
+        }
         if token.metadata().is_expired(now) {
             return Err(BpError::auth_expired(token.id()));
         }
