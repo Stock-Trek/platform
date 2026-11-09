@@ -36,53 +36,63 @@ impl AuthService {
             .replacement_for(&original, &replacement_id, now)
             .await?;
         let overlap_until = self.rotation_overlap_until(now)?;
-        let replacement = match self.store.put(&replacement).await {
-            Ok(()) => replacement,
-            Err(error) if Self::is_duplicate(&error) => {
+        let (replacement, created_replacement) = match self.store.put(&replacement).await {
+            Ok(()) => (replacement, true),
+            Err(error) if Self::is_duplicate(&error) => (
                 self.reuse_existing_replacement(&original, &replacement_id, error, now)
-                    .await?
-            }
+                    .await?,
+                false,
+            ),
             Err(error) => {
                 self.record_rotation_failure(&original, now, &error).await;
                 return Err(error);
             }
         };
-        match self
+        let retired = match self
             .retire_rotated_token(&original, replacement.id(), overlap_until, now)
             .await
         {
-            Ok(()) => {
-                self.record_rotation_success(&original, &replacement, now)
-                    .await?;
-                Ok(replacement)
-            }
-            Err(error) => {
-                match self.stored_token(original.id()).await {
-                    Ok(Some(current))
-                        if current.metadata().replaced_by() == Some(replacement.id()) =>
-                    {
-                        self.record_rotation_success(&original, &replacement, now)
-                            .await?;
-                        return Ok(replacement);
-                    }
-                    Ok(_) => {}
-                    Err(_) => {
-                        self.record_rotation_failure(&original, now, &error).await;
-                        return Err(error);
-                    }
+            Ok(retired) => retired,
+            Err(error) => match self.stored_token(original.id()).await {
+                Ok(Some(current)) if current.metadata().replaced_by() == Some(replacement.id()) => {
+                    current
                 }
-                let rollback = self.store.delete(replacement.id()).await;
-                self.record_rotation_failure(&original, now, &error).await;
-                match rollback {
-                    Ok(()) => Err(error),
-                    Err(rollback_error) => Err(Self::rotation_rollback_error(
-                        replacement.id(),
-                        &error,
-                        rollback_error,
-                    )),
+                Ok(_) => {
+                    let rollback = if created_replacement {
+                        self.store.delete(replacement.id()).await
+                    } else {
+                        Ok(())
+                    };
+                    self.record_rotation_failure(&original, now, &error).await;
+                    return Err(match rollback {
+                        Ok(()) => error,
+                        Err(rollback_error) => {
+                            Self::rotation_rollback_error(replacement.id(), &error, rollback_error)
+                        }
+                    });
                 }
-            }
+                Err(read_error) => {
+                    self.record_rotation_failure(&original, now, &read_error)
+                        .await;
+                    return Err(error);
+                }
+            },
+        };
+        if let Err(error) = self
+            .record_rotation_success(&original, &replacement, now)
+            .await
+        {
+            let rollback = self
+                .rollback_rotation(&retired, replacement.id(), created_replacement)
+                .await;
+            return Err(match rollback {
+                Ok(()) => error,
+                Err(rollback_error) => {
+                    Self::rotation_rollback_error(replacement.id(), &error, rollback_error)
+                }
+            });
         }
+        Ok(replacement)
     }
 
     async fn completed_rotation(
@@ -141,12 +151,13 @@ impl AuthService {
         replacement: &ApiToken,
         now: DateTime<Utc>,
     ) -> BpResult<()> {
-        let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
-            .with_token(original.id(), Some(original.owner()));
-        self.record_audit(event).await?;
-        let issued = TokenAuditEvent::new(TokenAuditAction::Issued, now)
-            .with_token(replacement.id(), Some(replacement.owner()));
-        self.record_audit(issued).await
+        let events = [
+            TokenAuditEvent::new(TokenAuditAction::Rotated, now)
+                .with_token(original.id(), Some(original.owner())),
+            TokenAuditEvent::new(TokenAuditAction::Issued, now)
+                .with_token(replacement.id(), Some(replacement.owner())),
+        ];
+        self.record_audit_batch(&events).await
     }
 
     async fn record_rotation_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {
@@ -166,7 +177,7 @@ impl AuthService {
             replacement_id,
             rollback.retryability().is_retryable(),
             format!(
-                "failed to remove the replacement after rotation failed: {rollback}; \
+                "failed to roll back the rotation: {rollback}; \
                  original failure: {failure}"
             ),
         )

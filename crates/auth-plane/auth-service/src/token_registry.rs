@@ -53,19 +53,10 @@ impl AuthService {
         }
         let event = TokenAuditEvent::new(TokenAuditAction::Issued, created_at)
             .with_token(token.id(), Some(token.owner()));
-        self.record_audit(event).await?;
-        Ok(token)
-    }
-
-    pub async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<()> {
-        let token = self.stored_token(id).await?;
-        self.store.delete(id).await?;
-        if let Some(token) = token {
-            let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
-                .with_token(token.id(), Some(token.owner()));
-            self.record_audit(event).await?;
+        if let Err(error) = self.record_audit(event).await {
+            return Err(self.rollback_added_token(&token, error).await);
         }
-        Ok(())
+        Ok(token)
     }
 
     pub async fn token(&self, id: &str) -> BpResult<ApiToken> {
@@ -179,5 +170,12 @@ impl AuthService {
             })
             .then_with(|| right.created_at().cmp(&left.created_at()))
             .then_with(|| left.id().cmp(right.id()))
+    }
+
+    async fn rollback_added_token(&self, token: &ApiToken, failure: BpError) -> BpError {
+        match self.store.delete(token.id()).await {
+            Ok(()) => failure,
+            Err(rollback) => Self::rollback_failure("remove token", token.id(), &failure, rollback),
+        }
     }
 }

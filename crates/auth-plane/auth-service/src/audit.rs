@@ -64,6 +64,13 @@ impl TokenAuditEvent {
 #[async_trait]
 pub trait TokenAuditLog: Send + Sync {
     async fn record(&self, event: TokenAuditEvent) -> BpResult<()>;
+
+    async fn record_batch(&self, events: &[TokenAuditEvent]) -> BpResult<()> {
+        for event in events {
+            self.record(event.clone()).await?;
+        }
+        Ok(())
+    }
 }
 
 #[derive(Debug)]
@@ -92,14 +99,20 @@ impl MemoryTokenAuditLog {
 #[async_trait]
 impl TokenAuditLog for MemoryTokenAuditLog {
     async fn record(&self, event: TokenAuditEvent) -> BpResult<()> {
-        let mut events = self.events.lock();
+        self.record_batch(&[event]).await
+    }
+
+    async fn record_batch(&self, events: &[TokenAuditEvent]) -> BpResult<()> {
+        let mut stored = self.events.lock();
         if self.capacity == 0 {
             return Ok(());
         }
-        if events.len() >= self.capacity {
-            events.pop_front();
+        for event in events {
+            if stored.len() >= self.capacity {
+                stored.pop_front();
+            }
+            stored.push_back(event.clone());
         }
-        events.push_back(event);
         Ok(())
     }
 }
