@@ -21,18 +21,10 @@ impl AuthReplayFixture {
         let replay = Arc::new(MemoryReplayStore::new(
             NonZeroUsize::new(8).expect("non-zero capacity"),
         ));
-        let first = AuthService::new(
-            token_store.clone(),
-            TestFixture::config(),
-            replay.clone(),
-        )
-        .expect("valid service");
-        let second = AuthService::new(
-            token_store.clone(),
-            TestFixture::config(),
-            replay.clone(),
-        )
-        .expect("valid service");
+        let first = AuthService::new(token_store.clone(), TestFixture::config(), replay.clone())
+            .expect("valid service");
+        let second = AuthService::new(token_store.clone(), TestFixture::config(), replay.clone())
+            .expect("valid service");
         (first, second, token_store, replay)
     }
 }
@@ -99,8 +91,8 @@ async fn a_restarted_verifier_rejects_replays_when_the_store_is_shared() {
             .expect("first verification")
     );
 
-    let restarted = AuthService::new(token_store, TestFixture::config(), replay)
-        .expect("valid service");
+    let restarted =
+        AuthService::new(token_store, TestFixture::config(), replay).expect("valid service");
 
     assert!(
         !restarted

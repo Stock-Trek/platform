@@ -100,13 +100,8 @@ impl AuthService {
         {
             Ok(ConsumeResult::Consumed(reservation)) => reservation,
             Ok(ConsumeResult::Replayed | ConsumeResult::Expired) => {
-                self.record_signature_rejected(
-                    token_id,
-                    Some(&token),
-                    now,
-                    "replayed signature",
-                )
-                .await;
+                self.record_signature_rejected(token_id, Some(&token), now, "replayed signature")
+                    .await;
                 return Ok(false);
             }
             Err(error) => {
