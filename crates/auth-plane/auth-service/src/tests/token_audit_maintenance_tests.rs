@@ -13,21 +13,11 @@ async fn keeps_only_the_most_recent_events_at_capacity() {
     TestFixture::add_token(&service, "token-c", "owner-a").await;
 
     let ids: Vec<_> = audit
-        .drain()
+        .events()
         .into_iter()
         .map(|event| event.token_id.unwrap())
         .collect();
     assert_eq!(ids, vec!["token-b", "token-c"]);
-}
-
-#[tokio::test]
-async fn audit_events_can_be_drained() {
-    let audit = Arc::new(MemoryTokenAuditLog::new(4096));
-    let service = TestFixture::service_with_audit(audit.clone());
-    TestFixture::add_token(&service, "token-a", "owner-a").await;
-
-    assert_eq!(audit.drain().len(), 1);
-    assert!(audit.events().is_empty());
 }
 
 #[tokio::test]
@@ -53,16 +43,17 @@ async fn purging_expired_tokens_records_deletions() {
         now - Duration::seconds(1),
     )
     .await;
-    audit.drain();
 
     let purged = service.purge_expired_tokens(now).await.unwrap();
 
     assert_eq!(purged, 1);
-    let events = audit.events();
-    assert_eq!(events.len(), 1);
-    assert_eq!(events[0].action, TokenAuditAction::Deleted);
-    assert_eq!(events[0].token_id.as_deref(), Some("expired"));
-    assert_eq!(events[0].owner.as_deref(), Some("owner-a"));
+    let event = audit
+        .events()
+        .into_iter()
+        .find(|event| event.action == TokenAuditAction::Deleted)
+        .expect("a deletion event should be recorded");
+    assert_eq!(event.token_id.as_deref(), Some("expired"));
+    assert_eq!(event.owner.as_deref(), Some("owner-a"));
 }
 
 #[tokio::test]

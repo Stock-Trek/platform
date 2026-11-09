@@ -16,6 +16,13 @@ impl ReplayStoreFixture {
     fn expiry(now: DateTime<Utc>) -> DateTime<Utc> {
         now + Duration::minutes(5)
     }
+
+    fn assert_consumed(outcome: ConsumeResult) {
+        assert!(
+            matches!(outcome, ConsumeResult::Consumed(_)),
+            "expected consumed outcome, got {outcome:?}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -25,18 +32,12 @@ async fn nonces_are_scoped_to_a_token() {
     let expires_at = ReplayStoreFixture::expiry(now);
     let key = ReplayStoreFixture::key("token-a", "nonce-a");
 
-    assert!(
-        store
-            .consume(key.clone(), expires_at, now)
-            .await
-            .unwrap()
-            .is_consumed()
-    );
+    ReplayStoreFixture::assert_consumed(store.consume(key.clone(), expires_at, now).await.unwrap());
     assert_eq!(
         store.consume(key, expires_at, now).await.unwrap(),
         ConsumeResult::Replayed
     );
-    assert!(
+    ReplayStoreFixture::assert_consumed(
         store
             .consume(
                 ReplayStoreFixture::key("token-b", "nonce-a"),
@@ -44,8 +45,7 @@ async fn nonces_are_scoped_to_a_token() {
                 now,
             )
             .await
-            .unwrap()
-            .is_consumed()
+            .unwrap(),
     );
 }
 
@@ -81,13 +81,7 @@ async fn released_nonces_can_be_used_again() {
 
     store.release(&reservation).await.unwrap();
 
-    assert!(
-        store
-            .consume(key, expires_at, now)
-            .await
-            .unwrap()
-            .is_consumed()
-    );
+    ReplayStoreFixture::assert_consumed(store.consume(key, expires_at, now).await.unwrap());
 }
 
 #[tokio::test]
@@ -122,21 +116,14 @@ async fn expired_nonces_are_evicted() {
     let expires_at = ReplayStoreFixture::expiry(now);
     let key = ReplayStoreFixture::key("token-a", "nonce-a");
 
-    assert!(
-        store
-            .consume(key.clone(), expires_at, now)
-            .await
-            .unwrap()
-            .is_consumed()
-    );
+    ReplayStoreFixture::assert_consumed(store.consume(key.clone(), expires_at, now).await.unwrap());
     let later = now + Duration::minutes(6);
     let later_expires_at = later + Duration::minutes(5);
-    assert!(
+    ReplayStoreFixture::assert_consumed(
         store
             .consume(key.clone(), later_expires_at, later)
             .await
-            .unwrap()
-            .is_consumed()
+            .unwrap(),
     );
     assert_eq!(
         store.consume(key, later_expires_at, later).await.unwrap(),
@@ -150,7 +137,7 @@ async fn capacity_rejects_new_unexpired_nonces() {
     let now = Utc::now();
     let expires_at = ReplayStoreFixture::expiry(now);
 
-    assert!(
+    ReplayStoreFixture::assert_consumed(
         store
             .consume(
                 ReplayStoreFixture::key("token-a", "nonce-a"),
@@ -158,8 +145,7 @@ async fn capacity_rejects_new_unexpired_nonces() {
                 now,
             )
             .await
-            .unwrap()
-            .is_consumed()
+            .unwrap(),
     );
     let error = store
         .consume(
@@ -176,7 +162,7 @@ async fn capacity_rejects_new_unexpired_nonces() {
     ));
 
     let later = now + Duration::minutes(6);
-    assert!(
+    ReplayStoreFixture::assert_consumed(
         store
             .consume(
                 ReplayStoreFixture::key("token-a", "nonce-b"),
@@ -184,7 +170,6 @@ async fn capacity_rejects_new_unexpired_nonces() {
                 later,
             )
             .await
-            .unwrap()
-            .is_consumed()
+            .unwrap(),
     );
 }

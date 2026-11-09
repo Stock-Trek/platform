@@ -51,10 +51,6 @@ impl ValkeyReplayStore {
         Ok(store)
     }
 
-    pub fn config(&self) -> &ValkeyReplayStoreConfig {
-        &self.config
-    }
-
     fn key(&self, replay_key: &ReplayKey) -> String {
         format!(
             "{}:{}:{}",

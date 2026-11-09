@@ -90,10 +90,6 @@ impl MemoryTokenAuditLog {
     pub fn events(&self) -> Vec<TokenAuditEvent> {
         self.events.lock().iter().cloned().collect()
     }
-
-    pub fn drain(&self) -> Vec<TokenAuditEvent> {
-        std::mem::take(&mut *self.events.lock()).into()
-    }
 }
 
 #[async_trait]

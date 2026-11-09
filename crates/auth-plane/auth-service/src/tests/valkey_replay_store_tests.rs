@@ -32,6 +32,13 @@ impl ValkeyReplayFixture {
             outcome => panic!("unexpected outcome: {outcome:?}"),
         }
     }
+
+    fn assert_consumed(outcome: ConsumeResult) {
+        assert!(
+            matches!(outcome, ConsumeResult::Consumed(_)),
+            "expected consumed outcome, got {outcome:?}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -42,18 +49,14 @@ async fn nonces_are_scoped_to_a_token_and_replays_are_rejected() {
     let expires_at = ValkeyReplayFixture::expiry(now);
     let key = ValkeyReplayFixture::key("token-a", "nonce-a");
 
-    assert!(
-        store
-            .consume(key.clone(), expires_at, now)
-            .await
-            .unwrap()
-            .is_consumed()
+    ValkeyReplayFixture::assert_consumed(
+        store.consume(key.clone(), expires_at, now).await.unwrap(),
     );
     assert_eq!(
         store.consume(key, expires_at, now).await.unwrap(),
         ConsumeResult::Replayed
     );
-    assert!(
+    ValkeyReplayFixture::assert_consumed(
         store
             .consume(
                 ValkeyReplayFixture::key("token-b", "nonce-a"),
@@ -61,8 +64,7 @@ async fn nonces_are_scoped_to_a_token_and_replays_are_rejected() {
                 now,
             )
             .await
-            .unwrap()
-            .is_consumed()
+            .unwrap(),
     );
 }
 
@@ -94,13 +96,7 @@ async fn released_nonces_can_be_used_again() {
 
     store.release(&reservation).await.unwrap();
 
-    assert!(
-        store
-            .consume(key, expires_at, now)
-            .await
-            .unwrap()
-            .is_consumed()
-    );
+    ValkeyReplayFixture::assert_consumed(store.consume(key, expires_at, now).await.unwrap());
 }
 
 #[tokio::test]
@@ -137,12 +133,8 @@ async fn verifiers_sharing_valkey_reject_replays_across_instances_and_restarts()
     let expires_at = ValkeyReplayFixture::expiry(now);
     let key = ValkeyReplayFixture::key("token-a", "nonce-a");
 
-    assert!(
-        first
-            .consume(key.clone(), expires_at, now)
-            .await
-            .unwrap()
-            .is_consumed()
+    ValkeyReplayFixture::assert_consumed(
+        first.consume(key.clone(), expires_at, now).await.unwrap(),
     );
     assert_eq!(
         second.consume(key.clone(), expires_at, now).await.unwrap(),
