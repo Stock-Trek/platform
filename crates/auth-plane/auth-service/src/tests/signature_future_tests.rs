@@ -86,7 +86,7 @@ async fn records_the_reason_a_future_signature_is_rejected() {
 
     assert!(!verified);
     let rejection = audit
-        .drain()
+        .events()
         .into_iter()
         .find(|event| event.action == TokenAuditAction::SignatureRejected)
         .expect("a rejection event should be recorded");

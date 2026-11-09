@@ -92,18 +92,6 @@ impl MemoryReplayStore {
         }
     }
 
-    pub fn capacity(&self) -> usize {
-        self.capacity
-    }
-
-    pub fn len(&self) -> usize {
-        self.state.lock().entries.len()
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
-
     fn next_reservation_id(&self) -> u64 {
         self.next_reservation_id
             .fetch_add(1, AtomicOrdering::Relaxed)

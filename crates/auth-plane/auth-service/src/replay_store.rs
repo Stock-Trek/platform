@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use std::{error::Error as StdError, fmt};
+use std::error::Error as StdError;
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub struct ReplayKey {
@@ -22,12 +22,6 @@ impl ReplayKey {
 
     pub fn nonce(&self) -> &str {
         &self.nonce
-    }
-}
-
-impl fmt::Display for ReplayKey {
-    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(formatter, "{}:{}", self.token_id, self.nonce)
     }
 }
 
@@ -56,12 +50,6 @@ pub enum ConsumeResult {
     Consumed(ReplayReservation),
     Replayed,
     Expired,
-}
-
-impl ConsumeResult {
-    pub fn is_consumed(&self) -> bool {
-        matches!(self, Self::Consumed(_))
-    }
 }
 
 #[derive(Debug, thiserror::Error)]

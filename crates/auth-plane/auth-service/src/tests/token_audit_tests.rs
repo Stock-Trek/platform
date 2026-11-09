@@ -136,7 +136,7 @@ async fn records_rejected_signatures_for_unknown_tokens() {
 
     assert!(!verified);
     let rejection = audit
-        .drain()
+        .events()
         .into_iter()
         .find(|event| event.action == TokenAuditAction::SignatureRejected)
         .expect("a rejection event should be recorded");
@@ -161,7 +161,7 @@ async fn records_rejected_signatures_for_malformed_token_ids() {
 
     assert!(!verified);
     let rejection = audit
-        .drain()
+        .events()
         .into_iter()
         .find(|event| event.action == TokenAuditAction::SignatureRejected)
         .expect("a rejection event should be recorded");
