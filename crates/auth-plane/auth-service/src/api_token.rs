@@ -62,7 +62,7 @@ impl ApiToken {
         if secret.trim().is_empty() {
             return Err(BpError::auth_invalid_field("secret", "must not be empty"));
         }
-        if secret.len() > MAX_SECRET_LENGTH {
+        if secret.chars().count() > MAX_SECRET_LENGTH {
             return Err(BpError::auth_invalid_field(
                 "secret",
                 format!("must be at most {MAX_SECRET_LENGTH} characters"),
@@ -116,7 +116,7 @@ impl ApiToken {
                 "must not have surrounding whitespace",
             ));
         }
-        if owner.len() > MAX_OWNER_LENGTH {
+        if owner.chars().count() > MAX_OWNER_LENGTH {
             return Err(BpError::auth_invalid_field(
                 "owner",
                 format!("must be at most {MAX_OWNER_LENGTH} characters"),

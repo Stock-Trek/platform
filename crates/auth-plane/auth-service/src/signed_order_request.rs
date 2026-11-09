@@ -44,7 +44,7 @@ impl SignedOrderRequest {
     }
 
     pub fn decode(signature: &str) -> BpResult<Self> {
-        if signature.len() > MAX_ENVELOPE_LENGTH {
+        if signature.chars().count() > MAX_ENVELOPE_LENGTH {
             return Err(BpError::auth_invalid_field(
                 "signature",
                 format!("must be at most {MAX_ENVELOPE_LENGTH} characters"),
