@@ -10,6 +10,55 @@ pub enum MarketStreamKind {
     Kline(BinanceKlinesInterval),
 }
 
+impl MarketStreamKind {
+    fn parse(stream: &str, suffix: &str) -> BpResult<Self> {
+        let lower = suffix.to_ascii_lowercase();
+        match lower.as_str() {
+            "trade" => Ok(Self::Trade),
+            "bookticker" => Ok(Self::BookTicker),
+            _ if Self::is_depth_suffix(&lower) => Ok(Self::Depth),
+            _ => Self::parse_kline(stream, &lower),
+        }
+    }
+
+    fn parse_kline(stream: &str, suffix: &str) -> BpResult<Self> {
+        let Some(interval) = suffix.strip_prefix("kline_") else {
+            return Err(BpError::bad_value(
+                "stream",
+                stream,
+                "unsupported stream; expected trade, depth, bookTicker, or kline_<interval>",
+            ));
+        };
+        BinanceKlinesInterval::try_from(interval)
+            .map(Self::Kline)
+            .map_err(|_| {
+                BpError::bad_value(
+                    "stream",
+                    stream,
+                    format!("unsupported kline interval {interval}"),
+                )
+            })
+    }
+
+    fn is_depth_suffix(suffix: &str) -> bool {
+        if suffix == "depth" || suffix.starts_with("depth@") {
+            return true;
+        }
+        let Some(levels) = suffix.strip_prefix("depth") else {
+            return false;
+        };
+        let digits_len = levels
+            .chars()
+            .take_while(|character| character.is_ascii_digit())
+            .count();
+        if digits_len == 0 {
+            return false;
+        }
+        let rest = &levels[digits_len..];
+        rest.is_empty() || rest.starts_with('@')
+    }
+}
+
 /// A parsed Binance stream name such as `btcusdt@trade`.
 #[derive(Debug, Clone)]
 pub struct MarketStream {
@@ -29,57 +78,10 @@ impl MarketStream {
         if symbol.is_empty() {
             return Err(BpError::bad_value("stream", stream, "symbol is empty"));
         }
-        let kind = Self::kind(stream, suffix)?;
+        let kind = MarketStreamKind::parse(stream, suffix)?;
         Ok(Self {
             symbol: symbol.to_ascii_uppercase(),
             kind,
         })
-    }
-
-    fn kind(stream: &str, suffix: &str) -> BpResult<MarketStreamKind> {
-        let lower = suffix.to_ascii_lowercase();
-        if lower == "trade" {
-            return Ok(MarketStreamKind::Trade);
-        }
-        if lower == "bookticker" {
-            return Ok(MarketStreamKind::BookTicker);
-        }
-        if Self::is_depth_suffix(&lower) {
-            return Ok(MarketStreamKind::Depth);
-        }
-        if let Some(interval) = lower.strip_prefix("kline_") {
-            return BinanceKlinesInterval::try_from(interval)
-                .map(MarketStreamKind::Kline)
-                .map_err(|_| {
-                    BpError::bad_value(
-                        "stream",
-                        stream,
-                        format!("unsupported kline interval {interval}"),
-                    )
-                });
-        }
-        Err(BpError::bad_value(
-            "stream",
-            stream,
-            "unsupported stream; expected trade, depth, bookTicker, or kline_<interval>",
-        ))
-    }
-
-    fn is_depth_suffix(suffix: &str) -> bool {
-        if suffix == "depth" || suffix.starts_with("depth@") {
-            return true;
-        }
-        let Some(levels) = suffix.strip_prefix("depth") else {
-            return false;
-        };
-        let digits_len = levels
-            .chars()
-            .take_while(|character| character.is_ascii_digit())
-            .count();
-        if digits_len == 0 {
-            return false;
-        }
-        let rest = &levels[digits_len..];
-        rest.is_empty() || rest.starts_with('@')
     }
 }

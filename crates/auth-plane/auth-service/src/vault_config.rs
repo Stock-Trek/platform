@@ -1,4 +1,5 @@
 use platform_errors::{BpError, BpResult};
+use platform_types::url_scheme::UrlScheme;
 use reqwest::Url;
 use secrecy::{ExposeSecret, SecretString};
 use std::time::Duration;
@@ -53,7 +54,9 @@ impl VaultTokenStoreConfig {
         }
         let address = reqwest::Url::parse(self.address.trim())
             .map_err(|e| BpError::config_invalid_source("vault_address", e))?;
-        if !matches!(address.scheme(), "http" | "https") || address.host_str().is_none() {
+        if !UrlScheme::from_url(&address).is_some_and(UrlScheme::is_http)
+            || address.host_str().is_none()
+        {
             return Err(BpError::config_invalid(
                 "vault_address",
                 "must be an absolute http or https URL",

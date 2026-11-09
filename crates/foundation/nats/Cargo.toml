@@ -10,6 +10,7 @@ futures = { workspace = true }
 hex = { workspace = true }
 parking_lot = { workspace = true }
 platform-errors = { workspace = true }
+platform-types = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true, features = ["sync", "time"] }
 tracing = { workspace = true }

@@ -1,6 +1,7 @@
 use platform_auth_service::{ValkeyReplayStoreConfig, VaultTokenStoreConfig};
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
+use platform_types::url_scheme::UrlScheme;
 use secrecy::SecretString;
 use std::time::Duration;
 
@@ -30,7 +31,7 @@ pub struct AuditConfig {
 impl AuditConfig {
     fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         Ok(Self {
-            queue_url: vars.required_url(AUDIT_QUEUE_URL, &["http", "https"])?,
+            queue_url: vars.required_url(AUDIT_QUEUE_URL, &UrlScheme::HTTP)?,
             timeout: vars.required_positive_duration_secs(AUDIT_TIMEOUT_SECS)?,
         })
     }
@@ -61,7 +62,7 @@ impl InvokerConfig {
             vars.required_nonzero_u64(MAX_CWASM_BYTES)?,
         );
         let vault = VaultTokenStoreConfig::new(
-            vars.required_url(VAULT_ADDRESS, &["http", "https"])?,
+            vars.required_url(VAULT_ADDRESS, &UrlScheme::HTTP)?,
             SecretString::from(vars.required(VAULT_TOKEN)?),
             vars.required(VAULT_MOUNT)?,
             VAULT_TIMEOUT,

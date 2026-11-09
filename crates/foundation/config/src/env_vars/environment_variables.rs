@@ -1,5 +1,6 @@
 use chrono::{DateTime, NaiveDate, Utc};
 use platform_errors::{BpError, BpResult};
+use platform_types::url_scheme::UrlScheme;
 use std::{
     collections::HashMap,
     ffi::{OsStr, OsString},
@@ -151,16 +152,20 @@ impl EnvVars {
     }
 
     /// Reads a required URL and validates its scheme.
-    pub fn required_url(&self, name: &str, allowed_schemes: &[&str]) -> BpResult<String> {
+    pub fn required_url(&self, name: &str, allowed_schemes: &[UrlScheme]) -> BpResult<String> {
         let value = self.required(name)?;
         let url =
             Url::parse(&value).map_err(|error| BpError::config_invalid_source(name, error))?;
-        if !allowed_schemes.contains(&url.scheme()) {
+        if !UrlScheme::from_url(&url).is_some_and(|scheme| allowed_schemes.contains(&scheme)) {
             return Err(BpError::config_invalid(
                 name,
                 format!(
                     "must use one of the schemes {}, got \"{}\"",
-                    allowed_schemes.join(", "),
+                    allowed_schemes
+                        .iter()
+                        .map(|scheme| scheme.as_str())
+                        .collect::<Vec<_>>()
+                        .join(", "),
                     url.scheme()
                 ),
             ));

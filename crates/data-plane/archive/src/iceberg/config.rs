@@ -1,5 +1,6 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
+use platform_types::url_scheme::UrlScheme;
 
 pub const ICEBERG_CATALOG_URI: &str = "ICEBERG_CATALOG_URI";
 pub const ICEBERG_CATALOG_WAREHOUSE: &str = "ICEBERG_CATALOG_WAREHOUSE";
@@ -16,7 +17,7 @@ pub struct IcebergConfig {
 
 impl IcebergConfig {
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
-        let catalog_uri = vars.required_url(ICEBERG_CATALOG_URI, &["http", "https"])?;
+        let catalog_uri = vars.required_url(ICEBERG_CATALOG_URI, &UrlScheme::HTTP)?;
         let warehouse = vars.required(ICEBERG_CATALOG_WAREHOUSE)?;
         if !warehouse.starts_with("s3://") {
             return Err(BpError::config_invalid(

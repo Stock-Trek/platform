@@ -1,5 +1,6 @@
 use super::*;
 use platform_errors::{BpError, ConfigError};
+use platform_types::url_scheme::UrlScheme;
 use std::ffi::OsString;
 use std::time::Duration;
 
@@ -94,10 +95,10 @@ fn positive_durations_reject_zero_and_invalid_values() {
 fn required_url_validates_the_scheme() {
     let vars = env_vars([("URL", "wss://example.test/ws")]);
     assert_eq!(
-        vars.required_url("URL", &["ws", "wss"]).unwrap(),
+        vars.required_url("URL", &UrlScheme::WEBSOCKET).unwrap(),
         "wss://example.test/ws"
     );
-    assert!(vars.required_url("URL", &["http", "https"]).is_err());
+    assert!(vars.required_url("URL", &UrlScheme::HTTP).is_err());
 }
 
 #[test]
