@@ -190,8 +190,8 @@ impl AuthService {
     }
 
     async fn rollback_added_token(&self, token: &ApiToken, failure: BpError) -> BpError {
-        match self.store.delete(token.id()).await {
-            Ok(()) => failure,
+        match self.store.delete_if(token).await {
+            Ok(_) => failure,
             Err(rollback) => Self::rollback_failure("remove token", token.id(), &failure, rollback),
         }
     }

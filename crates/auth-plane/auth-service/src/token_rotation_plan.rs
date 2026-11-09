@@ -54,12 +54,12 @@ impl AuthService {
     pub(crate) async fn rollback_rotation(
         &self,
         retired: &ApiToken,
-        replacement_id: &str,
+        replacement: &ApiToken,
         remove_replacement: bool,
     ) -> BpResult<()> {
         let mut current = retired.clone();
         for _ in 0..MAX_UPDATE_ATTEMPTS {
-            if current.metadata().replaced_by() != Some(replacement_id) {
+            if current.metadata().replaced_by() != Some(replacement.id()) {
                 break;
             }
             let expected = current.clone();
@@ -76,11 +76,11 @@ impl AuthService {
                 Err(error) => return Err(error),
             }
         }
-        if current.metadata().replaced_by() == Some(replacement_id) {
+        if current.metadata().replaced_by() == Some(replacement.id()) {
             return Err(BpError::token_conflict(retired.id()));
         }
         if remove_replacement {
-            self.store.delete(replacement_id).await?;
+            self.store.delete_if(replacement).await?;
         }
         Ok(())
     }

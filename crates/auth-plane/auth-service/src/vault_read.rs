@@ -1,0 +1,95 @@
+use crate::{
+    ApiToken,
+    vault_client::{TOMBSTONE_FIELD, VaultClient},
+};
+use platform_errors::{BpError, BpResult};
+use reqwest::{Method, StatusCode};
+use serde_json::Value;
+
+impl VaultClient {
+    pub(crate) async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+        Ok(self.get_entry(id).await?.map(|(token, _)| token))
+    }
+
+    pub(crate) async fn get_entry(&self, id: &str) -> BpResult<Option<(ApiToken, u64)>> {
+        ApiToken::validate_id(id)?;
+        let Some((data, version)) = self.get_value_entry(id).await? else {
+            return Ok(None);
+        };
+        if Self::is_tombstone(&data) {
+            return Ok(None);
+        }
+        let token = Self::token_from_value(id, &data)?;
+        Ok(Some((token, version)))
+    }
+
+    pub(crate) async fn get_value_entry(&self, path: &str) -> BpResult<Option<(Value, u64)>> {
+        let response = self
+            .send(
+                "read",
+                path,
+                self.request(Method::GET, self.config.url(&["data", path])?),
+            )
+            .await?;
+        if response.status() == StatusCode::NOT_FOUND {
+            return Ok(None);
+        }
+        let response = self.require_success("read", path, response).await?;
+        let value = self.parse_json("read", path, response).await?;
+        let data = value.pointer("/data/data").cloned().ok_or_else(|| {
+            BpError::auth_store("read", path, false, "malformed Vault response".to_string())
+        })?;
+        let version = value
+            .pointer("/data/metadata/version")
+            .and_then(Value::as_u64)
+            .ok_or_else(|| {
+                BpError::auth_store("read", path, false, "missing Vault version".to_string())
+            })?;
+        Ok(Some((data, version)))
+    }
+
+    pub(crate) fn token_from_value(id: &str, data: &Value) -> BpResult<ApiToken> {
+        ApiToken::from_value(id, data)
+            .map_err(|error| BpError::auth_store("read", id, false, error))
+    }
+
+    pub(crate) fn is_tombstone(value: &Value) -> bool {
+        value
+            .get(TOMBSTONE_FIELD)
+            .and_then(Value::as_bool)
+            .is_some_and(|deleted| deleted)
+    }
+
+    pub(crate) async fn ids(&self) -> BpResult<Vec<String>> {
+        let mut url = self.config.url(&["metadata"])?;
+        url.query_pairs_mut().append_pair("list", "true");
+        let response = self
+            .send("list", "tokens", self.request(Method::GET, url))
+            .await?;
+        if response.status() == StatusCode::NOT_FOUND {
+            return Ok(Vec::new());
+        }
+        let response = self.require_success("list", "tokens", response).await?;
+        let value = self.parse_json("list", "tokens", response).await?;
+        let keys = value
+            .pointer("/data/keys")
+            .and_then(Value::as_array)
+            .cloned()
+            .ok_or_else(|| {
+                BpError::auth_store(
+                    "list",
+                    "tokens",
+                    false,
+                    "malformed Vault response".to_string(),
+                )
+            })?;
+        let mut ids: Vec<String> = keys
+            .iter()
+            .filter_map(|key| key.as_str().map(str::to_string))
+            .filter(|key| !key.ends_with('/') && ApiToken::validate_id(key).is_ok())
+            .collect();
+        ids.sort();
+        ids.dedup();
+        Ok(ids)
+    }
+}
