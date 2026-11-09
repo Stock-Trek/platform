@@ -37,8 +37,11 @@ mod valkey_error;
 mod valkey_replay_store;
 mod vault_client;
 mod vault_config;
+mod vault_delete;
 mod vault_error;
+mod vault_read;
 mod vault_token_store;
+mod vault_write;
 
 #[cfg(test)]
 mod tests;

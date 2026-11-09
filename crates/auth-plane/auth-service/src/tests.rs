@@ -47,6 +47,7 @@ mod valkey_replay_store_tests;
 mod valkey_test_server_tests;
 mod vault_client_tests;
 mod vault_config_tests;
+mod vault_delete_tests;
 mod vault_error_tests;
 mod vault_http_tests;
 mod vault_kv_server_tests;

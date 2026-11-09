@@ -7,11 +7,12 @@ use platform_errors::{AuthError, BpError, BpResult};
 
 impl AuthService {
     pub(crate) async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<()> {
-        let token = self.stored_token(id).await?;
-        self.store.delete(id).await?;
-        let Some(token) = token else {
+        let Some(token) = self.stored_token(id).await? else {
             return Ok(());
         };
+        if !self.store.delete_if(&token).await? {
+            return Err(BpError::token_conflict(id));
+        }
         let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
             .with_token(token.id(), Some(token.owner()));
         if let Err(error) = self.record_audit(event).await {

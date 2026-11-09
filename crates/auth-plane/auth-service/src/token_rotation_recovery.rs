@@ -112,7 +112,7 @@ impl AuthService {
             }
             Ok(_) => {
                 let rollback = if created_replacement {
-                    self.store.delete(replacement.id()).await
+                    self.store.delete_if(replacement).await.map(|_| ())
                 } else {
                     Ok(())
                 };
@@ -163,7 +163,7 @@ impl AuthService {
             .await
         {
             let rollback = self
-                .rollback_rotation(retired, replacement.id(), created_replacement)
+                .rollback_rotation(retired, &replacement, created_replacement)
                 .await;
             return Err(match rollback {
                 Ok(()) => error,
