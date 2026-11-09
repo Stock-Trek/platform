@@ -3,7 +3,7 @@ use crate::{
     auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{AuthError, BpError, BpResult};
 
 impl AuthService {
     pub async fn revoke_token(
@@ -45,6 +45,17 @@ impl AuthService {
         Err(error)
     }
 
+    /// Revokes every token owned by `owner` that is not already revoked.
+    ///
+    /// This operation is deliberately non-atomic: each token is revoked with
+    /// its own compare-and-swap update. If one token cannot be revoked, the
+    /// remaining tokens are still processed and the first failure is returned
+    /// afterwards. Tokens revoked before the failure stay revoked.
+    ///
+    /// The operation is retryable. Already-revoked tokens, including tokens
+    /// revoked concurrently by another caller, are skipped on subsequent
+    /// attempts, so a retry only needs to revoke the tokens that are still
+    /// active.
     pub async fn revoke_tokens_for_owner(
         &self,
         owner: &str,
@@ -53,16 +64,33 @@ impl AuthService {
         now: DateTime<Utc>,
     ) -> BpResult<Vec<ApiToken>> {
         let mut revoked = Vec::new();
+        let mut first_error = None;
         for token in self.tokens_for_owner(owner).await? {
             if token.metadata().is_revoked() {
                 continue;
             }
-            revoked.push(
-                self.revoke_token(token.id(), reason, revoked_by, now)
-                    .await?,
-            );
+            match self.revoke_token(token.id(), reason, revoked_by, now).await {
+                Ok(token) => revoked.push(token),
+                Err(error) if Self::is_already_revoked(&error) => continue,
+                Err(error) => {
+                    if first_error.is_none() {
+                        first_error = Some(error);
+                    }
+                }
+            }
         }
-        Ok(revoked)
+        match first_error {
+            Some(error) => Err(error),
+            None => Ok(revoked),
+        }
+    }
+
+    fn is_already_revoked(error: &BpError) -> bool {
+        matches!(
+            error,
+            BpError::Auth(AuthError::InvalidField { field: "token_id", reason })
+                if reason == "is already revoked"
+        )
     }
 
     pub async fn purge_expired_tokens(&self, now: DateTime<Utc>) -> BpResult<usize> {
