@@ -1,4 +1,4 @@
-use crate::{TokenAuditEvent, TokenAuditLog, replay_cache::ReplayCache, token_store::TokenStore};
+use crate::{ReplayStore, TokenAuditEvent, TokenAuditLog, token_store::TokenStore};
 use chrono::Duration;
 use platform_errors::{AuthError, BpError, BpResult};
 use std::sync::Arc;
@@ -15,7 +15,7 @@ pub struct AuthServiceConfig {
 #[derive(Clone)]
 pub struct AuthService {
     pub(crate) store: Arc<dyn TokenStore>,
-    pub(crate) replay: Arc<ReplayCache>,
+    pub(crate) replay: Arc<dyn ReplayStore>,
     pub(crate) audit: Arc<dyn TokenAuditLog>,
     pub(crate) signature_validity: Duration,
     pub(crate) token_lifetime: Duration,
@@ -23,7 +23,23 @@ pub struct AuthService {
 }
 
 impl AuthService {
-    pub fn new(store: Arc<dyn TokenStore>, config: AuthServiceConfig) -> BpResult<Self> {
+    pub fn new(
+        store: Arc<dyn TokenStore>,
+        config: AuthServiceConfig,
+        replay: Arc<dyn ReplayStore>,
+    ) -> BpResult<Self> {
+        Self::validate_config(&config)?;
+        Ok(Self {
+            store,
+            replay,
+            audit: config.audit,
+            signature_validity: config.signature_validity,
+            token_lifetime: config.token_lifetime,
+            rotation_overlap: config.rotation_overlap,
+        })
+    }
+
+    fn validate_config(config: &AuthServiceConfig) -> BpResult<()> {
         if config.token_lifetime <= Duration::zero() {
             return Err(BpError::auth_invalid_field(
                 "token_lifetime",
@@ -42,14 +58,7 @@ impl AuthService {
                 "must be at least one second",
             ));
         }
-        Ok(Self {
-            store,
-            replay: Arc::new(ReplayCache::new()),
-            audit: config.audit,
-            signature_validity: config.signature_validity,
-            token_lifetime: config.token_lifetime,
-            rotation_overlap: config.rotation_overlap,
-        })
+        Ok(())
     }
 
     pub(crate) async fn record_audit(&self, event: TokenAuditEvent) -> BpResult<()> {

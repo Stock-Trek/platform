@@ -11,6 +11,7 @@ hmac = { workspace = true }
 httpdate = { workspace = true }
 parking_lot = { workspace = true }
 platform-errors = { workspace = true }
+platform-metrics = { workspace = true }
 platform-sqs = { workspace = true }
 platform-time = { workspace = true }
 rand = { workspace = true }
@@ -21,7 +22,9 @@ serde_json = { workspace = true }
 sha2 = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 subtle = { workspace = true }
+thiserror = { workspace = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
+platform-metrics = { workspace = true, features = ["test-utils"] }
 tokio = { workspace = true, features = ["macros", "rt"] }

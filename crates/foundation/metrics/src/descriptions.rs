@@ -70,6 +70,12 @@ pub const MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL: &str =
 pub const MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL: &str =
     "market_data_aggregator_out_of_contract_gap_windows_total";
 
+pub const AUTH_REPLAY_HITS_TOTAL: &str = "auth_replay_hits_total";
+pub const AUTH_REPLAY_EVICTIONS_TOTAL: &str = "auth_replay_evictions_total";
+pub const AUTH_REPLAY_STORE_FAILURES_TOTAL: &str = "auth_replay_store_failures_total";
+pub const AUTH_REPLAY_CAPACITY_REJECTIONS_TOTAL: &str = "auth_replay_capacity_rejections_total";
+pub const AUTH_REPLAY_ENTRIES: &str = "auth_replay_entries";
+
 pub const STATUS_SUCCESS: &str = "success";
 pub const STATUS_ERROR: &str = "error";
 pub const STATUS_INCOMPLETE: &str = "incomplete";
@@ -318,6 +324,26 @@ impl DescriptionsMetrics {
         describe_counter!(
             MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL,
             "Total number of gap-affected candle windows skipped by the aggregator event-time correction cutoff"
+        );
+        describe_counter!(
+            AUTH_REPLAY_HITS_TOTAL,
+            "Total number of order signatures rejected because their nonce was already consumed"
+        );
+        describe_counter!(
+            AUTH_REPLAY_EVICTIONS_TOTAL,
+            "Total number of replay entries evicted, labelled by reason"
+        );
+        describe_counter!(
+            AUTH_REPLAY_STORE_FAILURES_TOTAL,
+            "Total number of replay store failures, labelled by operation"
+        );
+        describe_counter!(
+            AUTH_REPLAY_CAPACITY_REJECTIONS_TOTAL,
+            "Total number of order signatures rejected because the replay store was at capacity"
+        );
+        describe_gauge!(
+            AUTH_REPLAY_ENTRIES,
+            "Number of entries currently retained by the replay store"
         );
     }
 }

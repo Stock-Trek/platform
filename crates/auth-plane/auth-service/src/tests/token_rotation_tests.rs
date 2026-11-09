@@ -12,6 +12,7 @@ impl RotationFixture {
         crate::AuthService::new(
             std::sync::Arc::new(crate::MemoryTokenStore::default()),
             config,
+            std::sync::Arc::new(crate::MemoryReplayStore::default()),
         )
         .unwrap()
     }
@@ -57,6 +58,7 @@ async fn rotation_applies_the_configured_token_lifetime() {
     let service = crate::AuthService::new(
         std::sync::Arc::new(crate::MemoryTokenStore::default()),
         config,
+        std::sync::Arc::new(crate::MemoryReplayStore::default()),
     )
     .unwrap();
     let old = TestFixture::add_token(&service, "token-a", "owner-a").await;

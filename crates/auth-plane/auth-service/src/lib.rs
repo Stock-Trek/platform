@@ -1,12 +1,13 @@
 mod api_token;
 mod audit;
 mod auth_service;
+mod memory_replay_store;
 mod memory_token_store;
 mod order_request_context;
 mod order_signature;
 mod order_signing_service;
 mod order_verification;
-mod replay_cache;
+mod replay_store;
 mod revocation_reason;
 mod revoked_by;
 mod secret_input;
@@ -37,9 +38,13 @@ pub use audit::{
     MemoryTokenAuditLog, NoopTokenAuditLog, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
 };
 pub use auth_service::{AuthService, AuthServiceConfig};
+pub use memory_replay_store::{DEFAULT_REPLAY_CAPACITY, MemoryReplayStore};
 pub use memory_token_store::MemoryTokenStore;
 pub use order_request_context::OrderRequestContext;
 pub use order_signature::OrderRequestSigner;
+pub use replay_store::{
+    ConsumeResult, ReplayKey, ReplayReservation, ReplayStore, ReplayStoreError,
+};
 pub use revocation_reason::RevocationReason;
 pub use revoked_by::RevokedBy;
 pub use secret_input::SecretInput;

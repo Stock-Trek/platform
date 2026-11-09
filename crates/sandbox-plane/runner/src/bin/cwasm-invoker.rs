@@ -41,7 +41,8 @@ use cwasm::{
     WasmRunner, backtest,
 };
 use platform_auth_service::{
-    AuthService, AuthServiceConfig, SqsTokenAuditLog, VaultTokenStore, VaultTokenStoreConfig,
+    AuthService, AuthServiceConfig, MemoryReplayStore, SqsTokenAuditLog, VaultTokenStore,
+    VaultTokenStoreConfig,
 };
 use platform_aws::Aws;
 use platform_exit_codes::ExitCode;
@@ -183,6 +184,7 @@ impl CwasmInvoker {
                 signature_validity: Duration::minutes(5),
                 audit: Arc::new(audit),
             },
+            Arc::new(MemoryReplayStore::default()),
         )
         .map_err(|error| {
             eprintln!("cwasm-invoker: invalid auth service configuration: {error}");

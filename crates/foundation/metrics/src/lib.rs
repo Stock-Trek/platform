@@ -1,3 +1,4 @@
+pub mod auth;
 pub mod build_metrics;
 pub mod descriptions;
 pub mod event;

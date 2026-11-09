@@ -1,7 +1,7 @@
 use chrono::{Duration, Utc};
 use platform_auth_service::{
-    ApiToken, AuthService, AuthServiceConfig, MemoryTokenAuditLog, MemoryTokenStore,
-    SignedOrderRequest, TokenExpiry, TokenOptions, TokenScope,
+    ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenAuditLog,
+    MemoryTokenStore, SignedOrderRequest, TokenExpiry, TokenOptions, TokenScope,
 };
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
@@ -32,6 +32,7 @@ impl Fixture {
                 signature_validity: Duration::minutes(5),
                 audit: Arc::new(MemoryTokenAuditLog::new(4096)),
             },
+            Arc::new(MemoryReplayStore::default()),
         )
         .unwrap()
     }
