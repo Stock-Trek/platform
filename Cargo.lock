@@ -4572,7 +4572,6 @@ name = "platform-auth-service"
 version = "0.2.0"
 dependencies = [
  "async-trait",
- "aws-sdk-sqs",
  "chrono",
  "data-encoding",
  "hmac 0.13.0",

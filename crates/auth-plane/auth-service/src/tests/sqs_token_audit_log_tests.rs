@@ -1,35 +1,24 @@
-use super::sqs_test_server_tests::{CapturedSqsRequest, MockSqs};
-use crate::{SqsTokenAuditLog, TokenAuditAction, TokenAuditEvent, TokenAuditLog};
-use aws_sdk_sqs::{
-    Client as SqsClient,
-    config::{BehaviorVersion, Credentials, Region, retry::RetryConfig},
+use super::{
+    sqs_audit_mock_tests::{MockAuditQueue, RecreateOnSecondGet},
+    support_tests::TestFixture,
 };
-use chrono::Utc;
+use crate::{
+    ApiToken, AuthService, MemoryReplayStore, SqsTokenAuditLog, TokenAuditAction, TokenAuditEvent,
+    TokenAuditLog, TokenMetadata, TokenScope,
+};
+use chrono::{DateTime, Duration, Utc};
 use platform_errors::BpError;
-use platform_sqs::sqs::{Sqs, SqsConfig};
-use platform_time::timeouts::Timeouts;
-use std::time::Duration;
-
-const QUEUE_URL: &str = "http://queue.test/audit";
+use std::{sync::Arc, time::Duration as StdDuration};
 
 struct SqsAuditFixture;
 
 impl SqsAuditFixture {
-    fn audit(server: &MockSqs, timeout: Duration) -> SqsTokenAuditLog {
-        let config = aws_sdk_sqs::Config::builder()
-            .behavior_version(BehaviorVersion::latest())
-            .region(Region::new("us-east-1"))
-            .endpoint_url(server.url())
-            .credentials_provider(Credentials::new("test", "test", None, None, "test"))
-            .retry_config(RetryConfig::standard().with_max_attempts(1))
-            .build();
-        let timeouts = Timeouts::from_durations(timeout, timeout);
-        let sqs = Sqs::new(
-            SqsClient::from_conf(config),
-            timeouts,
-            SqsConfig::new(QUEUE_URL.to_string()),
-        );
-        SqsTokenAuditLog::new(sqs, timeout)
+    fn audit(queue: &Arc<MockAuditQueue>, timeout: StdDuration) -> SqsTokenAuditLog {
+        SqsTokenAuditLog::with_queue(queue.clone(), timeout)
+    }
+
+    fn service(queue: &Arc<MockAuditQueue>) -> AuthService {
+        TestFixture::service_with_audit(Arc::new(Self::audit(queue, StdDuration::from_secs(1))))
     }
 
     fn event(token_id: &str) -> TokenAuditEvent {
@@ -37,80 +26,59 @@ impl SqsAuditFixture {
             .with_token(token_id, Some("owner-a"))
     }
 
-    fn only_request(server: &MockSqs) -> CapturedSqsRequest {
-        let mut requests = server.requests();
-        assert_eq!(requests.len(), 1);
-        requests.remove(0)
-    }
-
-    fn events(request: &CapturedSqsRequest) -> Vec<TokenAuditEvent> {
-        let bodies: Vec<&str> = if request.target.ends_with(".SendMessageBatch") {
-            request.body["Entries"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .map(|entry| entry["MessageBody"].as_str().unwrap())
-                .collect()
-        } else {
-            vec![request.body["MessageBody"].as_str().unwrap()]
-        };
-        bodies
-            .into_iter()
-            .map(|body| serde_json::from_str(body).unwrap())
-            .collect()
+    fn expired_token(now: DateTime<Utc>) -> ApiToken {
+        let metadata = TokenMetadata::new(now - Duration::seconds(1), TokenScope::DEFAULT)
+            .expect("valid metadata");
+        ApiToken::generate(
+            "token-a",
+            "expired-owner",
+            now - Duration::seconds(2),
+            metadata,
+        )
+        .expect("valid token")
     }
 }
 
 #[tokio::test]
-async fn record_sends_one_event_to_sqs() {
-    let server = MockSqs::start();
-    let audit = SqsAuditFixture::audit(&server, Duration::from_secs(1));
+async fn record_delivers_one_event_to_the_queue() {
+    let queue = Arc::new(MockAuditQueue::new());
+    let audit = SqsAuditFixture::audit(&queue, StdDuration::from_secs(1));
     let event = SqsAuditFixture::event("token-a");
 
     audit.record(event.clone()).await.unwrap();
 
-    let request = SqsAuditFixture::only_request(&server);
-    assert!(
-        request.target.ends_with(".SendMessageBatch"),
-        "unexpected target: {}",
-        request.target
-    );
-    assert_eq!(request.body["QueueUrl"], QUEUE_URL);
-    assert_eq!(SqsAuditFixture::events(&request), vec![event]);
+    assert_eq!(queue.batches(), vec![vec![event]]);
 }
 
 #[tokio::test]
-async fn record_batch_sends_all_events_in_one_batch() {
-    let server = MockSqs::start();
-    let audit = SqsAuditFixture::audit(&server, Duration::from_secs(1));
-    let events = [
+async fn record_batch_delivers_all_events_in_one_batch() {
+    let queue = Arc::new(MockAuditQueue::new());
+    let audit = SqsAuditFixture::audit(&queue, StdDuration::from_secs(1));
+    let events = vec![
         SqsAuditFixture::event("token-a"),
         SqsAuditFixture::event("token-b"),
     ];
 
     audit.record_batch(&events).await.unwrap();
 
-    let request = SqsAuditFixture::only_request(&server);
-    assert!(request.target.ends_with(".SendMessageBatch"));
-    assert_eq!(request.body["QueueUrl"], QUEUE_URL);
-    assert_eq!(SqsAuditFixture::events(&request), events);
+    assert_eq!(queue.batches(), vec![events]);
 }
 
 #[tokio::test]
-async fn record_batch_does_not_contact_sqs_for_no_events() {
-    let server = MockSqs::start();
-    let audit = SqsAuditFixture::audit(&server, Duration::from_secs(1));
+async fn record_batch_does_not_contact_the_queue_for_no_events() {
+    let queue = Arc::new(MockAuditQueue::new());
+    let audit = SqsAuditFixture::audit(&queue, StdDuration::from_secs(1));
 
     audit.record_batch(&[]).await.unwrap();
 
-    assert!(server.requests().is_empty());
+    assert!(queue.batches().is_empty());
 }
 
 #[tokio::test]
-async fn record_propagates_sqs_delivery_failures() {
-    let server = MockSqs::start();
-    server.fail_requests();
-    let audit = SqsAuditFixture::audit(&server, Duration::from_secs(2));
+async fn record_propagates_queue_delivery_failures() {
+    let queue = Arc::new(MockAuditQueue::new());
+    queue.fail();
+    let audit = SqsAuditFixture::audit(&queue, StdDuration::from_secs(1));
 
     let error = audit
         .record(SqsAuditFixture::event("token-a"))
@@ -118,4 +86,71 @@ async fn record_propagates_sqs_delivery_failures() {
         .unwrap_err();
 
     assert!(matches!(error, BpError::Sqs(_)));
+}
+
+#[tokio::test]
+async fn record_batch_propagates_queue_delivery_failures() {
+    let queue = Arc::new(MockAuditQueue::new());
+    queue.fail();
+    let audit = SqsAuditFixture::audit(&queue, StdDuration::from_secs(1));
+
+    let error = audit
+        .record_batch(&[SqsAuditFixture::event("token-a")])
+        .await
+        .unwrap_err();
+
+    assert!(matches!(error, BpError::Sqs(_)));
+}
+
+#[tokio::test]
+async fn purging_expired_tokens_delivers_deletion_events_as_a_batch() {
+    let queue = Arc::new(MockAuditQueue::new());
+    let service = SqsAuditFixture::service(&queue);
+    let now = Utc::now();
+    TestFixture::add_expired_token(
+        &service,
+        "expired",
+        "owner-a",
+        now - Duration::seconds(2),
+        now - Duration::seconds(1),
+    )
+    .await;
+
+    let purged = service.purge_expired_tokens(now).await.unwrap();
+
+    assert_eq!(purged, 1);
+    assert_eq!(queue.batches().len(), 1);
+    let events = queue.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].action, TokenAuditAction::Deleted);
+    assert_eq!(events[0].token_id.as_deref(), Some("expired"));
+    assert_eq!(events[0].owner.as_deref(), Some("owner-a"));
+}
+
+#[tokio::test]
+async fn purging_skips_queue_delivery_for_a_token_recreated_after_the_scan() {
+    let now = Utc::now();
+    let expired = SqsAuditFixture::expired_token(now);
+    let replacement = TestFixture::token("token-a");
+    let store = Arc::new(RecreateOnSecondGet::new(replacement.clone()));
+    store.put(&expired).await.unwrap();
+    let queue = Arc::new(MockAuditQueue::new());
+    let service = AuthService::new(
+        store,
+        TestFixture::config_with_audit(Arc::new(SqsAuditFixture::audit(
+            &queue,
+            StdDuration::from_secs(1),
+        ))),
+        Arc::new(MemoryReplayStore::default()),
+    )
+    .unwrap();
+
+    let purged = service.purge_expired_tokens(now).await.unwrap();
+
+    assert_eq!(purged, 0);
+    assert!(queue.batches().is_empty());
+    assert_eq!(
+        service.token("token-a").await.unwrap().to_value(),
+        replacement.to_value()
+    );
 }

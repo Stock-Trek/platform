@@ -18,7 +18,7 @@ mod signature_policy_tests;
 mod signature_retry_tests;
 mod signed_order_request_precision_tests;
 mod signed_order_request_tests;
-mod sqs_test_server_tests;
+mod sqs_audit_mock_tests;
 mod sqs_token_audit_log_tests;
 mod support_tests;
 mod token_administration_tests;
