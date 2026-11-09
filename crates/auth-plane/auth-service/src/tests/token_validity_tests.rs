@@ -73,7 +73,7 @@ async fn rejects_a_relative_expiry_that_has_already_passed() {
             .await
             .unwrap_err();
 
-        ValidityFixture::assert_invalid_field(error, "expiry");
+        ValidityFixture::assert_invalid_field(error, "expires_at");
     }
 }
 

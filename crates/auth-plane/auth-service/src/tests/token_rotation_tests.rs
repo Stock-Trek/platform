@@ -55,6 +55,7 @@ async fn rotation_keeps_the_old_token_valid_for_the_overlap() {
 async fn rotation_applies_the_configured_token_lifetime() {
     let mut config = TestFixture::config();
     config.token_lifetime = Duration::minutes(5);
+    config.rotation_overlap = Duration::minutes(1);
     let service = crate::AuthService::new(
         std::sync::Arc::new(crate::MemoryTokenStore::default()),
         config,

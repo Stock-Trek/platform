@@ -73,7 +73,7 @@ async fn rejects_non_positive_relative_lifetimes() {
     assert!(matches!(
         error,
         Err(BpError::Auth(AuthError::InvalidField {
-            field: "expiry",
+            field: "expires_at",
             ..
         }))
     ));
@@ -110,7 +110,7 @@ async fn rejects_an_already_past_absolute_expiry() {
     assert!(matches!(
         error,
         Err(BpError::Auth(AuthError::InvalidField {
-            field: "expiry",
+            field: "expires_at",
             ..
         }))
     ));
