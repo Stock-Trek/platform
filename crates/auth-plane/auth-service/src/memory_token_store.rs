@@ -34,6 +34,19 @@ impl TokenStore for MemoryTokenStore {
         Ok(())
     }
 
+    async fn delete_if(&self, expected: &ApiToken) -> BpResult<bool> {
+        expected.validate()?;
+        let mut tokens = self.tokens.lock();
+        let Some(stored) = tokens.get(expected.id()) else {
+            return Ok(false);
+        };
+        if stored.to_value() != expected.to_value() {
+            return Ok(false);
+        }
+        tokens.remove(expected.id());
+        Ok(true)
+    }
+
     async fn ids(&self) -> BpResult<Vec<String>> {
         let tokens = self.tokens.lock();
         let mut ids: Vec<String> = tokens.keys().cloned().collect();

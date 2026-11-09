@@ -10,6 +10,17 @@ pub trait TokenStore: Send + Sync {
 
     async fn delete(&self, id: &str) -> BpResult<()>;
 
+    async fn delete_if(&self, expected: &ApiToken) -> BpResult<bool> {
+        let Some(current) = self.get(expected.id()).await? else {
+            return Ok(false);
+        };
+        if current.to_value() != expected.to_value() {
+            return Ok(false);
+        }
+        self.delete(expected.id()).await?;
+        Ok(true)
+    }
+
     async fn ids(&self) -> BpResult<Vec<String>>;
 
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()>;

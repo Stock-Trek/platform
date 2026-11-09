@@ -15,17 +15,16 @@ impl AuthService {
                 expired.push(token);
             }
         }
-        if expired.is_empty() {
-            return Ok(0);
-        }
         let mut deleted = Vec::new();
-        for token in &expired {
-            match self.store.delete(token.id()).await {
-                Ok(()) => deleted.push(token.clone()),
-                Err(error) => {
-                    return Err(self.rollback_purge(&deleted, error).await);
-                }
+        for token in expired {
+            match self.delete_expired_if_current(&token, now).await {
+                Ok(true) => deleted.push(token),
+                Ok(false) => continue,
+                Err(error) => return Err(self.rollback_purge(&deleted, error).await),
             }
+        }
+        if deleted.is_empty() {
+            return Ok(0);
         }
         let events = deleted
             .iter()
@@ -38,6 +37,20 @@ impl AuthService {
             return Err(self.rollback_purge(&deleted, error).await);
         }
         Ok(deleted.len())
+    }
+
+    async fn delete_expired_if_current(
+        &self,
+        token: &ApiToken,
+        now: DateTime<Utc>,
+    ) -> BpResult<bool> {
+        let Some(current) = self.stored_token(token.id()).await? else {
+            return Ok(false);
+        };
+        if current.to_value() != token.to_value() || !current.metadata().is_expired(now) {
+            return Ok(false);
+        }
+        self.store.delete_if(token).await
     }
 
     async fn rollback_purge(&self, tokens: &[ApiToken], failure: BpError) -> BpError {
