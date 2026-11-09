@@ -28,5 +28,6 @@ tokio = { workspace = true, features = ["sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]
+aws-sdk-sqs = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
 platform-metrics = { workspace = true, features = ["test-utils"] }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "time"] }
