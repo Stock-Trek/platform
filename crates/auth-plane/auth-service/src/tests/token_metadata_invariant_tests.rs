@@ -66,7 +66,7 @@ fn rejects_invalid_rotation_lineage_ids() {
 }
 
 #[test]
-fn rejects_rotation_lineage_cycles() {
+fn rejects_rotation_lineage_with_the_same_predecessor_and_replacement() {
     let mut value = MetadataInvariantFixture::value();
     value["rotated_from"] = json!("token-b");
     value["replaced_by"] = json!("token-b");

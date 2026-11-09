@@ -49,7 +49,7 @@ async fn rejects_rotation_back_to_the_predecessor_id() {
 }
 
 #[tokio::test]
-async fn rejects_rotation_to_a_deeper_lineage_ancestor_id() {
+async fn rejects_rotation_that_would_close_a_cross_token_cycle() {
     let service = RotationLineageFixture::service();
     let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
