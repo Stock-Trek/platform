@@ -72,11 +72,6 @@ impl TokenMetadata {
         self.rotation_overlap_until
     }
 
-    pub fn effective_expires_at(&self) -> DateTime<Utc> {
-        self.rotation_overlap_until
-            .map_or(self.expires_at, |overlap| self.expires_at.min(overlap))
-    }
-
     pub fn is_expired(&self, now: DateTime<Utc>) -> bool {
         self.expires_at <= now
     }
@@ -170,13 +165,18 @@ impl TokenMetadata {
         }
     }
 
-    pub fn revoke(&mut self, now: DateTime<Utc>, reason: RevocationReason, revoked_by: RevokedBy) {
+    pub(crate) fn revoke(
+        &mut self,
+        now: DateTime<Utc>,
+        reason: RevocationReason,
+        revoked_by: RevokedBy,
+    ) {
         self.revoked_at.get_or_insert(now);
         self.revocation_reason.get_or_insert(reason);
         self.revoked_by.get_or_insert(revoked_by);
     }
 
-    pub fn begin_rotation(
+    pub(crate) fn begin_rotation(
         &mut self,
         replacement_id: impl Into<String>,
         overlap_until: DateTime<Utc>,

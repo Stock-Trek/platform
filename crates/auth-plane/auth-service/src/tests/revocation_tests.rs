@@ -17,14 +17,14 @@ impl RevocationFixture {
 #[tokio::test]
 async fn revoking_an_owners_tokens_includes_expired_tokens() {
     let (service, _) = RevocationFixture::service();
-    let now = Utc::now();
     let active = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let expired_at = Utc::now();
     let expired = TestFixture::add_expired_token(
         &service,
         "token-b",
         "owner-a",
-        now - Duration::seconds(2),
-        now - Duration::seconds(1),
+        expired_at - Duration::seconds(2),
+        expired_at - Duration::seconds(1),
     )
     .await;
 
@@ -33,7 +33,7 @@ async fn revoking_an_owners_tokens_includes_expired_tokens() {
             "owner-a",
             RevocationReason::NoLongerNeeded,
             RevokedBy::Owner,
-            now,
+            Utc::now(),
         )
         .await
         .unwrap();

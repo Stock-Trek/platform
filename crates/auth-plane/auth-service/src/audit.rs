@@ -103,13 +103,3 @@ impl TokenAuditLog for MemoryTokenAuditLog {
         Ok(())
     }
 }
-
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoopTokenAuditLog;
-
-#[async_trait]
-impl TokenAuditLog for NoopTokenAuditLog {
-    async fn record(&self, _event: TokenAuditEvent) -> BpResult<()> {
-        Ok(())
-    }
-}
