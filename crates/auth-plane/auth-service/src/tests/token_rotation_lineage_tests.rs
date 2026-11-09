@@ -14,8 +14,8 @@ impl RotationLineageFixture {
 #[tokio::test]
 async fn rejects_rotation_back_to_the_predecessor_id() {
     let service = RotationLineageFixture::service();
-    let now = Utc::now();
     let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
     let replacement = service
         .rotate_token_to(original.id(), "token-b", now)
         .await
@@ -51,8 +51,8 @@ async fn rejects_rotation_back_to_the_predecessor_id() {
 #[tokio::test]
 async fn rejects_rotation_to_a_deeper_lineage_ancestor_id() {
     let service = RotationLineageFixture::service();
-    let now = Utc::now();
     let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
     let replacement = service
         .rotate_token_to(original.id(), "token-b", now)
         .await
@@ -86,8 +86,8 @@ async fn rejects_rotation_to_a_deeper_lineage_ancestor_id() {
 #[tokio::test]
 async fn rotates_a_replacement_forward_to_a_new_id() {
     let service = RotationLineageFixture::service();
-    let now = Utc::now();
     let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    let now = Utc::now();
     let replacement = service
         .rotate_token_to(original.id(), "token-b", now)
         .await

@@ -35,7 +35,6 @@ impl AdministrationFixture {
 #[tokio::test]
 async fn token_reads_require_the_tokens_read_scope() {
     let service = TestFixture::service();
-    let now = Utc::now();
     let reader = AdministrationFixture::add_with_scopes(
         &service,
         "reader",
@@ -45,7 +44,7 @@ async fn token_reads_require_the_tokens_read_scope() {
     .await;
     let target = TestFixture::add_token(&service, "target", "owner-b").await;
     let reader = service
-        .token_reader(reader.id(), reader.secret(), now)
+        .token_reader(reader.id(), reader.secret(), Utc::now())
         .await
         .unwrap();
 
@@ -59,7 +58,7 @@ async fn token_reads_require_the_tokens_read_scope() {
     )
     .await;
     let error = service
-        .token_reader(order_token.id(), order_token.secret(), now)
+        .token_reader(order_token.id(), order_token.secret(), Utc::now())
         .await
         .err()
         .unwrap();
@@ -70,7 +69,6 @@ async fn token_reads_require_the_tokens_read_scope() {
 #[tokio::test]
 async fn token_writes_require_the_tokens_write_scope() {
     let service = TestFixture::service();
-    let now = Utc::now();
     let writer = AdministrationFixture::add_with_scopes(
         &service,
         "writer",
@@ -79,17 +77,21 @@ async fn token_writes_require_the_tokens_write_scope() {
     )
     .await;
     let administrator = service
-        .token_administrator(writer.id(), writer.secret(), now)
+        .token_administrator(writer.id(), writer.secret(), Utc::now())
         .await
         .unwrap();
     let options = TokenOptions::new(TokenExpiry::After(Duration::days(1)), TokenScope::DEFAULT);
+    let created_at = Utc::now();
     let created = administrator
-        .add_token("created", "owner-b", now, options, now)
+        .add_token("created", "owner-b", created_at, options, created_at)
         .await
         .unwrap();
 
     assert_eq!(created.id(), "created");
-    administrator.delete_token(created.id(), now).await.unwrap();
+    administrator
+        .delete_token(created.id(), Utc::now())
+        .await
+        .unwrap();
     assert!(service.token(created.id()).await.is_err());
 
     let reader = AdministrationFixture::add_with_scopes(
@@ -100,7 +102,7 @@ async fn token_writes_require_the_tokens_write_scope() {
     )
     .await;
     let error = service
-        .token_administrator(reader.id(), reader.secret(), now)
+        .token_administrator(reader.id(), reader.secret(), Utc::now())
         .await
         .err()
         .unwrap();
@@ -108,7 +110,7 @@ async fn token_writes_require_the_tokens_write_scope() {
     AdministrationFixture::assert_missing_scope(error, "tokens:write");
 
     let error = service
-        .token_reader(writer.id(), writer.secret(), now)
+        .token_reader(writer.id(), writer.secret(), Utc::now())
         .await
         .err()
         .unwrap();
@@ -119,7 +121,6 @@ async fn token_writes_require_the_tokens_write_scope() {
 #[tokio::test]
 async fn tokens_all_grants_both_token_permissions() {
     let service = TestFixture::service();
-    let now = Utc::now();
     let token = AdministrationFixture::add_with_scopes(
         &service,
         "all-tokens",
@@ -130,13 +131,13 @@ async fn tokens_all_grants_both_token_permissions() {
 
     assert!(
         service
-            .token_reader(token.id(), token.secret(), now)
+            .token_reader(token.id(), token.secret(), Utc::now())
             .await
             .is_ok()
     );
     assert!(
         service
-            .token_administrator(token.id(), token.secret(), now)
+            .token_administrator(token.id(), token.secret(), Utc::now())
             .await
             .is_ok()
     );
@@ -160,10 +161,10 @@ async fn admin_grants_every_scope() {
     }
 
     let service = TestFixture::service();
-    let now = Utc::now();
     let admin =
         AdministrationFixture::add_with_scopes(&service, "admin", "owner-a", [TokenScope::Admin])
             .await;
+    let now = Utc::now();
 
     assert!(
         service

@@ -18,6 +18,10 @@ impl ApiToken {
         )
     }
 
+    pub fn is_active(&self, now: DateTime<Utc>) -> bool {
+        self.created_at <= now && self.metadata.is_active(now)
+    }
+
     fn ensure_not_before_creation(
         field: &'static str,
         timestamp: Option<DateTime<Utc>>,
