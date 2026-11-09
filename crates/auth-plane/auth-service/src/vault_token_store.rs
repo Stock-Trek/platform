@@ -32,6 +32,17 @@ impl TokenStore for VaultTokenStore {
         self.client.delete(id).await
     }
 
+    async fn delete_if(&self, expected: &ApiToken) -> BpResult<bool> {
+        let Some((current, _)) = self.client.get_entry(expected.id()).await? else {
+            return Ok(false);
+        };
+        if current.to_value() != expected.to_value() {
+            return Ok(false);
+        }
+        self.client.delete(expected.id()).await?;
+        Ok(true)
+    }
+
     async fn ids(&self) -> BpResult<Vec<String>> {
         self.client.ids().await
     }
