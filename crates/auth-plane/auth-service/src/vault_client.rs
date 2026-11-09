@@ -1,4 +1,7 @@
-use crate::{ApiToken, VaultTokenStoreConfig, vault_error::VaultError};
+use crate::{
+    ApiToken, VaultTokenStoreConfig,
+    vault_error::{VaultError, VaultWriteOutcome},
+};
 use platform_errors::{BpError, BpResult};
 use reqwest::{Method, StatusCode, Url};
 use secrecy::ExposeSecret;
@@ -53,26 +56,8 @@ impl VaultClient {
             .request(Method::PUT, self.config.url(&["data", token.id()])?)
             .json(&body);
         let response = self.send("write", token.id(), request).await?;
-        let status = response.status();
-        if matches!(
-            status,
-            StatusCode::BAD_REQUEST | StatusCode::CONFLICT | StatusCode::PRECONDITION_FAILED
-        ) {
-            let headers = response.headers().clone();
-            let body = response
-                .text()
-                .await
-                .unwrap_or_else(|_| "<unreadable body>".to_string());
-            if VaultError::cas_mismatch(status, &body) {
-                return Err(condition.conflict(token.id()));
-            }
-            return Err(VaultError::response(
-                "write",
-                token.id(),
-                status,
-                &headers,
-                body,
-            ));
+        if VaultWriteOutcome::from_status(response.status()) == VaultWriteOutcome::CasMismatch {
+            return Err(condition.conflict(token.id()));
         }
         self.require_success("write", token.id(), response)
             .await

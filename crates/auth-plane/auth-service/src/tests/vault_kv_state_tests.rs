@@ -84,7 +84,7 @@ impl VaultKvState {
         let current = versions.len() as u64;
         if cas != current {
             return Err(json!({
-                "errors": ["check-and-set parameter did not match the current version"]
+                "errors": ["stale version"]
             }));
         }
         versions.push(data);

@@ -1,4 +1,4 @@
-use crate::vault_error::VaultError;
+use crate::vault_error::{VaultError, VaultWriteOutcome};
 use platform_errors::{AuthError, BpError, Retryability};
 use reqwest::{
     StatusCode,
@@ -81,24 +81,31 @@ fn server_errors_without_retry_after_remain_retryable() {
 }
 
 #[test]
-fn check_and_set_mismatches_are_detected() {
-    let body = r#"{"errors":["check-and-set parameter did not match the current version"]}"#;
-    let uppercase = r#"{"errors":["Check-And-Set parameter did not match the current version"]}"#;
-
-    assert!(VaultError::cas_mismatch(StatusCode::BAD_REQUEST, body));
-    assert!(VaultError::cas_mismatch(
+fn conditional_write_failure_statuses_are_cas_mismatches() {
+    for status in [
+        StatusCode::BAD_REQUEST,
+        StatusCode::CONFLICT,
         StatusCode::PRECONDITION_FAILED,
-        body
-    ));
-    assert!(VaultError::cas_mismatch(StatusCode::CONFLICT, uppercase));
+    ] {
+        assert_eq!(
+            VaultWriteOutcome::from_status(status),
+            VaultWriteOutcome::CasMismatch
+        );
+    }
 }
 
 #[test]
-fn other_bad_requests_are_not_cas_mismatches() {
-    assert!(!VaultError::cas_mismatch(
-        StatusCode::BAD_REQUEST,
-        r#"{"errors":["invalid request"]}"#
-    ));
+fn other_statuses_are_not_cas_mismatches() {
+    for status in [
+        StatusCode::OK,
+        StatusCode::NOT_FOUND,
+        StatusCode::INTERNAL_SERVER_ERROR,
+    ] {
+        assert_eq!(
+            VaultWriteOutcome::from_status(status),
+            VaultWriteOutcome::Other
+        );
+    }
 }
 
 #[test]
