@@ -22,7 +22,9 @@ impl AuthService {
         Self::validate_rotation_ids(id, &replacement_id)?;
         let original = self.token(id).await?;
         if original.metadata().replaced_by() == Some(replacement_id.as_str()) {
-            return self.completed_rotation(&original, &replacement_id).await;
+            return self
+                .completed_rotation(&original, &replacement_id, now)
+                .await;
         }
         let replacement = self
             .replacement_for(&original, &replacement_id, now)
