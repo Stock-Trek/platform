@@ -25,6 +25,7 @@ impl TokenScope {
 
     pub fn matches(self, required: Self) -> bool {
         self == Self::All
+            || self == Self::Admin
             || self == required
             || matches!(
                 (self, required),
