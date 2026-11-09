@@ -24,6 +24,7 @@ mod token_rotation;
 mod token_rotation_plan;
 mod token_scope;
 mod token_store;
+mod token_temporal;
 mod token_value;
 mod valkey_config;
 mod valkey_error;
@@ -37,9 +38,7 @@ mod vault_token_store;
 mod tests;
 
 pub use api_token::ApiToken;
-pub use audit::{
-    MemoryTokenAuditLog, NoopTokenAuditLog, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
-};
+pub use audit::{MemoryTokenAuditLog, TokenAuditAction, TokenAuditEvent, TokenAuditLog};
 pub use auth_service::{AuthService, AuthServiceConfig};
 pub use memory_replay_store::{DEFAULT_REPLAY_CAPACITY, MemoryReplayStore};
 pub use memory_token_store::MemoryTokenStore;

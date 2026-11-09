@@ -39,7 +39,7 @@ impl AuthService {
             retired
                 .metadata
                 .begin_rotation(replacement_id, overlap_until);
-            retired.metadata.validate()?;
+            retired.validate()?;
             match self.store.update(&current, &retired).await {
                 Ok(()) => return Ok(()),
                 Err(error) if Self::is_conflict(&error) => {

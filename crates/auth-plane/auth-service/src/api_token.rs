@@ -43,6 +43,7 @@ impl ApiToken {
         Self::validated_owner(&self.owner)?;
         Self::validate_secret(self.secret.expose_secret())?;
         self.metadata.validate()?;
+        self.validate_temporal()?;
         if self.metadata.rotated_from() == Some(self.id.as_str()) {
             return Err(BpError::auth_invalid_field(
                 "rotated_from",

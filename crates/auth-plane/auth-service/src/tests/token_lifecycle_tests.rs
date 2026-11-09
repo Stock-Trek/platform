@@ -155,9 +155,9 @@ async fn revocation_records_metadata_and_blocks_use() {
 #[tokio::test]
 async fn owner_listing_includes_inactive_tokens() {
     let service = LifecycleFixture::service();
-    let now = Utc::now();
     let active = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let revoked = TestFixture::add_token(&service, "token-b", "owner-a").await;
+    let now = Utc::now();
     service
         .revoke_token(
             revoked.id(),
