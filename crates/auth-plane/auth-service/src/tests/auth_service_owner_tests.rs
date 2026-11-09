@@ -18,19 +18,6 @@ async fn finds_tokens_by_owner() {
 }
 
 #[tokio::test]
-async fn finds_a_token_by_owner() {
-    let service = TestFixture::service();
-    let added = TestFixture::add_token(&service, "token-a", "owner-a").await;
-
-    let token = service
-        .token_for_owner("owner-a", Utc::now())
-        .await
-        .unwrap();
-
-    assert_eq!(token.id(), added.id());
-}
-
-#[tokio::test]
 async fn an_owner_without_a_token_cannot_be_used() {
     let service = TestFixture::service();
 

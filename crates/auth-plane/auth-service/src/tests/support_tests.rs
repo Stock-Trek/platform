@@ -10,6 +10,9 @@ pub(crate) const ORDER_REQUEST: &[u8] =
 
 pub(crate) const OWNER: &str = "demo-owner";
 
+pub(crate) const TEST_SIGNATURE: &str =
+    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
 pub(crate) struct TestFixture;
 
 impl TestFixture {

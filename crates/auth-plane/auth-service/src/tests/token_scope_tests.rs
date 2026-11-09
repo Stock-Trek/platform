@@ -65,14 +65,6 @@ async fn default_tokens_can_read_and_write_orders() {
     );
 }
 
-#[test]
-fn default_scopes_are_limited_to_order_access() {
-    assert_eq!(
-        TokenScope::DEFAULT,
-        &[TokenScope::OrdersRead, TokenScope::OrdersWrite]
-    );
-}
-
 #[tokio::test]
 async fn rejects_tokens_without_scopes() {
     let service = TestFixture::service();

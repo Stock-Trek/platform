@@ -1,3 +1,4 @@
+use super::support_tests::TEST_SIGNATURE;
 use crate::{
     OrderRequestContext, SignedOrderRequest, order_request_context::MAX_NONCE_LENGTH,
     signed_order_request::MAX_ENVELOPE_LENGTH,
@@ -17,7 +18,7 @@ impl SignedRequestFixture {
             "nonce-a",
         )
         .unwrap();
-        SignedOrderRequest::from_context(&context, "signature").expect("valid signed request")
+        SignedOrderRequest::from_context(&context, TEST_SIGNATURE).expect("valid signed request")
     }
 }
 
@@ -31,7 +32,7 @@ fn round_trips_through_the_signed_envelope() {
     assert_eq!(decoded.issued_at(), signed.issued_at());
     assert_eq!(decoded.expires_at(), signed.expires_at());
     assert_eq!(decoded.nonce(), signed.nonce());
-    assert_eq!(decoded.signature(), "signature");
+    assert_eq!(decoded.signature(), TEST_SIGNATURE);
 }
 
 #[test]
@@ -114,9 +115,9 @@ fn rejects_overlong_envelopes() {
 fn exposes_the_envelope_and_signature_separately() {
     let signed = SignedRequestFixture::signed();
 
-    assert_eq!(signed.signature(), "signature");
+    assert_eq!(signed.signature(), TEST_SIGNATURE);
     assert!(signed.envelope().starts_with("v1."));
-    assert!(signed.envelope().ends_with(".signature"));
+    assert!(signed.envelope().ends_with(&format!(".{TEST_SIGNATURE}")));
 }
 
 #[test]
@@ -142,7 +143,15 @@ fn from_parts_validates_the_context() {
 #[test]
 fn from_parts_rejects_invalid_raw_signatures() {
     let issued_at = chrono::DateTime::from_timestamp(Utc::now().timestamp(), 0).unwrap();
-    for signature in ["", "signature.with.separators"] {
+    let invalid = [
+        String::new(),
+        "signature.with.separators".to_string(),
+        "a".repeat(63),
+        "a".repeat(65),
+        "g".repeat(64),
+        "A".repeat(64),
+    ];
+    for signature in invalid {
         let error = SignedOrderRequest::from_parts(
             "token-a",
             issued_at,
@@ -151,6 +160,12 @@ fn from_parts_rejects_invalid_raw_signatures() {
             signature,
         );
 
-        assert!(error.is_err());
+        assert!(matches!(
+            error,
+            Err(BpError::Auth(AuthError::InvalidField {
+                field: "signature",
+                ..
+            }))
+        ));
     }
 }

@@ -1,3 +1,4 @@
+use super::support_tests::TEST_SIGNATURE;
 use crate::{OrderRequestContext, SignedOrderRequest};
 use chrono::{DateTime, Duration, Timelike};
 use platform_errors::{AuthError, BpError};
@@ -19,7 +20,7 @@ fn envelope_timestamps_match_their_serialized_form() {
         .expect("valid context");
 
     let signed =
-        SignedOrderRequest::from_context(&context, "signature").expect("valid signed request");
+        SignedOrderRequest::from_context(&context, TEST_SIGNATURE).expect("valid signed request");
     let decoded = SignedOrderRequest::decode(signed.envelope()).expect("valid envelope");
 
     assert_eq!(signed.issued_at(), decoded.issued_at());

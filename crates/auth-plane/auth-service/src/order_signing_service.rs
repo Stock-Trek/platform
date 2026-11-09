@@ -1,8 +1,9 @@
 use crate::{
     ApiToken, AuthService, OrderRequestContext, OrderRequestSigner, SecretInput,
     SignedOrderRequest, TokenAuditAction, TokenAuditEvent, TokenScope,
+    order_verification::CLOCK_SKEW_SECONDS,
 };
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use platform_errors::{BpError, BpResult};
 
 impl AuthService {
@@ -62,6 +63,15 @@ impl AuthService {
                 return Err(error);
             }
         };
+        let latest_issued_at = now
+            .checked_add_signed(Duration::seconds(CLOCK_SKEW_SECONDS))
+            .unwrap_or(DateTime::<Utc>::MAX_UTC);
+        if context.issued_at() > latest_issued_at {
+            let error = BpError::auth_invalid_field("issued_at", "must not be in the future");
+            self.record_signing_failure(authenticated, now, &error)
+                .await;
+            return Err(error);
+        }
         if context.expires_at() <= now {
             let error = BpError::auth_invalid_field("expires_at", "has already expired");
             self.record_signing_failure(authenticated, now, &error)
