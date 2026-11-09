@@ -19,15 +19,7 @@ impl AuthService {
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
         let replacement_id = replacement_id.into();
-        ApiToken::validate_id(&replacement_id).map_err(|_| {
-            BpError::auth_invalid_field("replacement_id", "must be a valid token id")
-        })?;
-        if replacement_id == id {
-            return Err(BpError::auth_invalid_field(
-                "replacement_id",
-                "must refer to a different token",
-            ));
-        }
+        Self::validate_rotation_ids(id, &replacement_id)?;
         let original = self.token(id).await?;
         if original.metadata().replaced_by() == Some(replacement_id.as_str()) {
             return self.completed_rotation(&original, &replacement_id).await;
@@ -36,101 +28,33 @@ impl AuthService {
             .replacement_for(&original, &replacement_id, now)
             .await?;
         let overlap_until = self.rotation_overlap_until(now)?;
-        let (replacement, created_replacement) = match self.store.put(&replacement).await {
-            Ok(()) => (replacement, true),
-            Err(error) if Self::is_duplicate(&error) => (
-                self.reuse_existing_replacement(&original, &replacement_id, error, now)
-                    .await?,
-                false,
-            ),
-            Err(error) => {
-                self.record_rotation_failure(&original, now, &error).await;
-                return Err(error);
-            }
-        };
-        let retired = match self
-            .retire_rotated_token(&original, replacement.id(), overlap_until, now)
+        let (replacement, created_replacement) = self
+            .store_rotation_replacement(&original, replacement, now)
+            .await?;
+        let retired = self
+            .retire_or_recover_rotation(
+                &original,
+                &replacement,
+                overlap_until,
+                created_replacement,
+                now,
+            )
+            .await?;
+        self.finish_rotation(&original, replacement, &retired, created_replacement, now)
             .await
-        {
-            Ok(retired) => retired,
-            Err(error) => match self.stored_token(original.id()).await {
-                Ok(Some(current)) if current.metadata().replaced_by() == Some(replacement.id()) => {
-                    current
-                }
-                Ok(_) => {
-                    let rollback = if created_replacement {
-                        self.store.delete(replacement.id()).await
-                    } else {
-                        Ok(())
-                    };
-                    self.record_rotation_failure(&original, now, &error).await;
-                    return Err(match rollback {
-                        Ok(()) => error,
-                        Err(rollback_error) => {
-                            Self::rotation_rollback_error(replacement.id(), &error, rollback_error)
-                        }
-                    });
-                }
-                Err(read_error) => {
-                    self.record_rotation_failure(&original, now, &read_error)
-                        .await;
-                    return Err(error);
-                }
-            },
-        };
-        if let Err(error) = self
-            .record_rotation_success(&original, &replacement, now)
-            .await
-        {
-            let rollback = self
-                .rollback_rotation(&retired, replacement.id(), created_replacement)
-                .await;
-            return Err(match rollback {
-                Ok(()) => error,
-                Err(rollback_error) => {
-                    Self::rotation_rollback_error(replacement.id(), &error, rollback_error)
-                }
-            });
-        }
-        Ok(replacement)
     }
 
-    async fn completed_rotation(
-        &self,
-        original: &ApiToken,
-        replacement_id: &str,
-    ) -> BpResult<ApiToken> {
-        let replacement = self
-            .stored_token(replacement_id)
-            .await?
-            .ok_or_else(|| BpError::unknown_token(replacement_id))?;
-        Self::ensure_replacement_matches(original, &replacement)?;
-        Ok(replacement)
-    }
-
-    async fn reuse_existing_replacement(
-        &self,
-        original: &ApiToken,
-        replacement_id: &str,
-        conflict: BpError,
-        now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
-        let existing = match self.stored_token(replacement_id).await {
-            Ok(Some(existing)) => existing,
-            Ok(None) => {
-                self.record_rotation_failure(original, now, &conflict).await;
-                return Err(conflict);
-            }
-            Err(error) => {
-                self.record_rotation_failure(original, now, &error).await;
-                return Err(error);
-            }
-        };
-        if let Err(error) = Self::ensure_replacement_matches(original, &existing) {
-            self.record_rotation_failure(original, now, &error).await;
-            return Err(error);
+    fn validate_rotation_ids(id: &str, replacement_id: &str) -> BpResult<()> {
+        ApiToken::validate_id(replacement_id).map_err(|_| {
+            BpError::auth_invalid_field("replacement_id", "must be a valid token id")
+        })?;
+        if replacement_id == id {
+            return Err(BpError::auth_invalid_field(
+                "replacement_id",
+                "must refer to a different token",
+            ));
         }
-        Ok(existing)
+        Ok(())
     }
 
     fn rotated_token_id(id: &str, now: DateTime<Utc>) -> String {
@@ -145,7 +69,7 @@ impl AuthService {
         format!("{prefix}{suffix}")
     }
 
-    async fn record_rotation_success(
+    pub(crate) async fn record_rotation_success(
         &self,
         original: &ApiToken,
         replacement: &ApiToken,
@@ -160,14 +84,19 @@ impl AuthService {
         self.record_audit_batch(&events).await
     }
 
-    async fn record_rotation_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {
+    pub(crate) async fn record_rotation_failure(
+        &self,
+        token: &ApiToken,
+        now: DateTime<Utc>,
+        error: &BpError,
+    ) {
         let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
             .with_token(token.id(), Some(token.owner()))
             .failure(error.to_string());
         self.record_audit_failure(event).await;
     }
 
-    fn rotation_rollback_error(
+    pub(crate) fn rotation_rollback_error(
         replacement_id: &str,
         failure: &BpError,
         rollback: BpError,
