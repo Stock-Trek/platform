@@ -145,6 +145,31 @@ async fn records_rejected_signatures_for_unknown_tokens() {
 }
 
 #[tokio::test]
+async fn records_rejected_signatures_for_malformed_token_ids() {
+    let (service, audit) = AuditFixture::service();
+    let now = Utc::now();
+
+    let verified = service
+        .verify_order_request(
+            "not/a/path",
+            ORDER_REQUEST,
+            "v1.0.0.nonce.token.signature",
+            now,
+        )
+        .await
+        .unwrap();
+
+    assert!(!verified);
+    let rejection = audit
+        .drain()
+        .into_iter()
+        .find(|event| event.action == TokenAuditAction::SignatureRejected)
+        .expect("a rejection event should be recorded");
+    assert_eq!(rejection.token_id.as_deref(), Some("not/a/path"));
+    assert_eq!(rejection.owner, None);
+}
+
+#[tokio::test]
 async fn records_rejected_signatures() {
     let (service, audit) = AuditFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;

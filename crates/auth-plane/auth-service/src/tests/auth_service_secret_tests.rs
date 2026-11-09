@@ -74,12 +74,19 @@ async fn rejects_path_traversal_token_ids_before_signing() {
             error,
             Err(BpError::Auth(AuthError::InvalidField { .. }))
         ));
-        let error = service
+    }
+}
+
+#[tokio::test]
+async fn treats_malformed_token_ids_as_verification_failures() {
+    let service = TestFixture::service();
+
+    for id in ["../metadata", "../../../sys/health", "not/a/path", ""] {
+        let now = Utc::now();
+        let verified = service
             .verify_order_request(id, ORDER_REQUEST, "v1.0.0.nonce.token.signature", now)
-            .await;
-        assert!(matches!(
-            error,
-            Err(BpError::Auth(AuthError::InvalidField { .. }))
-        ));
+            .await
+            .unwrap();
+        assert!(!verified);
     }
 }
