@@ -7,6 +7,7 @@ mod auth_service_signature_tests;
 mod auth_service_signature_validation_tests;
 mod auth_service_token_tests;
 mod auth_service_unicode_length_tests;
+mod owner_revocation_tests;
 mod replay_store_tests;
 mod revocation_reason_tests;
 mod revocation_tests;

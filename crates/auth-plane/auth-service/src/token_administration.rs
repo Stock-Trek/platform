@@ -81,6 +81,9 @@ impl<'a> TokenAdministrator<'a> {
         self.service.revoke_token(id, reason, revoked_by, now).await
     }
 
+    /// Revokes all active tokens for `owner`. See
+    /// [`AuthService::revoke_tokens_for_owner`] for the partial-progress and
+    /// retry semantics.
     pub async fn revoke_tokens_for_owner(
         &self,
         owner: &str,
