@@ -52,6 +52,12 @@ impl AuthService {
                 "must not be negative",
             ));
         }
+        if config.rotation_overlap > config.token_lifetime {
+            return Err(BpError::auth_invalid_field(
+                "rotation_overlap",
+                "must not exceed token_lifetime",
+            ));
+        }
         if config.signature_validity < Duration::seconds(1) {
             return Err(BpError::auth_invalid_field(
                 "signature_validity",
