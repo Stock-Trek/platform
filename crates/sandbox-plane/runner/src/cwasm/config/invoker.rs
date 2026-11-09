@@ -1,6 +1,6 @@
-use platform_auth_service::VaultTokenStoreConfig;
+use platform_auth_service::{ValkeyReplayStoreConfig, VaultTokenStoreConfig};
 use platform_config::env_vars::EnvVars;
-use platform_errors::BpResult;
+use platform_errors::{BpError, BpResult, ConfigError};
 use secrecy::SecretString;
 use std::time::Duration;
 
@@ -16,6 +16,22 @@ const VAULT_TOKEN: &str = "CWASM_INVOKER_VAULT_TOKEN";
 const VAULT_MOUNT: &str = "CWASM_INVOKER_VAULT_MOUNT";
 const AUDIT_QUEUE_URL: &str = "CWASM_INVOKER_AUDIT_QUEUE_URL";
 const AUDIT_TIMEOUT_SECS: &str = "CWASM_INVOKER_AUDIT_TIMEOUT_SECS";
+const VALKEY_URL: &str = "CWASM_INVOKER_VALKEY_URL";
+const VALKEY_URL_ALIASES: [&str; 2] = [
+    "CWASM_INVOKER_VALKEY_ADDRESS",
+    "CWASM_INVOKER_REPLAY_VALKEY_URL",
+];
+const VALKEY_KEY_PREFIX: &str = "CWASM_INVOKER_VALKEY_KEY_PREFIX";
+const VALKEY_KEY_PREFIX_ALIASES: [&str; 3] = [
+    "CWASM_INVOKER_VALKEY_PREFIX",
+    "CWASM_INVOKER_VALKEY_REPLAY_PREFIX",
+    "CWASM_INVOKER_REPLAY_PREFIX",
+];
+const VALKEY_TIMEOUT_SECS: &str = "CWASM_INVOKER_VALKEY_TIMEOUT_SECS";
+const VALKEY_TIMEOUT_ALIASES: [&str; 2] = [
+    "CWASM_INVOKER_REPLAY_VALKEY_TIMEOUT_SECS",
+    "CWASM_INVOKER_REPLAY_TIMEOUT_SECS",
+];
 const VAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone)]
@@ -38,6 +54,7 @@ pub struct InvokerConfig {
     pub execution: ExecutionLimits,
     pub cwasm: CwasmLimits,
     pub vault: VaultTokenStoreConfig,
+    pub valkey: ValkeyReplayStoreConfig,
     pub audit: AuditConfig,
 }
 
@@ -62,13 +79,51 @@ impl InvokerConfig {
             vars.required(VAULT_MOUNT)?,
             VAULT_TIMEOUT,
         )?;
+        let valkey = ValkeyReplayStoreConfig::new(
+            Self::required_any(vars, VALKEY_URL, &VALKEY_URL_ALIASES)?,
+            Self::required_any(vars, VALKEY_KEY_PREFIX, &VALKEY_KEY_PREFIX_ALIASES)?,
+            Self::required_positive_duration(vars, VALKEY_TIMEOUT_SECS, &VALKEY_TIMEOUT_ALIASES)?,
+        )?;
         let audit = AuditConfig::from_vars(vars)?;
 
         Ok(Self {
             execution,
             cwasm,
             vault,
+            valkey,
             audit,
         })
+    }
+
+    fn required_any(vars: &EnvVars, name: &str, aliases: &[&str]) -> BpResult<String> {
+        match vars.required(name) {
+            Ok(value) => Ok(value),
+            Err(BpError::Config(ConfigError::Missing { .. })) => {
+                for alias in aliases {
+                    match vars.required(alias) {
+                        Ok(value) => return Ok(value),
+                        Err(BpError::Config(ConfigError::Missing { .. })) => {}
+                        Err(error) => return Err(error),
+                    }
+                }
+                Err(BpError::config_missing(name))
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn required_positive_duration(
+        vars: &EnvVars,
+        name: &str,
+        aliases: &[&str],
+    ) -> BpResult<Duration> {
+        let value = Self::required_any(vars, name, aliases)?;
+        let seconds = value
+            .parse::<u64>()
+            .map_err(|error| BpError::config_invalid_source(name, error))?;
+        if seconds == 0 {
+            return Err(BpError::config_invalid(name, "must be greater than zero"));
+        }
+        Ok(Duration::from_secs(seconds))
     }
 }
