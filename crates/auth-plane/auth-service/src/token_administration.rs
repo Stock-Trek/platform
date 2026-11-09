@@ -1,9 +1,14 @@
 use crate::{
     ApiToken, AuthService, RevocationReason, RevokedBy, SecretInput, TokenOptions, TokenScope,
+    TokenView,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::BpResult;
 
+/// Read-only access to token metadata.
+///
+/// All results are redacted [`TokenView`] values and never contain the plaintext
+/// token secret.
 pub struct TokenReader<'a> {
     service: &'a AuthService,
 }
@@ -13,24 +18,38 @@ impl<'a> TokenReader<'a> {
         Self { service }
     }
 
-    pub async fn token(&self, id: &str) -> BpResult<ApiToken> {
-        self.service.token(id).await
+    pub async fn token(&self, id: &str) -> BpResult<TokenView> {
+        Ok(TokenView::from_token(&self.service.token(id).await?))
     }
 
-    pub async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
-        self.service.tokens_for_owner(owner).await
+    pub async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<TokenView>> {
+        Ok(self
+            .service
+            .tokens_for_owner(owner)
+            .await?
+            .iter()
+            .map(TokenView::from_token)
+            .collect())
     }
 
     pub async fn active_tokens_for_owner(
         &self,
         owner: &str,
         now: DateTime<Utc>,
-    ) -> BpResult<Vec<ApiToken>> {
-        self.service.active_tokens_for_owner(owner, now).await
+    ) -> BpResult<Vec<TokenView>> {
+        Ok(self
+            .service
+            .active_tokens_for_owner(owner, now)
+            .await?
+            .iter()
+            .map(TokenView::from_token)
+            .collect())
     }
 
-    pub async fn token_for_owner(&self, owner: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
-        self.service.token_for_owner(owner, now).await
+    pub async fn token_for_owner(&self, owner: &str, now: DateTime<Utc>) -> BpResult<TokenView> {
+        Ok(TokenView::from_token(
+            &self.service.token_for_owner(owner, now).await?,
+        ))
     }
 
     pub async fn token_for_owner_with_scope(
@@ -38,13 +57,21 @@ impl<'a> TokenReader<'a> {
         owner: &str,
         scope: TokenScope,
         now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
-        self.service
-            .token_for_owner_with_scope(owner, scope, now)
-            .await
+    ) -> BpResult<TokenView> {
+        Ok(TokenView::from_token(
+            &self
+                .service
+                .token_for_owner_with_scope(owner, scope, now)
+                .await?,
+        ))
     }
 }
 
+/// Token lifecycle administration.
+///
+/// Token administration is admin-level: `tokens:write` can mint tokens with
+/// arbitrary scopes, including [`TokenScope::Admin`], and can rotate or revoke
+/// any token. Grant this scope only to trusted principals.
 pub struct TokenAdministrator<'a> {
     service: &'a AuthService,
 }
@@ -115,6 +142,8 @@ impl<'a> TokenAdministrator<'a> {
 }
 
 impl AuthService {
+    /// Authenticates a caller with `tokens:read` and returns a redacted token
+    /// reader.
     pub async fn token_reader(
         &self,
         token_id: &str,
@@ -126,6 +155,9 @@ impl AuthService {
         Ok(TokenReader::new(self))
     }
 
+    /// Authenticates a caller with `tokens:write` and returns a token
+    /// administrator. This grants admin-level control over all tokens, including
+    /// issuing tokens with arbitrary scopes.
     pub async fn token_administrator(
         &self,
         token_id: &str,

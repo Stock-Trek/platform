@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use std::{borrow::Borrow, collections::HashSet};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TokenMetadata {
     pub(crate) expires_at: DateTime<Utc>,
     pub(crate) scopes: Vec<TokenScope>,

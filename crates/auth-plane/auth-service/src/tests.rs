@@ -40,6 +40,7 @@ mod token_store_validation_tests;
 mod token_temporal_tests;
 mod token_usage_tests;
 mod token_validity_tests;
+mod token_view_tests;
 mod valkey_config_tests;
 mod valkey_replay_store_tests;
 mod valkey_test_server_tests;
