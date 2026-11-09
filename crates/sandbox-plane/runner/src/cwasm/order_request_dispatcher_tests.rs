@@ -1,7 +1,7 @@
 use chrono::{Duration, Utc};
 use platform_auth_service::{
     ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenAuditLog,
-    MemoryTokenStore, SignedOrderRequest, TokenExpiry, TokenOptions, TokenScope,
+    MemoryTokenStore, SignedOrderRequest, TokenMetadata, TokenScope, TokenStore,
 };
 use serde_json::Value;
 use std::{collections::BTreeMap, sync::Arc};
@@ -23,9 +23,9 @@ const OWNER: &str = "runner-owner";
 struct Fixture;
 
 impl Fixture {
-    fn auth_service() -> AuthService {
+    fn auth_service_with_store(store: Arc<MemoryTokenStore>) -> AuthService {
         AuthService::new(
-            Arc::new(MemoryTokenStore::default()),
+            store,
             AuthServiceConfig {
                 token_lifetime: Duration::days(30),
                 rotation_overlap: Duration::days(7),
@@ -38,20 +38,19 @@ impl Fixture {
     }
 
     async fn setup(url: &str) -> (OrderRequestDispatcher, AuthService, ApiToken) {
-        let auth_service = Self::auth_service();
-        let options =
-            TokenOptions::new(TokenExpiry::After(Duration::days(30)), TokenScope::DEFAULT);
+        let store = Arc::new(MemoryTokenStore::default());
         let now = Utc::now();
-        let token = auth_service
-            .add_token(TOKEN_ID, OWNER, now, options, now)
-            .await
-            .unwrap();
+        let metadata = TokenMetadata::new(now + Duration::days(30), TokenScope::DEFAULT).unwrap();
+        let token = ApiToken::generate(TOKEN_ID, OWNER, now, metadata).unwrap();
+        store.put(&token).await.unwrap();
+        let auth_service = Self::auth_service_with_store(store);
         let dispatcher = OrderRequestDispatcher::new(url, OWNER, auth_service.clone()).unwrap();
         (dispatcher, auth_service, token)
     }
 
     fn dispatcher_without_token(url: &str) -> OrderRequestDispatcher {
-        OrderRequestDispatcher::new(url, OWNER, Self::auth_service()).unwrap()
+        let service = Self::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
+        OrderRequestDispatcher::new(url, OWNER, service).unwrap()
     }
 
     fn order_request() -> OrderRequest<AssetId, f64> {
@@ -142,20 +141,22 @@ impl TestServer {
 
 #[test]
 fn rejects_an_invalid_order_request_url() {
-    let result = OrderRequestDispatcher::new("not a url", OWNER, Fixture::auth_service());
+    let service = Fixture::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
+    let result = OrderRequestDispatcher::new("not a url", OWNER, service);
     assert!(result.is_err());
 }
 
 #[test]
 fn rejects_a_non_http_order_request_url() {
-    let result = OrderRequestDispatcher::new("file:///tmp/orders", OWNER, Fixture::auth_service());
+    let service = Fixture::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
+    let result = OrderRequestDispatcher::new("file:///tmp/orders", OWNER, service);
     assert!(result.is_err());
 }
 
 #[test]
 fn rejects_an_empty_owner() {
-    let result =
-        OrderRequestDispatcher::new("http://127.0.0.1:1/orders", "", Fixture::auth_service());
+    let service = Fixture::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
+    let result = OrderRequestDispatcher::new("http://127.0.0.1:1/orders", "", service);
     assert!(result.is_err());
 }
 

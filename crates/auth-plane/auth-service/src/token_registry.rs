@@ -6,7 +6,7 @@ use chrono::{DateTime, Duration, Utc};
 use platform_errors::{BpError, BpResult};
 
 impl AuthService {
-    pub async fn add_token(
+    pub(crate) async fn add_token(
         &self,
         id: impl Into<String>,
         owner: impl Into<String>,
@@ -72,7 +72,7 @@ impl AuthService {
         Ok(token)
     }
 
-    pub async fn token(&self, id: &str) -> BpResult<ApiToken> {
+    pub(crate) async fn token(&self, id: &str) -> BpResult<ApiToken> {
         self.stored_token(id)
             .await?
             .ok_or_else(|| BpError::unknown_token(id))
@@ -97,7 +97,7 @@ impl AuthService {
         Ok(token)
     }
 
-    pub async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
+    pub(crate) async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
         let owner = ApiToken::validated_owner(owner)?;
         let mut ids = self.store.ids().await?;
         ids.sort();
@@ -113,7 +113,7 @@ impl AuthService {
         Ok(tokens)
     }
 
-    pub async fn active_tokens_for_owner(
+    pub(crate) async fn active_tokens_for_owner(
         &self,
         owner: &str,
         now: DateTime<Utc>,
@@ -126,11 +126,15 @@ impl AuthService {
             .collect())
     }
 
-    pub async fn token_for_owner(&self, owner: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
+    pub(crate) async fn token_for_owner(
+        &self,
+        owner: &str,
+        now: DateTime<Utc>,
+    ) -> BpResult<ApiToken> {
         self.select_token_for_owner(owner, None, now).await
     }
 
-    pub async fn token_for_owner_with_scope(
+    pub(crate) async fn token_for_owner_with_scope(
         &self,
         owner: &str,
         scope: TokenScope,
