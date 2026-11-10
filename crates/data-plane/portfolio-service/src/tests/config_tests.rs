@@ -12,11 +12,13 @@ const VALKEY_TIMEOUT_SECS: &str = "PORTFOLIO_VALKEY_TIMEOUT_SECS";
 const VAULT_ADDRESS: &str = "PORTFOLIO_VAULT_ADDRESS";
 const VAULT_TOKEN: &str = "PORTFOLIO_VAULT_TOKEN";
 const VAULT_MOUNT: &str = "PORTFOLIO_VAULT_MOUNT";
+const JWKS_URL: &str = "PORTFOLIO_JWKS_URL";
 
-const ALL_VARS: [(&str, &str); 9] = [
+const ALL_VARS: [(&str, &str); 10] = [
     (LOG_FILTER, "info"),
     (BIND_ADDRESS, "127.0.0.1:8080"),
     (DELIVERY_URL, "https://orders.example.com/orders"),
+    (JWKS_URL, "https://auth.example.com/.well-known/jwks.json"),
     (VALKEY_URL, "redis://valkey.example.com:6379"),
     (VALKEY_KEY_PREFIX, "auth-replay"),
     (VALKEY_TIMEOUT_SECS, "2"),
@@ -80,6 +82,10 @@ fn reads_every_value_from_the_environment() {
     assert_eq!(config.auth().vault().address(), "https://vault.example.com");
     assert_eq!(config.auth().vault().mount(), "platform-tokens");
     assert_eq!(config.auth().vault().timeout(), Duration::from_secs(10));
+    assert_eq!(
+        config.auth().jwks_url(),
+        "https://auth.example.com/.well-known/jwks.json"
+    );
 }
 
 #[test]
@@ -117,6 +123,9 @@ fn rejects_invalid_service_configuration() {
         (VAULT_ADDRESS, "not a url"),
         (VAULT_ADDRESS, "file:///tmp/vault"),
         (VAULT_MOUNT, "../sys"),
+        (JWKS_URL, "not a url"),
+        (JWKS_URL, "file:///tmp/jwks.json"),
+        (JWKS_URL, "ftp://auth.example.com/jwks"),
     ] {
         assert!(
             Fixture::config(&Fixture::with(name, value)).is_err(),

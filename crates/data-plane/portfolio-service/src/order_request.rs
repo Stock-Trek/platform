@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use platform_auth_service::{AuthService, SignedOrderRequest};
+use platform_auth_service::{AuthService, JwksCache, SignedOrderRequest};
 use platform_errors::{BpError, BpResult};
 use platform_messages::order_request::UnsignedOrderRequest;
 use serde::Serialize;
@@ -57,11 +57,24 @@ impl SignedOrderSubmission {
 
 pub struct OrderRequestService {
     auth_service: AuthService,
+    jwt_verifier: JwksCache,
 }
 
 impl OrderRequestService {
     pub fn new(auth_service: AuthService) -> Self {
-        Self { auth_service }
+        let jwt_verifier = JwksCache::from_jwks(auth_service.jwks().clone());
+        Self::with_jwks_cache(auth_service, jwt_verifier)
+    }
+
+    pub fn with_jwks_cache(auth_service: AuthService, jwt_verifier: JwksCache) -> Self {
+        Self {
+            auth_service,
+            jwt_verifier,
+        }
+    }
+
+    pub fn with_jwks_url(auth_service: AuthService, url: &str) -> BpResult<Self> {
+        Ok(Self::with_jwks_cache(auth_service, JwksCache::new(url)?))
     }
 
     pub async fn verify_jwt(
@@ -70,7 +83,7 @@ impl OrderRequestService {
         request: &UnsignedOrderRequest,
         now: DateTime<Utc>,
     ) -> BpResult<()> {
-        let claims = self.auth_service.verify_jwt(jwt, now).await?;
+        let claims = self.jwt_verifier.verify(jwt, now).await?;
         if claims.owner() != request.owner() {
             return Err(BpError::auth_invalid_jwt(
                 "owner does not match the order request",

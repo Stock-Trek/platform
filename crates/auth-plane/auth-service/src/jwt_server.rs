@@ -12,12 +12,16 @@ use hyper_util::rt::TokioIo;
 use platform_errors::{BpError, BpResult};
 use platform_messages::jwt::{JwtRequest, JwtResponse};
 use platform_sigv4::{SigV4Config, SigV4Request};
+use serde::Serialize;
 use std::{
     collections::BTreeMap, convert::Infallible, net::SocketAddr, sync::Arc, time::SystemTime,
 };
 use tokio::net::TcpListener;
 
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
+const JWT_PATH: &str = "/jwt";
+const JWKS_PATH: &str = "/.well-known/jwks.json";
+const JWKS_ALIAS_PATH: &str = "/jwks";
 
 pub struct JwtServer {
     listener: TcpListener,
@@ -76,17 +80,7 @@ impl JwtServer {
         request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, Infallible> {
         let response = match Self::dispatch(&service, &sigv4, request).await {
-            Ok(response) => match serde_json::to_vec(&response) {
-                Ok(body) => Response::builder()
-                    .status(StatusCode::OK)
-                    .header("content-type", "application/json")
-                    .body(Full::new(Bytes::from(body)))
-                    .unwrap_or_else(|_| Self::error(StatusCode::INTERNAL_SERVER_ERROR)),
-                Err(error) => {
-                    tracing::error!("failed to serialize JWT response: {error}");
-                    Self::error(StatusCode::INTERNAL_SERVER_ERROR)
-                }
-            },
+            Ok(response) => response,
             Err((status, message)) => {
                 tracing::warn!("rejected JWT request: {message}");
                 Self::error(status)
@@ -99,8 +93,13 @@ impl JwtServer {
         service: &AuthService,
         sigv4: &SigV4Config,
         request: Request<Incoming>,
-    ) -> Result<JwtResponse, (StatusCode, String)> {
-        if request.method() != Method::POST || request.uri().path() != "/jwt" {
+    ) -> Result<Response<Full<Bytes>>, (StatusCode, String)> {
+        if request.method() == Method::GET
+            && matches!(request.uri().path(), JWKS_PATH | JWKS_ALIAS_PATH)
+        {
+            return Ok(Self::json(StatusCode::OK, service.jwks()));
+        }
+        if request.method() != Method::POST || request.uri().path() != JWT_PATH {
             return Err((StatusCode::NOT_FOUND, "not found".to_string()));
         }
         let (parts, incoming) = request.into_parts();
@@ -129,9 +128,9 @@ impl JwtServer {
             .issue_jwt_for_owner(request.owner(), Utc::now())
             .await
             .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
-        Ok(JwtResponse::new(
-            issued.token(),
-            issued.expires_at().timestamp(),
+        Ok(Self::json(
+            StatusCode::OK,
+            &JwtResponse::new(issued.token(), issued.expires_at().timestamp()),
         ))
     }
 
@@ -166,6 +165,20 @@ impl JwtServer {
                     .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))
             })
             .collect()
+    }
+
+    fn json<T: Serialize>(status: StatusCode, value: &T) -> Response<Full<Bytes>> {
+        match serde_json::to_vec(value) {
+            Ok(body) => Response::builder()
+                .status(status)
+                .header("content-type", "application/json")
+                .body(Full::new(Bytes::from(body)))
+                .unwrap_or_else(|_| Self::error(StatusCode::INTERNAL_SERVER_ERROR)),
+            Err(error) => {
+                tracing::error!("failed to serialize JWT response: {error}");
+                Self::error(StatusCode::INTERNAL_SERVER_ERROR)
+            }
+        }
     }
 
     fn error(status: StatusCode) -> Response<Full<Bytes>> {

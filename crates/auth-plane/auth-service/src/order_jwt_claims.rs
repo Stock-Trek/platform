@@ -1,10 +1,6 @@
 use crate::ApiToken;
 use chrono::{DateTime, Utc};
-use jsonwebtoken::{
-    Algorithm, DecodingKey, EncodingKey, Header, TokenData, Validation, decode, encode,
-};
 use platform_errors::{BpError, BpResult};
-use secrecy::{ExposeSecret, SecretString};
 use serde::{Deserialize, Serialize};
 
 pub(crate) const CLOCK_SKEW_SECONDS: i64 = 60;
@@ -102,40 +98,5 @@ impl OrderJwtClaims {
             return Err(BpError::auth_invalid_jwt("was issued in the future"));
         }
         Ok(())
-    }
-}
-
-pub(crate) struct JwtCodec;
-
-impl JwtCodec {
-    pub(crate) fn encode(secret: &SecretString, claims: &OrderJwtClaims) -> BpResult<IssuedJwt> {
-        let token = encode(
-            &Header::new(Algorithm::HS256),
-            claims,
-            &EncodingKey::from_secret(secret.expose_secret().as_bytes()),
-        )
-        .map_err(|error| BpError::auth_invalid_jwt(error.to_string()))?;
-        Ok(IssuedJwt::new(token, claims.expires_at()))
-    }
-
-    pub(crate) fn decode_untrusted(token: &str) -> BpResult<TokenData<OrderJwtClaims>> {
-        jsonwebtoken::dangerous::insecure_decode(token)
-            .map_err(|error| BpError::auth_invalid_jwt(error.to_string()))
-    }
-
-    pub(crate) fn decode(
-        secret: &SecretString,
-        token: &str,
-    ) -> BpResult<TokenData<OrderJwtClaims>> {
-        let mut validation = Validation::new(Algorithm::HS256);
-        validation.validate_exp = false;
-        validation.validate_aud = false;
-        validation.leeway = 0;
-        decode(
-            token,
-            &DecodingKey::from_secret(secret.expose_secret().as_bytes()),
-            &validation,
-        )
-        .map_err(|error| BpError::auth_invalid_jwt(error.to_string()))
     }
 }

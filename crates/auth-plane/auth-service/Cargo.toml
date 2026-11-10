@@ -13,6 +13,7 @@ httpdate = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 jsonwebtoken = { workspace = true, default-features = false, features = ["aws_lc_rs"] }
+p256 = { workspace = true }
 parking_lot = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
