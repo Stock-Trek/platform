@@ -1,6 +1,7 @@
 use super::support_tests::{AuthServiceBuilder, OWNER, TestFixture};
 use crate::{
-    ApiToken, AuthService, TokenAuditEvent, TokenMetadata, TokenMutation, TokenScope, TokenStore,
+    ApiToken, AuthService, TokenAuditEvent, TokenMetadata, TokenMutation, TokenRotationTransaction,
+    TokenScope, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
@@ -27,6 +28,15 @@ impl TokenStore for MismatchedTokenStore {
 
     async fn ids(&self) -> BpResult<Vec<String>> {
         Ok(vec!["token-a".to_string()])
+    }
+
+    async fn commit_rotation(&self, _transaction: &TokenRotationTransaction) -> BpResult<()> {
+        Err(BpError::auth_store(
+            "write",
+            "rotation-transaction",
+            false,
+            "store does not support rotation transactions".to_string(),
+        ))
     }
 
     async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> BpResult<()> {
@@ -101,6 +111,15 @@ impl TokenStore for DuplicateIdsStore {
             self.token.id().to_string(),
             self.token.id().to_string(),
         ])
+    }
+
+    async fn commit_rotation(&self, _transaction: &TokenRotationTransaction) -> BpResult<()> {
+        Err(BpError::auth_store(
+            "write",
+            "rotation-transaction",
+            false,
+            "store does not support rotation transactions".to_string(),
+        ))
     }
 
     async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> BpResult<()> {

@@ -145,7 +145,9 @@ async fn materializing_a_transaction_twice_is_idempotent() {
     let retired = store.get("token-a").await.unwrap().unwrap();
     assert_eq!(retired.metadata().replaced_by(), Some("token-b"));
     assert!(store.get("token-b").await.unwrap().is_some());
-    assert_eq!(store.pending_rotations().await.unwrap().len(), 1);
+    let pending = store.pending_rotations().await.unwrap();
+    assert_eq!(pending.len(), 1);
+    assert_eq!(pending[0].events(), transaction.events());
 
     store
         .acknowledge_rotation(transaction.transaction_id())

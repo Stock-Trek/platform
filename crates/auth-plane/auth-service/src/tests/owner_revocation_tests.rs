@@ -1,7 +1,7 @@
 use super::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{
     ApiToken, AuthService, MemoryTokenStore, RevocationReason, RevokedBy, TokenAuditEvent,
-    TokenMutation, TokenStore,
+    TokenMutation, TokenRotationTransaction, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -55,6 +55,10 @@ impl TokenStore for FailingStore {
             ));
         }
         self.inner.update(expected, token).await
+    }
+
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+        self.inner.commit_rotation(transaction).await
     }
 
     async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
@@ -142,6 +146,18 @@ impl TokenStore for RacingStore {
             self.revoke_concurrently(expected, token).await?;
         }
         self.inner.update(expected, token).await
+    }
+
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+        self.inner.commit_rotation(transaction).await
+    }
+
+    async fn pending_rotations(&self) -> BpResult<Vec<TokenRotationTransaction>> {
+        self.inner.pending_rotations().await
+    }
+
+    async fn acknowledge_rotation(&self, transaction_id: &str) -> BpResult<()> {
+        self.inner.acknowledge_rotation(transaction_id).await
     }
 
     async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
