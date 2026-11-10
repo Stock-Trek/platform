@@ -1,5 +1,7 @@
 use super::support_tests::{AuthServiceBuilder, OWNER, TestFixture};
-use crate::{ApiToken, AuthService, TokenMetadata, TokenScope, TokenStore};
+use crate::{
+    ApiToken, AuthService, TokenAuditEvent, TokenMetadata, TokenMutation, TokenScope, TokenStore,
+};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError, BpResult};
@@ -29,6 +31,10 @@ impl TokenStore for MismatchedTokenStore {
 
     async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> BpResult<()> {
         Ok(())
+    }
+
+    async fn commit(&self, _mutation: TokenMutation, _event: TokenAuditEvent) -> BpResult<bool> {
+        Ok(true)
     }
 }
 
@@ -99,6 +105,10 @@ impl TokenStore for DuplicateIdsStore {
 
     async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> BpResult<()> {
         Ok(())
+    }
+
+    async fn commit(&self, _mutation: TokenMutation, _event: TokenAuditEvent) -> BpResult<bool> {
+        Ok(true)
     }
 }
 

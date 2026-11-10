@@ -1,5 +1,6 @@
 use crate::{
     ApiToken,
+    token_audit_outbox::TokenAuditOutbox,
     token_rotation_transaction::TokenRotationTransaction,
     vault_client::{TOMBSTONE_FIELD, VaultClient},
 };
@@ -87,7 +88,12 @@ impl VaultClient {
         let mut keys: Vec<String> = keys
             .iter()
             .filter_map(|key| key.as_str().map(str::to_string))
-            .filter(|key| !key.ends_with('/') && ApiToken::validate_id(key).is_ok())
+            .filter(|key| {
+                !key.ends_with('/')
+                    && (ApiToken::validate_id(key).is_ok()
+                        || TokenRotationTransaction::is_storage_key(key)
+                        || TokenAuditOutbox::is_storage_key(key))
+            })
             .collect();
         keys.sort();
         keys.dedup();
@@ -99,7 +105,10 @@ impl VaultClient {
             .keys()
             .await?
             .into_iter()
-            .filter(|key| !TokenRotationTransaction::is_storage_key(key))
+            .filter(|key| {
+                !TokenRotationTransaction::is_storage_key(key)
+                    && !TokenAuditOutbox::is_storage_key(key)
+            })
             .collect())
     }
 }

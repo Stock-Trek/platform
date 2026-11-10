@@ -1,5 +1,6 @@
 use crate::{
     ApiToken, TokenAuditEvent, TokenRotationTransaction, auth_service::MAX_UPDATE_ATTEMPTS,
+    token_audit_outbox::TokenAuditOutbox,
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
@@ -39,20 +40,48 @@ pub trait TokenStore: Send + Sync {
     /// Applies `mutation` and records `event` in the same token document.
     ///
     /// Implementations must make the mutation and the outbox append a single
-    /// compare-and-swap write. The default keeps third-party stores working,
-    /// but cannot provide the outbox guarantee.
-    async fn commit(&self, mutation: TokenMutation, _event: TokenAuditEvent) -> BpResult<bool> {
-        match mutation {
-            TokenMutation::Create(token) => {
-                self.put(&token).await?;
-                Ok(true)
-            }
-            TokenMutation::Update { expected, token } => {
-                self.update(&expected, &token).await?;
-                Ok(true)
-            }
-            TokenMutation::Delete { expected } => self.delete_if(&expected).await,
+    /// compare-and-swap write. Stores must override this method; there is no
+    /// safe default because silently discarding the audit event would lose
+    /// audit data.
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool>;
+
+    /// Appends an audit event to the outbox without changing token state.
+    ///
+    /// Stores that can keep events independently of a token should override
+    /// this. The default attaches the event to an existing token so stores that
+    /// only implement transactional commits can still preserve events for known
+    /// tokens.
+    async fn append_audit(&self, mut event: TokenAuditEvent) -> BpResult<()> {
+        TokenAuditOutbox::ensure_event_id(&mut event);
+        let Some(token_id) = event.token_id.clone() else {
+            return Err(BpError::auth_store(
+                "audit",
+                "outbox",
+                false,
+                "token store does not support standalone audit events".to_string(),
+            ));
+        };
+        let Some(token) = self.get(&token_id).await? else {
+            return Err(BpError::auth_store(
+                "audit",
+                "outbox",
+                false,
+                "token store does not support standalone audit events".to_string(),
+            ));
+        };
+        if !self
+            .commit(
+                TokenMutation::Update {
+                    expected: token.clone(),
+                    token,
+                },
+                event,
+            )
+            .await?
+        {
+            return Err(BpError::token_conflict(token_id));
         }
+        Ok(())
     }
 
     /// Atomically writes a rotation transaction record.

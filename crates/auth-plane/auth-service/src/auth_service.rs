@@ -1,6 +1,6 @@
 use crate::{
     ReplayStore, TokenAuditEvent, TokenAuditLog, TokenAuditRelay, TokenMutation,
-    TokenRotationTransaction, token_audit_outbox::TokenAuditOutbox, token_store::TokenStore,
+    TokenRotationTransaction, token_store::TokenStore,
 };
 use chrono::Duration;
 use platform_errors::{AuthError, BpError, BpResult};
@@ -91,19 +91,21 @@ impl AuthService {
         Ok(())
     }
 
-    pub(crate) async fn record_audit(&self, mut event: TokenAuditEvent) -> BpResult<()> {
-        TokenAuditOutbox::ensure_event_id(&mut event);
-        self.audit.record(event).await
+    pub(crate) async fn record_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+        self.store.append_audit(event).await?;
+        self.relay_audit_best_effort().await;
+        Ok(())
     }
 
-    /// Records an event for an operation that is already failing. The original
-    /// failure is more useful to the caller, so audit delivery errors are logged
-    /// instead of replacing it.
-    pub(crate) async fn record_audit_failure(&self, mut event: TokenAuditEvent) {
-        TokenAuditOutbox::ensure_event_id(&mut event);
-        if let Err(error) = self.audit.record(event).await {
-            tracing::error!(%error, "failed to record token audit event");
+    /// Queues an event for an operation that is already failing. The original
+    /// failure is more useful to the caller, so outbox errors are logged instead
+    /// of replacing it.
+    pub(crate) async fn record_audit_failure(&self, event: TokenAuditEvent) {
+        if let Err(error) = self.store.append_audit(event).await {
+            tracing::error!(%error, "failed to enqueue token audit event");
+            return;
         }
+        self.relay_audit_best_effort().await;
     }
 
     /// Delivers pending outbox events and materializes pending rotations.

@@ -17,6 +17,7 @@ struct StoredEntry {
 struct MemoryState {
     tokens: HashMap<String, StoredEntry>,
     rotations: HashMap<String, TokenRotationTransaction>,
+    standalone_audits: HashMap<String, TokenAuditEvent>,
 }
 
 #[derive(Clone, Default)]
@@ -57,7 +58,7 @@ impl TokenStore for MemoryTokenStore {
     async fn delete_if(&self, expected: &ApiToken) -> BpResult<bool> {
         expected.validate()?;
         let mut state = self.state.lock();
-        let Some(entry) = state.tokens.get(expected.id()) else {
+        let Some(entry) = state.tokens.get_mut(expected.id()) else {
             return Ok(false);
         };
         let Some(stored) = &entry.token else {
@@ -66,7 +67,10 @@ impl TokenStore for MemoryTokenStore {
         if stored.to_value() != expected.to_value() {
             return Ok(false);
         }
-        state.tokens.remove(expected.id());
+        entry.token = None;
+        if entry.outbox.is_empty() {
+            state.tokens.remove(expected.id());
+        }
         Ok(true)
     }
 
@@ -165,17 +169,34 @@ impl TokenStore for MemoryTokenStore {
         Ok(())
     }
 
+    async fn append_audit(&self, mut event: TokenAuditEvent) -> BpResult<()> {
+        TokenAuditOutbox::ensure_event_id(&mut event);
+        let mut state = self.state.lock();
+        if let Some(token_id) = event.token_id.as_deref()
+            && let Some(entry) = state.tokens.get_mut(token_id)
+            && entry.token.is_some()
+        {
+            entry.outbox.push(event);
+            return Ok(());
+        }
+        let event_id = TokenAuditOutbox::require_event_id(&event)?.to_string();
+        state.standalone_audits.insert(event_id, event);
+        Ok(())
+    }
+
     async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
         let state = self.state.lock();
         let mut events = Vec::new();
         for entry in state.tokens.values() {
             events.extend(entry.outbox.iter().cloned());
         }
+        events.extend(state.standalone_audits.values().cloned());
         Ok(events)
     }
 
     async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
         let mut state = self.state.lock();
+        state.standalone_audits.remove(event_id);
         let mut remove = Vec::new();
         for (id, entry) in state.tokens.iter_mut() {
             TokenAuditOutbox::remove_events(&mut entry.outbox, event_id);

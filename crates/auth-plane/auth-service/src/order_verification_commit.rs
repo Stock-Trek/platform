@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, AuthService, ConsumeResult, OrderRequestContext, ReplayKey, ReplayReservation,
-    ReplayStoreError, TokenAuditAction, TokenAuditEvent, TokenScope,
+    ReplayStoreError, TokenAuditAction, TokenAuditEvent, TokenMutation, TokenScope,
     auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Utc};
@@ -38,15 +38,17 @@ impl AuthService {
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             let mut updated = latest.clone();
             updated.metadata.record_use(now);
-            match self.store.update(&latest, &updated).await {
-                Ok(()) => {
-                    let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
-                        .with_token(updated.id(), Some(updated.owner()));
-                    if let Err(error) = self.record_audit(event).await {
-                        self.release_replay_after_failure(reservation).await;
-                        return Err(error);
-                    }
-                    return Ok(true);
+            let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
+                .with_token(updated.id(), Some(updated.owner()));
+            let mutation = TokenMutation::Update {
+                expected: latest,
+                token: updated,
+            };
+            match self.commit_mutation(mutation, event).await {
+                Ok(true) => return Ok(true),
+                Ok(false) => {
+                    self.release_replay_after_failure(reservation).await;
+                    return Err(BpError::token_conflict(token_id));
                 }
                 Err(error) if Self::is_conflict(&error) => {
                     latest = match self.token(token_id).await {
