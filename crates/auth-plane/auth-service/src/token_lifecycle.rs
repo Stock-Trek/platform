@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, AuthService, RevocationReason, RevokedBy, TokenAuditAction, TokenAuditEvent,
-    auth_service::MAX_UPDATE_ATTEMPTS,
+    TokenMutation, auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{AuthError, BpError, BpResult};
@@ -10,15 +10,16 @@ impl AuthService {
         let Some(token) = self.stored_token(id).await? else {
             return Ok(());
         };
-        if !self.store.delete_if(&token).await? {
-            return Err(BpError::token_conflict(id));
-        }
         let event = TokenAuditEvent::new(TokenAuditAction::Deleted, now)
             .with_token(token.id(), Some(token.owner()));
-        if let Err(error) = self.record_audit(event).await {
-            return Err(self.rollback_deleted_token(&token, error).await);
+        let deleted = self
+            .commit_mutation(TokenMutation::Delete { expected: token }, event)
+            .await?;
+        if deleted {
+            Ok(())
+        } else {
+            Err(BpError::token_conflict(id))
         }
-        Ok(())
     }
 
     pub(crate) async fn revoke_token(
@@ -35,15 +36,14 @@ impl AuthService {
             }
             let original = token.clone();
             token.metadata.revoke(now, reason, revoked_by);
-            match self.store.update(&original, &token).await {
-                Ok(()) => {
-                    let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)
-                        .with_token(token.id(), Some(token.owner()));
-                    if let Err(error) = self.record_audit(event).await {
-                        return Err(self.rollback_revocation(&token, &original, error).await);
-                    }
-                    return Ok(token);
-                }
+            let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)
+                .with_token(token.id(), Some(token.owner()));
+            let mutation = TokenMutation::Update {
+                expected: original,
+                token: token.clone(),
+            };
+            match self.commit_mutation(mutation, event).await {
+                Ok(_) => return Ok(token),
                 Err(error) if Self::is_conflict(&error) => continue,
                 Err(error) => {
                     self.record_revocation_failure(&token, now, &error).await;
@@ -101,29 +101,6 @@ impl AuthService {
 
     fn is_already_revoked(error: &BpError) -> bool {
         matches!(error, BpError::Auth(AuthError::Revoked { .. }))
-    }
-
-    async fn rollback_deleted_token(&self, token: &ApiToken, failure: BpError) -> BpError {
-        match self.store.put(token).await {
-            Ok(()) => failure,
-            Err(rollback) => {
-                Self::rollback_failure("restore token", token.id(), &failure, rollback)
-            }
-        }
-    }
-
-    async fn rollback_revocation(
-        &self,
-        revoked: &ApiToken,
-        original: &ApiToken,
-        failure: BpError,
-    ) -> BpError {
-        match self.store.update(revoked, original).await {
-            Ok(()) => failure,
-            Err(rollback) => {
-                Self::rollback_failure("restore token", revoked.id(), &failure, rollback)
-            }
-        }
     }
 
     async fn record_revocation_failure(

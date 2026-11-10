@@ -53,30 +53,6 @@ async fn record_delivers_one_event_to_the_queue() {
 }
 
 #[tokio::test]
-async fn record_batch_delivers_all_events_in_one_batch() {
-    let queue = Arc::new(MockAuditQueue::new());
-    let audit = SqsAuditFixture::audit(&queue, StdDuration::from_secs(1));
-    let events = vec![
-        SqsAuditFixture::event("token-a"),
-        SqsAuditFixture::event("token-b"),
-    ];
-
-    audit.record_batch(&events).await.unwrap();
-
-    assert_eq!(queue.batches(), vec![events]);
-}
-
-#[tokio::test]
-async fn record_batch_does_not_contact_the_queue_for_no_events() {
-    let queue = Arc::new(MockAuditQueue::new());
-    let audit = SqsAuditFixture::audit(&queue, StdDuration::from_secs(1));
-
-    audit.record_batch(&[]).await.unwrap();
-
-    assert!(queue.batches().is_empty());
-}
-
-#[tokio::test]
 async fn record_propagates_queue_delivery_failures() {
     let queue = Arc::new(MockAuditQueue::new());
     queue.fail();
@@ -91,21 +67,7 @@ async fn record_propagates_queue_delivery_failures() {
 }
 
 #[tokio::test]
-async fn record_batch_propagates_queue_delivery_failures() {
-    let queue = Arc::new(MockAuditQueue::new());
-    queue.fail();
-    let audit = SqsAuditFixture::audit(&queue, StdDuration::from_secs(1));
-
-    let error = audit
-        .record_batch(&[SqsAuditFixture::event("token-a")])
-        .await
-        .unwrap_err();
-
-    assert!(matches!(error, BpError::Sqs(_)));
-}
-
-#[tokio::test]
-async fn purging_expired_tokens_delivers_deletion_events_as_a_batch() {
+async fn purging_expired_tokens_delivers_one_deletion_event() {
     let queue = Arc::new(MockAuditQueue::new());
     let service = SqsAuditFixture::service(&queue);
     let now = Utc::now();

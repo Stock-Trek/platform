@@ -1,5 +1,5 @@
 use super::support_tests::TestFixture;
-use crate::{MemoryTokenAuditLog, TokenAuditAction, TokenAuditEvent, TokenAuditLog};
+use crate::{MemoryTokenAuditLog, TokenAuditAction};
 use chrono::{Duration, Utc};
 use std::sync::Arc;
 
@@ -54,20 +54,4 @@ async fn purging_expired_tokens_records_deletions() {
         .expect("a deletion event should be recorded");
     assert_eq!(event.token_id.as_deref(), Some("expired"));
     assert_eq!(event.owner.as_deref(), Some("owner-a"));
-}
-
-#[tokio::test]
-async fn audit_batches_are_recorded_together() {
-    let audit = MemoryTokenAuditLog::new(1);
-    let now = Utc::now();
-    let events = [
-        TokenAuditEvent::new(TokenAuditAction::Rotated, now),
-        TokenAuditEvent::new(TokenAuditAction::Issued, now),
-    ];
-
-    audit.record_batch(&events).await.unwrap();
-
-    let recorded = audit.events();
-    assert_eq!(recorded.len(), 1);
-    assert_eq!(recorded[0].action, TokenAuditAction::Issued);
 }

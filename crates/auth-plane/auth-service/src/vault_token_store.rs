@@ -1,5 +1,5 @@
 use crate::{
-    ApiToken, VaultTokenStoreConfig,
+    ApiToken, TokenAuditEvent, TokenMutation, TokenRotationTransaction, VaultTokenStoreConfig,
     token_store::TokenStore,
     vault_client::{VaultClient, WriteCondition},
 };
@@ -50,5 +50,29 @@ impl TokenStore for VaultTokenStore {
         self.client
             .put(token, WriteCondition::Update(version))
             .await
+    }
+
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+        self.client.commit(mutation, event).await
+    }
+
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+        self.client.commit_rotation(transaction).await
+    }
+
+    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+        self.client.pending_audits().await
+    }
+
+    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+        self.client.acknowledge_audit(event_id).await
+    }
+
+    async fn pending_rotations(&self) -> BpResult<Vec<TokenRotationTransaction>> {
+        self.client.pending_rotations().await
+    }
+
+    async fn acknowledge_rotation(&self, transaction_id: &str) -> BpResult<()> {
+        self.client.acknowledge_rotation(transaction_id).await
     }
 }

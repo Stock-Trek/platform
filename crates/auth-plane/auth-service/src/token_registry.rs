@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, TokenExpiry, TokenMetadata,
-    TokenOptions, TokenScope,
+    TokenMutation, TokenOptions, TokenScope,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{BpError, BpResult};
@@ -57,19 +57,21 @@ impl AuthService {
         };
         let metadata = TokenMetadata::new(expires_at, options.scopes())?;
         let token = ApiToken::generate(id, owner, created_at, metadata)?;
-        if let Err(error) = self.store.put(&token).await {
-            let event = TokenAuditEvent::new(TokenAuditAction::Issued, now)
-                .with_token(token.id(), Some(token.owner()))
-                .failure(error.to_string());
-            self.record_audit_failure(event).await;
-            return Err(error);
-        }
         let event = TokenAuditEvent::new(TokenAuditAction::Issued, now)
             .with_token(token.id(), Some(token.owner()));
-        if let Err(error) = self.record_audit(event).await {
-            return Err(self.rollback_added_token(&token, error).await);
+        match self
+            .commit_mutation(TokenMutation::Create(token.clone()), event)
+            .await
+        {
+            Ok(_) => Ok(token),
+            Err(error) => {
+                let event = TokenAuditEvent::new(TokenAuditAction::Issued, now)
+                    .with_token(token.id(), Some(token.owner()))
+                    .failure(error.to_string());
+                self.record_audit_failure(event).await;
+                Err(error)
+            }
         }
-        Ok(token)
     }
 
     pub(crate) async fn token(&self, id: &str) -> BpResult<ApiToken> {
@@ -187,12 +189,5 @@ impl AuthService {
             })
             .then_with(|| right.created_at().cmp(&left.created_at()))
             .then_with(|| left.id().cmp(right.id()))
-    }
-
-    async fn rollback_added_token(&self, token: &ApiToken, failure: BpError) -> BpError {
-        match self.store.delete_if(token).await {
-            Ok(_) => failure,
-            Err(rollback) => Self::rollback_failure("remove token", token.id(), &failure, rollback),
-        }
     }
 }
