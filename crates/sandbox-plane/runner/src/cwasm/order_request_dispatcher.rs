@@ -1,3 +1,4 @@
+use super::JwtCache;
 use platform_errors::{BpError, BpResult};
 use platform_messages::order_request::UnsignedOrderRequest;
 use platform_types::url_scheme::UrlScheme;
@@ -10,10 +11,11 @@ pub struct OrderRequestDispatcher {
     url: reqwest::Url,
     owner: String,
     client: reqwest::Client,
+    jwt: JwtCache,
 }
 
 impl OrderRequestDispatcher {
-    pub fn new(url: &str, owner: impl Into<String>) -> BpResult<Self> {
+    pub fn new(url: &str, auth_service_url: &str, owner: impl Into<String>) -> BpResult<Self> {
         let url = reqwest::Url::parse(url)
             .map_err(|error| BpError::config_invalid_source("order_request_url", error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
@@ -29,7 +31,17 @@ impl OrderRequestDispatcher {
         let client = reqwest::Client::builder()
             .build()
             .map_err(BpError::external)?;
-        Ok(Self { url, owner, client })
+        let jwt = JwtCache::new(auth_service_url, owner.clone())?;
+        Ok(Self {
+            url,
+            owner,
+            client,
+            jwt,
+        })
+    }
+
+    pub async fn prime(&self) -> BpResult<()> {
+        self.jwt.token().await.map(|_| ())
     }
 
     pub async fn dispatch(&self, actions: impl IntoIterator<Item = String>) -> BpResult<()> {
@@ -56,9 +68,11 @@ impl OrderRequestDispatcher {
     ) -> BpResult<()> {
         let payload =
             UnsignedOrderRequest::new(cex_id, account_id, self.owner.clone(), order_request);
+        let jwt = self.jwt.token().await?;
         let response = self
             .client
             .post(self.url.clone())
+            .bearer_auth(jwt)
             .json(&payload)
             .send()
             .await

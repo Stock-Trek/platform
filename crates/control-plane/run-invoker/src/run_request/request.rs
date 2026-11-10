@@ -11,6 +11,7 @@ pub struct RunRequest {
     pub cwasm_size: u64,
     pub wasmtime_version: String,
     pub order_request_url: String,
+    pub auth_service_url: String,
     pub owner: String,
     #[serde(flatten)]
     pub command: RunCommand,
@@ -32,6 +33,7 @@ impl RunRequest {
         record: &RunRecord,
         cwasm_get_url: String,
         order_request_url: String,
+        auth_service_url: String,
         logs_post: PresignedPost,
     ) -> Self {
         Self {
@@ -40,6 +42,7 @@ impl RunRequest {
             cwasm_size: record.cwasm_size,
             wasmtime_version: record.wasmtime_version.clone(),
             order_request_url,
+            auth_service_url,
             owner: record.owner.clone(),
             command: RunCommand::Algorithm {
                 strategy_name: record.strategy_name.clone(),

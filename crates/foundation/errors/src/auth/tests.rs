@@ -66,7 +66,16 @@ fn authentication_failures_are_permanent() {
 }
 
 #[test]
-fn store_retryability_follows_the_flag() {
+fn invalid_jwt_is_permanent() {
+    let error = AuthError::InvalidJwt {
+        reason: "has expired".to_string(),
+    };
+
+    assert_eq!(error.retryability(), Retryability::Permanent);
+}
+
+#[test]
+fn store_failures_follow_the_retryable_flag() {
     let error = |retryable| AuthError::Store {
         operation: "write",
         target: "tokens/token-a".to_string(),

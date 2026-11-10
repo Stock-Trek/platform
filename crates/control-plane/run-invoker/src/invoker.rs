@@ -95,6 +95,7 @@ impl RunInvoker {
             record,
             cwasm_get_url,
             self.config.order_request_url.clone(),
+            self.config.auth_service_url.clone(),
             logs_post,
         );
         self.runner.invoke(&request.to_json()?).await?;

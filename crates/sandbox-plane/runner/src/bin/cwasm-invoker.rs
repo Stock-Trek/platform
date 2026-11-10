@@ -78,14 +78,21 @@ impl CwasmInvoker {
             Ok(runtime) => runtime,
             Err(code) => return code.code(),
         };
-        let dispatcher =
-            match OrderRequestDispatcher::new(&request.order_request_url, &request.owner) {
-                Ok(dispatcher) => dispatcher,
-                Err(error) => {
-                    eprintln!("cwasm-invoker: invalid order request configuration: {error}");
-                    return ExitCode::ServerRunnerConfigurationInvalid.code();
-                }
-            };
+        let dispatcher = match OrderRequestDispatcher::new(
+            &request.order_request_url,
+            &request.auth_service_url,
+            &request.owner,
+        ) {
+            Ok(dispatcher) => dispatcher,
+            Err(error) => {
+                eprintln!("cwasm-invoker: invalid order request configuration: {error}");
+                return ExitCode::ServerRunnerConfigurationInvalid.code();
+            }
+        };
+        if let Err(error) = runtime.block_on(dispatcher.prime()) {
+            eprintln!("cwasm-invoker: failed to fetch an order request JWT: {error}");
+            return ExitCode::ServerRunnerConnectionFailed.code();
+        }
         let integrity = CwasmIntegrity::new(
             request.cwasm_sha256.clone(),
             request.cwasm_size,

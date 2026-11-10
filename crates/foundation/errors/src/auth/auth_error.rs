@@ -22,6 +22,8 @@ pub enum AuthError {
     RotationOverlapEnded { token_id: String },
     #[error("API token {token_id:?} is missing required scope {scope}")]
     MissingScope { token_id: String, scope: String },
+    #[error("invalid JWT: {reason}")]
+    InvalidJwt { reason: String },
     #[error("token store {operation} failed for {target}: {source}")]
     Store {
         operation: &'static str,
@@ -50,6 +52,7 @@ impl AuthError {
             | Self::Expired { .. }
             | Self::RotationOverlapEnded { .. }
             | Self::MissingScope { .. }
+            | Self::InvalidJwt { .. }
             | Self::Store {
                 retryable: false, ..
             } => Retryability::Permanent,

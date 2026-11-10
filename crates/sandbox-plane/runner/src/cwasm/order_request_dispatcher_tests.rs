@@ -14,6 +14,7 @@ use tokio::{
 use super::OrderRequestDispatcher;
 
 const OWNER: &str = "runner-owner";
+const DEAD_AUTH: &str = "http://127.0.0.1:1/jwt";
 
 struct Fixture;
 
@@ -38,7 +39,20 @@ impl Fixture {
     }
 
     fn dispatcher(url: &str) -> OrderRequestDispatcher {
-        OrderRequestDispatcher::new(url, OWNER).unwrap()
+        OrderRequestDispatcher::new(url, DEAD_AUTH, OWNER).unwrap()
+    }
+
+    fn authenticated_dispatcher(url: &str, auth_service_url: &str) -> OrderRequestDispatcher {
+        OrderRequestDispatcher::new(url, auth_service_url, OWNER).unwrap()
+    }
+
+    fn jwt_response() -> String {
+        let expires_at = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+            + 3600;
+        format!(r#"{{"token":"test-jwt","expiresAtUnix":{expires_at}}}"#)
     }
 }
 
@@ -53,18 +67,29 @@ struct TestServer;
 
 impl TestServer {
     async fn start(status: &str) -> (String, JoinHandle<CapturedRequest>) {
+        Self::start_at("/order-requests", status, "").await
+    }
+
+    async fn start_at(
+        path: &str,
+        status: &str,
+        body: &str,
+    ) -> (String, JoinHandle<CapturedRequest>) {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let status = status.to_string();
+        let body = body.to_string();
         let server = tokio::spawn(async move {
             let (mut stream, _) = listener.accept().await.unwrap();
             let request = Self::read(&mut stream).await;
-            let response =
-                format!("HTTP/1.1 {status}\r\ncontent-length: 0\r\nconnection: close\r\n\r\n");
+            let response = format!(
+                "HTTP/1.1 {status}\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
+                body.len()
+            );
             stream.write_all(response.as_bytes()).await.unwrap();
             request
         });
-        (format!("http://{address}/order-requests"), server)
+        (format!("http://{address}{path}"), server)
     }
 
     async fn read(stream: &mut TcpStream) -> CapturedRequest {
@@ -110,29 +135,47 @@ impl TestServer {
 
 #[test]
 fn rejects_an_invalid_order_request_url() {
-    assert!(OrderRequestDispatcher::new("not a url", OWNER).is_err());
+    assert!(OrderRequestDispatcher::new("not a url", DEAD_AUTH, OWNER).is_err());
 }
 
 #[test]
 fn rejects_a_non_http_order_request_url() {
-    assert!(OrderRequestDispatcher::new("file:///tmp/orders", OWNER).is_err());
+    assert!(OrderRequestDispatcher::new("file:///tmp/orders", DEAD_AUTH, OWNER).is_err());
+}
+
+#[test]
+fn rejects_an_invalid_auth_service_url() {
+    assert!(
+        OrderRequestDispatcher::new("http://127.0.0.1:1/orders", "file:///tmp/jwt", OWNER).is_err()
+    );
 }
 
 #[test]
 fn rejects_an_empty_owner() {
-    assert!(OrderRequestDispatcher::new("http://127.0.0.1:1/orders", "").is_err());
+    assert!(OrderRequestDispatcher::new("http://127.0.0.1:1/orders", DEAD_AUTH, "").is_err());
 }
 
 #[tokio::test]
 async fn submits_unsigned_place_order_actions() {
     let (url, server) = TestServer::start("200 OK").await;
-    let dispatcher = Fixture::dispatcher(&url);
+    let (auth_url, auth_server) =
+        TestServer::start_at("/jwt", "200 OK", &Fixture::jwt_response()).await;
+    let dispatcher = Fixture::authenticated_dispatcher(&url, &auth_url);
 
     dispatcher.dispatch([Fixture::place_order()]).await.unwrap();
 
+    let auth_request = auth_server.await.unwrap();
+    assert_eq!(auth_request.method, "POST");
+    assert_eq!(auth_request.path, "/jwt");
+    let body: Value = serde_json::from_str(&auth_request.body).unwrap();
+    assert_eq!(body["owner"], OWNER);
     let request = server.await.unwrap();
     assert_eq!(request.method, "POST");
     assert_eq!(request.path, "/order-requests");
+    assert_eq!(
+        request.headers.get("authorization").map(String::as_str),
+        Some("Bearer test-jwt")
+    );
     assert_eq!(
         request.headers.get("content-type").map(String::as_str),
         Some("application/json")
@@ -169,8 +212,11 @@ async fn rejects_malformed_actions() {
 #[tokio::test]
 async fn reports_a_rejected_submission() {
     let (url, server) = TestServer::start("503 Service Unavailable").await;
-    let dispatcher = Fixture::dispatcher(&url);
+    let (auth_url, auth_server) =
+        TestServer::start_at("/jwt", "200 OK", &Fixture::jwt_response()).await;
+    let dispatcher = Fixture::authenticated_dispatcher(&url, &auth_url);
 
     assert!(dispatcher.dispatch([Fixture::place_order()]).await.is_err());
+    auth_server.await.unwrap();
     server.await.unwrap();
 }

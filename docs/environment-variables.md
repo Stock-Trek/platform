@@ -72,7 +72,7 @@ required in some configurations, the condition is stated in its description.
 
 | Variable | Description |
 | --- | --- |
-| `PORTFOLIO_ORDER_REQUEST_BIND_ADDR` | Socket address on which the portfolio service accepts unsigned order requests. |
+| `PORTFOLIO_ORDER_REQUEST_BIND_ADDR` | Socket address on which the portfolio service accepts unsigned order requests carrying a bearer JWT. |
 | `PORTFOLIO_ORDER_REQUEST_URL` | URL that receives signed order requests from the portfolio service. |
 | `PORTFOLIO_VALKEY_KEY_PREFIX` | Prefix for replay-protection keys in Valkey. |
 | `PORTFOLIO_VALKEY_TIMEOUT_SECS` | Connection and command timeout for Valkey, in seconds. |
@@ -265,6 +265,7 @@ their details.
 | Variable | Description |
 | --- | --- |
 | `RUN_INVOKER_ARTIFACT_BUCKET` | S3 bucket containing compiled runner cwasm artifacts. |
+| `RUN_INVOKER_AUTH_SERVICE_URL` | URL the runner calls to obtain a bearer JWT for order requests. |
 | `RUN_INVOKER_LOGS_BUCKET` | S3 bucket that receives the algorithm run logs the runner uploads with its pre-signed POST. |
 | `RUN_INVOKER_MAX_BATCH` | Maximum number of due runs claimed per invocation. |
 | `RUN_INVOKER_ORDER_REQUEST_URL` | URL the runner submits unsigned order requests to for portfolio-service signing and delivery. |
@@ -273,6 +274,20 @@ their details.
 | `S3_SIGNED_URL_EXPIRY_SECS` | Lifetime of the pre-signed S3 URLs handed to the runner, in seconds. |
 
 ## Auth plane
+
+### Auth service
+
+The auth service issues short-lived HS256 JWTs for owners with an active order-write token and
+verifies JWTs presented with order requests.
+
+#### Required
+
+| Variable | Description |
+| --- | --- |
+| `AUTH_SERVICE_BIND_ADDR` | Socket address on which the auth service accepts JWT requests. |
+| `AUTH_SERVICE_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
+| `AUTH_SERVICE_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
+| `AUTH_SERVICE_VAULT_TOKEN` | Vault token used to read auth-service tokens. |
 
 ### Auth relay
 
@@ -301,9 +316,11 @@ The auth relay also uses the shared AWS timeout variables listed under
 ### CWASM invoker
 
 The native cwasm host reads these required variables when it starts. Missing, empty, and invalid
-values fail startup. Place-order actions are submitted without signatures to the portfolio service,
-which signs them with the auth-service token owned by the run request owner. Auth operations commit
-audit events to the durable token outbox; the separate auth relay service delivers them to SQS.
+values fail startup. Place-order actions are submitted without signatures to the portfolio service, which signs them with
+the auth-service token owned by the run request owner. The runner fetches and caches a bearer JWT
+from the auth service and sends it with every order request; the portfolio service rejects requests
+without a valid JWT. Auth operations commit audit events to the durable token outbox; the separate
+auth relay service delivers them to SQS.
 
 #### Required
 

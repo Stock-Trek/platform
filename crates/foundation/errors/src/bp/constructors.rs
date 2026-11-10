@@ -66,6 +66,12 @@ impl BpError {
         })
     }
 
+    pub fn auth_invalid_jwt(reason: impl Into<String>) -> Self {
+        Self::Auth(AuthError::InvalidJwt {
+            reason: reason.into(),
+        })
+    }
+
     pub fn auth_store<E>(
         operation: &'static str,
         target: impl Into<String>,

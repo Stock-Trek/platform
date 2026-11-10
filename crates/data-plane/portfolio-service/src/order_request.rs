@@ -1,4 +1,4 @@
-use chrono::Utc;
+use chrono::{DateTime, Utc};
 use platform_auth_service::{AuthService, SignedOrderRequest};
 use platform_errors::{BpError, BpResult};
 use platform_messages::order_request::UnsignedOrderRequest;
@@ -62,6 +62,21 @@ pub struct OrderRequestService {
 impl OrderRequestService {
     pub fn new(auth_service: AuthService) -> Self {
         Self { auth_service }
+    }
+
+    pub async fn verify_jwt(
+        &self,
+        jwt: &str,
+        request: &UnsignedOrderRequest,
+        now: DateTime<Utc>,
+    ) -> BpResult<()> {
+        let claims = self.auth_service.verify_jwt(jwt, now).await?;
+        if claims.owner() != request.owner() {
+            return Err(BpError::auth_invalid_jwt(
+                "owner does not match the order request",
+            ));
+        }
+        Ok(())
     }
 
     pub async fn sign(&self, request: &UnsignedOrderRequest) -> BpResult<SignedOrderSubmission> {

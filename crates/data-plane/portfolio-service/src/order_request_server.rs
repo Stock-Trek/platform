@@ -1,8 +1,10 @@
 use crate::{OrderRequestDelivery, OrderRequestService, SignedOrderSubmission};
+use chrono::Utc;
 use http_body_util::{BodyExt, Full};
 use hyper::{
     Method, Request, Response, StatusCode,
     body::{Bytes, Incoming},
+    header::AUTHORIZATION,
     server::conn::http1,
     service::service_fn,
 };
@@ -100,6 +102,7 @@ impl OrderRequestServer {
                 "POST is required".to_string(),
             ));
         }
+        let jwt = Self::bearer(&request)?;
         let body = request
             .into_body()
             .collect()
@@ -114,6 +117,10 @@ impl OrderRequestServer {
         }
         let unsigned: UnsignedOrderRequest = serde_json::from_slice(&body)
             .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+        service
+            .verify_jwt(&jwt, &unsigned, Utc::now())
+            .await
+            .map_err(|error| (StatusCode::UNAUTHORIZED, error.to_string()))?;
         let submission = service
             .sign(&unsigned)
             .await
@@ -123,6 +130,28 @@ impl OrderRequestServer {
             .await
             .map_err(|error| (StatusCode::BAD_GATEWAY, error.to_string()))?;
         Ok(submission)
+    }
+
+    fn bearer(request: &Request<Incoming>) -> Result<String, (StatusCode, String)> {
+        let value = request.headers().get(AUTHORIZATION).ok_or_else(|| {
+            (
+                StatusCode::UNAUTHORIZED,
+                "bearer JWT is required".to_string(),
+            )
+        })?;
+        let value = value
+            .to_str()
+            .map_err(|error| (StatusCode::UNAUTHORIZED, error.to_string()))?;
+        let token = value
+            .strip_prefix("Bearer ")
+            .filter(|token| !token.trim().is_empty())
+            .ok_or_else(|| {
+                (
+                    StatusCode::UNAUTHORIZED,
+                    "authorization must use the Bearer scheme".to_string(),
+                )
+            })?;
+        Ok(token.to_string())
     }
 
     fn internal_error() -> Response<Full<Bytes>> {
