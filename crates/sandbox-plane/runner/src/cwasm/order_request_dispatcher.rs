@@ -1,8 +1,6 @@
-use chrono::Utc;
-use platform_auth_service::AuthService;
 use platform_errors::{BpError, BpResult};
+use platform_messages::order_request::UnsignedOrderRequest;
 use platform_types::url_scheme::UrlScheme;
-use serde_json::json;
 use stock_trek::{
     actions::ResolvedAction,
     types::{AccountId, AssetId, CexId, OrderRequest},
@@ -11,12 +9,11 @@ use stock_trek::{
 pub struct OrderRequestDispatcher {
     url: reqwest::Url,
     owner: String,
-    auth_service: AuthService,
     client: reqwest::Client,
 }
 
 impl OrderRequestDispatcher {
-    pub fn new(url: &str, owner: impl Into<String>, auth_service: AuthService) -> BpResult<Self> {
+    pub fn new(url: &str, owner: impl Into<String>) -> BpResult<Self> {
         let url = reqwest::Url::parse(url)
             .map_err(|error| BpError::config_invalid_source("order_request_url", error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
@@ -32,12 +29,7 @@ impl OrderRequestDispatcher {
         let client = reqwest::Client::builder()
             .build()
             .map_err(BpError::external)?;
-        Ok(Self {
-            url,
-            owner,
-            auth_service,
-            client,
-        })
+        Ok(Self { url, owner, client })
     }
 
     pub async fn dispatch(&self, actions: impl IntoIterator<Item = String>) -> BpResult<()> {
@@ -50,7 +42,7 @@ impl OrderRequestDispatcher {
                 order_request,
             } = action
             {
-                self.submit(&cex_id, &account_id, &order_request).await?;
+                self.submit(cex_id, account_id, order_request).await?;
             }
         }
         Ok(())
@@ -58,24 +50,12 @@ impl OrderRequestDispatcher {
 
     async fn submit(
         &self,
-        cex_id: &CexId,
-        account_id: &AccountId,
-        order_request: &OrderRequest<AssetId, f64>,
+        cex_id: CexId,
+        account_id: AccountId,
+        order_request: OrderRequest<AssetId, f64>,
     ) -> BpResult<()> {
-        let bytes = serde_json::to_vec(order_request).map_err(BpError::external)?;
-        let request_value = serde_json::to_value(order_request).map_err(BpError::external)?;
-        let now = Utc::now();
-        let signed = self
-            .auth_service
-            .sign_order_request_for_owner(&self.owner, &bytes, now, now)
-            .await?;
-        let payload = json!({
-            "cex": cex_id.to_string(),
-            "account": account_id.0,
-            "tokenId": signed.token_id(),
-            "orderRequest": request_value,
-            "signature": signed.envelope(),
-        });
+        let payload =
+            UnsignedOrderRequest::new(cex_id, account_id, self.owner.clone(), order_request);
         let response = self
             .client
             .post(self.url.clone())

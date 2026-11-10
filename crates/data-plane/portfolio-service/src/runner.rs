@@ -1,5 +1,8 @@
-use crate::{config::PortfolioConfig, service::PortfolioService};
-use platform_errors::BpResult;
+use crate::{
+    OrderRequestDelivery, OrderRequestServer, OrderRequestService, PortfolioAuthService,
+    PortfolioConfig,
+};
+use platform_errors::{BpError, BpResult};
 use platform_runtime::Service;
 use std::sync::Arc;
 
@@ -10,12 +13,17 @@ pub struct PortfolioRunner;
 impl PortfolioRunner {
     pub async fn run(config: PortfolioConfig) -> BpResult<()> {
         SERVICE.init_logging(config.log_filter())?;
-        let service = Arc::new(PortfolioService::in_memory());
-        Self::wait_for_shutdown(&service).await
-    }
-
-    async fn wait_for_shutdown(_service: &PortfolioService) -> BpResult<()> {
-        tokio::signal::ctrl_c().await?;
-        Ok(())
+        let auth_service = PortfolioAuthService::connect(config.auth().clone()).await?;
+        let service = Arc::new(OrderRequestService::new(auth_service));
+        let delivery = Arc::new(OrderRequestDelivery::new(
+            config.order_request().delivery_url(),
+        )?);
+        let server =
+            OrderRequestServer::bind(config.order_request().bind_address(), service, delivery)
+                .await?;
+        tokio::select! {
+            result = server.serve() => result,
+            result = tokio::signal::ctrl_c() => result.map_err(BpError::external),
+        }
     }
 }

@@ -66,6 +66,27 @@ required in some configurations, the condition is stated in its description.
 | --- | --- |
 | `INGESTER_WEBSOCKET_API_KEY` | API key sent as the `X-MBX-APIKEY` header. Currently supported only for Binance. |
 
+### Portfolio service
+
+#### Required
+
+| Variable | Description |
+| --- | --- |
+| `PORTFOLIO_AUDIT_QUEUE_URL` | SQS queue URL that receives auth-service token audit events. |
+| `PORTFOLIO_AUDIT_TIMEOUT_SECS` | Maximum time spent delivering one audit event, in seconds. |
+| `PORTFOLIO_ORDER_REQUEST_BIND_ADDR` | Socket address on which the portfolio service accepts unsigned order requests. |
+| `PORTFOLIO_ORDER_REQUEST_URL` | URL that receives signed order requests from the portfolio service. |
+| `PORTFOLIO_VALKEY_KEY_PREFIX` | Prefix for replay-protection keys in Valkey. |
+| `PORTFOLIO_VALKEY_TIMEOUT_SECS` | Connection and command timeout for Valkey, in seconds. |
+| `PORTFOLIO_VALKEY_URL` | `redis://`, `rediss://`, `valkey://`, or `valkeys://` URL of the shared Valkey replay backend. |
+| `PORTFOLIO_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
+| `PORTFOLIO_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
+| `PORTFOLIO_VAULT_TOKEN` | Vault token used to read auth-service tokens. |
+
+Replay protection fails closed when Valkey is unavailable. The replay key prefix must contain only
+colon-separated segments of ASCII letters, digits, `-`, and `_`. Signed request expiry controls
+each key's TTL, so Valkey removes stale nonces without a separate cleanup job.
+
 ### Backfiller
 
 #### Required
@@ -248,7 +269,7 @@ their details.
 | `RUN_INVOKER_ARTIFACT_BUCKET` | S3 bucket containing compiled runner cwasm artifacts. |
 | `RUN_INVOKER_LOGS_BUCKET` | S3 bucket that receives the algorithm run logs the runner uploads with its pre-signed POST. |
 | `RUN_INVOKER_MAX_BATCH` | Maximum number of due runs claimed per invocation. |
-| `RUN_INVOKER_ORDER_REQUEST_URL` | URL the runner submits signed order requests to. |
+| `RUN_INVOKER_ORDER_REQUEST_URL` | URL the runner submits unsigned order requests to for portfolio-service signing and delivery. |
 | `RUN_INVOKER_RUNNER_FUNCTION_NAME` | Name of the runner Lambda function invoked for every due run. |
 | `RUN_INVOKER_TABLE` | DynamoDB table holding the scheduled algorithm runs. |
 | `S3_SIGNED_URL_EXPIRY_SECS` | Lifetime of the pre-signed S3 URLs handed to the runner, in seconds. |
@@ -258,31 +279,18 @@ their details.
 ### CWASM invoker
 
 The native cwasm host reads these required variables when it starts. Missing, empty, and invalid
-values fail startup. Order requests are signed with the auth-service token owned by the owner in
-the run request. Token audit events are sent to the configured SQS queue before an auth operation
-completes; delivery failures fail the operation instead of disappearing with the process.
+values fail startup. Place-order actions are submitted without signatures to the portfolio service,
+which signs them with the auth-service token owned by the run request owner.
 
 #### Required
 
 | Variable | Description |
 | --- | --- |
-| `CWASM_INVOKER_AUDIT_QUEUE_URL` | SQS queue URL that receives auth-service token audit events. |
-| `CWASM_INVOKER_AUDIT_TIMEOUT_SECS` | Maximum time spent delivering one audit event, in seconds. |
 | `CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS` | Maximum time spent downloading a cwasm artifact, in seconds. |
 | `CWASM_INVOKER_EXECUTION_TIMEOUT_SECS` | Maximum guest execution time before the watchdog interrupts it, in seconds. |
 | `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. |
 | `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. |
 | `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. |
-| `CWASM_INVOKER_VALKEY_KEY_PREFIX` | Prefix for replay-protection keys in Valkey. |
-| `CWASM_INVOKER_VALKEY_TIMEOUT_SECS` | Connection and command timeout for Valkey, in seconds. |
-| `CWASM_INVOKER_VALKEY_URL` | `redis://`, `rediss://`, `valkey://`, or `valkeys://` URL of the shared Valkey replay backend. |
-| `CWASM_INVOKER_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
-| `CWASM_INVOKER_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
-| `CWASM_INVOKER_VAULT_TOKEN` | Vault token used to read auth-service tokens. |
-
-Replay protection fails closed when Valkey is unavailable. The replay key prefix must contain only
-colon-separated segments of ASCII letters, digits, `-`, and `_`. Signed request expiry controls
-each key's TTL, so Valkey removes stale nonces without a separate cleanup job.
 
 ## Secrets
 

@@ -2914,6 +2914,7 @@ dependencies = [
  "http 1.5.0",
  "http-body 1.1.0",
  "httparse",
+ "httpdate",
  "itoa",
  "pin-project-lite",
  "smallvec",
@@ -4913,6 +4914,7 @@ version = "0.2.0"
 dependencies = [
  "serde",
  "serde_json",
+ "stock-trek-types",
  "strum 0.28.0",
  "thiserror 2.0.21",
 ]
@@ -4946,13 +4948,29 @@ name = "platform-portfolio-service"
 version = "0.2.0"
 dependencies = [
  "async-trait",
+ "aws-sdk-sqs",
+ "chrono",
+ "http-body-util",
+ "hyper 1.12.0",
+ "hyper-util",
  "parking_lot",
+ "platform-auth-service",
+ "platform-aws",
  "platform-config",
  "platform-errors",
+ "platform-messages",
  "platform-runtime",
+ "platform-sqs",
+ "platform-time",
+ "platform-types",
+ "reqwest 0.13.5",
+ "secrecy",
+ "serde",
+ "serde_json",
  "stock-trek",
  "stock-trek-types",
  "tokio",
+ "tracing",
 ]
 
 [[package]]
@@ -5023,23 +5041,17 @@ dependencies = [
 name = "platform-runner"
 version = "0.2.0"
 dependencies = [
- "aws-sdk-sqs",
- "chrono",
  "futures",
  "hex",
- "platform-auth-service",
- "platform-aws",
  "platform-config",
  "platform-errors",
  "platform-exit-codes",
- "platform-sqs",
- "platform-time",
+ "platform-messages",
  "platform-types",
  "prost",
  "rand 0.8.8",
  "reqwest 0.13.5",
  "rust_decimal",
- "secrecy",
  "serde",
  "serde_json",
  "sha2 0.11.1",
