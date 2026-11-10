@@ -1,0 +1,14 @@
+[package]
+name = "platform-portfolio-service"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+platform-config = { workspace = true }
+platform-errors = { workspace = true }
+platform-runtime = { workspace = true }
+stock-trek = { workspace = true }
+stock-trek-types = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "sync"] }
