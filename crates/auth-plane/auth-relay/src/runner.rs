@@ -1,54 +1,27 @@
 use crate::{config::AuthRelayConfig, relay::AuthRelay};
 use platform_errors::BpResult;
-use platform_runtime::Runtime;
-use tokio::time::{MissedTickBehavior, interval};
-use tracing::{info, warn};
+use tracing::info;
 
 pub struct AuthRelayRunner {
-    config: AuthRelayConfig,
     relay: AuthRelay,
+    audit_queue_url: String,
 }
 
 impl AuthRelayRunner {
     pub fn new(config: AuthRelayConfig, relay: AuthRelay) -> Self {
-        Self { config, relay }
+        Self {
+            relay,
+            audit_queue_url: config.audit_queue_url,
+        }
     }
 
     pub async fn run(self) -> BpResult<()> {
         info!(
-            poll_interval_secs = self.config.poll_interval.as_secs(),
-            audit_queue_url = %self.config.audit_queue_url,
-            "auth relay started"
+            audit_queue_url = %self.audit_queue_url,
+            "auth relay drain started"
         );
-        let result = Runtime::run_until_shutdown(self.run_cycles()).await;
-        self.drain_on_shutdown().await;
-        result
-    }
-
-    async fn run_cycles(&self) -> BpResult<()> {
-        let mut ticker = interval(self.config.poll_interval);
-        ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
-        loop {
-            ticker.tick().await;
-            self.drain_once().await;
-        }
-    }
-
-    pub(crate) async fn drain_once(&self) {
-        match self.relay.drain().await {
-            Ok(delivered) if delivered > 0 => {
-                info!(delivered, "drained the token audit outbox");
-            }
-            Ok(_) => {}
-            Err(error) => {
-                warn!(%error, "failed to drain the token audit outbox");
-            }
-        }
-    }
-
-    async fn drain_on_shutdown(&self) {
-        if let Err(error) = self.relay.drain().await {
-            warn!(%error, "failed to drain the token audit outbox during shutdown");
-        }
+        let delivered = self.relay.drain().await?;
+        info!(delivered, "auth relay drain completed");
+        Ok(())
     }
 }
