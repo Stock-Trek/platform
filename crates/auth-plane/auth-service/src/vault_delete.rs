@@ -57,7 +57,7 @@ impl VaultClient {
         Ok(true)
     }
 
-    fn is_conflict(error: &BpError) -> bool {
+    pub(crate) fn is_conflict(error: &BpError) -> bool {
         matches!(error, BpError::Auth(AuthError::Conflict { .. }))
     }
 }

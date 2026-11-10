@@ -20,11 +20,11 @@ impl AuditQueue for Sqs {
     }
 }
 
-/// Delivers every audit event to an SQS queue before returning.
+/// Delivers audit events to an SQS queue.
 ///
-/// Unlike the in-memory log, this sink is durable and applies backpressure:
-/// each auth operation waits for SQS to accept the event, and a failed send is
-/// returned to the caller instead of silently dropping the event.
+/// Unlike the in-memory log, this sink is durable. It is used by
+/// [`crate::TokenAuditRelay`] to drain token outboxes; a failed send is returned
+/// to the relay so the event remains pending for a later retry.
 #[derive(Clone)]
 pub struct SqsTokenAuditLog {
     queue: Arc<dyn AuditQueue>,
@@ -55,12 +55,5 @@ impl TokenAuditLog for SqsTokenAuditLog {
         self.queue
             .deliver(std::slice::from_ref(&event), self.deadline())
             .await
-    }
-
-    async fn record_batch(&self, events: &[TokenAuditEvent]) -> BpResult<()> {
-        if events.is_empty() {
-            return Ok(());
-        }
-        self.queue.deliver(events, self.deadline()).await
     }
 }

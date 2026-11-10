@@ -184,9 +184,4 @@ impl TokenMetadata {
         self.replaced_by = Some(replacement_id.into());
         self.rotation_overlap_until = Some(overlap_until);
     }
-
-    pub(crate) fn cancel_rotation(&mut self) {
-        self.replaced_by = None;
-        self.rotation_overlap_until = None;
-    }
 }

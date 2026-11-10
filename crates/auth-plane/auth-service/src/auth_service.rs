@@ -1,4 +1,7 @@
-use crate::{ReplayStore, TokenAuditEvent, TokenAuditLog, token_store::TokenStore};
+use crate::{
+    ReplayStore, TokenAuditEvent, TokenAuditLog, TokenAuditRelay, TokenMutation,
+    TokenRotationTransaction, token_audit_outbox::TokenAuditOutbox, token_store::TokenStore,
+};
 use chrono::Duration;
 use platform_errors::{AuthError, BpError, BpResult};
 use std::sync::Arc;
@@ -67,45 +70,63 @@ impl AuthService {
         Ok(())
     }
 
-    pub(crate) async fn record_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
-        self.audit.record(event).await
+    pub(crate) async fn commit_mutation(
+        &self,
+        mutation: TokenMutation,
+        event: TokenAuditEvent,
+    ) -> BpResult<bool> {
+        let applied = self.store.commit(mutation, event).await?;
+        if applied {
+            self.relay_audit_best_effort().await;
+        }
+        Ok(applied)
     }
 
-    pub(crate) async fn record_audit_batch(&self, events: &[TokenAuditEvent]) -> BpResult<()> {
-        self.audit.record_batch(events).await
+    pub(crate) async fn commit_rotation(
+        &self,
+        transaction: &TokenRotationTransaction,
+    ) -> BpResult<()> {
+        self.store.commit_rotation(transaction).await?;
+        self.relay_audit_best_effort().await;
+        Ok(())
+    }
+
+    pub(crate) async fn record_audit(&self, mut event: TokenAuditEvent) -> BpResult<()> {
+        TokenAuditOutbox::ensure_event_id(&mut event);
+        self.audit.record(event).await
     }
 
     /// Records an event for an operation that is already failing. The original
     /// failure is more useful to the caller, so audit delivery errors are logged
     /// instead of replacing it.
-    pub(crate) async fn record_audit_failure(&self, event: TokenAuditEvent) {
+    pub(crate) async fn record_audit_failure(&self, mut event: TokenAuditEvent) {
+        TokenAuditOutbox::ensure_event_id(&mut event);
         if let Err(error) = self.audit.record(event).await {
             tracing::error!(%error, "failed to record token audit event");
         }
     }
 
+    /// Delivers pending outbox events and materializes pending rotations.
+    ///
+    /// This is safe to call from a background worker. Failed deliveries remain
+    /// in the outbox and are retried on the next drain.
+    pub async fn drain_audit_outbox(&self) -> BpResult<usize> {
+        TokenAuditRelay::new(self.store.clone(), self.audit.clone())
+            .drain()
+            .await
+    }
+
+    pub async fn relay_audit_outbox(&self) -> BpResult<usize> {
+        self.drain_audit_outbox().await
+    }
+
+    async fn relay_audit_best_effort(&self) {
+        if let Err(error) = self.drain_audit_outbox().await {
+            tracing::error!(%error, "failed to relay token audit outbox");
+        }
+    }
+
     pub(crate) fn is_conflict(error: &BpError) -> bool {
         matches!(error, BpError::Auth(AuthError::Conflict { .. }))
-    }
-
-    pub(crate) fn is_duplicate(error: &BpError) -> bool {
-        matches!(error, BpError::Auth(AuthError::TokenExists { .. }))
-    }
-
-    pub(crate) fn rollback_failure(
-        action: &str,
-        target: &str,
-        failure: &BpError,
-        rollback: BpError,
-    ) -> BpError {
-        BpError::auth_store(
-            "rollback",
-            target,
-            rollback.retryability().is_retryable(),
-            format!(
-                "failed to {action} after audit delivery failed: {rollback}; \
-                 original failure: {failure}"
-            ),
-        )
     }
 }

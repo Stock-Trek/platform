@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, AuthService, SecretInput, TokenAuditAction, TokenAuditEvent, TokenScope,
-    auth_service::MAX_UPDATE_ATTEMPTS,
+    ApiToken, AuthService, SecretInput, TokenAuditAction, TokenAuditEvent, TokenMutation,
+    TokenScope, auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
@@ -43,13 +43,14 @@ impl AuthService {
             }
             let original = token.clone();
             token.metadata.record_use(now);
-            match self.store.update(&original, &token).await {
-                Ok(()) => {
-                    let event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
-                        .with_token(token.id(), Some(token.owner()));
-                    self.record_audit(event).await?;
-                    return Ok(token);
-                }
+            let event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
+                .with_token(token.id(), Some(token.owner()));
+            let mutation = TokenMutation::Update {
+                expected: original,
+                token: token.clone(),
+            };
+            match self.commit_mutation(mutation, event).await {
+                Ok(_) => return Ok(token),
                 Err(error) if Self::is_conflict(&error) => continue,
                 Err(error) => {
                     self.record_authentication_failure(token_id, Some(&token), now, &error)

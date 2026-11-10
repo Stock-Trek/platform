@@ -24,6 +24,8 @@ pub enum TokenAuditAction {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct TokenAuditEvent {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event_id: Option<String>,
     pub timestamp: DateTime<Utc>,
     pub action: TokenAuditAction,
     pub token_id: Option<String>,
@@ -35,6 +37,7 @@ pub struct TokenAuditEvent {
 impl TokenAuditEvent {
     pub fn new(action: TokenAuditAction, timestamp: DateTime<Utc>) -> Self {
         Self {
+            event_id: None,
             timestamp,
             action,
             token_id: None,
@@ -50,27 +53,29 @@ impl TokenAuditEvent {
         self
     }
 
+    pub fn with_event_id(mut self, event_id: impl Into<String>) -> Self {
+        self.event_id = Some(event_id.into());
+        self
+    }
+
     pub fn failure(mut self, detail: impl Into<String>) -> Self {
         self.success = false;
         self.detail = Some(detail.into());
         self
     }
+
+    pub fn event_id(&self) -> Option<&str> {
+        self.event_id.as_deref()
+    }
 }
 
-/// Receives token audit events.
+/// Delivers token audit events to the durable audit sink.
 ///
-/// Delivery is awaited so implementations can provide backpressure and report
-/// failures to the operation that produced the event.
+/// Token mutations do not call this directly. They first commit the event to
+/// the token's outbox, and [`crate::TokenAuditRelay`] drains it afterwards.
 #[async_trait]
 pub trait TokenAuditLog: Send + Sync {
     async fn record(&self, event: TokenAuditEvent) -> BpResult<()>;
-
-    async fn record_batch(&self, events: &[TokenAuditEvent]) -> BpResult<()> {
-        for event in events {
-            self.record(event.clone()).await?;
-        }
-        Ok(())
-    }
 }
 
 #[derive(Debug)]
@@ -95,20 +100,14 @@ impl MemoryTokenAuditLog {
 #[async_trait]
 impl TokenAuditLog for MemoryTokenAuditLog {
     async fn record(&self, event: TokenAuditEvent) -> BpResult<()> {
-        self.record_batch(&[event]).await
-    }
-
-    async fn record_batch(&self, events: &[TokenAuditEvent]) -> BpResult<()> {
-        let mut stored = self.events.lock();
         if self.capacity == 0 {
             return Ok(());
         }
-        for event in events {
-            if stored.len() >= self.capacity {
-                stored.pop_front();
-            }
-            stored.push_back(event.clone());
+        let mut stored = self.events.lock();
+        if stored.len() >= self.capacity {
+            stored.pop_front();
         }
+        stored.push_back(event);
         Ok(())
     }
 }

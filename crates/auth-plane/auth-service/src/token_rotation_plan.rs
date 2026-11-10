@@ -1,4 +1,4 @@
-use crate::{ApiToken, AuthService, TokenMetadata, auth_service::MAX_UPDATE_ATTEMPTS};
+use crate::{ApiToken, AuthService, TokenMetadata};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use std::collections::HashSet;
@@ -21,68 +21,17 @@ impl AuthService {
         Ok(replacement)
     }
 
-    pub(crate) async fn retire_rotated_token(
-        &self,
+    pub(crate) fn retired_for(
         original: &ApiToken,
         replacement_id: &str,
         overlap_until: DateTime<Utc>,
-        now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
-        let mut current = original.clone();
-        for _ in 0..MAX_UPDATE_ATTEMPTS {
-            if current.metadata().replaced_by() == Some(replacement_id) {
-                return Ok(current);
-            }
-            self.ensure_rotation_allowed(&current, replacement_id, now)
-                .await?;
-            let mut retired = current.clone();
-            retired
-                .metadata
-                .begin_rotation(replacement_id, overlap_until);
-            retired.validate()?;
-            match self.store.update(&current, &retired).await {
-                Ok(()) => return Ok(retired),
-                Err(error) if Self::is_conflict(&error) => {
-                    current = self.token(original.id()).await?;
-                }
-                Err(error) => return Err(error),
-            }
-        }
-        Err(BpError::token_conflict(original.id()))
-    }
-
-    pub(crate) async fn rollback_rotation(
-        &self,
-        retired: &ApiToken,
-        replacement: &ApiToken,
-        remove_replacement: bool,
-    ) -> BpResult<()> {
-        let mut current = retired.clone();
-        for _ in 0..MAX_UPDATE_ATTEMPTS {
-            if current.metadata().replaced_by() != Some(replacement.id()) {
-                break;
-            }
-            let expected = current.clone();
-            let mut restored = current.clone();
-            restored.metadata.cancel_rotation();
-            match self.store.update(&expected, &restored).await {
-                Ok(()) => {
-                    current = restored;
-                    break;
-                }
-                Err(error) if Self::is_conflict(&error) => {
-                    current = self.token(retired.id()).await?;
-                }
-                Err(error) => return Err(error),
-            }
-        }
-        if current.metadata().replaced_by() == Some(replacement.id()) {
-            return Err(BpError::token_conflict(retired.id()));
-        }
-        if remove_replacement {
-            self.store.delete_if(replacement).await?;
-        }
-        Ok(())
+        let mut retired = original.clone();
+        retired
+            .metadata
+            .begin_rotation(replacement_id, overlap_until);
+        retired.validate()?;
+        Ok(retired)
     }
 
     pub(crate) fn ensure_replacement_matches(

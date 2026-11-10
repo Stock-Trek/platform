@@ -1,5 +1,6 @@
 use crate::{
     ApiToken,
+    token_rotation_transaction::TokenRotationTransaction,
     vault_client::{TOMBSTONE_FIELD, VaultClient},
 };
 use platform_errors::{BpError, BpResult};
@@ -60,7 +61,7 @@ impl VaultClient {
             .is_some_and(|deleted| deleted)
     }
 
-    pub(crate) async fn ids(&self) -> BpResult<Vec<String>> {
+    pub(crate) async fn keys(&self) -> BpResult<Vec<String>> {
         let mut url = self.config.url(&["metadata"])?;
         url.query_pairs_mut().append_pair("list", "true");
         let response = self
@@ -83,13 +84,22 @@ impl VaultClient {
                     "malformed Vault response".to_string(),
                 )
             })?;
-        let mut ids: Vec<String> = keys
+        let mut keys: Vec<String> = keys
             .iter()
             .filter_map(|key| key.as_str().map(str::to_string))
             .filter(|key| !key.ends_with('/') && ApiToken::validate_id(key).is_ok())
             .collect();
-        ids.sort();
-        ids.dedup();
-        Ok(ids)
+        keys.sort();
+        keys.dedup();
+        Ok(keys)
+    }
+
+    pub(crate) async fn ids(&self) -> BpResult<Vec<String>> {
+        Ok(self
+            .keys()
+            .await?
+            .into_iter()
+            .filter(|key| !TokenRotationTransaction::is_storage_key(key))
+            .collect())
     }
 }
