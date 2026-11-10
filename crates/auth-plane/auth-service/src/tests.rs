@@ -32,6 +32,7 @@ mod token_expiry_tests;
 mod token_lifecycle_tests;
 mod token_metadata_invariant_tests;
 mod token_purge_race_tests;
+mod token_rotation_idempotency_tests;
 mod token_rotation_lineage_tests;
 mod token_rotation_recovery_tests;
 mod token_rotation_tests;

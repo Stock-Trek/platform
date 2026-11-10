@@ -12,6 +12,10 @@ impl AuthService {
     ) -> BpResult<ApiToken> {
         self.ensure_rotation_allowed(original, replacement_id, now)
             .await?;
+        if let Some(existing) = self.stored_token(replacement_id).await? {
+            Self::ensure_replacement_usable(original, &existing, now)?;
+            return Ok(existing);
+        }
         let expires_at = now.checked_add_signed(self.token_lifetime).ok_or_else(|| {
             BpError::auth_invalid_field("token_lifetime", "is outside the supported range")
         })?;

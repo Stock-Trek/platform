@@ -6,6 +6,7 @@ use serde_json::{Map, Value};
 
 const CREATED_AT: &str = "created_at";
 const ID: &str = "id";
+const LAST_USED_AT: &str = "last_used_at";
 const OWNER: &str = "owner";
 const SECRET: &str = "secret";
 
@@ -26,6 +27,16 @@ impl ApiToken {
             value.extend(metadata);
         }
         Value::Object(value)
+    }
+
+    pub(crate) fn same_rotation_replacement(&self, other: &Self) -> bool {
+        let mut left = self.to_value();
+        let mut right = other.to_value();
+        if let (Some(left), Some(right)) = (left.as_object_mut(), right.as_object_mut()) {
+            left.remove(LAST_USED_AT);
+            right.remove(LAST_USED_AT);
+        }
+        left == right
     }
 
     pub fn from_value(id: &str, value: &Value) -> BpResult<Self> {
