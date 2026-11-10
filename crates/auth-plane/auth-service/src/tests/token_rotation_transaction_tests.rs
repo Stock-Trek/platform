@@ -85,8 +85,9 @@ impl RotationFixture {
 #[tokio::test]
 async fn a_pending_rotation_survives_an_audit_failure_and_retries_both_events() {
     let audit = Arc::new(ToggleAudit::new());
-    let service = AuthServiceBuilder::new().audit(audit.clone()).build();
+    let service = AuthServiceBuilder::new().build();
     let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    TestFixture::drain(&service, audit.clone()).await;
     audit.fail();
     let now = Utc::now();
 
@@ -115,7 +116,7 @@ async fn a_pending_rotation_survives_an_audit_failure_and_retries_both_events() 
     );
 
     audit.succeed();
-    assert_eq!(service.drain_audit_outbox().await.unwrap(), 2);
+    assert_eq!(TestFixture::drain(&service, audit.clone()).await, 2);
     assert!(service.store.pending_rotations().await.unwrap().is_empty());
     let actions: Vec<_> = audit.events().iter().map(|event| event.action).collect();
     assert_eq!(
@@ -126,7 +127,7 @@ async fn a_pending_rotation_survives_an_audit_failure_and_retries_both_events() 
             TokenAuditAction::Issued
         ]
     );
-    assert_eq!(service.drain_audit_outbox().await.unwrap(), 0);
+    assert_eq!(TestFixture::drain(&service, audit.clone()).await, 0);
 }
 
 #[tokio::test]

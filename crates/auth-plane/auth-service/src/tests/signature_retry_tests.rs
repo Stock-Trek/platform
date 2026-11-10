@@ -1,7 +1,7 @@
 use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{
     ApiToken, AuthService, MemoryTokenStore, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
-    TokenMutation, TokenRotationTransaction, TokenStore,
+    TokenAuditRelay, TokenMutation, TokenRotationTransaction, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -141,8 +141,9 @@ impl SignatureRetryFixture {
 #[tokio::test]
 async fn retries_audit_delivery_without_rejecting_the_signature() {
     let audit = Arc::new(FailingSignatureVerifiedAuditLog::new());
-    let service = TestFixture::service_with_audit(audit.clone());
+    let service = TestFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
+    TestFixture::drain(&service, audit.clone()).await;
     let now = Utc::now();
     let signed = service
         .sign_order_request(token.id(), token.secret(), ORDER_REQUEST, now, now)
@@ -161,11 +162,15 @@ async fn retries_audit_delivery_without_rejecting_the_signature() {
             .any(|event| event.action == TokenAuditAction::SignatureVerified)
     );
 
-    let drained = service
-        .relay_audit_outbox()
-        .await
-        .expect("audit retry succeeds");
-    assert_eq!(drained, 1);
+    let relay = TokenAuditRelay::new(service.store.clone(), audit.clone());
+    assert!(relay.drain().await.is_err());
+    assert!(
+        !audit
+            .events()
+            .iter()
+            .any(|event| event.action == TokenAuditAction::SignatureVerified)
+    );
+    assert_eq!(relay.drain().await.expect("audit retry succeeds"), 1);
     assert!(
         audit
             .events()

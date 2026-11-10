@@ -1,8 +1,8 @@
 use crate::OrderRequestService;
 use chrono::{Duration, Utc};
 use platform_auth_service::{
-    ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenAuditLog,
-    MemoryTokenStore, TokenMetadata, TokenScope, TokenStore,
+    ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenStore, TokenMetadata,
+    TokenScope, TokenStore,
 };
 use platform_messages::order_request::UnsignedOrderRequest;
 use std::sync::Arc;
@@ -23,7 +23,6 @@ impl Fixture {
                 token_lifetime: Duration::days(30),
                 rotation_overlap: Duration::days(7),
                 signature_validity: Duration::minutes(5),
-                audit: Arc::new(MemoryTokenAuditLog::new(4096)),
             },
             Arc::new(MemoryReplayStore::default()),
         )

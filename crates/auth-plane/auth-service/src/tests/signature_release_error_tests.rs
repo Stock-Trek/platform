@@ -1,8 +1,8 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{
     ApiToken, AuthService, ConsumeResult, MemoryReplayStore, MemoryTokenStore, ReplayKey,
-    ReplayReservation, ReplayStore, ReplayStoreError, TokenAuditAction, TokenAuditEvent,
-    TokenAuditLog, TokenMutation, TokenRotationTransaction, TokenStore,
+    ReplayReservation, ReplayStore, ReplayStoreError, TokenAuditEvent, TokenMutation,
+    TokenRotationTransaction, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -48,18 +48,6 @@ impl ReplayStore for FailingReleaseReplayStore {
             true,
             std::io::Error::other("release failed"),
         ))
-    }
-}
-
-struct FailingSignatureVerifiedAuditLog;
-
-#[async_trait]
-impl TokenAuditLog for FailingSignatureVerifiedAuditLog {
-    async fn record(&self, event: TokenAuditEvent) -> BpResult<()> {
-        if event.action == TokenAuditAction::SignatureVerified {
-            return Err(BpError::auth_invalid_field("audit", "queue unavailable"));
-        }
-        Ok(())
     }
 }
 
@@ -155,7 +143,7 @@ async fn audit_delivery_failure_does_not_fail_signature_verification() {
     let replay = Arc::new(FailingReleaseReplayStore::new());
     let service = AuthService::new(
         Arc::new(MemoryTokenStore::default()),
-        TestFixture::config_with_audit(Arc::new(FailingSignatureVerifiedAuditLog)),
+        TestFixture::config(),
         replay.clone(),
     )
     .expect("valid service");

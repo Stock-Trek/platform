@@ -9,7 +9,7 @@ struct RevocationFixture;
 impl RevocationFixture {
     fn service() -> (AuthService, Arc<MemoryTokenAuditLog>) {
         let audit = Arc::new(MemoryTokenAuditLog::new(64));
-        let service = AuthServiceBuilder::new().audit(audit.clone()).build();
+        let service = AuthServiceBuilder::new().build();
         (service, audit)
     }
 }
@@ -123,6 +123,7 @@ async fn revoking_a_token_twice_records_one_revocation_event() {
         .await;
 
     assert!(error.is_err());
+    TestFixture::drain(&service, audit.clone()).await;
     let events: Vec<_> = audit
         .events()
         .into_iter()

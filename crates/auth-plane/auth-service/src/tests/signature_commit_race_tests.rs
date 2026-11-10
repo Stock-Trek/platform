@@ -167,10 +167,7 @@ async fn a_rejected_signature_commit_releases_the_replay_reservation() {
 async fn a_rejected_signature_commit_is_not_recorded_as_verified() {
     let audit = Arc::new(crate::MemoryTokenAuditLog::new(4096));
     let store = Arc::new(SecretRotationStore::new());
-    let service = AuthServiceBuilder::new()
-        .store(store.clone())
-        .audit(audit.clone())
-        .build();
+    let service = AuthServiceBuilder::new().store(store.clone()).build();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
     let signed = service
@@ -185,6 +182,7 @@ async fn a_rejected_signature_commit_is_not_recorded_as_verified() {
             .await
             .expect("verification completes")
     );
+    TestFixture::drain(&service, audit.clone()).await;
 
     let actions: Vec<TokenAuditAction> = audit
         .events()

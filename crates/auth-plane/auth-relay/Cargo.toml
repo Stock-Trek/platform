@@ -1,0 +1,23 @@
+[package]
+name = "platform-auth-relay"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aws-sdk-sqs = { workspace = true }
+platform-auth-service = { workspace = true }
+platform-aws = { workspace = true }
+platform-config = { workspace = true }
+platform-errors = { workspace = true }
+platform-runtime = { workspace = true }
+platform-sqs = { workspace = true }
+platform-time = { workspace = true }
+platform-types = { workspace = true }
+secrecy = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+platform-auth-service = { workspace = true }

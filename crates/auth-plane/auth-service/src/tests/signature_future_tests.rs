@@ -74,7 +74,7 @@ async fn rejects_a_signature_issued_in_the_future() {
 #[tokio::test]
 async fn records_the_reason_a_future_signature_is_rejected() {
     let audit = Arc::new(MemoryTokenAuditLog::new(4096));
-    let service = TestFixture::service_with_audit(audit.clone());
+    let service = TestFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = FutureSignatureFixture::now();
     let signed = FutureSignatureFixture::signed(&token, now);
@@ -85,6 +85,7 @@ async fn records_the_reason_a_future_signature_is_rejected() {
         .unwrap();
 
     assert!(!verified);
+    TestFixture::drain(&service, audit.clone()).await;
     let rejection = audit
         .events()
         .into_iter()
