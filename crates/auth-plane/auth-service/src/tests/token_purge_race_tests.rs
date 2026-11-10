@@ -1,8 +1,5 @@
-use super::support_tests::TestFixture;
-use crate::{
-    ApiToken, AuthService, MemoryReplayStore, MemoryTokenStore, TokenMetadata, TokenScope,
-    TokenStore,
-};
+use super::support_tests::{AuthServiceBuilder, TestFixture};
+use crate::{ApiToken, AuthService, MemoryTokenStore, TokenMetadata, TokenScope, TokenStore};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
 use platform_errors::BpResult;
@@ -64,12 +61,7 @@ struct PurgeRaceFixture;
 impl PurgeRaceFixture {
     fn service(replacement: ApiToken) -> (AuthService, Arc<RecreateOnSecondGet>) {
         let store = Arc::new(RecreateOnSecondGet::new(replacement));
-        let service = AuthService::new(
-            store.clone(),
-            TestFixture::config(),
-            Arc::new(MemoryReplayStore::default()),
-        )
-        .expect("valid service");
+        let service = AuthServiceBuilder::new().store(store.clone()).build();
         (service, store)
     }
 

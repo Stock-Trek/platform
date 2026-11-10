@@ -1,10 +1,10 @@
 use super::{
     sqs_audit_mock_tests::{MockAuditQueue, RecreateOnSecondGet},
-    support_tests::TestFixture,
+    support_tests::{AuthServiceBuilder, TestFixture},
 };
 use crate::{
-    ApiToken, AuthService, MemoryReplayStore, SqsTokenAuditLog, TokenAuditAction, TokenAuditEvent,
-    TokenAuditLog, TokenMetadata, TokenScope,
+    ApiToken, AuthService, SqsTokenAuditLog, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
+    TokenMetadata, TokenScope,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::BpError;
@@ -18,7 +18,9 @@ impl SqsAuditFixture {
     }
 
     fn service(queue: &Arc<MockAuditQueue>) -> AuthService {
-        TestFixture::service_with_audit(Arc::new(Self::audit(queue, StdDuration::from_secs(1))))
+        AuthServiceBuilder::new()
+            .audit(Arc::new(Self::audit(queue, StdDuration::from_secs(1))))
+            .build()
     }
 
     fn event(token_id: &str) -> TokenAuditEvent {
@@ -135,15 +137,13 @@ async fn purging_skips_queue_delivery_for_a_token_recreated_after_the_scan() {
     let store = Arc::new(RecreateOnSecondGet::new(replacement.clone()));
     store.put(&expired).await.unwrap();
     let queue = Arc::new(MockAuditQueue::new());
-    let service = AuthService::new(
-        store,
-        TestFixture::config_with_audit(Arc::new(SqsAuditFixture::audit(
+    let service = AuthServiceBuilder::new()
+        .store(store)
+        .audit(Arc::new(SqsAuditFixture::audit(
             &queue,
             StdDuration::from_secs(1),
-        ))),
-        Arc::new(MemoryReplayStore::default()),
-    )
-    .unwrap();
+        )))
+        .build();
 
     let purged = service.purge_expired_tokens(now).await.unwrap();
 

@@ -1,7 +1,7 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
+use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{
-    ApiToken, AuthService, MemoryReplayStore, MemoryTokenStore, TokenAuditAction, TokenAuditEvent,
-    TokenAuditLog, TokenStore,
+    ApiToken, AuthService, MemoryTokenStore, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
+    TokenStore,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -96,12 +96,7 @@ struct SignatureRetryFixture;
 impl SignatureRetryFixture {
     fn service() -> (AuthService, Arc<FailingStore>) {
         let store = Arc::new(FailingStore::new());
-        let service = AuthService::new(
-            store.clone(),
-            TestFixture::config(),
-            Arc::new(MemoryReplayStore::default()),
-        )
-        .expect("valid service");
+        let service = AuthServiceBuilder::new().store(store.clone()).build();
         (service, store)
     }
 }

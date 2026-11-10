@@ -1,8 +1,5 @@
-use super::support_tests::TestFixture;
-use crate::{
-    ApiToken, AuthService, MemoryReplayStore, MemoryTokenStore, RevocationReason, RevokedBy,
-    TokenStore,
-};
+use super::support_tests::{AuthServiceBuilder, TestFixture};
+use crate::{ApiToken, AuthService, MemoryTokenStore, RevocationReason, RevokedBy, TokenStore};
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::{BpError, BpResult};
@@ -116,12 +113,7 @@ struct OwnerRevocationFixture;
 
 impl OwnerRevocationFixture {
     fn service(store: Arc<dyn TokenStore>) -> AuthService {
-        AuthService::new(
-            store,
-            TestFixture::config(),
-            Arc::new(MemoryReplayStore::default()),
-        )
-        .expect("valid service")
+        AuthServiceBuilder::new().store(store).build()
     }
 
     async fn add_three_tokens(service: &AuthService) {

@@ -1,8 +1,10 @@
 use crate::{
     ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenAuditLog,
-    MemoryTokenStore, TokenAuditLog, TokenExpiry, TokenMetadata, TokenOptions, TokenScope,
+    MemoryTokenStore, ReplayStore, TokenAuditLog, TokenExpiry, TokenMetadata, TokenOptions,
+    TokenScope, TokenStore,
 };
 use chrono::{DateTime, Duration, Utc};
+use platform_errors::BpResult;
 use std::sync::Arc;
 
 pub(crate) const ORDER_REQUEST: &[u8] =
@@ -12,6 +14,65 @@ pub(crate) const OWNER: &str = "demo-owner";
 
 pub(crate) const TEST_SIGNATURE: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+pub(crate) struct AuthServiceBuilder {
+    store: Arc<dyn TokenStore>,
+    config: AuthServiceConfig,
+    replay: Arc<dyn ReplayStore>,
+}
+
+impl AuthServiceBuilder {
+    pub(crate) fn new() -> Self {
+        Self {
+            store: Arc::new(MemoryTokenStore::default()),
+            config: TestFixture::config(),
+            replay: Arc::new(MemoryReplayStore::default()),
+        }
+    }
+
+    pub(crate) fn store(mut self, store: Arc<dyn TokenStore>) -> Self {
+        self.store = store;
+        self
+    }
+
+    pub(crate) fn replay(mut self, replay: Arc<dyn ReplayStore>) -> Self {
+        self.replay = replay;
+        self
+    }
+
+    pub(crate) fn config(mut self, config: AuthServiceConfig) -> Self {
+        self.config = config;
+        self
+    }
+
+    pub(crate) fn audit(mut self, audit: Arc<dyn TokenAuditLog>) -> Self {
+        self.config.audit = audit;
+        self
+    }
+
+    pub(crate) fn token_lifetime(mut self, lifetime: Duration) -> Self {
+        self.config.token_lifetime = lifetime;
+        self
+    }
+
+    pub(crate) fn rotation_overlap(mut self, overlap: Duration) -> Self {
+        self.config.rotation_overlap = overlap;
+        self
+    }
+
+    pub(crate) fn signature_validity(mut self, validity: Duration) -> Self {
+        self.config.signature_validity = validity;
+        self
+    }
+
+    pub(crate) fn build(self) -> AuthService {
+        self.try_build().expect("valid service")
+    }
+
+    pub(crate) fn try_build(self) -> BpResult<AuthService> {
+        AuthService::new(self.store, self.config, self.replay)
+    }
+}
 
 pub(crate) struct TestFixture;
 
@@ -30,21 +91,11 @@ impl TestFixture {
     }
 
     pub(crate) fn service() -> AuthService {
-        AuthService::new(
-            Arc::new(MemoryTokenStore::default()),
-            Self::config(),
-            Arc::new(MemoryReplayStore::default()),
-        )
-        .unwrap()
+        AuthServiceBuilder::new().build()
     }
 
     pub(crate) fn service_with_audit(audit: Arc<dyn TokenAuditLog>) -> AuthService {
-        AuthService::new(
-            Arc::new(MemoryTokenStore::default()),
-            Self::config_with_audit(audit),
-            Arc::new(MemoryReplayStore::default()),
-        )
-        .unwrap()
+        AuthServiceBuilder::new().audit(audit).build()
     }
 
     pub(crate) fn metadata() -> TokenMetadata {
@@ -78,6 +129,16 @@ impl TestFixture {
             .add_token(id, owner, created_at, options, created_at)
             .await
             .unwrap()
+    }
+
+    pub(crate) async fn add_token_with_expiry(
+        service: &AuthService,
+        id: &str,
+        owner: &str,
+        expires_at: DateTime<Utc>,
+    ) -> ApiToken {
+        let options = TokenOptions::new(TokenExpiry::At(expires_at), TokenScope::DEFAULT);
+        Self::add_token_at(service, id, owner, Utc::now(), options).await
     }
 
     pub(crate) async fn add_expired_token(

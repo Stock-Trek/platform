@@ -1,4 +1,4 @@
-use super::support_tests::TestFixture;
+use super::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{RevocationReason, RevokedBy, TokenAuditAction, TokenAuditEvent, TokenAuditLog};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
@@ -67,7 +67,7 @@ struct AuditRollbackFixture;
 impl AuditRollbackFixture {
     fn service() -> (crate::AuthService, Arc<SelectiveAuditLog>) {
         let audit = Arc::new(SelectiveAuditLog::new());
-        let service = TestFixture::service_with_audit(audit.clone());
+        let service = AuthServiceBuilder::new().audit(audit.clone()).build();
         (service, audit)
     }
 
