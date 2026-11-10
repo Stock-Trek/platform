@@ -209,3 +209,14 @@ async fn rotation_transactions_assign_event_ids() {
             .starts_with(|c: char| c.is_ascii_digit())
     );
 }
+
+#[test]
+fn rotation_storage_keys_cannot_collide_with_token_ids() {
+    let key = format!(
+        "{}transaction-id",
+        crate::token_rotation_transaction::ROTATION_TRANSACTION_PREFIX
+    );
+
+    assert!(ApiToken::validate_id(&key).is_err());
+    assert!(ApiToken::validate_id("__rotation_transaction__-legacy-token").is_ok());
+}

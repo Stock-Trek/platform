@@ -1,5 +1,6 @@
 use crate::{
-    ApiToken, MemoryTokenStore, TokenAuditEvent, TokenStore, sqs_token_audit_log::AuditQueue,
+    ApiToken, MemoryTokenStore, TokenAuditEvent, TokenMutation, TokenStore,
+    sqs_token_audit_log::AuditQueue,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -93,5 +94,38 @@ impl TokenStore for RecreateOnSecondGet {
 
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
         self.inner.update(expected, token).await
+    }
+
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+        match mutation {
+            TokenMutation::Create(token) => {
+                self.inner.commit(TokenMutation::Create(token), event).await
+            }
+            TokenMutation::Update { expected, token } => {
+                self.update(&expected, &token).await?;
+                self.inner.append_audit(event).await?;
+                Ok(true)
+            }
+            TokenMutation::Delete { expected } => {
+                if self.delete_if(&expected).await? {
+                    self.inner.append_audit(event).await?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+        }
+    }
+
+    async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+        self.inner.append_audit(event).await
+    }
+
+    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+        self.inner.pending_audits().await
+    }
+
+    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+        self.inner.acknowledge_audit(event_id).await
     }
 }

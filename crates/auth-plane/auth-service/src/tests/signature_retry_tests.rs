@@ -1,11 +1,11 @@
 use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{
     ApiToken, AuthService, MemoryTokenStore, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
-    TokenStore,
+    TokenMutation, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::Utc;
-use platform_errors::{AuthError, BpError, BpResult};
+use platform_errors::{BpError, BpResult};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -58,6 +58,39 @@ impl TokenStore for FailingStore {
         }
         self.inner.update(expected, token).await
     }
+
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+        match mutation {
+            TokenMutation::Create(token) => {
+                self.inner.commit(TokenMutation::Create(token), event).await
+            }
+            TokenMutation::Update { expected, token } => {
+                self.update(&expected, &token).await?;
+                self.inner.append_audit(event).await?;
+                Ok(true)
+            }
+            TokenMutation::Delete { expected } => {
+                if self.delete_if(&expected).await? {
+                    self.inner.append_audit(event).await?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+        }
+    }
+
+    async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+        self.inner.append_audit(event).await
+    }
+
+    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+        self.inner.pending_audits().await
+    }
+
+    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+        self.inner.acknowledge_audit(event_id).await
+    }
 }
 
 struct FailingSignatureVerifiedAuditLog {
@@ -102,7 +135,7 @@ impl SignatureRetryFixture {
 }
 
 #[tokio::test]
-async fn retries_a_signature_after_audit_delivery_fails() {
+async fn retries_audit_delivery_without_rejecting_the_signature() {
     let audit = Arc::new(FailingSignatureVerifiedAuditLog::new());
     let service = TestFixture::service_with_audit(audit.clone());
     let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
@@ -112,20 +145,23 @@ async fn retries_a_signature_after_audit_delivery_fails() {
         .await
         .expect("signed request");
 
-    let error = service
-        .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
-        .await
-        .expect_err("audit delivery failure");
-    assert!(matches!(
-        error,
-        BpError::Auth(AuthError::InvalidField { field: "audit", .. })
-    ));
-
     let verified = service
         .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
-        .expect("retried verification");
+        .expect("verification succeeds despite audit delivery failure");
     assert!(verified);
+    assert!(
+        !audit
+            .events()
+            .iter()
+            .any(|event| event.action == TokenAuditAction::SignatureVerified)
+    );
+
+    let drained = service
+        .relay_audit_outbox()
+        .await
+        .expect("audit retry succeeds");
+    assert_eq!(drained, 1);
     assert!(
         audit
             .events()

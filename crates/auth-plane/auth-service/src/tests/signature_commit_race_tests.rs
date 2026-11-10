@@ -1,5 +1,8 @@
 use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
-use crate::{ApiToken, AuthService, MemoryTokenStore, TokenAuditAction, TokenStore};
+use crate::{
+    ApiToken, AuthService, MemoryTokenStore, TokenAuditAction, TokenAuditEvent, TokenMutation,
+    TokenStore,
+};
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::{BpError, BpResult};
@@ -58,6 +61,39 @@ impl TokenStore for SecretRotationStore {
             self.rotate_secret(expected).await?;
         }
         self.inner.update(expected, token).await
+    }
+
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+        match mutation {
+            TokenMutation::Create(token) => {
+                self.inner.commit(TokenMutation::Create(token), event).await
+            }
+            TokenMutation::Update { expected, token } => {
+                self.update(&expected, &token).await?;
+                self.inner.append_audit(event).await?;
+                Ok(true)
+            }
+            TokenMutation::Delete { expected } => {
+                if self.delete_if(&expected).await? {
+                    self.inner.append_audit(event).await?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+        }
+    }
+
+    async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+        self.inner.append_audit(event).await
+    }
+
+    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+        self.inner.pending_audits().await
+    }
+
+    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+        self.inner.acknowledge_audit(event_id).await
     }
 }
 

@@ -4,7 +4,7 @@ use crate::{
     vault_client::{VaultClient, WriteCondition},
 };
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult};
+use platform_errors::BpResult;
 
 pub struct VaultTokenStore {
     client: VaultClient,
@@ -41,19 +41,15 @@ impl TokenStore for VaultTokenStore {
     }
 
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
-        let Some((current, version)) = self.client.get_entry(token.id()).await? else {
-            return Err(BpError::unknown_token(token.id()));
-        };
-        if current.to_value() != expected.to_value() {
-            return Err(BpError::token_conflict(token.id()));
-        }
-        self.client
-            .put(token, WriteCondition::Update(version))
-            .await
+        self.client.update_preserving_outbox(expected, token).await
     }
 
     async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
         self.client.commit(mutation, event).await
+    }
+
+    async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+        self.client.append_audit(event).await
     }
 
     async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {

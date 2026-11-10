@@ -2,7 +2,7 @@ use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{
     ApiToken, AuthService, ConsumeResult, MemoryReplayStore, MemoryTokenStore, ReplayKey,
     ReplayReservation, ReplayStore, ReplayStoreError, TokenAuditAction, TokenAuditEvent,
-    TokenAuditLog, TokenStore,
+    TokenAuditLog, TokenMutation, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -111,10 +111,43 @@ impl TokenStore for ConflictReadStore {
         }
         self.inner.update(expected, token).await
     }
+
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+        match mutation {
+            TokenMutation::Create(token) => {
+                self.inner.commit(TokenMutation::Create(token), event).await
+            }
+            TokenMutation::Update { expected, token } => {
+                self.update(&expected, &token).await?;
+                self.inner.append_audit(event).await?;
+                Ok(true)
+            }
+            TokenMutation::Delete { expected } => {
+                if self.delete_if(&expected).await? {
+                    self.inner.append_audit(event).await?;
+                    Ok(true)
+                } else {
+                    Ok(false)
+                }
+            }
+        }
+    }
+
+    async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+        self.inner.append_audit(event).await
+    }
+
+    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+        self.inner.pending_audits().await
+    }
+
+    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+        self.inner.acknowledge_audit(event_id).await
+    }
 }
 
 #[tokio::test]
-async fn audit_failure_takes_precedence_over_replay_release_failure() {
+async fn audit_delivery_failure_does_not_fail_signature_verification() {
     let replay = Arc::new(FailingReleaseReplayStore::new());
     let service = AuthService::new(
         Arc::new(MemoryTokenStore::default()),
@@ -129,16 +162,13 @@ async fn audit_failure_takes_precedence_over_replay_release_failure() {
         .await
         .expect("signed request");
 
-    let error = service
+    let verified = service
         .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
-        .expect_err("audit delivery failure");
+        .expect("signature verification succeeds despite audit delivery failure");
 
-    assert!(matches!(
-        error,
-        BpError::Auth(AuthError::InvalidField { field: "audit", .. })
-    ));
-    assert_eq!(replay.release_attempts(), 1);
+    assert!(verified);
+    assert_eq!(replay.release_attempts(), 0);
 }
 
 #[tokio::test]

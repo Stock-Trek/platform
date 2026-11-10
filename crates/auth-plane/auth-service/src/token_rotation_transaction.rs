@@ -5,7 +5,9 @@ use rand::{Rng, distributions::Alphanumeric};
 use serde_json::{Value, json};
 
 pub(crate) const ROTATION_TRANSACTION_FIELD: &str = "__rotation_transaction__";
-pub(crate) const ROTATION_TRANSACTION_PREFIX: &str = "__rotation_transaction__-";
+// The '@' is not valid in a token id, so rotation records can never collide
+// with, or hide, a real token in the same Vault mount.
+pub(crate) const ROTATION_TRANSACTION_PREFIX: &str = "__rotation_transaction__@";
 
 /// The durable intent to rotate a token.
 ///

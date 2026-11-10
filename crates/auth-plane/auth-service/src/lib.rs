@@ -38,6 +38,7 @@ mod token_view;
 mod valkey_config;
 mod valkey_error;
 mod valkey_replay_store;
+mod vault_audit;
 mod vault_client;
 mod vault_commit;
 mod vault_config;

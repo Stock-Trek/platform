@@ -47,6 +47,7 @@ mod token_view_tests;
 mod valkey_config_tests;
 mod valkey_replay_store_tests;
 mod valkey_test_server_tests;
+mod vault_audit_outbox_tests;
 mod vault_client_tests;
 mod vault_config_tests;
 mod vault_delete_tests;
