@@ -23,10 +23,10 @@ platform-errors = { workspace = true, features = ["http", "storage"] }
 platform-messages = { workspace = true }
 platform-types = { workspace = true }
 rand = { workspace = true }
-reqwest = { workspace = true, default-features = false, features = ["rustls", "stream"] }
+reqwest = { workspace = true, default-features = false, features = ["json", "rustls", "stream"] }
 sha2 = { workspace = true }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt", "time"] }
+tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt", "sync", "time"] }
 tokio-websockets = { workspace = true, features = ["client", "rustls-webpki-roots", "sha1_smol", "rand"] }
 tracing = { workspace = true }
 wasmtime = { workspace = true, features = ["runtime", "std"] }

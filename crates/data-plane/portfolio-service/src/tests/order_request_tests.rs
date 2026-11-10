@@ -92,6 +92,22 @@ async fn signs_unsigned_order_requests_for_the_owner() {
 }
 
 #[tokio::test]
+async fn verifies_a_jwt_for_the_request_owner() {
+    let (service, auth_service, _) = Fixture::service().await;
+    let request = Fixture::unsigned(OWNER);
+    let now = Utc::now();
+    let jwt = auth_service.issue_jwt_for_owner(OWNER, now).await.unwrap();
+
+    assert!(service.verify_jwt(jwt.token(), &request, now).await.is_ok());
+    assert!(
+        service
+            .verify_jwt(jwt.token(), &Fixture::unsigned("other-owner"), now)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
 async fn serializes_the_signed_submission_for_delivery() {
     let (service, _, _) = Fixture::service().await;
 

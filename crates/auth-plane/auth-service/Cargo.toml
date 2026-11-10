@@ -8,10 +8,17 @@ async-trait = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 data-encoding = { workspace = true }
 hmac = { workspace = true }
+http-body-util = { workspace = true }
 httpdate = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+jsonwebtoken = { workspace = true, default-features = false, features = ["aws_lc_rs"] }
 parking_lot = { workspace = true }
+platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-metrics = { workspace = true }
+platform-messages = { workspace = true }
+platform-runtime = { workspace = true }
 platform-sqs = { workspace = true }
 platform-time = { workspace = true }
 platform-types = { workspace = true }
@@ -25,7 +32,7 @@ sha2 = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 subtle = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["sync"] }
+tokio = { workspace = true, features = ["macros", "net", "rt", "signal", "sync"] }
 tracing = { workspace = true }
 
 [dev-dependencies]

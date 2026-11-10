@@ -14,6 +14,7 @@ fn full_vars() -> Vec<(&'static str, &'static str)> {
             "RUN_INVOKER_ORDER_REQUEST_URL",
             "https://orders.example/requests",
         ),
+        ("RUN_INVOKER_AUTH_SERVICE_URL", "https://auth.example/jwt"),
         ("RUN_INVOKER_RUNNER_FUNCTION_NAME", "platform-runner"),
         ("RUN_INVOKER_MAX_BATCH", "10"),
         ("S3_SIGNED_URL_EXPIRY_SECS", "900"),
@@ -57,6 +58,7 @@ fn reads_a_complete_configuration() {
     assert_eq!(config.artifact_bucket, "artifacts");
     assert_eq!(config.logs_bucket, "run-logs");
     assert_eq!(config.order_request_url, "https://orders.example/requests");
+    assert_eq!(config.auth_service_url, "https://auth.example/jwt");
     assert_eq!(config.runner_function_name, "platform-runner");
     assert_eq!(config.max_batch, 10);
     assert_eq!(config.signed_url_expiry, Duration::from_secs(900));
@@ -91,6 +93,7 @@ fn rejects_invalid_values() {
         ("RUN_INVOKER_ARTIFACT_BUCKET", ""),
         ("RUN_INVOKER_LOGS_BUCKET", ""),
         ("RUN_INVOKER_ORDER_REQUEST_URL", ""),
+        ("RUN_INVOKER_AUTH_SERVICE_URL", ""),
         ("RUN_INVOKER_RUNNER_FUNCTION_NAME", ""),
         ("RUN_INVOKER_MAX_BATCH", "0"),
         ("RUN_INVOKER_MAX_BATCH", "ten"),

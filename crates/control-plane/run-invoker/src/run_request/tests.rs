@@ -36,6 +36,7 @@ fn request() -> RunRequest {
         &record(),
         "https://bucket.s3.example/runner.cwasm?X-Amz-Signature=signed".to_string(),
         "https://orders.example/requests".to_string(),
+        "https://auth.example/jwt".to_string(),
         logs_post(),
     )
 }
@@ -55,6 +56,7 @@ fn serialises_the_runner_contract() {
     assert_eq!(request.cwasm_size, 123456);
     assert_eq!(request.wasmtime_version, "43.0.1");
     assert_eq!(request.order_request_url, "https://orders.example/requests");
+    assert_eq!(request.auth_service_url, "https://auth.example/jwt");
     assert_eq!(request.owner, "demo-owner");
     match request.command {
         platform_runner::command::Command::Algorithm { strategy_name } => {
@@ -72,6 +74,7 @@ fn serialises_camel_case_fields() {
     assert!(json.contains("\"cwasmSize\":123456"));
     assert!(json.contains("\"wasmtimeVersion\":"));
     assert!(json.contains("\"orderRequestUrl\":\"https://orders.example/requests\""));
+    assert!(json.contains("\"authServiceUrl\":\"https://auth.example/jwt\""));
     assert!(json.contains("\"owner\":\"demo-owner\""));
     assert!(json.contains("\"command\":\"algorithm\""));
     assert!(json.contains("\"strategyName\":\"MyStrategy\""));

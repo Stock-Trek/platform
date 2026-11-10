@@ -32,6 +32,7 @@ fn deserialises_the_cwasm_url_alongside_the_command() {
                 "cwasmSize": 8,
                 "wasmtimeVersion": "43.0.1",
                 "orderRequestUrl": "https://orders.example.com/requests",
+                "authServiceUrl": "https://auth.example.com/jwt",
                 "owner": "demo-owner",
                 "strategyName": "AlgorithmStub",
                 "strategyContextPath": "/tmp/strategy-context.bin",
@@ -51,6 +52,7 @@ fn deserialises_the_cwasm_url_alongside_the_command() {
         request.order_request_url,
         "https://orders.example.com/requests"
     );
+    assert_eq!(request.auth_service_url, "https://auth.example.com/jwt");
     assert_eq!(request.owner, "demo-owner");
     assert_eq!(request.command.strategy_name(), "AlgorithmStub");
 }
@@ -81,6 +83,24 @@ fn rejects_requests_without_an_owner() {
                 "cwasmSize": 8,
                 "wasmtimeVersion": "43.0.1",
                 "orderRequestUrl": "https://orders.example.com/requests",
+                "strategyName": "AlgorithmStub"
+            }"#,
+    );
+
+    assert!(result.is_err());
+}
+
+#[test]
+fn rejects_requests_without_an_auth_service_url() {
+    let result = serde_json::from_str::<RunRequest>(
+        r#"{
+                "command": "metadata",
+                "cwasmGetUrl": "https://example.com/runner.cwasm",
+                "cwasmSha256": "0000000000000000000000000000000000000000000000000000000000000000",
+                "cwasmSize": 8,
+                "wasmtimeVersion": "43.0.1",
+                "orderRequestUrl": "https://orders.example.com/requests",
+                "owner": "demo-owner",
                 "strategyName": "AlgorithmStub"
             }"#,
     );
