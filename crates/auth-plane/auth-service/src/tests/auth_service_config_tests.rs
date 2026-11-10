@@ -1,9 +1,7 @@
 use super::support_tests::AuthServiceBuilder;
-use crate::{AuthService, AuthServiceConfig, MemoryTokenAuditLog};
+use crate::{AuthService, AuthServiceConfig};
 use chrono::Duration;
 use platform_errors::{AuthError, BpError, BpResult};
-use std::sync::Arc;
-
 struct ConfigFixture;
 
 impl ConfigFixture {
@@ -12,7 +10,6 @@ impl ConfigFixture {
             token_lifetime: Duration::days(30),
             rotation_overlap: Duration::days(7),
             signature_validity: Duration::minutes(5),
-            audit: Arc::new(MemoryTokenAuditLog::new(16)),
         }
     }
 

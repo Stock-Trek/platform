@@ -4,7 +4,7 @@ use super::{
 };
 use crate::{
     ApiToken, AuthService, SqsTokenAuditLog, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
-    TokenMetadata, TokenScope,
+    TokenAuditRelay, TokenMetadata, TokenScope,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::BpError;
@@ -17,10 +17,11 @@ impl SqsAuditFixture {
         SqsTokenAuditLog::with_queue(queue.clone(), timeout)
     }
 
-    fn service(queue: &Arc<MockAuditQueue>) -> AuthService {
-        AuthServiceBuilder::new()
-            .audit(Arc::new(Self::audit(queue, StdDuration::from_secs(1))))
-            .build()
+    fn service(queue: &Arc<MockAuditQueue>) -> (AuthService, SqsTokenAuditLog) {
+        (
+            AuthServiceBuilder::new().build(),
+            Self::audit(queue, StdDuration::from_secs(1)),
+        )
     }
 
     fn event(token_id: &str) -> TokenAuditEvent {
@@ -69,7 +70,7 @@ async fn record_propagates_queue_delivery_failures() {
 #[tokio::test]
 async fn purging_expired_tokens_delivers_one_deletion_event() {
     let queue = Arc::new(MockAuditQueue::new());
-    let service = SqsAuditFixture::service(&queue);
+    let (service, audit) = SqsAuditFixture::service(&queue);
     let now = Utc::now();
     TestFixture::add_expired_token(
         &service,
@@ -81,6 +82,10 @@ async fn purging_expired_tokens_delivers_one_deletion_event() {
     .await;
 
     let purged = service.purge_expired_tokens(now).await.unwrap();
+    TokenAuditRelay::new(service.store.clone(), Arc::new(audit))
+        .drain()
+        .await
+        .unwrap();
 
     assert_eq!(purged, 1);
     assert_eq!(queue.batches().len(), 1);
@@ -99,13 +104,7 @@ async fn purging_skips_queue_delivery_for_a_token_recreated_after_the_scan() {
     let store = Arc::new(RecreateOnSecondGet::new(replacement.clone()));
     store.put(&expired).await.unwrap();
     let queue = Arc::new(MockAuditQueue::new());
-    let service = AuthServiceBuilder::new()
-        .store(store)
-        .audit(Arc::new(SqsAuditFixture::audit(
-            &queue,
-            StdDuration::from_secs(1),
-        )))
-        .build();
+    let service = AuthServiceBuilder::new().store(store).build();
 
     let purged = service.purge_expired_tokens(now).await.unwrap();
 

@@ -274,13 +274,38 @@ their details.
 | `RUN_INVOKER_TABLE` | DynamoDB table holding the scheduled algorithm runs. |
 | `S3_SIGNED_URL_EXPIRY_SECS` | Lifetime of the pre-signed S3 URLs handed to the runner, in seconds. |
 
+## Auth plane
+
+### Auth relay
+
+The auth relay performs a single drain of pending token audit events and rotation
+materializations from the Vault token store to SQS, then exits. Run it from a cron job every few
+minutes so events are retried even when auth-service is idle or SQS is temporarily unavailable.
+Auth operations only commit events to the outbox; a failed drain leaves them pending for the next
+scheduled run.
+
+#### Required
+
+| Variable | Description |
+| --- | --- |
+| `AUTH_RELAY_AUDIT_QUEUE_URL` | SQS queue URL that receives auth-service token audit events. |
+| `AUTH_RELAY_AUDIT_TIMEOUT_SECS` | Maximum time spent delivering one audit event, in seconds. |
+| `AUTH_RELAY_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
+| `AUTH_RELAY_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
+| `AUTH_RELAY_VAULT_TIMEOUT_SECS` | Connection and request timeout for Vault, in seconds. |
+| `AUTH_RELAY_VAULT_TOKEN` | Vault token used to read and acknowledge auth-service token events. |
+
+The auth relay also uses the shared AWS timeout variables listed under
+[Build orchestrator](#build-orchestrator).
+
 ## Sandbox plane
 
 ### CWASM invoker
 
 The native cwasm host reads these required variables when it starts. Missing, empty, and invalid
 values fail startup. Place-order actions are submitted without signatures to the portfolio service,
-which signs them with the auth-service token owned by the run request owner.
+which signs them with the auth-service token owned by the run request owner. Auth operations commit
+audit events to the durable token outbox; the separate auth relay service delivers them to SQS.
 
 #### Required
 

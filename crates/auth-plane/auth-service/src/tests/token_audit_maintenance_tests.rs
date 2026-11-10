@@ -6,11 +6,14 @@ use std::sync::Arc;
 #[tokio::test]
 async fn keeps_only_the_most_recent_events_at_capacity() {
     let audit = Arc::new(MemoryTokenAuditLog::new(2));
-    let service = TestFixture::service_with_audit(audit.clone());
+    let service = TestFixture::service();
 
     TestFixture::add_token(&service, "token-a", "owner-a").await;
+    TestFixture::drain(&service, audit.clone()).await;
     TestFixture::add_token(&service, "token-b", "owner-a").await;
+    TestFixture::drain(&service, audit.clone()).await;
     TestFixture::add_token(&service, "token-c", "owner-a").await;
+    TestFixture::drain(&service, audit.clone()).await;
 
     let ids: Vec<_> = audit
         .events()
@@ -23,9 +26,10 @@ async fn keeps_only_the_most_recent_events_at_capacity() {
 #[tokio::test]
 async fn deleting_a_missing_token_does_not_record_a_deletion() {
     let audit = Arc::new(MemoryTokenAuditLog::new(4096));
-    let service = TestFixture::service_with_audit(audit.clone());
+    let service = TestFixture::service();
 
     service.delete_token("ghost", Utc::now()).await.unwrap();
+    TestFixture::drain(&service, audit.clone()).await;
 
     assert!(audit.events().is_empty());
 }
@@ -33,7 +37,7 @@ async fn deleting_a_missing_token_does_not_record_a_deletion() {
 #[tokio::test]
 async fn purging_expired_tokens_records_deletions() {
     let audit = Arc::new(MemoryTokenAuditLog::new(4096));
-    let service = TestFixture::service_with_audit(audit.clone());
+    let service = TestFixture::service();
     let now = Utc::now();
     TestFixture::add_expired_token(
         &service,
@@ -47,6 +51,7 @@ async fn purging_expired_tokens_records_deletions() {
     let purged = service.purge_expired_tokens(now).await.unwrap();
 
     assert_eq!(purged, 1);
+    TestFixture::drain(&service, audit.clone()).await;
     let event = audit
         .events()
         .into_iter()

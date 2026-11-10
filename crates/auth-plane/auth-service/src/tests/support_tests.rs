@@ -1,7 +1,7 @@
 use crate::{
-    ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenAuditLog,
-    MemoryTokenStore, ReplayStore, TokenAuditLog, TokenExpiry, TokenMetadata, TokenOptions,
-    TokenScope, TokenStore,
+    ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenStore, ReplayStore,
+    TokenAuditLog, TokenAuditRelay, TokenExpiry, TokenMetadata, TokenOptions, TokenScope,
+    TokenStore,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::BpResult;
@@ -45,11 +45,6 @@ impl AuthServiceBuilder {
         self
     }
 
-    pub(crate) fn audit(mut self, audit: Arc<dyn TokenAuditLog>) -> Self {
-        self.config.audit = audit;
-        self
-    }
-
     pub(crate) fn token_lifetime(mut self, lifetime: Duration) -> Self {
         self.config.token_lifetime = lifetime;
         self
@@ -78,15 +73,10 @@ pub(crate) struct TestFixture;
 
 impl TestFixture {
     pub(crate) fn config() -> AuthServiceConfig {
-        Self::config_with_audit(Arc::new(MemoryTokenAuditLog::new(4096)))
-    }
-
-    pub(crate) fn config_with_audit(audit: Arc<dyn TokenAuditLog>) -> AuthServiceConfig {
         AuthServiceConfig {
             token_lifetime: Duration::days(30),
             rotation_overlap: Duration::days(7),
             signature_validity: Duration::minutes(5),
-            audit,
         }
     }
 
@@ -94,8 +84,11 @@ impl TestFixture {
         AuthServiceBuilder::new().build()
     }
 
-    pub(crate) fn service_with_audit(audit: Arc<dyn TokenAuditLog>) -> AuthService {
-        AuthServiceBuilder::new().audit(audit).build()
+    pub(crate) async fn drain(service: &AuthService, audit: Arc<dyn TokenAuditLog>) -> usize {
+        TokenAuditRelay::new(service.store.clone(), audit)
+            .drain()
+            .await
+            .unwrap()
     }
 
     pub(crate) fn metadata() -> TokenMetadata {

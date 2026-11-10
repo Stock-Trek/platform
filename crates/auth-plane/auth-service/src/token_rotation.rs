@@ -23,7 +23,6 @@ impl AuthService {
         Self::validate_rotation_ids(id, &replacement_id)?;
         let original = self.token(id).await?;
         if original.metadata().replaced_by() == Some(replacement_id.as_str()) {
-            let _ = self.drain_audit_outbox().await;
             return self
                 .completed_rotation(&original, &replacement_id, now)
                 .await;
@@ -50,7 +49,6 @@ impl AuthService {
                     .store
                     .acknowledge_rotation(transaction.transaction_id())
                     .await;
-                let _ = self.drain_audit_outbox().await;
                 return self
                     .completed_rotation(&original, &replacement_id, now)
                     .await;
@@ -58,7 +56,6 @@ impl AuthService {
             self.record_rotation_failure(&original, now, &error).await;
             return Err(error);
         }
-        let _ = self.drain_audit_outbox().await;
         let replacement = self.token(&replacement_id).await?;
         Self::ensure_replacement_usable(&original, &replacement, now)?;
         Ok(replacement)

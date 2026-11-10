@@ -8,7 +8,7 @@ struct AuditFixture;
 impl AuditFixture {
     fn service() -> (crate::AuthService, Arc<MemoryTokenAuditLog>) {
         let audit = Arc::new(MemoryTokenAuditLog::new(4096));
-        let service = AuthServiceBuilder::new().audit(audit.clone()).build();
+        let service = AuthServiceBuilder::new().build();
         (service, audit)
     }
 
@@ -30,6 +30,8 @@ async fn records_token_issuance_and_authentication() {
         .authenticate(token.id(), token.secret(), None, Utc::now())
         .await
         .unwrap();
+
+    TestFixture::drain(&service, audit.clone()).await;
 
     assert_eq!(
         AuditFixture::actions(&audit),
@@ -73,6 +75,7 @@ async fn issuance_events_use_the_operation_time() {
         )
         .await
         .unwrap();
+    TestFixture::drain(&service, audit.clone()).await;
 
     let events = audit.events();
     assert_eq!(events.len(), 1);
@@ -88,6 +91,7 @@ async fn records_failed_authentication_without_the_secret() {
     let _ = service
         .authenticate(token.id(), "wrong-secret", None, Utc::now())
         .await;
+    TestFixture::drain(&service, audit.clone()).await;
 
     let events = audit.events();
     let failure = events
@@ -108,6 +112,7 @@ async fn records_rotation_and_revocation() {
         .rotate_token_to(token.id(), "token-b", now)
         .await
         .unwrap();
+    TestFixture::drain(&service, audit.clone()).await;
 
     service
         .revoke_token(
@@ -118,6 +123,7 @@ async fn records_rotation_and_revocation() {
         )
         .await
         .unwrap();
+    TestFixture::drain(&service, audit.clone()).await;
 
     let actions = AuditFixture::actions(&audit);
     assert!(actions.contains(&TokenAuditAction::Rotated));
@@ -138,6 +144,7 @@ async fn records_signing_and_signature_verification() {
         .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .unwrap();
+    TestFixture::drain(&service, audit.clone()).await;
 
     let actions = AuditFixture::actions(&audit);
     assert!(actions.contains(&TokenAuditAction::Signed));
@@ -156,6 +163,7 @@ async fn records_signing_failures() {
         .await;
 
     assert!(result.is_err());
+    TestFixture::drain(&service, audit.clone()).await;
     let failure = audit
         .events()
         .into_iter()
@@ -175,6 +183,7 @@ async fn records_rejected_signatures_for_unknown_tokens() {
         .unwrap();
 
     assert!(!verified);
+    TestFixture::drain(&service, audit.clone()).await;
     let rejection = audit
         .events()
         .into_iter()
@@ -200,6 +209,7 @@ async fn records_rejected_signatures_for_malformed_token_ids() {
         .unwrap();
 
     assert!(!verified);
+    TestFixture::drain(&service, audit.clone()).await;
     let rejection = audit
         .events()
         .into_iter()
@@ -226,5 +236,6 @@ async fn records_rejected_signatures() {
         .unwrap();
 
     assert!(!verified);
+    TestFixture::drain(&service, audit.clone()).await;
     assert!(AuditFixture::actions(&audit).contains(&TokenAuditAction::SignatureRejected));
 }

@@ -55,7 +55,7 @@ struct OutboxFixture;
 impl OutboxFixture {
     fn service() -> (crate::AuthService, Arc<ControllableAuditLog>) {
         let audit = Arc::new(ControllableAuditLog::new());
-        let service = AuthServiceBuilder::new().audit(audit.clone()).build();
+        let service = AuthServiceBuilder::new().build();
         (service, audit)
     }
 }
@@ -79,12 +79,12 @@ async fn a_failed_delivery_leaves_the_event_in_the_outbox() {
     let event_id = pending[0].event_id().expect("event id").to_string();
 
     audit.succeed();
-    assert_eq!(service.drain_audit_outbox().await.unwrap(), 1);
+    assert_eq!(TestFixture::drain(&service, audit.clone()).await, 1);
     let delivered = audit.events();
     assert_eq!(delivered.len(), 1);
     assert_eq!(delivered[0].event_id(), Some(event_id.as_str()));
     assert!(service.store.pending_audits().await.unwrap().is_empty());
-    assert_eq!(service.drain_audit_outbox().await.unwrap(), 0);
+    assert_eq!(TestFixture::drain(&service, audit.clone()).await, 0);
     assert_eq!(audit.events().len(), 1);
 }
 
@@ -92,6 +92,7 @@ async fn a_failed_delivery_leaves_the_event_in_the_outbox() {
 async fn authentication_appends_to_the_same_outbox() {
     let (service, audit) = OutboxFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    TestFixture::drain(&service, audit.clone()).await;
     audit.fail();
 
     service
@@ -104,7 +105,7 @@ async fn authentication_appends_to_the_same_outbox() {
     assert_eq!(pending[0].action, TokenAuditAction::Authenticated);
 
     audit.succeed();
-    assert_eq!(service.drain_audit_outbox().await.unwrap(), 1);
+    assert_eq!(TestFixture::drain(&service, audit.clone()).await, 1);
     assert_eq!(
         audit.events().last().unwrap().action,
         TokenAuditAction::Authenticated
@@ -115,6 +116,7 @@ async fn authentication_appends_to_the_same_outbox() {
 async fn a_deleted_token_keeps_its_tombstone_until_the_event_is_delivered() {
     let (service, audit) = OutboxFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    TestFixture::drain(&service, audit.clone()).await;
     audit.fail();
 
     service.delete_token(token.id(), Utc::now()).await.unwrap();
@@ -126,7 +128,7 @@ async fn a_deleted_token_keeps_its_tombstone_until_the_event_is_delivered() {
     assert!(service.store.put(&token).await.is_err());
 
     audit.succeed();
-    assert_eq!(service.drain_audit_outbox().await.unwrap(), 1);
+    assert_eq!(TestFixture::drain(&service, audit.clone()).await, 1);
     assert_eq!(
         audit.events().last().unwrap().action,
         TokenAuditAction::Deleted
@@ -169,7 +171,7 @@ async fn purge_commits_tokens_one_at_a_time_without_restoring_them() {
     assert_eq!(service.store.pending_audits().await.unwrap().len(), 2);
 
     audit.succeed();
-    assert_eq!(service.drain_audit_outbox().await.unwrap(), 2);
+    assert_eq!(TestFixture::drain(&service, audit.clone()).await, 2);
     assert_eq!(audit.events().len(), 2);
     assert!(
         audit

@@ -1,6 +1,5 @@
 use crate::{
-    ReplayStore, TokenAuditEvent, TokenAuditLog, TokenAuditRelay, TokenMutation,
-    TokenRotationTransaction, token_store::TokenStore,
+    ReplayStore, TokenAuditEvent, TokenMutation, TokenRotationTransaction, token_store::TokenStore,
 };
 use chrono::Duration;
 use platform_errors::{AuthError, BpError, BpResult};
@@ -12,14 +11,12 @@ pub struct AuthServiceConfig {
     pub token_lifetime: Duration,
     pub rotation_overlap: Duration,
     pub signature_validity: Duration,
-    pub audit: Arc<dyn TokenAuditLog>,
 }
 
 #[derive(Clone)]
 pub struct AuthService {
     pub(crate) store: Arc<dyn TokenStore>,
     pub(crate) replay: Arc<dyn ReplayStore>,
-    pub(crate) audit: Arc<dyn TokenAuditLog>,
     pub(crate) signature_validity: Duration,
     pub(crate) token_lifetime: Duration,
     pub(crate) rotation_overlap: Duration,
@@ -35,7 +32,6 @@ impl AuthService {
         Ok(Self {
             store,
             replay,
-            audit: config.audit,
             signature_validity: config.signature_validity,
             token_lifetime: config.token_lifetime,
             rotation_overlap: config.rotation_overlap,
@@ -75,26 +71,18 @@ impl AuthService {
         mutation: TokenMutation,
         event: TokenAuditEvent,
     ) -> BpResult<bool> {
-        let applied = self.store.commit(mutation, event).await?;
-        if applied {
-            self.relay_audit_best_effort().await;
-        }
-        Ok(applied)
+        self.store.commit(mutation, event).await
     }
 
     pub(crate) async fn commit_rotation(
         &self,
         transaction: &TokenRotationTransaction,
     ) -> BpResult<()> {
-        self.store.commit_rotation(transaction).await?;
-        self.relay_audit_best_effort().await;
-        Ok(())
+        self.store.commit_rotation(transaction).await
     }
 
     pub(crate) async fn record_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
-        self.store.append_audit(event).await?;
-        self.relay_audit_best_effort().await;
-        Ok(())
+        self.store.append_audit(event).await
     }
 
     /// Queues an event for an operation that is already failing. The original
@@ -103,28 +91,6 @@ impl AuthService {
     pub(crate) async fn record_audit_failure(&self, event: TokenAuditEvent) {
         if let Err(error) = self.store.append_audit(event).await {
             tracing::error!(%error, "failed to enqueue token audit event");
-            return;
-        }
-        self.relay_audit_best_effort().await;
-    }
-
-    /// Delivers pending outbox events and materializes pending rotations.
-    ///
-    /// This is safe to call from a background worker. Failed deliveries remain
-    /// in the outbox and are retried on the next drain.
-    pub async fn drain_audit_outbox(&self) -> BpResult<usize> {
-        TokenAuditRelay::new(self.store.clone(), self.audit.clone())
-            .drain()
-            .await
-    }
-
-    pub async fn relay_audit_outbox(&self) -> BpResult<usize> {
-        self.drain_audit_outbox().await
-    }
-
-    async fn relay_audit_best_effort(&self) {
-        if let Err(error) = self.drain_audit_outbox().await {
-            tracing::error!(%error, "failed to relay token audit outbox");
         }
     }
 

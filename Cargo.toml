@@ -7,6 +7,7 @@ version = "0.2.0"
 edition = "2024"
 
 [workspace.dependencies]
+platform-auth-relay = { path = "crates/auth-plane/auth-relay" }
 platform-auth-service = { path = "crates/auth-plane/auth-service" }
 
 platform-build-agent = { path = "crates/build-plane/build-agent" }
