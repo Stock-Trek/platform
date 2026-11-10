@@ -31,6 +31,8 @@ impl AuthService {
         token_id: &str,
         now: DateTime<Utc>,
         reservation: &ReplayReservation,
+        signature: &str,
+        order_request: &[u8],
     ) -> BpResult<bool> {
         let mut latest = token;
         for _ in 0..MAX_UPDATE_ATTEMPTS {
@@ -65,6 +67,25 @@ impl AuthService {
                         return self
                             .reject_signature(token_id, Some(&latest), now, &error.to_string())
                             .await;
+                    }
+                    match self.revalidate_signature(
+                        token_id,
+                        signature,
+                        order_request,
+                        &latest,
+                        now,
+                    ) {
+                        Ok(Some(detail)) => {
+                            self.release_replay(reservation).await?;
+                            return self
+                                .reject_signature(token_id, Some(&latest), now, detail)
+                                .await;
+                        }
+                        Ok(None) => {}
+                        Err(error) => {
+                            self.release_replay(reservation).await?;
+                            return Err(error);
+                        }
                     }
                 }
                 Err(error) => {

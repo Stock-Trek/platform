@@ -13,6 +13,7 @@ mod revocation_reason_tests;
 mod revocation_tests;
 mod revoked_by_tests;
 mod signature_clock_skew_tests;
+mod signature_commit_race_tests;
 mod signature_future_tests;
 mod signature_policy_tests;
 mod signature_retry_tests;
