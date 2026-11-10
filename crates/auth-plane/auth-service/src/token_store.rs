@@ -95,7 +95,19 @@ pub trait TokenStore: Send + Sync {
     /// Applies a committed rotation transaction idempotently.
     async fn materialize_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
         let replacement = transaction.replacement();
-        if let Some(existing) = self.get(replacement.id()).await? {
+        let existing = match self.get(replacement.id()).await? {
+            Some(existing) => Some(existing),
+            None => match self.put(replacement).await {
+                Ok(()) => None,
+                Err(BpError::Auth(platform_errors::AuthError::TokenExists { .. })) => Some(
+                    self.get(replacement.id())
+                        .await?
+                        .ok_or_else(|| BpError::token_conflict(replacement.id()))?,
+                ),
+                Err(error) => return Err(error),
+            },
+        };
+        if let Some(existing) = existing {
             if existing.owner() != replacement.owner()
                 || existing.metadata().rotated_from() != Some(transaction.original().id())
             {
@@ -123,11 +135,8 @@ pub trait TokenStore: Send + Sync {
             if existing.metadata().is_rotation_overlap_ended(now) {
                 return Err(BpError::auth_rotation_overlap_ended(replacement.id()));
             }
-        } else {
-            match self.put(replacement).await {
-                Ok(()) => {}
-                Err(BpError::Auth(platform_errors::AuthError::TokenExists { .. })) => {}
-                Err(error) => return Err(error),
+            if !existing.same_rotation_replacement(replacement) {
+                return Err(BpError::token_conflict(replacement.id()));
             }
         }
 

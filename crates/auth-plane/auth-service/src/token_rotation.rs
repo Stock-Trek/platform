@@ -43,10 +43,23 @@ impl AuthService {
             TokenRotationTransaction::new(original.clone(), retired, replacement.clone(), events)?;
         self.commit_rotation(&transaction).await?;
         if let Err(error) = self.store.materialize_rotation(&transaction).await {
+            if let Some(current) = self.stored_token(original.id()).await?
+                && current.metadata().replaced_by() == Some(replacement_id.as_str())
+            {
+                let _ = self
+                    .store
+                    .acknowledge_rotation(transaction.transaction_id())
+                    .await;
+                let _ = self.drain_audit_outbox().await;
+                return self
+                    .completed_rotation(&original, &replacement_id, now)
+                    .await;
+            }
             self.record_rotation_failure(&original, now, &error).await;
             return Err(error);
         }
         let _ = self.drain_audit_outbox().await;
+        let replacement = self.token(&replacement_id).await?;
         Self::ensure_replacement_usable(&original, &replacement, now)?;
         Ok(replacement)
     }
