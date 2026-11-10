@@ -1,4 +1,5 @@
 use platform_messages::order_request::UnsignedOrderRequest;
+use platform_sigv4::{SigV4Config, SigV4Registry};
 use serde_json::Value;
 use std::collections::BTreeMap;
 use stock_trek::{
@@ -42,8 +43,13 @@ impl Fixture {
         OrderRequestDispatcher::new(url, DEAD_AUTH, OWNER).unwrap()
     }
 
+    fn sigv4() -> SigV4Config {
+        let registry = SigV4Registry::from_parts("AKID", "secret", OWNER, None).unwrap();
+        SigV4Config::new(registry, "eu-west-1", "execute-api").unwrap()
+    }
+
     fn authenticated_dispatcher(url: &str, auth_service_url: &str) -> OrderRequestDispatcher {
-        OrderRequestDispatcher::new(url, auth_service_url, OWNER).unwrap()
+        OrderRequestDispatcher::with_sigv4(url, auth_service_url, OWNER, &Self::sigv4()).unwrap()
     }
 
     fn jwt_response() -> String {
@@ -169,6 +175,18 @@ async fn submits_unsigned_place_order_actions() {
     assert_eq!(auth_request.path, "/jwt");
     let body: Value = serde_json::from_str(&auth_request.body).unwrap();
     assert_eq!(body["owner"], OWNER);
+    assert!(
+        auth_request
+            .headers
+            .get("authorization")
+            .is_some_and(|value| value.starts_with("AWS4-HMAC-SHA256 Credential=AKID/"))
+    );
+    assert!(auth_request.headers.contains_key("x-amz-date"));
+    assert!(auth_request.headers.contains_key("host"));
+    assert_eq!(
+        auth_request.headers.get("content-type").map(String::as_str),
+        Some("application/json")
+    );
     let request = server.await.unwrap();
     assert_eq!(request.method, "POST");
     assert_eq!(request.path, "/order-requests");

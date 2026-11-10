@@ -2,6 +2,7 @@ use crate::VaultTokenStoreConfig;
 use platform_config::env_names::RUST_LOG;
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
+use platform_sigv4::SigV4Config;
 use platform_types::url_scheme::UrlScheme;
 use secrecy::SecretString;
 use std::{fmt, net::SocketAddr, time::Duration};
@@ -17,6 +18,7 @@ pub struct JwtServerConfig {
     log_filter: String,
     bind_address: SocketAddr,
     vault: VaultTokenStoreConfig,
+    sigv4: SigV4Config,
 }
 
 impl JwtServerConfig {
@@ -35,6 +37,7 @@ impl JwtServerConfig {
             log_filter: vars.required_log_filter(RUST_LOG)?,
             bind_address: vars.required_parsed(AUTH_SERVICE_BIND_ADDR)?,
             vault,
+            sigv4: SigV4Config::from_vars(vars)?,
         })
     }
 
@@ -49,6 +52,10 @@ impl JwtServerConfig {
     pub fn vault(&self) -> &VaultTokenStoreConfig {
         &self.vault
     }
+
+    pub fn sigv4(&self) -> &SigV4Config {
+        &self.sigv4
+    }
 }
 
 impl fmt::Debug for JwtServerConfig {
@@ -58,6 +65,7 @@ impl fmt::Debug for JwtServerConfig {
             .field("log_filter", &self.log_filter)
             .field("bind_address", &self.bind_address)
             .field("vault", &self.vault)
+            .field("sigv4", &self.sigv4)
             .finish()
     }
 }

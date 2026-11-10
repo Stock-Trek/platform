@@ -1,7 +1,11 @@
 use platform_errors::{BpError, BpResult};
 use platform_messages::jwt::{JwtRequest, JwtResponse};
+use platform_sigv4::{SigV4Config, SigV4Signer};
 use platform_types::url_scheme::UrlScheme;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::{
+    collections::BTreeMap,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
 use tokio::sync::Mutex;
 
 const REFRESH_MARGIN_SECS: u64 = 30;
@@ -21,11 +25,30 @@ pub struct JwtCache {
     url: reqwest::Url,
     owner: String,
     client: reqwest::Client,
+    signer: Option<SigV4Signer>,
     cached: Mutex<Option<CachedJwt>>,
 }
 
 impl JwtCache {
+    #[allow(dead_code)]
     pub fn new(url: &str, owner: impl Into<String>) -> BpResult<Self> {
+        Self::with_optional_signer(url, owner.into(), None)
+    }
+
+    pub fn with_sigv4(url: &str, owner: impl Into<String>, sigv4: &SigV4Config) -> BpResult<Self> {
+        let owner = owner.into();
+        if owner.trim().is_empty() {
+            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
+        }
+        let signer = sigv4.signer_for_owner(&owner)?;
+        Self::with_optional_signer(url, owner, Some(signer))
+    }
+
+    fn with_optional_signer(
+        url: &str,
+        owner: String,
+        signer: Option<SigV4Signer>,
+    ) -> BpResult<Self> {
         let url = reqwest::Url::parse(url)
             .map_err(|error| BpError::config_invalid_source("auth_service_url", error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
@@ -34,7 +57,6 @@ impl JwtCache {
                 "must use the http or https scheme",
             ));
         }
-        let owner = owner.into();
         if owner.trim().is_empty() {
             return Err(BpError::auth_invalid_field("owner", "must not be empty"));
         }
@@ -45,6 +67,7 @@ impl JwtCache {
             url,
             owner,
             client,
+            signer,
             cached: Mutex::new(None),
         })
     }
@@ -74,10 +97,24 @@ impl JwtCache {
     }
 
     async fn fetch(&self) -> BpResult<CachedJwt> {
-        let response = self
-            .client
-            .post(self.url.clone())
-            .json(&JwtRequest::new(self.owner.clone()))
+        let body =
+            serde_json::to_vec(&JwtRequest::new(self.owner.clone())).map_err(BpError::external)?;
+        let mut headers =
+            BTreeMap::from([("content-type".to_string(), "application/json".to_string())]);
+        if let Some(signer) = &self.signer {
+            signer.sign(
+                "POST",
+                self.url.as_str(),
+                &mut headers,
+                &body,
+                SystemTime::now(),
+            )?;
+        }
+        let mut request = self.client.post(self.url.clone()).body(body);
+        for (name, value) in headers {
+            request = request.header(name, value);
+        }
+        let response = request
             .send()
             .await
             .map_err(|error| BpError::http_request("fetch JWT", self.url.as_str(), error))?;

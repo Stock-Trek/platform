@@ -72,16 +72,17 @@ impl CwasmInvoker {
         let InvokerConfig {
             execution,
             cwasm: cwasm_limits,
-            ..
+            sigv4,
         } = config;
         let runtime = match Self::runtime() {
             Ok(runtime) => runtime,
             Err(code) => return code.code(),
         };
-        let dispatcher = match OrderRequestDispatcher::new(
+        let dispatcher = match OrderRequestDispatcher::with_sigv4(
             &request.order_request_url,
             &request.auth_service_url,
             &request.owner,
+            &sigv4,
         ) {
             Ok(dispatcher) => dispatcher,
             Err(error) => {

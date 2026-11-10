@@ -4607,6 +4607,7 @@ dependencies = [
  "platform-messages",
  "platform-metrics",
  "platform-runtime",
+ "platform-sigv4",
  "platform-sqs",
  "platform-time",
  "platform-types",
@@ -5070,6 +5071,7 @@ dependencies = [
  "platform-errors",
  "platform-exit-codes",
  "platform-messages",
+ "platform-sigv4",
  "platform-types",
  "prost",
  "rand 0.8.8",
@@ -5100,6 +5102,25 @@ dependencies = [
  "stock-trek-types",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "platform-sigv4"
+version = "0.2.0"
+dependencies = [
+ "aws-credential-types",
+ "aws-sigv4",
+ "aws-smithy-runtime-api",
+ "hex",
+ "platform-config",
+ "platform-errors",
+ "secrecy",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "subtle",
+ "time",
+ "url",
 ]
 
 [[package]]

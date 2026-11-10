@@ -23,7 +23,9 @@ impl AuthServiceRunner {
             },
             Arc::new(MemoryReplayStore::default()),
         )?;
-        let server = JwtServer::bind(config.bind_address(), service).await?;
+        let server =
+            JwtServer::bind_with_sigv4(config.bind_address(), service, config.sigv4().clone())
+                .await?;
         tokio::select! {
             result = server.serve() => result,
             result = tokio::signal::ctrl_c() => result.map_err(BpError::external),

@@ -1,0 +1,19 @@
+[package]
+name = "platform-sigv4"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aws-credential-types = { workspace = true }
+aws-sigv4 = { workspace = true }
+aws-smithy-runtime-api = { workspace = true, features = ["client"] }
+hex = { workspace = true }
+platform-config = { workspace = true }
+platform-errors = { workspace = true }
+secrecy = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+subtle = { workspace = true }
+time = { workspace = true }
+url = { workspace = true }

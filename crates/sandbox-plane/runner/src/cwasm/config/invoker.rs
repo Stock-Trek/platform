@@ -1,5 +1,6 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
+use platform_sigv4::SigV4Config;
 
 use crate::cwasm::{CwasmLimits, ExecutionLimits};
 
@@ -13,6 +14,7 @@ const MAX_CWASM_BYTES: &str = "CWASM_INVOKER_MAX_CWASM_BYTES";
 pub struct InvokerConfig {
     pub execution: ExecutionLimits,
     pub cwasm: CwasmLimits,
+    pub sigv4: SigV4Config,
 }
 
 impl InvokerConfig {
@@ -30,6 +32,11 @@ impl InvokerConfig {
             vars.required_positive_duration_secs(CWASM_DOWNLOAD_TIMEOUT_SECS)?,
             vars.required_nonzero_u64(MAX_CWASM_BYTES)?,
         );
-        Ok(Self { execution, cwasm })
+        let sigv4 = SigV4Config::from_vars(vars)?;
+        Ok(Self {
+            execution,
+            cwasm,
+            sigv4,
+        })
     }
 }
