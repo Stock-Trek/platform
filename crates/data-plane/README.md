@@ -91,6 +91,18 @@ Aggregator metrics are named `market_data_aggregator_*` and cover:
 - closed candles evicted by the per-interval cap;
 - out-of-contract trade corrections and gap-affected windows.
 
+## Portfolio service
+
+The portfolio service keeps an in-memory view of the accounts a user tracks. Accounts are keyed by `CexId` and `AccountId`, and each account portfolio contains asset totals plus pending orders grouped by tag. Accounts can be tracked globally or for a specific owner.
+
+Exchange delivery is behind the `PortfolioFeed` interface. `GroupingPortfolioFeed` keeps one connection per `CexId` and sends the complete account set for that exchange whenever tracked accounts change, so exchanges that support multiple users per websocket do not need one connection per account. The first cut ships the grouping and service layers but leaves the concrete exchange connector, inbound update loop, and request-serving transport unwired.
+
+Configuration:
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `RUST_LOG` | required | Tracing filter for the service. |
+
 ## Archiver
 
 Archiver is a durable Jetstream consumer that periodically flushes de-duplicated data to parquet files bucketed by exchange event timestamp and sends it using Apache Iceberg to S3. Raw objects are also grouped by a fixed virtual routing bucket derived from the trading pair, so archive layout does not depend on the current aggregator shard count. It also listens to closed candles and archives those as well.
