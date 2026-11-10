@@ -43,7 +43,7 @@ impl AuthService {
                     let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
                         .with_token(updated.id(), Some(updated.owner()));
                     if let Err(error) = self.record_audit(event).await {
-                        self.release_replay(reservation).await?;
+                        self.release_replay_after_failure(reservation).await;
                         return Err(error);
                     }
                     return Ok(true);
@@ -52,18 +52,18 @@ impl AuthService {
                     latest = match self.token(token_id).await {
                         Ok(token) => token,
                         Err(error) => {
-                            self.release_replay(reservation).await?;
+                            self.release_replay_after_failure(reservation).await;
                             return Err(error);
                         }
                     };
                     if let Err(error) = Self::ensure_active(&latest, now) {
-                        self.release_replay(reservation).await?;
+                        self.release_replay_after_failure(reservation).await;
                         return self
                             .reject_signature(token_id, Some(&latest), now, &error.to_string())
                             .await;
                     }
                     if let Err(error) = Self::ensure_scope(&latest, TokenScope::OrdersWrite) {
-                        self.release_replay(reservation).await?;
+                        self.release_replay_after_failure(reservation).await;
                         return self
                             .reject_signature(token_id, Some(&latest), now, &error.to_string())
                             .await;
@@ -76,25 +76,25 @@ impl AuthService {
                         now,
                     ) {
                         Ok(Some(detail)) => {
-                            self.release_replay(reservation).await?;
+                            self.release_replay_after_failure(reservation).await;
                             return self
                                 .reject_signature(token_id, Some(&latest), now, detail)
                                 .await;
                         }
                         Ok(None) => {}
                         Err(error) => {
-                            self.release_replay(reservation).await?;
+                            self.release_replay_after_failure(reservation).await;
                             return Err(error);
                         }
                     }
                 }
                 Err(error) => {
-                    self.release_replay(reservation).await?;
+                    self.release_replay_after_failure(reservation).await;
                     return Err(error);
                 }
             }
         }
-        self.release_replay(reservation).await?;
+        self.release_replay_after_failure(reservation).await;
         Err(BpError::token_conflict(token_id))
     }
 
@@ -109,5 +109,14 @@ impl AuthService {
             .release(reservation)
             .await
             .map_err(|error| Self::replay_store_error("release", error))
+    }
+
+    /// Releases a replay reservation after an operation has already failed. The
+    /// original failure is more useful to the caller, so release errors are
+    /// logged instead of replacing it.
+    async fn release_replay_after_failure(&self, reservation: &ReplayReservation) {
+        if let Err(error) = self.release_replay(reservation).await {
+            tracing::error!(%error, "failed to release replay reservation");
+        }
     }
 }
