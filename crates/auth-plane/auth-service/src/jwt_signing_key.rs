@@ -1,18 +1,18 @@
 use crate::{IssuedJwt, OrderJwtClaims};
+use ed25519_compact::KeyPair;
 use jsonwebtoken::{
     Algorithm, EncodingKey, Header, encode,
-    jwk::{Jwk, JwkSet, KeyAlgorithm, PublicKeyUse},
-};
-use p256::{
-    SecretKey,
-    elliptic_curve::Generate,
-    pkcs8::{DecodePrivateKey, EncodePrivateKey},
+    jwk::{
+        AlgorithmParameters, CommonParameters, EllipticCurve, Jwk, JwkSet, KeyAlgorithm,
+        OctetKeyPairParameters, OctetKeyPairType, PublicKeyUse,
+    },
 };
 use platform_errors::{BpError, BpResult};
 use std::fmt;
 
-pub const JWT_SIGNING_ALGORITHM: Algorithm = Algorithm::ES256;
+pub const JWT_SIGNING_ALGORITHM: Algorithm = Algorithm::EdDSA;
 pub const DEFAULT_JWT_KEY_ID: &str = "auth-service";
+const JWT_KEY_FIELD: &str = "jwt_private_key";
 
 pub struct JwtSigningKey {
     key_id: String,
@@ -22,36 +22,21 @@ pub struct JwtSigningKey {
 
 impl JwtSigningKey {
     pub fn generate(key_id: impl Into<String>) -> BpResult<Self> {
-        let secret = SecretKey::try_generate().map_err(BpError::external)?;
-        Self::from_secret_key(key_id.into(), &secret)
+        let key_pair = KeyPair::generate();
+        Self::from_key_pair(key_id.into(), &key_pair)
     }
 
     pub fn from_pkcs8_der(key_id: impl Into<String>, der: &[u8]) -> BpResult<Self> {
-        let key_id = key_id.into();
-        if key_id.trim().is_empty() {
-            return Err(BpError::auth_invalid_field(
-                "jwt_key_id",
-                "must not be empty",
-            ));
-        }
-        let encoding = EncodingKey::from_ec_der(der);
-        let mut jwk = Jwk::from_encoding_key(&encoding, JWT_SIGNING_ALGORITHM)
-            .map_err(|error| BpError::auth_invalid_field("jwt_private_key", error.to_string()))?;
-        jwk.common.key_id = Some(key_id.clone());
-        jwk.common.key_algorithm = Some(KeyAlgorithm::ES256);
-        jwk.common.public_key_use = Some(PublicKeyUse::Signature);
-        Ok(Self {
-            key_id,
-            encoding,
-            jwks: JwkSet { keys: vec![jwk] },
-        })
+        let key_pair = KeyPair::from_der(der)
+            .map_err(|error| BpError::auth_invalid_field(JWT_KEY_FIELD, error.to_string()))?;
+        Self::from_key_pair(key_id.into(), &key_pair)
     }
 
     pub fn from_pkcs8_pem(key_id: impl Into<String>, pem: &str) -> BpResult<Self> {
         let pem = pem.replace("\\n", "\n");
-        let secret = SecretKey::from_pkcs8_pem(&pem)
-            .map_err(|error| BpError::auth_invalid_field("jwt_private_key", error.to_string()))?;
-        Self::from_secret_key(key_id.into(), &secret)
+        let key_pair = KeyPair::from_pem(&pem)
+            .map_err(|error| BpError::auth_invalid_field(JWT_KEY_FIELD, error.to_string()))?;
+        Self::from_key_pair(key_id.into(), &key_pair)
     }
 
     pub fn sign(&self, claims: &OrderJwtClaims) -> BpResult<IssuedJwt> {
@@ -70,11 +55,33 @@ impl JwtSigningKey {
         &self.jwks
     }
 
-    fn from_secret_key(key_id: String, secret: &SecretKey) -> BpResult<Self> {
-        let der = secret
-            .to_pkcs8_der()
-            .map_err(|error| BpError::auth_invalid_field("jwt_private_key", error.to_string()))?;
-        Self::from_pkcs8_der(key_id, der.as_bytes())
+    fn from_key_pair(key_id: String, key_pair: &KeyPair) -> BpResult<Self> {
+        if key_id.trim().is_empty() {
+            return Err(BpError::auth_invalid_field(
+                "jwt_key_id",
+                "must not be empty",
+            ));
+        }
+        let encoding = EncodingKey::from_ed_der(&key_pair.sk.to_der());
+        let public_key = data_encoding::BASE64URL_NOPAD.encode(&key_pair.pk[..]);
+        let jwk = Jwk {
+            common: CommonParameters {
+                public_key_use: Some(PublicKeyUse::Signature),
+                key_algorithm: Some(KeyAlgorithm::EdDSA),
+                key_id: Some(key_id.clone()),
+                ..Default::default()
+            },
+            algorithm: AlgorithmParameters::OctetKeyPair(OctetKeyPairParameters {
+                key_type: OctetKeyPairType::OctetKeyPair,
+                curve: EllipticCurve::Ed25519,
+                x: public_key,
+            }),
+        };
+        Ok(Self {
+            key_id,
+            encoding,
+            jwks: JwkSet { keys: vec![jwk] },
+        })
     }
 }
 

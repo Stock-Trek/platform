@@ -27,11 +27,11 @@ impl Fixture {
 }
 
 #[tokio::test]
-async fn signs_tokens_with_es256_and_a_key_id() {
+async fn signs_tokens_with_eddsa_and_a_key_id() {
     let (_, token, _) = Fixture::issued_token().await;
     let header = decode_header(&token).unwrap();
 
-    assert_eq!(header.alg, Algorithm::ES256);
+    assert_eq!(header.alg, Algorithm::EdDSA);
     assert_eq!(header.kid.as_deref(), Some(crate::DEFAULT_JWT_KEY_ID));
 }
 
@@ -43,12 +43,12 @@ async fn publishes_only_public_key_material() {
     let keys = jwks["keys"].as_array().unwrap();
 
     assert_eq!(keys.len(), 1);
-    assert_eq!(keys[0]["kty"], "EC");
-    assert_eq!(keys[0]["crv"], "P-256");
-    assert_eq!(keys[0]["alg"], "ES256");
+    assert_eq!(keys[0]["kty"], "OKP");
+    assert_eq!(keys[0]["crv"], "Ed25519");
+    assert_eq!(keys[0]["alg"], "EdDSA");
     assert_eq!(keys[0]["use"], "sig");
     assert!(keys[0].get("x").is_some());
-    assert!(keys[0].get("y").is_some());
+    assert!(keys[0].get("y").is_none());
     assert!(!serialized.contains("\"d\""));
 }
 
@@ -106,15 +106,8 @@ async fn static_jwks_cache_verifies_without_a_token_store() {
 
 #[test]
 fn signs_with_an_imported_pkcs8_pem_key() {
-    use p256::{
-        SecretKey,
-        elliptic_curve::Generate,
-        pkcs8::{EncodePrivateKey, LineEnding},
-    };
-
-    let secret = SecretKey::try_generate().unwrap();
-    let pem = secret.to_pkcs8_pem(LineEnding::LF).unwrap();
-    let signer = JwtSigningKey::from_pkcs8_pem("imported", pem.as_ref()).unwrap();
+    let pem = ed25519_compact::KeyPair::generate().sk.to_pem();
+    let signer = JwtSigningKey::from_pkcs8_pem("imported", &pem).unwrap();
     let now = Utc::now();
     let issued = signer.sign(&Fixture::claims(now)).unwrap();
     let verifier = JwtVerifier::from_signing_key(&signer);

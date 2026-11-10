@@ -45,17 +45,17 @@ impl JwtVerifier {
     ) -> BpResult<OrderJwtClaims> {
         if header.alg != JWT_SIGNING_ALGORITHM {
             return Err(BpError::auth_invalid_jwt(
-                "must use the ES256 signing algorithm",
+                "must use the EdDSA signing algorithm",
             ));
         }
         let jwk = self
             .resolve_key(header)
             .ok_or_else(|| BpError::auth_invalid_jwt("references an unknown signing key"))?;
         if let Some(algorithm) = jwk.common.key_algorithm
-            && algorithm != KeyAlgorithm::ES256
+            && algorithm != KeyAlgorithm::EdDSA
         {
             return Err(BpError::auth_invalid_jwt(
-                "signing key does not support ES256",
+                "signing key does not support EdDSA",
             ));
         }
         let key = DecodingKey::from_jwk(jwk)

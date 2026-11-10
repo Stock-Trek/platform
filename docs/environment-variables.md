@@ -281,7 +281,7 @@ their details.
 
 ### Auth service
 
-The auth service issues short-lived ES256 JWTs for owners with an active order-write token and
+The auth service issues short-lived EdDSA JWTs for owners with an active order-write token and
 publishes its public signing key at `/.well-known/jwks.json` (also available as `/jwks`). It
 verifies JWTs presented with order requests. Each replica must use the same private key so that
 tokens signed by one replica verify against the JWKS published by another. A JWT request must
@@ -294,7 +294,7 @@ owner bound to the caller's access key.
 | --- | --- |
 | `AUTH_SERVICE_BIND_ADDR` | Socket address on which the auth service accepts JWT requests. |
 | `AUTH_SERVICE_JWT_KEY_ID` | Key ID published as the JWT `kid` header and in the JWKS document. |
-| `AUTH_SERVICE_JWT_PRIVATE_KEY_PEM` | ES256 (P-256) private key in PKCS#8 PEM format. Literal `\n` sequences are converted to newlines. |
+| `AUTH_SERVICE_JWT_PRIVATE_KEY_PEM` | Ed25519 private key in PKCS#8 PEM format. Literal `\n` sequences are converted to newlines. |
 | `AUTH_SERVICE_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
 | `AUTH_SERVICE_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
 | `AUTH_SERVICE_VAULT_TOKEN` | Vault token used to read auth-service tokens. |
@@ -329,7 +329,7 @@ The native cwasm host reads these required variables when it starts. Missing, em
 values fail startup. Place-order actions are submitted without signatures to the portfolio service, which signs them with
 the auth-service token owned by the run request owner. The runner fetches and caches a bearer JWT
 from the auth service and sends it with every order request; the portfolio service rejects requests
-without an ES256 JWT signed by a key in the auth service JWKS, which it caches locally. Auth
+without an EdDSA JWT signed by a key in the auth service JWKS, which it caches locally. Auth
 operations commit audit events to the durable token outbox; the separate auth relay service
 delivers them to SQS.
 

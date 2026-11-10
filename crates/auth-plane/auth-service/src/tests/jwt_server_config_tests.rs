@@ -1,9 +1,4 @@
 use crate::JwtServerConfig;
-use p256::{
-    SecretKey,
-    elliptic_curve::Generate,
-    pkcs8::{EncodePrivateKey, LineEnding},
-};
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
 use std::collections::HashMap;
@@ -20,8 +15,7 @@ struct Fixture;
 
 impl Fixture {
     fn key_pem() -> String {
-        let secret = SecretKey::try_generate().unwrap();
-        secret.to_pkcs8_pem(LineEnding::LF).unwrap().to_string()
+        ed25519_compact::KeyPair::generate().sk.to_pem()
     }
 
     fn vars() -> HashMap<String, String> {
