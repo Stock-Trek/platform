@@ -52,7 +52,7 @@ impl AuthService {
                     .await;
             }
         };
-        self.commit_signature_use(token, token_id, now, &reservation)
+        self.commit_signature_use(token, token_id, now, &reservation, signature, order_request)
             .await
     }
 }

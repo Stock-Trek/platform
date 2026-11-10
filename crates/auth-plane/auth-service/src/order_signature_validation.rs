@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, AuthService, OrderRequestContext, SignedOrderRequest, TokenAuditAction,
-    TokenAuditEvent, order_verification::CLOCK_SKEW_SECONDS,
+    ApiToken, AuthService, OrderRequestContext, OrderRequestSigner, SignedOrderRequest,
+    TokenAuditAction, TokenAuditEvent, order_verification::CLOCK_SKEW_SECONDS,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, BpError, BpResult};
@@ -58,6 +58,26 @@ impl AuthService {
             return Err("signature validity exceeds policy");
         }
         Ok((signed, context))
+    }
+
+    pub(crate) fn revalidate_signature(
+        &self,
+        token_id: &str,
+        signature: &str,
+        order_request: &[u8],
+        token: &ApiToken,
+        now: DateTime<Utc>,
+    ) -> BpResult<Option<&'static str>> {
+        let (signed, context) = match self.validate_order_signature(token_id, signature, now) {
+            Ok(validated) => validated,
+            Err(detail) => return Ok(Some(detail)),
+        };
+        let signer = OrderRequestSigner::new(token.secret())?;
+        if signer.verify_order_request(&context, order_request, signed.signature())? {
+            Ok(None)
+        } else {
+            Ok(Some("signature mismatch"))
+        }
     }
 
     pub(crate) async fn reject_signature(
