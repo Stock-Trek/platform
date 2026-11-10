@@ -1,4 +1,4 @@
-use super::support_tests::TestFixture;
+use super::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{AuthService, MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
@@ -9,7 +9,7 @@ struct RevocationFixture;
 impl RevocationFixture {
     fn service() -> (AuthService, Arc<MemoryTokenAuditLog>) {
         let audit = Arc::new(MemoryTokenAuditLog::new(64));
-        let service = TestFixture::service_with_audit(audit.clone());
+        let service = AuthServiceBuilder::new().audit(audit.clone()).build();
         (service, audit)
     }
 }

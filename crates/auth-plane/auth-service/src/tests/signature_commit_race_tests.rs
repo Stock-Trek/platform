@@ -1,7 +1,5 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::{
-    ApiToken, AuthService, MemoryReplayStore, MemoryTokenStore, TokenAuditAction, TokenStore,
-};
+use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
+use crate::{ApiToken, AuthService, MemoryTokenStore, TokenAuditAction, TokenStore};
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::{BpError, BpResult};
@@ -68,12 +66,7 @@ struct SignatureCommitRaceFixture;
 impl SignatureCommitRaceFixture {
     fn service() -> (AuthService, Arc<SecretRotationStore>) {
         let store = Arc::new(SecretRotationStore::new());
-        let service = AuthService::new(
-            store.clone(),
-            TestFixture::config(),
-            Arc::new(MemoryReplayStore::default()),
-        )
-        .expect("valid service");
+        let service = AuthServiceBuilder::new().store(store.clone()).build();
         (service, store)
     }
 }
@@ -134,12 +127,10 @@ async fn a_rejected_signature_commit_releases_the_replay_reservation() {
 async fn a_rejected_signature_commit_is_not_recorded_as_verified() {
     let audit = Arc::new(crate::MemoryTokenAuditLog::new(4096));
     let store = Arc::new(SecretRotationStore::new());
-    let service = AuthService::new(
-        store.clone(),
-        TestFixture::config_with_audit(audit.clone()),
-        Arc::new(MemoryReplayStore::default()),
-    )
-    .expect("valid service");
+    let service = AuthServiceBuilder::new()
+        .store(store.clone())
+        .audit(audit.clone())
+        .build();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
     let signed = service

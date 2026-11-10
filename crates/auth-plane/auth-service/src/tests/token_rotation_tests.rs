@@ -1,4 +1,4 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
+use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{AuthService, api_token::MAX_TOKEN_ID_LENGTH};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
@@ -7,14 +7,9 @@ struct RotationFixture;
 
 impl RotationFixture {
     fn service(overlap_seconds: i64) -> AuthService {
-        let mut config = TestFixture::config();
-        config.rotation_overlap = Duration::seconds(overlap_seconds);
-        crate::AuthService::new(
-            std::sync::Arc::new(crate::MemoryTokenStore::default()),
-            config,
-            std::sync::Arc::new(crate::MemoryReplayStore::default()),
-        )
-        .unwrap()
+        AuthServiceBuilder::new()
+            .rotation_overlap(Duration::seconds(overlap_seconds))
+            .build()
     }
 }
 
@@ -53,15 +48,10 @@ async fn rotation_keeps_the_old_token_valid_for_the_overlap() {
 
 #[tokio::test]
 async fn rotation_applies_the_configured_token_lifetime() {
-    let mut config = TestFixture::config();
-    config.token_lifetime = Duration::minutes(5);
-    config.rotation_overlap = Duration::minutes(1);
-    let service = crate::AuthService::new(
-        std::sync::Arc::new(crate::MemoryTokenStore::default()),
-        config,
-        std::sync::Arc::new(crate::MemoryReplayStore::default()),
-    )
-    .unwrap();
+    let service = AuthServiceBuilder::new()
+        .token_lifetime(Duration::minutes(5))
+        .rotation_overlap(Duration::minutes(1))
+        .build();
     let old = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
 

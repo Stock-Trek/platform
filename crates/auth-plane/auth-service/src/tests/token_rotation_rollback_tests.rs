@@ -1,5 +1,5 @@
-use super::support_tests::TestFixture;
-use crate::{ApiToken, AuthService, MemoryReplayStore, MemoryTokenStore, TokenStore};
+use super::support_tests::{AuthServiceBuilder, TestFixture};
+use crate::{ApiToken, AuthService, MemoryTokenStore, TokenStore};
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::{AuthError, BpError, BpResult};
@@ -84,12 +84,7 @@ struct RotationRollbackFixture;
 impl RotationRollbackFixture {
     fn service() -> (AuthService, Arc<FailingRotationStore>) {
         let store = Arc::new(FailingRotationStore::new());
-        let service = AuthService::new(
-            store.clone(),
-            TestFixture::config(),
-            Arc::new(MemoryReplayStore::default()),
-        )
-        .expect("valid service");
+        let service = AuthServiceBuilder::new().store(store.clone()).build();
         (service, store)
     }
 }

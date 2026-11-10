@@ -1,34 +1,14 @@
 use super::support_tests::TestFixture;
-use crate::{
-    ApiToken, AuthService, RevocationReason, RevokedBy, TokenExpiry, TokenOptions, TokenScope,
-};
+use crate::{RevocationReason, RevokedBy, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
 
-struct LifecycleFixture;
-
-impl LifecycleFixture {
-    fn service() -> AuthService {
-        TestFixture::service()
-    }
-
-    async fn add_token_with_expiry(
-        service: &AuthService,
-        id: &str,
-        owner: &str,
-        expires_at: chrono::DateTime<Utc>,
-    ) -> ApiToken {
-        let options = TokenOptions::new(TokenExpiry::At(expires_at), TokenScope::DEFAULT);
-        TestFixture::add_token_at(service, id, owner, Utc::now(), options).await
-    }
-}
-
 #[tokio::test]
 async fn expires_tokens_are_rejected() {
-    let service = LifecycleFixture::service();
+    let service = TestFixture::service();
     let expires_at = Utc::now() + Duration::seconds(1);
     let token =
-        LifecycleFixture::add_token_with_expiry(&service, "token-a", "owner-a", expires_at).await;
+        TestFixture::add_token_with_expiry(&service, "token-a", "owner-a", expires_at).await;
 
     let error = service
         .authenticate(token.id(), token.secret(), None, expires_at)
@@ -44,7 +24,7 @@ async fn expires_tokens_are_rejected() {
 
 #[tokio::test]
 async fn token_option_lifetimes_are_relative_to_creation_time() {
-    let service = LifecycleFixture::service();
+    let service = TestFixture::service();
     let created_at = Utc::now();
     let options = TokenOptions::new(
         TokenExpiry::After(Duration::minutes(5)),
@@ -62,7 +42,7 @@ async fn token_option_lifetimes_are_relative_to_creation_time() {
 
 #[tokio::test]
 async fn rejects_non_positive_relative_lifetimes() {
-    let service = LifecycleFixture::service();
+    let service = TestFixture::service();
     let options = TokenOptions::new(TokenExpiry::After(Duration::zero()), TokenScope::DEFAULT);
 
     let now = Utc::now();
@@ -81,7 +61,7 @@ async fn rejects_non_positive_relative_lifetimes() {
 
 #[tokio::test]
 async fn absolute_expiry_is_validated_against_the_injected_now() {
-    let service = LifecycleFixture::service();
+    let service = TestFixture::service();
     let now = chrono::DateTime::from_timestamp(1_700_000_000, 0).unwrap();
     let expires_at = now + Duration::hours(1);
     let options = TokenOptions::new(TokenExpiry::At(expires_at), TokenScope::DEFAULT);
@@ -96,7 +76,7 @@ async fn absolute_expiry_is_validated_against_the_injected_now() {
 
 #[tokio::test]
 async fn rejects_an_already_past_absolute_expiry() {
-    let service = LifecycleFixture::service();
+    let service = TestFixture::service();
     let now = Utc::now();
     let options = TokenOptions::new(
         TokenExpiry::At(now - Duration::seconds(1)),
@@ -118,7 +98,7 @@ async fn rejects_an_already_past_absolute_expiry() {
 
 #[tokio::test]
 async fn revocation_records_metadata_and_blocks_use() {
-    let service = LifecycleFixture::service();
+    let service = TestFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
 
@@ -154,7 +134,7 @@ async fn revocation_records_metadata_and_blocks_use() {
 
 #[tokio::test]
 async fn owner_listing_includes_inactive_tokens() {
-    let service = LifecycleFixture::service();
+    let service = TestFixture::service();
     let active = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let revoked = TestFixture::add_token(&service, "token-b", "owner-a").await;
     let now = Utc::now();

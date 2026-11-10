@@ -1,4 +1,4 @@
-use super::support_tests::TestFixture;
+use super::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{ApiToken, AuthService, RevocationReason, RevokedBy};
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, BpError};
@@ -7,26 +7,16 @@ struct RotationRecoveryFixture;
 
 impl RotationRecoveryFixture {
     fn service(overlap_seconds: i64) -> AuthService {
-        let mut config = TestFixture::config();
-        config.rotation_overlap = Duration::seconds(overlap_seconds);
-        AuthService::new(
-            std::sync::Arc::new(crate::MemoryTokenStore::default()),
-            config,
-            std::sync::Arc::new(crate::MemoryReplayStore::default()),
-        )
-        .unwrap()
+        AuthServiceBuilder::new()
+            .rotation_overlap(Duration::seconds(overlap_seconds))
+            .build()
     }
 
     fn service_with_lifetime(lifetime_seconds: i64, overlap_seconds: i64) -> AuthService {
-        let mut config = TestFixture::config();
-        config.token_lifetime = Duration::seconds(lifetime_seconds);
-        config.rotation_overlap = Duration::seconds(overlap_seconds);
-        AuthService::new(
-            std::sync::Arc::new(crate::MemoryTokenStore::default()),
-            config,
-            std::sync::Arc::new(crate::MemoryReplayStore::default()),
-        )
-        .unwrap()
+        AuthServiceBuilder::new()
+            .token_lifetime(Duration::seconds(lifetime_seconds))
+            .rotation_overlap(Duration::seconds(overlap_seconds))
+            .build()
     }
 
     async fn orphan_replacement(

@@ -1,4 +1,4 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
+use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction, TokenAuditEvent};
 use chrono::{Duration, Utc};
 use std::sync::Arc;
@@ -8,7 +8,7 @@ struct AuditFixture;
 impl AuditFixture {
     fn service() -> (crate::AuthService, Arc<MemoryTokenAuditLog>) {
         let audit = Arc::new(MemoryTokenAuditLog::new(4096));
-        let service = TestFixture::service_with_audit(audit.clone());
+        let service = AuthServiceBuilder::new().audit(audit.clone()).build();
         (service, audit)
     }
 

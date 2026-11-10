@@ -1,4 +1,4 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
+use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{
     AuthService, ConsumeResult, MemoryReplayStore, MemoryTokenStore, ReplayReservation,
     ReplayStore, ReplayStoreError,
@@ -21,10 +21,14 @@ impl AuthReplayFixture {
         let replay = Arc::new(MemoryReplayStore::new(
             NonZeroUsize::new(8).expect("non-zero capacity"),
         ));
-        let first = AuthService::new(token_store.clone(), TestFixture::config(), replay.clone())
-            .expect("valid service");
-        let second = AuthService::new(token_store.clone(), TestFixture::config(), replay.clone())
-            .expect("valid service");
+        let first = AuthServiceBuilder::new()
+            .store(token_store.clone())
+            .replay(replay.clone())
+            .build();
+        let second = AuthServiceBuilder::new()
+            .store(token_store.clone())
+            .replay(replay.clone())
+            .build();
         (first, second, token_store, replay)
     }
 }
@@ -91,8 +95,10 @@ async fn a_restarted_verifier_rejects_replays_when_the_store_is_shared() {
             .expect("first verification")
     );
 
-    let restarted =
-        AuthService::new(token_store, TestFixture::config(), replay).expect("valid service");
+    let restarted = AuthServiceBuilder::new()
+        .store(token_store)
+        .replay(replay)
+        .build();
 
     assert!(
         !restarted
@@ -104,12 +110,9 @@ async fn a_restarted_verifier_rejects_replays_when_the_store_is_shared() {
 
 #[tokio::test]
 async fn replay_store_failures_are_returned_and_fail_closed() {
-    let service = AuthService::new(
-        Arc::new(MemoryTokenStore::default()),
-        TestFixture::config(),
-        Arc::new(UnavailableReplayStore),
-    )
-    .expect("valid service");
+    let service = AuthServiceBuilder::new()
+        .replay(Arc::new(UnavailableReplayStore))
+        .build();
     let token = TestFixture::add_token(&service, "token-a", "demo-owner").await;
     let now = Utc::now();
     let signed = service

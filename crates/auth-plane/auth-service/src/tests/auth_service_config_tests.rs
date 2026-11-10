@@ -1,8 +1,7 @@
-use crate::{
-    AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenAuditLog, MemoryTokenStore,
-};
+use super::support_tests::AuthServiceBuilder;
+use crate::{AuthService, AuthServiceConfig, MemoryTokenAuditLog};
 use chrono::Duration;
-use platform_errors::{AuthError, BpError};
+use platform_errors::{AuthError, BpError, BpResult};
 use std::sync::Arc;
 
 struct ConfigFixture;
@@ -17,12 +16,8 @@ impl ConfigFixture {
         }
     }
 
-    fn service(config: AuthServiceConfig) -> platform_errors::BpResult<AuthService> {
-        AuthService::new(
-            Arc::new(MemoryTokenStore::default()),
-            config,
-            Arc::new(MemoryReplayStore::default()),
-        )
+    fn service(config: AuthServiceConfig) -> BpResult<AuthService> {
+        AuthServiceBuilder::new().config(config).try_build()
     }
 }
 
@@ -52,14 +47,9 @@ fn accepts_rotation_overlap_equal_to_token_lifetime() {
 
 #[test]
 fn rejects_sub_second_signature_validity() {
-    let mut config = ConfigFixture::config();
-    config.signature_validity = Duration::milliseconds(500);
-
-    let error = AuthService::new(
-        Arc::new(MemoryTokenStore::default()),
-        config,
-        Arc::new(MemoryReplayStore::default()),
-    );
+    let error = AuthServiceBuilder::new()
+        .signature_validity(Duration::milliseconds(500))
+        .try_build();
 
     assert!(matches!(
         error,
@@ -72,15 +62,9 @@ fn rejects_sub_second_signature_validity() {
 
 #[test]
 fn accepts_one_second_signature_validity() {
-    let mut config = ConfigFixture::config();
-    config.signature_validity = Duration::seconds(1);
+    let result = AuthServiceBuilder::new()
+        .signature_validity(Duration::seconds(1))
+        .try_build();
 
-    assert!(
-        AuthService::new(
-            Arc::new(MemoryTokenStore::default()),
-            config,
-            Arc::new(MemoryReplayStore::default()),
-        )
-        .is_ok()
-    );
+    assert!(result.is_ok());
 }

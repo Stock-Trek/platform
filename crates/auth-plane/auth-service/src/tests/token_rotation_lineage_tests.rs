@@ -1,19 +1,10 @@
 use super::support_tests::TestFixture;
-use crate::AuthService;
 use chrono::Utc;
 use platform_errors::{AuthError, BpError};
 
-struct RotationLineageFixture;
-
-impl RotationLineageFixture {
-    fn service() -> AuthService {
-        TestFixture::service()
-    }
-}
-
 #[tokio::test]
 async fn rejects_rotation_back_to_the_predecessor_id() {
-    let service = RotationLineageFixture::service();
+    let service = TestFixture::service();
     let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
     let replacement = service
@@ -50,7 +41,7 @@ async fn rejects_rotation_back_to_the_predecessor_id() {
 
 #[tokio::test]
 async fn rejects_rotation_that_would_close_a_cross_token_cycle() {
-    let service = RotationLineageFixture::service();
+    let service = TestFixture::service();
     let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
     let replacement = service
@@ -85,7 +76,7 @@ async fn rejects_rotation_that_would_close_a_cross_token_cycle() {
 
 #[tokio::test]
 async fn rotates_a_replacement_forward_to_a_new_id() {
-    let service = RotationLineageFixture::service();
+    let service = TestFixture::service();
     let original = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
     let replacement = service
