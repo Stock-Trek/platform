@@ -72,8 +72,6 @@ required in some configurations, the condition is stated in its description.
 
 | Variable | Description |
 | --- | --- |
-| `PORTFOLIO_AUDIT_QUEUE_URL` | SQS queue URL that receives auth-service token audit events. |
-| `PORTFOLIO_AUDIT_TIMEOUT_SECS` | Maximum time spent delivering one audit event, in seconds. |
 | `PORTFOLIO_ORDER_REQUEST_BIND_ADDR` | Socket address on which the portfolio service accepts unsigned order requests. |
 | `PORTFOLIO_ORDER_REQUEST_URL` | URL that receives signed order requests from the portfolio service. |
 | `PORTFOLIO_VALKEY_KEY_PREFIX` | Prefix for replay-protection keys in Valkey. |
