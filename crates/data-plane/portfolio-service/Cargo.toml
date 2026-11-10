@@ -5,10 +5,26 @@ edition.workspace = true
 
 [dependencies]
 async-trait = { workspace = true }
+aws-sdk-sqs = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
+chrono = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
 parking_lot = { workspace = true }
+platform-auth-service = { workspace = true }
+platform-aws = { workspace = true }
 platform-config = { workspace = true }
-platform-errors = { workspace = true }
+platform-errors = { workspace = true, features = ["http"] }
+platform-messages = { workspace = true }
 platform-runtime = { workspace = true }
+platform-sqs = { workspace = true }
+platform-time = { workspace = true }
+platform-types = { workspace = true }
+reqwest = { workspace = true, default-features = false, features = ["json", "rustls"] }
+secrecy = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 stock-trek = { workspace = true }
 stock-trek-types = { workspace = true }
-tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "sync"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tracing = { workspace = true }

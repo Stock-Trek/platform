@@ -75,6 +75,9 @@ futures-timer = "3"
 hex = "0.4"
 hmac = "0.13"
 http = "1"
+hyper = { version = "1", features = ["http1", "server"] }
+hyper-util = { version = "0.1", features = ["tokio"] }
+http-body-util = "0.1"
 httpdate = "1"
 iceberg = "0.10"
 iceberg-catalog-rest = "0.10"

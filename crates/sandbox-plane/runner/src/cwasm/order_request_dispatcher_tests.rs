@@ -1,10 +1,6 @@
-use chrono::{Duration, Utc};
-use platform_auth_service::{
-    ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenAuditLog,
-    MemoryTokenStore, SignedOrderRequest, TokenMetadata, TokenScope, TokenStore,
-};
+use platform_messages::order_request::UnsignedOrderRequest;
 use serde_json::Value;
-use std::{collections::BTreeMap, sync::Arc};
+use std::collections::BTreeMap;
 use stock_trek::{
     actions::ResolvedAction,
     types::{AccountId, Activation, AssetId, CexId, OrderRequest, Tag},
@@ -17,42 +13,11 @@ use tokio::{
 
 use super::OrderRequestDispatcher;
 
-const TOKEN_ID: &str = "runner-token";
 const OWNER: &str = "runner-owner";
 
 struct Fixture;
 
 impl Fixture {
-    fn auth_service_with_store(store: Arc<MemoryTokenStore>) -> AuthService {
-        AuthService::new(
-            store,
-            AuthServiceConfig {
-                token_lifetime: Duration::days(30),
-                rotation_overlap: Duration::days(7),
-                signature_validity: Duration::minutes(5),
-                audit: Arc::new(MemoryTokenAuditLog::new(4096)),
-            },
-            Arc::new(MemoryReplayStore::default()),
-        )
-        .unwrap()
-    }
-
-    async fn setup(url: &str) -> (OrderRequestDispatcher, AuthService, ApiToken) {
-        let store = Arc::new(MemoryTokenStore::default());
-        let now = Utc::now();
-        let metadata = TokenMetadata::new(now + Duration::days(30), TokenScope::DEFAULT).unwrap();
-        let token = ApiToken::generate(TOKEN_ID, OWNER, now, metadata).unwrap();
-        store.put(&token).await.unwrap();
-        let auth_service = Self::auth_service_with_store(store);
-        let dispatcher = OrderRequestDispatcher::new(url, OWNER, auth_service.clone()).unwrap();
-        (dispatcher, auth_service, token)
-    }
-
-    fn dispatcher_without_token(url: &str) -> OrderRequestDispatcher {
-        let service = Self::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
-        OrderRequestDispatcher::new(url, OWNER, service).unwrap()
-    }
-
     fn order_request() -> OrderRequest<AssetId, f64> {
         OrderRequest::MarketBuy {
             base: AssetId::Bitcoin,
@@ -70,6 +35,10 @@ impl Fixture {
             order_request: Self::order_request(),
         })
         .unwrap()
+    }
+
+    fn dispatcher(url: &str) -> OrderRequestDispatcher {
+        OrderRequestDispatcher::new(url, OWNER).unwrap()
     }
 }
 
@@ -141,29 +110,23 @@ impl TestServer {
 
 #[test]
 fn rejects_an_invalid_order_request_url() {
-    let service = Fixture::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
-    let result = OrderRequestDispatcher::new("not a url", OWNER, service);
-    assert!(result.is_err());
+    assert!(OrderRequestDispatcher::new("not a url", OWNER).is_err());
 }
 
 #[test]
 fn rejects_a_non_http_order_request_url() {
-    let service = Fixture::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
-    let result = OrderRequestDispatcher::new("file:///tmp/orders", OWNER, service);
-    assert!(result.is_err());
+    assert!(OrderRequestDispatcher::new("file:///tmp/orders", OWNER).is_err());
 }
 
 #[test]
 fn rejects_an_empty_owner() {
-    let service = Fixture::auth_service_with_store(Arc::new(MemoryTokenStore::default()));
-    let result = OrderRequestDispatcher::new("http://127.0.0.1:1/orders", "", service);
-    assert!(result.is_err());
+    assert!(OrderRequestDispatcher::new("http://127.0.0.1:1/orders", "").is_err());
 }
 
 #[tokio::test]
-async fn signs_and_submits_place_order_actions() {
+async fn submits_unsigned_place_order_actions() {
     let (url, server) = TestServer::start("200 OK").await;
-    let (dispatcher, auth_service, token) = Fixture::setup(&url).await;
+    let dispatcher = Fixture::dispatcher(&url);
 
     dispatcher.dispatch([Fixture::place_order()]).await.unwrap();
 
@@ -176,33 +139,21 @@ async fn signs_and_submits_place_order_actions() {
     );
 
     let body: Value = serde_json::from_str(&request.body).unwrap();
-    assert_eq!(body["cex"], "binance");
-    assert_eq!(body["account"], "account-1");
-    assert_eq!(body["tokenId"], token.id());
-
-    let order_request: OrderRequest<AssetId, f64> =
-        serde_json::from_value(body["orderRequest"].clone()).unwrap();
-    let bytes = serde_json::to_vec(&order_request).unwrap();
-    let signed = SignedOrderRequest::decode(body["signature"].as_str().unwrap()).unwrap();
-    assert_eq!(signed.token_id(), token.id());
-    assert!(
-        auth_service
-            .verify_order_request(token.id(), &bytes, signed.envelope(), Utc::now())
-            .await
-            .unwrap()
+    let payload: UnsignedOrderRequest = serde_json::from_value(body.clone()).unwrap();
+    assert_eq!(payload.cex(), CexId::Binance);
+    assert_eq!(payload.account(), &AccountId("account-1".to_string()));
+    assert_eq!(payload.owner(), OWNER);
+    assert_eq!(
+        serde_json::to_value(payload.order_request()).unwrap(),
+        serde_json::to_value(Fixture::order_request()).unwrap()
     );
-}
-
-#[tokio::test]
-async fn rejects_an_owner_without_a_token() {
-    let dispatcher = Fixture::dispatcher_without_token("http://127.0.0.1:1/order-requests");
-
-    assert!(dispatcher.dispatch([Fixture::place_order()]).await.is_err());
+    assert!(body.get("tokenId").is_none());
+    assert!(body.get("signature").is_none());
 }
 
 #[tokio::test]
 async fn ignores_actions_that_do_not_place_orders() {
-    let dispatcher = Fixture::dispatcher_without_token("http://127.0.0.1:1/order-requests");
+    let dispatcher = Fixture::dispatcher("http://127.0.0.1:1/order-requests");
     let action = serde_json::to_string(&ResolvedAction::CancelAllOrders { tag: None }).unwrap();
 
     dispatcher.dispatch([action]).await.unwrap();
@@ -210,7 +161,7 @@ async fn ignores_actions_that_do_not_place_orders() {
 
 #[tokio::test]
 async fn rejects_malformed_actions() {
-    let dispatcher = Fixture::dispatcher_without_token("http://127.0.0.1:1/order-requests");
+    let dispatcher = Fixture::dispatcher("http://127.0.0.1:1/order-requests");
 
     assert!(dispatcher.dispatch(["{".to_string()]).await.is_err());
 }
@@ -218,7 +169,7 @@ async fn rejects_malformed_actions() {
 #[tokio::test]
 async fn reports_a_rejected_submission() {
     let (url, server) = TestServer::start("503 Service Unavailable").await;
-    let (dispatcher, _, _) = Fixture::setup(&url).await;
+    let dispatcher = Fixture::dispatcher(&url);
 
     assert!(dispatcher.dispatch([Fixture::place_order()]).await.is_err());
     server.await.unwrap();

@@ -34,25 +34,13 @@
 #[path = "../cwasm/mod.rs"]
 mod cwasm;
 
-use aws_sdk_sqs::Client as SqsClient;
-use chrono::Duration;
 use cwasm::{
-    AuditConfig, Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher,
-    WasmRunner, backtest,
+    Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher, WasmRunner,
+    backtest,
 };
-use platform_auth_service::{
-    AuthService, AuthServiceConfig, SqsTokenAuditLog, ValkeyReplayStore, ValkeyReplayStoreConfig,
-    VaultTokenStore, VaultTokenStoreConfig,
-};
-use platform_aws::Aws;
 use platform_exit_codes::ExitCode;
 use platform_runner::command::{Command, RunRequest};
-use platform_sqs::sqs::{Sqs, SqsConfig};
-use platform_time::timeouts::Timeouts;
-use std::{
-    io::{self, Read},
-    sync::Arc,
-};
+use std::io::{self, Read};
 
 const MAX_RUN_REQUEST_BYTES: u64 = 1024 * 1024;
 
@@ -84,29 +72,20 @@ impl CwasmInvoker {
         let InvokerConfig {
             execution,
             cwasm: cwasm_limits,
-            vault,
-            valkey,
-            audit,
+            ..
         } = config;
         let runtime = match Self::runtime() {
             Ok(runtime) => runtime,
             Err(code) => return code.code(),
         };
-        let auth_service = match runtime.block_on(Self::auth_service(vault, valkey, audit)) {
-            Ok(auth_service) => auth_service,
-            Err(code) => return code.code(),
-        };
-        let dispatcher = match OrderRequestDispatcher::new(
-            &request.order_request_url,
-            &request.owner,
-            auth_service,
-        ) {
-            Ok(dispatcher) => dispatcher,
-            Err(error) => {
-                eprintln!("cwasm-invoker: invalid order request configuration: {error}");
-                return ExitCode::ServerRunnerConfigurationInvalid.code();
-            }
-        };
+        let dispatcher =
+            match OrderRequestDispatcher::new(&request.order_request_url, &request.owner) {
+                Ok(dispatcher) => dispatcher,
+                Err(error) => {
+                    eprintln!("cwasm-invoker: invalid order request configuration: {error}");
+                    return ExitCode::ServerRunnerConfigurationInvalid.code();
+                }
+            };
         let integrity = CwasmIntegrity::new(
             request.cwasm_sha256.clone(),
             request.cwasm_size,
@@ -159,43 +138,6 @@ impl CwasmInvoker {
                 eprintln!("cwasm-invoker: failed to start tokio runtime: {error}");
                 ExitCode::ServerRunnerRuntimeStartFailed
             })
-    }
-
-    async fn auth_service(
-        config: VaultTokenStoreConfig,
-        replay: ValkeyReplayStoreConfig,
-        audit: AuditConfig,
-    ) -> Result<AuthService, ExitCode> {
-        let store = VaultTokenStore::new(config).map_err(|error| {
-            eprintln!("cwasm-invoker: invalid auth service configuration: {error}");
-            ExitCode::ServerRunnerConfigurationInvalid
-        })?;
-        let timeouts = Timeouts::from_durations(audit.timeout, audit.timeout);
-        let sdk_config = Aws::load_sdk_config(timeouts).await;
-        let sqs = Sqs::new(
-            SqsClient::new(&sdk_config),
-            timeouts,
-            SqsConfig::new(audit.queue_url),
-        );
-        let audit = SqsTokenAuditLog::new(sqs, audit.timeout);
-        let replay = ValkeyReplayStore::connect(replay).await.map_err(|error| {
-            eprintln!("cwasm-invoker: failed to connect the replay store: {error}");
-            ExitCode::ServerRunnerConnectionFailed
-        })?;
-        AuthService::new(
-            Arc::new(store),
-            AuthServiceConfig {
-                token_lifetime: Duration::days(30),
-                rotation_overlap: Duration::days(7),
-                signature_validity: Duration::minutes(5),
-                audit: Arc::new(audit),
-            },
-            Arc::new(replay),
-        )
-        .map_err(|error| {
-            eprintln!("cwasm-invoker: invalid auth service configuration: {error}");
-            ExitCode::ServerRunnerConfigurationInvalid
-        })
     }
 
     fn read_request() -> Result<String, ExitCode> {

@@ -17,7 +17,7 @@ retained entries.
 
 ## Stage 2 implementation
 
-The production cwasm invoker uses `ValkeyReplayStore`, a shared `ReplayStore`
+The production portfolio service uses `ValkeyReplayStore`, a shared `ReplayStore`
 implementation backed by Redis-compatible Valkey. `consume` atomically writes a
 unique reservation value with `SET key value NX PX <remaining-ttl>`. A key that
 already exists is a replay, while an already-expired signed request is rejected
@@ -31,8 +31,8 @@ fails the verification closed with a retryable store error. The shared backend
 is authoritative across verifier instances and restarts; `MemoryReplayStore`
 remains available for local development and tests.
 
-Valkey is configured with the required `CWASM_INVOKER_VALKEY_URL`,
-`CWASM_INVOKER_VALKEY_KEY_PREFIX`, and `CWASM_INVOKER_VALKEY_TIMEOUT_SECS`
+Valkey is configured with the required `PORTFOLIO_VALKEY_URL`,
+`PORTFOLIO_VALKEY_KEY_PREFIX`, and `PORTFOLIO_VALKEY_TIMEOUT_SECS`
 variables. URLs may use `redis://`, `rediss://`, `valkey://`, or `valkeys://`;
 credentials in the URL are redacted from configuration debug output. See
 `docs/environment-variables.md` for details.
@@ -53,7 +53,7 @@ Relevant implementation:
 - `crates/auth-plane/auth-service/src/tests/valkey_config_tests.rs`
 - `crates/auth-plane/auth-service/src/tests/valkey_replay_store_tests.rs`
 
-Production wiring is in `crates/sandbox-plane/runner/src/bin/cwasm-invoker.rs`,
+Production wiring is in `crates/data-plane/portfolio-service/src/auth_service.rs`,
 which explicitly constructs the `ValkeyReplayStore` alongside its Vault-backed
 `TokenStore`.
 
