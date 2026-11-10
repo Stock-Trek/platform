@@ -16,6 +16,7 @@ mod signature_clock_skew_tests;
 mod signature_commit_race_tests;
 mod signature_future_tests;
 mod signature_policy_tests;
+mod signature_release_error_tests;
 mod signature_retry_tests;
 mod signed_order_request_precision_tests;
 mod signed_order_request_tests;
