@@ -2,7 +2,7 @@ use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{
     ApiToken, AuthService, ConsumeResult, MemoryReplayStore, MemoryTokenStore, ReplayKey,
     ReplayReservation, ReplayStore, ReplayStoreError, TokenAuditAction, TokenAuditEvent,
-    TokenAuditLog, TokenMutation, TokenStore,
+    TokenAuditLog, TokenMutation, TokenRotationTransaction, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -110,6 +110,10 @@ impl TokenStore for ConflictReadStore {
             return Err(BpError::token_conflict(token.id()));
         }
         self.inner.update(expected, token).await
+    }
+
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+        self.inner.commit_rotation(transaction).await
     }
 
     async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {

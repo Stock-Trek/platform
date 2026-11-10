@@ -84,15 +84,20 @@ pub trait TokenStore: Send + Sync {
         Ok(())
     }
 
-    /// Atomically writes a rotation transaction record.
+    /// Atomically writes a rotation transaction record, including its events.
     ///
-    /// Stores that cannot keep a separate transaction record materialize it
-    /// immediately instead.
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
-        self.materialize_rotation(transaction).await
-    }
+    /// This must be a single durable write so a rotation can never be
+    /// materialized without its audit events. Stores that cannot keep a
+    /// separate transaction record must still persist the events before they
+    /// materialize the rotation; they must not silently drop
+    /// [`TokenRotationTransaction::events`].
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()>;
 
     /// Applies a committed rotation transaction idempotently.
+    ///
+    /// This only changes token state. Audit events are owned by
+    /// [`TokenStore::commit_rotation`] and must already be persisted by the
+    /// time this method is called.
     async fn materialize_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
         let replacement = transaction.replacement();
         let existing = match self.get(replacement.id()).await? {

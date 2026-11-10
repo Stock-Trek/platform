@@ -1,7 +1,7 @@
 use super::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{
     ApiToken, AuthService, MemoryTokenStore, TokenAuditEvent, TokenMetadata, TokenMutation,
-    TokenScope, TokenStore,
+    TokenRotationTransaction, TokenScope, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
@@ -56,6 +56,10 @@ impl TokenStore for RecreateOnSecondGet {
 
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
         self.inner.update(expected, token).await
+    }
+
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+        self.inner.commit_rotation(transaction).await
     }
 
     async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {

@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, MemoryTokenStore, TokenAuditEvent, TokenMutation, TokenStore,
-    sqs_token_audit_log::AuditQueue,
+    ApiToken, MemoryTokenStore, TokenAuditEvent, TokenMutation, TokenRotationTransaction,
+    TokenStore, sqs_token_audit_log::AuditQueue,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -94,6 +94,10 @@ impl TokenStore for RecreateOnSecondGet {
 
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
         self.inner.update(expected, token).await
+    }
+
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+        self.inner.commit_rotation(transaction).await
     }
 
     async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {

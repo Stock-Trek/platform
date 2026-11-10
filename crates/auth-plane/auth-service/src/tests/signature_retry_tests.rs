@@ -1,7 +1,7 @@
 use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{
     ApiToken, AuthService, MemoryTokenStore, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
-    TokenMutation, TokenStore,
+    TokenMutation, TokenRotationTransaction, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -57,6 +57,10 @@ impl TokenStore for FailingStore {
             ));
         }
         self.inner.update(expected, token).await
+    }
+
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+        self.inner.commit_rotation(transaction).await
     }
 
     async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
