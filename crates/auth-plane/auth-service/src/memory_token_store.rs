@@ -102,8 +102,18 @@ impl TokenStore for MemoryTokenStore {
         Ok(())
     }
 
-    async fn commit(&self, mutation: TokenMutation, mut event: TokenAuditEvent) -> BpResult<bool> {
-        TokenAuditOutbox::ensure_event_id(&mut event);
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+        self.commit_events(mutation, vec![event]).await
+    }
+
+    async fn commit_events(
+        &self,
+        mutation: TokenMutation,
+        mut events: Vec<TokenAuditEvent>,
+    ) -> BpResult<bool> {
+        for event in &mut events {
+            TokenAuditOutbox::ensure_event_id(event);
+        }
         let mut state = self.state.lock();
         match mutation {
             TokenMutation::Create(token) => {
@@ -115,7 +125,7 @@ impl TokenStore for MemoryTokenStore {
                     token.id().to_string(),
                     StoredEntry {
                         token: Some(token),
-                        outbox: vec![event],
+                        outbox: events,
                     },
                 );
                 Ok(true)
@@ -132,7 +142,7 @@ impl TokenStore for MemoryTokenStore {
                     return Err(BpError::token_conflict(token.id()));
                 }
                 entry.token = Some(token);
-                entry.outbox.push(event);
+                entry.outbox.extend(events);
                 Ok(true)
             }
             TokenMutation::Delete { expected } => {
@@ -147,7 +157,7 @@ impl TokenStore for MemoryTokenStore {
                     return Ok(false);
                 }
                 entry.token = None;
-                entry.outbox.push(event);
+                entry.outbox.extend(events);
                 Ok(true)
             }
         }

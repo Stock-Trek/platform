@@ -45,6 +45,29 @@ pub trait TokenStore: Send + Sync {
     /// audit data.
     async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool>;
 
+    /// Applies `mutation` and records all `events` as one durable operation
+    /// where the store supports it.
+    ///
+    /// The default preserves at-least-once audit delivery by committing the
+    /// mutation with the first event and appending any remaining events.
+    async fn commit_events(
+        &self,
+        mutation: TokenMutation,
+        events: Vec<TokenAuditEvent>,
+    ) -> BpResult<bool> {
+        let mut events = events.into_iter();
+        let Some(first) = events.next() else {
+            return Ok(false);
+        };
+        if !self.commit(mutation, first).await? {
+            return Ok(false);
+        }
+        for event in events {
+            self.append_audit(event).await?;
+        }
+        Ok(true)
+    }
+
     /// Appends an audit event to the outbox without changing token state.
     ///
     /// Stores that can keep events independently of a token should override

@@ -3,7 +3,8 @@ use super::{
     vault_kv_state_tests::CapturedRequest,
 };
 use crate::{
-    TokenAuditAction, TokenAuditEvent, TokenStore, VaultTokenStore, VaultTokenStoreConfig,
+    TokenAuditAction, TokenAuditEvent, TokenMutation, TokenStore, VaultTokenStore,
+    VaultTokenStoreConfig,
     token_audit_outbox::TokenAuditOutbox,
     vault_client::{VaultClient, WriteCondition},
 };
@@ -75,6 +76,54 @@ async fn updating_a_token_preserves_pending_audit_events() {
     let pending = fixture.store.pending_audits().await.unwrap();
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].action, TokenAuditAction::Authenticated);
+    assert_eq!(
+        fixture
+            .store
+            .get(token.id())
+            .await
+            .unwrap()
+            .unwrap()
+            .to_value(),
+        updated.to_value()
+    );
+}
+
+#[tokio::test]
+async fn committing_multiple_events_updates_a_token_with_one_write() {
+    let fixture = VaultOutboxFixture::new();
+    let token = TestFixture::token("token-a");
+    fixture.store.put(&token).await.unwrap();
+    let writes_before = VaultOutboxFixture::token_writes(&fixture.server.requests(), token.id());
+
+    let now = Utc::now();
+    let mut updated = token.clone();
+    updated.metadata.record_use(now);
+    let events = vec![
+        VaultOutboxFixture::event(TokenAuditAction::Authenticated, token.id()),
+        VaultOutboxFixture::event(TokenAuditAction::Signed, token.id()),
+    ];
+    assert!(
+        fixture
+            .store
+            .commit_events(
+                TokenMutation::Update {
+                    expected: token.clone(),
+                    token: updated.clone(),
+                },
+                events,
+            )
+            .await
+            .unwrap()
+    );
+
+    assert_eq!(
+        VaultOutboxFixture::token_writes(&fixture.server.requests(), token.id()),
+        writes_before + 1
+    );
+    let pending = fixture.store.pending_audits().await.unwrap();
+    assert_eq!(pending.len(), 2);
+    assert_eq!(pending[0].action, TokenAuditAction::Authenticated);
+    assert_eq!(pending[1].action, TokenAuditAction::Signed);
     assert_eq!(
         fixture
             .store

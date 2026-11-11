@@ -53,6 +53,7 @@ mod valkey_replay_store;
 mod vault_audit;
 mod vault_client;
 mod vault_commit;
+mod vault_commit_events;
 mod vault_config;
 mod vault_delete;
 mod vault_error;

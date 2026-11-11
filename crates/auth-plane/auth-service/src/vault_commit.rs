@@ -13,23 +13,7 @@ impl VaultClient {
         mut event: TokenAuditEvent,
     ) -> BpResult<bool> {
         TokenAuditOutbox::ensure_event_id(&mut event);
-        match mutation {
-            TokenMutation::Create(token) => {
-                token.validate()?;
-                self.put_entry(
-                    token.id(),
-                    TokenAuditOutbox::token_document(&token, std::slice::from_ref(&event))?,
-                    WriteCondition::Create,
-                )
-                .await?;
-                Ok(true)
-            }
-            TokenMutation::Update { expected, token } => {
-                self.commit_update(&expected, &token, event).await?;
-                Ok(true)
-            }
-            TokenMutation::Delete { expected } => self.commit_delete(&expected, event).await,
-        }
+        self.commit_events(mutation, vec![event]).await
     }
 
     /// Updates a token without dropping audit events already waiting in its
@@ -57,61 +41,6 @@ impl VaultClient {
             WriteCondition::Update(version),
         )
         .await
-    }
-
-    async fn commit_update(
-        &self,
-        expected: &ApiToken,
-        token: &ApiToken,
-        event: TokenAuditEvent,
-    ) -> BpResult<()> {
-        token.validate()?;
-        let Some((data, version)) = self.get_value_entry(token.id()).await? else {
-            return Err(BpError::unknown_token(token.id()));
-        };
-        if Self::is_tombstone(&data) {
-            return Err(BpError::unknown_token(token.id()));
-        }
-        let current = Self::token_from_value(token.id(), &data)?;
-        if current.to_value() != expected.to_value() {
-            return Err(BpError::token_conflict(token.id()));
-        }
-        let mut outbox = TokenAuditOutbox::from_document(&data)?;
-        outbox.push(event);
-        self.put_entry(
-            token.id(),
-            TokenAuditOutbox::token_document(token, &outbox)?,
-            WriteCondition::Update(version),
-        )
-        .await
-    }
-
-    async fn commit_delete(&self, expected: &ApiToken, event: TokenAuditEvent) -> BpResult<bool> {
-        expected.validate()?;
-        let Some((data, version)) = self.get_value_entry(expected.id()).await? else {
-            return Ok(false);
-        };
-        if Self::is_tombstone(&data) {
-            return Ok(false);
-        }
-        let current = Self::token_from_value(expected.id(), &data)?;
-        if current.to_value() != expected.to_value() {
-            return Ok(false);
-        }
-        let mut outbox = TokenAuditOutbox::from_document(&data)?;
-        outbox.push(event);
-        match self
-            .put_entry(
-                expected.id(),
-                TokenAuditOutbox::tombstone_document(&outbox)?,
-                WriteCondition::Update(version),
-            )
-            .await
-        {
-            Ok(()) => Ok(true),
-            Err(error) if Self::is_conflict(&error) => Ok(false),
-            Err(error) => Err(error),
-        }
     }
 
     pub(crate) async fn append_audit(&self, mut event: TokenAuditEvent) -> BpResult<()> {
