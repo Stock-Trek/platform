@@ -20,6 +20,7 @@ pub(super) struct Spec {
     pub(super) historical_candle_count: usize,
     pub(super) open_candle_progress_millis: u64,
     pub(super) simulation_count: u32,
+    pub(super) max_concurrent_simulations: u32,
     pub(super) random_seed: u64,
     pub(super) simulation: SimulationParameters,
     pub(super) user_id: String,
@@ -43,6 +44,7 @@ impl Spec {
             algorithm_id,
             back_test_id,
             simulation_count,
+            max_concurrent_simulations,
             random_seed,
             trading_pairs,
             windows,
@@ -56,6 +58,11 @@ impl Spec {
         if *simulation_count < 1 {
             return Err(Self::invalid_argument(
                 "simulation count must be at least one",
+            ));
+        }
+        if *max_concurrent_simulations < 1 {
+            return Err(Self::invalid_argument(
+                "max concurrent simulations must be at least one",
             ));
         }
         for (name, chance) in [
@@ -176,6 +183,7 @@ impl Spec {
             historical_candle_count: *historical_candle_count as usize,
             open_candle_progress_millis: *open_candle_progress_millis,
             simulation_count: *simulation_count,
+            max_concurrent_simulations: *max_concurrent_simulations,
             random_seed: *random_seed,
             simulation: simulation.clone(),
             user_id: user_id.clone(),

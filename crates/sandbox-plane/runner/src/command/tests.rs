@@ -198,6 +198,7 @@ fn deserialises_the_back_test_command() {
                 "algorithmId": "algorithm-1",
                 "backTestId": "back-test-1",
                 "simulationCount": 10,
+                "maxConcurrentSimulations": 4,
                 "randomSeed": 42,
                 "tradingPairs": [{"base": "Bitcoin", "quote": "TetherUSD"}],
                 "windows": [5, 12],
@@ -211,6 +212,7 @@ fn deserialises_the_back_test_command() {
     assert_eq!(command.arguments(), vec!["BackTest", "AlgorithmStub"]);
     let Command::BackTest {
         simulation_count,
+        max_concurrent_simulations,
         random_seed,
         trading_pairs,
         windows,
@@ -223,6 +225,7 @@ fn deserialises_the_back_test_command() {
         panic!("expected a back test command");
     };
     assert_eq!(*simulation_count, 10);
+    assert_eq!(*max_concurrent_simulations, 4);
     assert_eq!(*random_seed, 42);
     assert_eq!(
         trading_pairs,
@@ -252,6 +255,7 @@ fn deserialises_back_test_simulation_parameters() {
                 "algorithmId": "algorithm-1",
                 "backTestId": "back-test-1",
                 "simulationCount": 1,
+                "maxConcurrentSimulations": 2,
                 "randomSeed": 42,
                 "tradingPairs": [{"base": "Bitcoin", "quote": "TetherUSD"}],
                 "windows": [5],
@@ -267,9 +271,15 @@ fn deserialises_back_test_simulation_parameters() {
     )
     .unwrap();
 
-    let Command::BackTest { simulation, .. } = &command else {
+    let Command::BackTest {
+        simulation,
+        max_concurrent_simulations,
+        ..
+    } = &command
+    else {
         panic!("expected a back test command");
     };
+    assert_eq!(*max_concurrent_simulations, 2);
     assert_eq!(
         simulation,
         &SimulationParameters {

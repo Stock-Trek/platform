@@ -1,6 +1,12 @@
+use parking_lot::Mutex;
 use platform_exit_codes::ExitCode;
 use platform_runner::command::Command;
-use std::{collections::BTreeMap, path::Path};
+use std::{
+    collections::BTreeMap,
+    panic::{AssertUnwindSafe, catch_unwind},
+    path::Path,
+    sync::atomic::{AtomicU32, Ordering},
+};
 use stock_trek::types::{AccountId, AssetId, CexId};
 
 use crate::cwasm::WasmRunner;
@@ -18,25 +24,47 @@ impl BackTest {
             Ok(spec) => spec,
             Err(code) => return code,
         };
-        let results = std::thread::scope(|scope| {
-            (0..spec.simulation_count)
-                .map(|index| {
-                    let spec = &spec;
-                    scope.spawn(move || Self::simulate(runner, cwasm_path, spec, index))
-                })
-                .collect::<Vec<_>>()
-                .into_iter()
-                .map(|handle| {
-                    handle
-                        .join()
-                        .unwrap_or_else(|_| Err(ExitCode::BotErrorPanic.code()))
-                })
-                .collect::<Vec<_>>()
+        Self::run_simulations(
+            spec.simulation_count,
+            spec.max_concurrent_simulations,
+            |index| Self::simulate(runner, cwasm_path, &spec, index),
+        )
+        .into_iter()
+        .find_map(Result::err)
+        .unwrap_or(ExitCode::Success.code())
+    }
+
+    pub(super) fn run_simulations<F>(
+        simulation_count: u32,
+        max_concurrent: u32,
+        simulate: F,
+    ) -> Vec<Result<(), i32>>
+    where
+        F: Fn(u32) -> Result<(), i32> + Sync,
+    {
+        let worker_count = simulation_count.min(max_concurrent) as usize;
+        let next = AtomicU32::new(0);
+        let results = Mutex::new(Vec::with_capacity(simulation_count as usize));
+        std::thread::scope(|scope| {
+            for _ in 0..worker_count {
+                scope.spawn(|| {
+                    let mut worker_results = Vec::new();
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        if index >= simulation_count {
+                            break;
+                        }
+                        let result = catch_unwind(AssertUnwindSafe(|| simulate(index)))
+                            .unwrap_or_else(|_| Err(ExitCode::BotErrorPanic.code()));
+                        worker_results.push((index, result));
+                    }
+                    results.lock().extend(worker_results);
+                });
+            }
         });
-        results
-            .into_iter()
-            .find_map(Result::err)
-            .unwrap_or(ExitCode::Success.code())
+        let mut results = results.into_inner();
+        results.sort_by_key(|(index, _)| *index);
+        results.into_iter().map(|(_, result)| result).collect()
     }
 
     fn simulate(
