@@ -23,8 +23,13 @@ const OWNERSHIP_CLIENT_NAME: &str = "PORTFOLIO_OWNERSHIP_CLIENT_NAME";
 const OWNERSHIP_DURABLE: &str = "PORTFOLIO_OWNERSHIP_DURABLE";
 const OWNERSHIP_CHECKPOINT_BUCKET: &str = "PORTFOLIO_OWNERSHIP_CHECKPOINT_BUCKET";
 const OWNERSHIP_RETRY_BACKOFF_SECS: &str = "PORTFOLIO_OWNERSHIP_RETRY_BACKOFF_SECS";
+const UPDATE_NATS_URL: &str = "PORTFOLIO_UPDATE_NATS_URL";
+const UPDATE_CLIENT_NAME: &str = "PORTFOLIO_UPDATE_CLIENT_NAME";
+const UPDATE_DURABLE: &str = "PORTFOLIO_UPDATE_DURABLE";
+const UPDATE_CHECKPOINT_BUCKET: &str = "PORTFOLIO_UPDATE_CHECKPOINT_BUCKET";
+const UPDATE_RETRY_BACKOFF_SECS: &str = "PORTFOLIO_UPDATE_RETRY_BACKOFF_SECS";
 
-const ALL_VARS: [(&str, &str); 20] = [
+const ALL_VARS: [(&str, &str); 25] = [
     (LOG_FILTER, "info"),
     (BIND_ADDRESS, "127.0.0.1:8080"),
     (DELIVERY_URL, "https://orders.example.com/orders"),
@@ -45,12 +50,21 @@ const ALL_VARS: [(&str, &str); 20] = [
     (OWNERSHIP_DURABLE, "portfolio-ownership"),
     (OWNERSHIP_CHECKPOINT_BUCKET, "portfolio-checkpoints"),
     (OWNERSHIP_RETRY_BACKOFF_SECS, "3"),
+    (UPDATE_NATS_URL, "nats://nats.example.com:4222"),
+    (UPDATE_CLIENT_NAME, "portfolio-service-updates"),
+    (UPDATE_DURABLE, "portfolio-updates"),
+    (UPDATE_CHECKPOINT_BUCKET, "portfolio-checkpoints"),
+    (UPDATE_RETRY_BACKOFF_SECS, "2"),
 ];
 
-struct Fixture;
+pub(super) struct Fixture;
 
 impl Fixture {
-    fn config(vars: &[(&str, &str)]) -> BpResult<PortfolioConfig> {
+    pub fn all() -> Vec<(&'static str, &'static str)> {
+        ALL_VARS.to_vec()
+    }
+
+    pub(super) fn config(vars: &[(&str, &str)]) -> BpResult<PortfolioConfig> {
         PortfolioConfig::from_vars(&EnvVars::from_map(
             vars.iter()
                 .map(|(name, value)| ((*name).to_string(), (*value).to_string())),
@@ -119,6 +133,16 @@ fn reads_every_value_from_the_environment() {
         "portfolio-checkpoints"
     );
     assert_eq!(config.ownership().retry_backoff(), Duration::from_secs(3));
+    assert_eq!(config.update().nats_url(), "nats://nats.example.com:4222");
+    assert_eq!(config.update().client_name(), "portfolio-service-updates");
+    assert_eq!(config.update().durable(), "portfolio-updates");
+    assert_eq!(config.update().checkpoint_bucket(), "portfolio-checkpoints");
+    assert_eq!(config.update().retry_backoff(), Duration::from_secs(2));
+    assert_eq!(
+        config.freshness().policy().max_age(),
+        chrono::Duration::seconds(60)
+    );
+    assert!(!config.binance().enabled());
 }
 
 #[test]
@@ -168,6 +192,9 @@ fn rejects_invalid_service_configuration() {
         (OWNERSHIP_NATS_URL, "not a url"),
         (OWNERSHIP_NATS_URL, "http://nats.example.com"),
         (OWNERSHIP_RETRY_BACKOFF_SECS, "0"),
+        (UPDATE_NATS_URL, "not a url"),
+        (UPDATE_NATS_URL, "http://nats.example.com"),
+        (UPDATE_RETRY_BACKOFF_SECS, "0"),
     ] {
         assert!(
             Fixture::config(&Fixture::with(name, value)).is_err(),

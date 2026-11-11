@@ -3,12 +3,18 @@ use platform_errors::BpResult;
 use platform_runtime::Config;
 
 mod auth;
+mod binance;
+mod freshness;
 mod order_request;
 mod ownership;
+mod update;
 
 pub use auth::AuthConfig;
+pub use binance::{BinanceConfig, BinanceCredentialConfig};
+pub use freshness::FreshnessConfig;
 pub use order_request::OrderRequestConfig;
 pub use ownership::OwnershipConfig;
+pub use update::UpdateConfig;
 
 #[derive(Debug, Clone)]
 pub struct PortfolioConfig {
@@ -16,6 +22,9 @@ pub struct PortfolioConfig {
     order_request: OrderRequestConfig,
     auth: AuthConfig,
     ownership: OwnershipConfig,
+    update: UpdateConfig,
+    freshness: FreshnessConfig,
+    binance: BinanceConfig,
 }
 
 impl PortfolioConfig {
@@ -29,6 +38,9 @@ impl PortfolioConfig {
             order_request: OrderRequestConfig::from_vars(vars)?,
             auth: AuthConfig::from_vars(vars)?,
             ownership: OwnershipConfig::from_vars(vars)?,
+            update: UpdateConfig::from_vars(vars)?,
+            freshness: FreshnessConfig::from_vars(vars)?,
+            binance: BinanceConfig::from_vars(vars)?,
         })
     }
 
@@ -46,5 +58,17 @@ impl PortfolioConfig {
 
     pub fn ownership(&self) -> &OwnershipConfig {
         &self.ownership
+    }
+
+    pub fn update(&self) -> &UpdateConfig {
+        &self.update
+    }
+
+    pub fn freshness(&self) -> FreshnessConfig {
+        self.freshness
+    }
+
+    pub fn binance(&self) -> &BinanceConfig {
+        &self.binance
     }
 }

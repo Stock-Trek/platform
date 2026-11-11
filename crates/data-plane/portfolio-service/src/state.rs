@@ -1,11 +1,46 @@
 use crate::portfolio::{AccountPortfolio, AccountPortfolios, PortfolioUpdate};
+use chrono::{DateTime, Utc};
 use platform_portfolio_ownership::AccountKey;
 use std::collections::{BTreeMap, BTreeSet};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PortfolioUpdateOutcome {
+    Applied,
+    IgnoredUntracked,
+    IgnoredStale,
+}
+
+#[derive(Debug, Clone)]
+pub struct PortfolioUpdateMetadata {
+    version: u64,
+    occurred_at: DateTime<Utc>,
+    exchange_time: Option<DateTime<Utc>>,
+    applied_at: DateTime<Utc>,
+}
+
+impl PortfolioUpdateMetadata {
+    pub fn version(&self) -> u64 {
+        self.version
+    }
+
+    pub fn occurred_at(&self) -> DateTime<Utc> {
+        self.occurred_at
+    }
+
+    pub fn exchange_time(&self) -> Option<DateTime<Utc>> {
+        self.exchange_time
+    }
+
+    pub fn applied_at(&self) -> DateTime<Utc> {
+        self.applied_at
+    }
+}
+
 #[derive(Debug, Default)]
 pub struct PortfolioState {
     portfolios: AccountPortfolios,
+    updates: BTreeMap<AccountKey, PortfolioUpdateMetadata>,
     global_accounts: BTreeSet<AccountKey>,
     owner_accounts: BTreeMap<String, BTreeSet<AccountKey>>,
 }
@@ -130,15 +165,34 @@ impl PortfolioState {
     }
 
     pub fn apply_update(&mut self, update: PortfolioUpdate) -> bool {
-        let (account, portfolio) = update.into_parts();
-        if !self.is_tracked(&account) {
-            return false;
+        self.apply_update_with_outcome(update) == PortfolioUpdateOutcome::Applied
+    }
+
+    pub fn apply_update_with_outcome(&mut self, update: PortfolioUpdate) -> PortfolioUpdateOutcome {
+        let account = update.account().clone();
+        let tracked = match update.owner() {
+            Some(owner) => self.is_tracked_for_owner(owner, &account),
+            None => self.is_tracked(&account),
+        };
+        if !tracked {
+            return PortfolioUpdateOutcome::IgnoredUntracked;
         }
+        if !self.accepts(&account, update.version()) {
+            return PortfolioUpdateOutcome::IgnoredStale;
+        }
+        let metadata = PortfolioUpdateMetadata {
+            version: update.version(),
+            occurred_at: update.occurred_at(),
+            exchange_time: update.exchange_time(),
+            applied_at: Utc::now(),
+        };
+        let (_, portfolio) = update.into_parts();
         self.portfolios
             .entry(account.cex_id())
             .or_default()
             .insert(account.account_id().clone(), portfolio);
-        true
+        self.updates.insert(account, metadata);
+        PortfolioUpdateOutcome::Applied
     }
 
     pub fn set_portfolio(&mut self, account: AccountKey, portfolio: AccountPortfolio) -> bool {
@@ -149,6 +203,19 @@ impl PortfolioState {
         self.portfolios
             .get(&account.cex_id())
             .and_then(|accounts| accounts.get(account.account_id()))
+    }
+
+    pub fn update(&self, account: &AccountKey) -> Option<&PortfolioUpdateMetadata> {
+        self.updates.get(account)
+    }
+
+    pub fn snapshot_age(
+        &self,
+        account: &AccountKey,
+        now: DateTime<Utc>,
+    ) -> Option<chrono::Duration> {
+        self.update(account)
+            .map(|metadata| now.signed_duration_since(metadata.occurred_at()))
     }
 
     pub fn snapshot(&self) -> AccountPortfolios {
@@ -176,10 +243,17 @@ impl PortfolioState {
         }
     }
 
+    fn accepts(&self, account: &AccountKey, version: u64) -> bool {
+        self.updates.get(account).is_none_or(|metadata| {
+            version > metadata.version() || (version == 0 && metadata.version() == 0)
+        })
+    }
+
     fn prune(&mut self, account: &AccountKey) {
         if self.is_tracked(account) {
             return;
         }
+        self.updates.remove(account);
         let remove_cex = self
             .portfolios
             .get_mut(&account.cex_id())

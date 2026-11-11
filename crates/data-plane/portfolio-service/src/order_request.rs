@@ -139,13 +139,8 @@ impl OrderRequestService {
             return Ok(());
         };
         let account = AccountKey::from((request.cex(), request.account().clone()));
-        if portfolio.is_tracked_for_owner(owner, &account) {
-            Ok(())
-        } else {
-            Err(BpError::auth_invalid_field(
-                "account",
-                "is not owned by the authenticated owner",
-            ))
-        }
+        portfolio
+            .authorize_order(owner, &account, Utc::now())
+            .map(|_| ())
     }
 }

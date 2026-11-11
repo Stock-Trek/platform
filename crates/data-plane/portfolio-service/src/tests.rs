@@ -1,6 +1,9 @@
 mod account_tests;
+mod binance_config_tests;
 mod config_tests;
 mod feed_tests;
+mod freshness_tests;
+mod health_tests;
 mod order_request_auth_tests;
 mod order_request_error_tests;
 mod order_request_fixture_tests;
@@ -11,6 +14,8 @@ mod order_request_server_shutdown_tests;
 mod order_request_server_tests;
 mod order_request_tests;
 mod ownership_tests;
+mod portfolio_codec_tests;
 mod service_tests;
 mod state_tests;
 mod test_feed;
+mod update_tests;

@@ -1,11 +1,15 @@
 use crate::{
-    feed::PortfolioFeed,
+    feed::{PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink},
+    freshness::{FreshnessPolicy, PortfolioFreshness},
     ownership_registry::{OwnershipApply, OwnershipRegistry},
     portfolio::{AccountPortfolio, AccountPortfolios, PortfolioUpdate},
-    state::PortfolioState,
+    state::{PortfolioState, PortfolioUpdateMetadata, PortfolioUpdateOutcome},
 };
+use async_trait::async_trait;
+use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use platform_errors::BpResult;
+use platform_metrics::PortfolioMetrics;
 use platform_portfolio_ownership::{AccountKey, OwnershipEvent};
 use std::{collections::BTreeSet, sync::Arc};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
@@ -17,14 +21,20 @@ pub struct PortfolioService {
     state: RwLock<PortfolioState>,
     ownership: RwLock<OwnershipRegistry>,
     feed: Arc<dyn PortfolioFeed>,
+    freshness: FreshnessPolicy,
 }
 
 impl PortfolioService {
     pub fn new(feed: Arc<dyn PortfolioFeed>) -> Self {
+        Self::with_freshness_policy(feed, FreshnessPolicy::default_degraded())
+    }
+
+    pub fn with_freshness_policy(feed: Arc<dyn PortfolioFeed>, freshness: FreshnessPolicy) -> Self {
         Self {
             state: RwLock::new(PortfolioState::new()),
             ownership: RwLock::new(OwnershipRegistry::new()),
             feed,
+            freshness,
         }
     }
 
@@ -149,7 +159,14 @@ impl PortfolioService {
             };
             (current, next)
         };
-        self.sync(cex_id, current, next).await?;
+        let pre_tracked =
+            event.action().is_add() && self.state.write().track_for_owner(event.owner(), account);
+        if let Err(error) = self.sync(cex_id, current, next).await {
+            if pre_tracked {
+                self.state.write().untrack_for_owner(event.owner(), account);
+            }
+            return Err(error);
+        }
         let outcome = self.ownership.write().apply(event);
         if let OwnershipApply::Applied { previous_owner, .. } = &outcome {
             let mut state = self.state.write();
@@ -163,6 +180,8 @@ impl PortfolioService {
             } else {
                 state.untrack_for_owner(event.owner(), account);
             }
+        } else if pre_tracked {
+            self.state.write().untrack_for_owner(event.owner(), account);
         }
         Ok(outcome)
     }
@@ -208,7 +227,54 @@ impl PortfolioService {
     }
 
     pub fn apply_update(&self, update: PortfolioUpdate) -> bool {
-        self.state.write().apply_update(update)
+        self.apply_portfolio_update(update) == PortfolioUpdateApply::Applied
+    }
+
+    pub fn apply_portfolio_update(&self, update: PortfolioUpdate) -> PortfolioUpdateApply {
+        match self.state.write().apply_update_with_outcome(update) {
+            PortfolioUpdateOutcome::Applied => PortfolioUpdateApply::Applied,
+            PortfolioUpdateOutcome::IgnoredUntracked => PortfolioUpdateApply::IgnoredUntracked,
+            PortfolioUpdateOutcome::IgnoredStale => PortfolioUpdateApply::IgnoredStale,
+        }
+    }
+
+    pub fn update_metadata(&self, account: &AccountKey) -> Option<PortfolioUpdateMetadata> {
+        self.state.read().update(account).cloned()
+    }
+
+    pub fn snapshot_age(
+        &self,
+        account: &AccountKey,
+        now: DateTime<Utc>,
+    ) -> Option<chrono::Duration> {
+        self.state.read().snapshot_age(account, now)
+    }
+
+    pub fn freshness(&self, account: &AccountKey, now: DateTime<Utc>) -> PortfolioFreshness {
+        self.freshness.evaluate(self.snapshot_age(account, now))
+    }
+
+    pub fn authorize_order(
+        &self,
+        owner: &str,
+        account: &AccountKey,
+        now: DateTime<Utc>,
+    ) -> BpResult<PortfolioFreshness> {
+        if !self.is_tracked_for_owner(owner, account) {
+            PortfolioMetrics::record_order_rejection("not_owned");
+            return Err(platform_errors::BpError::auth_invalid_field(
+                "account",
+                "is not owned by the authenticated owner",
+            ));
+        }
+        let age = self.snapshot_age(account, now);
+        match self.freshness.authorize_order(age) {
+            Ok(freshness) => Ok(freshness),
+            Err(error) => {
+                PortfolioMetrics::record_order_rejection("stale");
+                Err(error)
+            }
+        }
     }
 
     #[cfg(test)]
@@ -230,5 +296,12 @@ impl PortfolioService {
             return Ok(());
         }
         self.feed.set_accounts(cex_id, next).await
+    }
+}
+
+#[async_trait]
+impl PortfolioUpdateSink for PortfolioService {
+    async fn apply_update(&self, update: PortfolioUpdate) -> BpResult<PortfolioUpdateApply> {
+        Ok(self.apply_portfolio_update(update))
     }
 }
