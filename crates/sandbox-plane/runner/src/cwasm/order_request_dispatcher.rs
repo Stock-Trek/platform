@@ -3,10 +3,15 @@ use platform_errors::{BpError, BpResult};
 use platform_messages::order_request::UnsignedOrderRequest;
 use platform_sigv4::SigV4Config;
 use platform_types::url_scheme::UrlScheme;
+use std::time::Duration;
 use stock_trek::{
     actions::ResolvedAction,
     types::{AccountId, AssetId, CexId, OrderRequest},
 };
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+const READ_TIMEOUT: Duration = Duration::from_secs(10);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct OrderRequestDispatcher {
     url: reqwest::Url,
@@ -49,6 +54,9 @@ impl OrderRequestDispatcher {
             return Err(BpError::auth_invalid_field("owner", "must not be empty"));
         }
         let client = reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .read_timeout(READ_TIMEOUT)
+            .timeout(REQUEST_TIMEOUT)
             .build()
             .map_err(BpError::external)?;
         Ok(Self {

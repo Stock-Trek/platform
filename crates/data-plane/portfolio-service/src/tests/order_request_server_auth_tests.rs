@@ -1,4 +1,4 @@
-use super::order_request_server_fixture_tests::{Fixture, OWNER};
+use super::order_request_server_fixture::{Fixture, OWNER};
 use crate::{
     AccountKey, OrderRequestDelivery, OrderRequestServer, OrderRequestService, PortfolioService,
 };

@@ -4,6 +4,7 @@ mod config;
 mod feed;
 mod order_delivery;
 mod order_request;
+mod order_request_connection;
 mod order_request_server;
 mod portfolio;
 mod runner;
