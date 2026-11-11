@@ -60,6 +60,7 @@ pub enum Command {
         algorithm_id: String,
         back_test_id: String,
         simulation_count: u32,
+        max_concurrent_simulations: u32,
         random_seed: u64,
         trading_pairs: Vec<TradingPair>,
         windows: Vec<u32>,

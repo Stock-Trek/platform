@@ -1,7 +1,13 @@
+use parking_lot::Mutex;
 use platform_runner::command::SimulationParameters;
 use rand::{SeedableRng, rngs::StdRng};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::{
+    collections::BTreeMap,
+    sync::atomic::{AtomicUsize, Ordering},
+    thread,
+    time::Duration,
+};
 use stock_trek::{
     actions::ResolvedAction,
     types::{AccountId, AssetId, CexId, OrderRequest, Quantity, Side},
@@ -9,7 +15,7 @@ use stock_trek::{
 
 use super::orders::OrderProcessor;
 use super::portfolio::Portfolio;
-use super::{Balances, PriceMap};
+use super::{BackTest, Balances, PriceMap};
 
 fn balances() -> Balances {
     BTreeMap::from([(
@@ -181,5 +187,41 @@ fn asset_totals_serialize_cex_accounts_and_assets() {
     assert_eq!(
         totals["binance"]["main"]["tether_u_s_d"],
         serde_json::json!(1000.0)
+    );
+}
+
+#[test]
+fn simulations_respect_the_concurrency_limit() {
+    let active = AtomicUsize::new(0);
+    let peak = AtomicUsize::new(0);
+    let seen = Mutex::new(Vec::new());
+    let results = BackTest::run_simulations(12, 3, |index| {
+        let running = active.fetch_add(1, Ordering::SeqCst) + 1;
+        peak.fetch_max(running, Ordering::SeqCst);
+        seen.lock().push(index);
+        thread::sleep(Duration::from_millis(2));
+        active.fetch_sub(1, Ordering::SeqCst);
+        Ok(())
+    });
+    assert_eq!(results.len(), 12);
+    assert!(results.iter().all(Result::is_ok));
+    assert!(peak.load(Ordering::SeqCst) <= 3);
+    let mut seen = seen.into_inner();
+    seen.sort_unstable();
+    assert_eq!(seen, (0..12).collect::<Vec<_>>());
+}
+
+#[test]
+fn a_panicking_simulation_is_reported_without_stopping_the_others() {
+    let results = BackTest::run_simulations(4, 2, |index| {
+        if index == 2 {
+            panic!("simulation failed");
+        }
+        Ok(())
+    });
+    assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+    assert_eq!(
+        results[2],
+        Err(platform_exit_codes::ExitCode::BotErrorPanic.code())
     );
 }
