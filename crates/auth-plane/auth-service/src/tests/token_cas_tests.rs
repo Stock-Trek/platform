@@ -222,7 +222,7 @@ async fn signature_verification_retries_after_a_concurrent_last_used_update() {
         .await
         .unwrap();
 
-    assert!(verified);
+    assert!(verified.is_valid());
     assert!(
         service
             .token(token.id())

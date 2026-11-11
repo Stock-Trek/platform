@@ -182,7 +182,7 @@ async fn records_rejected_signatures_for_unknown_tokens() {
         .await
         .unwrap();
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
     TestFixture::drain(&service, audit.clone()).await;
     let rejection = audit
         .events()
@@ -208,7 +208,7 @@ async fn records_rejected_signatures_for_malformed_token_ids() {
         .await
         .unwrap();
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
     TestFixture::drain(&service, audit.clone()).await;
     let rejection = audit
         .events()
@@ -235,7 +235,7 @@ async fn records_rejected_signatures() {
         .await
         .unwrap();
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
     TestFixture::drain(&service, audit.clone()).await;
     assert!(AuditFixture::actions(&audit).contains(&TokenAuditAction::SignatureRejected));
 }

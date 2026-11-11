@@ -1,4 +1,6 @@
-use crate::{AuthService, OrderRequestSigner, TokenScope};
+use crate::{
+    AuthService, InvalidOrderRequest, OrderRequestSigner, OrderRequestVerification, TokenScope,
+};
 use chrono::{DateTime, Utc};
 use platform_errors::BpResult;
 
@@ -11,48 +13,92 @@ impl AuthService {
         order_request: &[u8],
         signature: &str,
         now: DateTime<Utc>,
-    ) -> BpResult<bool> {
-        let Some(token) = self.signature_token(token_id, now).await? else {
-            return Ok(false);
+    ) -> BpResult<OrderRequestVerification> {
+        let token = match self.signature_token(token_id, now).await {
+            Ok(Some(token)) => token,
+            Ok(None) => {
+                return Ok(OrderRequestVerification::Invalid(
+                    InvalidOrderRequest::UnknownToken,
+                ));
+            }
+            Err(error) => {
+                tracing::warn!(%error, "order request verification could not load the token");
+                return Ok(OrderRequestVerification::Retryable);
+            }
         };
-        if let Err(error) = Self::ensure_active(&token, now) {
+        if Self::ensure_active(&token, now).is_err() {
             return self
-                .reject_signature(token_id, Some(&token), now, &error.to_string())
+                .reject_signature(
+                    token_id,
+                    Some(&token),
+                    now,
+                    InvalidOrderRequest::InactiveToken,
+                )
                 .await;
         }
-        if let Err(error) = Self::ensure_scope(&token, TokenScope::OrdersWrite) {
+        if Self::ensure_scope(&token, TokenScope::OrdersWrite).is_err() {
             return self
-                .reject_signature(token_id, Some(&token), now, &error.to_string())
+                .reject_signature(
+                    token_id,
+                    Some(&token),
+                    now,
+                    InvalidOrderRequest::MissingScope,
+                )
                 .await;
         }
         let (signed, context) = match self.validate_order_signature(token_id, signature, now) {
             Ok(validated) => validated,
-            Err(detail) => {
+            Err(reason) => {
                 return self
-                    .reject_signature(token_id, Some(&token), now, detail)
+                    .reject_signature(token_id, Some(&token), now, reason)
                     .await;
             }
         };
-        let signer = OrderRequestSigner::new(token.secret())?;
-        if !signer.verify_order_request(&context, order_request, signed.signature())? {
-            return self
-                .reject_signature(token_id, Some(&token), now, "signature mismatch")
-                .await;
+        let signer = match OrderRequestSigner::new(token.secret()) {
+            Ok(signer) => signer,
+            Err(error) => {
+                return self
+                    .reject_retryable(token_id, Some(&token), now, &error)
+                    .await;
+            }
+        };
+        match signer.verify_order_request(&context, order_request, signed.signature()) {
+            Ok(true) => {}
+            Ok(false) => {
+                return self
+                    .reject_signature(
+                        token_id,
+                        Some(&token),
+                        now,
+                        InvalidOrderRequest::SignatureMismatch,
+                    )
+                    .await;
+            }
+            Err(error) => {
+                return self
+                    .reject_retryable(token_id, Some(&token), now, &error)
+                    .await;
+            }
         }
         let reservation = match self.reserve_order_request_replay(&context, now).await {
             Ok(Some(reservation)) => reservation,
             Ok(None) => {
                 return self
-                    .reject_signature(token_id, Some(&token), now, "replayed signature")
+                    .reject_signature(token_id, Some(&token), now, InvalidOrderRequest::Replay)
                     .await;
             }
             Err(error) => {
                 return self
-                    .reject_signature_with_error(token_id, Some(&token), now, error)
+                    .reject_retryable(token_id, Some(&token), now, &error)
                     .await;
             }
         };
-        self.commit_signature_use(token, token_id, now, &reservation, signature, order_request)
+        match self
+            .commit_signature_use(token, token_id, now, &reservation, signature, order_request)
             .await
+        {
+            Ok(verification) => Ok(verification),
+            Err(error) => self.reject_retryable(token_id, None, now, &error).await,
+        }
     }
 }

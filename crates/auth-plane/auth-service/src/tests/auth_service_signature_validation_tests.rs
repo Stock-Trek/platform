@@ -20,7 +20,7 @@ async fn rejects_a_signature_from_another_token() {
         .await
         .unwrap();
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
 }
 
 #[tokio::test]
@@ -42,8 +42,8 @@ async fn rejects_a_replayed_signature() {
         .await
         .unwrap();
 
-    assert!(first);
-    assert!(!second);
+    assert!(first.is_valid());
+    assert!(second.is_invalid());
 }
 
 #[test]
@@ -88,7 +88,7 @@ async fn rejects_an_expired_signature() {
         .await
         .unwrap();
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
 }
 
 #[tokio::test]

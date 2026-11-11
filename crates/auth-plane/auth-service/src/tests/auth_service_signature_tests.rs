@@ -53,7 +53,7 @@ async fn verifies_a_matching_signature() {
         .await
         .unwrap();
 
-    assert!(verified);
+    assert!(verified.is_valid());
 }
 
 #[tokio::test]
@@ -73,7 +73,7 @@ async fn rejects_a_tampered_signature() {
         .await
         .unwrap();
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
 }
 
 #[tokio::test]
@@ -91,5 +91,5 @@ async fn rejects_a_tampered_request() {
         .await
         .unwrap();
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
 }

@@ -2,6 +2,7 @@ use super::order_request_server_fixture::{Fixture, OWNER};
 use crate::{OrderRequestDelivery, OrderRequestServer, OrderRequestService};
 use chrono::Utc;
 use platform_messages::order_request::UnsignedOrderRequest;
+use serde_json::json;
 use std::sync::Arc;
 
 #[tokio::test]
@@ -46,6 +47,7 @@ async fn signs_received_requests_and_delivers_them() {
             )
             .await
             .unwrap()
+            .is_valid()
     );
     running.abort();
 }
@@ -94,5 +96,60 @@ async fn rejects_a_request_with_an_invalid_jwt() {
         .unwrap();
 
     assert_eq!(response.status(), reqwest::StatusCode::UNAUTHORIZED);
+    running.abort();
+}
+
+#[tokio::test]
+async fn rejects_invalid_json_with_a_stable_body() {
+    let (delivery_url, _) = Fixture::downstream().await;
+    let (auth_service, _) = Fixture::auth_service().await;
+    let jwt = auth_service
+        .issue_jwt_for_owner(OWNER, Utc::now())
+        .await
+        .unwrap();
+    let (address, running) = Fixture::running_server(&delivery_url, auth_service).await;
+
+    let response = reqwest::Client::new()
+        .post(format!("http://{address}/order-requests"))
+        .bearer_auth(jwt.token())
+        .header(reqwest::header::CONTENT_TYPE, "application/json")
+        .body(r#"{"side":"buy""#)
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(
+        body,
+        json!({
+            "error": "invalid_request",
+            "message": "the request is invalid"
+        })
+    );
+    running.abort();
+}
+
+#[tokio::test]
+async fn rejects_unsupported_methods_with_a_stable_body() {
+    let (delivery_url, _) = Fixture::downstream().await;
+    let (auth_service, _) = Fixture::auth_service().await;
+    let (address, running) = Fixture::running_server(&delivery_url, auth_service).await;
+
+    let response = reqwest::Client::new()
+        .get(format!("http://{address}/order-requests"))
+        .send()
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), reqwest::StatusCode::METHOD_NOT_ALLOWED);
+    let body: serde_json::Value = response.json().await.unwrap();
+    assert_eq!(
+        body,
+        json!({
+            "error": "method_not_allowed",
+            "message": "POST is required"
+        })
+    );
     running.abort();
 }

@@ -42,5 +42,5 @@ async fn verification_handles_clock_skew_at_the_timestamp_limit() {
         .await
         .expect("verification succeeds");
 
-    assert!(verified);
+    assert!(verified.is_valid());
 }

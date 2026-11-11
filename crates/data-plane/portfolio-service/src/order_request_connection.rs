@@ -1,4 +1,4 @@
-use crate::{OrderRequestDelivery, OrderRequestService, SignedOrderSubmission};
+use crate::{OrderRequestDelivery, OrderRequestError, OrderRequestService, SignedOrderSubmission};
 use chrono::Utc;
 use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
 use hyper::{
@@ -9,7 +9,7 @@ use hyper::{
     service::service_fn,
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
-use platform_errors::{AuthError, BpError};
+use platform_errors::BpError;
 use platform_messages::order_request::UnsignedOrderRequest;
 use std::{convert::Infallible, sync::Arc, time::Duration};
 use tokio::{net::TcpStream, sync::watch, time::timeout};
@@ -68,18 +68,15 @@ impl OrderRequestConnection {
                     .status(StatusCode::OK)
                     .header("content-type", "application/json")
                     .body(Full::new(Bytes::from(body)))
-                    .unwrap_or_else(|_| Self::internal_error()),
+                    .unwrap_or_else(|_| OrderRequestError::Internal.response()),
                 Err(error) => {
                     tracing::error!("failed to serialize the signed order request: {error}");
-                    Self::internal_error()
+                    OrderRequestError::Internal.response()
                 }
             },
-            Err((status, message)) => {
-                tracing::warn!("rejected order request: {message}");
-                Response::builder()
-                    .status(status)
-                    .body(Full::new(Bytes::from(message)))
-                    .unwrap_or_else(|_| Self::internal_error())
+            Err((error, detail)) => {
+                tracing::warn!(%detail, "rejected order request");
+                error.response()
             }
         };
         Ok(response)
@@ -89,22 +86,31 @@ impl OrderRequestConnection {
         service: &OrderRequestService,
         delivery: &OrderRequestDelivery,
         request: Request<Incoming>,
-    ) -> Result<SignedOrderSubmission, (StatusCode, String)> {
+    ) -> Result<SignedOrderSubmission, (OrderRequestError, String)> {
         if request.method() != Method::POST {
             return Err((
-                StatusCode::METHOD_NOT_ALLOWED,
+                OrderRequestError::MethodNotAllowed,
                 "POST is required".to_string(),
             ));
         }
         let jwt = Self::bearer(&request)?;
         Self::ensure_content_length(&request)?;
         let body = Self::read_body(request.into_body()).await?;
-        let unsigned: UnsignedOrderRequest = serde_json::from_slice(&body)
-            .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+        let unsigned: UnsignedOrderRequest = serde_json::from_slice(&body).map_err(|error| {
+            (
+                OrderRequestError::InvalidRequest,
+                format!("invalid order request: {error}"),
+            )
+        })?;
         let claims = service
             .authenticate(&jwt, Utc::now())
             .await
-            .map_err(|error| (StatusCode::UNAUTHORIZED, error.to_string()))?;
+            .map_err(|error| {
+                (
+                    OrderRequestError::from_authentication_error(&error),
+                    error.to_string(),
+                )
+            })?;
         let submission = service
             .sign_for_caller(&unsigned, &claims)
             .await
@@ -112,44 +118,41 @@ impl OrderRequestConnection {
         delivery
             .deliver(&submission)
             .await
-            .map_err(|error| (StatusCode::BAD_GATEWAY, error.to_string()))?;
+            .map_err(|error| (OrderRequestError::ServiceUnavailable, error.to_string()))?;
         Ok(submission)
     }
 
-    fn sign_error(error: BpError) -> (StatusCode, String) {
-        let status = match &error {
-            BpError::Auth(AuthError::InvalidField {
-                field: "account", ..
-            }) => StatusCode::FORBIDDEN,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        (status, error.to_string())
+    fn sign_error(error: BpError) -> (OrderRequestError, String) {
+        let public = OrderRequestError::from_signing_error(&error);
+        (public, error.to_string())
     }
 
-    async fn read_body(body: Incoming) -> Result<Bytes, (StatusCode, String)> {
+    async fn read_body(body: Incoming) -> Result<Bytes, (OrderRequestError, String)> {
         let body = Limited::new(body, MAX_REQUEST_BYTES);
         let collected = timeout(BODY_READ_TIMEOUT, body.collect())
             .await
             .map_err(|_| {
                 (
-                    StatusCode::REQUEST_TIMEOUT,
+                    OrderRequestError::RequestTimeout,
                     "order request body timed out".to_string(),
                 )
             })?
             .map_err(|error| {
                 if error.downcast_ref::<LengthLimitError>().is_some() {
                     (
-                        StatusCode::PAYLOAD_TOO_LARGE,
+                        OrderRequestError::PayloadTooLarge,
                         "order request is too large".to_string(),
                     )
                 } else {
-                    (StatusCode::BAD_REQUEST, error.to_string())
+                    (OrderRequestError::InvalidRequest, error.to_string())
                 }
             })?;
         Ok(collected.to_bytes())
     }
 
-    fn ensure_content_length(request: &Request<Incoming>) -> Result<(), (StatusCode, String)> {
+    fn ensure_content_length(
+        request: &Request<Incoming>,
+    ) -> Result<(), (OrderRequestError, String)> {
         let too_large = request
             .headers()
             .get(CONTENT_LENGTH)
@@ -158,7 +161,7 @@ impl OrderRequestConnection {
             .is_some_and(|length| length > MAX_REQUEST_BYTES);
         if too_large {
             Err((
-                StatusCode::PAYLOAD_TOO_LARGE,
+                OrderRequestError::PayloadTooLarge,
                 "order request is too large".to_string(),
             ))
         } else {
@@ -166,32 +169,28 @@ impl OrderRequestConnection {
         }
     }
 
-    fn bearer(request: &Request<Incoming>) -> Result<String, (StatusCode, String)> {
+    fn bearer(request: &Request<Incoming>) -> Result<String, (OrderRequestError, String)> {
         let value = request.headers().get(AUTHORIZATION).ok_or_else(|| {
             (
-                StatusCode::UNAUTHORIZED,
+                OrderRequestError::Unauthorized,
                 "bearer JWT is required".to_string(),
             )
         })?;
-        let value = value
-            .to_str()
-            .map_err(|error| (StatusCode::UNAUTHORIZED, error.to_string()))?;
+        let value = value.to_str().map_err(|error| {
+            (
+                OrderRequestError::Unauthorized,
+                format!("invalid authorization header: {error}"),
+            )
+        })?;
         let token = value
             .strip_prefix("Bearer ")
             .filter(|token| !token.trim().is_empty())
             .ok_or_else(|| {
                 (
-                    StatusCode::UNAUTHORIZED,
+                    OrderRequestError::Unauthorized,
                     "authorization must use the Bearer scheme".to_string(),
                 )
             })?;
         Ok(token.to_string())
-    }
-
-    fn internal_error() -> Response<Full<Bytes>> {
-        Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Full::new(Bytes::from_static(b"internal error")))
-            .expect("static response is valid")
     }
 }

@@ -5,7 +5,6 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use platform_errors::{AuthError, BpError};
 use std::{num::NonZeroUsize, sync::Arc};
 
 struct AuthReplayFixture;
@@ -70,12 +69,14 @@ async fn verifiers_sharing_a_replay_store_reject_replays_across_instances() {
             .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
             .await
             .expect("first verification")
+            .is_valid()
     );
     assert!(
-        !first
+        first
             .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
             .await
             .expect("replayed verification")
+            .is_invalid()
     );
 }
 
@@ -93,6 +94,7 @@ async fn a_restarted_verifier_rejects_replays_when_the_store_is_shared() {
             .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
             .await
             .expect("first verification")
+            .is_valid()
     );
 
     let restarted = AuthServiceBuilder::new()
@@ -101,15 +103,16 @@ async fn a_restarted_verifier_rejects_replays_when_the_store_is_shared() {
         .build();
 
     assert!(
-        !restarted
+        restarted
             .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
             .await
             .expect("replayed verification")
+            .is_invalid()
     );
 }
 
 #[tokio::test]
-async fn replay_store_failures_are_returned_and_fail_closed() {
+async fn replay_store_failures_are_reported_as_retryable() {
     let service = AuthServiceBuilder::new()
         .replay(Arc::new(UnavailableReplayStore))
         .build();
@@ -120,17 +123,10 @@ async fn replay_store_failures_are_returned_and_fail_closed() {
         .await
         .expect("signed request");
 
-    let error = service
+    let verification = service
         .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
-        .expect_err("replay store failure");
+        .expect("replay store failure is classified");
 
-    assert!(matches!(
-        error,
-        BpError::Auth(AuthError::Store {
-            operation: "consume",
-            retryable: true,
-            ..
-        })
-    ));
+    assert!(verification.is_retryable());
 }

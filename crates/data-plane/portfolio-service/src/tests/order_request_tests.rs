@@ -30,6 +30,7 @@ async fn signs_unsigned_order_requests_for_the_owner() {
             )
             .await
             .unwrap()
+            .is_valid()
     );
 }
 

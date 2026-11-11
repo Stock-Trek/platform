@@ -1,7 +1,7 @@
 use crate::{
-    ApiToken, AuthService, ConsumeResult, OrderRequestContext, ReplayKey, ReplayReservation,
-    ReplayStoreError, TokenAuditAction, TokenAuditEvent, TokenMutation, TokenScope,
-    auth_service::MAX_UPDATE_ATTEMPTS,
+    ApiToken, AuthService, ConsumeResult, InvalidOrderRequest, OrderRequestContext,
+    OrderRequestVerification, ReplayKey, ReplayReservation, ReplayStoreError, TokenAuditAction,
+    TokenAuditEvent, TokenMutation, TokenScope, auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
@@ -33,7 +33,7 @@ impl AuthService {
         reservation: &ReplayReservation,
         signature: &str,
         order_request: &[u8],
-    ) -> BpResult<bool> {
+    ) -> BpResult<OrderRequestVerification> {
         let mut latest = token;
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             let mut updated = latest.clone();
@@ -45,7 +45,7 @@ impl AuthService {
                 token: updated,
             };
             match self.commit_mutation(mutation, event).await {
-                Ok(true) => return Ok(true),
+                Ok(true) => return Ok(OrderRequestVerification::Valid),
                 Ok(false) => {
                     self.release_replay_after_failure(reservation).await;
                     return Err(BpError::token_conflict(token_id));
@@ -58,16 +58,26 @@ impl AuthService {
                             return Err(error);
                         }
                     };
-                    if let Err(error) = Self::ensure_active(&latest, now) {
+                    if Self::ensure_active(&latest, now).is_err() {
                         self.release_replay_after_failure(reservation).await;
                         return self
-                            .reject_signature(token_id, Some(&latest), now, &error.to_string())
+                            .reject_signature(
+                                token_id,
+                                Some(&latest),
+                                now,
+                                InvalidOrderRequest::InactiveToken,
+                            )
                             .await;
                     }
-                    if let Err(error) = Self::ensure_scope(&latest, TokenScope::OrdersWrite) {
+                    if Self::ensure_scope(&latest, TokenScope::OrdersWrite).is_err() {
                         self.release_replay_after_failure(reservation).await;
                         return self
-                            .reject_signature(token_id, Some(&latest), now, &error.to_string())
+                            .reject_signature(
+                                token_id,
+                                Some(&latest),
+                                now,
+                                InvalidOrderRequest::MissingScope,
+                            )
                             .await;
                     }
                     match self.revalidate_signature(
@@ -77,10 +87,10 @@ impl AuthService {
                         &latest,
                         now,
                     ) {
-                        Ok(Some(detail)) => {
+                        Ok(Some(reason)) => {
                             self.release_replay_after_failure(reservation).await;
                             return self
-                                .reject_signature(token_id, Some(&latest), now, detail)
+                                .reject_signature(token_id, Some(&latest), now, reason)
                                 .await;
                         }
                         Ok(None) => {}
