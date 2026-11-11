@@ -1,6 +1,7 @@
 use crate::{
     JwtSigningKey, JwtVerifier, ReplayStore, TokenAuditEvent, TokenMutation,
-    TokenRotationTransaction, jwt_signing_key::DEFAULT_JWT_KEY_ID, token_store::TokenStore,
+    TokenRotationTransaction, TokenUsageQueue, jwt_signing_key::DEFAULT_JWT_KEY_ID,
+    token_store::TokenStore,
 };
 use chrono::Duration;
 use jsonwebtoken::jwk::JwkSet;
@@ -23,6 +24,7 @@ pub struct AuthService {
     pub(crate) token_lifetime: Duration,
     pub(crate) rotation_overlap: Duration,
     pub(crate) jwt_signer: Arc<JwtSigningKey>,
+    pub(crate) usage: Option<Arc<dyn TokenUsageQueue>>,
 }
 
 impl AuthService {
@@ -49,7 +51,13 @@ impl AuthService {
             token_lifetime: config.token_lifetime,
             rotation_overlap: config.rotation_overlap,
             jwt_signer,
+            usage: None,
         })
+    }
+
+    pub fn with_usage_queue(mut self, usage: Arc<dyn TokenUsageQueue>) -> Self {
+        self.usage = Some(usage);
+        self
     }
 
     pub fn jwks(&self) -> &JwkSet {
@@ -109,6 +117,12 @@ impl AuthService {
     }
 
     pub(crate) async fn record_audit_failure(&self, event: TokenAuditEvent) {
+        if self.usage.is_some() {
+            if let Err(error) = self.enqueue_usage(crate::TokenUsage::audit(event)).await {
+                tracing::error!(%error, "failed to enqueue token audit event");
+            }
+            return;
+        }
         if let Err(error) = self.store.append_audit(event).await {
             tracing::error!(%error, "failed to enqueue token audit event");
         }

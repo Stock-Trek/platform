@@ -84,6 +84,15 @@ required in some configurations, the condition is stated in its description.
 | `PORTFOLIO_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
 | `PORTFOLIO_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
 | `PORTFOLIO_VAULT_TOKEN` | Vault token used to read auth-service tokens. |
+| `PORTFOLIO_USAGE_QUEUE_URL` | Valkey connection URL for the durable token usage queue. |
+| `PORTFOLIO_USAGE_QUEUE_PREFIX` | Key prefix for the token usage queue stream and consumer group. |
+| `PORTFOLIO_USAGE_QUEUE_TIMEOUT_SECS` | Connection and command timeout for the usage queue, in seconds. |
+| `PORTFOLIO_USAGE_QUEUE_CAPACITY` | Maximum number of queued usage records before requests fail closed. |
+| `PORTFOLIO_USAGE_QUEUE_BATCH_SIZE` | Maximum number of usage records claimed by one drain. |
+
+Signed order verification appends usage records to the durable Valkey queue instead of writing
+`last_used_at` and audit outbox entries synchronously. The queue URL, prefix, and capacity must
+match the auth service and auth relay so a single relay drains records from both services.
 
 Replay protection fails closed when Valkey is unavailable. The replay key prefix must contain only
 colon-separated segments of ASCII letters, digits, `-`, and `_`. Signed request expiry controls
@@ -298,14 +307,23 @@ owner bound to the caller's access key.
 | `AUTH_SERVICE_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
 | `AUTH_SERVICE_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
 | `AUTH_SERVICE_VAULT_TOKEN` | Vault token used to read auth-service tokens. |
+| `AUTH_SERVICE_USAGE_QUEUE_URL` | Valkey connection URL for the durable token usage queue. |
+| `AUTH_SERVICE_USAGE_QUEUE_PREFIX` | Key prefix for the token usage queue stream and consumer group. |
+| `AUTH_SERVICE_USAGE_QUEUE_TIMEOUT_SECS` | Connection and command timeout for the usage queue, in seconds. |
+| `AUTH_SERVICE_USAGE_QUEUE_CAPACITY` | Maximum number of queued usage records before requests fail closed. |
+| `AUTH_SERVICE_USAGE_QUEUE_BATCH_SIZE` | Maximum number of usage records claimed by one drain. |
+
+Authentication and signing append usage records to a durable Valkey stream instead of writing
+`last_used_at` and audit outbox entries synchronously. Requests fail closed if the queue reaches
+capacity so audit records are not silently dropped.
 
 ### Auth relay
 
-The auth relay performs a single drain of pending token audit events and rotation
-materializations from the Vault token store to SQS, then exits. Run it from a cron job every few
-minutes so events are retried even when auth-service is idle or SQS is temporarily unavailable.
-Auth operations only commit events to the outbox; a failed drain leaves them pending for the next
-scheduled run.
+The auth relay performs a single drain of pending token usage records, token audit events, and
+rotation materializations from the Vault token store to SQS, then exits. Run it from a cron job
+every few minutes so events are retried even when auth-service is idle or SQS is temporarily
+unavailable. Auth operations only append usage records to the durable queue; a failed drain leaves
+them pending for the next scheduled run.
 
 #### Required
 
@@ -317,6 +335,11 @@ scheduled run.
 | `AUTH_RELAY_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
 | `AUTH_RELAY_VAULT_TIMEOUT_SECS` | Connection and request timeout for Vault, in seconds. |
 | `AUTH_RELAY_VAULT_TOKEN` | Vault token used to read and acknowledge auth-service token events. |
+| `AUTH_RELAY_USAGE_QUEUE_URL` | Valkey connection URL for the durable token usage queue. Must match the auth service. |
+| `AUTH_RELAY_USAGE_QUEUE_PREFIX` | Key prefix for the token usage queue stream and consumer group. Must match the auth service. |
+| `AUTH_RELAY_USAGE_QUEUE_TIMEOUT_SECS` | Connection and command timeout for the usage queue, in seconds. |
+| `AUTH_RELAY_USAGE_QUEUE_CAPACITY` | Maximum number of queued usage records before requests fail closed. Must match the auth service. |
+| `AUTH_RELAY_USAGE_QUEUE_BATCH_SIZE` | Maximum number of usage records applied by one drain. |
 
 The auth relay also uses the shared AWS timeout variables listed under
 [Build orchestrator](#build-orchestrator).
@@ -330,8 +353,8 @@ values fail startup. Place-order actions are submitted without signatures to the
 the auth-service token owned by the run request owner. The runner fetches and caches a bearer JWT
 from the auth service and sends it with every order request; the portfolio service rejects requests
 without an EdDSA JWT signed by a key in the auth service JWKS, which it caches locally. Auth
-operations commit audit events to the durable token outbox; the separate auth relay service
-delivers them to SQS.
+operations append usage and audit records to the durable Valkey queue; the separate auth relay
+service applies them and delivers audit events to SQS.
 
 #### Required
 

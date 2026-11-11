@@ -1,7 +1,7 @@
 use crate::{
     ApiToken, AuthService, ConsumeResult, InvalidOrderRequest, OrderRequestContext,
     OrderRequestVerification, ReplayKey, ReplayReservation, ReplayStoreError, TokenAuditAction,
-    TokenAuditEvent, TokenMutation, TokenScope, auth_service::MAX_UPDATE_ATTEMPTS,
+    TokenAuditEvent, TokenMutation, TokenScope, TokenUsage, auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
@@ -34,6 +34,17 @@ impl AuthService {
         signature: &str,
         order_request: &[u8],
     ) -> BpResult<OrderRequestVerification> {
+        if self.has_usage_queue() {
+            let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
+                .with_token(token.id(), Some(token.owner()));
+            let usage = TokenUsage::for_token(token.id(), now, vec![event]);
+            if let Err(error) = self.enqueue_usage(usage).await {
+                tracing::error!(%error, "failed to enqueue token usage");
+                self.release_replay_after_failure(reservation).await;
+                return Err(error);
+            }
+            return Ok(OrderRequestVerification::Valid);
+        }
         let mut latest = token;
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             let mut updated = latest.clone();

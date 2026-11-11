@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, AuthService, OrderRequestContext, OrderRequestSigner, SecretInput,
-    SignedOrderRequest, TokenAuditAction, TokenAuditEvent, TokenScope,
+    SignedOrderRequest, TokenAuditAction, TokenAuditEvent, TokenScope, TokenUsage,
     auth_service::MAX_UPDATE_ATTEMPTS, order_verification::CLOCK_SKEW_SECONDS,
 };
 use chrono::{DateTime, Duration, Utc};
@@ -117,6 +117,17 @@ impl AuthService {
                 .with_token(token.id(), Some(token.owner()));
             let signed_event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
                 .with_token(token.id(), Some(token.owner()));
+            if self.has_usage_queue() {
+                let usage =
+                    TokenUsage::for_token(token.id(), now, vec![authenticated_event, signed_event]);
+                match self.enqueue_usage(usage).await {
+                    Ok(()) => return Ok(signed),
+                    Err(error) => {
+                        tracing::error!(%error, "failed to enqueue token usage");
+                        return Err(error);
+                    }
+                }
+            }
             let original = token.clone();
             token.metadata.record_use(now);
             let mutation = crate::TokenMutation::Update {

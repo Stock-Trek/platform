@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use chrono::Utc;
 use platform_auth_service::{
     MemoryTokenStore, TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenStore,
-    VaultTokenStoreConfig,
+    TokenUsageQueueConfig, VaultTokenStoreConfig,
 };
 use platform_errors::{BpError, BpResult};
 use platform_time::timeouts::Timeouts;
@@ -84,6 +84,14 @@ impl RelayFixture {
             audit_queue_url: "https://sqs.example.com/123/audit".to_string(),
             audit_timeout: Duration::from_secs(5),
             aws_timeouts: Timeouts::from_durations(Duration::from_secs(5), Duration::from_secs(15)),
+            usage_queue: TokenUsageQueueConfig::new(
+                "redis://valkey.example.com:6379",
+                "auth-usage",
+                Duration::from_secs(5),
+                1000,
+                100,
+            )
+            .expect("valid usage queue config"),
         }
     }
 }

@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, AuthService, SecretInput, TokenAuditAction, TokenAuditEvent, TokenMutation,
-    TokenScope, auth_service::MAX_UPDATE_ATTEMPTS,
+    TokenScope, TokenUsage, auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
@@ -52,10 +52,21 @@ impl AuthService {
                     .await;
                 return Err(error);
             }
-            let original = token.clone();
-            token.metadata.record_use(now);
             let event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
                 .with_token(token.id(), Some(token.owner()));
+            if self.has_usage_queue() {
+                token.metadata.record_use(now);
+                let usage = TokenUsage::for_token(token.id(), now, vec![event]);
+                match self.enqueue_usage(usage).await {
+                    Ok(()) => return Ok(token),
+                    Err(error) => {
+                        tracing::error!(%error, "failed to enqueue token usage");
+                        return Err(error);
+                    }
+                }
+            }
+            let original = token.clone();
+            token.metadata.record_use(now);
             let mutation = TokenMutation::Update {
                 expected: original,
                 token: token.clone(),

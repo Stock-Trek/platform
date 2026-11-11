@@ -82,6 +82,12 @@ pub const AUTH_AUDIT_RELAY_PENDING_ROTATIONS: &str = "auth_audit_relay_pending_r
 pub const AUTH_AUDIT_RELAY_DELIVERED_TOTAL: &str = "auth_audit_relay_delivered_total";
 pub const AUTH_AUDIT_RELAY_FAILURES_TOTAL: &str = "auth_audit_relay_failures_total";
 pub const AUTH_AUDIT_RELAY_DRAIN_DURATION_SECONDS: &str = "auth_audit_relay_drain_duration_seconds";
+pub const AUTH_USAGE_QUEUE_ENQUEUED_TOTAL: &str = "auth_usage_queue_enqueued_total";
+pub const AUTH_USAGE_QUEUE_CAPACITY_REJECTIONS_TOTAL: &str =
+    "auth_usage_queue_capacity_rejections_total";
+pub const AUTH_USAGE_QUEUE_DELIVERED_TOTAL: &str = "auth_usage_queue_delivered_total";
+pub const AUTH_USAGE_QUEUE_FAILURES_TOTAL: &str = "auth_usage_queue_failures_total";
+pub const AUTH_USAGE_QUEUE_DRAIN_DURATION_SECONDS: &str = "auth_usage_queue_drain_duration_seconds";
 
 pub const STATUS_SUCCESS: &str = "success";
 pub const STATUS_ERROR: &str = "error";
@@ -375,6 +381,26 @@ impl DescriptionsMetrics {
         describe_histogram!(
             AUTH_AUDIT_RELAY_DRAIN_DURATION_SECONDS,
             "Duration of token audit relay drain attempts in seconds"
+        );
+        describe_counter!(
+            AUTH_USAGE_QUEUE_ENQUEUED_TOTAL,
+            "Total number of token usage records enqueued for asynchronous processing"
+        );
+        describe_counter!(
+            AUTH_USAGE_QUEUE_CAPACITY_REJECTIONS_TOTAL,
+            "Total number of token usage records rejected because the queue was at capacity"
+        );
+        describe_counter!(
+            AUTH_USAGE_QUEUE_DELIVERED_TOTAL,
+            "Total number of token usage records applied by the worker"
+        );
+        describe_counter!(
+            AUTH_USAGE_QUEUE_FAILURES_TOTAL,
+            "Total number of token usage queue failures, labelled by operation and error type"
+        );
+        describe_histogram!(
+            AUTH_USAGE_QUEUE_DRAIN_DURATION_SECONDS,
+            "Duration of token usage queue drain attempts in seconds"
         );
     }
 }

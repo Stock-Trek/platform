@@ -10,6 +10,11 @@ const VAULT_TOKEN: &str = "AUTH_SERVICE_VAULT_TOKEN";
 const LOG_FILTER: &str = "RUST_LOG";
 const JWT_KEY_ID: &str = "AUTH_SERVICE_JWT_KEY_ID";
 const JWT_PRIVATE_KEY_PEM: &str = "AUTH_SERVICE_JWT_PRIVATE_KEY_PEM";
+const USAGE_QUEUE_URL: &str = "AUTH_SERVICE_USAGE_QUEUE_URL";
+const USAGE_QUEUE_PREFIX: &str = "AUTH_SERVICE_USAGE_QUEUE_PREFIX";
+const USAGE_QUEUE_TIMEOUT_SECS: &str = "AUTH_SERVICE_USAGE_QUEUE_TIMEOUT_SECS";
+const USAGE_QUEUE_CAPACITY: &str = "AUTH_SERVICE_USAGE_QUEUE_CAPACITY";
+const USAGE_QUEUE_BATCH_SIZE: &str = "AUTH_SERVICE_USAGE_QUEUE_BATCH_SIZE";
 const SIGV4_CREDENTIALS: &str = "SIGV4_CREDENTIALS";
 const SIGV4_REGION: &str = "SIGV4_REGION";
 const SIGV4_SERVICE: &str = "SIGV4_SERVICE";
@@ -36,6 +41,14 @@ impl Fixture {
             (JWT_KEY_ID.to_string(), "auth-service".to_string()),
             (JWT_PRIVATE_KEY_PEM.to_string(), Self::key_pem()),
             (
+                USAGE_QUEUE_URL.to_string(),
+                "redis://valkey.example.com:6379".to_string(),
+            ),
+            (USAGE_QUEUE_PREFIX.to_string(), "auth-usage".to_string()),
+            (USAGE_QUEUE_TIMEOUT_SECS.to_string(), "5".to_string()),
+            (USAGE_QUEUE_CAPACITY.to_string(), "1000".to_string()),
+            (USAGE_QUEUE_BATCH_SIZE.to_string(), "100".to_string()),
+            (
                 SIGV4_CREDENTIALS.to_string(),
                 SIGV4_CREDENTIALS_JSON.to_string(),
             ),
@@ -60,6 +73,8 @@ fn imports_a_pkcs8_private_key_from_the_environment() {
 
     assert_eq!(config.jwt_key_id(), "rotation-2026");
     assert_eq!(signer.key_id(), "rotation-2026");
+    assert_eq!(config.usage_queue().capacity(), 1000);
+    assert_eq!(config.usage_queue().batch_size(), 100);
 }
 
 #[test]
