@@ -178,16 +178,16 @@ authorization state, and alerts fire on stale or lagging data.
 
 ## Open questions
 
-1. Which exchange is first, and does it provide a multi-account user-data
-   stream, or only one listen key per API credential? The first exchange is Binance, yes it does provide multi-account user-data stream, it allows listening to up to 1000 accounts on each websocket connection.
-2. Are CEX accounts single-owner, shareable, or global? `PortfolioState`
+1. Q. Which exchange is first, and does it provide a multi-account user-data
+   stream, or only one listen key per API credential? A. The first exchange is Binance, yes it does provide multi-account user-data stream, it allows listening to up to 1000 accounts on each websocket connection.
+2. Q. Are CEX accounts single-owner, shareable, or global? `PortfolioState`
    currently supports global and per-owner tracking, but the product model is
-   not documented. Only single owner CEX accounts will be supported.
-3. Is stale portfolio data acceptable for order authorization? Today the order
+   not documented. A. Only single owner CEX accounts will be supported.
+3. Q. Is stale portfolio data acceptable for order authorization? Today the order
    path checks ownership only, not balances, so the answer may differ for
-   authorization and strategy evaluation. Yes stale portfolio data is accepted, but the duration it can be stale for should be tied to the account tier.
-4. Should account registration be self-service, operator-only, or driven by an
-   external control plane? Users will be able to register their accounts via a separate API, then registration events will be passed through via the control plane.
-5. How should exchange credentials be associated with owners and accounts, and
-   what rotation/revocation flow is required? Account/credential association will be done in a similar way to question 4, through a separate API then passed through via the control plane.
-6. Are there existing accounts to migrate, or does the registry start empty? The registry will start empty. This is greenfield work so there is nothing to migrate.
+   authorization and strategy evaluation. A. Yes stale portfolio data is accepted, but the duration it can be stale for should be tied to the account tier.
+4. Q. Should account registration be self-service, operator-only, or driven by an
+   external control plane? A. Users will be able to register their accounts via a separate API, then registration events will be passed through via the control plane.
+5. Q. How should exchange credentials be associated with owners and accounts, and
+   what rotation/revocation flow is required? A. Account/credential association will be done in a similar way to question 4, through a separate API then passed through via the control plane.
+6. Q. Are there existing accounts to migrate, or does the registry start empty? A. The registry will start empty. This is greenfield work so there is nothing to migrate.
