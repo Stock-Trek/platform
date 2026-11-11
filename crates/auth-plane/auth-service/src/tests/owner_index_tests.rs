@@ -223,9 +223,9 @@ async fn revoked_owner_selection_does_not_scan_every_token() {
 }
 
 #[tokio::test]
-async fn missing_vault_indexes_fall_back_to_the_token_scan_and_are_backfilled() {
+async fn missing_vault_indexes_are_not_rebuilt_implicitly() {
     let fixture = VaultFixture::new();
-    let token = TestFixture::add_token(&fixture.service, "token-a", OWNER).await;
+    TestFixture::add_token(&fixture.service, "token-a", OWNER).await;
     fixture.forget_index(OWNER).await;
     assert!(
         fixture
@@ -237,21 +237,22 @@ async fn missing_vault_indexes_fall_back_to_the_token_scan_and_are_backfilled() 
             .is_none()
     );
 
-    let selected = fixture
+    let error = fixture
         .service
         .token_for_owner(OWNER, Utc::now())
         .await
-        .unwrap();
-    let index = fixture
-        .service
-        .store
-        .owner_index(OWNER)
-        .await
-        .unwrap()
-        .unwrap();
+        .unwrap_err();
 
-    assert_eq!(selected.id(), token.id());
-    assert_eq!(IndexAssertions::entry_ids(&index), vec!["token-a"]);
+    assert!(matches!(error, platform_errors::BpError::Auth(_)));
+    assert!(
+        fixture
+            .service
+            .store
+            .owner_index(OWNER)
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[tokio::test]

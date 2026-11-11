@@ -3,13 +3,6 @@ use platform_errors::BpResult;
 use std::collections::BTreeMap;
 
 impl AuthService {
-    pub(crate) async fn backfill_owner_index(&self, owner: &str) -> BpResult<usize> {
-        let owner = ApiToken::validated_owner(owner)?;
-        let tokens = self.scan_tokens_for_owner(owner).await?;
-        self.rebuild_owner_index(owner, &tokens).await?;
-        Ok(tokens.len())
-    }
-
     pub(crate) async fn reconcile_owner_indexes(&self) -> BpResult<usize> {
         let mut ids = self.store.ids().await?;
         ids.sort();

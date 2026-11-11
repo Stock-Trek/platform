@@ -128,8 +128,6 @@ async fn committing_multiple_events_updates_a_token_with_one_write() {
         let key = TokenAuditOutbox::storage_key(event.event_id().unwrap());
         assert!(fixture.server.current(&key).is_some());
     }
-    let stored = fixture.server.current(token.id()).unwrap().0;
-    assert!(stored.get("audit_outbox").is_none());
     assert_eq!(
         fixture
             .store
@@ -233,18 +231,9 @@ async fn deleting_a_token_keeps_pending_events_until_they_are_acknowledged() {
 }
 
 #[tokio::test]
-async fn corrupt_outbox_and_audit_records_are_reported_instead_of_dropped() {
+async fn corrupt_audit_records_are_reported_instead_of_dropped() {
     let fixture = VaultOutboxFixture::new();
-    let token = TestFixture::token("token-a");
-    fixture.store.put(&token).await.unwrap();
     let client = fixture.client();
-    let (data, version) = client.get_value_entry(token.id()).await.unwrap().unwrap();
-    let mut corrupt = data;
-    corrupt["audit_outbox"] = json!("not-an-array");
-    client
-        .put_entry(token.id(), corrupt, WriteCondition::Update(version))
-        .await
-        .unwrap();
     client
         .put_entry(
             &TokenAuditOutbox::storage_key("event-corrupt"),
@@ -254,23 +243,15 @@ async fn corrupt_outbox_and_audit_records_are_reported_instead_of_dropped() {
         .await
         .unwrap();
 
-    let writes_before = VaultOutboxFixture::token_writes(&fixture.server.requests(), token.id());
-    for result in [
-        fixture.store.update(&token, &token).await,
-        fixture.store.pending_audits().await.map(|_| ()),
-    ] {
-        assert!(matches!(
-            result,
-            Err(BpError::Auth(AuthError::Store {
-                retryable: false,
-                ..
-            }))
-        ));
-    }
-    assert_eq!(
-        VaultOutboxFixture::token_writes(&fixture.server.requests(), token.id()),
-        writes_before
-    );
+    let result = fixture.store.pending_audits().await;
+
+    assert!(matches!(
+        result,
+        Err(BpError::Auth(AuthError::Store {
+            retryable: false,
+            ..
+        }))
+    ));
 }
 
 #[tokio::test]

@@ -244,5 +244,4 @@ fn rotation_storage_keys_cannot_collide_with_token_ids() {
     );
 
     assert!(ApiToken::validate_id(&key).is_err());
-    assert!(ApiToken::validate_id("__rotation_transaction__-legacy-token").is_ok());
 }

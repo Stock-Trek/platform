@@ -28,11 +28,7 @@ impl VaultClient {
         }
         let result = match mutation {
             TokenMutation::Create(token) => self
-                .put_entry(
-                    token.id(),
-                    TokenAuditOutbox::token_document(&token, &[])?,
-                    WriteCondition::Create,
-                )
+                .put_entry(token.id(), token.to_value(), WriteCondition::Create)
                 .await
                 .map(|_| true),
             TokenMutation::Update { expected, token } => self
@@ -72,10 +68,9 @@ impl VaultClient {
         if current.to_value() != expected.to_value() {
             return Err(BpError::token_conflict(token.id()));
         }
-        let outbox = TokenAuditOutbox::from_document(&data)?;
         self.put_entry(
             token.id(),
-            TokenAuditOutbox::token_document(token, &outbox)?,
+            token.to_value(),
             WriteCondition::Update(version),
         )
         .await
@@ -86,26 +81,25 @@ impl VaultClient {
             return Ok(false);
         };
         if Self::is_tombstone(&data) {
+            self.delete(expected.id()).await?;
             return Ok(false);
         }
         let current = Self::token_from_value(expected.id(), &data)?;
         if current.to_value() != expected.to_value() {
             return Ok(false);
         }
-        let outbox = TokenAuditOutbox::from_document(&data)?;
         match self
             .put_entry(
                 expected.id(),
-                TokenAuditOutbox::tombstone_document(&outbox)?,
+                Self::tombstone_value(),
                 WriteCondition::Update(version),
             )
             .await
         {
-            Ok(()) if outbox.is_empty() => {
+            Ok(()) => {
                 self.delete(expected.id()).await?;
                 Ok(true)
             }
-            Ok(()) => Ok(true),
             Err(error) if Self::is_conflict(&error) => Ok(false),
             Err(error) => Err(error),
         }

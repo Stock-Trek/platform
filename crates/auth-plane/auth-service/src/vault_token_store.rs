@@ -107,9 +107,7 @@ impl TokenStore for VaultTokenStore {
     }
 
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
-        self.client
-            .update_preserving_outbox(expected, token)
-            .await?;
+        self.client.update_if_unchanged(expected, token).await?;
         if expected.owner() != token.owner() {
             self.sync_removed_index(expected.owner(), expected.id())
                 .await;

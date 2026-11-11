@@ -16,9 +16,7 @@ impl VaultClient {
         self.commit_events(mutation, vec![event]).await
     }
 
-    /// Updates a token without dropping audit events already waiting in its
-    /// outbox.
-    pub(crate) async fn update_preserving_outbox(
+    pub(crate) async fn update_if_unchanged(
         &self,
         expected: &ApiToken,
         token: &ApiToken,
@@ -34,10 +32,9 @@ impl VaultClient {
         if current.to_value() != expected.to_value() {
             return Err(BpError::token_conflict(token.id()));
         }
-        let outbox = TokenAuditOutbox::from_document(&data)?;
         self.put_entry(
             token.id(),
-            TokenAuditOutbox::token_document(token, &outbox)?,
+            token.to_value(),
             WriteCondition::Update(version),
         )
         .await

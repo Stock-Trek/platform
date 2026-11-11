@@ -7,15 +7,9 @@ use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult};
 use std::{collections::HashMap, sync::Arc};
 
-#[derive(Clone)]
-struct StoredEntry {
-    token: Option<ApiToken>,
-    outbox: Vec<TokenAuditEvent>,
-}
-
 #[derive(Clone, Default)]
 struct MemoryState {
-    tokens: HashMap<String, StoredEntry>,
+    tokens: HashMap<String, ApiToken>,
     owner_indexes: HashMap<String, OwnerIndex>,
     rotations: HashMap<String, TokenRotationTransaction>,
     standalone_audits: HashMap<String, TokenAuditEvent>,
@@ -53,21 +47,14 @@ impl TokenStore for MemoryTokenStore {
         if state.tokens.contains_key(token.id()) {
             return Err(BpError::token_exists(token.id()));
         }
-        state.tokens.insert(
-            token.id().to_string(),
-            StoredEntry {
-                token: Some(token.clone()),
-                outbox: Vec::new(),
-            },
-        );
+        state.tokens.insert(token.id().to_string(), token.clone());
         state.upsert_owner_token(token);
         Ok(())
     }
 
     async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
         ApiToken::validate_id(id)?;
-        let state = self.state.lock();
-        Ok(state.tokens.get(id).and_then(|entry| entry.token.clone()))
+        Ok(self.state.lock().tokens.get(id).cloned())
     }
 
     async fn delete(&self, id: &str) -> BpResult<()> {
@@ -76,7 +63,6 @@ impl TokenStore for MemoryTokenStore {
         let owner = state
             .tokens
             .remove(id)
-            .and_then(|entry| entry.token)
             .map(|token| token.owner().to_string());
         if let Some(owner) = owner {
             state.remove_owner_token(&owner, id);
@@ -87,19 +73,13 @@ impl TokenStore for MemoryTokenStore {
     async fn delete_if(&self, expected: &ApiToken) -> BpResult<bool> {
         expected.validate()?;
         let mut state = self.state.lock();
-        let Some(entry) = state.tokens.get_mut(expected.id()) else {
+        let Some(token) = state.tokens.get(expected.id()) else {
             return Ok(false);
         };
-        let Some(stored) = &entry.token else {
-            return Ok(false);
-        };
-        if stored.to_value() != expected.to_value() {
+        if token.to_value() != expected.to_value() {
             return Ok(false);
         }
-        entry.token = None;
-        if entry.outbox.is_empty() {
-            state.tokens.remove(expected.id());
-        }
+        state.tokens.remove(expected.id());
         state.remove_token_indexes(expected);
         Ok(true)
     }
@@ -134,13 +114,7 @@ impl TokenStore for MemoryTokenStore {
     }
 
     async fn ids(&self) -> BpResult<Vec<String>> {
-        let state = self.state.lock();
-        let mut ids: Vec<String> = state
-            .tokens
-            .iter()
-            .filter(|(_, entry)| entry.token.is_some())
-            .map(|(id, _)| id.clone())
-            .collect();
+        let mut ids: Vec<String> = self.state.lock().tokens.keys().cloned().collect();
         ids.sort();
         Ok(ids)
     }
@@ -148,16 +122,13 @@ impl TokenStore for MemoryTokenStore {
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
         token.validate()?;
         let mut state = self.state.lock();
-        let Some(entry) = state.tokens.get_mut(token.id()) else {
-            return Err(BpError::unknown_token(token.id()));
-        };
-        let Some(stored) = &entry.token else {
+        let Some(stored) = state.tokens.get(token.id()) else {
             return Err(BpError::unknown_token(token.id()));
         };
         if stored.to_value() != expected.to_value() {
             return Err(BpError::token_conflict(token.id()));
         }
-        entry.token = Some(token.clone());
+        state.tokens.insert(token.id().to_string(), token.clone());
         state.remove_token_indexes(expected);
         state.upsert_owner_token(token);
         Ok(())
@@ -182,29 +153,20 @@ impl TokenStore for MemoryTokenStore {
                 if state.tokens.contains_key(token.id()) {
                     return Err(BpError::token_exists(token.id()));
                 }
-                state.tokens.insert(
-                    token.id().to_string(),
-                    StoredEntry {
-                        token: Some(token.clone()),
-                        outbox: Vec::new(),
-                    },
-                );
+                state.tokens.insert(token.id().to_string(), token.clone());
                 state.upsert_owner_token(&token);
                 Self::store_standalone_audits(&mut state, events);
                 Ok(true)
             }
             TokenMutation::Update { expected, token } => {
                 token.validate()?;
-                let Some(entry) = state.tokens.get_mut(token.id()) else {
-                    return Err(BpError::unknown_token(token.id()));
-                };
-                let Some(stored) = &entry.token else {
+                let Some(stored) = state.tokens.get(token.id()) else {
                     return Err(BpError::unknown_token(token.id()));
                 };
                 if stored.to_value() != expected.to_value() {
                     return Err(BpError::token_conflict(token.id()));
                 }
-                entry.token = Some(token.clone());
+                state.tokens.insert(token.id().to_string(), token.clone());
                 state.remove_token_indexes(&expected);
                 state.upsert_owner_token(&token);
                 Self::store_standalone_audits(&mut state, events);
@@ -212,10 +174,7 @@ impl TokenStore for MemoryTokenStore {
             }
             TokenMutation::Delete { expected } => {
                 expected.validate()?;
-                let Some(entry) = state.tokens.get(expected.id()) else {
-                    return Ok(false);
-                };
-                let Some(stored) = &entry.token else {
+                let Some(stored) = state.tokens.get(expected.id()) else {
                     return Ok(false);
                 };
                 if stored.to_value() != expected.to_value() {

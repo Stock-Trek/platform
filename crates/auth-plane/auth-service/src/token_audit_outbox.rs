@@ -1,4 +1,4 @@
-use crate::{ApiToken, TokenAuditEvent};
+use crate::TokenAuditEvent;
 use chrono::Utc;
 use platform_errors::{BpError, BpResult};
 use rand::{Rng, distributions::Alphanumeric};
@@ -7,11 +7,8 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static EVENT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-pub(crate) const AUDIT_OUTBOX_FIELD: &str = "audit_outbox";
 pub(crate) const AUDIT_EVENT_FIELD: &str = "__platform_audit_event__";
 pub(crate) const AUDIT_EVENT_PREFIX: &str = "audit/events/";
-const LEGACY_AUDIT_EVENT_PREFIX: &str = "__platform_audit_event__@";
-pub(crate) const TOMBSTONE_FIELD: &str = "__platform_deleted__";
 
 pub(crate) struct TokenAuditOutbox;
 
@@ -33,42 +30,6 @@ impl TokenAuditOutbox {
             "{:020}-{sequence:020}-{random}",
             Utc::now().timestamp_micros()
         )
-    }
-
-    pub(crate) fn from_document(value: &Value) -> BpResult<Vec<TokenAuditEvent>> {
-        let Some(events) = value.get(AUDIT_OUTBOX_FIELD) else {
-            return Ok(Vec::new());
-        };
-        let events = events.as_array().ok_or_else(|| {
-            Self::malformed("audit_outbox must be an array of audit events".to_string())
-        })?;
-        events
-            .iter()
-            .enumerate()
-            .map(|(index, event)| {
-                serde_json::from_value(event.clone()).map_err(|error| {
-                    Self::malformed(format!(
-                        "invalid audit_outbox event at index {index}: {error}"
-                    ))
-                })
-            })
-            .collect()
-    }
-
-    pub(crate) fn token_document(token: &ApiToken, outbox: &[TokenAuditEvent]) -> BpResult<Value> {
-        let mut document = match token.to_value() {
-            Value::Object(document) => document,
-            _ => Map::new(),
-        };
-        Self::insert(&mut document, outbox)?;
-        Ok(Value::Object(document))
-    }
-
-    pub(crate) fn tombstone_document(outbox: &[TokenAuditEvent]) -> BpResult<Value> {
-        let mut document = Map::new();
-        document.insert(TOMBSTONE_FIELD.to_string(), Value::Bool(true));
-        Self::insert(&mut document, outbox)?;
-        Ok(Value::Object(document))
     }
 
     pub(crate) fn standalone_document(event: &TokenAuditEvent) -> BpResult<Value> {
@@ -103,23 +64,11 @@ impl TokenAuditOutbox {
     }
 
     pub(crate) fn is_storage_key(key: &str) -> bool {
-        key.starts_with(AUDIT_EVENT_PREFIX) || key.starts_with(LEGACY_AUDIT_EVENT_PREFIX)
+        key.starts_with(AUDIT_EVENT_PREFIX)
     }
 
     pub(crate) fn storage_key(event_id: &str) -> String {
         format!("{AUDIT_EVENT_PREFIX}{event_id}")
-    }
-
-    fn insert(document: &mut Map<String, Value>, outbox: &[TokenAuditEvent]) -> BpResult<()> {
-        if !outbox.is_empty() {
-            document.insert(
-                AUDIT_OUTBOX_FIELD.to_string(),
-                serde_json::to_value(outbox).map_err(|error| {
-                    Self::malformed(format!("could not serialize audit outbox: {error}"))
-                })?,
-            );
-        }
-        Ok(())
     }
 
     pub(crate) fn require_event_id(event: &TokenAuditEvent) -> BpResult<&str> {
