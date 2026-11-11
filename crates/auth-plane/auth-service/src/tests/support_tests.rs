@@ -1,7 +1,8 @@
+use super::token_usage_queue_fixture_tests::ImmediateTokenUsageQueue;
 use crate::{
     ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenStore, ReplayStore,
     TokenAuditLog, TokenAuditRelay, TokenExpiry, TokenMetadata, TokenOptions, TokenScope,
-    TokenStore,
+    TokenStore, TokenUsageQueue,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::BpResult;
@@ -19,6 +20,7 @@ pub(crate) struct AuthServiceBuilder {
     store: Arc<dyn TokenStore>,
     config: AuthServiceConfig,
     replay: Arc<dyn ReplayStore>,
+    usage: Option<Arc<dyn TokenUsageQueue>>,
 }
 
 impl AuthServiceBuilder {
@@ -27,6 +29,7 @@ impl AuthServiceBuilder {
             store: Arc::new(MemoryTokenStore::default()),
             config: TestFixture::config(),
             replay: Arc::new(MemoryReplayStore::default()),
+            usage: None,
         }
     }
 
@@ -42,6 +45,11 @@ impl AuthServiceBuilder {
 
     pub(crate) fn config(mut self, config: AuthServiceConfig) -> Self {
         self.config = config;
+        self
+    }
+
+    pub(crate) fn usage(mut self, usage: Arc<dyn TokenUsageQueue>) -> Self {
+        self.usage = Some(usage);
         self
     }
 
@@ -65,7 +73,10 @@ impl AuthServiceBuilder {
     }
 
     pub(crate) fn try_build(self) -> BpResult<AuthService> {
-        AuthService::new(self.store, self.config, self.replay)
+        let usage = self
+            .usage
+            .unwrap_or_else(|| Arc::new(ImmediateTokenUsageQueue::new(self.store.clone())));
+        AuthService::new(self.store, self.config, self.replay, usage)
     }
 }
 
@@ -82,6 +93,14 @@ impl TestFixture {
 
     pub(crate) fn service() -> AuthService {
         AuthServiceBuilder::new().build()
+    }
+
+    pub(crate) fn service_with_usage(usage: Arc<dyn TokenUsageQueue>) -> AuthService {
+        AuthServiceBuilder::new().usage(usage).build()
+    }
+
+    pub(crate) fn immediate_usage(store: Arc<dyn TokenStore>) -> Arc<dyn TokenUsageQueue> {
+        Arc::new(ImmediateTokenUsageQueue::new(store))
     }
 
     pub(crate) async fn drain(service: &AuthService, audit: Arc<dyn TokenAuditLog>) -> usize {

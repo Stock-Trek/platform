@@ -1,6 +1,8 @@
 use crate::config::AuthConfig;
 use chrono::Duration;
-use platform_auth_service::{AuthService, AuthServiceConfig, ValkeyReplayStore, VaultTokenStore};
+use platform_auth_service::{
+    AuthService, AuthServiceConfig, ValkeyReplayStore, ValkeyTokenUsageQueue, VaultTokenStore,
+};
 use platform_errors::BpResult;
 use std::sync::Arc;
 
@@ -10,6 +12,7 @@ impl PortfolioAuthService {
     pub async fn connect(config: AuthConfig) -> BpResult<AuthService> {
         let store = VaultTokenStore::new(config.vault().clone())?;
         let replay = ValkeyReplayStore::connect(config.valkey().clone()).await?;
+        let usage = Arc::new(ValkeyTokenUsageQueue::connect(config.usage_queue().clone()).await?);
         AuthService::new(
             Arc::new(store),
             AuthServiceConfig {
@@ -18,6 +21,7 @@ impl PortfolioAuthService {
                 signature_validity: Duration::minutes(5),
             },
             Arc::new(replay),
+            usage,
         )
     }
 }

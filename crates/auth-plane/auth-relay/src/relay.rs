@@ -1,7 +1,8 @@
 use crate::config::AuthRelayConfig;
 use aws_sdk_sqs::Client as SqsClient;
 use platform_auth_service::{
-    SqsTokenAuditLog, TokenAuditLog, TokenAuditRelay, TokenStore, VaultTokenStore,
+    SqsTokenAuditLog, TokenAuditLog, TokenAuditRelay, TokenStore, TokenUsageQueue,
+    TokenUsageWorker, ValkeyTokenUsageQueue, VaultTokenStore,
 };
 use platform_aws::Aws;
 use platform_errors::BpResult;
@@ -10,11 +11,13 @@ use std::sync::Arc;
 
 pub struct AuthRelay {
     relay: TokenAuditRelay,
+    usage: TokenUsageWorker,
 }
 
 impl AuthRelay {
     pub async fn connect(config: &AuthRelayConfig) -> BpResult<Self> {
-        let store = VaultTokenStore::new(config.vault.clone())?;
+        let store = Arc::new(VaultTokenStore::new(config.vault.clone())?);
+        let usage = Arc::new(ValkeyTokenUsageQueue::connect(config.usage_queue.clone()).await?);
         let sdk_config = Aws::load_sdk_config(config.aws_timeouts).await;
         let sqs = Sqs::new(
             SqsClient::new(&sdk_config),
@@ -22,16 +25,33 @@ impl AuthRelay {
             SqsConfig::new(config.audit_queue_url.clone()),
         );
         let sink = SqsTokenAuditLog::new(sqs, config.audit_timeout);
-        Ok(Self::new(Arc::new(store), Arc::new(sink)))
+        Ok(Self::new(
+            store,
+            Arc::new(sink),
+            usage,
+            config.usage_queue.batch_size(),
+        ))
     }
 
-    pub fn new(store: Arc<dyn TokenStore>, sink: Arc<dyn TokenAuditLog>) -> Self {
+    pub fn new(
+        store: Arc<dyn TokenStore>,
+        sink: Arc<dyn TokenAuditLog>,
+        queue: Arc<dyn TokenUsageQueue>,
+        batch_size: usize,
+    ) -> Self {
+        let usage = TokenUsageWorker::new(store.clone(), queue, batch_size);
         Self {
             relay: TokenAuditRelay::new(store, sink),
+            usage,
         }
     }
 
     pub async fn drain(&self) -> BpResult<usize> {
-        self.relay.drain().await
+        let usage_result = self.usage.drain().await;
+        let audit_result = self.relay.drain().await;
+        match (usage_result, audit_result) {
+            (Ok(applied), Ok(delivered)) => Ok(applied + delivered),
+            (Err(error), _) | (_, Err(error)) => Err(error),
+        }
     }
 }

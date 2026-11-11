@@ -10,8 +10,13 @@ const VAULT_ADDRESS: &str = "AUTH_RELAY_VAULT_ADDRESS";
 const VAULT_MOUNT: &str = "AUTH_RELAY_VAULT_MOUNT";
 const VAULT_TIMEOUT_SECS: &str = "AUTH_RELAY_VAULT_TIMEOUT_SECS";
 const VAULT_TOKEN: &str = "AUTH_RELAY_VAULT_TOKEN";
+const USAGE_QUEUE_URL: &str = "AUTH_RELAY_USAGE_QUEUE_URL";
+const USAGE_QUEUE_PREFIX: &str = "AUTH_RELAY_USAGE_QUEUE_PREFIX";
+const USAGE_QUEUE_TIMEOUT_SECS: &str = "AUTH_RELAY_USAGE_QUEUE_TIMEOUT_SECS";
+const USAGE_QUEUE_CAPACITY: &str = "AUTH_RELAY_USAGE_QUEUE_CAPACITY";
+const USAGE_QUEUE_BATCH_SIZE: &str = "AUTH_RELAY_USAGE_QUEUE_BATCH_SIZE";
 
-const ALL_VARS: [(&str, &str); 9] = [
+const ALL_VARS: [(&str, &str); 14] = [
     (RUST_LOG, "info"),
     (AWS_CONNECT_TIMEOUT_SECS, "5"),
     (AWS_OPERATION_TIMEOUT_SECS, "15"),
@@ -21,6 +26,11 @@ const ALL_VARS: [(&str, &str); 9] = [
     (VAULT_TIMEOUT_SECS, "10"),
     (AUDIT_QUEUE_URL, "https://sqs.example.com/123/audit"),
     (AUDIT_TIMEOUT_SECS, "5"),
+    (USAGE_QUEUE_URL, "redis://valkey.example.com:6379"),
+    (USAGE_QUEUE_PREFIX, "auth-usage"),
+    (USAGE_QUEUE_TIMEOUT_SECS, "5"),
+    (USAGE_QUEUE_CAPACITY, "1000"),
+    (USAGE_QUEUE_BATCH_SIZE, "100"),
 ];
 
 struct ConfigFixture;
@@ -59,6 +69,10 @@ fn reads_every_value_from_the_environment() {
     assert_eq!(config.vault.timeout(), Duration::from_secs(10));
     assert_eq!(config.audit_queue_url, "https://sqs.example.com/123/audit");
     assert_eq!(config.audit_timeout, Duration::from_secs(5));
+    assert_eq!(config.usage_queue.url(), "redis://valkey.example.com:6379");
+    assert_eq!(config.usage_queue.key_prefix(), "auth-usage");
+    assert_eq!(config.usage_queue.capacity(), 1000);
+    assert_eq!(config.usage_queue.batch_size(), 100);
     assert_eq!(
         config.aws_timeouts.connect.duration(),
         Some(Duration::from_secs(5))
@@ -79,6 +93,12 @@ fn rejects_invalid_service_configuration() {
         (AUDIT_QUEUE_URL, "file:///tmp/audit"),
         (VAULT_TIMEOUT_SECS, "0"),
         (AUDIT_TIMEOUT_SECS, "0"),
+        (USAGE_QUEUE_URL, "not a url"),
+        (USAGE_QUEUE_URL, "https://valkey.example.com"),
+        (USAGE_QUEUE_PREFIX, "../auth-usage"),
+        (USAGE_QUEUE_TIMEOUT_SECS, "0"),
+        (USAGE_QUEUE_CAPACITY, "0"),
+        (USAGE_QUEUE_BATCH_SIZE, "0"),
         (AWS_CONNECT_TIMEOUT_SECS, "0"),
         (AWS_OPERATION_TIMEOUT_SECS, "0"),
     ] {

@@ -1,0 +1,102 @@
+use crate::{
+    MemoryTokenUsageQueue, TokenStore, TokenUsage, TokenUsageQueue, TokenUsageReservation,
+    TokenUsageWorker,
+};
+use async_trait::async_trait;
+use platform_errors::{BpError, BpResult};
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
+};
+
+/// Test queue that applies usage immediately, preserving synchronous test
+/// expectations while production code always goes through the durable queue.
+pub(crate) struct ImmediateTokenUsageQueue {
+    store: Arc<dyn TokenStore>,
+    inner: Arc<MemoryTokenUsageQueue>,
+}
+
+impl ImmediateTokenUsageQueue {
+    pub(crate) fn new(store: Arc<dyn TokenStore>) -> Self {
+        Self {
+            store,
+            inner: Arc::new(MemoryTokenUsageQueue::new(usize::MAX)),
+        }
+    }
+
+    async fn drain(&self) -> BpResult<()> {
+        TokenUsageWorker::new(self.store.clone(), self.inner.clone(), 100)
+            .drain()
+            .await?;
+        Ok(())
+    }
+}
+
+#[async_trait]
+impl TokenUsageQueue for ImmediateTokenUsageQueue {
+    async fn enqueue(&self, usage: TokenUsage) -> BpResult<()> {
+        self.inner.enqueue(usage).await?;
+        self.drain().await
+    }
+
+    async fn reserve(&self, limit: usize) -> BpResult<Vec<TokenUsageReservation>> {
+        self.inner.reserve(limit).await
+    }
+
+    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BpResult<()> {
+        self.inner.acknowledge(reservation).await
+    }
+
+    async fn release(&self, reservation: &TokenUsageReservation) -> BpResult<()> {
+        self.inner.release(reservation).await
+    }
+}
+
+pub(crate) struct ToggleTokenUsageQueue {
+    inner: MemoryTokenUsageQueue,
+    failing: AtomicBool,
+}
+
+impl ToggleTokenUsageQueue {
+    pub(crate) fn new() -> Self {
+        Self {
+            inner: MemoryTokenUsageQueue::new(1024),
+            failing: AtomicBool::new(false),
+        }
+    }
+
+    pub(crate) fn fail(&self) {
+        self.failing.store(true, Ordering::SeqCst);
+    }
+
+    pub(crate) fn succeed(&self) {
+        self.failing.store(false, Ordering::SeqCst);
+    }
+}
+
+#[async_trait]
+impl TokenUsageQueue for ToggleTokenUsageQueue {
+    async fn enqueue(&self, usage: TokenUsage) -> BpResult<()> {
+        if self.failing.load(Ordering::SeqCst) {
+            return Err(BpError::auth_store(
+                "usage",
+                "test-queue",
+                true,
+                "queue unavailable".to_string(),
+            ));
+        }
+        self.inner.enqueue(usage).await
+    }
+
+    async fn reserve(&self, limit: usize) -> BpResult<Vec<TokenUsageReservation>> {
+        self.inner.reserve(limit).await
+    }
+
+    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BpResult<()> {
+        self.inner.acknowledge(reservation).await
+    }
+
+    async fn release(&self, reservation: &TokenUsageReservation) -> BpResult<()> {
+        self.inner.release(reservation).await
+    }
+}

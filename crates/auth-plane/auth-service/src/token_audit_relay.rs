@@ -22,6 +22,10 @@ impl TokenAuditRelay {
         Self { store, sink }
     }
 
+    pub fn store(&self) -> Arc<dyn TokenStore> {
+        self.store.clone()
+    }
+
     pub async fn drain(&self) -> BpResult<usize> {
         let started = Instant::now();
         let result = self.drain_once().await;

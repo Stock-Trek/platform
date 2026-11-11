@@ -10,6 +10,7 @@ mod jwt_signing_key;
 mod jwt_verifier;
 mod memory_replay_store;
 mod memory_token_store;
+mod memory_token_usage_queue;
 mod order_jwt_claims;
 mod order_jwt_issuance;
 mod order_jwt_verification;
@@ -48,11 +49,16 @@ mod token_rotation_transaction;
 mod token_scope;
 mod token_store;
 mod token_temporal;
+mod token_usage;
+mod token_usage_queue_config;
+mod token_usage_worker;
 mod token_value;
 mod token_view;
 mod valkey_config;
 mod valkey_error;
 mod valkey_replay_store;
+mod valkey_token_usage_queue;
+mod valkey_token_usage_reply;
 mod vault_audit;
 mod vault_client;
 mod vault_commit;
@@ -80,6 +86,7 @@ pub use jwt_signing_key::{DEFAULT_JWT_KEY_ID, JWT_SIGNING_ALGORITHM, JwtSigningK
 pub use jwt_verifier::JwtVerifier;
 pub use memory_replay_store::{DEFAULT_REPLAY_CAPACITY, MemoryReplayStore};
 pub use memory_token_store::MemoryTokenStore;
+pub use memory_token_usage_queue::MemoryTokenUsageQueue;
 pub use order_jwt_claims::{IssuedJwt, OrderJwtClaims};
 pub use order_request_context::OrderRequestContext;
 pub use order_signature::OrderRequestSigner;
@@ -100,8 +107,15 @@ pub use token_options::{TokenExpiry, TokenOptions};
 pub use token_rotation_transaction::TokenRotationTransaction;
 pub use token_scope::TokenScope;
 pub use token_store::{TokenMutation, TokenStore};
+pub use token_usage::{TokenUsage, TokenUsageQueue, TokenUsageReservation};
+pub use token_usage_queue_config::{
+    DEFAULT_TOKEN_USAGE_QUEUE_BATCH_SIZE, DEFAULT_TOKEN_USAGE_QUEUE_CAPACITY,
+    DEFAULT_TOKEN_USAGE_QUEUE_PREFIX, TokenUsageQueueConfig,
+};
+pub use token_usage_worker::TokenUsageWorker;
 pub use token_view::TokenView;
 pub use valkey_config::{DEFAULT_VALKEY_REPLAY_PREFIX, ValkeyReplayStoreConfig};
 pub use valkey_replay_store::ValkeyReplayStore;
+pub use valkey_token_usage_queue::ValkeyTokenUsageQueue;
 pub use vault_config::VaultTokenStoreConfig;
 pub use vault_token_store::VaultTokenStore;

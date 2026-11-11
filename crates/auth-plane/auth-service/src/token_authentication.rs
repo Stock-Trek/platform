@@ -1,6 +1,5 @@
 use crate::{
-    ApiToken, AuthService, SecretInput, TokenAuditAction, TokenAuditEvent, TokenMutation,
-    TokenScope, auth_service::MAX_UPDATE_ATTEMPTS,
+    ApiToken, AuthService, SecretInput, TokenAuditAction, TokenAuditEvent, TokenScope, TokenUsage,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
@@ -33,57 +32,35 @@ impl AuthService {
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
         let token_id = token.id().to_string();
-        for _ in 0..MAX_UPDATE_ATTEMPTS {
-            if !token.matches_secret(candidate) {
-                let error = BpError::auth_invalid_secret(token.id());
-                self.record_authentication_failure(&token_id, Some(&token), now, &error)
-                    .await;
-                return Err(error);
-            }
-            if let Err(error) = Self::ensure_active(&token, now) {
-                self.record_authentication_failure(&token_id, Some(&token), now, &error)
-                    .await;
-                return Err(error);
-            }
-            if let Some(scope) = scope
-                && let Err(error) = Self::ensure_scope(&token, scope)
-            {
-                self.record_authentication_failure(&token_id, Some(&token), now, &error)
-                    .await;
-                return Err(error);
-            }
-            let original = token.clone();
-            token.metadata.record_use(now);
-            let event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
-                .with_token(token.id(), Some(token.owner()));
-            let mutation = TokenMutation::Update {
-                expected: original,
-                token: token.clone(),
-            };
-            match self.commit_mutation(mutation, event).await {
-                Ok(_) => return Ok(token),
-                Err(error) if Self::is_conflict(&error) => {
-                    token = match self.token(&token_id).await {
-                        Ok(token) => token,
-                        Err(error) => {
-                            self.record_authentication_failure(&token_id, None, now, &error)
-                                .await;
-                            return Err(error);
-                        }
-                    };
-                    continue;
-                }
-                Err(error) => {
-                    self.record_authentication_failure(&token_id, Some(&token), now, &error)
-                        .await;
-                    return Err(error);
-                }
+        if !token.matches_secret(candidate) {
+            let error = BpError::auth_invalid_secret(token.id());
+            self.record_authentication_failure(&token_id, Some(&token), now, &error)
+                .await;
+            return Err(error);
+        }
+        if let Err(error) = Self::ensure_active(&token, now) {
+            self.record_authentication_failure(&token_id, Some(&token), now, &error)
+                .await;
+            return Err(error);
+        }
+        if let Some(scope) = scope
+            && let Err(error) = Self::ensure_scope(&token, scope)
+        {
+            self.record_authentication_failure(&token_id, Some(&token), now, &error)
+                .await;
+            return Err(error);
+        }
+        let event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
+            .with_token(token.id(), Some(token.owner()));
+        token.metadata.record_use(now);
+        let usage = TokenUsage::for_token(token.id(), now, vec![event]);
+        match self.enqueue_usage(usage).await {
+            Ok(()) => Ok(token),
+            Err(error) => {
+                tracing::error!(%error, "failed to enqueue token usage");
+                Err(error)
             }
         }
-        let error = BpError::token_conflict(&token_id);
-        self.record_authentication_failure(&token_id, None, now, &error)
-            .await;
-        Err(error)
     }
 
     pub(crate) fn ensure_active(token: &ApiToken, now: DateTime<Utc>) -> BpResult<()> {

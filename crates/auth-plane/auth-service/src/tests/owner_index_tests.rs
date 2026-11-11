@@ -142,9 +142,10 @@ impl VaultFixture {
         .unwrap();
         let store = Arc::new(VaultTokenStore::new(config).unwrap());
         let service = AuthService::new(
-            store,
+            store.clone(),
             TestFixture::config(),
             Arc::new(crate::MemoryReplayStore::default()),
+            TestFixture::immediate_usage(store),
         )
         .unwrap();
         Self { server, service }

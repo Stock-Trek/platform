@@ -93,10 +93,7 @@ impl AuthService {
                     .await;
             }
         };
-        match self
-            .commit_signature_use(token, token_id, now, &reservation, signature, order_request)
-            .await
-        {
+        match self.commit_signature_use(token, now, &reservation).await {
             Ok(verification) => Ok(verification),
             Err(error) => self.reject_retryable(token_id, None, now, &error).await,
         }

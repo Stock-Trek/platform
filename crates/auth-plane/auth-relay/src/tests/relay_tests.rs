@@ -2,8 +2,8 @@ use crate::{AuthRelay, AuthRelayConfig, AuthRelayRunner};
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_auth_service::{
-    MemoryTokenStore, TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenStore,
-    VaultTokenStoreConfig,
+    MemoryTokenStore, MemoryTokenUsageQueue, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
+    TokenStore, TokenUsageQueueConfig, VaultTokenStoreConfig,
 };
 use platform_errors::{BpError, BpResult};
 use platform_time::timeouts::Timeouts;
@@ -71,6 +71,10 @@ impl RelayFixture {
         store
     }
 
+    fn usage_queue() -> Arc<MemoryTokenUsageQueue> {
+        Arc::new(MemoryTokenUsageQueue::new(1024))
+    }
+
     fn config() -> AuthRelayConfig {
         AuthRelayConfig {
             log_filter: "info".to_string(),
@@ -84,6 +88,14 @@ impl RelayFixture {
             audit_queue_url: "https://sqs.example.com/123/audit".to_string(),
             audit_timeout: Duration::from_secs(5),
             aws_timeouts: Timeouts::from_durations(Duration::from_secs(5), Duration::from_secs(15)),
+            usage_queue: TokenUsageQueueConfig::new(
+                "redis://valkey.example.com:6379",
+                "auth-usage",
+                Duration::from_secs(5),
+                1000,
+                100,
+            )
+            .expect("valid usage queue config"),
         }
     }
 }
@@ -93,7 +105,12 @@ async fn drains_pending_events_after_a_later_successful_attempt() {
     let store = RelayFixture::store().await;
     let audit = Arc::new(ToggleAudit::new());
     audit.fail();
-    let relay = AuthRelay::new(store.clone(), audit.clone());
+    let relay = AuthRelay::new(
+        store.clone(),
+        audit.clone(),
+        RelayFixture::usage_queue(),
+        100,
+    );
 
     assert!(relay.drain().await.is_err());
     assert_eq!(store.pending_audits().await.unwrap().len(), 1);
@@ -111,7 +128,12 @@ async fn runner_drains_pending_events_in_a_single_pass() {
     let audit = Arc::new(ToggleAudit::new());
     let runner = AuthRelayRunner::new(
         RelayFixture::config(),
-        AuthRelay::new(store.clone(), audit.clone()),
+        AuthRelay::new(
+            store.clone(),
+            audit.clone(),
+            RelayFixture::usage_queue(),
+            100,
+        ),
     );
 
     runner.run().await.expect("single relay pass");
@@ -127,7 +149,12 @@ async fn runner_returns_delivery_failures_so_the_cron_job_can_retry() {
     audit.fail();
     let runner = AuthRelayRunner::new(
         RelayFixture::config(),
-        AuthRelay::new(store.clone(), audit.clone()),
+        AuthRelay::new(
+            store.clone(),
+            audit.clone(),
+            RelayFixture::usage_queue(),
+            100,
+        ),
     );
 
     assert!(runner.run().await.is_err());

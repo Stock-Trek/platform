@@ -13,8 +13,13 @@ const VAULT_ADDRESS: &str = "PORTFOLIO_VAULT_ADDRESS";
 const VAULT_TOKEN: &str = "PORTFOLIO_VAULT_TOKEN";
 const VAULT_MOUNT: &str = "PORTFOLIO_VAULT_MOUNT";
 const JWKS_URL: &str = "PORTFOLIO_JWKS_URL";
+const USAGE_QUEUE_URL: &str = "PORTFOLIO_USAGE_QUEUE_URL";
+const USAGE_QUEUE_PREFIX: &str = "PORTFOLIO_USAGE_QUEUE_PREFIX";
+const USAGE_QUEUE_TIMEOUT_SECS: &str = "PORTFOLIO_USAGE_QUEUE_TIMEOUT_SECS";
+const USAGE_QUEUE_CAPACITY: &str = "PORTFOLIO_USAGE_QUEUE_CAPACITY";
+const USAGE_QUEUE_BATCH_SIZE: &str = "PORTFOLIO_USAGE_QUEUE_BATCH_SIZE";
 
-const ALL_VARS: [(&str, &str); 10] = [
+const ALL_VARS: [(&str, &str); 15] = [
     (LOG_FILTER, "info"),
     (BIND_ADDRESS, "127.0.0.1:8080"),
     (DELIVERY_URL, "https://orders.example.com/orders"),
@@ -25,6 +30,11 @@ const ALL_VARS: [(&str, &str); 10] = [
     (VAULT_ADDRESS, "https://vault.example.com"),
     (VAULT_TOKEN, "vault-token"),
     (VAULT_MOUNT, "platform-tokens"),
+    (USAGE_QUEUE_URL, "redis://valkey.example.com:6379"),
+    (USAGE_QUEUE_PREFIX, "auth-usage"),
+    (USAGE_QUEUE_TIMEOUT_SECS, "5"),
+    (USAGE_QUEUE_CAPACITY, "1000"),
+    (USAGE_QUEUE_BATCH_SIZE, "100"),
 ];
 
 struct Fixture;
@@ -82,6 +92,8 @@ fn reads_every_value_from_the_environment() {
     assert_eq!(config.auth().vault().address(), "https://vault.example.com");
     assert_eq!(config.auth().vault().mount(), "platform-tokens");
     assert_eq!(config.auth().vault().timeout(), Duration::from_secs(10));
+    assert_eq!(config.auth().usage_queue().capacity(), 1000);
+    assert_eq!(config.auth().usage_queue().batch_size(), 100);
     assert_eq!(
         config.auth().jwks_url(),
         "https://auth.example.com/.well-known/jwks.json"
@@ -126,6 +138,12 @@ fn rejects_invalid_service_configuration() {
         (JWKS_URL, "not a url"),
         (JWKS_URL, "file:///tmp/jwks.json"),
         (JWKS_URL, "ftp://auth.example.com/jwks"),
+        (USAGE_QUEUE_URL, "not a url"),
+        (USAGE_QUEUE_URL, "file:///tmp/valkey"),
+        (USAGE_QUEUE_PREFIX, "../auth-usage"),
+        (USAGE_QUEUE_TIMEOUT_SECS, "0"),
+        (USAGE_QUEUE_CAPACITY, "0"),
+        (USAGE_QUEUE_BATCH_SIZE, "0"),
     ] {
         assert!(
             Fixture::config(&Fixture::with(name, value)).is_err(),

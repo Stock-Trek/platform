@@ -1,6 +1,7 @@
 use crate::{
     JwtSigningKey, JwtVerifier, ReplayStore, TokenAuditEvent, TokenMutation,
-    TokenRotationTransaction, jwt_signing_key::DEFAULT_JWT_KEY_ID, token_store::TokenStore,
+    TokenRotationTransaction, TokenUsageQueue, jwt_signing_key::DEFAULT_JWT_KEY_ID,
+    token_store::TokenStore,
 };
 use chrono::Duration;
 use jsonwebtoken::jwk::JwkSet;
@@ -23,6 +24,7 @@ pub struct AuthService {
     pub(crate) token_lifetime: Duration,
     pub(crate) rotation_overlap: Duration,
     pub(crate) jwt_signer: Arc<JwtSigningKey>,
+    pub(crate) usage: Arc<dyn TokenUsageQueue>,
 }
 
 impl AuthService {
@@ -30,9 +32,10 @@ impl AuthService {
         store: Arc<dyn TokenStore>,
         config: AuthServiceConfig,
         replay: Arc<dyn ReplayStore>,
+        usage: Arc<dyn TokenUsageQueue>,
     ) -> BpResult<Self> {
         let signer = JwtSigningKey::generate(DEFAULT_JWT_KEY_ID)?;
-        Self::with_jwt_signing_key(store, config, replay, Arc::new(signer))
+        Self::with_jwt_signing_key(store, config, replay, Arc::new(signer), usage)
     }
 
     pub fn with_jwt_signing_key(
@@ -40,6 +43,7 @@ impl AuthService {
         config: AuthServiceConfig,
         replay: Arc<dyn ReplayStore>,
         jwt_signer: Arc<JwtSigningKey>,
+        usage: Arc<dyn TokenUsageQueue>,
     ) -> BpResult<Self> {
         Self::validate_config(&config)?;
         Ok(Self {
@@ -49,6 +53,7 @@ impl AuthService {
             token_lifetime: config.token_lifetime,
             rotation_overlap: config.rotation_overlap,
             jwt_signer,
+            usage,
         })
     }
 
@@ -109,7 +114,7 @@ impl AuthService {
     }
 
     pub(crate) async fn record_audit_failure(&self, event: TokenAuditEvent) {
-        if let Err(error) = self.store.append_audit(event).await {
+        if let Err(error) = self.enqueue_usage(crate::TokenUsage::audit(event)).await {
             tracing::error!(%error, "failed to enqueue token audit event");
         }
     }

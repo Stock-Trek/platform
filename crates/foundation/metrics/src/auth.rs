@@ -63,3 +63,34 @@ impl AuthAuditRelayMetrics {
         histogram!(AUTH_AUDIT_RELAY_DRAIN_DURATION_SECONDS).record(duration.as_secs_f64());
     }
 }
+
+pub struct AuthUsageQueueMetrics;
+
+impl AuthUsageQueueMetrics {
+    pub fn record_enqueued() {
+        counter!(AUTH_USAGE_QUEUE_ENQUEUED_TOTAL).increment(1);
+    }
+
+    pub fn record_capacity_rejection() {
+        counter!(AUTH_USAGE_QUEUE_CAPACITY_REJECTIONS_TOTAL).increment(1);
+    }
+
+    pub fn record_delivered(count: usize) {
+        if count > 0 {
+            counter!(AUTH_USAGE_QUEUE_DELIVERED_TOTAL).increment(count as u64);
+        }
+    }
+
+    pub fn record_failure(operation: &'static str, error_type: &'static str) {
+        counter!(
+            AUTH_USAGE_QUEUE_FAILURES_TOTAL,
+            "operation" => operation,
+            "error_type" => error_type,
+        )
+        .increment(1);
+    }
+
+    pub fn record_drain_duration(duration: Duration) {
+        histogram!(AUTH_USAGE_QUEUE_DRAIN_DURATION_SECONDS).record(duration.as_secs_f64());
+    }
+}
