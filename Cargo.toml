@@ -14,6 +14,7 @@ platform-build-agent = { path = "crates/build-plane/build-agent" }
 platform-build-orchestrator = { path = "crates/build-plane/build-orchestrator" }
 platform-git-webhook = { path = "crates/build-plane/git-webhook" }
 
+platform-portfolio-registry = { path = "crates/control-plane/portfolio-registry" }
 platform-run-invoker = { path = "crates/control-plane/run-invoker" }
 platform-run-store = { path = "crates/control-plane/run-store" }
 
@@ -35,6 +36,7 @@ platform-market-data = { path = "crates/foundation/market-data" }
 platform-messages = { path = "crates/foundation/messages" }
 platform-metrics = { path = "crates/foundation/metrics" }
 platform-nats = { path = "crates/foundation/nats" }
+platform-portfolio-ownership = { path = "crates/foundation/portfolio-ownership" }
 platform-proto-gen = { path = "crates/foundation/proto-gen" }
 platform-sigv4 = { path = "crates/foundation/sigv4" }
 platform-type-bridge = { path = "crates/foundation/type-bridge" }

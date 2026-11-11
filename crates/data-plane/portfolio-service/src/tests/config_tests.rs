@@ -18,8 +18,13 @@ const USAGE_QUEUE_PREFIX: &str = "PORTFOLIO_USAGE_QUEUE_PREFIX";
 const USAGE_QUEUE_TIMEOUT_SECS: &str = "PORTFOLIO_USAGE_QUEUE_TIMEOUT_SECS";
 const USAGE_QUEUE_CAPACITY: &str = "PORTFOLIO_USAGE_QUEUE_CAPACITY";
 const USAGE_QUEUE_BATCH_SIZE: &str = "PORTFOLIO_USAGE_QUEUE_BATCH_SIZE";
+const OWNERSHIP_NATS_URL: &str = "PORTFOLIO_OWNERSHIP_NATS_URL";
+const OWNERSHIP_CLIENT_NAME: &str = "PORTFOLIO_OWNERSHIP_CLIENT_NAME";
+const OWNERSHIP_DURABLE: &str = "PORTFOLIO_OWNERSHIP_DURABLE";
+const OWNERSHIP_CHECKPOINT_BUCKET: &str = "PORTFOLIO_OWNERSHIP_CHECKPOINT_BUCKET";
+const OWNERSHIP_RETRY_BACKOFF_SECS: &str = "PORTFOLIO_OWNERSHIP_RETRY_BACKOFF_SECS";
 
-const ALL_VARS: [(&str, &str); 15] = [
+const ALL_VARS: [(&str, &str); 20] = [
     (LOG_FILTER, "info"),
     (BIND_ADDRESS, "127.0.0.1:8080"),
     (DELIVERY_URL, "https://orders.example.com/orders"),
@@ -35,6 +40,11 @@ const ALL_VARS: [(&str, &str); 15] = [
     (USAGE_QUEUE_TIMEOUT_SECS, "5"),
     (USAGE_QUEUE_CAPACITY, "1000"),
     (USAGE_QUEUE_BATCH_SIZE, "100"),
+    (OWNERSHIP_NATS_URL, "nats://nats.example.com:4222"),
+    (OWNERSHIP_CLIENT_NAME, "portfolio-service"),
+    (OWNERSHIP_DURABLE, "portfolio-ownership"),
+    (OWNERSHIP_CHECKPOINT_BUCKET, "portfolio-checkpoints"),
+    (OWNERSHIP_RETRY_BACKOFF_SECS, "3"),
 ];
 
 struct Fixture;
@@ -98,6 +108,17 @@ fn reads_every_value_from_the_environment() {
         config.auth().jwks_url(),
         "https://auth.example.com/.well-known/jwks.json"
     );
+    assert_eq!(
+        config.ownership().nats_url(),
+        "nats://nats.example.com:4222"
+    );
+    assert_eq!(config.ownership().client_name(), "portfolio-service");
+    assert_eq!(config.ownership().durable(), "portfolio-ownership");
+    assert_eq!(
+        config.ownership().checkpoint_bucket(),
+        "portfolio-checkpoints"
+    );
+    assert_eq!(config.ownership().retry_backoff(), Duration::from_secs(3));
 }
 
 #[test]
@@ -144,6 +165,9 @@ fn rejects_invalid_service_configuration() {
         (USAGE_QUEUE_TIMEOUT_SECS, "0"),
         (USAGE_QUEUE_CAPACITY, "0"),
         (USAGE_QUEUE_BATCH_SIZE, "0"),
+        (OWNERSHIP_NATS_URL, "not a url"),
+        (OWNERSHIP_NATS_URL, "http://nats.example.com"),
+        (OWNERSHIP_RETRY_BACKOFF_SECS, "0"),
     ] {
         assert!(
             Fixture::config(&Fixture::with(name, value)).is_err(),

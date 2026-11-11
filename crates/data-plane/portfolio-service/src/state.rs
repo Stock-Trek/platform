@@ -1,7 +1,5 @@
-use crate::{
-    account::AccountKey,
-    portfolio::{AccountPortfolio, AccountPortfolios, PortfolioUpdate},
-};
+use crate::portfolio::{AccountPortfolio, AccountPortfolios, PortfolioUpdate};
+use platform_portfolio_ownership::AccountKey;
 use std::collections::{BTreeMap, BTreeSet};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 

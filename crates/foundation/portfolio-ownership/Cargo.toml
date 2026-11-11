@@ -1,0 +1,13 @@
+[package]
+name = "platform-portfolio-ownership"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+chrono = { workspace = true }
+platform-errors = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+stock-trek-types = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+serde_json.workspace = true

@@ -10,6 +10,7 @@ mod order_request_server_fixture;
 mod order_request_server_shutdown_tests;
 mod order_request_server_tests;
 mod order_request_tests;
+mod ownership_tests;
 mod service_tests;
 mod state_tests;
 mod test_feed;

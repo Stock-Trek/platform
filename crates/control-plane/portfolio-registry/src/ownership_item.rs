@@ -1,0 +1,67 @@
+use crate::OwnershipRecord;
+use aws_sdk_dynamodb::types::AttributeValue;
+use platform_errors::{BpError, BpResult};
+use std::collections::HashMap;
+
+pub(crate) const ACCOUNT_KEY: &str = "accountKey";
+pub(crate) const OWNER: &str = "owner";
+pub(crate) const ACTIVE: &str = "active";
+pub(crate) const VERSION: &str = "version";
+pub(crate) const RECORD: &str = "record";
+pub(crate) const PENDING_EVENTS: &str = "pendingEvents";
+
+pub(crate) struct OwnershipItem;
+
+impl OwnershipItem {
+    pub(crate) fn parse(item: &HashMap<String, AttributeValue>) -> BpResult<OwnershipRecord> {
+        let payload = Self::string(item, RECORD)?;
+        let mut record: OwnershipRecord = serde_json::from_str(payload)?;
+        record.pending_events = match item.get(PENDING_EVENTS) {
+            Some(AttributeValue::S(payload)) => serde_json::from_str(payload)?,
+            _ => Vec::new(),
+        };
+        Ok(record)
+    }
+
+    pub(crate) fn attributes(
+        record: &OwnershipRecord,
+    ) -> BpResult<HashMap<String, AttributeValue>> {
+        let mut item = HashMap::from([
+            (
+                ACCOUNT_KEY.to_string(),
+                AttributeValue::S(record.account.storage_key()),
+            ),
+            (OWNER.to_string(), AttributeValue::S(record.owner.clone())),
+            (ACTIVE.to_string(), AttributeValue::Bool(record.active)),
+            (
+                VERSION.to_string(),
+                AttributeValue::N(record.version.to_string()),
+            ),
+            (
+                RECORD.to_string(),
+                AttributeValue::S(serde_json::to_string(record)?),
+            ),
+        ]);
+        if !record.pending_events.is_empty() {
+            item.insert(
+                PENDING_EVENTS.to_string(),
+                AttributeValue::S(serde_json::to_string(&record.pending_events)?),
+            );
+        }
+        Ok(item)
+    }
+
+    fn string<'a>(
+        item: &'a HashMap<String, AttributeValue>,
+        name: &'static str,
+    ) -> BpResult<&'a str> {
+        match item.get(name) {
+            Some(AttributeValue::S(value)) => Ok(value),
+            _ => Err(BpError::bad_value(
+                "ownership item",
+                name,
+                "missing string attribute",
+            )),
+        }
+    }
+}
