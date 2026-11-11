@@ -16,7 +16,7 @@ impl Entry {
 
     fn execute() -> BpResult<()> {
         let config = JwtServerConfig::from_env()?;
-        let runtime = tokio::runtime::Builder::new_current_thread()
+        let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()?;
         runtime.block_on(AuthServiceRunner::run(config))

@@ -312,6 +312,9 @@ owner bound to the caller's access key.
 | `AUTH_SERVICE_USAGE_QUEUE_TIMEOUT_SECS` | Connection and command timeout for the usage queue, in seconds. |
 | `AUTH_SERVICE_USAGE_QUEUE_CAPACITY` | Maximum number of queued usage records before requests fail closed. |
 | `AUTH_SERVICE_USAGE_QUEUE_BATCH_SIZE` | Maximum number of usage records claimed by one drain. |
+| `AUTH_SERVICE_VALKEY_KEY_PREFIX` | Prefix for replay-protection keys in the shared Valkey backend. |
+| `AUTH_SERVICE_VALKEY_TIMEOUT_SECS` | Connection and command timeout for the replay Valkey backend, in seconds. |
+| `AUTH_SERVICE_VALKEY_URL` | `redis://`, `rediss://`, `valkey://`, or `valkeys://` URL of the shared Valkey replay backend. |
 
 Authentication and signing append usage records to a durable Valkey stream instead of writing
 `last_used_at` and audit outbox entries synchronously. Requests fail closed if the queue reaches

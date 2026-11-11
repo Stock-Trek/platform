@@ -1,7 +1,7 @@
 use crate::JwtServerConfig;
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
-use std::collections::HashMap;
+use std::{collections::HashMap, time::Duration};
 
 const BIND_ADDRESS: &str = "AUTH_SERVICE_BIND_ADDR";
 const VAULT_ADDRESS: &str = "AUTH_SERVICE_VAULT_ADDRESS";
@@ -15,6 +15,9 @@ const USAGE_QUEUE_PREFIX: &str = "AUTH_SERVICE_USAGE_QUEUE_PREFIX";
 const USAGE_QUEUE_TIMEOUT_SECS: &str = "AUTH_SERVICE_USAGE_QUEUE_TIMEOUT_SECS";
 const USAGE_QUEUE_CAPACITY: &str = "AUTH_SERVICE_USAGE_QUEUE_CAPACITY";
 const USAGE_QUEUE_BATCH_SIZE: &str = "AUTH_SERVICE_USAGE_QUEUE_BATCH_SIZE";
+const VALKEY_URL: &str = "AUTH_SERVICE_VALKEY_URL";
+const VALKEY_KEY_PREFIX: &str = "AUTH_SERVICE_VALKEY_KEY_PREFIX";
+const VALKEY_TIMEOUT_SECS: &str = "AUTH_SERVICE_VALKEY_TIMEOUT_SECS";
 const SIGV4_CREDENTIALS: &str = "SIGV4_CREDENTIALS";
 const SIGV4_REGION: &str = "SIGV4_REGION";
 const SIGV4_SERVICE: &str = "SIGV4_SERVICE";
@@ -49,6 +52,12 @@ impl Fixture {
             (USAGE_QUEUE_CAPACITY.to_string(), "1000".to_string()),
             (USAGE_QUEUE_BATCH_SIZE.to_string(), "100".to_string()),
             (
+                VALKEY_URL.to_string(),
+                "redis://valkey.example.com:6379".to_string(),
+            ),
+            (VALKEY_KEY_PREFIX.to_string(), "auth-replay".to_string()),
+            (VALKEY_TIMEOUT_SECS.to_string(), "2".to_string()),
+            (
                 SIGV4_CREDENTIALS.to_string(),
                 SIGV4_CREDENTIALS_JSON.to_string(),
             ),
@@ -75,6 +84,9 @@ fn imports_a_pkcs8_private_key_from_the_environment() {
     assert_eq!(signer.key_id(), "rotation-2026");
     assert_eq!(config.usage_queue().capacity(), 1000);
     assert_eq!(config.usage_queue().batch_size(), 100);
+    assert_eq!(config.valkey().url(), "redis://valkey.example.com:6379");
+    assert_eq!(config.valkey().key_prefix(), "auth-replay");
+    assert_eq!(config.valkey().timeout(), Duration::from_secs(2));
 }
 
 #[test]

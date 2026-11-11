@@ -55,7 +55,8 @@ Relevant implementation:
 
 Production wiring is in `crates/data-plane/portfolio-service/src/auth_service.rs`,
 which explicitly constructs the `ValkeyReplayStore` alongside its Vault-backed
-`TokenStore`.
+`TokenStore`, and in `crates/auth-plane/auth-service/src/auth_service_runner.rs`,
+which configures the shared store from the auth service environment.
 
 ## Pre-stage-1 behaviour
 

@@ -1,4 +1,4 @@
-use crate::{JwtSigningKey, TokenUsageQueueConfig, VaultTokenStoreConfig};
+use crate::{JwtSigningKey, TokenUsageQueueConfig, ValkeyReplayStoreConfig, VaultTokenStoreConfig};
 use platform_config::env_names::RUST_LOG;
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
@@ -18,6 +18,9 @@ const AUTH_SERVICE_USAGE_QUEUE_PREFIX: &str = "AUTH_SERVICE_USAGE_QUEUE_PREFIX";
 const AUTH_SERVICE_USAGE_QUEUE_TIMEOUT_SECS: &str = "AUTH_SERVICE_USAGE_QUEUE_TIMEOUT_SECS";
 const AUTH_SERVICE_USAGE_QUEUE_CAPACITY: &str = "AUTH_SERVICE_USAGE_QUEUE_CAPACITY";
 const AUTH_SERVICE_USAGE_QUEUE_BATCH_SIZE: &str = "AUTH_SERVICE_USAGE_QUEUE_BATCH_SIZE";
+const AUTH_SERVICE_VALKEY_KEY_PREFIX: &str = "AUTH_SERVICE_VALKEY_KEY_PREFIX";
+const AUTH_SERVICE_VALKEY_TIMEOUT_SECS: &str = "AUTH_SERVICE_VALKEY_TIMEOUT_SECS";
+const AUTH_SERVICE_VALKEY_URL: &str = "AUTH_SERVICE_VALKEY_URL";
 const VAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
@@ -25,6 +28,7 @@ pub struct JwtServerConfig {
     log_filter: String,
     bind_address: SocketAddr,
     vault: VaultTokenStoreConfig,
+    valkey: ValkeyReplayStoreConfig,
     sigv4: SigV4Config,
     jwt_key_id: String,
     jwt_private_key_pem: SecretString,
@@ -46,6 +50,11 @@ impl JwtServerConfig {
         let jwt_key_id = vars.required(AUTH_SERVICE_JWT_KEY_ID)?;
         let jwt_private_key_pem =
             SecretString::from(vars.required(AUTH_SERVICE_JWT_PRIVATE_KEY_PEM)?);
+        let valkey = ValkeyReplayStoreConfig::new(
+            vars.required(AUTH_SERVICE_VALKEY_URL)?,
+            vars.required(AUTH_SERVICE_VALKEY_KEY_PREFIX)?,
+            vars.required_positive_duration_secs(AUTH_SERVICE_VALKEY_TIMEOUT_SECS)?,
+        )?;
         let usage_queue = TokenUsageQueueConfig::new(
             vars.required_url(
                 AUTH_SERVICE_USAGE_QUEUE_URL,
@@ -65,6 +74,7 @@ impl JwtServerConfig {
             log_filter: vars.required_log_filter(RUST_LOG)?,
             bind_address: vars.required_parsed(AUTH_SERVICE_BIND_ADDR)?,
             vault,
+            valkey,
             sigv4: SigV4Config::from_vars(vars)?,
             jwt_key_id,
             jwt_private_key_pem,
@@ -82,6 +92,10 @@ impl JwtServerConfig {
 
     pub fn vault(&self) -> &VaultTokenStoreConfig {
         &self.vault
+    }
+
+    pub fn valkey(&self) -> &ValkeyReplayStoreConfig {
+        &self.valkey
     }
 
     pub fn sigv4(&self) -> &SigV4Config {
@@ -109,6 +123,7 @@ impl fmt::Debug for JwtServerConfig {
             .field("log_filter", &self.log_filter)
             .field("bind_address", &self.bind_address)
             .field("vault", &self.vault)
+            .field("valkey", &self.valkey)
             .field("sigv4", &self.sigv4)
             .field("jwt_key_id", &self.jwt_key_id)
             .field("jwt_private_key_pem", &"<redacted>")
