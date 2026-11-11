@@ -1,4 +1,4 @@
-use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
+use super::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{AuthService, api_token::MAX_TOKEN_ID_LENGTH};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
@@ -85,7 +85,7 @@ async fn a_rotated_token_can_be_used_after_the_overlap_ends() {
 }
 
 #[tokio::test]
-async fn owner_signing_prefers_the_rotated_token_during_the_overlap() {
+async fn owner_token_selection_prefers_the_rotated_token_during_the_overlap() {
     let service = RotationFixture::service(60);
     let old = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
@@ -94,12 +94,9 @@ async fn owner_signing_prefers_the_rotated_token_during_the_overlap() {
         .await
         .unwrap();
 
-    let signed = service
-        .sign_order_request_for_owner("owner-a", ORDER_REQUEST, now, now)
-        .await
-        .unwrap();
+    let selected = service.token_for_owner("owner-a", now).await.unwrap();
 
-    assert_eq!(signed.token_id(), replacement.id());
+    assert_eq!(selected.id(), replacement.id());
 }
 
 #[tokio::test]

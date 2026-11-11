@@ -1,9 +1,10 @@
-use crate::OrderRequestService;
+use crate::{OrderRequestService, SignedOrderSubmission};
 use chrono::{Duration, Utc};
 use platform_auth_service::{
     ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenStore, TokenMetadata,
     TokenScope, TokenStore,
 };
+use platform_errors::BpResult;
 use platform_messages::order_request::UnsignedOrderRequest;
 use std::sync::Arc;
 use stock_trek_types::cex::{
@@ -45,6 +46,19 @@ impl Fixture {
 
     pub(super) fn canonical_bytes(request: &UnsignedOrderRequest) -> Vec<u8> {
         request.canonical_bytes().unwrap()
+    }
+
+    pub(super) async fn sign(
+        service: &OrderRequestService,
+        auth_service: &AuthService,
+        request: &UnsignedOrderRequest,
+    ) -> BpResult<SignedOrderSubmission> {
+        let now = Utc::now();
+        let jwt = auth_service
+            .issue_jwt_for_owner(request.owner(), now)
+            .await?;
+        let claims = service.authenticate(jwt.token(), now).await?;
+        service.sign_for_caller(request, &claims).await
     }
 
     pub(super) fn unsigned(owner: &str) -> UnsignedOrderRequest {

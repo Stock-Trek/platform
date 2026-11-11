@@ -117,28 +117,6 @@ impl OrderRequestService {
         Ok(())
     }
 
-    pub async fn sign(&self, request: &UnsignedOrderRequest) -> BpResult<SignedOrderSubmission> {
-        let owner = ApiToken::validated_owner(request.owner())?;
-        self.sign_for_owner(request, owner).await
-    }
-
-    pub async fn sign_for_owner(
-        &self,
-        request: &UnsignedOrderRequest,
-        owner: &str,
-    ) -> BpResult<SignedOrderSubmission> {
-        let owner = ApiToken::validated_owner(owner)?;
-        let request = request.clone().with_owner(owner);
-        self.authorize_account(owner, &request)?;
-        let order_request = request.canonical_bytes().map_err(BpError::external)?;
-        let now = Utc::now();
-        let signed = self
-            .auth_service
-            .sign_order_request_for_owner(owner, &order_request, now, now)
-            .await?;
-        Ok(SignedOrderSubmission::new(&request, &signed))
-    }
-
     pub async fn sign_for_caller(
         &self,
         request: &UnsignedOrderRequest,

@@ -10,7 +10,9 @@ async fn signs_unsigned_order_requests_for_the_owner() {
     let (service, auth_service, token) = Fixture::service().await;
     let request = Fixture::unsigned(OWNER);
 
-    let submission = service.sign(&request).await.unwrap();
+    let submission = Fixture::sign(&service, &auth_service, &request)
+        .await
+        .unwrap();
 
     assert_eq!(submission.cex(), CexId::Binance);
     assert_eq!(submission.account(), &AccountId("account-1".to_string()));
@@ -52,9 +54,11 @@ async fn verifies_a_jwt_for_the_request_owner() {
 
 #[tokio::test]
 async fn serializes_the_signed_submission_for_delivery() {
-    let (service, _, _) = Fixture::service().await;
+    let (service, auth_service, _) = Fixture::service().await;
 
-    let submission = service.sign(&Fixture::unsigned(OWNER)).await.unwrap();
+    let submission = Fixture::sign(&service, &auth_service, &Fixture::unsigned(OWNER))
+        .await
+        .unwrap();
     let body = serde_json::to_value(&submission).unwrap();
 
     assert_eq!(body["cex"], "binance");
@@ -66,15 +70,23 @@ async fn serializes_the_signed_submission_for_delivery() {
 
 #[tokio::test]
 async fn rejects_an_empty_owner() {
-    let (service, _, _) = Fixture::service().await;
+    let (service, auth_service, _) = Fixture::service().await;
 
-    assert!(service.sign(&Fixture::unsigned("  ")).await.is_err());
+    assert!(
+        Fixture::sign(&service, &auth_service, &Fixture::unsigned("  "))
+            .await
+            .is_err()
+    );
 }
 
 #[tokio::test]
 async fn rejects_an_owner_without_a_token() {
     let auth_service = Fixture::auth_service(Arc::new(MemoryTokenStore::default()));
-    let service = OrderRequestService::new(auth_service);
+    let service = OrderRequestService::new(auth_service.clone());
 
-    assert!(service.sign(&Fixture::unsigned(OWNER)).await.is_err());
+    assert!(
+        Fixture::sign(&service, &auth_service, &Fixture::unsigned(OWNER))
+            .await
+            .is_err()
+    );
 }
