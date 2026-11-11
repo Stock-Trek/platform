@@ -48,6 +48,14 @@ impl TokenStore for VaultTokenStore {
         self.client.commit(mutation, event).await
     }
 
+    async fn commit_events(
+        &self,
+        mutation: TokenMutation,
+        events: Vec<TokenAuditEvent>,
+    ) -> BpResult<bool> {
+        self.client.commit_events(mutation, events).await
+    }
+
     async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
         self.client.append_audit(event).await
     }

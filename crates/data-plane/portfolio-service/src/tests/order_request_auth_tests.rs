@@ -79,6 +79,7 @@ async fn normalizes_the_request_owner() {
             )
             .await
             .unwrap()
+            .is_valid()
     );
 }
 

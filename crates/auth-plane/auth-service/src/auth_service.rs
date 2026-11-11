@@ -103,13 +103,6 @@ impl AuthService {
         self.store.commit_rotation(transaction).await
     }
 
-    pub(crate) async fn record_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
-        self.store.append_audit(event).await
-    }
-
-    /// Queues an event for an operation that is already failing. The original
-    /// failure is more useful to the caller, so outbox errors are logged instead
-    /// of replacing it.
     pub(crate) async fn record_audit_failure(&self, event: TokenAuditEvent) {
         if let Err(error) = self.store.append_audit(event).await {
             tracing::error!(%error, "failed to enqueue token audit event");

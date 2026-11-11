@@ -1,5 +1,5 @@
 use super::support_tests::{AuthServiceBuilder, TestFixture};
-use crate::{SecretInput, TokenAuditAction, TokenAuditEvent, TokenAuditLog};
+use crate::{SecretInput, TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenMutation};
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::BpResult;
@@ -109,6 +109,53 @@ async fn authentication_appends_to_the_same_outbox() {
     assert_eq!(
         audit.events().last().unwrap().action,
         TokenAuditAction::Authenticated
+    );
+}
+
+#[tokio::test]
+async fn committing_multiple_events_stores_them_with_the_mutation() {
+    let (service, audit) = OutboxFixture::service();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+    TestFixture::drain(&service, audit.clone()).await;
+    audit.fail();
+
+    let now = Utc::now();
+    let mut updated = token.clone();
+    updated.metadata.record_use(now);
+    let events = vec![
+        TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
+            .with_token(token.id(), Some(token.owner())),
+        TokenAuditEvent::new(TokenAuditAction::Signed, now)
+            .with_token(token.id(), Some(token.owner())),
+    ];
+    assert!(
+        service
+            .store
+            .commit_events(
+                TokenMutation::Update {
+                    expected: token.clone(),
+                    token: updated.clone(),
+                },
+                events,
+            )
+            .await
+            .unwrap()
+    );
+
+    let pending = service.store.pending_audits().await.unwrap();
+    assert_eq!(pending.len(), 2);
+    assert_eq!(pending[0].action, TokenAuditAction::Authenticated);
+    assert_eq!(pending[1].action, TokenAuditAction::Signed);
+    assert!(pending.iter().all(|event| event.event_id().is_some()));
+    assert_eq!(
+        service
+            .store
+            .get(token.id())
+            .await
+            .unwrap()
+            .unwrap()
+            .to_value(),
+        updated.to_value()
     );
 }
 

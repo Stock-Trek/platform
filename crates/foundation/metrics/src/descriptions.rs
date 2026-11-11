@@ -75,6 +75,13 @@ pub const AUTH_REPLAY_EVICTIONS_TOTAL: &str = "auth_replay_evictions_total";
 pub const AUTH_REPLAY_STORE_FAILURES_TOTAL: &str = "auth_replay_store_failures_total";
 pub const AUTH_REPLAY_CAPACITY_REJECTIONS_TOTAL: &str = "auth_replay_capacity_rejections_total";
 pub const AUTH_REPLAY_ENTRIES: &str = "auth_replay_entries";
+pub const AUTH_AUDIT_RELAY_PENDING_EVENTS: &str = "auth_audit_relay_pending_events";
+pub const AUTH_AUDIT_RELAY_OLDEST_PENDING_AGE_SECONDS: &str =
+    "auth_audit_relay_oldest_pending_age_seconds";
+pub const AUTH_AUDIT_RELAY_PENDING_ROTATIONS: &str = "auth_audit_relay_pending_rotations";
+pub const AUTH_AUDIT_RELAY_DELIVERED_TOTAL: &str = "auth_audit_relay_delivered_total";
+pub const AUTH_AUDIT_RELAY_FAILURES_TOTAL: &str = "auth_audit_relay_failures_total";
+pub const AUTH_AUDIT_RELAY_DRAIN_DURATION_SECONDS: &str = "auth_audit_relay_drain_duration_seconds";
 
 pub const STATUS_SUCCESS: &str = "success";
 pub const STATUS_ERROR: &str = "error";
@@ -344,6 +351,30 @@ impl DescriptionsMetrics {
         describe_gauge!(
             AUTH_REPLAY_ENTRIES,
             "Number of entries currently retained by the replay store"
+        );
+        describe_gauge!(
+            AUTH_AUDIT_RELAY_PENDING_EVENTS,
+            "Number of token audit events waiting to be relayed"
+        );
+        describe_gauge!(
+            AUTH_AUDIT_RELAY_OLDEST_PENDING_AGE_SECONDS,
+            "Age in seconds of the oldest token audit event waiting to be relayed"
+        );
+        describe_gauge!(
+            AUTH_AUDIT_RELAY_PENDING_ROTATIONS,
+            "Number of token rotation transactions waiting to be materialized"
+        );
+        describe_counter!(
+            AUTH_AUDIT_RELAY_DELIVERED_TOTAL,
+            "Total number of token audit events delivered to the sink"
+        );
+        describe_counter!(
+            AUTH_AUDIT_RELAY_FAILURES_TOTAL,
+            "Total number of token audit relay failures, labelled by operation and error type"
+        );
+        describe_histogram!(
+            AUTH_AUDIT_RELAY_DRAIN_DURATION_SECONDS,
+            "Duration of token audit relay drain attempts in seconds"
         );
     }
 }

@@ -14,30 +14,41 @@ impl AuthService {
         now: DateTime<Utc>,
     ) -> BpResult<ApiToken> {
         let candidate = secret.secret_input();
+        let token = match self.token(token_id).await {
+            Ok(token) => token,
+            Err(error) => {
+                self.record_authentication_failure(token_id, None, now, &error)
+                    .await;
+                return Err(error);
+            }
+        };
+        self.authenticate_loaded(token, candidate, scope, now).await
+    }
+
+    pub(crate) async fn authenticate_loaded(
+        &self,
+        mut token: ApiToken,
+        candidate: &str,
+        scope: Option<TokenScope>,
+        now: DateTime<Utc>,
+    ) -> BpResult<ApiToken> {
+        let token_id = token.id().to_string();
         for _ in 0..MAX_UPDATE_ATTEMPTS {
-            let mut token = match self.token(token_id).await {
-                Ok(token) => token,
-                Err(error) => {
-                    self.record_authentication_failure(token_id, None, now, &error)
-                        .await;
-                    return Err(error);
-                }
-            };
             if !token.matches_secret(candidate) {
                 let error = BpError::auth_invalid_secret(token.id());
-                self.record_authentication_failure(token_id, Some(&token), now, &error)
+                self.record_authentication_failure(&token_id, Some(&token), now, &error)
                     .await;
                 return Err(error);
             }
             if let Err(error) = Self::ensure_active(&token, now) {
-                self.record_authentication_failure(token_id, Some(&token), now, &error)
+                self.record_authentication_failure(&token_id, Some(&token), now, &error)
                     .await;
                 return Err(error);
             }
             if let Some(scope) = scope
                 && let Err(error) = Self::ensure_scope(&token, scope)
             {
-                self.record_authentication_failure(token_id, Some(&token), now, &error)
+                self.record_authentication_failure(&token_id, Some(&token), now, &error)
                     .await;
                 return Err(error);
             }
@@ -51,16 +62,26 @@ impl AuthService {
             };
             match self.commit_mutation(mutation, event).await {
                 Ok(_) => return Ok(token),
-                Err(error) if Self::is_conflict(&error) => continue,
+                Err(error) if Self::is_conflict(&error) => {
+                    token = match self.token(&token_id).await {
+                        Ok(token) => token,
+                        Err(error) => {
+                            self.record_authentication_failure(&token_id, None, now, &error)
+                                .await;
+                            return Err(error);
+                        }
+                    };
+                    continue;
+                }
                 Err(error) => {
-                    self.record_authentication_failure(token_id, Some(&token), now, &error)
+                    self.record_authentication_failure(&token_id, Some(&token), now, &error)
                         .await;
                     return Err(error);
                 }
             }
         }
-        let error = BpError::token_conflict(token_id);
-        self.record_authentication_failure(token_id, None, now, &error)
+        let error = BpError::token_conflict(&token_id);
+        self.record_authentication_failure(&token_id, None, now, &error)
             .await;
         Err(error)
     }
@@ -95,7 +116,7 @@ impl AuthService {
         }
     }
 
-    async fn record_authentication_failure(
+    pub(crate) async fn record_authentication_failure(
         &self,
         token_id: &str,
         token: Option<&ApiToken>,
