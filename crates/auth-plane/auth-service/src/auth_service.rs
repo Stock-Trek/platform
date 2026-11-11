@@ -93,7 +93,12 @@ impl AuthService {
         mutation: TokenMutation,
         event: TokenAuditEvent,
     ) -> BpResult<bool> {
-        self.store.commit(mutation, event).await
+        let index_mutation = mutation.clone();
+        let applied = self.store.commit(mutation, event).await?;
+        if applied {
+            self.sync_owner_index_mutation(&index_mutation).await;
+        }
+        Ok(applied)
     }
 
     pub(crate) async fn commit_rotation(

@@ -59,13 +59,25 @@ async fn writes_and_reads_kv_v2_payloads_with_versions() {
         token.to_value()
     );
     let requests = fixture.server.requests();
-    assert_eq!(requests[0].method, "PUT");
-    assert_eq!(requests[0].path, "/v1/platform-tokens/data/token-a");
-    assert_eq!(requests[0].token.as_deref(), Some("vault-token"));
-    assert_eq!(VaultClientFixture::cas(&requests[0]), Some(0));
-    assert_eq!(requests[0].body.get("data"), Some(&token.to_value()));
-    assert_eq!(requests[1].method, "GET");
-    assert_eq!(requests[1].path, "/v1/platform-tokens/data/token-a");
+    let write = requests
+        .iter()
+        .find(|request| {
+            request.method == "PUT" && request.path == "/v1/platform-tokens/data/token-a"
+        })
+        .unwrap();
+    assert_eq!(write.token.as_deref(), Some("vault-token"));
+    assert_eq!(VaultClientFixture::cas(write), Some(0));
+    assert_eq!(write.body.get("data"), Some(&token.to_value()));
+    let read = requests
+        .iter()
+        .find(|request| {
+            request.method == "GET" && request.path == "/v1/platform-tokens/data/token-a"
+        })
+        .unwrap();
+    assert_eq!(read.path, "/v1/platform-tokens/data/token-a");
+    assert!(requests.iter().any(|request| {
+        request.method == "PUT" && request.path.contains("/data/index/owners/")
+    }));
 }
 
 #[tokio::test]
@@ -82,7 +94,14 @@ async fn create_is_cas_zero_and_duplicates_map_to_token_exists() {
     ));
     assert_eq!(fixture.server.current("token-a").unwrap().1, 1);
     let requests = fixture.server.requests();
-    assert_eq!(VaultClientFixture::cas(&requests[1]), Some(0));
+    let duplicate = requests
+        .iter()
+        .rev()
+        .find(|request| {
+            request.method == "PUT" && request.path == "/v1/platform-tokens/data/token-a"
+        })
+        .unwrap();
+    assert_eq!(VaultClientFixture::cas(duplicate), Some(0));
 }
 
 #[tokio::test]

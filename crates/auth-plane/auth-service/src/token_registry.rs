@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, TokenExpiry, TokenMetadata,
-    TokenMutation, TokenOptions, TokenScope,
+    TokenMutation, TokenOptions,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{BpError, BpResult};
@@ -97,97 +97,5 @@ impl AuthService {
                 .map_err(|error| BpError::auth_store("read", id, false, error))?;
         }
         Ok(token)
-    }
-
-    pub(crate) async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
-        let owner = ApiToken::validated_owner(owner)?;
-        let mut ids = self.store.ids().await?;
-        ids.sort();
-        ids.dedup();
-        let mut tokens = Vec::new();
-        for id in ids {
-            if let Some(token) = self.stored_token(&id).await?
-                && token.owner() == owner
-            {
-                tokens.push(token);
-            }
-        }
-        Ok(tokens)
-    }
-
-    pub(crate) async fn active_tokens_for_owner(
-        &self,
-        owner: &str,
-        now: DateTime<Utc>,
-    ) -> BpResult<Vec<ApiToken>> {
-        Ok(self
-            .tokens_for_owner(owner)
-            .await?
-            .into_iter()
-            .filter(|token| token.is_active(now))
-            .collect())
-    }
-
-    pub(crate) async fn token_for_owner(
-        &self,
-        owner: &str,
-        now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
-        self.select_token_for_owner(owner, None, now).await
-    }
-
-    pub(crate) async fn token_for_owner_with_scope(
-        &self,
-        owner: &str,
-        scope: TokenScope,
-        now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
-        self.select_token_for_owner(owner, Some(scope), now).await
-    }
-
-    async fn select_token_for_owner(
-        &self,
-        owner: &str,
-        scope: Option<TokenScope>,
-        now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
-        let tokens = self.active_tokens_for_owner(owner, now).await?;
-        if tokens.is_empty() {
-            return Err(BpError::auth_invalid_field(
-                "owner",
-                "has no active API token",
-            ));
-        }
-        match scope {
-            Some(scope) => tokens
-                .into_iter()
-                .filter(|token| token.metadata().has_scope(scope))
-                .min_by(Self::compare_tokens)
-                .ok_or_else(|| {
-                    BpError::auth_invalid_field(
-                        "scope",
-                        format!("owner has no active API token with required scope {scope:?}"),
-                    )
-                }),
-            None => tokens
-                .into_iter()
-                .min_by(Self::compare_tokens)
-                .ok_or_else(|| BpError::auth_invalid_field("owner", "has no active API token")),
-        }
-    }
-
-    fn compare_tokens(left: &ApiToken, right: &ApiToken) -> std::cmp::Ordering {
-        left.metadata()
-            .replaced_by()
-            .is_some()
-            .cmp(&right.metadata().replaced_by().is_some())
-            .then_with(|| {
-                right
-                    .metadata()
-                    .last_used_at()
-                    .cmp(&left.metadata().last_used_at())
-            })
-            .then_with(|| right.created_at().cmp(&left.created_at()))
-            .then_with(|| left.id().cmp(right.id()))
     }
 }

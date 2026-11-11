@@ -52,6 +52,23 @@ impl TokenAuditRelay {
                 .materialize_rotation(&transaction)
                 .await
                 .map_err(|error| Self::record_failure("materialize_rotation", error))?;
+            for id in [transaction.original().id(), transaction.replacement().id()] {
+                match self.store.get(id).await {
+                    Ok(Some(token)) => {
+                        if let Err(error) = self.store.index_owner_token(&token).await {
+                            tracing::warn!(
+                                %error,
+                                token_id = token.id(),
+                                "failed to update owner index"
+                            );
+                        }
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        tracing::warn!(%error, token_id = id, "failed to read rotated token");
+                    }
+                }
+            }
             for event in transaction.events() {
                 self.sink
                     .record(event.clone())

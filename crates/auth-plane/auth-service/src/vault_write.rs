@@ -43,7 +43,7 @@ impl VaultClient {
             "options": { "cas": condition.cas() },
         });
         let request = self
-            .request(Method::PUT, self.config.url(&["data", path])?)
+            .request(Method::PUT, self.url_for_path("data", path)?)
             .json(&body);
         let response = self.send("write", path, request).await?;
         if VaultWriteOutcome::from_status(response.status()) == VaultWriteOutcome::CasMismatch {
