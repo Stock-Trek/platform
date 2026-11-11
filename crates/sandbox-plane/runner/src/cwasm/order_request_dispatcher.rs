@@ -42,6 +42,7 @@ impl OrderRequestDispatcher {
     }
 
     fn with_jwt(url: &str, owner: String, jwt: JwtCache) -> BpResult<Self> {
+        let owner = owner.trim().to_string();
         let url = reqwest::Url::parse(url)
             .map_err(|error| BpError::config_invalid_source("order_request_url", error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
@@ -50,7 +51,7 @@ impl OrderRequestDispatcher {
                 "must use the http or https scheme",
             ));
         }
-        if owner.trim().is_empty() {
+        if owner.is_empty() {
             return Err(BpError::auth_invalid_field("owner", "must not be empty"));
         }
         let client = reqwest::Client::builder()

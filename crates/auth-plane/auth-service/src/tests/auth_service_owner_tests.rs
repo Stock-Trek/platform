@@ -42,22 +42,28 @@ async fn rejects_an_empty_owner() {
 }
 
 #[test]
-fn rejects_owners_with_surrounding_whitespace() {
-    let error = ApiToken::from_parts(
+fn normalizes_owners_with_surrounding_whitespace() {
+    let token = ApiToken::from_parts(
         "token-a",
         " demo-owner ",
         SecretString::from("secret"),
         Utc::now(),
         TestFixture::metadata(),
-    );
+    )
+    .unwrap();
 
-    assert!(matches!(
-        error,
-        Err(BpError::Auth(AuthError::InvalidField {
-            field: "owner",
-            ..
-        }))
-    ));
+    assert_eq!(token.owner(), "demo-owner");
+}
+
+#[tokio::test]
+async fn finds_tokens_with_a_normalized_owner() {
+    let service = TestFixture::service();
+    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
+
+    let tokens = service.tokens_for_owner("  owner-a  ").await.unwrap();
+
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(tokens[0].id(), token.id());
 }
 
 #[tokio::test]

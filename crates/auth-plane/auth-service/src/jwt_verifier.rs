@@ -64,10 +64,10 @@ impl JwtVerifier {
         validation.validate_exp = false;
         validation.validate_aud = false;
         validation.leeway = 0;
-        let verified: TokenData<OrderJwtClaims> = decode(jwt, &key, &validation)
+        let mut verified: TokenData<OrderJwtClaims> = decode(jwt, &key, &validation)
             .map_err(|error| BpError::auth_invalid_jwt(error.to_string()))?;
         ApiToken::validate_id(verified.claims.token_id())?;
-        ApiToken::validated_owner(verified.claims.owner())?;
+        verified.claims.normalize_owner()?;
         verified.claims.validate_at(now)?;
         Ok(verified.claims)
     }

@@ -213,6 +213,29 @@ async fn submits_unsigned_place_order_actions() {
 }
 
 #[tokio::test]
+async fn normalizes_the_owner_before_sending_order_requests() {
+    let (url, server) = TestServer::start("200 OK").await;
+    let (auth_url, auth_server) =
+        TestServer::start_at("/jwt", "200 OK", &Fixture::jwt_response()).await;
+    let dispatcher = OrderRequestDispatcher::with_sigv4(
+        &url,
+        &auth_url,
+        format!("  {OWNER}  "),
+        &Fixture::sigv4(),
+    )
+    .unwrap();
+
+    dispatcher.dispatch([Fixture::place_order()]).await.unwrap();
+
+    let auth_request = auth_server.await.unwrap();
+    let auth_body: Value = serde_json::from_str(&auth_request.body).unwrap();
+    assert_eq!(auth_body["owner"], OWNER);
+    let request = server.await.unwrap();
+    let body: Value = serde_json::from_str(&request.body).unwrap();
+    assert_eq!(body["owner"], OWNER);
+}
+
+#[tokio::test]
 async fn ignores_actions_that_do_not_place_orders() {
     let dispatcher = Fixture::dispatcher("http://127.0.0.1:1/order-requests");
     let action = serde_json::to_string(&ResolvedAction::CancelAllOrders { tag: None }).unwrap();
