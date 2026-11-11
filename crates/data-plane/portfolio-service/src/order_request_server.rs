@@ -1,25 +1,24 @@
-use crate::{OrderRequestDelivery, OrderRequestService, SignedOrderSubmission};
-use chrono::Utc;
-use http_body_util::{BodyExt, Full};
-use hyper::{
-    Method, Request, Response, StatusCode,
-    body::{Bytes, Incoming},
-    header::AUTHORIZATION,
-    server::conn::http1,
-    service::service_fn,
+use crate::{
+    OrderRequestDelivery, OrderRequestService, order_request_connection::OrderRequestConnection,
 };
-use hyper_util::rt::TokioIo;
-use platform_errors::{AuthError, BpError, BpResult};
-use platform_messages::order_request::UnsignedOrderRequest;
-use std::{convert::Infallible, net::SocketAddr, sync::Arc};
-use tokio::net::TcpListener;
+use platform_errors::{BpError, BpResult};
+use platform_runtime::Runtime;
+use std::{future::Future, net::SocketAddr, sync::Arc, time::Duration};
+use tokio::{
+    net::TcpListener,
+    sync::{Semaphore, watch},
+    task::JoinSet,
+    time::timeout,
+};
 
-const MAX_REQUEST_BYTES: usize = 1024 * 1024;
+const MAX_CONNECTIONS: usize = 256;
+const DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
 pub struct OrderRequestServer {
     listener: TcpListener,
     service: Arc<OrderRequestService>,
     delivery: Arc<OrderRequestDelivery>,
+    slots: Arc<Semaphore>,
 }
 
 impl OrderRequestServer {
@@ -35,139 +34,76 @@ impl OrderRequestServer {
             listener,
             service,
             delivery,
+            slots: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
         })
     }
 
     pub async fn serve(self) -> BpResult<()> {
-        loop {
-            let (stream, _) = self.listener.accept().await.map_err(BpError::external)?;
-            let service = self.service.clone();
-            let delivery = self.delivery.clone();
-            tokio::spawn(async move {
-                let connection = http1::Builder::new()
-                    .serve_connection(
-                        TokioIo::new(stream),
-                        service_fn(move |request| {
-                            Self::respond(service.clone(), delivery.clone(), request)
-                        }),
-                    )
-                    .await;
-                if let Err(error) = connection {
-                    tracing::warn!("order request connection failed: {error}");
+        self.serve_with_shutdown(Runtime::shutdown_signal()).await
+    }
+
+    pub async fn serve_with_shutdown<F>(self, shutdown: F) -> BpResult<()>
+    where
+        F: Future<Output = BpResult<()>> + Send,
+    {
+        let (shutdown_tx, shutdown_rx) = watch::channel(false);
+        let mut connections = JoinSet::new();
+        tokio::pin!(shutdown);
+
+        let result = loop {
+            tokio::select! {
+                signal = &mut shutdown => break signal,
+                accepted = self.listener.accept() => {
+                    let (stream, peer) = match accepted {
+                        Ok(accepted) => accepted,
+                        Err(error) => break Err(BpError::external(error)),
+                    };
+                    let permit = match self.slots.clone().try_acquire_owned() {
+                        Ok(permit) => permit,
+                        Err(_) => {
+                            tracing::warn!(%peer, "order request connection limit reached");
+                            drop(stream);
+                            continue;
+                        }
+                    };
+                    let service = self.service.clone();
+                    let delivery = self.delivery.clone();
+                    let shutdown = shutdown_rx.clone();
+                    connections.spawn(async move {
+                        OrderRequestConnection::serve(stream, service, delivery, shutdown).await;
+                        drop(permit);
+                    });
                 }
-            });
-        }
+                joined = connections.join_next(), if !connections.is_empty() => {
+                    if let Some(Err(error)) = joined {
+                        tracing::warn!("order request connection task failed: {error}");
+                    }
+                }
+            }
+        };
+
+        drop(self.listener);
+        let _ = shutdown_tx.send(true);
+        Self::drain(&mut connections).await;
+        result
     }
 
     pub fn local_addr(&self) -> BpResult<SocketAddr> {
         self.listener.local_addr().map_err(BpError::external)
     }
 
-    async fn respond(
-        service: Arc<OrderRequestService>,
-        delivery: Arc<OrderRequestDelivery>,
-        request: Request<Incoming>,
-    ) -> Result<Response<Full<Bytes>>, Infallible> {
-        let response = match Self::dispatch(&service, &delivery, request).await {
-            Ok(submission) => match serde_json::to_vec(&submission) {
-                Ok(body) => Response::builder()
-                    .status(StatusCode::OK)
-                    .header("content-type", "application/json")
-                    .body(Full::new(Bytes::from(body)))
-                    .unwrap_or_else(|_| Self::internal_error()),
-                Err(error) => {
-                    tracing::error!("failed to serialize the signed order request: {error}");
-                    Self::internal_error()
+    async fn drain(connections: &mut JoinSet<()>) {
+        let draining = async {
+            while let Some(joined) = connections.join_next().await {
+                if let Err(error) = joined {
+                    tracing::warn!("order request connection task failed: {error}");
                 }
-            },
-            Err((status, message)) => {
-                tracing::warn!("rejected order request: {message}");
-                Response::builder()
-                    .status(status)
-                    .body(Full::new(Bytes::from(message)))
-                    .unwrap_or_else(|_| Self::internal_error())
             }
         };
-        Ok(response)
-    }
-
-    async fn dispatch(
-        service: &OrderRequestService,
-        delivery: &OrderRequestDelivery,
-        request: Request<Incoming>,
-    ) -> Result<SignedOrderSubmission, (StatusCode, String)> {
-        if request.method() != Method::POST {
-            return Err((
-                StatusCode::METHOD_NOT_ALLOWED,
-                "POST is required".to_string(),
-            ));
+        if timeout(DRAIN_TIMEOUT, draining).await.is_err() {
+            tracing::warn!("order request drain timed out; aborting remaining connections");
+            connections.abort_all();
+            while connections.join_next().await.is_some() {}
         }
-        let jwt = Self::bearer(&request)?;
-        let body = request
-            .into_body()
-            .collect()
-            .await
-            .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?
-            .to_bytes();
-        if body.len() > MAX_REQUEST_BYTES {
-            return Err((
-                StatusCode::PAYLOAD_TOO_LARGE,
-                "order request is too large".to_string(),
-            ));
-        }
-        let unsigned: UnsignedOrderRequest = serde_json::from_slice(&body)
-            .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
-        let claims = service
-            .authenticate(&jwt, Utc::now())
-            .await
-            .map_err(|error| (StatusCode::UNAUTHORIZED, error.to_string()))?;
-        let submission = service
-            .sign_for_caller(&unsigned, &claims)
-            .await
-            .map_err(Self::sign_error)?;
-        delivery
-            .deliver(&submission)
-            .await
-            .map_err(|error| (StatusCode::BAD_GATEWAY, error.to_string()))?;
-        Ok(submission)
-    }
-
-    fn sign_error(error: BpError) -> (StatusCode, String) {
-        let status = match &error {
-            BpError::Auth(AuthError::InvalidField {
-                field: "account", ..
-            }) => StatusCode::FORBIDDEN,
-            _ => StatusCode::INTERNAL_SERVER_ERROR,
-        };
-        (status, error.to_string())
-    }
-
-    fn bearer(request: &Request<Incoming>) -> Result<String, (StatusCode, String)> {
-        let value = request.headers().get(AUTHORIZATION).ok_or_else(|| {
-            (
-                StatusCode::UNAUTHORIZED,
-                "bearer JWT is required".to_string(),
-            )
-        })?;
-        let value = value
-            .to_str()
-            .map_err(|error| (StatusCode::UNAUTHORIZED, error.to_string()))?;
-        let token = value
-            .strip_prefix("Bearer ")
-            .filter(|token| !token.trim().is_empty())
-            .ok_or_else(|| {
-                (
-                    StatusCode::UNAUTHORIZED,
-                    "authorization must use the Bearer scheme".to_string(),
-                )
-            })?;
-        Ok(token.to_string())
-    }
-
-    fn internal_error() -> Response<Full<Bytes>> {
-        Response::builder()
-            .status(StatusCode::INTERNAL_SERVER_ERROR)
-            .body(Full::new(Bytes::from_static(b"internal error")))
-            .expect("static response is valid")
     }
 }

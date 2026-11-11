@@ -9,6 +9,9 @@ use std::{
 use tokio::sync::Mutex;
 
 const REFRESH_MARGIN_SECS: u64 = 30;
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+const READ_TIMEOUT: Duration = Duration::from_secs(10);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 struct CachedJwt {
     token: String,
@@ -61,6 +64,9 @@ impl JwtCache {
             return Err(BpError::auth_invalid_field("owner", "must not be empty"));
         }
         let client = reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .read_timeout(READ_TIMEOUT)
+            .timeout(REQUEST_TIMEOUT)
             .build()
             .map_err(BpError::external)?;
         Ok(Self {

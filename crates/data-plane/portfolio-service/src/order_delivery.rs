@@ -1,6 +1,11 @@
 use crate::SignedOrderSubmission;
 use platform_errors::{BpError, BpResult};
 use platform_types::url_scheme::UrlScheme;
+use std::time::Duration;
+
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
+const READ_TIMEOUT: Duration = Duration::from_secs(10);
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub struct OrderRequestDelivery {
     url: reqwest::Url,
@@ -18,6 +23,9 @@ impl OrderRequestDelivery {
             ));
         }
         let client = reqwest::Client::builder()
+            .connect_timeout(CONNECT_TIMEOUT)
+            .read_timeout(READ_TIMEOUT)
+            .timeout(REQUEST_TIMEOUT)
             .build()
             .map_err(BpError::external)?;
         Ok(Self { url, client })

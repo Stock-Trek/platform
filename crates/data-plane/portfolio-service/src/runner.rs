@@ -2,8 +2,8 @@ use crate::{
     OrderRequestDelivery, OrderRequestServer, OrderRequestService, PortfolioAuthService,
     PortfolioConfig, PortfolioService,
 };
-use platform_errors::{BpError, BpResult};
-use platform_runtime::Service;
+use platform_errors::BpResult;
+use platform_runtime::{Runtime, Service};
 use std::sync::Arc;
 
 const SERVICE: Service = Service::new("platform-portfolio-service");
@@ -25,9 +25,6 @@ impl PortfolioRunner {
         let server =
             OrderRequestServer::bind(config.order_request().bind_address(), service, delivery)
                 .await?;
-        tokio::select! {
-            result = server.serve() => result,
-            result = tokio::signal::ctrl_c() => result.map_err(BpError::external),
-        }
+        server.serve_with_shutdown(Runtime::shutdown_signal()).await
     }
 }
