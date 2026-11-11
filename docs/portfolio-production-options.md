@@ -156,8 +156,8 @@ policy; restart and replay are covered by tests.
    failover, and credential ownership.
 3. Add dashboards and alerts for connector health, update age, consumer lag,
    apply failures, ownership-event failures, and rejected orders.
-4. Run the new path in shadow/read-only mode beside the current service, compare
-   outputs, then enable order authorization behind a feature flag.
+4. Deploy with order authorization behind a feature flag, validate decisions
+   and feed health on staging traffic, then enable the flag in production.
 5. Load-test reconnects, exchange rate limits, event floods, and stream replay.
 6. Document runbooks for stuck consumers, stale feeds, failed credential
    rotation, and ownership rollback.
