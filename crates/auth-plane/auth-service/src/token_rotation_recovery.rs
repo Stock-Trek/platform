@@ -14,6 +14,12 @@ impl AuthService {
             .await?
             .ok_or_else(|| BpError::unknown_token(replacement_id))?;
         Self::ensure_replacement_usable(original, &replacement, now)?;
+        if original.metadata().replaced_by() == Some(replacement_id) {
+            self.sync_owner_index_token(original).await;
+        } else if let Some(current) = self.stored_token(original.id()).await? {
+            self.sync_owner_index_token(&current).await;
+        }
+        self.sync_owner_index_token(&replacement).await;
         Ok(replacement)
     }
 

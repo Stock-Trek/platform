@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, TokenAuditEvent, TokenMutation, TokenRotationTransaction, TokenStore,
-    token_audit_outbox::TokenAuditOutbox,
+    ApiToken, OwnerIndex, OwnerIndexEntry, TokenAuditEvent, TokenMutation,
+    TokenRotationTransaction, TokenStore, token_audit_outbox::TokenAuditOutbox,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -16,8 +16,28 @@ struct StoredEntry {
 #[derive(Clone, Default)]
 struct MemoryState {
     tokens: HashMap<String, StoredEntry>,
+    owner_indexes: HashMap<String, OwnerIndex>,
     rotations: HashMap<String, TokenRotationTransaction>,
     standalone_audits: HashMap<String, TokenAuditEvent>,
+}
+
+impl MemoryState {
+    fn upsert_owner_token(&mut self, token: &ApiToken) {
+        self.owner_indexes
+            .entry(token.owner().to_string())
+            .or_insert_with(|| OwnerIndex::new(token.owner()))
+            .upsert(OwnerIndexEntry::from_token(token));
+    }
+
+    fn remove_owner_token(&mut self, owner: &str, id: &str) {
+        if let Some(index) = self.owner_indexes.get_mut(owner) {
+            index.remove(id);
+        }
+    }
+
+    fn remove_token_indexes(&mut self, token: &ApiToken) {
+        self.remove_owner_token(token.owner(), token.id());
+    }
 }
 
 #[derive(Clone, Default)]
@@ -40,6 +60,7 @@ impl TokenStore for MemoryTokenStore {
                 outbox: Vec::new(),
             },
         );
+        state.upsert_owner_token(token);
         Ok(())
     }
 
@@ -51,7 +72,15 @@ impl TokenStore for MemoryTokenStore {
 
     async fn delete(&self, id: &str) -> BpResult<()> {
         ApiToken::validate_id(id)?;
-        self.state.lock().tokens.remove(id);
+        let mut state = self.state.lock();
+        let owner = state
+            .tokens
+            .remove(id)
+            .and_then(|entry| entry.token)
+            .map(|token| token.owner().to_string());
+        if let Some(owner) = owner {
+            state.remove_owner_token(&owner, id);
+        }
         Ok(())
     }
 
@@ -71,7 +100,37 @@ impl TokenStore for MemoryTokenStore {
         if entry.outbox.is_empty() {
             state.tokens.remove(expected.id());
         }
+        state.remove_token_indexes(expected);
         Ok(true)
+    }
+
+    async fn owner_index(&self, owner: &str) -> BpResult<Option<OwnerIndex>> {
+        Ok(self.state.lock().owner_indexes.get(owner).cloned())
+    }
+
+    async fn put_owner_index(&self, index: &OwnerIndex) -> BpResult<()> {
+        self.state
+            .lock()
+            .owner_indexes
+            .insert(index.owner().to_string(), index.clone());
+        Ok(())
+    }
+
+    async fn owner_indexes(&self) -> BpResult<Vec<OwnerIndex>> {
+        let state = self.state.lock();
+        let mut indexes: Vec<_> = state.owner_indexes.values().cloned().collect();
+        indexes.sort_by(|left, right| left.owner().cmp(right.owner()));
+        Ok(indexes)
+    }
+
+    async fn index_owner_token(&self, token: &ApiToken) -> BpResult<()> {
+        self.state.lock().upsert_owner_token(token);
+        Ok(())
+    }
+
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BpResult<()> {
+        self.state.lock().remove_owner_token(owner, id);
+        Ok(())
     }
 
     async fn ids(&self) -> BpResult<Vec<String>> {
@@ -99,6 +158,8 @@ impl TokenStore for MemoryTokenStore {
             return Err(BpError::token_conflict(token.id()));
         }
         entry.token = Some(token.clone());
+        state.remove_token_indexes(expected);
+        state.upsert_owner_token(token);
         Ok(())
     }
 
@@ -124,10 +185,11 @@ impl TokenStore for MemoryTokenStore {
                 state.tokens.insert(
                     token.id().to_string(),
                     StoredEntry {
-                        token: Some(token),
+                        token: Some(token.clone()),
                         outbox: events,
                     },
                 );
+                state.upsert_owner_token(&token);
                 Ok(true)
             }
             TokenMutation::Update { expected, token } => {
@@ -141,8 +203,10 @@ impl TokenStore for MemoryTokenStore {
                 if stored.to_value() != expected.to_value() {
                     return Err(BpError::token_conflict(token.id()));
                 }
-                entry.token = Some(token);
+                entry.token = Some(token.clone());
                 entry.outbox.extend(events);
+                state.remove_token_indexes(&expected);
+                state.upsert_owner_token(&token);
                 Ok(true)
             }
             TokenMutation::Delete { expected } => {
@@ -158,6 +222,7 @@ impl TokenStore for MemoryTokenStore {
                 }
                 entry.token = None;
                 entry.outbox.extend(events);
+                state.remove_token_indexes(&expected);
                 Ok(true)
             }
         }

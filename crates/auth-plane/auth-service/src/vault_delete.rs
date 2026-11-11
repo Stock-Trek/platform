@@ -18,7 +18,7 @@ impl VaultClient {
             .send(
                 "delete",
                 key,
-                self.request(Method::DELETE, self.config.url(&["metadata", key])?),
+                self.request(Method::DELETE, self.url_for_path("metadata", key)?),
             )
             .await?;
         if response.status() == StatusCode::NOT_FOUND {

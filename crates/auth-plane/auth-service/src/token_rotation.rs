@@ -54,6 +54,10 @@ impl AuthService {
         }
         let replacement = self.token(&replacement_id).await?;
         Self::ensure_replacement_usable(&original, &replacement, now)?;
+        if let Some(retired) = self.stored_token(original.id()).await? {
+            self.sync_owner_index_token(&retired).await;
+        }
+        self.sync_owner_index_token(&replacement).await;
         Ok(replacement)
     }
 

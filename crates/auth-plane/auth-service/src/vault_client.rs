@@ -24,6 +24,12 @@ impl VaultClient {
         Ok(Self { client, config })
     }
 
+    pub(crate) fn url_for_path(&self, area: &str, path: &str) -> BpResult<Url> {
+        let mut segments = vec![area];
+        segments.extend(path.split('/').filter(|segment| !segment.is_empty()));
+        self.config.url(&segments)
+    }
+
     pub(crate) fn request(&self, method: Method, url: Url) -> reqwest::RequestBuilder {
         self.client
             .request(method, url)

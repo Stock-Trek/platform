@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, TokenAuditEvent, TokenRotationTransaction, auth_service::MAX_UPDATE_ATTEMPTS,
-    token_audit_outbox::TokenAuditOutbox,
+    ApiToken, OwnerIndex, OwnerIndexEntry, TokenAuditEvent, TokenRotationTransaction,
+    auth_service::MAX_UPDATE_ATTEMPTS, token_audit_outbox::TokenAuditOutbox,
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
@@ -34,6 +34,43 @@ pub trait TokenStore: Send + Sync {
     }
 
     async fn ids(&self) -> BpResult<Vec<String>>;
+
+    async fn owner_index(&self, _owner: &str) -> BpResult<Option<OwnerIndex>> {
+        Ok(None)
+    }
+
+    async fn put_owner_index(&self, _index: &OwnerIndex) -> BpResult<()> {
+        Ok(())
+    }
+
+    async fn owner_indexes(&self) -> BpResult<Vec<OwnerIndex>> {
+        Ok(Vec::new())
+    }
+
+    async fn index_owner_token(&self, token: &ApiToken) -> BpResult<()> {
+        let mut index = self
+            .owner_index(token.owner())
+            .await?
+            .unwrap_or_else(|| OwnerIndex::new(token.owner()));
+        if index.owner() != token.owner() {
+            return Err(BpError::auth_store(
+                "write",
+                OwnerIndex::storage_key(token.owner()),
+                false,
+                "owner index belongs to a different owner".to_string(),
+            ));
+        }
+        index.upsert(OwnerIndexEntry::from_token(token));
+        self.put_owner_index(&index).await
+    }
+
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BpResult<()> {
+        let Some(mut index) = self.owner_index(owner).await? else {
+            return Ok(());
+        };
+        index.remove(id);
+        self.put_owner_index(&index).await
+    }
 
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()>;
 

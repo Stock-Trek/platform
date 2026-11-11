@@ -30,7 +30,7 @@ impl VaultClient {
             .send(
                 "read",
                 path,
-                self.request(Method::GET, self.config.url(&["data", path])?),
+                self.request(Method::GET, self.url_for_path("data", path)?),
             )
             .await?;
         if response.status() == StatusCode::NOT_FOUND {
