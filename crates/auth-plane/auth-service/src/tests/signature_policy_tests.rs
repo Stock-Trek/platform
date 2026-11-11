@@ -1,11 +1,16 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::{OrderRequestContext, OrderRequestSigner, SignedOrderRequest};
+use crate::{
+    OrderRequestContext, OrderRequestSigner, OrderRequestVerification, SignedOrderRequest,
+};
 use chrono::{Duration, Utc};
 
 struct SignaturePolicyFixture;
 
 impl SignaturePolicyFixture {
-    async fn verify_with_validity(validity: Duration, now: chrono::DateTime<Utc>) -> (bool, bool) {
+    async fn verify_with_validity(
+        validity: Duration,
+        now: chrono::DateTime<Utc>,
+    ) -> (OrderRequestVerification, OrderRequestVerification) {
         let service = TestFixture::service();
         let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
         let now = now.max(token.created_at());
@@ -34,8 +39,8 @@ async fn accepts_signatures_at_the_configured_validity() {
     let (verified, replayed) =
         SignaturePolicyFixture::verify_with_validity(Duration::minutes(5), Utc::now()).await;
 
-    assert!(verified);
-    assert!(!replayed);
+    assert!(verified.is_valid());
+    assert!(replayed.is_invalid());
 }
 
 #[tokio::test]
@@ -43,5 +48,5 @@ async fn rejects_signatures_that_outlive_the_configured_validity() {
     let (verified, _) =
         SignaturePolicyFixture::verify_with_validity(Duration::minutes(10), Utc::now()).await;
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
 }

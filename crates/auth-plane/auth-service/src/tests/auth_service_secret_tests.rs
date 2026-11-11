@@ -58,7 +58,7 @@ async fn signing_after_deletion_fails() {
         )
         .await
         .unwrap();
-    assert!(!verified);
+    assert!(verified.is_invalid());
 }
 
 #[tokio::test]
@@ -87,6 +87,6 @@ async fn treats_malformed_token_ids_as_verification_failures() {
             .verify_order_request(id, ORDER_REQUEST, "v1.0.0.nonce.token.signature", now)
             .await
             .unwrap();
-        assert!(!verified);
+        assert!(verified.is_invalid());
     }
 }

@@ -19,6 +19,7 @@ mod order_signature_validation;
 mod order_signing_service;
 mod order_verification;
 mod order_verification_commit;
+mod order_verification_outcome;
 mod replay_store;
 mod revocation_reason;
 mod revoked_by;
@@ -76,6 +77,7 @@ pub use memory_token_store::MemoryTokenStore;
 pub use order_jwt_claims::{IssuedJwt, OrderJwtClaims};
 pub use order_request_context::OrderRequestContext;
 pub use order_signature::OrderRequestSigner;
+pub use order_verification_outcome::{InvalidOrderRequest, OrderRequestVerification};
 pub use replay_store::{
     ConsumeResult, ReplayKey, ReplayReservation, ReplayStore, ReplayStoreError,
 };

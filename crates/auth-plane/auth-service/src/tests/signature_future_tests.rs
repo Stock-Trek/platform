@@ -68,7 +68,7 @@ async fn rejects_a_signature_issued_in_the_future() {
         .await
         .unwrap();
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
 }
 
 #[tokio::test]
@@ -84,7 +84,7 @@ async fn records_the_reason_a_future_signature_is_rejected() {
         .await
         .unwrap();
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
     TestFixture::drain(&service, audit.clone()).await;
     let rejection = audit
         .events()

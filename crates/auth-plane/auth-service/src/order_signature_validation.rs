@@ -1,6 +1,7 @@
 use crate::{
-    ApiToken, AuthService, OrderRequestContext, OrderRequestSigner, SignedOrderRequest,
-    TokenAuditAction, TokenAuditEvent, order_verification::CLOCK_SKEW_SECONDS,
+    ApiToken, AuthService, InvalidOrderRequest, OrderRequestContext, OrderRequestSigner,
+    OrderRequestVerification, SignedOrderRequest, TokenAuditAction, TokenAuditEvent,
+    order_verification::CLOCK_SKEW_SECONDS,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, BpError, BpResult};
@@ -36,26 +37,29 @@ impl AuthService {
         token_id: &str,
         signature: &str,
         now: DateTime<Utc>,
-    ) -> Result<(SignedOrderRequest, OrderRequestContext), &'static str> {
-        let signed = SignedOrderRequest::decode(signature).map_err(|_| "malformed signature")?;
+    ) -> Result<(SignedOrderRequest, OrderRequestContext), InvalidOrderRequest> {
+        let signed = SignedOrderRequest::decode(signature)
+            .map_err(|_| InvalidOrderRequest::MalformedSignature)?;
         if signed.token_id() != token_id {
-            return Err("token mismatch");
+            return Err(InvalidOrderRequest::SignatureMismatch);
         }
-        let context = signed.context().map_err(|_| "invalid context")?;
+        let context = signed
+            .context()
+            .map_err(|_| InvalidOrderRequest::MalformedSignature)?;
         let latest_issued_at = now
             .checked_add_signed(Duration::seconds(CLOCK_SKEW_SECONDS))
             .unwrap_or(DateTime::<Utc>::MAX_UTC);
         if signed.is_expired(now) {
-            return Err("expired signature");
+            return Err(InvalidOrderRequest::ExpiredSignature);
         }
         if signed.issued_at() > latest_issued_at {
-            return Err("signature issued in the future");
+            return Err(InvalidOrderRequest::FutureSignature);
         }
         let validity = signed
             .expires_at()
             .signed_duration_since(signed.issued_at());
         if validity > self.signature_validity {
-            return Err("signature validity exceeds policy");
+            return Err(InvalidOrderRequest::InvalidValidity);
         }
         Ok((signed, context))
     }
@@ -67,16 +71,16 @@ impl AuthService {
         order_request: &[u8],
         token: &ApiToken,
         now: DateTime<Utc>,
-    ) -> BpResult<Option<&'static str>> {
+    ) -> BpResult<Option<InvalidOrderRequest>> {
         let (signed, context) = match self.validate_order_signature(token_id, signature, now) {
             Ok(validated) => validated,
-            Err(detail) => return Ok(Some(detail)),
+            Err(reason) => return Ok(Some(reason)),
         };
         let signer = OrderRequestSigner::new(token.secret())?;
         if signer.verify_order_request(&context, order_request, signed.signature())? {
             Ok(None)
         } else {
-            Ok(Some("signature mismatch"))
+            Ok(Some(InvalidOrderRequest::SignatureMismatch))
         }
     }
 
@@ -85,23 +89,24 @@ impl AuthService {
         token_id: &str,
         token: Option<&ApiToken>,
         now: DateTime<Utc>,
-        detail: &str,
-    ) -> BpResult<bool> {
-        self.record_signature_rejected(token_id, token, now, detail)
+        reason: InvalidOrderRequest,
+    ) -> BpResult<OrderRequestVerification> {
+        self.record_signature_rejected(token_id, token, now, reason.detail())
             .await;
-        Ok(false)
+        Ok(OrderRequestVerification::Invalid(reason))
     }
 
-    pub(crate) async fn reject_signature_with_error<T>(
+    pub(crate) async fn reject_retryable(
         &self,
         token_id: &str,
         token: Option<&ApiToken>,
         now: DateTime<Utc>,
-        error: BpError,
-    ) -> BpResult<T> {
+        error: &BpError,
+    ) -> BpResult<OrderRequestVerification> {
         self.record_signature_rejected(token_id, token, now, &error.to_string())
             .await;
-        Err(error)
+        tracing::warn!(%error, "order request verification will be retried");
+        Ok(OrderRequestVerification::Retryable)
     }
 
     async fn record_signature_rejected(

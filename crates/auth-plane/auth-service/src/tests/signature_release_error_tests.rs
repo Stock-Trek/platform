@@ -6,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use platform_errors::{AuthError, BpError, BpResult};
+use platform_errors::{BpError, BpResult};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -159,12 +159,12 @@ async fn audit_delivery_failure_does_not_fail_signature_verification() {
         .await
         .expect("signature verification succeeds despite audit delivery failure");
 
-    assert!(verified);
+    assert!(verified.is_valid());
     assert_eq!(replay.release_attempts(), 0);
 }
 
 #[tokio::test]
-async fn read_failure_takes_precedence_over_replay_release_failure() {
+async fn read_failure_is_reported_before_replay_release_failure() {
     let replay = Arc::new(FailingReleaseReplayStore::new());
     let store = Arc::new(ConflictReadStore::new());
     let service = AuthService::new(store.clone(), TestFixture::config(), replay.clone())
@@ -177,17 +177,11 @@ async fn read_failure_takes_precedence_over_replay_release_failure() {
         .expect("signed request");
     store.conflict_next_update();
 
-    let error = service
+    let verification = service
         .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
-        .expect_err("token read failure");
+        .expect("token read failure is classified");
 
-    assert!(matches!(
-        error,
-        BpError::Auth(AuthError::Store {
-            operation: "read",
-            ..
-        })
-    ));
+    assert!(verification.is_retryable());
     assert_eq!(replay.release_attempts(), 1);
 }

@@ -5,6 +5,7 @@ mod feed;
 mod order_delivery;
 mod order_request;
 mod order_request_connection;
+mod order_request_error;
 mod order_request_server;
 mod portfolio;
 mod runner;
@@ -20,6 +21,7 @@ pub use feed::{
 };
 pub use order_delivery::OrderRequestDelivery;
 pub use order_request::{OrderRequestService, SignedOrderSubmission};
+pub use order_request_error::OrderRequestError;
 pub use order_request_server::OrderRequestServer;
 pub use portfolio::{AccountPortfolio, AccountPortfolios, PendingOrder, PortfolioUpdate};
 pub use runner::PortfolioRunner;

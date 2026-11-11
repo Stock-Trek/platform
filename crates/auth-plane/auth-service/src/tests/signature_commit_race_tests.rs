@@ -127,7 +127,7 @@ async fn rejects_a_signature_when_the_secret_changes_during_the_commit() {
         .await
         .expect("verification completes");
 
-    assert!(!verified);
+    assert!(verified.is_invalid());
     let stored = service.token(token.id()).await.expect("stored token");
     assert!(!stored.matches_secret(token.secret().expose_secret()));
 }
@@ -144,10 +144,11 @@ async fn a_rejected_signature_commit_releases_the_replay_reservation() {
     store.rotate_secret_next_update();
 
     assert!(
-        !service
+        service
             .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
             .await
             .expect("verification completes")
+            .is_invalid()
     );
 
     let stored = service.token(token.id()).await.expect("stored token");
@@ -160,6 +161,7 @@ async fn a_rejected_signature_commit_releases_the_replay_reservation() {
             .verify_order_request(token.id(), ORDER_REQUEST, resigned.envelope(), now)
             .await
             .expect("verification completes")
+            .is_valid()
     );
 }
 
@@ -177,10 +179,11 @@ async fn a_rejected_signature_commit_is_not_recorded_as_verified() {
     store.rotate_secret_next_update();
 
     assert!(
-        !service
+        service
             .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
             .await
             .expect("verification completes")
+            .is_invalid()
     );
     TestFixture::drain(&service, audit.clone()).await;
 

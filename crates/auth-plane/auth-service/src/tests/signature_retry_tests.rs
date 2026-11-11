@@ -154,7 +154,7 @@ async fn retries_audit_delivery_without_rejecting_the_signature() {
         .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .expect("verification succeeds despite audit delivery failure");
-    assert!(verified);
+    assert!(verified.is_valid());
     assert!(
         !audit
             .events()
@@ -190,14 +190,15 @@ async fn retries_a_signature_after_the_token_store_update_fails() {
         .expect("signed request");
 
     store.fail_next_update();
-    let error = service
+    let verification = service
         .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
-        .await;
-    assert!(error.is_err());
+        .await
+        .expect("store failure is classified");
+    assert!(verification.is_retryable());
 
     let verified = service
         .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
         .await
         .expect("retried verification");
-    assert!(verified);
+    assert!(verified.is_valid());
 }

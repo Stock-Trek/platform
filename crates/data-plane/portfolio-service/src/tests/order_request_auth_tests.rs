@@ -35,7 +35,7 @@ async fn signature_binds_the_routing_fields() {
 
     for tampered in [&reowned, &reaccounted] {
         assert!(
-            !auth_service
+            auth_service
                 .verify_order_request(
                     token.id(),
                     &Fixture::canonical_bytes(tampered),
@@ -44,6 +44,7 @@ async fn signature_binds_the_routing_fields() {
                 )
                 .await
                 .unwrap()
+                .is_invalid()
         );
     }
     assert!(
@@ -56,6 +57,7 @@ async fn signature_binds_the_routing_fields() {
             )
             .await
             .unwrap()
+            .is_valid()
     );
 }
 
@@ -82,6 +84,7 @@ async fn signs_for_the_authenticated_owner_not_the_body_owner() {
             )
             .await
             .unwrap()
+            .is_valid()
     );
 }
 

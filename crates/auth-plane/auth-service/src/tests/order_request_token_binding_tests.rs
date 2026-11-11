@@ -33,6 +33,7 @@ async fn signs_order_requests_with_the_authenticated_token() {
             .verify_order_request(authenticated.id(), ORDER_REQUEST, signed.envelope(), now)
             .await
             .unwrap()
+            .is_valid()
     );
 }
 
