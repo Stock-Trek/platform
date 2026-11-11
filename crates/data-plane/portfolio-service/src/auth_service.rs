@@ -13,7 +13,7 @@ impl PortfolioAuthService {
         let store = VaultTokenStore::new(config.vault().clone())?;
         let replay = ValkeyReplayStore::connect(config.valkey().clone()).await?;
         let usage = Arc::new(ValkeyTokenUsageQueue::connect(config.usage_queue().clone()).await?);
-        Ok(AuthService::new(
+        AuthService::new(
             Arc::new(store),
             AuthServiceConfig {
                 token_lifetime: Duration::days(30),
@@ -21,7 +21,7 @@ impl PortfolioAuthService {
                 signature_validity: Duration::minutes(5),
             },
             Arc::new(replay),
-        )?
-        .with_usage_queue(usage))
+            usage,
+        )
     }
 }

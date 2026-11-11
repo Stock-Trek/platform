@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 pub struct AuthRelay {
     relay: TokenAuditRelay,
-    usage: Option<TokenUsageWorker>,
+    usage: TokenUsageWorker,
 }
 
 impl AuthRelay {
@@ -25,31 +25,29 @@ impl AuthRelay {
             SqsConfig::new(config.audit_queue_url.clone()),
         );
         let sink = SqsTokenAuditLog::new(sqs, config.audit_timeout);
-        Ok(Self::new(store, Arc::new(sink))
-            .with_usage_queue(usage, config.usage_queue.batch_size()))
+        Ok(Self::new(
+            store,
+            Arc::new(sink),
+            usage,
+            config.usage_queue.batch_size(),
+        ))
     }
 
-    pub fn new(store: Arc<dyn TokenStore>, sink: Arc<dyn TokenAuditLog>) -> Self {
+    pub fn new(
+        store: Arc<dyn TokenStore>,
+        sink: Arc<dyn TokenAuditLog>,
+        queue: Arc<dyn TokenUsageQueue>,
+        batch_size: usize,
+    ) -> Self {
+        let usage = TokenUsageWorker::new(store.clone(), queue, batch_size);
         Self {
             relay: TokenAuditRelay::new(store, sink),
-            usage: None,
+            usage,
         }
     }
 
-    pub fn with_usage_queue(mut self, queue: Arc<dyn TokenUsageQueue>, batch_size: usize) -> Self {
-        self.usage = Some(TokenUsageWorker::new(self.relay_store(), queue, batch_size));
-        self
-    }
-
-    fn relay_store(&self) -> Arc<dyn TokenStore> {
-        self.relay.store()
-    }
-
     pub async fn drain(&self) -> BpResult<usize> {
-        let usage_result = match &self.usage {
-            Some(worker) => worker.drain().await,
-            None => Ok(0),
-        };
+        let usage_result = self.usage.drain().await;
         let audit_result = self.relay.drain().await;
         match (usage_result, audit_result) {
             (Ok(applied), Ok(delivered)) => Ok(applied + delivered),

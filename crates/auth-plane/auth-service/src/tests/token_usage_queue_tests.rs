@@ -9,7 +9,7 @@ struct UsageQueueFixture;
 
 impl UsageQueueFixture {
     fn service(queue: Arc<MemoryTokenUsageQueue>) -> crate::AuthService {
-        TestFixture::service().with_usage_queue(queue)
+        TestFixture::service_with_usage(queue)
     }
 
     async fn worker(

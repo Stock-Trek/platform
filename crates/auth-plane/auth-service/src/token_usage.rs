@@ -110,15 +110,8 @@ pub trait TokenUsageQueue: Send + Sync {
 }
 
 impl crate::auth_service::AuthService {
-    pub(crate) fn has_usage_queue(&self) -> bool {
-        self.usage.is_some()
-    }
-
     pub(crate) async fn enqueue_usage(&self, mut usage: TokenUsage) -> BpResult<()> {
-        let Some(queue) = &self.usage else {
-            return Ok(());
-        };
         usage.ensure_event_ids();
-        queue.enqueue(usage).await
+        self.usage.enqueue(usage).await
     }
 }

@@ -166,12 +166,12 @@ async fn authentication_does_not_overwrite_a_concurrent_revocation() {
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
     store.race_next_update();
 
-    let error = service
+    let authenticated = service
         .authenticate(token.id(), token.secret(), None, Utc::now())
         .await
-        .unwrap_err();
+        .expect("queued usage preserves the concurrent revocation");
 
-    assert!(matches!(error, BpError::Auth(AuthError::Revoked { .. })));
+    assert_eq!(authenticated.id(), token.id());
     assert!(
         service
             .token(token.id())

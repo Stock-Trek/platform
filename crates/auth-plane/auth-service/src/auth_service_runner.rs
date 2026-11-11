@@ -25,8 +25,8 @@ impl AuthServiceRunner {
             },
             Arc::new(MemoryReplayStore::default()),
             Arc::new(config.jwt_signing_key()?),
-        )?
-        .with_usage_queue(usage);
+            usage,
+        )?;
         let server =
             JwtServer::bind_with_sigv4(config.bind_address(), service, config.sigv4().clone())
                 .await?;

@@ -1,8 +1,8 @@
 use crate::{OrderRequestService, SignedOrderSubmission};
 use chrono::{Duration, Utc};
 use platform_auth_service::{
-    ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenStore, TokenMetadata,
-    TokenScope, TokenStore,
+    ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenStore,
+    MemoryTokenUsageQueue, TokenMetadata, TokenScope, TokenStore,
 };
 use platform_errors::BpResult;
 use platform_messages::order_request::UnsignedOrderRequest;
@@ -26,6 +26,7 @@ impl Fixture {
                 signature_validity: Duration::minutes(5),
             },
             Arc::new(MemoryReplayStore::default()),
+            Arc::new(MemoryTokenUsageQueue::new(1024)),
         )
         .unwrap()
     }

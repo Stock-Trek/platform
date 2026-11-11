@@ -1,7 +1,7 @@
 use crate::{
     ApiToken, AuthService, OrderRequestContext, OrderRequestSigner, SecretInput,
     SignedOrderRequest, TokenAuditAction, TokenAuditEvent, TokenScope, TokenUsage,
-    auth_service::MAX_UPDATE_ATTEMPTS, order_verification::CLOCK_SKEW_SECONDS,
+    order_verification::CLOCK_SKEW_SECONDS,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{BpError, BpResult};
@@ -43,125 +43,84 @@ impl AuthService {
 
     async fn sign_with_loaded_token(
         &self,
-        mut token: ApiToken,
+        token: ApiToken,
         candidate: Option<String>,
         order_request: &[u8],
         issued_at: DateTime<Utc>,
         now: DateTime<Utc>,
     ) -> BpResult<SignedOrderRequest> {
         let token_id = token.id().to_string();
-        for _ in 0..MAX_UPDATE_ATTEMPTS {
-            let candidate = candidate
-                .clone()
-                .unwrap_or_else(|| token.secret().expose_secret().to_string());
-            if !token.matches_secret(&candidate) {
-                let error = BpError::auth_invalid_secret(token.id());
-                self.record_authentication_failure(&token_id, Some(&token), now, &error)
-                    .await;
-                return Err(error);
-            }
-            if let Err(error) = Self::ensure_active(&token, now) {
-                self.record_authentication_failure(&token_id, Some(&token), now, &error)
-                    .await;
-                return Err(error);
-            }
-            if let Err(error) = Self::ensure_scope(&token, TokenScope::OrdersWrite) {
-                self.record_authentication_failure(&token_id, Some(&token), now, &error)
-                    .await;
-                return Err(error);
-            }
-            let context =
-                match OrderRequestContext::generate(token.id(), issued_at, self.signature_validity)
-                {
-                    Ok(context) => context,
-                    Err(error) => {
-                        self.record_signing_failure(&token, now, &error).await;
-                        return Err(error);
-                    }
-                };
-            let latest_issued_at = now
-                .checked_add_signed(Duration::seconds(CLOCK_SKEW_SECONDS))
-                .unwrap_or(DateTime::<Utc>::MAX_UTC);
-            if context.issued_at() > latest_issued_at {
-                let error = BpError::auth_invalid_field("issued_at", "must not be in the future");
+        let candidate = candidate.unwrap_or_else(|| token.secret().expose_secret().to_string());
+        if !token.matches_secret(&candidate) {
+            let error = BpError::auth_invalid_secret(token.id());
+            self.record_authentication_failure(&token_id, Some(&token), now, &error)
+                .await;
+            return Err(error);
+        }
+        if let Err(error) = Self::ensure_active(&token, now) {
+            self.record_authentication_failure(&token_id, Some(&token), now, &error)
+                .await;
+            return Err(error);
+        }
+        if let Err(error) = Self::ensure_scope(&token, TokenScope::OrdersWrite) {
+            self.record_authentication_failure(&token_id, Some(&token), now, &error)
+                .await;
+            return Err(error);
+        }
+        let context =
+            match OrderRequestContext::generate(token.id(), issued_at, self.signature_validity) {
+                Ok(context) => context,
+                Err(error) => {
+                    self.record_signing_failure(&token, now, &error).await;
+                    return Err(error);
+                }
+            };
+        let latest_issued_at = now
+            .checked_add_signed(Duration::seconds(CLOCK_SKEW_SECONDS))
+            .unwrap_or(DateTime::<Utc>::MAX_UTC);
+        if context.issued_at() > latest_issued_at {
+            let error = BpError::auth_invalid_field("issued_at", "must not be in the future");
+            self.record_signing_failure(&token, now, &error).await;
+            return Err(error);
+        }
+        if context.expires_at() <= now {
+            let error = BpError::auth_invalid_field("expires_at", "has already expired");
+            self.record_signing_failure(&token, now, &error).await;
+            return Err(error);
+        }
+        let signer = match OrderRequestSigner::new(token.secret()) {
+            Ok(signer) => signer,
+            Err(error) => {
                 self.record_signing_failure(&token, now, &error).await;
                 return Err(error);
             }
-            if context.expires_at() <= now {
-                let error = BpError::auth_invalid_field("expires_at", "has already expired");
+        };
+        let signature = match signer.sign_order_request(&context, order_request) {
+            Ok(signature) => signature,
+            Err(error) => {
                 self.record_signing_failure(&token, now, &error).await;
                 return Err(error);
             }
-            let signer = match OrderRequestSigner::new(token.secret()) {
-                Ok(signer) => signer,
-                Err(error) => {
-                    self.record_signing_failure(&token, now, &error).await;
-                    return Err(error);
-                }
-            };
-            let signature = match signer.sign_order_request(&context, order_request) {
-                Ok(signature) => signature,
-                Err(error) => {
-                    self.record_signing_failure(&token, now, &error).await;
-                    return Err(error);
-                }
-            };
-            let signed = match SignedOrderRequest::from_context(&context, signature) {
-                Ok(signed) => signed,
-                Err(error) => {
-                    self.record_signing_failure(&token, now, &error).await;
-                    return Err(error);
-                }
-            };
-            let authenticated_event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
-                .with_token(token.id(), Some(token.owner()));
-            let signed_event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
-                .with_token(token.id(), Some(token.owner()));
-            if self.has_usage_queue() {
-                let usage =
-                    TokenUsage::for_token(token.id(), now, vec![authenticated_event, signed_event]);
-                match self.enqueue_usage(usage).await {
-                    Ok(()) => return Ok(signed),
-                    Err(error) => {
-                        tracing::error!(%error, "failed to enqueue token usage");
-                        return Err(error);
-                    }
-                }
+        };
+        let signed = match SignedOrderRequest::from_context(&context, signature) {
+            Ok(signed) => signed,
+            Err(error) => {
+                self.record_signing_failure(&token, now, &error).await;
+                return Err(error);
             }
-            let original = token.clone();
-            token.metadata.record_use(now);
-            let mutation = crate::TokenMutation::Update {
-                expected: original,
-                token: token.clone(),
-            };
-            match self
-                .store
-                .commit_events(mutation, vec![authenticated_event, signed_event])
-                .await
-            {
-                Ok(_) => return Ok(signed),
-                Err(error) if Self::is_conflict(&error) => {
-                    token = match self.token(&token_id).await {
-                        Ok(token) => token,
-                        Err(error) => {
-                            self.record_authentication_failure(&token_id, None, now, &error)
-                                .await;
-                            return Err(error);
-                        }
-                    };
-                    continue;
-                }
-                Err(error) => {
-                    self.record_authentication_failure(&token_id, Some(&token), now, &error)
-                        .await;
-                    return Err(error);
-                }
+        };
+        let authenticated_event = TokenAuditEvent::new(TokenAuditAction::Authenticated, now)
+            .with_token(token.id(), Some(token.owner()));
+        let signed_event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
+            .with_token(token.id(), Some(token.owner()));
+        let usage = TokenUsage::for_token(token.id(), now, vec![authenticated_event, signed_event]);
+        match self.enqueue_usage(usage).await {
+            Ok(()) => Ok(signed),
+            Err(error) => {
+                tracing::error!(%error, "failed to enqueue token usage");
+                Err(error)
             }
         }
-        let error = BpError::token_conflict(&token_id);
-        self.record_authentication_failure(&token_id, None, now, &error)
-            .await;
-        Err(error)
     }
 
     async fn record_signing_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BpError) {

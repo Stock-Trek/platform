@@ -1,7 +1,6 @@
 use crate::{
-    ApiToken, AuthService, ConsumeResult, InvalidOrderRequest, OrderRequestContext,
-    OrderRequestVerification, ReplayKey, ReplayReservation, ReplayStoreError, TokenAuditAction,
-    TokenAuditEvent, TokenMutation, TokenScope, TokenUsage, auth_service::MAX_UPDATE_ATTEMPTS,
+    ApiToken, AuthService, ConsumeResult, OrderRequestContext, OrderRequestVerification, ReplayKey,
+    ReplayReservation, ReplayStoreError, TokenAuditAction, TokenAuditEvent, TokenUsage,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
@@ -28,97 +27,18 @@ impl AuthService {
     pub(crate) async fn commit_signature_use(
         &self,
         token: ApiToken,
-        token_id: &str,
         now: DateTime<Utc>,
         reservation: &ReplayReservation,
-        signature: &str,
-        order_request: &[u8],
     ) -> BpResult<OrderRequestVerification> {
-        if self.has_usage_queue() {
-            let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
-                .with_token(token.id(), Some(token.owner()));
-            let usage = TokenUsage::for_token(token.id(), now, vec![event]);
-            if let Err(error) = self.enqueue_usage(usage).await {
-                tracing::error!(%error, "failed to enqueue token usage");
-                self.release_replay_after_failure(reservation).await;
-                return Err(error);
-            }
-            return Ok(OrderRequestVerification::Valid);
+        let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
+            .with_token(token.id(), Some(token.owner()));
+        let usage = TokenUsage::for_token(token.id(), now, vec![event]);
+        if let Err(error) = self.enqueue_usage(usage).await {
+            tracing::error!(%error, "failed to enqueue token usage");
+            self.release_replay_after_failure(reservation).await;
+            return Err(error);
         }
-        let mut latest = token;
-        for _ in 0..MAX_UPDATE_ATTEMPTS {
-            let mut updated = latest.clone();
-            updated.metadata.record_use(now);
-            let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
-                .with_token(updated.id(), Some(updated.owner()));
-            let mutation = TokenMutation::Update {
-                expected: latest,
-                token: updated,
-            };
-            match self.commit_mutation(mutation, event).await {
-                Ok(true) => return Ok(OrderRequestVerification::Valid),
-                Ok(false) => {
-                    self.release_replay_after_failure(reservation).await;
-                    return Err(BpError::token_conflict(token_id));
-                }
-                Err(error) if Self::is_conflict(&error) => {
-                    latest = match self.token(token_id).await {
-                        Ok(token) => token,
-                        Err(error) => {
-                            self.release_replay_after_failure(reservation).await;
-                            return Err(error);
-                        }
-                    };
-                    if Self::ensure_active(&latest, now).is_err() {
-                        self.release_replay_after_failure(reservation).await;
-                        return self
-                            .reject_signature(
-                                token_id,
-                                Some(&latest),
-                                now,
-                                InvalidOrderRequest::InactiveToken,
-                            )
-                            .await;
-                    }
-                    if Self::ensure_scope(&latest, TokenScope::OrdersWrite).is_err() {
-                        self.release_replay_after_failure(reservation).await;
-                        return self
-                            .reject_signature(
-                                token_id,
-                                Some(&latest),
-                                now,
-                                InvalidOrderRequest::MissingScope,
-                            )
-                            .await;
-                    }
-                    match self.revalidate_signature(
-                        token_id,
-                        signature,
-                        order_request,
-                        &latest,
-                        now,
-                    ) {
-                        Ok(Some(reason)) => {
-                            self.release_replay_after_failure(reservation).await;
-                            return self
-                                .reject_signature(token_id, Some(&latest), now, reason)
-                                .await;
-                        }
-                        Ok(None) => {}
-                        Err(error) => {
-                            self.release_replay_after_failure(reservation).await;
-                            return Err(error);
-                        }
-                    }
-                }
-                Err(error) => {
-                    self.release_replay_after_failure(reservation).await;
-                    return Err(error);
-                }
-            }
-        }
-        self.release_replay_after_failure(reservation).await;
-        Err(BpError::token_conflict(token_id))
+        Ok(OrderRequestVerification::Valid)
     }
 
     fn replay_store_error(operation: &'static str, error: ReplayStoreError) -> BpError {

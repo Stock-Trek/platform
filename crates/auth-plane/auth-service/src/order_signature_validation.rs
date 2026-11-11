@@ -1,7 +1,6 @@
 use crate::{
-    ApiToken, AuthService, InvalidOrderRequest, OrderRequestContext, OrderRequestSigner,
-    OrderRequestVerification, SignedOrderRequest, TokenAuditAction, TokenAuditEvent,
-    order_verification::CLOCK_SKEW_SECONDS,
+    ApiToken, AuthService, InvalidOrderRequest, OrderRequestContext, OrderRequestVerification,
+    SignedOrderRequest, TokenAuditAction, TokenAuditEvent, order_verification::CLOCK_SKEW_SECONDS,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, BpError, BpResult};
@@ -62,26 +61,6 @@ impl AuthService {
             return Err(InvalidOrderRequest::InvalidValidity);
         }
         Ok((signed, context))
-    }
-
-    pub(crate) fn revalidate_signature(
-        &self,
-        token_id: &str,
-        signature: &str,
-        order_request: &[u8],
-        token: &ApiToken,
-        now: DateTime<Utc>,
-    ) -> BpResult<Option<InvalidOrderRequest>> {
-        let (signed, context) = match self.validate_order_signature(token_id, signature, now) {
-            Ok(validated) => validated,
-            Err(reason) => return Ok(Some(reason)),
-        };
-        let signer = OrderRequestSigner::new(token.secret())?;
-        if signer.verify_order_request(&context, order_request, signed.signature())? {
-            Ok(None)
-        } else {
-            Ok(Some(InvalidOrderRequest::SignatureMismatch))
-        }
     }
 
     pub(crate) async fn reject_signature(
