@@ -48,8 +48,8 @@ impl OrderJwtClaims {
     ) -> BpResult<Self> {
         let token_id = token_id.into();
         let owner = owner.into();
+        let owner = ApiToken::validated_owner(&owner)?.to_string();
         ApiToken::validate_id(&token_id)?;
-        ApiToken::validated_owner(&owner)?;
         let issued_at = issued_at.timestamp();
         let expires_at = expires_at.timestamp();
         if expires_at <= issued_at {
@@ -83,6 +83,11 @@ impl OrderJwtClaims {
 
     pub fn is_expired(&self, now: DateTime<Utc>) -> bool {
         self.expires_at <= now.timestamp()
+    }
+
+    pub(crate) fn normalize_owner(&mut self) -> BpResult<()> {
+        self.owner = ApiToken::validated_owner(&self.owner)?.to_string();
+        Ok(())
     }
 
     pub(crate) fn validate_at(&self, now: DateTime<Utc>) -> BpResult<()> {

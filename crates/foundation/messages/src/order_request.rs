@@ -22,7 +22,7 @@ impl UnsignedOrderRequest {
         Self {
             cex,
             account,
-            owner: owner.into(),
+            owner: owner.into().trim().to_string(),
             order_request,
         }
     }
@@ -52,7 +52,7 @@ impl UnsignedOrderRequest {
     }
 
     pub fn with_owner(mut self, owner: impl Into<String>) -> Self {
-        self.owner = owner.into();
+        self.owner = owner.into().trim().to_string();
         self
     }
 }

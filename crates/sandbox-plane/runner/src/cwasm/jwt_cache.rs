@@ -39,8 +39,8 @@ impl JwtCache {
     }
 
     pub fn with_sigv4(url: &str, owner: impl Into<String>, sigv4: &SigV4Config) -> BpResult<Self> {
-        let owner = owner.into();
-        if owner.trim().is_empty() {
+        let owner = owner.into().trim().to_string();
+        if owner.is_empty() {
             return Err(BpError::auth_invalid_field("owner", "must not be empty"));
         }
         let signer = sigv4.signer_for_owner(&owner)?;
@@ -52,6 +52,7 @@ impl JwtCache {
         owner: String,
         signer: Option<SigV4Signer>,
     ) -> BpResult<Self> {
+        let owner = owner.trim().to_string();
         let url = reqwest::Url::parse(url)
             .map_err(|error| BpError::config_invalid_source("auth_service_url", error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
@@ -60,7 +61,7 @@ impl JwtCache {
                 "must use the http or https scheme",
             ));
         }
-        if owner.trim().is_empty() {
+        if owner.is_empty() {
             return Err(BpError::auth_invalid_field("owner", "must not be empty"));
         }
         let client = reqwest::Client::builder()

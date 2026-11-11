@@ -1,4 +1,4 @@
-use crate::AuthService;
+use crate::{ApiToken, AuthService};
 use chrono::Utc;
 use http_body_util::{BodyExt, Full};
 use hyper::{
@@ -118,14 +118,16 @@ impl JwtServer {
         let caller = Self::verify(sigv4, &parts, &headers, &body)?;
         let request: JwtRequest = serde_json::from_slice(&body)
             .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
-        if request.owner() != caller.owner() {
+        let owner = ApiToken::validated_owner(request.owner())
+            .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+        if owner != caller.owner() {
             return Err((
                 StatusCode::FORBIDDEN,
                 "requested owner does not match the authenticated caller".to_string(),
             ));
         }
         let issued = service
-            .issue_jwt_for_owner(request.owner(), Utc::now())
+            .issue_jwt_for_owner(owner, Utc::now())
             .await
             .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
         Ok(Self::json(

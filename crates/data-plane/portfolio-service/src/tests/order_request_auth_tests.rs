@@ -62,6 +62,41 @@ async fn signature_binds_the_routing_fields() {
 }
 
 #[tokio::test]
+async fn normalizes_the_request_owner() {
+    let (service, auth_service, token) = Fixture::service().await;
+    let request = Fixture::unsigned(&format!("  {OWNER}  "));
+
+    let submission = service.sign(&request).await.unwrap();
+
+    assert_eq!(submission.owner(), OWNER);
+    assert!(
+        auth_service
+            .verify_order_request(
+                token.id(),
+                &submission.canonical_bytes().unwrap(),
+                submission.signature(),
+                Utc::now(),
+            )
+            .await
+            .unwrap()
+    );
+}
+
+#[tokio::test]
+async fn verifies_a_jwt_against_a_normalized_request_owner() {
+    let (service, auth_service, _) = Fixture::service().await;
+    let now = Utc::now();
+    let jwt = auth_service.issue_jwt_for_owner(OWNER, now).await.unwrap();
+
+    assert!(
+        service
+            .verify_jwt(jwt.token(), &Fixture::unsigned("  portfolio-owner  "), now)
+            .await
+            .is_ok()
+    );
+}
+
+#[tokio::test]
 async fn signs_for_the_authenticated_owner_not_the_body_owner() {
     let (service, auth_service, _) = Fixture::service().await;
     let now = Utc::now();

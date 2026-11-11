@@ -1,6 +1,6 @@
 use crate::{AccountKey, PortfolioService};
 use chrono::{DateTime, Utc};
-use platform_auth_service::{AuthService, JwksCache, OrderJwtClaims, SignedOrderRequest};
+use platform_auth_service::{ApiToken, AuthService, JwksCache, OrderJwtClaims, SignedOrderRequest};
 use platform_errors::{BpError, BpResult};
 use platform_messages::order_request::UnsignedOrderRequest;
 use serde::Serialize;
@@ -25,7 +25,7 @@ impl SignedOrderSubmission {
         Self {
             cex: request.cex(),
             account: request.account().clone(),
-            owner: request.owner().to_string(),
+            owner: request.owner().trim().to_string(),
             token_id: signed.token_id().to_string(),
             order_request: request.order_request().clone(),
             signature: signed.envelope().to_string(),
@@ -108,7 +108,8 @@ impl OrderRequestService {
         now: DateTime<Utc>,
     ) -> BpResult<()> {
         let claims = self.authenticate(jwt, now).await?;
-        if claims.owner() != request.owner() {
+        let owner = ApiToken::validated_owner(request.owner())?;
+        if claims.owner() != owner {
             return Err(BpError::auth_invalid_jwt(
                 "owner does not match the order request",
             ));
@@ -117,7 +118,8 @@ impl OrderRequestService {
     }
 
     pub async fn sign(&self, request: &UnsignedOrderRequest) -> BpResult<SignedOrderSubmission> {
-        self.sign_for_owner(request, request.owner()).await
+        let owner = ApiToken::validated_owner(request.owner())?;
+        self.sign_for_owner(request, owner).await
     }
 
     pub async fn sign_for_owner(
@@ -125,6 +127,7 @@ impl OrderRequestService {
         request: &UnsignedOrderRequest,
         owner: &str,
     ) -> BpResult<SignedOrderSubmission> {
+        let owner = ApiToken::validated_owner(owner)?;
         let request = request.clone().with_owner(owner);
         self.authorize_account(owner, &request)?;
         let order_request = request.canonical_bytes().map_err(BpError::external)?;
@@ -141,7 +144,7 @@ impl OrderRequestService {
         request: &UnsignedOrderRequest,
         claims: &OrderJwtClaims,
     ) -> BpResult<SignedOrderSubmission> {
-        let owner = claims.owner();
+        let owner = ApiToken::validated_owner(claims.owner())?;
         let request = request.clone().with_owner(owner);
         self.authorize_account(owner, &request)?;
         let order_request = request.canonical_bytes().map_err(BpError::external)?;
