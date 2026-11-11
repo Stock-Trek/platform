@@ -46,4 +46,13 @@ impl UnsignedOrderRequest {
     pub fn order_request_bytes(&self) -> serde_json::Result<Vec<u8>> {
         serde_json::to_vec(&self.order_request)
     }
+
+    pub fn canonical_bytes(&self) -> serde_json::Result<Vec<u8>> {
+        serde_json::to_vec(self)
+    }
+
+    pub fn with_owner(mut self, owner: impl Into<String>) -> Self {
+        self.owner = owner.into();
+        self
+    }
 }

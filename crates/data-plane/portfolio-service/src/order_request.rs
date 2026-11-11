@@ -1,8 +1,10 @@
+use crate::{AccountKey, PortfolioService};
 use chrono::{DateTime, Utc};
-use platform_auth_service::{AuthService, JwksCache, SignedOrderRequest};
+use platform_auth_service::{AuthService, JwksCache, OrderJwtClaims, SignedOrderRequest};
 use platform_errors::{BpError, BpResult};
 use platform_messages::order_request::UnsignedOrderRequest;
 use serde::Serialize;
+use std::sync::Arc;
 use stock_trek_types::cex::{
     account_id::AccountId, asset_id::AssetId, cex_id::CexId, order_request::OrderRequest,
 };
@@ -53,11 +55,23 @@ impl SignedOrderSubmission {
     pub fn signature(&self) -> &str {
         &self.signature
     }
+
+    pub fn canonical_bytes(&self) -> BpResult<Vec<u8>> {
+        UnsignedOrderRequest::new(
+            self.cex,
+            self.account.clone(),
+            self.owner.clone(),
+            self.order_request.clone(),
+        )
+        .canonical_bytes()
+        .map_err(BpError::external)
+    }
 }
 
 pub struct OrderRequestService {
     auth_service: AuthService,
     jwt_verifier: JwksCache,
+    portfolio: Option<Arc<PortfolioService>>,
 }
 
 impl OrderRequestService {
@@ -70,11 +84,21 @@ impl OrderRequestService {
         Self {
             auth_service,
             jwt_verifier,
+            portfolio: None,
         }
     }
 
     pub fn with_jwks_url(auth_service: AuthService, url: &str) -> BpResult<Self> {
         Ok(Self::with_jwks_cache(auth_service, JwksCache::new(url)?))
+    }
+
+    pub fn with_portfolio_service(mut self, portfolio: Arc<PortfolioService>) -> Self {
+        self.portfolio = Some(portfolio);
+        self
+    }
+
+    pub async fn authenticate(&self, jwt: &str, now: DateTime<Utc>) -> BpResult<OrderJwtClaims> {
+        self.jwt_verifier.verify(jwt, now).await
     }
 
     pub async fn verify_jwt(
@@ -83,7 +107,7 @@ impl OrderRequestService {
         request: &UnsignedOrderRequest,
         now: DateTime<Utc>,
     ) -> BpResult<()> {
-        let claims = self.jwt_verifier.verify(jwt, now).await?;
+        let claims = self.authenticate(jwt, now).await?;
         if claims.owner() != request.owner() {
             return Err(BpError::auth_invalid_jwt(
                 "owner does not match the order request",
@@ -93,15 +117,54 @@ impl OrderRequestService {
     }
 
     pub async fn sign(&self, request: &UnsignedOrderRequest) -> BpResult<SignedOrderSubmission> {
-        if request.owner().trim().is_empty() {
-            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
-        }
-        let order_request = request.order_request_bytes().map_err(BpError::external)?;
+        self.sign_for_owner(request, request.owner()).await
+    }
+
+    pub async fn sign_for_owner(
+        &self,
+        request: &UnsignedOrderRequest,
+        owner: &str,
+    ) -> BpResult<SignedOrderSubmission> {
+        let request = request.clone().with_owner(owner);
+        self.authorize_account(owner, &request)?;
+        let order_request = request.canonical_bytes().map_err(BpError::external)?;
         let now = Utc::now();
         let signed = self
             .auth_service
-            .sign_order_request_for_owner(request.owner(), &order_request, now, now)
+            .sign_order_request_for_owner(owner, &order_request, now, now)
             .await?;
-        Ok(SignedOrderSubmission::new(request, &signed))
+        Ok(SignedOrderSubmission::new(&request, &signed))
+    }
+
+    pub async fn sign_for_caller(
+        &self,
+        request: &UnsignedOrderRequest,
+        claims: &OrderJwtClaims,
+    ) -> BpResult<SignedOrderSubmission> {
+        let owner = claims.owner();
+        let request = request.clone().with_owner(owner);
+        self.authorize_account(owner, &request)?;
+        let order_request = request.canonical_bytes().map_err(BpError::external)?;
+        let now = Utc::now();
+        let signed = self
+            .auth_service
+            .sign_order_request_for_token(claims.token_id(), &order_request, now, now)
+            .await?;
+        Ok(SignedOrderSubmission::new(&request, &signed))
+    }
+
+    fn authorize_account(&self, owner: &str, request: &UnsignedOrderRequest) -> BpResult<()> {
+        let Some(portfolio) = &self.portfolio else {
+            return Ok(());
+        };
+        let account = AccountKey::from((request.cex(), request.account().clone()));
+        if portfolio.is_tracked_for_owner(owner, &account) {
+            Ok(())
+        } else {
+            Err(BpError::auth_invalid_field(
+                "account",
+                "is not owned by the authenticated owner",
+            ))
+        }
     }
 }

@@ -12,6 +12,7 @@ mod jwt_key_tests;
 mod jwt_server_config_tests;
 mod jwt_server_tests;
 mod order_jwt_tests;
+mod order_request_token_binding_tests;
 mod owner_revocation_tests;
 mod replay_store_tests;
 mod revocation_reason_tests;

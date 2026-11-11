@@ -32,6 +32,18 @@ impl AuthService {
         let token = self
             .token_for_owner_with_scope(owner, TokenScope::OrdersWrite, now)
             .await?;
+        self.sign_order_request_for_token(token.id(), order_request, issued_at, now)
+            .await
+    }
+
+    pub async fn sign_order_request_for_token(
+        &self,
+        token_id: &str,
+        order_request: &[u8],
+        issued_at: DateTime<Utc>,
+        now: DateTime<Utc>,
+    ) -> BpResult<SignedOrderRequest> {
+        let token = self.token(token_id).await?;
         let authenticated = self
             .authenticate(
                 token.id(),

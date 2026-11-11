@@ -1,67 +1,9 @@
+use super::order_request_fixture_tests::{Fixture, OWNER};
 use crate::OrderRequestService;
-use chrono::{Duration, Utc};
-use platform_auth_service::{
-    ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenStore, TokenMetadata,
-    TokenScope, TokenStore,
-};
-use platform_messages::order_request::UnsignedOrderRequest;
+use chrono::Utc;
+use platform_auth_service::MemoryTokenStore;
 use std::sync::Arc;
-use stock_trek_types::cex::{
-    account_id::AccountId, activation::Activation, asset_id::AssetId, cex_id::CexId,
-    order_request::OrderRequest, tag::Tag,
-};
-
-const OWNER: &str = "portfolio-owner";
-
-struct Fixture;
-
-impl Fixture {
-    fn auth_service(store: Arc<MemoryTokenStore>) -> AuthService {
-        AuthService::new(
-            store,
-            AuthServiceConfig {
-                token_lifetime: Duration::days(30),
-                rotation_overlap: Duration::days(7),
-                signature_validity: Duration::minutes(5),
-            },
-            Arc::new(MemoryReplayStore::default()),
-        )
-        .unwrap()
-    }
-
-    async fn service() -> (OrderRequestService, AuthService, ApiToken) {
-        let store = Arc::new(MemoryTokenStore::default());
-        let now = Utc::now();
-        let metadata = TokenMetadata::new(now + Duration::days(30), TokenScope::DEFAULT).unwrap();
-        let token = ApiToken::generate("portfolio-token", OWNER, now, metadata).unwrap();
-        store.put(&token).await.unwrap();
-        let auth_service = Self::auth_service(store);
-        (
-            OrderRequestService::new(auth_service.clone()),
-            auth_service,
-            token,
-        )
-    }
-
-    fn order_request_bytes(request: &UnsignedOrderRequest) -> Vec<u8> {
-        request.order_request_bytes().unwrap()
-    }
-
-    fn unsigned(owner: &str) -> UnsignedOrderRequest {
-        UnsignedOrderRequest::new(
-            CexId::Binance,
-            AccountId("account-1".to_string()),
-            owner,
-            OrderRequest::MarketBuy {
-                base: AssetId::Bitcoin,
-                quote: AssetId::TetherUSD,
-                activation: Activation::Immediate,
-                quote_quantity: 250.0,
-                tag: Tag::new("strategy-entry"),
-            },
-        )
-    }
-}
+use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
 #[tokio::test]
 async fn signs_unsigned_order_requests_for_the_owner() {
@@ -82,7 +24,7 @@ async fn signs_unsigned_order_requests_for_the_owner() {
         auth_service
             .verify_order_request(
                 token.id(),
-                &Fixture::order_request_bytes(&request),
+                &submission.canonical_bytes().unwrap(),
                 submission.signature(),
                 Utc::now(),
             )
