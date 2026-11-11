@@ -1,7 +1,6 @@
-use crate::{ApiToken, TokenAuditEvent, token_audit_outbox::TokenAuditOutbox};
-use chrono::Utc;
+use crate::{ApiToken, TokenAuditEvent, token_rotation_identity::TokenRotationIdentity};
+use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
-use rand::{Rng, distributions::Alphanumeric};
 use serde_json::{Value, json};
 
 pub(crate) const ROTATION_TRANSACTION_FIELD: &str = "__rotation_transaction__";
@@ -45,9 +44,16 @@ impl TokenRotationTransaction {
                 "does not describe a consistent token rotation",
             ));
         }
-        TokenAuditOutbox::ensure_events_have_ids(&mut events);
+        let transaction_id = TokenRotationIdentity::transaction_id(original.id(), replacement.id());
+        for (index, event) in events.iter_mut().enumerate() {
+            event.event_id = Some(TokenRotationIdentity::event_id(
+                &transaction_id,
+                index,
+                event,
+            ));
+        }
         Ok(Self {
-            transaction_id: Self::generate_id(),
+            transaction_id,
             original,
             retired,
             replacement,
@@ -55,13 +61,8 @@ impl TokenRotationTransaction {
         })
     }
 
-    fn generate_id() -> String {
-        let random: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(16)
-            .map(char::from)
-            .collect();
-        format!("{}-{random}", Utc::now().timestamp_micros())
+    pub(crate) fn has_same_rotation(&self, other: &Self) -> bool {
+        self.original.id() == other.original.id() && self.replacement.id() == other.replacement.id()
     }
 
     pub fn transaction_id(&self) -> &str {
@@ -84,7 +85,7 @@ impl TokenRotationTransaction {
         &self.events
     }
 
-    pub fn timestamp(&self) -> chrono::DateTime<Utc> {
+    pub fn timestamp(&self) -> DateTime<Utc> {
         self.events[0].timestamp
     }
 

@@ -45,10 +45,6 @@ impl AuthService {
             if let Some(current) = self.stored_token(original.id()).await?
                 && current.metadata().replaced_by() == Some(replacement_id.as_str())
             {
-                let _ = self
-                    .store
-                    .acknowledge_rotation(transaction.transaction_id())
-                    .await;
                 return self
                     .completed_rotation(&original, &replacement_id, now)
                     .await;
