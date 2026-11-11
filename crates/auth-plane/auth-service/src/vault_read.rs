@@ -63,16 +63,44 @@ impl VaultClient {
     }
 
     pub(crate) async fn keys(&self) -> BpResult<Vec<String>> {
-        let mut url = self.config.url(&["metadata"])?;
+        let mut keys = self.list_directory("").await?;
+        keys.retain(|key| {
+            !key.ends_with('/')
+                && (ApiToken::validate_id(key).is_ok()
+                    || TokenRotationTransaction::is_storage_key(key)
+                    || TokenAuditOutbox::is_storage_key(key))
+        });
+        keys.sort();
+        keys.dedup();
+        Ok(keys)
+    }
+
+    pub(crate) async fn keys_with_prefix(&self, prefix: &str) -> BpResult<Vec<String>> {
+        let directory = prefix
+            .rsplit_once('/')
+            .map_or("", |(directory, _)| directory);
+        let mut keys: Vec<String> = self
+            .list_directory(directory)
+            .await?
+            .into_iter()
+            .filter(|key| key.starts_with(prefix))
+            .collect();
+        keys.sort();
+        keys.dedup();
+        Ok(keys)
+    }
+
+    async fn list_directory(&self, directory: &str) -> BpResult<Vec<String>> {
+        let mut url = self.url_for_path("metadata", directory)?;
         url.query_pairs_mut().append_pair("list", "true");
         let response = self
-            .send("list", "tokens", self.request(Method::GET, url))
+            .send("list", directory, self.request(Method::GET, url))
             .await?;
         if response.status() == StatusCode::NOT_FOUND {
             return Ok(Vec::new());
         }
-        let response = self.require_success("list", "tokens", response).await?;
-        let value = self.parse_json("list", "tokens", response).await?;
+        let response = self.require_success("list", directory, response).await?;
+        let value = self.parse_json("list", directory, response).await?;
         let keys = value
             .pointer("/data/keys")
             .and_then(Value::as_array)
@@ -80,24 +108,22 @@ impl VaultClient {
             .ok_or_else(|| {
                 BpError::auth_store(
                     "list",
-                    "tokens",
+                    directory,
                     false,
                     "malformed Vault response".to_string(),
                 )
             })?;
-        let mut keys: Vec<String> = keys
+        Ok(keys
             .iter()
             .filter_map(|key| key.as_str().map(str::to_string))
-            .filter(|key| {
-                !key.ends_with('/')
-                    && (ApiToken::validate_id(key).is_ok()
-                        || TokenRotationTransaction::is_storage_key(key)
-                        || TokenAuditOutbox::is_storage_key(key))
+            .map(|key| {
+                if directory.is_empty() {
+                    key
+                } else {
+                    format!("{directory}/{key}")
+                }
             })
-            .collect();
-        keys.sort();
-        keys.dedup();
-        Ok(keys)
+            .collect())
     }
 
     pub(crate) async fn ids(&self) -> BpResult<Vec<String>> {

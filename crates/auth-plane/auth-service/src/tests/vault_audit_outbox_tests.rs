@@ -124,6 +124,12 @@ async fn committing_multiple_events_updates_a_token_with_one_write() {
     assert_eq!(pending.len(), 2);
     assert_eq!(pending[0].action, TokenAuditAction::Authenticated);
     assert_eq!(pending[1].action, TokenAuditAction::Signed);
+    for event in &pending {
+        let key = TokenAuditOutbox::storage_key(event.event_id().unwrap());
+        assert!(fixture.server.current(&key).is_some());
+    }
+    let stored = fixture.server.current(token.id()).unwrap().0;
+    assert!(stored.get("audit_outbox").is_none());
     assert_eq!(
         fixture
             .store
@@ -133,6 +139,71 @@ async fn committing_multiple_events_updates_a_token_with_one_write() {
             .unwrap()
             .to_value(),
         updated.to_value()
+    );
+}
+
+#[tokio::test]
+async fn pending_audits_do_not_read_token_records() {
+    let fixture = VaultOutboxFixture::new();
+    let token = TestFixture::token("token-a");
+    fixture.store.put(&token).await.unwrap();
+    fixture
+        .store
+        .append_audit(
+            VaultOutboxFixture::event(TokenAuditAction::Authenticated, token.id())
+                .with_event_id("event-authenticated"),
+        )
+        .await
+        .unwrap();
+    let start = fixture.server.requests().len();
+
+    let pending = fixture.store.pending_audits().await.unwrap();
+
+    assert_eq!(pending.len(), 1);
+    let requests = fixture.server.requests();
+    assert!(requests[start..].iter().any(|request| {
+        request.method == "GET" && request.path == "/v1/platform-tokens/metadata/audit/events"
+    }));
+    assert!(!requests[start..].iter().any(|request| {
+        request.method == "GET"
+            && request.path == format!("/v1/platform-tokens/data/{}", token.id())
+    }));
+}
+
+#[tokio::test]
+async fn acknowledging_an_event_deletes_only_its_index_key() {
+    let fixture = VaultOutboxFixture::new();
+    let token = TestFixture::token("token-a");
+    fixture.store.put(&token).await.unwrap();
+    fixture
+        .store
+        .append_audit(
+            VaultOutboxFixture::event(TokenAuditAction::Authenticated, token.id())
+                .with_event_id("event-authenticated"),
+        )
+        .await
+        .unwrap();
+    let start = fixture.server.requests().len();
+
+    fixture
+        .store
+        .acknowledge_audit("event-authenticated")
+        .await
+        .unwrap();
+
+    let requests = fixture.server.requests();
+    let ack_requests = &requests[start..];
+    assert!(!ack_requests.iter().any(|request| request.method == "GET"));
+    assert_eq!(
+        ack_requests
+            .iter()
+            .filter(|request| request.method == "DELETE")
+            .count(),
+        1
+    );
+    assert_eq!(
+        ack_requests[0].path,
+        "/v1/platform-tokens/metadata/audit/events/event-authenticated"
     );
 }
 
@@ -150,7 +221,6 @@ async fn deleting_a_token_keeps_pending_events_until_they_are_acknowledged() {
     let pending = fixture.store.pending_audits().await.unwrap();
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].event_id(), Some("event-revoked"));
-    assert!(fixture.store.put(&token).await.is_err());
 
     fixture
         .store
@@ -163,7 +233,7 @@ async fn deleting_a_token_keeps_pending_events_until_they_are_acknowledged() {
 }
 
 #[tokio::test]
-async fn corrupt_outbox_entries_are_reported_instead_of_dropped() {
+async fn corrupt_outbox_and_audit_records_are_reported_instead_of_dropped() {
     let fixture = VaultOutboxFixture::new();
     let token = TestFixture::token("token-a");
     fixture.store.put(&token).await.unwrap();
@@ -173,6 +243,14 @@ async fn corrupt_outbox_entries_are_reported_instead_of_dropped() {
     corrupt["audit_outbox"] = json!("not-an-array");
     client
         .put_entry(token.id(), corrupt, WriteCondition::Update(version))
+        .await
+        .unwrap();
+    client
+        .put_entry(
+            &TokenAuditOutbox::storage_key("event-corrupt"),
+            json!({ "__platform_audit_event__": true, "event": "not-an-event" }),
+            WriteCondition::Create,
+        )
         .await
         .unwrap();
 

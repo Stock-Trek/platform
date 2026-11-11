@@ -186,10 +186,11 @@ impl TokenStore for MemoryTokenStore {
                     token.id().to_string(),
                     StoredEntry {
                         token: Some(token.clone()),
-                        outbox: events,
+                        outbox: Vec::new(),
                     },
                 );
                 state.upsert_owner_token(&token);
+                Self::store_standalone_audits(&mut state, events);
                 Ok(true)
             }
             TokenMutation::Update { expected, token } => {
@@ -204,14 +205,14 @@ impl TokenStore for MemoryTokenStore {
                     return Err(BpError::token_conflict(token.id()));
                 }
                 entry.token = Some(token.clone());
-                entry.outbox.extend(events);
                 state.remove_token_indexes(&expected);
                 state.upsert_owner_token(&token);
+                Self::store_standalone_audits(&mut state, events);
                 Ok(true)
             }
             TokenMutation::Delete { expected } => {
                 expected.validate()?;
-                let Some(entry) = state.tokens.get_mut(expected.id()) else {
+                let Some(entry) = state.tokens.get(expected.id()) else {
                     return Ok(false);
                 };
                 let Some(stored) = &entry.token else {
@@ -220,9 +221,9 @@ impl TokenStore for MemoryTokenStore {
                 if stored.to_value() != expected.to_value() {
                     return Ok(false);
                 }
-                entry.token = None;
-                entry.outbox.extend(events);
+                state.tokens.remove(expected.id());
                 state.remove_token_indexes(&expected);
+                Self::store_standalone_audits(&mut state, events);
                 Ok(true)
             }
         }
@@ -244,42 +245,24 @@ impl TokenStore for MemoryTokenStore {
 
     async fn append_audit(&self, mut event: TokenAuditEvent) -> BpResult<()> {
         TokenAuditOutbox::ensure_event_id(&mut event);
-        let mut state = self.state.lock();
-        if let Some(token_id) = event.token_id.as_deref()
-            && let Some(entry) = state.tokens.get_mut(token_id)
-            && entry.token.is_some()
-        {
-            entry.outbox.push(event);
-            return Ok(());
-        }
         let event_id = TokenAuditOutbox::require_event_id(&event)?.to_string();
-        state.standalone_audits.insert(event_id, event);
+        self.state.lock().standalone_audits.insert(event_id, event);
         Ok(())
     }
 
     async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
         let state = self.state.lock();
-        let mut events = Vec::new();
-        for entry in state.tokens.values() {
-            events.extend(entry.outbox.iter().cloned());
-        }
-        events.extend(state.standalone_audits.values().cloned());
+        let mut events: Vec<_> = state.standalone_audits.values().cloned().collect();
+        events.sort_by(|left, right| {
+            left.timestamp
+                .cmp(&right.timestamp)
+                .then_with(|| left.event_id().cmp(&right.event_id()))
+        });
         Ok(events)
     }
 
     async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
-        let mut state = self.state.lock();
-        state.standalone_audits.remove(event_id);
-        let mut remove = Vec::new();
-        for (id, entry) in state.tokens.iter_mut() {
-            TokenAuditOutbox::remove_events(&mut entry.outbox, event_id);
-            if entry.token.is_none() && entry.outbox.is_empty() {
-                remove.push(id.clone());
-            }
-        }
-        for id in remove {
-            state.tokens.remove(&id);
-        }
+        self.state.lock().standalone_audits.remove(event_id);
         Ok(())
     }
 
@@ -293,5 +276,15 @@ impl TokenStore for MemoryTokenStore {
     async fn acknowledge_rotation(&self, transaction_id: &str) -> BpResult<()> {
         self.state.lock().rotations.remove(transaction_id);
         Ok(())
+    }
+}
+
+impl MemoryTokenStore {
+    fn store_standalone_audits(state: &mut MemoryState, events: Vec<TokenAuditEvent>) {
+        for event in events {
+            if let Some(event_id) = event.event_id().map(str::to_string) {
+                state.standalone_audits.insert(event_id, event);
+            }
+        }
     }
 }

@@ -3,10 +3,14 @@ use chrono::Utc;
 use platform_errors::{BpError, BpResult};
 use rand::{Rng, distributions::Alphanumeric};
 use serde_json::{Map, Value};
+use std::sync::atomic::{AtomicU64, Ordering};
+
+static EVENT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 pub(crate) const AUDIT_OUTBOX_FIELD: &str = "audit_outbox";
 pub(crate) const AUDIT_EVENT_FIELD: &str = "__platform_audit_event__";
-pub(crate) const AUDIT_EVENT_PREFIX: &str = "__platform_audit_event__@";
+pub(crate) const AUDIT_EVENT_PREFIX: &str = "audit/events/";
+const LEGACY_AUDIT_EVENT_PREFIX: &str = "__platform_audit_event__@";
 pub(crate) const TOMBSTONE_FIELD: &str = "__platform_deleted__";
 
 pub(crate) struct TokenAuditOutbox;
@@ -24,7 +28,11 @@ impl TokenAuditOutbox {
             .take(16)
             .map(char::from)
             .collect();
-        format!("{}-{random}", Utc::now().timestamp_micros())
+        let sequence = EVENT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        format!(
+            "{:020}-{sequence:020}-{random}",
+            Utc::now().timestamp_micros()
+        )
     }
 
     pub(crate) fn from_document(value: &Value) -> BpResult<Vec<TokenAuditEvent>> {
@@ -95,7 +103,7 @@ impl TokenAuditOutbox {
     }
 
     pub(crate) fn is_storage_key(key: &str) -> bool {
-        key.starts_with(AUDIT_EVENT_PREFIX)
+        key.starts_with(AUDIT_EVENT_PREFIX) || key.starts_with(LEGACY_AUDIT_EVENT_PREFIX)
     }
 
     pub(crate) fn storage_key(event_id: &str) -> String {
@@ -112,10 +120,6 @@ impl TokenAuditOutbox {
             );
         }
         Ok(())
-    }
-
-    pub(crate) fn remove_events(outbox: &mut Vec<TokenAuditEvent>, event_id: &str) {
-        outbox.retain(|event| event.event_id() != Some(event_id));
     }
 
     pub(crate) fn require_event_id(event: &TokenAuditEvent) -> BpResult<&str> {

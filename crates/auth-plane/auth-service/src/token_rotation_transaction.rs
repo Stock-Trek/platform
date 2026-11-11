@@ -4,9 +4,8 @@ use platform_errors::{BpError, BpResult};
 use serde_json::{Value, json};
 
 pub(crate) const ROTATION_TRANSACTION_FIELD: &str = "__rotation_transaction__";
-// The '@' is not valid in a token id, so rotation records can never collide
-// with, or hide, a real token in the same Vault mount.
-pub(crate) const ROTATION_TRANSACTION_PREFIX: &str = "__rotation_transaction__@";
+pub(crate) const ROTATION_TRANSACTION_PREFIX: &str = "rotation/transactions/";
+const LEGACY_ROTATION_TRANSACTION_PREFIX: &str = "__rotation_transaction__@";
 
 /// The durable intent to rotate a token.
 ///
@@ -91,6 +90,7 @@ impl TokenRotationTransaction {
 
     pub(crate) fn is_storage_key(id: &str) -> bool {
         id.starts_with(ROTATION_TRANSACTION_PREFIX)
+            || id.starts_with(LEGACY_ROTATION_TRANSACTION_PREFIX)
     }
 
     pub(crate) fn is_document(document: &Value) -> bool {
