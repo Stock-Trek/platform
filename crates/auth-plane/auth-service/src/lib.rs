@@ -39,6 +39,7 @@ mod token_metadata;
 mod token_metadata_value;
 mod token_options;
 mod token_owner_index;
+mod token_owner_index_recovery;
 mod token_purge;
 mod token_registry;
 mod token_rotation;

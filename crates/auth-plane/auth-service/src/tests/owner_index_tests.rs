@@ -3,9 +3,9 @@ use super::{
     vault_kv_server_tests::MockVault,
 };
 use crate::{
-    ApiToken, AuthService, MemoryTokenStore, OwnerIndex, RevocationReason, RevokedBy,
-    TokenAuditEvent, TokenMutation, TokenRotationTransaction, TokenStore, VaultTokenStore,
-    VaultTokenStoreConfig, vault_client::VaultClient,
+    ApiToken, AuthService, MemoryTokenStore, OwnerIndex, OwnerIndexEntry, RevocationReason,
+    RevokedBy, TokenAuditEvent, TokenMutation, TokenRotationTransaction, TokenStore,
+    VaultTokenStore, VaultTokenStoreConfig, vault_client::VaultClient,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -224,7 +224,7 @@ async fn revoked_owner_selection_does_not_scan_every_token() {
 }
 
 #[tokio::test]
-async fn missing_vault_indexes_are_not_rebuilt_implicitly() {
+async fn missing_vault_indexes_are_rebuilt_from_tokens() {
     let fixture = VaultFixture::new();
     TestFixture::add_token(&fixture.service, "token-a", OWNER).await;
     fixture.forget_index(OWNER).await;
@@ -238,22 +238,53 @@ async fn missing_vault_indexes_are_not_rebuilt_implicitly() {
             .is_none()
     );
 
-    let error = fixture
+    let selected = fixture
         .service
         .token_for_owner(OWNER, Utc::now())
         .await
-        .unwrap_err();
+        .unwrap();
 
-    assert!(matches!(error, platform_errors::BpError::Auth(_)));
-    assert!(
-        fixture
-            .service
-            .store
-            .owner_index(OWNER)
-            .await
-            .unwrap()
-            .is_none()
-    );
+    assert_eq!(selected.id(), "token-a");
+    let index = fixture
+        .service
+        .store
+        .owner_index(OWNER)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(IndexAssertions::entry_ids(&index), vec!["token-a"]);
+}
+
+#[tokio::test]
+async fn stale_vault_index_entries_are_rebuilt_from_tokens() {
+    let fixture = VaultFixture::new();
+    let token = TestFixture::add_token(&fixture.service, "token-a", OWNER).await;
+    let mut used_token = token.clone();
+    used_token.metadata.record_use(Utc::now());
+    let mut stale_index = OwnerIndex::new(OWNER);
+    stale_index.upsert(OwnerIndexEntry::from_token(&used_token));
+    fixture
+        .service
+        .store
+        .put_owner_index(&stale_index)
+        .await
+        .unwrap();
+
+    let selected = fixture
+        .service
+        .token_for_owner(OWNER, Utc::now())
+        .await
+        .unwrap();
+
+    assert_eq!(selected.id(), token.id());
+    let index = fixture
+        .service
+        .store
+        .owner_index(OWNER)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(index.tokens()[0].matches_token(&token));
 }
 
 #[tokio::test]
