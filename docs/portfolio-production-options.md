@@ -62,8 +62,6 @@ restore must not resurrect an account that was explicitly removed.
 
 ## Proposed design: control-plane registry plus dedicated connector
 
-This combines the former Options B and C into one target architecture.
-
 The control plane owns account ownership. An authoritative store holds
 owner/account mappings; admin writes and owner-scoped reads go through its API.
 Every mutation writes an audit record and a transactional outbox event, making
