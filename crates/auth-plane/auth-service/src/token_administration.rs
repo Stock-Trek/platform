@@ -139,10 +139,6 @@ impl<'a> TokenAdministrator<'a> {
         self.service.purge_expired_tokens(now).await
     }
 
-    pub async fn backfill_owner_index(&self, owner: &str) -> BpResult<usize> {
-        self.service.backfill_owner_index(owner).await
-    }
-
     pub async fn reconcile_owner_indexes(&self) -> BpResult<usize> {
         self.service.reconcile_owner_indexes().await
     }

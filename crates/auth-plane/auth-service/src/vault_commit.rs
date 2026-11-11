@@ -16,9 +16,7 @@ impl VaultClient {
         self.commit_events(mutation, vec![event]).await
     }
 
-    /// Updates a token without dropping audit events already waiting in its
-    /// outbox.
-    pub(crate) async fn update_preserving_outbox(
+    pub(crate) async fn update_if_unchanged(
         &self,
         expected: &ApiToken,
         token: &ApiToken,
@@ -34,10 +32,9 @@ impl VaultClient {
         if current.to_value() != expected.to_value() {
             return Err(BpError::token_conflict(token.id()));
         }
-        let outbox = TokenAuditOutbox::from_document(&data)?;
         self.put_entry(
             token.id(),
-            TokenAuditOutbox::token_document(token, &outbox)?,
+            token.to_value(),
             WriteCondition::Update(version),
         )
         .await
@@ -45,37 +42,10 @@ impl VaultClient {
 
     pub(crate) async fn append_audit(&self, mut event: TokenAuditEvent) -> BpResult<()> {
         TokenAuditOutbox::ensure_event_id(&mut event);
-        if let Some(token_id) = event.token_id.clone()
-            && ApiToken::validate_id(&token_id).is_ok()
-        {
-            for _ in 0..MAX_UPDATE_ATTEMPTS {
-                let Some((data, version)) = self.get_value_entry(&token_id).await? else {
-                    break;
-                };
-                if Self::is_tombstone(&data) {
-                    break;
-                }
-                let token = Self::token_from_value(&token_id, &data)?;
-                let mut outbox = TokenAuditOutbox::from_document(&data)?;
-                outbox.push(event.clone());
-                match self
-                    .put_entry(
-                        &token_id,
-                        TokenAuditOutbox::token_document(&token, &outbox)?,
-                        WriteCondition::Update(version),
-                    )
-                    .await
-                {
-                    Ok(()) => return Ok(()),
-                    Err(error) if Self::is_conflict(&error) => continue,
-                    Err(error) => return Err(error),
-                }
-            }
-        }
-        self.put_standalone_audit(&event).await
+        self.put_standalone_audit(&event).await.map(|_| ())
     }
 
-    async fn put_standalone_audit(&self, event: &TokenAuditEvent) -> BpResult<()> {
+    pub(crate) async fn put_standalone_audit(&self, event: &TokenAuditEvent) -> BpResult<bool> {
         let event_id = TokenAuditOutbox::require_event_id(event)?;
         let key = TokenAuditOutbox::storage_key(event_id);
         match self
@@ -86,8 +56,8 @@ impl VaultClient {
             )
             .await
         {
-            Ok(()) => Ok(()),
-            Err(BpError::Auth(platform_errors::AuthError::TokenExists { .. })) => Ok(()),
+            Ok(()) => Ok(true),
+            Err(BpError::Auth(platform_errors::AuthError::TokenExists { .. })) => Ok(false),
             Err(error) => Err(error),
         }
     }
@@ -132,10 +102,10 @@ impl VaultClient {
 
     pub(crate) async fn pending_rotations(&self) -> BpResult<Vec<TokenRotationTransaction>> {
         let mut transactions = Vec::new();
-        for key in self.keys().await? {
-            if !TokenRotationTransaction::is_storage_key(&key) {
-                continue;
-            }
+        for key in self
+            .keys_with_prefix(crate::token_rotation_transaction::ROTATION_TRANSACTION_PREFIX)
+            .await?
+        {
             let Some((data, _)) = self.get_value_entry(&key).await? else {
                 continue;
             };

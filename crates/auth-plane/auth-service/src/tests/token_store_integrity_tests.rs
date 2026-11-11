@@ -1,7 +1,7 @@
 use super::support_tests::{AuthServiceBuilder, OWNER, TestFixture};
 use crate::{
-    ApiToken, AuthService, TokenAuditEvent, TokenMetadata, TokenMutation, TokenRotationTransaction,
-    TokenScope, TokenStore,
+    ApiToken, AuthService, OwnerIndex, TokenAuditEvent, TokenMetadata, TokenMutation,
+    TokenRotationTransaction, TokenScope, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
@@ -28,6 +28,16 @@ impl TokenStore for MismatchedTokenStore {
 
     async fn ids(&self) -> BpResult<Vec<String>> {
         Ok(vec!["token-a".to_string()])
+    }
+
+    async fn owner_index(&self, owner: &str) -> BpResult<Option<OwnerIndex>> {
+        let token = ApiToken::generate(
+            "token-a",
+            owner,
+            self.token.created_at(),
+            self.token.metadata().clone(),
+        )?;
+        Ok(Some(OwnerIndex::from_tokens(owner, &[token])))
     }
 
     async fn commit_rotation(&self, _transaction: &TokenRotationTransaction) -> BpResult<()> {
@@ -146,15 +156,6 @@ impl DuplicateIdsFixture {
             .expect("valid metadata");
         ApiToken::generate("token-a", OWNER, created_at, metadata).expect("valid token")
     }
-}
-
-#[tokio::test]
-async fn owner_listing_deduplicates_store_ids() {
-    let service = DuplicateIdsFixture::service(TestFixture::token("token-a"));
-
-    let tokens = service.tokens_for_owner(OWNER).await.unwrap();
-
-    assert_eq!(tokens.len(), 1);
 }
 
 #[tokio::test]

@@ -1,7 +1,7 @@
 use super::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{
-    ApiToken, AuthService, MemoryTokenStore, RevocationReason, RevokedBy, TokenAuditEvent,
-    TokenMutation, TokenRotationTransaction, TokenStore,
+    ApiToken, AuthService, MemoryTokenStore, OwnerIndex, RevocationReason, RevokedBy,
+    TokenAuditEvent, TokenMutation, TokenRotationTransaction, TokenStore,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -43,6 +43,26 @@ impl TokenStore for FailingStore {
 
     async fn ids(&self) -> BpResult<Vec<String>> {
         self.inner.ids().await
+    }
+
+    async fn owner_index(&self, owner: &str) -> BpResult<Option<OwnerIndex>> {
+        self.inner.owner_index(owner).await
+    }
+
+    async fn put_owner_index(&self, index: &OwnerIndex) -> BpResult<()> {
+        self.inner.put_owner_index(index).await
+    }
+
+    async fn owner_indexes(&self) -> BpResult<Vec<OwnerIndex>> {
+        self.inner.owner_indexes().await
+    }
+
+    async fn index_owner_token(&self, token: &ApiToken) -> BpResult<()> {
+        self.inner.index_owner_token(token).await
+    }
+
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BpResult<()> {
+        self.inner.remove_owner_index_token(owner, id).await
     }
 
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
@@ -139,6 +159,26 @@ impl TokenStore for RacingStore {
 
     async fn ids(&self) -> BpResult<Vec<String>> {
         self.inner.ids().await
+    }
+
+    async fn owner_index(&self, owner: &str) -> BpResult<Option<OwnerIndex>> {
+        self.inner.owner_index(owner).await
+    }
+
+    async fn put_owner_index(&self, index: &OwnerIndex) -> BpResult<()> {
+        self.inner.put_owner_index(index).await
+    }
+
+    async fn owner_indexes(&self) -> BpResult<Vec<OwnerIndex>> {
+        self.inner.owner_indexes().await
+    }
+
+    async fn index_owner_token(&self, token: &ApiToken) -> BpResult<()> {
+        self.inner.index_owner_token(token).await
+    }
+
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BpResult<()> {
+        self.inner.remove_owner_index_token(owner, id).await
     }
 
     async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {

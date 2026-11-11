@@ -91,9 +91,8 @@ impl MockVault {
         });
         let prefix = format!("/v1/{mount}");
         let route = path.strip_prefix(&prefix).unwrap_or_default();
-        let mut segments = route.trim_start_matches('/').split('/');
-        let area = segments.next().unwrap_or_default();
-        let key = segments.next().unwrap_or_default();
+        let route = route.trim_start_matches('/');
+        let (area, key) = route.split_once('/').unwrap_or((route, ""));
         let mut state = state.lock().unwrap();
         let (status, body) = match (request.method.as_str(), area, key, query.as_deref()) {
             ("PUT", "data", id, _) if !id.is_empty() => state.put_response(id, &request.body),
@@ -102,7 +101,7 @@ impl MockVault {
                 state.delete(id);
                 (204, json!({}))
             }
-            ("GET", "metadata", "", Some("list=true")) => state.list_response(),
+            ("GET", "metadata", directory, Some("list=true")) => state.list_response(directory),
             _ => (404, json!({ "errors": [] })),
         };
         VaultHttp::respond(&mut stream, status, body);

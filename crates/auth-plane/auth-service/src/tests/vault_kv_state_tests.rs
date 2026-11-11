@@ -1,5 +1,5 @@
 use serde_json::{Value, json};
-use std::collections::HashMap;
+use std::collections::{BTreeSet, HashMap};
 
 #[derive(Clone, Debug)]
 pub(crate) struct CapturedRequest {
@@ -62,8 +62,8 @@ impl VaultKvState {
         )
     }
 
-    pub(crate) fn list_response(&self) -> (u16, Value) {
-        match self.list() {
+    pub(crate) fn list_response(&self, directory: &str) -> (u16, Value) {
+        match self.list(directory) {
             Some(keys) => (200, json!({ "data": { "keys": keys } })),
             None => (404, json!({ "errors": [] })),
         }
@@ -97,12 +97,30 @@ impl VaultKvState {
         Some((versions.last()?.clone(), version))
     }
 
-    fn list(&self) -> Option<Vec<String>> {
-        if self.entries.is_empty() {
-            return None;
+    fn list(&self, directory: &str) -> Option<Vec<String>> {
+        let prefix = if directory.is_empty() {
+            String::new()
+        } else {
+            format!("{}/", directory.trim_end_matches('/'))
+        };
+        let mut keys = BTreeSet::new();
+        for key in self.entries.keys() {
+            let Some(rest) = key.strip_prefix(&prefix) else {
+                continue;
+            };
+            if rest.is_empty() {
+                continue;
+            }
+            let child = match rest.split_once('/') {
+                Some((first, _)) => format!("{first}/"),
+                None => rest.to_string(),
+            };
+            keys.insert(child);
         }
-        let mut keys: Vec<String> = self.entries.keys().cloned().collect();
-        keys.sort();
-        Some(keys)
+        if keys.is_empty() {
+            None
+        } else {
+            Some(keys.into_iter().collect())
+        }
     }
 }

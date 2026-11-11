@@ -160,7 +160,7 @@ async fn committing_multiple_events_stores_them_with_the_mutation() {
 }
 
 #[tokio::test]
-async fn a_deleted_token_keeps_its_tombstone_until_the_event_is_delivered() {
+async fn a_deleted_token_can_be_recreated_before_its_event_is_delivered() {
     let (service, audit) = OutboxFixture::service();
     let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
     TestFixture::drain(&service, audit.clone()).await;
@@ -172,7 +172,7 @@ async fn a_deleted_token_keeps_its_tombstone_until_the_event_is_delivered() {
     let pending = service.store.pending_audits().await.unwrap();
     assert_eq!(pending.len(), 1);
     assert_eq!(pending[0].action, TokenAuditAction::Deleted);
-    assert!(service.store.put(&token).await.is_err());
+    service.store.put(&token).await.unwrap();
 
     audit.succeed();
     assert_eq!(TestFixture::drain(&service, audit.clone()).await, 1);
@@ -180,7 +180,6 @@ async fn a_deleted_token_keeps_its_tombstone_until_the_event_is_delivered() {
         audit.events().last().unwrap().action,
         TokenAuditAction::Deleted
     );
-    service.store.put(&token).await.unwrap();
     assert_eq!(
         service
             .store
