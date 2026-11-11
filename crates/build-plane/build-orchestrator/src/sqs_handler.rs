@@ -1,9 +1,9 @@
 use crate::{context::RsOrchestratorContext, tasks::task::Task};
-use aws_lambda_events::event::sqs::{SqsBatchResponse, SqsEvent, SqsMessage as SqsRecord};
+use aws_lambda_events::event::sqs::{SqsBatchResponse, SqsEvent, SqsMessage};
 use futures::{StreamExt, stream};
 use lambda_runtime::LambdaEvent;
 use platform_errors::{BpError, BpResult, ErrorType, SqsError};
-use platform_messages::sqs_message::SqsMessage;
+use platform_messages::sqs_message::SqsMessage as PlatformSqsMessage;
 use platform_metrics::{route::RouteMetrics, sqs::SqsMetrics};
 use platform_time::{deadline::Deadline, request_context::RequestContext};
 
@@ -61,13 +61,13 @@ impl SqsHandler {
     async fn handle_sqs_record(
         &self,
         request_context: RequestContext<&RsOrchestratorContext>,
-        record: &SqsRecord,
+        record: &SqsMessage,
     ) -> BpResult<()> {
         let body = record
             .body
             .as_deref()
             .ok_or_else(|| BpError::Sqs(SqsError::MissingMessageBody))?;
-        let message: SqsMessage = serde_json::from_str(body)?;
+        let message: PlatformSqsMessage = serde_json::from_str(body)?;
         let dedup = request_context.context.dedup.clone();
         let Some(dedup_guard) = dedup.claim(&message) else {
             tracing::info!(
