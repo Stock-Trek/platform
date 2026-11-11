@@ -256,6 +256,31 @@ async fn missing_vault_indexes_are_rebuilt_from_tokens() {
 }
 
 #[tokio::test]
+async fn empty_vault_indexes_are_rebuilt_from_tokens() {
+    let fixture = VaultFixture::new();
+    TestFixture::add_token(&fixture.service, "token-a", OWNER).await;
+    fixture
+        .service
+        .store
+        .put_owner_index(&OwnerIndex::new(OWNER))
+        .await
+        .unwrap();
+
+    let tokens = fixture.service.tokens_for_owner(OWNER).await.unwrap();
+
+    assert_eq!(tokens.len(), 1);
+    assert_eq!(tokens[0].id(), "token-a");
+    let index = fixture
+        .service
+        .store
+        .owner_index(OWNER)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(IndexAssertions::entry_ids(&index), vec!["token-a"]);
+}
+
+#[tokio::test]
 async fn stale_vault_index_entries_are_rebuilt_from_tokens() {
     let fixture = VaultFixture::new();
     let token = TestFixture::add_token(&fixture.service, "token-a", OWNER).await;

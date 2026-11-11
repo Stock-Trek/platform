@@ -14,6 +14,9 @@ impl AuthService {
                 index.owner()
             )));
         }
+        if index.is_empty() {
+            return self.tokens_from_owner_scan(owner).await;
+        }
         match self.tokens_from_owner_index(owner, &index).await {
             Ok(tokens) => Ok(tokens),
             Err(error) => {
