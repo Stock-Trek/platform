@@ -22,7 +22,9 @@ fn canonical_payload_contains_the_routing_fields() {
 async fn signature_binds_the_routing_fields() {
     let (service, auth_service, token) = Fixture::service().await;
     let request = Fixture::unsigned(OWNER);
-    let submission = service.sign(&request).await.unwrap();
+    let submission = Fixture::sign(&service, &auth_service, &request)
+        .await
+        .unwrap();
     let now = Utc::now();
 
     let reowned = request.clone().with_owner("other-owner");
@@ -66,7 +68,9 @@ async fn normalizes_the_request_owner() {
     let (service, auth_service, token) = Fixture::service().await;
     let request = Fixture::unsigned(&format!("  {OWNER}  "));
 
-    let submission = service.sign(&request).await.unwrap();
+    let submission = Fixture::sign(&service, &auth_service, &request)
+        .await
+        .unwrap();
 
     assert_eq!(submission.owner(), OWNER);
     assert!(
@@ -126,7 +130,7 @@ async fn signs_for_the_authenticated_owner_not_the_body_owner() {
 
 #[tokio::test]
 async fn rejects_an_account_that_the_owner_does_not_track() {
-    let (service, _, _) = Fixture::service().await;
+    let (service, auth_service, _) = Fixture::service().await;
     let portfolio = Arc::new(PortfolioService::in_memory());
     let account = AccountKey::from((CexId::Binance, AccountId("account-1".to_string())));
     portfolio
@@ -135,18 +139,22 @@ async fn rejects_an_account_that_the_owner_does_not_track() {
         .unwrap();
     let service = service.with_portfolio_service(portfolio);
 
-    let error = service.sign(&Fixture::unsigned(OWNER)).await;
+    let error = Fixture::sign(&service, &auth_service, &Fixture::unsigned(OWNER)).await;
 
     assert!(error.is_err());
 }
 
 #[tokio::test]
 async fn accepts_an_account_tracked_by_the_owner() {
-    let (service, _, _) = Fixture::service().await;
+    let (service, auth_service, _) = Fixture::service().await;
     let portfolio = Arc::new(PortfolioService::in_memory());
     let account = AccountKey::from((CexId::Binance, AccountId("account-1".to_string())));
     portfolio.track_user_account(OWNER, account).await.unwrap();
     let service = service.with_portfolio_service(portfolio);
 
-    assert!(service.sign(&Fixture::unsigned(OWNER)).await.is_ok());
+    assert!(
+        Fixture::sign(&service, &auth_service, &Fixture::unsigned(OWNER))
+            .await
+            .is_ok()
+    );
 }

@@ -1,8 +1,8 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
+use super::support_tests::TestFixture;
 use crate::{ApiToken, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BpError};
-use secrecy::{ExposeSecret, SecretString};
+use secrecy::SecretString;
 
 #[tokio::test]
 async fn finds_tokens_by_owner() {
@@ -67,25 +67,50 @@ async fn finds_tokens_with_a_normalized_owner() {
 }
 
 #[tokio::test]
-async fn signs_order_requests_for_the_owner() {
+async fn selects_a_token_with_the_required_scope_for_an_owner() {
     let service = TestFixture::service();
-    let token = TestFixture::add_token(&service, "token-a", "owner-a").await;
     let now = Utc::now();
+    let read_options = TokenOptions::new(
+        TokenExpiry::After(Duration::days(30)),
+        [TokenScope::OrdersRead],
+    );
+    let write_options = TokenOptions::new(
+        TokenExpiry::After(Duration::days(30)),
+        [TokenScope::OrdersWrite],
+    );
+    TestFixture::add_token_at(&service, "token-a", "owner-a", now, read_options).await;
+    let writer =
+        TestFixture::add_token_at(&service, "token-z", "owner-a", now, write_options).await;
 
-    let signed = service
-        .sign_order_request_for_owner("owner-a", ORDER_REQUEST, now, now)
+    let selected = service
+        .token_for_owner_with_scope("owner-a", TokenScope::OrdersWrite, now)
         .await
         .unwrap();
 
-    assert_eq!(signed.token_id(), token.id());
-    assert!(!signed.envelope().contains(token.secret().expose_secret()));
-    assert!(
-        service
-            .verify_order_request(token.id(), ORDER_REQUEST, signed.envelope(), now)
-            .await
-            .unwrap()
-            .is_valid()
+    assert_eq!(selected.id(), writer.id());
+}
+
+#[tokio::test]
+async fn selecting_a_token_for_an_owner_requires_the_required_scope() {
+    let service = TestFixture::service();
+    let now = Utc::now();
+    let read_options = TokenOptions::new(
+        TokenExpiry::After(Duration::days(30)),
+        [TokenScope::OrdersRead],
     );
+    TestFixture::add_token_at(&service, "token-a", "owner-a", now, read_options).await;
+
+    let error = service
+        .token_for_owner_with_scope("owner-a", TokenScope::OrdersWrite, now)
+        .await;
+
+    assert!(matches!(
+        error,
+        Err(BpError::Auth(AuthError::InvalidField {
+            field: "scope",
+            ..
+        }))
+    ));
 }
 
 #[tokio::test]
@@ -150,51 +175,4 @@ async fn chooses_the_most_recently_used_token() {
 
     assert_eq!(selected.id(), older.id());
     assert_ne!(selected.id(), newer.id());
-}
-
-#[tokio::test]
-async fn signing_for_an_owner_uses_a_token_with_the_required_scope() {
-    let service = TestFixture::service();
-    let now = Utc::now();
-    let read_options = TokenOptions::new(
-        TokenExpiry::After(Duration::days(30)),
-        [TokenScope::OrdersRead],
-    );
-    let write_options = TokenOptions::new(
-        TokenExpiry::After(Duration::days(30)),
-        [TokenScope::OrdersWrite],
-    );
-    TestFixture::add_token_at(&service, "token-a", "owner-a", now, read_options).await;
-    let writer =
-        TestFixture::add_token_at(&service, "token-z", "owner-a", now, write_options).await;
-
-    let signed = service
-        .sign_order_request_for_owner("owner-a", ORDER_REQUEST, now, now)
-        .await
-        .unwrap();
-
-    assert_eq!(signed.token_id(), writer.id());
-}
-
-#[tokio::test]
-async fn signing_for_an_owner_requires_a_token_with_the_required_scope() {
-    let service = TestFixture::service();
-    let now = Utc::now();
-    let read_options = TokenOptions::new(
-        TokenExpiry::After(Duration::days(30)),
-        [TokenScope::OrdersRead],
-    );
-    TestFixture::add_token_at(&service, "token-a", "owner-a", now, read_options).await;
-
-    let error = service
-        .sign_order_request_for_owner("owner-a", ORDER_REQUEST, now, now)
-        .await;
-
-    assert!(matches!(
-        error,
-        Err(BpError::Auth(AuthError::InvalidField {
-            field: "scope",
-            ..
-        }))
-    ));
 }
