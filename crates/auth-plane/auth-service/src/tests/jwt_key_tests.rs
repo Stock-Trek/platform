@@ -4,6 +4,9 @@ use crate::{
 };
 use chrono::{Duration, Utc};
 use jsonwebtoken::{Algorithm, decode_header, jwk::JwkSet};
+use platform_sigv4::{SigV4Config, SigV4Registry};
+
+const JWKS_ACCESS_KEY: &str = "AKIDJWKS";
 
 struct Fixture;
 
@@ -14,6 +17,12 @@ impl Fixture {
 
     fn signing_key(key_id: &str) -> JwtSigningKey {
         JwtSigningKey::generate(key_id).unwrap()
+    }
+
+    fn sigv4() -> SigV4Config {
+        let registry =
+            SigV4Registry::from_parts(JWKS_ACCESS_KEY, "jwks-secret", OWNER, None).unwrap();
+        SigV4Config::new(registry, "eu-west-1", "execute-api").unwrap()
     }
 
     async fn issued_token() -> (crate::AuthService, String, OrderJwtClaims) {
@@ -121,9 +130,13 @@ fn signs_with_an_imported_pkcs8_pem_key() {
 #[tokio::test]
 async fn serves_jwks_at_the_well_known_endpoint() {
     let service = TestFixture::service();
-    let server = JwtServer::bind("127.0.0.1:0".parse().unwrap(), service.clone())
-        .await
-        .unwrap();
+    let server = JwtServer::bind_with_sigv4(
+        "127.0.0.1:0".parse().unwrap(),
+        service.clone(),
+        Fixture::sigv4(),
+    )
+    .await
+    .unwrap();
     let address = server.local_addr().unwrap();
     let task = tokio::spawn(server.serve());
 

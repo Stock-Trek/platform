@@ -10,6 +10,11 @@ const VAULT_TOKEN: &str = "AUTH_SERVICE_VAULT_TOKEN";
 const LOG_FILTER: &str = "RUST_LOG";
 const JWT_KEY_ID: &str = "AUTH_SERVICE_JWT_KEY_ID";
 const JWT_PRIVATE_KEY_PEM: &str = "AUTH_SERVICE_JWT_PRIVATE_KEY_PEM";
+const SIGV4_CREDENTIALS: &str = "SIGV4_CREDENTIALS";
+const SIGV4_REGION: &str = "SIGV4_REGION";
+const SIGV4_SERVICE: &str = "SIGV4_SERVICE";
+const SIGV4_CREDENTIALS_JSON: &str =
+    r#"[{"accessKeyId":"AKID","secretAccessKey":"secret","owner":"runner-owner"}]"#;
 
 struct Fixture;
 
@@ -30,6 +35,12 @@ impl Fixture {
             (VAULT_TOKEN.to_string(), "vault-token".to_string()),
             (JWT_KEY_ID.to_string(), "auth-service".to_string()),
             (JWT_PRIVATE_KEY_PEM.to_string(), Self::key_pem()),
+            (
+                SIGV4_CREDENTIALS.to_string(),
+                SIGV4_CREDENTIALS_JSON.to_string(),
+            ),
+            (SIGV4_REGION.to_string(), "eu-west-1".to_string()),
+            (SIGV4_SERVICE.to_string(), "execute-api".to_string()),
         ])
     }
 
