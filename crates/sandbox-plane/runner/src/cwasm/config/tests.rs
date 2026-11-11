@@ -9,13 +9,21 @@ const MAX_GUEST_MEMORY_BYTES: &str = "CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES";
 const MAX_TABLE_ELEMENTS: &str = "CWASM_INVOKER_MAX_TABLE_ELEMENTS";
 const CWASM_DOWNLOAD_TIMEOUT_SECS: &str = "CWASM_INVOKER_CWASM_DOWNLOAD_TIMEOUT_SECS";
 const MAX_CWASM_BYTES: &str = "CWASM_INVOKER_MAX_CWASM_BYTES";
+const SIGV4_CREDENTIALS: &str = "SIGV4_CREDENTIALS";
+const SIGV4_REGION: &str = "SIGV4_REGION";
+const SIGV4_SERVICE: &str = "SIGV4_SERVICE";
+const SIGV4_CREDENTIALS_JSON: &str =
+    r#"[{"accessKeyId":"AKID","secretAccessKey":"secret","owner":"runner-owner"}]"#;
 
-const ALL_VARS: [(&str, &str); 5] = [
+const ALL_VARS: [(&str, &str); 8] = [
     (EXECUTION_TIMEOUT_SECS, "45"),
     (MAX_GUEST_MEMORY_BYTES, "1048576"),
     (MAX_TABLE_ELEMENTS, "2048"),
     (CWASM_DOWNLOAD_TIMEOUT_SECS, "15"),
     (MAX_CWASM_BYTES, "4096"),
+    (SIGV4_CREDENTIALS, SIGV4_CREDENTIALS_JSON),
+    (SIGV4_REGION, "eu-west-1"),
+    (SIGV4_SERVICE, "execute-api"),
 ];
 
 struct Fixture;
@@ -60,6 +68,8 @@ fn reads_every_value_from_the_environment() {
     assert_eq!(config.execution.max_table_elements, 2048);
     assert_eq!(config.cwasm.download_timeout, Duration::from_secs(15));
     assert_eq!(config.cwasm.max_bytes.get(), 4096);
+    assert_eq!(config.sigv4.region(), "eu-west-1");
+    assert_eq!(config.sigv4.service(), "execute-api");
 }
 
 #[test]
@@ -91,6 +101,8 @@ fn rejects_zero_and_invalid_values() {
         (CWASM_DOWNLOAD_TIMEOUT_SECS, "0"),
         (MAX_CWASM_BYTES, "0"),
         (MAX_CWASM_BYTES, "not-a-number"),
+        (SIGV4_CREDENTIALS, "not-json"),
+        (SIGV4_CREDENTIALS, "[]"),
     ] {
         assert!(
             Fixture::config(&Fixture::with(name, value)).is_err(),

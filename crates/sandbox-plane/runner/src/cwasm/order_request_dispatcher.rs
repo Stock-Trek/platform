@@ -1,6 +1,7 @@
 use super::JwtCache;
 use platform_errors::{BpError, BpResult};
 use platform_messages::order_request::UnsignedOrderRequest;
+use platform_sigv4::SigV4Config;
 use platform_types::url_scheme::UrlScheme;
 use stock_trek::{
     actions::ResolvedAction,
@@ -15,7 +16,27 @@ pub struct OrderRequestDispatcher {
 }
 
 impl OrderRequestDispatcher {
+    #[allow(dead_code)]
     pub fn new(url: &str, auth_service_url: &str, owner: impl Into<String>) -> BpResult<Self> {
+        let owner = owner.into();
+        Self::with_jwt(url, owner.clone(), JwtCache::new(auth_service_url, owner)?)
+    }
+
+    pub fn with_sigv4(
+        url: &str,
+        auth_service_url: &str,
+        owner: impl Into<String>,
+        sigv4: &SigV4Config,
+    ) -> BpResult<Self> {
+        let owner = owner.into();
+        Self::with_jwt(
+            url,
+            owner.clone(),
+            JwtCache::with_sigv4(auth_service_url, owner, sigv4)?,
+        )
+    }
+
+    fn with_jwt(url: &str, owner: String, jwt: JwtCache) -> BpResult<Self> {
         let url = reqwest::Url::parse(url)
             .map_err(|error| BpError::config_invalid_source("order_request_url", error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
@@ -24,14 +45,12 @@ impl OrderRequestDispatcher {
                 "must use the http or https scheme",
             ));
         }
-        let owner = owner.into();
         if owner.trim().is_empty() {
             return Err(BpError::auth_invalid_field("owner", "must not be empty"));
         }
         let client = reqwest::Client::builder()
             .build()
             .map_err(BpError::external)?;
-        let jwt = JwtCache::new(auth_service_url, owner.clone())?;
         Ok(Self {
             url,
             owner,

@@ -38,6 +38,9 @@ required in some configurations, the condition is stated in its description.
 | `S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES` | Build orchestrator, Build agent | Maximum accepted source archive size, in bytes. |
 | `SECRETS_SSM_DECRYPT` | Backfiller, Git webhook | Whether SSM parameters are decrypted, parsed as `true` or `false`. |
 | `SECRETS_SSM_PATH` | Backfiller, Git webhook | SSM parameter path to load secrets from. A leading `/` is added when missing, and a trailing `/` is rejected. |
+| `SIGV4_CREDENTIALS` | Auth service, CWASM invoker | JSON array of SigV4 caller credentials. Each entry has `accessKeyId`, `secretAccessKey`, `owner`, and an optional `sessionToken`. Owners and access key IDs must be unique. |
+| `SIGV4_REGION` | Auth service, CWASM invoker | Region used in the SigV4 credential scope. |
+| `SIGV4_SERVICE` | Auth service, CWASM invoker | Service name used in the SigV4 credential scope. |
 | `SQS_QUEUE_URL` | Build orchestrator, Git webhook | URL of the SQS queue that carries build requests. |
 
 ### Optional
@@ -278,7 +281,8 @@ their details.
 ### Auth service
 
 The auth service issues short-lived HS256 JWTs for owners with an active order-write token and
-verifies JWTs presented with order requests.
+verifies JWTs presented with order requests. A JWT request must carry a valid SigV4 signature from
+a configured caller, and the requested owner must match the owner bound to the caller's access key.
 
 #### Required
 
@@ -331,6 +335,9 @@ auth relay service delivers them to SQS.
 | `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. |
 | `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. |
 | `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. |
+
+The CWASM invoker also requires the shared `SIGV4_CREDENTIALS`, `SIGV4_REGION`, and `SIGV4_SERVICE`
+variables listed under [Shared variables](#shared-variables).
 
 ## Secrets
 

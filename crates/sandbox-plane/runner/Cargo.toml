@@ -21,6 +21,7 @@ hex = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http", "storage"] }
 platform-messages = { workspace = true }
+platform-sigv4 = { workspace = true }
 platform-types = { workspace = true }
 rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json", "rustls", "stream"] }

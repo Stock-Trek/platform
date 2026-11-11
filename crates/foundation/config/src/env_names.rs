@@ -35,5 +35,11 @@ pub const S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES: &str = "S3_MAX_SOURCE_ARCHIVE_SIZE_B
 /// Lifetime of S3 signed URLs, in seconds.
 pub const S3_SIGNED_URL_EXPIRY_SECS: &str = "S3_SIGNED_URL_EXPIRY_SECS";
 
+pub const SIGV4_CREDENTIALS: &str = "SIGV4_CREDENTIALS";
+
+pub const SIGV4_REGION: &str = "SIGV4_REGION";
+
+pub const SIGV4_SERVICE: &str = "SIGV4_SERVICE";
+
 /// URL of the SQS queue that carries build requests.
 pub const SQS_QUEUE_URL: &str = "SQS_QUEUE_URL";

@@ -36,6 +36,7 @@ platform-messages = { path = "crates/foundation/messages" }
 platform-metrics = { path = "crates/foundation/metrics" }
 platform-nats = { path = "crates/foundation/nats" }
 platform-proto-gen = { path = "crates/foundation/proto-gen" }
+platform-sigv4 = { path = "crates/foundation/sigv4" }
 platform-type-bridge = { path = "crates/foundation/type-bridge" }
 
 platform-time = { path = "crates/foundation/time" }
