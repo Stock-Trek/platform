@@ -118,6 +118,10 @@ impl PortfolioService {
         self.untrack_user_account(owner, account).await
     }
 
+    pub fn is_tracked_for_owner(&self, owner: &str, account: &AccountKey) -> bool {
+        self.state.read().is_tracked_for_owner(owner, account)
+    }
+
     pub fn account_portfolio(&self, account: &AccountKey) -> Option<AccountPortfolio> {
         self.state.read().portfolio(account).cloned()
     }

@@ -1,6 +1,6 @@
 use crate::{
     OrderRequestDelivery, OrderRequestServer, OrderRequestService, PortfolioAuthService,
-    PortfolioConfig,
+    PortfolioConfig, PortfolioService,
 };
 use platform_errors::{BpError, BpResult};
 use platform_runtime::Service;
@@ -14,10 +14,11 @@ impl PortfolioRunner {
     pub async fn run(config: PortfolioConfig) -> BpResult<()> {
         SERVICE.init_logging(config.log_filter())?;
         let auth_service = PortfolioAuthService::connect(config.auth().clone()).await?;
-        let service = Arc::new(OrderRequestService::with_jwks_url(
-            auth_service,
-            config.auth().jwks_url(),
-        )?);
+        let portfolio = Arc::new(PortfolioService::in_memory());
+        let service = Arc::new(
+            OrderRequestService::with_jwks_url(auth_service, config.auth().jwks_url())?
+                .with_portfolio_service(portfolio),
+        );
         let delivery = Arc::new(OrderRequestDelivery::new(
             config.order_request().delivery_url(),
         )?);

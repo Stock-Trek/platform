@@ -9,7 +9,7 @@ use hyper::{
     service::service_fn,
 };
 use hyper_util::rt::TokioIo;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{AuthError, BpError, BpResult};
 use platform_messages::order_request::UnsignedOrderRequest;
 use std::{convert::Infallible, net::SocketAddr, sync::Arc};
 use tokio::net::TcpListener;
@@ -117,19 +117,29 @@ impl OrderRequestServer {
         }
         let unsigned: UnsignedOrderRequest = serde_json::from_slice(&body)
             .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
-        service
-            .verify_jwt(&jwt, &unsigned, Utc::now())
+        let claims = service
+            .authenticate(&jwt, Utc::now())
             .await
             .map_err(|error| (StatusCode::UNAUTHORIZED, error.to_string()))?;
         let submission = service
-            .sign(&unsigned)
+            .sign_for_caller(&unsigned, &claims)
             .await
-            .map_err(|error| (StatusCode::INTERNAL_SERVER_ERROR, error.to_string()))?;
+            .map_err(Self::sign_error)?;
         delivery
             .deliver(&submission)
             .await
             .map_err(|error| (StatusCode::BAD_GATEWAY, error.to_string()))?;
         Ok(submission)
+    }
+
+    fn sign_error(error: BpError) -> (StatusCode, String) {
+        let status = match &error {
+            BpError::Auth(AuthError::InvalidField {
+                field: "account", ..
+            }) => StatusCode::FORBIDDEN,
+            _ => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+        (status, error.to_string())
     }
 
     fn bearer(request: &Request<Incoming>) -> Result<String, (StatusCode, String)> {
