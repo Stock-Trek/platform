@@ -1,4 +1,4 @@
-# Portfolio/order path production options
+# Portfolio/order path production plan
 
 Status: investigation only. This document makes no code changes, as requested by
 issue #569.
@@ -6,7 +6,7 @@ issue #569.
 ## Question
 
 What would it take for the portfolio/order path to serve real traffic, and what
-are the viable ways to close the gap?
+is the actionable plan for closing the gap?
 
 ## Current path
 
@@ -42,201 +42,131 @@ read API for the portfolio service and does not change the findings above.
 
 ## Requirements
 
-### Functional
+Functional: the account registry must be authoritative, durable, auditable, and
+readable at startup; registration changes must go through a control-plane API,
+not process memory; the service must subscribe to exchange streams for tracked
+accounts; order authorization must remain owner-scoped; owners may read their
+own accounts and portfolios while admins may mutate any mapping; state must
+survive restarts and rolling deployments.
 
-- An account registry must be authoritative, durable, and readable at startup.
-- New accounts must be registered and removed through a supported API or
-  control-plane event, not by editing process memory.
-- The service must subscribe to exchange portfolio streams for tracked
-  accounts and apply updates to local state.
-- Order authorization must remain owner-scoped: a caller may submit an order
-  only for an account tracked for that owner.
-- Operators and users need read access, subject to different authorization:
-  - owner read: own accounts and portfolios only;
-  - admin write: register/remove accounts for any owner.
-- Account and portfolio state must survive restarts and rolling deployments.
+Operational: reconnects need backoff, health reporting, and alerting; updates
+need versioning and duplicate handling; staleness policy must be explicit;
+metrics must cover connections, subscription size, update age, apply failures,
+consumer lag, and rejected orders; credentials must stay in the existing
+secret-management path.
 
-### Operational
+Correctness: ownership changes and subscriptions must not leave an authorizable
+account without a feed or a feed without an authorizable account; removal must
+stop the subscription and clear cached state; untracked updates must be ignored;
+restore must not resurrect an account that was explicitly removed.
 
-- Reconnects need backoff and a health signal.
-- Portfolio updates need ordering/versioning and duplicate handling.
-- Bounded staleness must be explicit; the order path must decide whether stale
-  portfolio data is acceptable.
-- The service must expose metrics for connected exchanges, subscription size,
-  update age, apply failures, persistence failures, and rejected orders.
-- Exchange credentials must live in the existing secret-management path, not
-  in environment variables or source control.
+## Proposed design: control-plane registry plus dedicated connector
 
-### Correctness
+This combines the former Options B and C into one target architecture.
 
-- Account ownership changes and feed subscriptions must be applied atomically
-  enough that a failed subscription does not create an authorizable account
-  without a feed, or a feed without an authorizable account.
-- Removing an account must stop its subscription and remove its cached
-  portfolio without removing another owner's shared view.
-- Updates for untracked accounts must be ignored, as they are today.
-- State restore must not resurrect an account that was explicitly removed.
+The control plane owns account ownership. An authoritative store holds
+owner/account mappings; admin writes and owner-scoped reads go through its API.
+Every mutation writes an audit record and a transactional outbox event, making
+the control plane the only writer of ownership state.
 
-## Options
+A dedicated connector service owns exchange connectivity. Connectors are
+partitioned by exchange, consume ownership events, load credentials from Vault,
+open user-data streams, and publish normalised, versioned updates. They do not
+serve orders or store ownership state.
 
-### Option A: Complete the in-process service
+The portfolio/order service owns only a local read model. It consumes ownership
+and update streams, materialises tracked accounts and latest portfolios, and
+authorises orders from that state. It holds no exchange credentials and no
+runtime mutation API outside the event consumers.
 
-Keep the current single-service design and add the missing pieces:
+NATS JetStream carries the contracts: `portfolio.ownership.changed.v1`
+(owner/account add or remove with ownership version and audit id),
+`portfolio.updates.v1` (normalised updates with account id, owner, exchange
+sequence or version, and timestamp), and `portfolio.connector.health.v1`
+(connection state, subscription count, and last-update age). Streams need
+replay, duplicate detection, durable consumers, and checkpoints; updates are
+idempotent and consumers ignore duplicates and older versions.
 
-- an account-registry trait with a durable implementation;
-- an admin/read HTTP surface, preferably on a separate internal listener;
-- a real connector for one exchange, plus an inbound update channel from the
-  connection to `PortfolioService`;
-- startup restore and write-through persistence;
-- feed reconnect, health, metrics, and an end-to-end order test.
+Failure semantics:
 
-The account registry could use:
-- Vault KV, which is already a dependency and supports compare-and-swap;
-- a new control-plane database (PostgreSQL/DynamoDB) if account management is a
-  product feature;
-- Valkey for cached state plus an authoritative database, never Valkey alone.
+- Orders are rejected until the ownership event is materialised.
+- Orders fail closed when portfolio data exceeds the configured staleness bound,
+  unless a documented policy explicitly downgrades that behaviour.
+- After restart, the service replays from its checkpoint and reports unready
+  until caught up.
+- Removing a mapping stops the subscription and clears the read-model entry;
+  late updates are ignored by version and ownership check.
+- Every replica consumes the same streams, so authorization is consistent
+  without sticky routing.
 
-**Advantages:** smallest number of moving parts; reuses the existing server and
-auth stack; low update latency; easiest path to a first working deployment.
+## Actionable plan
 
-**Disadvantages:** exchange-specific protocol and credential handling live in
-the order-serving process; every replica may open its own exchange connections;
-a connector bug can affect order serving; multi-replica ordering and failover
-need explicit design; adding each exchange expands the order service.
+### Phase 1: make account ownership authoritative
 
-**Best for:** the first production exchange, a small deployment, or a
-transitional step before a dedicated gateway.
+1. Define the ownership model and lifecycle: single-owner or shared accounts,
+   removal semantics, and conflict rules.
+2. Add the authoritative store with schema, migrations, and audit history.
+3. Add a control-plane admin API for add/remove mapping and an owner-scoped read
+   API for accounts. Put admin endpoints on a separate internal listener with
+   its own authorization scope.
+4. Publish ownership events through a transactional outbox. Include a monotonic
+   ownership version so consumers can reject stale events.
+5. Replace portfolio-service startup with an ownership-event consumer that
+   builds the local registry, persists its checkpoint, and fails or reports
+   degraded if it cannot reach the stream.
+6. Remove runtime reliance on the in-memory mutation methods. Keep them only
+   for tests; production writes come from the event consumer.
+7. Add tests for add, remove, restart, replay, duplicate events, and owner
+   isolation.
 
-### Option B: Dedicated portfolio-connector service or sidecar
+Exit criteria: an operator can add and remove a mapping through an audited API;
+a restart preserves the mapping; an owner can submit an order for a tracked
+account while another owner and an untracked account are rejected.
 
-Move exchange connectivity out of the order-serving process:
+### Phase 2: add the connector and inbound update path
 
-- a connector service connects to exchange account streams, owns credentials,
-  and publishes versioned portfolio updates to NATS JetStream;
-- the portfolio service consumes updates and maintains an in-memory read model;
-- account subscription commands are published to the connector;
-- the order server reads the local materialized state, with an explicit
-  staleness policy.
+1. Define the versioned portfolio-update schema and the order path's staleness
+   contract before implementing a connector.
+2. Extend the feed contract with an inbound update sink so connector output can
+   reach `PortfolioService::apply_update`.
+3. Implement the first exchange connector:
+   - credential loading and rotation from Vault;
+   - subscribe/unsubscribe from ownership events;
+   - reconnect and backoff with listen-key renewal where required;
+   - exchange sequence handling, normalisation, and untracked-account filtering;
+   - publishing to `portfolio.updates.v1` and health to
+     `portfolio.connector.health.v1`.
+4. Add a durable portfolio-service consumer with idempotent apply, checkpointing,
+   duplicate/stale rejection, and consumer-lag metrics.
+5. Add the order-path freshness gate and document whether stale data rejects
+   orders or only degrades non-authorization features.
+6. Persist or replay enough state that a rolling restart has a bounded recovery
+   time; do not serve order traffic from an empty read model.
+7. Add an integration test that registers an account, applies a real connector
+   update, submits an order, restarts the service, and verifies authorization
+   before and after recovery.
 
-One connector per exchange (or a connector deployment partitioned by exchange)
-avoids duplicate exchange connections across order-service replicas.
+Exit criteria: real portfolio updates are applied for tracked accounts; update
+age and consumer lag are observable; orders respect ownership and the staleness
+policy; restart and replay are covered by tests.
 
-**Advantages:** isolates exchange protocols and failures; one exchange
-connection can serve several order-service replicas; JetStream provides replay
-and recovery; the order service stays small; exchange connectors can be scaled
-and deployed independently.
+### Phase 3: production hardening and rollout
 
-**Disadvantages:** more services and a NATS dependency; updates are eventually
-consistent; needs idempotent apply, sequencing, consumer checkpoints, and
-lag/health monitoring; account-registry events and subscription commands need
-a clear ordering contract.
+1. Provision NATS JetStream with retention, replication, backup, and disaster
+   recovery appropriate to the update replay window.
+2. Define connector deployment topology: one connector per exchange, scaling,
+   failover, and credential ownership.
+3. Add dashboards and alerts for connector health, update age, consumer lag,
+   apply failures, ownership-event failures, and rejected orders.
+4. Run the new path in shadow/read-only mode beside the current service, compare
+   outputs, then enable order authorization behind a feature flag.
+5. Load-test reconnects, exchange rate limits, event floods, and stream replay.
+6. Document runbooks for stuck consumers, stale feeds, failed credential
+   rotation, and ownership rollback.
 
-**Best for:** multiple exchanges, multiple order-service replicas, or any
-deployment where exchange connectivity must not share a failure domain with
-order serving.
-
-### Option C: Control-plane-owned account registry
-
-Make account ownership a control-plane concern rather than portfolio-service
-state:
-
-- store owner/account mappings in an authoritative control-plane store;
-- publish account-added/account-removed events;
-- portfolio-service consumers materialize the mapping locally;
-- the connector reacts to the same events.
-
-This can be combined with Option A or Option B. It is the cleanest answer to
-"who owns this CEX account?" and gives one place to audit changes.
-
-**Advantages:** one source of truth for ownership; supports user self-service
-and operator tooling; avoids duplicating account administration in each
-portfolio replica; natural fit for multi-tenant authorization.
-
-**Disadvantages:** requires a product-level ownership model and a new
-persistent store or an extension of the auth/control plane; event delivery and
-migration need design; higher initial effort.
-
-**Best for:** a real multi-tenant product, as opposed to a single-operator
-deployment.
-
-## Comparison
-
-| Option | Real portfolio updates | Durable ownership | Multi-replica safe | Exchange isolation | New infrastructure | Relative effort |
-| --- | --- | --- | --- | --- | --- | --- |
-| A. In-process completion | Yes | Yes, via chosen store | Needs explicit sync/leader design | No | Maybe a database | Medium |
-| B. Connector service + read model | Yes | Depends on registry option | Yes, via JetStream | Yes | NATS, connector deployment | High |
-| C. Control-plane registry | Not by itself | Yes | Yes | Depends on feed choice | Control-plane store | High |
-
-## Recommendation
-
-Use a phased approach. Do not treat a connector as the first task; without an
-authoritative account registry and a supported admin path, a connector has
-nothing to subscribe to and operators cannot repair state.
-
-**Phase 1: make account ownership durable and observable.**
-
-- Introduce an account-registry abstraction with an in-memory implementation
-  for tests and a durable implementation for production. Reuse Vault if the
-  deployment is small; prefer a control-plane store if ownership is a product
-  feature.
-- Add an internal admin/read HTTP surface:
-  - owner-scoped `GET` for tracked accounts and portfolios;
-  - admin-scoped add/remove for accounts and owner mappings;
-  - explicit audit logging for every mutation.
-- Load the registry at startup, restore portfolios if they are persisted, and
-  fail startup if the configured account source cannot be read.
-- Add an end-to-end test that registers an account, starts the server, submits
-  an order, and verifies both acceptance for the owner and rejection for a
-  different owner.
-
-This phase alone fixes the empty-startup rejection and makes authorization
-usable, but portfolios will still be empty or stale. It is not sufficient for a
-real trading deployment.
-
-**Phase 2: add the update path.**
-
-- Extend the feed contract with an inbound `PortfolioUpdate` sink (channel or
-  trait callback). A connector that only receives account sets cannot update
-  the service today.
-- Implement the first real exchange connector, including credential loading,
-  reconnect/backoff, sequence or version handling, and untracked-account
-  filtering.
-- Persist portfolio snapshots with a bounded staleness marker, or rebuild them
-  from the exchange on startup. Make the order path's staleness policy
-  explicit.
-- Add metrics and alerts for connection state, update age, apply failures, and
-  persistence failures.
-
-**Phase 3: choose the long-term topology.**
-
-- For one exchange and a small deployment, keep Option A and add a single
-  connector leader or partition accounts across replicas.
-- For multiple exchanges or multiple order-service replicas, move to Option B
-  and use NATS JetStream for replayable updates. Combine it with Option C if
-  account ownership is user-facing.
-
-The recommended target is **Option C for ownership + Option B for updates**,
-with Option A as the transitional implementation.
-
-## Open questions
-
-1. Which exchange is first, and does it provide a multi-account user-data
-   stream, or only one listen key per API credential?
-2. Are CEX accounts single-owner, shareable, or global? `PortfolioState`
-   currently supports global and per-owner tracking, but the product model is
-   not documented.
-3. Is stale portfolio data acceptable for order authorization? Today the order
-   path checks ownership only, not balances, so the answer may differ for
-   authorization and strategy evaluation.
-4. Should account registration be self-service, operator-only, or driven by an
-   external control plane?
-5. Where should admin endpoints live: a separate internal listener, a
-   service-to-service API, or the existing order-request listener with an
-   additional authorization scope?
-6. How should exchange credentials be associated with owners and accounts, and
-   what rotation/revocation flow is required?
-7. Are there existing production accounts to migrate, or can the first
-   deployment start from an empty registry?
+Exit criteria: the service survives connector and NATS restarts without losing
+authorization state, alerts fire on stale or lagging data, and a documented
+rollback path exists.
 
 ## Acceptance criteria for closing the issue
 
@@ -250,3 +180,20 @@ with Option A as the transitional implementation.
   connection/update-age metrics.
 - An integration test covers startup, account registration, update
   application, restart, and order authorization.
+
+## Open questions
+
+1. Which exchange is first, and does it provide a multi-account user-data
+   stream, or only one listen key per API credential?
+2. Are CEX accounts single-owner, shareable, or global? `PortfolioState`
+   currently supports global and per-owner tracking, but the product model is
+   not documented.
+3. Is stale portfolio data acceptable for order authorization? Today the order
+   path checks ownership only, not balances, so the answer may differ for
+   authorization and strategy evaluation.
+4. Should account registration be self-service, operator-only, or driven by an
+   external control plane?
+5. How should exchange credentials be associated with owners and accounts, and
+   what rotation/revocation flow is required?
+6. Are there existing production accounts to migrate, or can the first
+   deployment start from an empty registry?
