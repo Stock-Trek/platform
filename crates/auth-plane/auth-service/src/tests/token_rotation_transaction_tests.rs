@@ -4,7 +4,7 @@ use crate::{
     TokenRotationTransaction, TokenStore,
 };
 use async_trait::async_trait;
-use chrono::Utc;
+use chrono::{Duration, Utc};
 use platform_errors::BpResult;
 use std::sync::{
     Arc, Mutex,
@@ -211,6 +211,29 @@ async fn rotation_transactions_assign_event_ids() {
             .transaction_id()
             .starts_with(|c: char| c.is_ascii_digit())
     );
+}
+
+#[test]
+fn rotation_ids_are_stable_across_retries() {
+    let now = Utc::now();
+    let original = TestFixture::token("token-a");
+    let replacement = RotationFixture::replacement(&original, "token-b", now);
+    let first = RotationFixture::transaction(original.clone(), replacement.clone(), now);
+    let retry = RotationFixture::transaction(original, replacement, now + Duration::seconds(30));
+
+    assert_eq!(first.transaction_id(), retry.transaction_id());
+    let first_ids: Vec<_> = first
+        .events()
+        .iter()
+        .map(|event| event.event_id())
+        .collect();
+    let retry_ids: Vec<_> = retry
+        .events()
+        .iter()
+        .map(|event| event.event_id())
+        .collect();
+    assert_eq!(first_ids, retry_ids);
+    assert_ne!(first_ids[0], first_ids[1]);
 }
 
 #[test]

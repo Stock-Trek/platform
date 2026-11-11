@@ -155,12 +155,10 @@ impl TokenStore for MemoryTokenStore {
 
     async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
         let mut state = self.state.lock();
-        if let Some(existing) = state.rotations.get(transaction.transaction_id()) {
-            return if existing.to_value() == transaction.to_value() {
-                Ok(())
-            } else {
-                Err(BpError::token_conflict(transaction.original().id()))
-            };
+        if let Some(existing) = state.rotations.get(transaction.transaction_id())
+            && !existing.has_same_rotation(transaction)
+        {
+            return Err(BpError::token_conflict(transaction.original().id()));
         }
         state.rotations.insert(
             transaction.transaction_id().to_string(),

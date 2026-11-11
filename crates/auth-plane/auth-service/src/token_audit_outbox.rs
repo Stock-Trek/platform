@@ -18,12 +18,6 @@ impl TokenAuditOutbox {
         }
     }
 
-    pub(crate) fn ensure_events_have_ids(events: &mut [TokenAuditEvent]) {
-        for event in events {
-            Self::ensure_event_id(event);
-        }
-    }
-
     fn generate_event_id() -> String {
         let random: String = rand::thread_rng()
             .sample_iter(&Alphanumeric)

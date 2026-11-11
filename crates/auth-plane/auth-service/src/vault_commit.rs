@@ -167,12 +167,38 @@ impl VaultClient {
         &self,
         transaction: &TokenRotationTransaction,
     ) -> BpResult<()> {
-        self.put_entry(
-            &transaction.storage_key(),
-            transaction.to_value(),
-            WriteCondition::Create,
-        )
-        .await
+        let key = transaction.storage_key();
+        for _ in 0..MAX_UPDATE_ATTEMPTS {
+            match self.get_value_entry(&key).await? {
+                None => match self
+                    .put_entry(&key, transaction.to_value(), WriteCondition::Create)
+                    .await
+                {
+                    Ok(()) => return Ok(()),
+                    Err(BpError::Auth(platform_errors::AuthError::TokenExists { .. })) => continue,
+                    Err(error) => return Err(error),
+                },
+                Some((data, version)) => {
+                    let existing = TokenRotationTransaction::from_value(&data)?;
+                    if !existing.has_same_rotation(transaction) {
+                        return Err(BpError::token_conflict(transaction.original().id()));
+                    }
+                    match self
+                        .put_entry(
+                            &key,
+                            transaction.to_value(),
+                            WriteCondition::Update(version),
+                        )
+                        .await
+                    {
+                        Ok(()) => return Ok(()),
+                        Err(BpError::Auth(platform_errors::AuthError::Conflict { .. })) => continue,
+                        Err(error) => return Err(error),
+                    }
+                }
+            }
+        }
+        Err(BpError::token_conflict(transaction.original().id()))
     }
 
     pub(crate) async fn pending_rotations(&self) -> BpResult<Vec<TokenRotationTransaction>> {

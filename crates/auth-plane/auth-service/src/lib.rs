@@ -38,6 +38,7 @@ mod token_options;
 mod token_purge;
 mod token_registry;
 mod token_rotation;
+mod token_rotation_identity;
 mod token_rotation_plan;
 mod token_rotation_recovery;
 mod token_rotation_transaction;

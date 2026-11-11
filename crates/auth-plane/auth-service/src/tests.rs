@@ -42,6 +42,7 @@ mod token_purge_race_tests;
 mod token_rotation_idempotency_tests;
 mod token_rotation_lineage_tests;
 mod token_rotation_recovery_tests;
+mod token_rotation_retry_tests;
 mod token_rotation_tests;
 mod token_rotation_transaction_tests;
 mod token_scope_persistence_tests;
