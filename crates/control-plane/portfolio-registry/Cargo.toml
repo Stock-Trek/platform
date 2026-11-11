@@ -1,0 +1,27 @@
+[package]
+name = "platform-portfolio-registry"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+async-trait = { workspace = true }
+aws-sdk-dynamodb = { workspace = true }
+chrono = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+platform-auth-service = { workspace = true }
+platform-aws = { workspace = true }
+platform-config = { workspace = true }
+platform-errors = { workspace = true, features = ["http"] }
+platform-nats = { workspace = true }
+platform-portfolio-ownership = { workspace = true }
+platform-runtime = { workspace = true }
+platform-types = { workspace = true }
+secrecy = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+subtle = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }

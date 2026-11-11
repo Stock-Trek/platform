@@ -1,16 +1,21 @@
 use crate::{
-    account::AccountKey,
-    feed::{NoopPortfolioFeed, PortfolioFeed},
+    feed::PortfolioFeed,
+    ownership_registry::{OwnershipApply, OwnershipRegistry},
     portfolio::{AccountPortfolio, AccountPortfolios, PortfolioUpdate},
     state::PortfolioState,
 };
 use parking_lot::RwLock;
 use platform_errors::BpResult;
+use platform_portfolio_ownership::{AccountKey, OwnershipEvent};
 use std::{collections::BTreeSet, sync::Arc};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
+#[cfg(test)]
+use crate::feed::NoopPortfolioFeed;
+
 pub struct PortfolioService {
     state: RwLock<PortfolioState>,
+    ownership: RwLock<OwnershipRegistry>,
     feed: Arc<dyn PortfolioFeed>,
 }
 
@@ -18,14 +23,17 @@ impl PortfolioService {
     pub fn new(feed: Arc<dyn PortfolioFeed>) -> Self {
         Self {
             state: RwLock::new(PortfolioState::new()),
+            ownership: RwLock::new(OwnershipRegistry::new()),
             feed,
         }
     }
 
+    #[cfg(test)]
     pub fn in_memory() -> Self {
         Self::new(Arc::new(NoopPortfolioFeed::new()))
     }
 
+    #[cfg(test)]
     pub async fn track_account(&self, account: AccountKey) -> BpResult<bool> {
         if self.state.read().is_global(&account) {
             return Ok(false);
@@ -43,6 +51,7 @@ impl PortfolioService {
         Ok(true)
     }
 
+    #[cfg(test)]
     pub async fn untrack_account(&self, account: AccountKey) -> BpResult<bool> {
         if !self.state.read().is_tracked(&account) {
             return Ok(false);
@@ -59,6 +68,7 @@ impl PortfolioService {
         Ok(true)
     }
 
+    #[cfg(test)]
     pub async fn track_user_account(
         &self,
         owner: impl Into<String>,
@@ -81,6 +91,7 @@ impl PortfolioService {
         Ok(true)
     }
 
+    #[cfg(test)]
     pub async fn untrack_user_account(&self, owner: &str, account: AccountKey) -> BpResult<bool> {
         if !self.state.read().is_tracked_for_owner(owner, &account) {
             return Ok(false);
@@ -98,14 +109,17 @@ impl PortfolioService {
         Ok(true)
     }
 
+    #[cfg(test)]
     pub async fn add_account(&self, account: AccountKey) -> BpResult<bool> {
         self.track_account(account).await
     }
 
+    #[cfg(test)]
     pub async fn remove_account(&self, account: AccountKey) -> BpResult<bool> {
         self.untrack_account(account).await
     }
 
+    #[cfg(test)]
     pub async fn add_user_account(
         &self,
         owner: impl Into<String>,
@@ -114,8 +128,47 @@ impl PortfolioService {
         self.track_user_account(owner, account).await
     }
 
+    #[cfg(test)]
     pub async fn remove_user_account(&self, owner: &str, account: AccountKey) -> BpResult<bool> {
         self.untrack_user_account(owner, account).await
+    }
+
+    pub async fn apply_ownership_event(&self, event: &OwnershipEvent) -> BpResult<OwnershipApply> {
+        if !self.ownership.read().accepts(event) {
+            return Ok(self.ownership.write().apply(event));
+        }
+        let account = event.account();
+        let cex_id = account.cex_id();
+        let (current, next) = {
+            let state = self.state.read();
+            let current = state.accounts_for_cex(cex_id);
+            let next = if event.action().is_add() {
+                state.accounts_for_cex_with(cex_id, account)
+            } else {
+                state.accounts_for_cex_without_owner(event.owner(), cex_id, account)
+            };
+            (current, next)
+        };
+        self.sync(cex_id, current, next).await?;
+        let outcome = self.ownership.write().apply(event);
+        if let OwnershipApply::Applied { previous_owner, .. } = &outcome {
+            let mut state = self.state.write();
+            if let Some(previous) = previous_owner
+                && previous != event.owner()
+            {
+                state.untrack_for_owner(previous, account);
+            }
+            if event.action().is_add() {
+                state.track_for_owner(event.owner(), account);
+            } else {
+                state.untrack_for_owner(event.owner(), account);
+            }
+        }
+        Ok(outcome)
+    }
+
+    pub fn ownership_version(&self, account: &AccountKey) -> Option<u64> {
+        self.ownership.read().version(account)
     }
 
     pub fn is_tracked_for_owner(&self, owner: &str, account: &AccountKey) -> bool {
@@ -158,6 +211,7 @@ impl PortfolioService {
         self.state.write().apply_update(update)
     }
 
+    #[cfg(test)]
     pub fn apply_portfolio(&self, account: AccountKey, portfolio: AccountPortfolio) -> bool {
         self.state.write().set_portfolio(account, portfolio)
     }

@@ -1,6 +1,8 @@
+use platform_errors::{BpError, BpResult};
+use serde::{Deserialize, Serialize};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, PartialOrd, Ord, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct AccountKey {
     cex_id: CexId,
     account_id: AccountId,
@@ -18,6 +20,20 @@ impl AccountKey {
         Self { cex_id, account_id }
     }
 
+    pub fn parse(cex_id: &str, account_id: &str) -> BpResult<Self> {
+        if account_id.trim().is_empty() {
+            return Err(BpError::bad_value(
+                "account id",
+                account_id,
+                "must not be empty",
+            ));
+        }
+        let cex_id = cex_id
+            .parse::<CexId>()
+            .map_err(|_| BpError::bad_value("cex id", cex_id, "must be a supported exchange"))?;
+        Ok(Self::new(cex_id, account_id))
+    }
+
     pub fn cex_id(&self) -> CexId {
         self.cex_id
     }
@@ -28,6 +44,10 @@ impl AccountKey {
 
     pub fn into_parts(self) -> (CexId, AccountId) {
         (self.cex_id, self.account_id)
+    }
+
+    pub fn storage_key(&self) -> String {
+        format!("{}:{}", self.cex_id, self.account_id.0)
     }
 }
 

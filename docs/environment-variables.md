@@ -78,6 +78,11 @@ required in some configurations, the condition is stated in its description.
 | `PORTFOLIO_JWKS_URL` | URL of the auth service JWKS endpoint, normally `https://<auth-service>/.well-known/jwks.json`. The portfolio service caches the public keys and verifies bearer JWTs locally. |
 | `PORTFOLIO_ORDER_REQUEST_BIND_ADDR` | Socket address on which the portfolio service accepts unsigned order requests carrying a bearer JWT. |
 | `PORTFOLIO_ORDER_REQUEST_URL` | URL that receives signed order requests from the portfolio service. |
+| `PORTFOLIO_OWNERSHIP_CHECKPOINT_BUCKET` | NATS JetStream key-value bucket that stores the last processed ownership-event sequence. |
+| `PORTFOLIO_OWNERSHIP_CLIENT_NAME` | NATS client name used by the portfolio-service ownership consumer. |
+| `PORTFOLIO_OWNERSHIP_DURABLE` | Durable JetStream consumer name for ownership events. |
+| `PORTFOLIO_OWNERSHIP_NATS_URL` | NATS URL used to consume ownership events. |
+| `PORTFOLIO_OWNERSHIP_RETRY_BACKOFF_SECS` | Delay between ownership-consumer retries after an error, in seconds. |
 | `PORTFOLIO_VALKEY_KEY_PREFIX` | Prefix for replay-protection keys in Valkey. |
 | `PORTFOLIO_VALKEY_TIMEOUT_SECS` | Connection and command timeout for Valkey, in seconds. |
 | `PORTFOLIO_VALKEY_URL` | `redis://`, `rediss://`, `valkey://`, or `valkeys://` URL of the shared Valkey replay backend. |
@@ -97,6 +102,10 @@ match the auth service and auth relay so a single relay drains records from both
 Replay protection fails closed when Valkey is unavailable. The replay key prefix must contain only
 colon-separated segments of ASCII letters, digits, `-`, and `_`. Signed request expiry controls
 each key's TTL, so Valkey removes stale nonces without a separate cleanup job.
+
+The ownership consumer replays the `portfolio.ownership.changed.v1.events` stream from its
+checkpoint on startup. When no checkpoint exists it starts at the earliest retained event and
+builds the local owner/account registry before accepting orders for those accounts.
 
 ### Backfiller
 
@@ -267,6 +276,29 @@ No process-specific optional variables.
 No process-specific optional variables.
 
 ## Control plane
+
+### Portfolio registry
+
+The portfolio registry is the control-plane writer for CEX account ownership. It serves an
+internal admin API for adding and removing mappings and an owner-scoped read API for listing the
+caller's accounts. Every mutation is audited and published through the ownership stream.
+
+#### Required
+
+| Variable | Description |
+| --- | --- |
+| `PORTFOLIO_REGISTRY_ADMIN_BIND_ADDR` | Socket address for the internal admin listener. |
+| `PORTFOLIO_REGISTRY_ADMIN_TOKEN` | Bearer token for the admin listener. Must be at least 32 characters. |
+| `PORTFOLIO_REGISTRY_JWKS_URL` | URL of the auth service JWKS endpoint used to verify owner bearer JWTs on the read listener. |
+| `PORTFOLIO_REGISTRY_NATS_CLIENT_NAME` | NATS client name used by the registry outbox relay. |
+| `PORTFOLIO_REGISTRY_NATS_URL` | NATS URL used to publish ownership events. |
+| `PORTFOLIO_REGISTRY_OUTBOX_INTERVAL_SECS` | Delay between ownership outbox flushes, in seconds. |
+| `PORTFOLIO_REGISTRY_READ_BIND_ADDR` | Socket address for the owner-scoped read listener. |
+| `PORTFOLIO_REGISTRY_TABLE` | DynamoDB table holding ownership mappings, audit history, and pending outbox events. |
+
+#### Optional
+
+No process-specific optional variables.
 
 ### Run invoker
 

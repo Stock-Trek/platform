@@ -1,4 +1,4 @@
-use crate::account::AccountKey;
+use platform_portfolio_ownership::AccountKey;
 use std::collections::BTreeMap;
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 

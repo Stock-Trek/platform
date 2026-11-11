@@ -4,15 +4,18 @@ use platform_runtime::Config;
 
 mod auth;
 mod order_request;
+mod ownership;
 
 pub use auth::AuthConfig;
 pub use order_request::OrderRequestConfig;
+pub use ownership::OwnershipConfig;
 
 #[derive(Debug, Clone)]
 pub struct PortfolioConfig {
     log_filter: String,
     order_request: OrderRequestConfig,
     auth: AuthConfig,
+    ownership: OwnershipConfig,
 }
 
 impl PortfolioConfig {
@@ -25,6 +28,7 @@ impl PortfolioConfig {
             log_filter: Config::log_filter(vars)?,
             order_request: OrderRequestConfig::from_vars(vars)?,
             auth: AuthConfig::from_vars(vars)?,
+            ownership: OwnershipConfig::from_vars(vars)?,
         })
     }
 
@@ -38,5 +42,9 @@ impl PortfolioConfig {
 
     pub fn auth(&self) -> &AuthConfig {
         &self.auth
+    }
+
+    pub fn ownership(&self) -> &OwnershipConfig {
+        &self.ownership
     }
 }
