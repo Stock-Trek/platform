@@ -1,12 +1,12 @@
 use crate::{ApiToken, AuthService, OwnerIndex, OwnerIndexEntry, TokenScope};
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::BpResult;
 
 impl AuthService {
     pub(crate) async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
         let owner = ApiToken::validated_owner(owner)?;
         let Some(index) = self.store.owner_index(owner).await? else {
-            return Ok(Vec::new());
+            return self.tokens_from_owner_scan(owner).await;
         };
         if index.owner() != owner {
             return Err(Self::owner_index_error(format!(
@@ -14,7 +14,13 @@ impl AuthService {
                 index.owner()
             )));
         }
-        self.tokens_from_owner_index(owner, &index).await
+        match self.tokens_from_owner_index(owner, &index).await {
+            Ok(tokens) => Ok(tokens),
+            Err(error) => {
+                tracing::warn!(%error, %owner, "owner index is stale; rebuilding from tokens");
+                self.tokens_from_owner_scan(owner).await
+            }
+        }
     }
 
     pub(crate) async fn active_tokens_for_owner(
@@ -55,7 +61,7 @@ impl AuthService {
     ) -> BpResult<ApiToken> {
         let owner = ApiToken::validated_owner(owner)?;
         let Some(index) = self.store.owner_index(owner).await? else {
-            return Err(Self::no_active_token(scope));
+            return self.select_token_from_scan(owner, scope, now).await;
         };
         if index.owner() != owner {
             return Err(Self::owner_index_error(format!(
@@ -73,21 +79,22 @@ impl AuthService {
             })
             .min_by(|left, right| OwnerIndexEntry::compare(left, right));
         let Some(candidate) = candidate else {
+            if index.is_empty() {
+                return self.select_token_from_scan(owner, scope, now).await;
+            }
             return Err(Self::no_active_token(scope));
         };
-        let token = self
-            .stored_token(candidate.id())
-            .await?
-            .ok_or_else(|| Self::owner_index_error(format!("missing token {}", candidate.id())))?;
+        let Some(token) = self.stored_token(candidate.id()).await? else {
+            tracing::warn!(owner = %owner, token_id = candidate.id(), "owner index references a missing token; rescanning");
+            return self.select_token_from_scan(owner, scope, now).await;
+        };
         if token.owner() != owner
             || !candidate.matches_token(&token)
             || !token.is_active(now)
             || !scope.is_none_or(|scope| token.metadata().has_scope(scope))
         {
-            return Err(Self::owner_index_error(format!(
-                "owner index entry for {} is stale",
-                candidate.id()
-            )));
+            tracing::warn!(owner = %owner, token_id = candidate.id(), "owner index entry is stale; rescanning");
+            return self.select_token_from_scan(owner, scope, now).await;
         }
         Ok(token)
     }
@@ -122,19 +129,5 @@ impl AuthService {
         }
         tokens.sort_by(|left, right| left.id().cmp(right.id()));
         Ok(tokens)
-    }
-
-    fn no_active_token(scope: Option<TokenScope>) -> BpError {
-        match scope {
-            Some(scope) => BpError::auth_invalid_field(
-                "scope",
-                format!("owner has no active API token with required scope {scope:?}"),
-            ),
-            None => BpError::auth_invalid_field("owner", "has no active API token"),
-        }
-    }
-
-    fn owner_index_error(detail: String) -> BpError {
-        BpError::auth_store("read", "owner-index", false, detail)
     }
 }
