@@ -1,25 +1,14 @@
-use crate::{
-    AuthService, OrderJwtClaims, TokenScope, order_jwt_claims::CLOCK_SKEW_SECONDS,
-    order_jwt_claims::JwtCodec,
-};
+use crate::{AuthService, OrderJwtClaims, TokenScope, order_jwt_claims::CLOCK_SKEW_SECONDS};
 use chrono::{DateTime, Utc};
-use jsonwebtoken::Algorithm;
 use platform_errors::{BpError, BpResult};
 
 impl AuthService {
     pub async fn verify_jwt(&self, jwt: &str, now: DateTime<Utc>) -> BpResult<OrderJwtClaims> {
-        let untrusted = JwtCodec::decode_untrusted(jwt)?;
-        if untrusted.header.alg != Algorithm::HS256 {
-            return Err(BpError::auth_invalid_jwt(
-                "must use the HS256 signing algorithm",
-            ));
-        }
-        let token_id = untrusted.claims.token_id().to_string();
+        let verified = self.jwt_verifier().verify(jwt, now)?;
         let token = self
-            .stored_token(&token_id)
+            .stored_token(verified.token_id())
             .await?
             .ok_or_else(|| BpError::auth_invalid_jwt("references an unknown token"))?;
-        let verified = JwtCodec::decode(token.secret(), jwt)?.claims;
         if verified.token_id() != token.id() || verified.owner() != token.owner() {
             return Err(BpError::auth_invalid_jwt(
                 "claims do not match the referenced token",

@@ -1,7 +1,9 @@
 use crate::{
-    ReplayStore, TokenAuditEvent, TokenMutation, TokenRotationTransaction, token_store::TokenStore,
+    JwtSigningKey, JwtVerifier, ReplayStore, TokenAuditEvent, TokenMutation,
+    TokenRotationTransaction, jwt_signing_key::DEFAULT_JWT_KEY_ID, token_store::TokenStore,
 };
 use chrono::Duration;
+use jsonwebtoken::jwk::JwkSet;
 use platform_errors::{AuthError, BpError, BpResult};
 use std::sync::Arc;
 
@@ -20,6 +22,7 @@ pub struct AuthService {
     pub(crate) signature_validity: Duration,
     pub(crate) token_lifetime: Duration,
     pub(crate) rotation_overlap: Duration,
+    pub(crate) jwt_signer: Arc<JwtSigningKey>,
 }
 
 impl AuthService {
@@ -28,6 +31,16 @@ impl AuthService {
         config: AuthServiceConfig,
         replay: Arc<dyn ReplayStore>,
     ) -> BpResult<Self> {
+        let signer = JwtSigningKey::generate(DEFAULT_JWT_KEY_ID)?;
+        Self::with_jwt_signing_key(store, config, replay, Arc::new(signer))
+    }
+
+    pub fn with_jwt_signing_key(
+        store: Arc<dyn TokenStore>,
+        config: AuthServiceConfig,
+        replay: Arc<dyn ReplayStore>,
+        jwt_signer: Arc<JwtSigningKey>,
+    ) -> BpResult<Self> {
         Self::validate_config(&config)?;
         Ok(Self {
             store,
@@ -35,7 +48,16 @@ impl AuthService {
             signature_validity: config.signature_validity,
             token_lifetime: config.token_lifetime,
             rotation_overlap: config.rotation_overlap,
+            jwt_signer,
         })
+    }
+
+    pub fn jwks(&self) -> &JwkSet {
+        self.jwt_signer.jwks()
+    }
+
+    pub fn jwt_verifier(&self) -> JwtVerifier {
+        JwtVerifier::new(self.jwks().clone())
     }
 
     fn validate_config(config: &AuthServiceConfig) -> BpResult<()> {

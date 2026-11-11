@@ -1,6 +1,4 @@
-use crate::{
-    ApiToken, AuthService, IssuedJwt, OrderJwtClaims, TokenScope, order_jwt_claims::JwtCodec,
-};
+use crate::{ApiToken, AuthService, IssuedJwt, OrderJwtClaims, TokenScope};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 
@@ -39,6 +37,6 @@ impl AuthService {
             })?;
         let expires_at = requested_expiry.min(token.metadata().expires_at());
         let claims = OrderJwtClaims::new(token.id(), token.owner(), issued_at, expires_at)?;
-        JwtCodec::encode(token.secret(), &claims)
+        self.jwt_signer.sign(&claims)
     }
 }

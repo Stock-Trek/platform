@@ -14,7 +14,10 @@ impl PortfolioRunner {
     pub async fn run(config: PortfolioConfig) -> BpResult<()> {
         SERVICE.init_logging(config.log_filter())?;
         let auth_service = PortfolioAuthService::connect(config.auth().clone()).await?;
-        let service = Arc::new(OrderRequestService::new(auth_service));
+        let service = Arc::new(OrderRequestService::with_jwks_url(
+            auth_service,
+            config.auth().jwks_url(),
+        )?);
         let delivery = Arc::new(OrderRequestDelivery::new(
             config.order_request().delivery_url(),
         )?);

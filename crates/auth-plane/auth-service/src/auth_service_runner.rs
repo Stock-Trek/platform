@@ -14,7 +14,7 @@ impl AuthServiceRunner {
     pub async fn run(config: JwtServerConfig) -> BpResult<()> {
         SERVICE.init_logging(config.log_filter())?;
         let store = Arc::new(VaultTokenStore::new(config.vault().clone())?);
-        let service = AuthService::new(
+        let service = AuthService::with_jwt_signing_key(
             store,
             AuthServiceConfig {
                 token_lifetime: Duration::days(30),
@@ -22,6 +22,7 @@ impl AuthServiceRunner {
                 signature_validity: Duration::minutes(5),
             },
             Arc::new(MemoryReplayStore::default()),
+            Arc::new(config.jwt_signing_key()?),
         )?;
         let server =
             JwtServer::bind_with_sigv4(config.bind_address(), service, config.sigv4().clone())
