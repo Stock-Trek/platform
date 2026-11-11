@@ -1,7 +1,7 @@
 # Portfolio/order path production options
 
 Status: investigation only. This document makes no code changes, as requested by
-issue #569. The issue had no comments when this investigation was performed.
+issue #569.
 
 ## Question
 
@@ -159,36 +159,6 @@ migration need design; higher initial effort.
 **Best for:** a real multi-tenant product, as opposed to a single-operator
 deployment.
 
-### Option D: Static bootstrap list plus polling
-
-Load tracked accounts from configuration at startup and periodically poll the
-exchange REST API for balances and open orders.
-
-**Advantages:** no websocket protocol work; simple to operate for a small,
-fixed set of accounts; useful as a fallback when an exchange has no suitable
-account stream.
-
-**Disadvantages:** configuration changes require a restart or a separate
-reload path; polling has higher latency and rate-limit cost; no prompt order
-updates; still needs durable ownership data and an update sink; does not scale
-to self-service account registration.
-
-**Best for:** a small pilot, a read-only portfolio view, or a fallback path.
-
-### Option E: Track accounts on first order request
-
-Accept an order for an unknown account and add it to the tracked set when the
-request is first seen.
-
-**Advantages:** trivial to implement and removes the startup rejection.
-
-**Disadvantages:** it is not ownership verification. Any caller with a valid
-token could claim an arbitrary CEX account, which breaks the authorization
-model the portfolio service exists to enforce. It also cannot obtain a
-portfolio without credentials for that account.
-
-**Best for:** local development only. Not a production option.
-
 ## Comparison
 
 | Option | Real portfolio updates | Durable ownership | Multi-replica safe | Exchange isolation | New infrastructure | Relative effort |
@@ -196,8 +166,6 @@ portfolio without credentials for that account.
 | A. In-process completion | Yes | Yes, via chosen store | Needs explicit sync/leader design | No | Maybe a database | Medium |
 | B. Connector service + read model | Yes | Depends on registry option | Yes, via JetStream | Yes | NATS, connector deployment | High |
 | C. Control-plane registry | Not by itself | Yes | Yes | Depends on feed choice | Control-plane store | High |
-| D. Static bootstrap + polling | Polled only | Static list only | Read-only replicas might share a DB | Partial | Scheduler/poller | Low to medium |
-| E. Trust on first order | No | No | No | No | None | Very low (unsafe) |
 
 ## Recommendation
 
@@ -248,8 +216,7 @@ real trading deployment.
   account ownership is user-facing.
 
 The recommended target is **Option C for ownership + Option B for updates**,
-with Option A as the transitional implementation. Option D is a useful
-fallback or pilot, and Option E should be explicitly rejected.
+with Option A as the transitional implementation.
 
 ## Open questions
 
