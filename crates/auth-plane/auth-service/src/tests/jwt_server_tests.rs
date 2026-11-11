@@ -3,8 +3,13 @@ use crate::JwtServer;
 use platform_sigv4::{SigV4Config, SigV4Registry};
 use reqwest::StatusCode;
 use serde_json::{Value, json};
-use std::{collections::BTreeMap, time::SystemTime};
-use tokio::task::JoinHandle;
+use std::{collections::BTreeMap, time::Duration, time::SystemTime};
+use tokio::{
+    io::{AsyncReadExt, AsyncWriteExt},
+    net::TcpStream,
+    task::JoinHandle,
+    time::timeout,
+};
 
 const ACCEPTED_ACCESS_KEY: &str = "AKIDRUNNER";
 const OTHER_OWNER: &str = "other-owner";
@@ -58,6 +63,16 @@ impl Fixture {
         let status = response.status();
         let value = response.json::<Value>().await.ok();
         (status, value)
+    }
+    async fn raw_exchange(address: &str, request: &[u8]) -> String {
+        let mut stream = TcpStream::connect(address).await.unwrap();
+        stream.write_all(request).await.unwrap();
+        let mut response = Vec::new();
+        timeout(Duration::from_secs(1), stream.read_to_end(&mut response))
+            .await
+            .unwrap()
+            .unwrap();
+        String::from_utf8(response).unwrap()
     }
 }
 
@@ -122,5 +137,25 @@ async fn rejects_an_owner_that_does_not_match_the_caller() {
     let (status, _) = Fixture::send(&url, headers, body).await;
 
     assert_eq!(status, StatusCode::FORBIDDEN);
+    server.abort();
+}
+
+#[tokio::test]
+async fn rejects_an_oversized_declared_body_before_reading_it() {
+    let (url, server) = Fixture::server().await;
+    let address = url
+        .strip_prefix("http://")
+        .unwrap()
+        .split('/')
+        .next()
+        .unwrap();
+    let request = format!(
+        "POST /jwt HTTP/1.1\r\nHost: {address}\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n",
+        64 * 1024 + 1
+    );
+
+    let response = Fixture::raw_exchange(address, request.as_bytes()).await;
+
+    assert!(response.starts_with("HTTP/1.1 413"));
     server.abort();
 }

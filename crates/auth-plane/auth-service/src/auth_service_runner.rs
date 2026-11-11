@@ -3,7 +3,7 @@ use crate::{
     ValkeyTokenUsageQueue, VaultTokenStore,
 };
 use chrono::Duration;
-use platform_errors::{BpError, BpResult};
+use platform_errors::BpResult;
 use platform_runtime::Service;
 use std::sync::Arc;
 
@@ -30,9 +30,6 @@ impl AuthServiceRunner {
         let server =
             JwtServer::bind_with_sigv4(config.bind_address(), service, config.sigv4().clone())
                 .await?;
-        tokio::select! {
-            result = server.serve() => result,
-            result = tokio::signal::ctrl_c() => result.map_err(BpError::external),
-        }
+        server.serve().await
     }
 }
