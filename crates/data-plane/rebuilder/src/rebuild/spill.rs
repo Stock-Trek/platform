@@ -4,7 +4,6 @@ use std::path::Path;
 const MERGE_BATCH_RECORDS: usize = 8_192;
 const MAX_MERGE_FANIN: usize = 64;
 
-/// Bytes written to spill run files and the largest single run.
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub struct SpillUsage {
     pub bytes_written: u64,
@@ -33,17 +32,13 @@ impl SpillUsage {
     }
 }
 
-pub(crate) struct SpillMerge;
+pub(crate) struct SpillMergeLimits;
 
-impl SpillMerge {
-    /// Number of runs merged at once, so the merge buffers stay proportional
-    /// to the configured spill limit.
+impl SpillMergeLimits {
     pub(crate) fn fanin(limit: usize) -> usize {
         (limit / MERGE_BATCH_RECORDS).clamp(2, MAX_MERGE_FANIN)
     }
 
-    /// Records decoded or buffered per run during a merge, so the merge
-    /// buffers never exceed the configured spill limit even for tiny limits.
     pub(crate) fn batch_records(limit: usize) -> usize {
         (limit / Self::fanin(limit)).clamp(1, MERGE_BATCH_RECORDS)
     }
