@@ -1,7 +1,7 @@
 use super::ownership_checkpoint::OwnershipCheckpoint;
 use crate::{
-    ownership_source::{OwnershipEventSource, OwnershipMessage},
     OwnershipConfig,
+    ownership_source::{OwnershipEventSource, OwnershipMessage},
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};

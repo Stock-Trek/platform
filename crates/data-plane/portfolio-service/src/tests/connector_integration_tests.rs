@@ -1,5 +1,5 @@
 use super::order_request_fixture_tests::{Fixture as OrderFixture, OWNER};
-use super::test_feed::Fixture as PortfolioFixture;
+use super::test_feed_tests::Fixture as PortfolioFixture;
 use crate::connector::{
     ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
     PortfolioCredentialSource, PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink,

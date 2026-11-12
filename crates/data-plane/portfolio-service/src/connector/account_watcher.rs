@@ -1,9 +1,5 @@
 use std::time::Duration;
-use tokio::{
-    sync::watch,
-    task::JoinHandle,
-    time::timeout,
-};
+use tokio::{sync::watch, task::JoinHandle, time::timeout};
 
 pub(super) struct AccountWatcher {
     shutdown: watch::Sender<bool>,

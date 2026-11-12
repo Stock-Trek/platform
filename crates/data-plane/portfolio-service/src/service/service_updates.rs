@@ -1,11 +1,11 @@
 use super::PortfolioService;
+#[cfg(test)]
+use crate::portfolio::AccountPortfolio;
 use crate::{
     freshness::PortfolioFreshness,
     portfolio::PortfolioUpdate,
     state::{PortfolioUpdateMetadata, PortfolioUpdateOutcome},
 };
-#[cfg(test)]
-use crate::portfolio::AccountPortfolio;
 use chrono::{DateTime, Utc};
 use platform_errors::BpResult;
 use platform_metrics::PortfolioMetrics;

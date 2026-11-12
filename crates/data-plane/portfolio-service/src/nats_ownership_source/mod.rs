@@ -1,4 +1,4 @@
-mod nats_ownership_source;
 mod ownership_checkpoint;
+mod source;
 
-pub use nats_ownership_source::NatsOwnershipSource;
+pub use source::NatsOwnershipSource;

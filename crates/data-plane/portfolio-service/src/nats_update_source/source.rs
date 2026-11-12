@@ -1,10 +1,8 @@
 use super::update_checkpoint::UpdateCheckpoint;
 use crate::{
-    portfolio::{
-        PortfolioUpdate, PORTFOLIO_UPDATE_STREAM_PREFIX, PORTFOLIO_UPDATE_SUBJECT,
-    },
-    update_source::{PortfolioUpdateMessage, PortfolioUpdateSource},
     UpdateConfig,
+    portfolio::{PORTFOLIO_UPDATE_STREAM_PREFIX, PORTFOLIO_UPDATE_SUBJECT, PortfolioUpdate},
+    update_source::{PortfolioUpdateMessage, PortfolioUpdateSource},
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};

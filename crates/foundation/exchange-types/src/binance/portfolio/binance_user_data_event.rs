@@ -1,4 +1,4 @@
-use super::{wire_event::WireEvent, BinanceAccountBalanceEvent};
+use super::{BinanceAccountBalanceEvent, wire_event::WireEvent};
 use platform_errors::{BpError, BpResult};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -20,11 +20,7 @@ impl BinanceUserDataEvent {
                 balances
                     .into_iter()
                     .map(|balance| {
-                        BinanceAccountBalanceEvent::new(
-                            balance.asset,
-                            balance.free,
-                            balance.locked,
-                        )
+                        BinanceAccountBalanceEvent::new(balance.asset, balance.free, balance.locked)
                     })
                     .collect()
             }),

@@ -1,7 +1,7 @@
 use super::{
-    exchange_portfolio_connection::ExchangePortfolioConnection, ConnectorHealthSink,
-    ExchangePortfolioFeed, PortfolioConnector, PortfolioCredentialSource, PortfolioFeed,
-    PortfolioUpdateSink, health_reporter::HealthReporter,
+    ConnectorHealthSink, ExchangePortfolioFeed, PortfolioConnector, PortfolioCredentialSource,
+    PortfolioFeed, PortfolioUpdateSink, exchange_portfolio_connection::ExchangePortfolioConnection,
+    health_reporter::HealthReporter,
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};

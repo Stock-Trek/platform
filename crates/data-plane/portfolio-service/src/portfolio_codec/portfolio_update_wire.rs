@@ -4,11 +4,7 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use std::collections::BTreeMap;
-use stock_trek_types::cex::{
-    asset_id::AssetId,
-    order_request::OrderRequest,
-    tag::Tag,
-};
+use stock_trek_types::cex::{asset_id::AssetId, order_request::OrderRequest, tag::Tag};
 
 #[derive(serde::Serialize, serde::Deserialize)]
 pub(crate) struct PortfolioUpdateWire {

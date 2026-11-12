@@ -1,7 +1,6 @@
 use super::{
-    account_watcher::AccountWatcher, ConnectorState, PortfolioConnection,
-    PortfolioCredentialSource, PortfolioUpdateSink, health_reporter::HealthReporter,
-    watcher::Watcher,
+    ConnectorState, PortfolioConnection, PortfolioCredentialSource, PortfolioUpdateSink,
+    account_watcher::AccountWatcher, health_reporter::HealthReporter, watcher::Watcher,
 };
 use async_trait::async_trait;
 use platform_errors::BpResult;

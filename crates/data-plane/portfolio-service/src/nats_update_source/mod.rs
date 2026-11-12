@@ -1,4 +1,4 @@
-mod nats_update_source;
+mod source;
 mod update_checkpoint;
 
-pub use nats_update_source::NatsUpdateSource;
+pub use source::NatsUpdateSource;

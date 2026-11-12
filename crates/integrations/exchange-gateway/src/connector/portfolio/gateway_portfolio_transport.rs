@@ -1,9 +1,6 @@
 use super::gateway_account_event_stream::GatewayAccountEventStream;
 use crate::{
-    clients::reqwest::ReqwestHttpClient,
-    connector::Connector,
-    iris,
-    submission::SubmissionOutcome,
+    clients::reqwest::ReqwestHttpClient, connector::Connector, iris, submission::SubmissionOutcome,
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult, ExchangeError};
@@ -165,7 +162,9 @@ where
         let events = listener.subscribe();
         connector.connect().await?;
         Ok(Box::new(GatewayAccountEventStream::new(
-            connector, events, self.mapping,
+            connector,
+            events,
+            self.mapping,
         )))
     }
 }

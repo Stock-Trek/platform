@@ -1,5 +1,5 @@
-use platform_errors::{BpError, BpResult};
 use platform_auth_service::SignedOrderRequest;
+use platform_errors::{BpError, BpResult};
 use platform_messages::order_request::UnsignedOrderRequest;
 use serde::Serialize;
 use stock_trek_types::cex::{

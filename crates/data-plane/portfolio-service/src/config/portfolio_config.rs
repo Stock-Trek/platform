@@ -1,6 +1,5 @@
 use super::{
-    AuthConfig, ConnectorConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig,
-    UpdateConfig,
+    AuthConfig, ConnectorConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig, UpdateConfig,
 };
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;

@@ -1,7 +1,7 @@
-mod service;
+mod portfolio_service;
 mod service_accounts;
 mod service_ownership;
 mod service_portfolios;
 mod service_updates;
 
-pub use service::PortfolioService;
+pub use portfolio_service::PortfolioService;

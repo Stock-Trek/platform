@@ -1,7 +1,7 @@
 mod decision;
 mod ownership_apply;
 mod ownership_entry;
-mod ownership_registry;
+mod registry;
 
 pub use ownership_apply::OwnershipApply;
-pub use ownership_registry::OwnershipRegistry;
+pub use registry::OwnershipRegistry;

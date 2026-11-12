@@ -1,7 +1,5 @@
 use crate::{
-    connector::PortfolioFeed,
-    freshness::FreshnessPolicy,
-    ownership_registry::OwnershipRegistry,
+    connector::PortfolioFeed, freshness::FreshnessPolicy, ownership_registry::OwnershipRegistry,
     state::PortfolioState,
 };
 use parking_lot::RwLock;

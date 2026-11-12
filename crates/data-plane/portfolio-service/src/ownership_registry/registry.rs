@@ -1,6 +1,4 @@
-use super::{
-    decision::Decision, ownership_apply::OwnershipApply, ownership_entry::OwnershipEntry,
-};
+use super::{decision::Decision, ownership_apply::OwnershipApply, ownership_entry::OwnershipEntry};
 use crate::AccountKey;
 use platform_portfolio_ownership::OwnershipEvent;
 use std::collections::BTreeMap;

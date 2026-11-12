@@ -21,9 +21,7 @@ mod static_portfolio_credentials;
 mod watcher;
 
 pub use connector_health::ConnectorHealth;
-pub use connector_health_contract::{
-    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT,
-};
+pub use connector_health_contract::{CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT};
 pub use connector_health_sink::ConnectorHealthSink;
 pub use connector_portfolio_update::ConnectorPortfolioUpdate;
 pub use connector_state::ConnectorState;

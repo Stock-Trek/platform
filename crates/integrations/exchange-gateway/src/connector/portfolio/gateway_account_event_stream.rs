@@ -1,7 +1,6 @@
 use super::GatewayPortfolioTransport;
 use crate::{
-    clients::iris::IrisWebsocketClient,
-    connector::Connector,
+    clients::iris::IrisWebsocketClient, connector::Connector,
     websocket_listener::WebsocketEventStream,
 };
 use async_trait::async_trait;

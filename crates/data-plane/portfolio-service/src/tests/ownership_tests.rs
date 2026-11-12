@@ -1,4 +1,4 @@
-use super::test_feed::Fixture;
+use super::test_feed_tests::Fixture;
 use crate::connector::PortfolioFeed;
 use crate::{
     AccountKey, OwnershipApply, OwnershipConsumer, OwnershipEventSource, OwnershipMessage,
@@ -198,7 +198,7 @@ async fn consumer_checkpoints_replays_and_acknowledges_events() {
         message(event("alice", "first", OwnershipAction::Remove, 2), 12),
     ]));
     let service = std::sync::Arc::new(PortfolioService::new(std::sync::Arc::new(
-        super::test_feed::RecordingFeed::default(),
+        super::test_feed_tests::RecordingFeed::default(),
     )));
     let consumer =
         OwnershipConsumer::new(service.clone(), source.clone(), Duration::from_millis(10));
@@ -216,7 +216,7 @@ async fn restart_replays_from_the_persisted_events() {
         1,
     )]));
     let first_service = std::sync::Arc::new(PortfolioService::new(std::sync::Arc::new(
-        super::test_feed::RecordingFeed::default(),
+        super::test_feed_tests::RecordingFeed::default(),
     )));
     OwnershipConsumer::new(
         first_service.clone(),
@@ -229,7 +229,7 @@ async fn restart_replays_from_the_persisted_events() {
     assert_eq!(first_source.checkpoints(), vec![1]);
 
     let second_service = std::sync::Arc::new(PortfolioService::new(std::sync::Arc::new(
-        super::test_feed::RecordingFeed::default(),
+        super::test_feed_tests::RecordingFeed::default(),
     )));
     let replay = std::sync::Arc::new(FakeSource::with_messages(vec![
         message(event("alice", "first", OwnershipAction::Add, 1), 1),

@@ -1,4 +1,4 @@
-use super::{binance_listen_key_action::BinanceListenKeyAction, BinanceListenKeyResponse};
+use super::{BinanceListenKeyResponse, binance_listen_key_action::BinanceListenKeyAction};
 use crate::{
     binance::{exchange::BinanceExchange, response::BinanceResponse},
     encode::ByteEncoder,

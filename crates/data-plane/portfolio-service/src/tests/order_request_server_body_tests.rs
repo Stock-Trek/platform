@@ -1,4 +1,4 @@
-use super::order_request_server_fixture::Fixture;
+use super::order_request_server_fixture_tests::Fixture;
 
 const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 
