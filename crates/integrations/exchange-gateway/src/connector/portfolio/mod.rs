@@ -50,6 +50,8 @@ pub use portfolio_update_sink::PortfolioUpdateSink;
 pub use static_portfolio_credentials::StaticPortfolioCredentials;
 
 #[cfg(test)]
+mod config_tests;
+#[cfg(test)]
 mod connector_tests;
 #[cfg(test)]
 mod feed_tests;

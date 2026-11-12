@@ -1,9 +1,9 @@
 //! JetStream-backed publisher with acknowledgements and idempotent message ids.
 
-use crate::{NatsAddress, NatsSubject, jetstream::JetStream};
+use crate::{NatsAddress, NatsSubject, StreamSpec, jetstream::JetStream};
 use async_nats::{
     HeaderMap,
-    jetstream::{self, Context},
+    jetstream::{self, Context, stream},
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -78,17 +78,28 @@ impl NatsPublisher {
     }
 
     /// Ensures a JetStream stream covering every subject below `prefix` exists,
-    /// creating it on first use.
+    /// creating or updating it on first use.
     pub async fn ensure_stream(&self, subject_prefix: &str) -> BpResult<()> {
         NatsSubject::validate_named("subject prefix", subject_prefix)?;
-        let stream = JetStream::stream_name(subject_prefix);
+        self.ensure_stream_config(JetStream::stream_config(subject_prefix))
+            .await
+    }
+
+    pub async fn ensure_stream_spec(&self, spec: &StreamSpec) -> BpResult<()> {
+        NatsSubject::validate_named("subject prefix", spec.subject_prefix())?;
+        self.ensure_stream_config(stream::Config::try_from(spec)?)
+            .await
+    }
+
+    async fn ensure_stream_config(&self, config: stream::Config) -> BpResult<()> {
+        let stream = config.name.clone();
         if self.streams.lock().contains(&stream) {
             return Ok(());
         }
 
         let context = self.context().await?;
         let result = context
-            .get_or_create_stream(JetStream::stream_config(subject_prefix))
+            .create_or_update_stream(config)
             .await
             .map(|_| ())
             .map_err(|error| JetStream::protocol_error("failed to ensure JetStream stream", error));

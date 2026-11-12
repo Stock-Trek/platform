@@ -41,6 +41,24 @@ impl OwnershipRegistry {
         self.entries.get(account).map(|entry| entry.version)
     }
 
+    pub fn owner_and_version(&self, account: &AccountKey) -> Option<(&str, u64)> {
+        self.entries
+            .get(account)
+            .filter(|entry| entry.active)
+            .map(|entry| (entry.owner.as_str(), entry.version))
+    }
+
+    pub(crate) fn restore(&mut self, account: &AccountKey, owner: &str, version: u64) {
+        self.entries.insert(
+            account.clone(),
+            OwnershipEntry {
+                owner: owner.to_string(),
+                version,
+                active: true,
+            },
+        );
+    }
+
     fn decision(
         event: &OwnershipEvent,
         existing: Option<&OwnershipEntry>,

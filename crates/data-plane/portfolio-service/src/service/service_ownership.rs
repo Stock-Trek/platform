@@ -1,5 +1,5 @@
 use super::PortfolioService;
-use crate::ownership_registry::OwnershipApply;
+use crate::{ownership_registry::OwnershipApply, read_model::OwnershipRecord};
 use platform_errors::BpResult;
 use platform_portfolio_ownership::{AccountKey, OwnershipEvent};
 
@@ -49,6 +49,12 @@ impl PortfolioService {
 
     pub fn ownership_version(&self, account: &AccountKey) -> Option<u64> {
         self.ownership.read().version(account)
+    }
+
+    pub fn ownership_record(&self, account: &AccountKey) -> Option<OwnershipRecord> {
+        let registry = self.ownership.read();
+        let (owner, version) = registry.owner_and_version(account)?;
+        Some(OwnershipRecord::new(account.clone(), owner, version))
     }
 
     pub fn is_tracked_for_owner(&self, owner: &str, account: &AccountKey) -> bool {

@@ -76,7 +76,10 @@ pub const PORTFOLIO_CONNECTOR_RECONNECTS_TOTAL: &str = "portfolio_connector_reco
 pub const PORTFOLIO_CONNECTOR_LAST_UPDATE_AGE_SECONDS: &str =
     "portfolio_connector_last_update_age_seconds";
 pub const PORTFOLIO_UPDATES_TOTAL: &str = "portfolio_updates_total";
+pub const PORTFOLIO_APPLY_FAILURES_TOTAL: &str = "portfolio_apply_failures_total";
 pub const PORTFOLIO_CONSUMER_LAG_SECONDS: &str = "portfolio_consumer_lag_seconds";
+pub const PORTFOLIO_OWNERSHIP_LAG_SECONDS: &str = "portfolio_ownership_lag_seconds";
+pub const PORTFOLIO_OWNERSHIP_OUTCOMES_TOTAL: &str = "portfolio_ownership_outcomes_total";
 pub const PORTFOLIO_ORDER_REJECTIONS_TOTAL: &str = "portfolio_order_rejections_total";
 
 pub const AUTH_REPLAY_HITS_TOTAL: &str = "auth_replay_hits_total";
@@ -367,9 +370,21 @@ impl DescriptionsMetrics {
             PORTFOLIO_UPDATES_TOTAL,
             "Total number of portfolio updates, labelled by exchange and outcome"
         );
+        describe_counter!(
+            PORTFOLIO_APPLY_FAILURES_TOTAL,
+            "Total number of portfolio consumer failures, labelled by stage and operation"
+        );
         describe_histogram!(
             PORTFOLIO_CONSUMER_LAG_SECONDS,
             "Lag in seconds between portfolio update occurrence and consumer application"
+        );
+        describe_histogram!(
+            PORTFOLIO_OWNERSHIP_LAG_SECONDS,
+            "Lag in seconds between ownership event occurrence and consumer application"
+        );
+        describe_counter!(
+            PORTFOLIO_OWNERSHIP_OUTCOMES_TOTAL,
+            "Total number of ownership events, labelled by outcome"
         );
         describe_counter!(
             PORTFOLIO_ORDER_REJECTIONS_TOTAL,

@@ -9,7 +9,7 @@ pub struct PortfolioUpdateMetadata {
 }
 
 impl PortfolioUpdateMetadata {
-    pub(super) fn new(
+    pub(crate) fn new(
         version: u64,
         occurred_at: DateTime<Utc>,
         exchange_time: Option<DateTime<Utc>>,

@@ -15,6 +15,7 @@ mod ownership_source;
 mod portfolio;
 mod portfolio_codec;
 mod publishing_sink;
+mod read_model;
 mod runner;
 mod service;
 mod state;

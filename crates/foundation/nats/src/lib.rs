@@ -14,7 +14,7 @@ mod subscriber;
 
 pub use address::NatsAddress;
 pub use consumer::{ConsumerStart, JetStreamConsumer};
-pub use jetstream::{ACK_WAIT, JetStream};
+pub use jetstream::{ACK_WAIT, JetStream, StreamSpec};
 pub use kv::KeyValue;
 pub use message::Message;
 pub use publisher::{EventPublisher, NatsPublisher, PublishAck};
