@@ -1,7 +1,7 @@
 use crate::{
     aws_ops::{
         lambda::{Lambda, LambdaConfig},
-        s3::S3,
+        s3_client::S3,
     },
     config::OrchestratorConfig,
 };
@@ -9,7 +9,7 @@ use aws_sdk_lambda::Client as LambdaClient;
 use aws_sdk_sqs::Client as SqsClient;
 use platform_errors::BuildResult;
 use platform_github::github_auth::GitHubAuth;
-use platform_sqs::{sqs::Sqs, sqs::SqsConfig, sqs_dedup::SqsDedup};
+use platform_sqs::{message_dedup::SqsDedup, sqs::Sqs, sqs::SqsConfig};
 use std::time::Duration;
 
 pub struct RsOrchestratorContext {

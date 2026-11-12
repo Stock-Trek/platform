@@ -1,18 +1,18 @@
 //! Source input dispatch, candle publishing and idle flushing.
 
 use super::{
-    ProcessorRunner, QuiesceReceiver, commit::CommitState, output::CandleOutputWriter,
+    ProcessorRunner, QuiesceReceiver, commit::CommitState, output_writer::CandleOutputWriter,
     writer::Writer,
 };
 use crate::{
-    checkpoint::StateStore,
+    candle_sink::{ClosedCandlePublisher, OpenCandleStore},
+    checkpoint_record::StateStore,
     config::AggregatorConfig,
-    lease::LeaseStore,
+    market_source::{MarketInput, MarketSource},
     processor::{CandleProcessor, ProcessorUpdate},
-    shard::ShardId,
-    sink::{ClosedCandlePublisher, OpenCandleStore},
-    source::{MarketInput, MarketSource},
+    shard_id::ShardId,
     state::DeduplicationKey,
+    writer_lease::LeaseStore,
 };
 use platform_errors::BuildResult;
 use platform_market_data::{

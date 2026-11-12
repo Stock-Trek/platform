@@ -1,12 +1,11 @@
 use crate::{
-    auto_resync_connector::AutoResyncConnector,
     clients::client::{HttpClient, WebsocketClient},
     clients::{iris::IrisWebsocketClient, reqwest::ReqwestHttpClient},
-    clock::Clock,
     rate_limit::{
-        rate_limiter::RateLimiter, rate_limiter_state::RateLimiterState,
-        rate_limiters::RateLimiters,
+        limiter_registry::RateLimiters, limiter_state::RateLimiterState, rate_limiter::RateLimiter,
     },
+    resync_connector::AutoResyncConnector,
+    server_clock::Clock,
     websocket_listener::WebsocketListener,
 };
 use iris::{Config as IrisConfig, DisconnectedBehavior, ServerCloseBehavior};

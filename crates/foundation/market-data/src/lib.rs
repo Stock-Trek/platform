@@ -9,9 +9,18 @@
 
 pub mod candle;
 pub mod decoders;
-pub mod envelope;
-pub mod event;
-pub mod subject;
+pub mod envelope_codec;
 
+#[cfg(test)]
+mod envelope_codec_tests;
+
+pub use envelope_codec::*;
+pub mod event;
+pub mod market_event_subject;
+
+#[cfg(test)]
+mod market_event_subject_tests;
+
+pub use market_event_subject::*;
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;

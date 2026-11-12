@@ -1,8 +1,8 @@
 use crate::{
     backfiller::{BackfillOptions, BackfillService},
-    fetcher::{BackfilledEvent, MissingEventFetcher},
-    gap_marker_source::GapMarkerSource,
-    retry::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
+    event_fetcher::{BackfilledEvent, MissingEventFetcher},
+    gap_retry_store::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
+    nats_gap_marker_source::GapMarkerSource,
 };
 use async_trait::async_trait;
 use platform_errors::BuildResult;

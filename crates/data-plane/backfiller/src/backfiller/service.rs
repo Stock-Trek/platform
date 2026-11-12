@@ -1,14 +1,14 @@
 use crate::{
-    fetcher::{BackfilledEvent, MissingEventFetcher},
-    gap_marker_source::GapMarkerSource,
-    retry::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
+    event_fetcher::{BackfilledEvent, MissingEventFetcher},
+    gap_retry_store::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
+    nats_gap_marker_source::GapMarkerSource,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::{BuildError, BuildResult};
 use platform_market_data::{
-    envelope::EnvelopeCodec,
+    envelope_codec::EnvelopeCodec,
     event::{GapMarker, MarketEvent},
-    subject::MarketEventSubject,
+    market_event_subject::MarketEventSubject,
 };
 use platform_metrics::descriptions::{
     BACKFILL_OUTCOME_COVERED, BACKFILL_OUTCOME_EMPTY, BACKFILL_OUTCOME_ERROR,

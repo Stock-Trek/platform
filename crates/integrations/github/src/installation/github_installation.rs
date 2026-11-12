@@ -3,7 +3,7 @@ use octocrab::{Octocrab, models::InstallationId};
 use platform_config::DirectoryLimits;
 use platform_errors::{BuildError, BuildResult, GitHubError, TimeoutError};
 use platform_git::git_host::{GitFile, GitHost};
-use platform_time::{deadline::Deadline, timeouts::Timeouts};
+use platform_time::{deadline_budget::Deadline, timeouts::Timeouts};
 use std::sync::Arc;
 
 const PROVIDER: &str = "github";

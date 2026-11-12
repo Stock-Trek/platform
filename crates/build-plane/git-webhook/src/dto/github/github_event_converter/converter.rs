@@ -4,7 +4,7 @@ use crate::{
 };
 use platform_aws::SsmSecrets;
 use platform_errors::{BuildError, BuildResult};
-use platform_github::host_allow_list::HostAllowlist;
+use platform_github::host_allowlist::HostAllowlist;
 use platform_metrics::event::EventMetrics;
 
 const GITHUB_WEBHOOK_SECRET: &str = "GITHUB_WEBHOOK_SECRET";

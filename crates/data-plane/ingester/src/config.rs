@@ -1,4 +1,4 @@
-use crate::source::StreamFormat;
+use crate::websocket_source::StreamFormat;
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Config;

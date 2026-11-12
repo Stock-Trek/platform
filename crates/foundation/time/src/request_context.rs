@@ -1,4 +1,4 @@
-use crate::deadline::Deadline;
+use crate::deadline_budget::Deadline;
 
 #[derive(Debug, Clone)]
 pub struct RequestContext<Context> {

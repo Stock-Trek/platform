@@ -1,7 +1,7 @@
 use super::fixtures_tests::{Fixtures, VecArchive};
-use crate::checkpoint::tests::InMemoryStateStore;
-use crate::checkpoint::{CheckpointRecord, StateStore};
-use crate::shard::ShardId;
+use crate::checkpoint_record::{CheckpointRecord, StateStore};
+use crate::checkpoint_record_tests::InMemoryStateStore;
+use crate::shard_id::ShardId;
 use crate::state::{AggregatorState, DeduplicationKey, STATE_SCHEMA_VERSION};
 use platform_market_data::decoders::trade::TradeDecoderFactory;
 use platform_nats::ConsumerStart;

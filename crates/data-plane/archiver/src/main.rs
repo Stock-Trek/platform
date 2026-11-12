@@ -1,10 +1,15 @@
+mod archiver_runner;
 mod config;
-mod runner;
+
+#[cfg(test)]
+mod archiver_runner_tests;
+
 mod sink;
 mod source;
 
 use crate::{
-    config::ArchiverConfig, runner::ArchiverRunner, sink::S3ParquetSink, source::NatsArchiveSource,
+    archiver_runner::ArchiverRunner, config::ArchiverConfig, sink::S3ParquetSink,
+    source::NatsArchiveSource,
 };
 use platform_archive::IcebergCatalog;
 use platform_errors::BuildResult;

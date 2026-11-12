@@ -1,9 +1,9 @@
 use super::fixtures_tests::{FakeSink, FakeSource, Fixtures, SignalingSource};
-use crate::checkpoint::tests::InMemoryStateStore;
-use crate::checkpoint::{CheckpointRecord, StateStore};
+use crate::checkpoint_record::{CheckpointRecord, StateStore};
+use crate::checkpoint_record_tests::InMemoryStateStore;
+use crate::market_source::MarketInput;
 use crate::runner::ProcessorRunner;
-use crate::shard::ShardId;
-use crate::source::MarketInput;
+use crate::shard_id::ShardId;
 use crate::state::{AggregatorState, DeduplicationKey};
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::atomic::AtomicUsize;

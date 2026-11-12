@@ -1,7 +1,7 @@
 use super::Connector;
 use crate::{
     clients::client::WebsocketClient,
-    rate_limit::rate_limiters::RateLimitGuard,
+    rate_limit::limiter_registry::RateLimitGuard,
     submission::{Submission, SubmissionOutcome},
 };
 use futures_timer::Delay;

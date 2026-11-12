@@ -9,7 +9,12 @@
 //! (including the algorithm registry) run before the command is handled.
 
 pub mod backtest;
-mod config;
+mod invoker;
+
+#[cfg(test)]
+mod invoker_tests;
+
+pub use invoker::*;
 mod cwasm_artifact;
 mod guest_actions;
 mod guest_state;
@@ -33,7 +38,6 @@ mod runtime_tests;
 #[cfg(test)]
 mod tests;
 
-pub use config::*;
 pub use cwasm_artifact::*;
 pub use guest_actions::*;
 pub use guest_state::Emit;

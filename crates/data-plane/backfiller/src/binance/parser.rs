@@ -1,4 +1,4 @@
-use crate::fetcher::BackfilledEvent;
+use crate::event_fetcher::BackfilledEvent;
 use platform_exchange_types::binance::{depth::BinanceDepthResponse, trades::BinanceTradeResponse};
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::json;

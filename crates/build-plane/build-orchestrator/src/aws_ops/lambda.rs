@@ -1,7 +1,7 @@
-use crate::aws_ops::build_request::BuildRequest;
+use crate::aws_ops::request::BuildRequest;
 use aws_sdk_lambda::{Client as LambdaClient, primitives::Blob, types::InvocationType};
 use platform_errors::{BuildError, BuildResult, TimeoutError};
-use platform_time::{deadline::Deadline, timeouts::Timeouts};
+use platform_time::{deadline_budget::Deadline, timeouts::Timeouts};
 
 pub struct LambdaConfig {
     pub function_name: String,

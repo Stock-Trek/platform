@@ -1,7 +1,7 @@
 use super::fixtures_tests::{FakeSink, Fixtures};
 use crate::processor::{CandleProcessor, ProcessorUpdate};
 use crate::runner::ProcessorRunner;
-use crate::shard::ShardId;
+use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
 use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle};
 use platform_market_data::decoders::trade::Trade;
@@ -93,7 +93,7 @@ async fn count_only_retention_updates_reach_metrics_without_publishing_candles()
     );
 
     let sink = FakeSink::default();
-    let writer = crate::runner::output::CandleOutputWriter::start(sink.clone());
+    let writer = crate::runner::output_writer::CandleOutputWriter::start(sink.clone());
     writer.enqueue(update, processor.state()).await.unwrap();
     writer.flush().await.unwrap();
     writer.shutdown().await.unwrap();

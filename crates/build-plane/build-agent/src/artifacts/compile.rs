@@ -2,7 +2,7 @@ use super::{
     Artifacts, CARGO, CWASM_ARTIFACT_FILE, SOURCE_TARGET_DIR, WASM_ARTIFACT_FILE, WASM_MANIFEST,
     WASM_TARGET, WASMTIME, WORKSPACE_ENTRIES,
 };
-use crate::source::Source;
+use crate::source_archive::Source;
 use platform_errors::{BuildError, BuildResult, ConfigError, ValidationError};
 use std::{
     fs as std_fs, io,

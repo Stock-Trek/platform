@@ -1,9 +1,11 @@
 mod aggregator;
+mod config_validation;
 mod env;
 mod loader;
 mod replay;
-mod validation;
 
+#[cfg(test)]
+mod config_validation_tests;
 pub use aggregator::AggregatorConfig;
 pub use env::{
     AGGREGATOR_ALLOWED_LATENESS_MS, AGGREGATOR_CHECKPOINT_BUCKET,

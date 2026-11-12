@@ -1,15 +1,15 @@
 //! Checkpointing and source acknowledgement for a shard writer.
 
-use super::{ProcessorRunner, output::CandleOutputWriter, writer::Writer};
+use super::{ProcessorRunner, output_writer::CandleOutputWriter, writer::Writer};
 use crate::{
-    checkpoint::{CheckpointRecord, StateStore},
+    candle_sink::{ClosedCandlePublisher, OpenCandleStore},
+    checkpoint_record::{CheckpointRecord, StateStore},
     config::AggregatorConfig,
-    lease::LeaseStore,
+    market_source::{MarketSource, SourceRecord},
     processor::CandleProcessor,
-    shard::ShardId,
-    sink::{ClosedCandlePublisher, OpenCandleStore},
-    source::{MarketSource, SourceRecord},
+    shard_id::ShardId,
     state::AggregatorState,
+    writer_lease::LeaseStore,
 };
 use platform_errors::{BuildError, BuildResult, ErrorType};
 use platform_metrics::AggregatorMetrics;

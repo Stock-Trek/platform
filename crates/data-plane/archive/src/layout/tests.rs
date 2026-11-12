@@ -1,5 +1,5 @@
 use super::{ArchiveHour, ArchivePath};
-use crate::{ArchiveKind, ArchivePartition, routing::RoutingBucket};
+use crate::{ArchiveKind, ArchivePartition, routing_key::RoutingBucket};
 use chrono::{TimeZone, Utc};
 use platform_market_data::candle::{AlignedWindow, CandleKey};
 use platform_types::new_types::TimestampMilliseconds;

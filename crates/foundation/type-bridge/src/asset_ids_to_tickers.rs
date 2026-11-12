@@ -1,4 +1,4 @@
-use crate::ticker_mapping::TickerMapping;
+use crate::ticker_map::TickerMapping;
 use platform_errors::{BuildError, BuildResult, ValidationError};
 use platform_exchange_types::ticker::Ticker;
 use stock_trek_types::cex::{asset_id::AssetId, order_request::OrderRequest};

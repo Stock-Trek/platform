@@ -1,12 +1,28 @@
 mod config;
-mod ingester;
-mod runner;
-mod sequence;
-mod source;
+mod message_ingester;
+
+#[cfg(test)]
+mod message_ingester_tests;
+
+pub use message_ingester::*;
+mod ingester_runner;
+
+#[cfg(test)]
+mod ingester_runner_tests;
+
+mod sequence_tracker;
+
+#[cfg(test)]
+pub(crate) mod sequence_tracker_tests;
+
+mod websocket_source;
+
+#[cfg(test)]
+mod websocket_source_tests;
 
 use crate::{
-    config::IngesterConfig, runner::IngesterRunner, sequence::NatsSequenceStore,
-    source::WebsocketSource,
+    config::IngesterConfig, ingester_runner::IngesterRunner, sequence_tracker::NatsSequenceStore,
+    websocket_source::WebsocketSource,
 };
 use platform_errors::BuildResult;
 use platform_nats::NatsPublisher;

@@ -1,8 +1,8 @@
 use super::Connector;
 use crate::{
     clients::client::HttpClient,
-    rate_limit::rate_limiters::RateLimitGuard,
-    retry_after::RetryAfter,
+    rate_limit::limiter_registry::RateLimitGuard,
+    retry_after_header::RetryAfter,
     submission::{Submission, SubmissionOutcome},
 };
 use platform_errors::{BuildError, BuildResult, ConnectorError, RateLimitError, SendFailure};

@@ -1,6 +1,6 @@
 use crate::{
     ArchiveBatch, ArchiveParquet, ArchiveParquetWriter,
-    record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent},
+    archive_record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent},
 };
 use bytes::Bytes;
 use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle, MarketOhlcv};

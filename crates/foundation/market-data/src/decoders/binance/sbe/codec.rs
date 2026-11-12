@@ -1,7 +1,7 @@
 use super::groups::SbeGroupExt;
 use crate::{
     decoders::{
-        binary::BinaryCursor,
+        binary_cursor::BinaryCursor,
         frame::{DecodedFrame, FrameBytes},
     },
     event::ParsedMessage,

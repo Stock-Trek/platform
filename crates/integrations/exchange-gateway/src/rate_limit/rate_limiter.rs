@@ -1,4 +1,4 @@
-use crate::rate_limit::rate_limiter_state::RateLimiterState;
+use crate::rate_limit::limiter_state::RateLimiterState;
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult, RateLimitError};
 use platform_exchange_types::rate_limited::RateUsage;

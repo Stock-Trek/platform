@@ -1,6 +1,6 @@
 use crate::{
     config::RebuildConfig,
-    events::IcebergEventReader,
+    iceberg_event_reader::IcebergEventReader,
     rebuild::{
         RebuildOptions, RebuildStats, SpillUsage, candle_spill::CandleSpill,
         replay_spill::ReplaySpill,

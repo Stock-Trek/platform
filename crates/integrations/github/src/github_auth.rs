@@ -1,6 +1,6 @@
 use crate::{
     app_config::GitHubAppConfig,
-    host_allow_list::{DEFAULT_HOST, HostAllowlist},
+    host_allowlist::{DEFAULT_HOST, HostAllowlist},
     installation::GitHubInstallation,
 };
 use jsonwebtoken::EncodingKey;

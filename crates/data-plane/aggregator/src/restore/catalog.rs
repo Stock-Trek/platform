@@ -5,7 +5,7 @@
 
 use super::replay::S3ArchivedEventSource;
 use crate::config::ReplayStartPolicy;
-use crate::shard::ShardId;
+use crate::shard_id::ShardId;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{
     ArchiveHandoff, ArchiveKind, ArchivePath, Bucket, IcebergCatalog, IcebergConfig, ObjectKey,

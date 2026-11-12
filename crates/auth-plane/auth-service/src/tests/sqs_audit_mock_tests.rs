@@ -5,7 +5,7 @@ use crate::{
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::{BuildResult, SqsError};
-use platform_time::deadline::Deadline;
+use platform_time::deadline_budget::Deadline;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 pub(crate) struct MockAuditQueue {

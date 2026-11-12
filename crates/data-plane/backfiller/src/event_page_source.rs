@@ -1,4 +1,4 @@
-use crate::fetcher::BackfilledEvent;
+use crate::event_fetcher::BackfilledEvent;
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 

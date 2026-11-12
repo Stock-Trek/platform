@@ -1,8 +1,8 @@
 use super::fixtures_tests::{FailingCheckpointStore, FakeSink, FakeSource, Fixtures};
-use crate::checkpoint::tests::InMemoryStateStore;
+use crate::checkpoint_record_tests::InMemoryStateStore;
+use crate::market_source::{MarketInput, SourceRecord};
 use crate::runner::ProcessorRunner;
-use crate::shard::ShardId;
-use crate::source::{MarketInput, SourceRecord};
+use crate::shard_id::ShardId;
 use crate::state::DeduplicationKey;
 use platform_market_data::event::GapMarker;
 use platform_nats::Message;

@@ -1,4 +1,4 @@
-use crate::aws_ops::s3::S3Config;
+use crate::aws_ops::s3_client::S3Config;
 use platform_config::{
     AWS_CONNECT_TIMEOUT_SECS, AWS_LAMBDA_FUNCTION_NAME, AWS_OPERATION_TIMEOUT_SECS,
     BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS, BUILD_AGENT_TIMEOUT_SECS, DEADLINE_BUFFER_SECS,
@@ -6,7 +6,7 @@ use platform_config::{
     S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES, S3_SIGNED_URL_EXPIRY_SECS, SQS_QUEUE_URL,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_github::{app_config::GitHubAppConfig, host_allow_list::HostAllowlist};
+use platform_github::{app_config::GitHubAppConfig, host_allowlist::HostAllowlist};
 use platform_time::timeouts::Timeouts;
 use platform_types::url_scheme::UrlScheme;
 use std::{num::NonZeroUsize, time::Duration};

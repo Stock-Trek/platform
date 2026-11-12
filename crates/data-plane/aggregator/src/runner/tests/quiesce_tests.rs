@@ -1,10 +1,10 @@
 use super::fixtures_tests::{FakeSink, Fixtures, SignalingSource};
-use crate::checkpoint::tests::InMemoryStateStore;
-use crate::lease::LeaseStore;
-use crate::lease::tests::InMemoryLeaseStore;
+use crate::checkpoint_record_tests::InMemoryStateStore;
+use crate::market_source::MarketInput;
 use crate::runner::{ProcessorRunner, QuiesceSignal};
-use crate::shard::ShardId;
-use crate::source::MarketInput;
+use crate::shard_id::ShardId;
+use crate::writer_lease::LeaseStore;
+use crate::writer_lease_tests::InMemoryLeaseStore;
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};

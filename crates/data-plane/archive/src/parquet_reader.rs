@@ -1,4 +1,4 @@
-use crate::s3::{Bucket, ObjectKey};
+use crate::s3_object::{Bucket, ObjectKey};
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use bytes::Bytes;
 use futures::{FutureExt, future::BoxFuture};

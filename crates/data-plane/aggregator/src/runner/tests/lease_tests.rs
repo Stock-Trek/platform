@@ -1,8 +1,8 @@
 use super::fixtures_tests::{FakeSink, FakeSource, Fixtures};
-use crate::lease::LeaseStore;
-use crate::lease::tests::InMemoryLeaseStore;
 use crate::runner::ProcessorRunner;
-use crate::shard::ShardId;
+use crate::shard_id::ShardId;
+use crate::writer_lease::LeaseStore;
+use crate::writer_lease_tests::InMemoryLeaseStore;
 use std::sync::Arc;
 
 #[tokio::test]
