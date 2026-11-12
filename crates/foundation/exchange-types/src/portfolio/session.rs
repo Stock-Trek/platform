@@ -1,23 +1,21 @@
-use super::transport::{
-    AccountSnapshot, BinanceAccountEvent, BinanceEventStream, BinanceTransport,
-};
+use super::{AccountEvent, AccountEventStream, AccountSnapshot, PortfolioTransport};
 use crate::api_key_credential::ApiKeyCredentials;
 use platform_errors::BpResult;
 use std::sync::Arc;
 use stock_trek_types::cex::account_id::AccountId;
 use tokio::sync::Mutex;
 
-pub struct BinanceSession {
+pub struct PortfolioSession {
     account: AccountId,
     credentials: ApiKeyCredentials,
     listen_key: String,
-    stream: Mutex<Box<dyn BinanceEventStream>>,
-    transport: Arc<dyn BinanceTransport>,
+    stream: Mutex<Box<dyn AccountEventStream>>,
+    transport: Arc<dyn PortfolioTransport>,
 }
 
-impl BinanceSession {
+impl PortfolioSession {
     pub async fn open(
-        transport: Arc<dyn BinanceTransport>,
+        transport: Arc<dyn PortfolioTransport>,
         account: &AccountId,
         credentials: &ApiKeyCredentials,
     ) -> BpResult<Self> {
@@ -54,15 +52,15 @@ impl BinanceSession {
             .await
     }
 
-    pub async fn next(&mut self) -> BpResult<Option<BinanceAccountEvent>> {
+    pub async fn next(&mut self) -> BpResult<Option<AccountEvent>> {
         self.stream.lock().await.next().await
     }
 }
 
-impl std::fmt::Debug for BinanceSession {
+impl std::fmt::Debug for PortfolioSession {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         formatter
-            .debug_struct("BinanceSession")
+            .debug_struct("PortfolioSession")
             .field("account", &self.account)
             .field("listen_key", &"[redacted]")
             .finish()

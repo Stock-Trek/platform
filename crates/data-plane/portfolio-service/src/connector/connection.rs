@@ -1,10 +1,11 @@
 use super::{
     ConnectorHealthSink, ConnectorState, ExchangePortfolioFeed, PortfolioConnection,
-    PortfolioConnector, PortfolioCredentialSource, PortfolioExchangeTransport, PortfolioFeed,
-    PortfolioUpdateSink, health_reporter::HealthReporter, watcher::Watcher,
+    PortfolioConnector, PortfolioCredentialSource, PortfolioFeed, PortfolioUpdateSink,
+    health_reporter::HealthReporter, watcher::Watcher,
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
+use platform_exchange_types::portfolio::PortfolioTransport;
 use platform_metrics::PortfolioMetrics;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -19,14 +20,14 @@ use tokio::{
 };
 
 pub struct ExchangePortfolioConnector {
-    transports: BTreeMap<CexId, Arc<dyn PortfolioExchangeTransport>>,
+    transports: BTreeMap<CexId, Arc<dyn PortfolioTransport>>,
     credentials: Arc<dyn PortfolioCredentialSource>,
     health: Arc<dyn ConnectorHealthSink>,
 }
 
 impl ExchangePortfolioConnector {
     pub fn new(
-        transports: impl IntoIterator<Item = Arc<dyn PortfolioExchangeTransport>>,
+        transports: impl IntoIterator<Item = Arc<dyn PortfolioTransport>>,
         credentials: Arc<dyn PortfolioCredentialSource>,
         health: Arc<dyn ConnectorHealthSink>,
     ) -> Self {
@@ -87,7 +88,7 @@ struct AccountWatcher {
 
 struct ExchangePortfolioConnection {
     cex_id: CexId,
-    transport: Arc<dyn PortfolioExchangeTransport>,
+    transport: Arc<dyn PortfolioTransport>,
     credentials: Arc<dyn PortfolioCredentialSource>,
     sink: Arc<dyn PortfolioUpdateSink>,
     health: HealthReporter,

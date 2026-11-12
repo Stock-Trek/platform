@@ -28,12 +28,11 @@ pub use config::{
     PortfolioConfig, UpdateConfig,
 };
 pub use connector::{
-    BinanceExchangeTransport, CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT,
-    ConnectorHealth, ConnectorHealthSink, ConnectorPortfolioUpdate, ConnectorState,
-    ExchangePortfolioConnector, ExchangePortfolioFeed, NoopConnectorHealthSink, NoopPortfolioFeed,
-    PortfolioConnection, PortfolioConnector, PortfolioCredentialSource, PortfolioEvent,
-    PortfolioExchangeTransport, PortfolioFeed, PortfolioPosition, PortfolioSession,
-    PortfolioSnapshot, PortfolioUpdateApply, PortfolioUpdateSink, StaticPortfolioCredentials,
+    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT, ConnectorHealth, ConnectorHealthSink,
+    ConnectorPortfolioUpdate, ConnectorState, ExchangePortfolioConnector, ExchangePortfolioFeed,
+    NoopConnectorHealthSink, NoopPortfolioFeed, PortfolioConnection, PortfolioConnector,
+    PortfolioCredentialSource, PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink,
+    StaticPortfolioCredentials,
 };
 pub use connector_health_publisher::NatsConnectorHealthSink;
 pub use freshness::{FreshnessPolicy, PortfolioFreshness, StaleOrderPolicy};

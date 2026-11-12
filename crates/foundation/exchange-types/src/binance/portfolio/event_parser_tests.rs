@@ -1,4 +1,5 @@
-use super::{event_parser::EventParser, transport::BinanceAccountEvent};
+use super::event_parser::EventParser;
+use crate::portfolio::AccountEvent;
 use stock_trek_types::cex::asset_id::AssetId;
 
 struct Fixture;
@@ -29,7 +30,7 @@ fn parses_position_events_into_mapped_balances() {
     )
     .expect("event")
     .expect("position");
-    let BinanceAccountEvent::Position(event) = event else {
+    let AccountEvent::Position(event) = event else {
         panic!("expected position");
     };
     assert_eq!(event.version(), 42);
@@ -45,5 +46,5 @@ fn parses_listen_key_expiration_events() {
     )
     .expect("event")
     .expect("event");
-    assert_eq!(event, BinanceAccountEvent::ListenKeyExpired);
+    assert_eq!(event, AccountEvent::SessionExpired);
 }

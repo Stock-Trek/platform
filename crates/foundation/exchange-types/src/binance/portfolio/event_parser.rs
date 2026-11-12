@@ -1,8 +1,5 @@
-use super::{
-    balances::BalanceParser,
-    transport::{AccountPositionEvent, BinanceAccountEvent},
-    user_data::BinanceUserDataEvent,
-};
+use super::user_data::BinanceUserDataEvent;
+use crate::portfolio::{AccountEvent, AccountPositionEvent, BalanceParser};
 use chrono::{TimeZone, Utc};
 use platform_errors::{BpError, BpResult, ExchangeError};
 use stock_trek_types::cex::asset_id::AssetId;
@@ -10,13 +7,13 @@ use stock_trek_types::cex::asset_id::AssetId;
 pub struct EventParser;
 
 impl EventParser {
-    pub fn parse<F>(value: &serde_json::Value, mapping: &F) -> BpResult<Option<BinanceAccountEvent>>
+    pub fn parse<F>(value: &serde_json::Value, mapping: &F) -> BpResult<Option<AccountEvent>>
     where
-        F: Fn(&str) -> Option<AssetId>,
+        F: Fn(&str) -> Option<AssetId> + ?Sized,
     {
         let event = BinanceUserDataEvent::from_value(value)?;
         if event.is_listen_key_expired() {
-            return Ok(Some(BinanceAccountEvent::ListenKeyExpired));
+            return Ok(Some(AccountEvent::SessionExpired));
         }
         if !event.is_account_position() {
             return Ok(None);
@@ -48,8 +45,10 @@ impl EventParser {
                     "invalid event timestamp".to_string(),
                 ))
             })?;
-        Ok(Some(BinanceAccountEvent::Position(
-            AccountPositionEvent::new(version, balances, occurred_at),
-        )))
+        Ok(Some(AccountEvent::Position(AccountPositionEvent::new(
+            version,
+            balances,
+            occurred_at,
+        ))))
     }
 }

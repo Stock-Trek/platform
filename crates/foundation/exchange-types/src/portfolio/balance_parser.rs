@@ -10,7 +10,7 @@ impl BalanceParser {
         mapping: &F,
     ) -> BpResult<BTreeMap<AssetId, f64>>
     where
-        F: Fn(&str) -> Option<AssetId>,
+        F: Fn(&str) -> Option<AssetId> + ?Sized,
     {
         let mut parsed = BTreeMap::new();
         for (asset, free, locked) in balances {

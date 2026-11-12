@@ -1,6 +1,6 @@
 use super::{
-    AccountPositionEvent, AccountSnapshot, BinanceAccountEvent, BinanceEventStream, BinanceSession,
-    BinanceTransport,
+    AccountEvent, AccountEventStream, AccountPositionEvent, AccountSnapshot, PortfolioSession,
+    PortfolioTransport,
 };
 use crate::api_key_credential::ApiKeyCredentials;
 use async_trait::async_trait;
@@ -13,8 +13,9 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
+    time::Duration,
 };
-use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId};
+use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 
 struct Transport {
     closes: AtomicUsize,
@@ -23,7 +24,19 @@ struct Transport {
 }
 
 #[async_trait]
-impl BinanceTransport for Transport {
+impl PortfolioTransport for Transport {
+    fn cex_id(&self) -> CexId {
+        CexId::Binance
+    }
+
+    fn refresh_interval(&self) -> Duration {
+        Duration::from_secs(60)
+    }
+
+    fn reconnect_backoff(&self) -> Duration {
+        Duration::from_secs(1)
+    }
+
     async fn create_listen_key(&self, _credentials: &ApiKeyCredentials) -> BpResult<String> {
         self.created.store(true, Ordering::SeqCst);
         Ok("listen-key".to_string())
@@ -57,27 +70,27 @@ impl BinanceTransport for Transport {
         ))
     }
 
-    async fn open_stream(&self, _listen_key: &str) -> BpResult<Box<dyn BinanceEventStream>> {
+    async fn open_stream(&self, _listen_key: &str) -> BpResult<Box<dyn AccountEventStream>> {
         Ok(Box::new(Stream {
             events: VecDeque::from([
-                BinanceAccountEvent::Position(AccountPositionEvent::new(
+                AccountEvent::Position(AccountPositionEvent::new(
                     42,
                     BTreeMap::from([(AssetId::TetherUSD, 500.0)]),
                     Utc::now() + chrono::Duration::seconds(1),
                 )),
-                BinanceAccountEvent::ListenKeyExpired,
+                AccountEvent::SessionExpired,
             ]),
         }))
     }
 }
 
 struct Stream {
-    events: VecDeque<BinanceAccountEvent>,
+    events: VecDeque<AccountEvent>,
 }
 
 #[async_trait]
-impl BinanceEventStream for Stream {
-    async fn next(&mut self) -> BpResult<Option<BinanceAccountEvent>> {
+impl AccountEventStream for Stream {
+    async fn next(&mut self) -> BpResult<Option<AccountEvent>> {
         Ok(self.events.pop_front())
     }
 }
@@ -104,8 +117,8 @@ impl Fixture {
 #[tokio::test]
 async fn session_opens_snapshots_refreshes_and_closes_the_listen_key() {
     let transport = Fixture::transport();
-    let session = BinanceSession::open(
-        Arc::clone(&transport) as Arc<dyn BinanceTransport>,
+    let session = PortfolioSession::open(
+        Arc::clone(&transport) as Arc<dyn PortfolioTransport>,
         &AccountId::new("primary"),
         &Fixture::credentials(),
     )
@@ -118,8 +131,7 @@ async fn session_opens_snapshots_refreshes_and_closes_the_listen_key() {
     assert_eq!(transport.refreshes.load(Ordering::SeqCst), 1);
 
     let mut session = session;
-    let BinanceAccountEvent::Position(position) =
-        session.next().await.expect("event").expect("event")
+    let AccountEvent::Position(position) = session.next().await.expect("event").expect("event")
     else {
         panic!("expected position");
     };
@@ -127,7 +139,7 @@ async fn session_opens_snapshots_refreshes_and_closes_the_listen_key() {
     assert_eq!(position.balances().get(&AssetId::TetherUSD), Some(&500.0));
     assert_eq!(
         session.next().await.expect("event"),
-        Some(BinanceAccountEvent::ListenKeyExpired)
+        Some(AccountEvent::SessionExpired)
     );
     assert_eq!(session.next().await.expect("event"), None);
 

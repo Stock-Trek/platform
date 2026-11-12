@@ -5040,6 +5040,7 @@ dependencies = [
  "platform-nats",
  "platform-portfolio-ownership",
  "platform-runtime",
+ "platform-type-bridge",
  "platform-types",
  "reqwest 0.13.5",
  "secrecy",

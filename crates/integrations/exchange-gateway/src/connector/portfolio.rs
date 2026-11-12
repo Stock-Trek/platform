@@ -1,0 +1,201 @@
+use super::Connector;
+use crate::{
+    clients::{iris::IrisWebsocketClient, reqwest::ReqwestHttpClient},
+    iris,
+    submission::SubmissionOutcome,
+    websocket_listener::WebsocketEventStream,
+};
+use async_trait::async_trait;
+use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_exchange_types::{
+    api_key_credential::ApiKeyCredentials,
+    encode::ByteEncoder,
+    portfolio::{
+        AccountEvent, AccountEventStream, AccountSnapshot, PortfolioExchange, PortfolioTransport,
+    },
+    request::ETHttpRequest,
+    signer::Signer,
+    ticker::Ticker,
+};
+use platform_type_bridge::TickerMapping;
+use std::time::Duration;
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
+
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
+const MAX_RETRIES: u8 = 3;
+
+pub struct GatewayPortfolioTransport<Exchange> {
+    exchange: Exchange,
+    rest_url: String,
+    websocket_url: String,
+    refresh_interval: Duration,
+    reconnect_backoff: Duration,
+    mapping: &'static TickerMapping,
+}
+
+impl<Exchange> GatewayPortfolioTransport<Exchange> {
+    pub fn new(
+        exchange: Exchange,
+        rest_url: impl Into<String>,
+        websocket_url: impl Into<String>,
+        refresh_interval: Duration,
+        reconnect_backoff: Duration,
+        mapping: &'static TickerMapping,
+    ) -> Self {
+        Self {
+            exchange,
+            rest_url: rest_url.into(),
+            websocket_url: websocket_url.into().trim_end_matches('/').to_string(),
+            refresh_interval,
+            reconnect_backoff,
+            mapping,
+        }
+    }
+
+    fn asset_id(mapping: &TickerMapping, asset: &str) -> Option<AssetId> {
+        mapping.asset_id(&Ticker(asset.to_string())).copied()
+    }
+}
+
+impl<Exchange> GatewayPortfolioTransport<Exchange>
+where
+    Exchange: PortfolioExchange + Clone + Send + Sync + 'static,
+{
+    fn http_connector(
+        &self,
+        credentials: &ApiKeyCredentials,
+    ) -> BpResult<Connector<Exchange, ReqwestHttpClient>> {
+        Connector::try_new_http_reqwest(
+            self.rest_url.clone(),
+            self.exchange.clone(),
+            Exchange::signer(credentials)?,
+            REQUEST_TIMEOUT,
+            MAX_RETRIES,
+        )
+    }
+
+    async fn submit<Request>(
+        connector: &Connector<Exchange, ReqwestHttpClient>,
+        request: Request,
+    ) -> BpResult<Request::Response>
+    where
+        Request: ETHttpRequest<Exchange = Exchange> + Send,
+    {
+        match connector.submit_http(request)?.wait().await? {
+            SubmissionOutcome::Submitted(response) => Ok(response),
+            SubmissionOutcome::Unknown { .. } => Err(BpError::Exchange(
+                ExchangeError::BadResponse("portfolio request outcome is unknown".to_string()),
+            )),
+        }
+    }
+}
+
+#[async_trait]
+impl<Exchange> PortfolioTransport for GatewayPortfolioTransport<Exchange>
+where
+    Exchange: PortfolioExchange + Clone + Send + Sync + 'static,
+{
+    fn cex_id(&self) -> CexId {
+        self.exchange.cex_id()
+    }
+
+    fn refresh_interval(&self) -> Duration {
+        self.refresh_interval
+    }
+
+    fn reconnect_backoff(&self) -> Duration {
+        self.reconnect_backoff
+    }
+
+    async fn create_listen_key(&self, credentials: &ApiKeyCredentials) -> BpResult<String> {
+        let connector = self.http_connector(credentials)?;
+        let response = Self::submit(&connector, Exchange::create_listen_key_request()).await?;
+        Exchange::listen_key(response)
+    }
+
+    async fn keepalive_listen_key(
+        &self,
+        credentials: &ApiKeyCredentials,
+        listen_key: &str,
+    ) -> BpResult<()> {
+        let connector = self.http_connector(credentials)?;
+        let response = Self::submit(
+            &connector,
+            Exchange::keepalive_listen_key_request(listen_key),
+        )
+        .await?;
+        Exchange::listen_key_ack(response)
+    }
+
+    async fn close_listen_key(
+        &self,
+        credentials: &ApiKeyCredentials,
+        listen_key: &str,
+    ) -> BpResult<()> {
+        let connector = self.http_connector(credentials)?;
+        let response =
+            Self::submit(&connector, Exchange::close_listen_key_request(listen_key)).await?;
+        Exchange::listen_key_ack(response)
+    }
+
+    async fn account_snapshot(&self, credentials: &ApiKeyCredentials) -> BpResult<AccountSnapshot> {
+        let connector = self.http_connector(credentials)?;
+        let response = Self::submit(&connector, Exchange::account_snapshot_request()).await?;
+        let mapping = self.mapping;
+        Exchange::account_snapshot(response, &|asset| Self::asset_id(mapping, asset))
+    }
+
+    async fn open_stream(&self, listen_key: &str) -> BpResult<Box<dyn AccountEventStream>> {
+        let url = format!("{}/{listen_key}", self.websocket_url);
+        let connector = Connector::try_new_websocket_iris(
+            url,
+            self.exchange.clone(),
+            Signer::new_unencrypted(ByteEncoder::HexLower),
+            iris::Config::new(),
+            REQUEST_TIMEOUT,
+            0,
+        )?;
+        let listener = connector
+            .websocket_listener
+            .as_ref()
+            .ok_or_else(|| {
+                BpError::Exchange(ExchangeError::BadResponse(
+                    "websocket listener is missing".to_string(),
+                ))
+            })?
+            .clone();
+        let events = listener.subscribe();
+        connector.connect().await?;
+        Ok(Box::new(GatewayAccountEventStream {
+            _connector: connector,
+            events,
+            mapping: self.mapping,
+        }))
+    }
+}
+
+struct GatewayAccountEventStream<Exchange> {
+    _connector: Connector<Exchange, IrisWebsocketClient>,
+    events: WebsocketEventStream,
+    mapping: &'static TickerMapping,
+}
+
+#[async_trait]
+impl<Exchange> AccountEventStream for GatewayAccountEventStream<Exchange>
+where
+    Exchange: PortfolioExchange + Send + Sync + 'static,
+{
+    async fn next(&mut self) -> BpResult<Option<AccountEvent>> {
+        loop {
+            let Some(value) = self.events.next().await else {
+                return Ok(None);
+            };
+            let mapping = self.mapping;
+            if let Some(event) = Exchange::account_event(&value, &|asset| {
+                GatewayPortfolioTransport::<Exchange>::asset_id(mapping, asset)
+            })? {
+                return Ok(Some(event));
+            }
+        }
+    }
+}

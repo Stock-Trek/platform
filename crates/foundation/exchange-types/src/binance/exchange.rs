@@ -17,6 +17,7 @@ use platform_errors::BpResult;
 use platform_types::new_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, time::Duration};
 
+#[derive(Clone, Copy)]
 pub struct BinanceExchange;
 
 impl ETExchange for BinanceExchange {

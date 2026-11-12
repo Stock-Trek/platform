@@ -1,10 +1,12 @@
 use super::{
-    ConnectorPortfolioUpdate, ConnectorState, PortfolioEvent, PortfolioExchangeTransport,
-    PortfolioPosition, PortfolioUpdateApply, PortfolioUpdateSink, health_reporter::HealthReporter,
-    session_state::SessionState,
+    ConnectorPortfolioUpdate, ConnectorState, PortfolioUpdateApply, PortfolioUpdateSink,
+    health_reporter::HealthReporter, session_state::SessionState,
 };
 use chrono::Utc;
 use platform_errors::{BpError, BpResult};
+use platform_exchange_types::portfolio::{
+    AccountEvent, AccountPositionEvent, PortfolioSession, PortfolioTransport,
+};
 use platform_metrics::PortfolioMetrics;
 use std::{sync::Arc, time::Instant};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
@@ -18,7 +20,7 @@ const HEALTH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 pub(super) struct Watcher {
     pub(super) cex_id: CexId,
     pub(super) account: AccountId,
-    pub(super) transport: Arc<dyn PortfolioExchangeTransport>,
+    pub(super) transport: Arc<dyn PortfolioTransport>,
     pub(super) credentials: Arc<dyn super::PortfolioCredentialSource>,
     pub(super) sink: Arc<dyn PortfolioUpdateSink>,
     pub(super) health: HealthReporter,
@@ -68,10 +70,9 @@ impl Watcher {
             .credentials
             .credentials(self.cex_id, &self.account)
             .await?;
-        let mut session = self
-            .transport
-            .open_session(&self.account, &credentials)
-            .await?;
+        let mut session =
+            PortfolioSession::open(Arc::clone(&self.transport), &self.account, &credentials)
+                .await?;
         let result = self.session(&mut session, shutdown, state).await;
         let _ = session.close().await;
         result
@@ -79,7 +80,7 @@ impl Watcher {
 
     async fn session(
         &self,
-        session: &mut Box<dyn super::PortfolioSession>,
+        session: &mut PortfolioSession,
         shutdown: &mut watch::Receiver<bool>,
         state: &mut SessionState,
     ) -> BpResult<()> {
@@ -118,10 +119,10 @@ impl Watcher {
                 event = session.next() => {
                     match event? {
                         None => return Err(BpError::external(std::io::Error::other("portfolio event stream closed"))),
-                        Some(PortfolioEvent::SessionExpired) => {
+                        Some(AccountEvent::SessionExpired) => {
                             return Err(BpError::external(std::io::Error::other("portfolio session expired")));
                         }
-                        Some(PortfolioEvent::Position(event)) => {
+                        Some(AccountEvent::Position(event)) => {
                             self.apply_position(event, state).await?;
                         }
                     }
@@ -132,7 +133,7 @@ impl Watcher {
 
     async fn apply_position(
         &self,
-        event: PortfolioPosition,
+        event: AccountPositionEvent,
         state: &mut SessionState,
     ) -> BpResult<()> {
         if event.occurred_at() < state.last_exchange_time {

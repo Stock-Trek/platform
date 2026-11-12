@@ -2,16 +2,19 @@ use super::order_request_fixture_tests::{Fixture as OrderFixture, OWNER};
 use super::test_feed::Fixture as PortfolioFixture;
 use crate::connector::{
     ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
-    PortfolioCredentialSource, PortfolioEvent, PortfolioExchangeTransport, PortfolioFeed,
-    PortfolioPosition, PortfolioSession, PortfolioSnapshot, PortfolioUpdateApply,
-    PortfolioUpdateSink,
+    PortfolioCredentialSource, PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink,
 };
 use crate::{OrderRequestService, PortfolioService, PortfolioUpdate};
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
 use platform_errors::BpResult;
-use platform_exchange_types::api_key_credential::ApiKeyCredentials;
+use platform_exchange_types::{
+    api_key_credential::ApiKeyCredentials,
+    portfolio::{
+        AccountEvent, AccountEventStream, AccountPositionEvent, AccountSnapshot, PortfolioTransport,
+    },
+};
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use secrecy::SecretString;
 use std::{
@@ -40,41 +43,12 @@ impl PortfolioCredentialSource for Credentials {
     }
 }
 
-struct Session {
-    snapshot: PortfolioSnapshot,
-    events: VecDeque<PortfolioEvent>,
-    closes: Arc<AtomicUsize>,
-}
-
-#[async_trait]
-impl PortfolioSession for Session {
-    async fn snapshot(&self) -> BpResult<PortfolioSnapshot> {
-        Ok(self.snapshot.clone())
-    }
-
-    async fn refresh(&self) -> BpResult<()> {
-        Ok(())
-    }
-
-    async fn close(&mut self) -> BpResult<()> {
-        self.closes.fetch_add(1, Ordering::SeqCst);
-        Ok(())
-    }
-
-    async fn next(&mut self) -> BpResult<Option<PortfolioEvent>> {
-        if let Some(event) = self.events.pop_front() {
-            return Ok(Some(event));
-        }
-        std::future::pending().await
-    }
-}
-
 struct Transport {
     closes: Arc<AtomicUsize>,
 }
 
 #[async_trait]
-impl PortfolioExchangeTransport for Transport {
+impl PortfolioTransport for Transport {
     fn cex_id(&self) -> CexId {
         CexId::Binance
     }
@@ -87,20 +61,59 @@ impl PortfolioExchangeTransport for Transport {
         Duration::from_millis(10)
     }
 
-    async fn open_session(
+    async fn create_listen_key(&self, _credentials: &ApiKeyCredentials) -> BpResult<String> {
+        Ok("listen-key".to_string())
+    }
+
+    async fn keepalive_listen_key(
         &self,
-        _account: &AccountId,
         _credentials: &ApiKeyCredentials,
-    ) -> BpResult<Box<dyn PortfolioSession>> {
-        Ok(Box::new(Session {
-            snapshot: PortfolioSnapshot::new(BTreeMap::from([(AssetId::Bitcoin, 1.0)]), Utc::now()),
-            events: VecDeque::from([PortfolioEvent::Position(PortfolioPosition::new(
+        _listen_key: &str,
+    ) -> BpResult<()> {
+        Ok(())
+    }
+
+    async fn close_listen_key(
+        &self,
+        _credentials: &ApiKeyCredentials,
+        _listen_key: &str,
+    ) -> BpResult<()> {
+        self.closes.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn account_snapshot(
+        &self,
+        _credentials: &ApiKeyCredentials,
+    ) -> BpResult<AccountSnapshot> {
+        Ok(AccountSnapshot::new(
+            BTreeMap::from([(AssetId::Bitcoin, 1.0)]),
+            Utc::now(),
+        ))
+    }
+
+    async fn open_stream(&self, _listen_key: &str) -> BpResult<Box<dyn AccountEventStream>> {
+        Ok(Box::new(Stream {
+            events: VecDeque::from([AccountEvent::Position(AccountPositionEvent::new(
                 42,
                 BTreeMap::from([(AssetId::TetherUSD, 500.0)]),
                 Utc::now() + chrono::Duration::seconds(1),
             ))]),
-            closes: Arc::clone(&self.closes),
         }))
+    }
+}
+
+struct Stream {
+    events: VecDeque<AccountEvent>,
+}
+
+#[async_trait]
+impl AccountEventStream for Stream {
+    async fn next(&mut self) -> BpResult<Option<AccountEvent>> {
+        if let Some(event) = self.events.pop_front() {
+            return Ok(Some(event));
+        }
+        std::future::pending().await
     }
 }
 
@@ -160,7 +173,7 @@ impl Fixture {
 
     fn feed(closes: Arc<AtomicUsize>) -> Arc<dyn PortfolioFeed> {
         ExchangePortfolioConnector::new(
-            [Arc::new(Transport { closes }) as Arc<dyn PortfolioExchangeTransport>],
+            [Arc::new(Transport { closes }) as Arc<dyn PortfolioTransport>],
             Arc::new(Credentials),
             Arc::new(NoopConnectorHealthSink::new()),
         )

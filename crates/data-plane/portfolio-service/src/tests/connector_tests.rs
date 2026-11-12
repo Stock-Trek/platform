@@ -1,13 +1,17 @@
 use crate::connector::{
     ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
-    PortfolioCredentialSource, PortfolioEvent, PortfolioExchangeTransport, PortfolioFeed,
-    PortfolioPosition, PortfolioSession, PortfolioSnapshot, PortfolioUpdateApply,
-    PortfolioUpdateSink, StaticPortfolioCredentials,
+    PortfolioCredentialSource, PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink,
+    StaticPortfolioCredentials,
 };
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::BpResult;
-use platform_exchange_types::api_key_credential::ApiKeyCredentials;
+use platform_exchange_types::{
+    api_key_credential::ApiKeyCredentials,
+    portfolio::{
+        AccountEvent, AccountEventStream, AccountPositionEvent, AccountSnapshot, PortfolioTransport,
+    },
+};
 use secrecy::SecretString;
 use std::{
     collections::{BTreeMap, BTreeSet, VecDeque},
@@ -26,7 +30,7 @@ struct Transport {
 }
 
 #[async_trait]
-impl PortfolioExchangeTransport for Transport {
+impl PortfolioTransport for Transport {
     fn cex_id(&self) -> CexId {
         CexId::Binance
     }
@@ -39,50 +43,59 @@ impl PortfolioExchangeTransport for Transport {
         Duration::from_millis(10)
     }
 
-    async fn open_session(
-        &self,
-        _account: &AccountId,
-        _credentials: &ApiKeyCredentials,
-    ) -> BpResult<Box<dyn PortfolioSession>> {
-        self.opens.fetch_add(1, Ordering::SeqCst);
-        Ok(Box::new(Session {
-            events: VecDeque::from([
-                PortfolioEvent::Position(PortfolioPosition::new(
-                    42,
-                    BTreeMap::from([(AssetId::TetherUSD, 500.0)]),
-                    Utc::now() + chrono::Duration::seconds(1),
-                )),
-                PortfolioEvent::SessionExpired,
-            ]),
-            closes: Arc::clone(&self.closes),
-        }))
+    async fn create_listen_key(&self, _credentials: &ApiKeyCredentials) -> BpResult<String> {
+        Ok("listen-key".to_string())
     }
-}
 
-struct Session {
-    events: VecDeque<PortfolioEvent>,
-    closes: Arc<AtomicUsize>,
-}
+    async fn keepalive_listen_key(
+        &self,
+        _credentials: &ApiKeyCredentials,
+        _listen_key: &str,
+    ) -> BpResult<()> {
+        Ok(())
+    }
 
-#[async_trait]
-impl PortfolioSession for Session {
-    async fn snapshot(&self) -> BpResult<PortfolioSnapshot> {
-        Ok(PortfolioSnapshot::new(
+    async fn close_listen_key(
+        &self,
+        _credentials: &ApiKeyCredentials,
+        _listen_key: &str,
+    ) -> BpResult<()> {
+        self.closes.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn account_snapshot(
+        &self,
+        _credentials: &ApiKeyCredentials,
+    ) -> BpResult<AccountSnapshot> {
+        Ok(AccountSnapshot::new(
             BTreeMap::from([(AssetId::Bitcoin, 1.0)]),
             Utc::now(),
         ))
     }
 
-    async fn refresh(&self) -> BpResult<()> {
-        Ok(())
+    async fn open_stream(&self, _listen_key: &str) -> BpResult<Box<dyn AccountEventStream>> {
+        self.opens.fetch_add(1, Ordering::SeqCst);
+        Ok(Box::new(Stream {
+            events: VecDeque::from([
+                AccountEvent::Position(AccountPositionEvent::new(
+                    42,
+                    BTreeMap::from([(AssetId::TetherUSD, 500.0)]),
+                    Utc::now() + chrono::Duration::seconds(1),
+                )),
+                AccountEvent::SessionExpired,
+            ]),
+        }))
     }
+}
 
-    async fn close(&mut self) -> BpResult<()> {
-        self.closes.fetch_add(1, Ordering::SeqCst);
-        Ok(())
-    }
+struct Stream {
+    events: VecDeque<AccountEvent>,
+}
 
-    async fn next(&mut self) -> BpResult<Option<PortfolioEvent>> {
+#[async_trait]
+impl AccountEventStream for Stream {
+    async fn next(&mut self) -> BpResult<Option<AccountEvent>> {
         if let Some(event) = self.events.pop_front() {
             return Ok(Some(event));
         }
@@ -120,7 +133,7 @@ impl Fixture {
 
     fn feed(transport: Arc<Transport>) -> Arc<dyn PortfolioFeed> {
         ExchangePortfolioConnector::new(
-            [transport as Arc<dyn PortfolioExchangeTransport>],
+            [transport as Arc<dyn PortfolioTransport>],
             Self::credentials(),
             Arc::new(NoopConnectorHealthSink::new()),
         )
