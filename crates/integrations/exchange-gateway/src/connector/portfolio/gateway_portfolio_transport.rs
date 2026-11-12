@@ -2,9 +2,7 @@ use super::{
     AccountEventStream, PortfolioTransport, gateway_account_event_stream::GatewayAccountEventStream,
 };
 use crate::{
-    clients::{iris::IrisWebsocketClient, reqwest::ReqwestHttpClient},
-    connector::Connector,
-    submission::SubmissionOutcome,
+    clients::reqwest::ReqwestHttpClient, connector::Connector, iris, submission::SubmissionOutcome,
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult, ExchangeError};
@@ -146,20 +144,11 @@ where
 
     async fn open_stream(&self, listen_key: &str) -> BpResult<Box<dyn AccountEventStream>> {
         let url = format!("{}/{listen_key}", self.websocket_url);
-        let iris_config = crate::iris::Config::new()
-            .with_disconnected_behavior(crate::iris::DisconnectedBehavior::DropAllQueued)
-            .with_server_close_behavior(crate::iris::ServerCloseBehavior::Reconnect);
-        let connector = Connector::try_new_websocket(
+        let connector = Connector::try_new_websocket_iris(
             url,
             self.exchange.clone(),
             Signer::new_unencrypted(ByteEncoder::HexLower),
-            move |url, listener| {
-                Ok(IrisWebsocketClient::with_config(
-                    &url,
-                    iris_config,
-                    listener,
-                ))
-            },
+            iris::Config::new(),
             REQUEST_TIMEOUT,
             0,
         )?;

@@ -1,3 +1,4 @@
+pub mod auto_resync_connector;
 pub mod clients;
 mod clock;
 pub mod connector;

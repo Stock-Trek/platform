@@ -1,6 +1,7 @@
 use crate::{
+    auto_resync_connector::AutoResyncConnector,
     clients::client::{HttpClient, WebsocketClient},
-    clients::reqwest::ReqwestHttpClient,
+    clients::{iris::IrisWebsocketClient, reqwest::ReqwestHttpClient},
     clock::Clock,
     rate_limit::{
         rate_limiter::RateLimiter, rate_limiter_state::RateLimiterState,
@@ -8,6 +9,7 @@ use crate::{
     },
     websocket_listener::WebsocketListener,
 };
+use iris::{Config as IrisConfig, DisconnectedBehavior, ServerCloseBehavior};
 use platform_errors::{BpError, BpResult, SendFailure};
 use platform_exchange_types::{
     exchange::ETExchange,
@@ -113,6 +115,37 @@ impl Connector<(), ()> {
             websocket_listener: Some(websocket_listener),
         })
     }
+    #[allow(clippy::type_complexity, unused)]
+    pub fn try_new_websocket_iris<Exchange>(
+        url: String,
+        exchange: Exchange,
+        signer: Signer,
+        mut iris_config: IrisConfig,
+        request_timeout: Duration,
+        max_retries: u8,
+    ) -> BpResult<Connector<Exchange, IrisWebsocketClient>>
+    where
+        Exchange: ETExchange,
+    {
+        iris_config = iris_config
+            .with_disconnected_behavior(DisconnectedBehavior::DropAllQueued)
+            .with_server_close_behavior(ServerCloseBehavior::Reconnect);
+        let client_creator = move |url: String, websocket_listener| {
+            Ok(IrisWebsocketClient::with_config(
+                &url,
+                iris_config,
+                websocket_listener,
+            ))
+        };
+        Self::try_new_websocket(
+            url,
+            exchange,
+            signer,
+            client_creator,
+            request_timeout,
+            max_retries,
+        )
+    }
     pub fn rate_limiters(
         default_capacity: HashMap<RateLimit, UsageCount>,
     ) -> BpResult<RateLimiters> {
@@ -138,6 +171,14 @@ impl<Exchange, Client> Connector<Exchange, Client>
 where
     Exchange: ETExchange,
 {
+    #[allow(unused)]
+    pub fn into_auto_resync(self) -> AutoResyncConnector<Exchange, Client>
+    where
+        Exchange: Send + Sync + 'static,
+        Client: Send + Sync + 'static,
+    {
+        AutoResyncConnector::new(Arc::new(self))
+    }
     pub fn duration_since_last_sync(&self) -> BpResult<Option<Duration>> {
         self.clock.duration_since_last_sync()
     }
