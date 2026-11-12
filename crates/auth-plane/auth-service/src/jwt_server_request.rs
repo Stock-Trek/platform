@@ -1,4 +1,7 @@
-use crate::{ApiToken, AuthService};
+use crate::{
+    ApiToken, AuthService,
+    jwt_server_error::{JwtServerError, JwtServerResult},
+};
 use chrono::Utc;
 use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
 use hyper::{
@@ -25,14 +28,14 @@ impl JwtServerRequest {
         service: &AuthService,
         sigv4: &SigV4Config,
         request: Request<Incoming>,
-    ) -> Result<Response<Full<Bytes>>, (StatusCode, String)> {
+    ) -> JwtServerResult<Response<Full<Bytes>>> {
         if request.method() == Method::GET
             && matches!(request.uri().path(), JWKS_PATH | JWKS_ALIAS_PATH)
         {
             return Ok(Self::json(StatusCode::OK, service.jwks()));
         }
         if request.method() != Method::POST || request.uri().path() != JWT_PATH {
-            return Err((StatusCode::NOT_FOUND, "not found".to_string()));
+            return Err(JwtServerError::new(StatusCode::NOT_FOUND, "not found"));
         }
         Self::ensure_content_length(&request)?;
         let (parts, incoming) = request.into_parts();
@@ -40,26 +43,26 @@ impl JwtServerRequest {
         let headers = Self::headers(&parts.headers)?;
         let caller = Self::verify(sigv4, &parts, &headers, &body)?;
         let request: JwtRequest = serde_json::from_slice(&body)
-            .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+            .map_err(|error| JwtServerError::new(StatusCode::BAD_REQUEST, error.to_string()))?;
         let owner = ApiToken::validated_owner(request.owner())
-            .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+            .map_err(|error| JwtServerError::new(StatusCode::BAD_REQUEST, error.to_string()))?;
         if owner != caller.owner() {
-            return Err((
+            return Err(JwtServerError::new(
                 StatusCode::FORBIDDEN,
-                "requested owner does not match the authenticated caller".to_string(),
+                "requested owner does not match the authenticated caller",
             ));
         }
         let issued = service
             .issue_jwt_for_owner(owner, Utc::now())
             .await
-            .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))?;
+            .map_err(JwtServerError::issuance)?;
         Ok(Self::json(
             StatusCode::OK,
             &JwtResponse::new(issued.token(), issued.expires_at().timestamp()),
         ))
     }
 
-    async fn read_body(body: Incoming) -> Result<Bytes, (StatusCode, String)> {
+    async fn read_body(body: Incoming) -> JwtServerResult<Bytes> {
         let body = Limited::new(body, MAX_REQUEST_BYTES);
         let collected = timeout(BODY_READ_TIMEOUT, body.collect())
             .await
@@ -82,7 +85,7 @@ impl JwtServerRequest {
         Ok(collected.to_bytes())
     }
 
-    fn ensure_content_length(request: &Request<Incoming>) -> Result<(), (StatusCode, String)> {
+    fn ensure_content_length(request: &Request<Incoming>) -> JwtServerResult<()> {
         let too_large = request
             .headers()
             .get(CONTENT_LENGTH)
@@ -90,9 +93,9 @@ impl JwtServerRequest {
             .and_then(|value| value.parse::<usize>().ok())
             .is_some_and(|length| length > MAX_REQUEST_BYTES);
         if too_large {
-            Err((
+            Err(JwtServerError::new(
                 StatusCode::PAYLOAD_TOO_LARGE,
-                "JWT request is too large".to_string(),
+                "JWT request is too large",
             ))
         } else {
             Ok(())
@@ -104,7 +107,7 @@ impl JwtServerRequest {
         parts: &hyper::http::request::Parts,
         headers: &BTreeMap<String, String>,
         body: &[u8],
-    ) -> Result<platform_sigv4::VerifiedCaller, (StatusCode, String)> {
+    ) -> JwtServerResult<platform_sigv4::VerifiedCaller> {
         let host = headers
             .get("host")
             .ok_or_else(|| (StatusCode::UNAUTHORIZED, "missing host header".to_string()))?;
@@ -117,17 +120,19 @@ impl JwtServerRequest {
         let request = SigV4Request::new(parts.method.as_str(), &url, headers, body);
         sigv4
             .verify(&request, SystemTime::now())
-            .map_err(|error| (StatusCode::UNAUTHORIZED, error.to_string()))
+            .map_err(|error| JwtServerError::new(StatusCode::UNAUTHORIZED, error.to_string()))
     }
 
-    fn headers(values: &HeaderMap) -> Result<BTreeMap<String, String>, (StatusCode, String)> {
+    fn headers(values: &HeaderMap) -> JwtServerResult<BTreeMap<String, String>> {
         values
             .iter()
             .map(|(name, value)| {
                 value
                     .to_str()
                     .map(|value| (name.as_str().to_ascii_lowercase(), value.to_string()))
-                    .map_err(|error| (StatusCode::BAD_REQUEST, error.to_string()))
+                    .map_err(|error| {
+                        JwtServerError::new(StatusCode::BAD_REQUEST, error.to_string())
+                    })
             })
             .collect()
     }

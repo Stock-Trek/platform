@@ -10,6 +10,7 @@ mod auth_service_unicode_length_tests;
 mod jwks_cache_tests;
 mod jwt_key_tests;
 mod jwt_server_config_tests;
+mod jwt_server_issuance_error_tests;
 mod jwt_server_tests;
 mod order_jwt_tests;
 mod order_request_token_binding_tests;
