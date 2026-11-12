@@ -70,6 +70,15 @@ pub const MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL: &str =
 pub const MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL: &str =
     "market_data_aggregator_out_of_contract_gap_windows_total";
 
+pub const PORTFOLIO_CONNECTOR_CONNECTED: &str = "portfolio_connector_connected";
+pub const PORTFOLIO_CONNECTOR_SUBSCRIPTIONS: &str = "portfolio_connector_subscriptions";
+pub const PORTFOLIO_CONNECTOR_RECONNECTS_TOTAL: &str = "portfolio_connector_reconnects_total";
+pub const PORTFOLIO_CONNECTOR_LAST_UPDATE_AGE_SECONDS: &str =
+    "portfolio_connector_last_update_age_seconds";
+pub const PORTFOLIO_UPDATES_TOTAL: &str = "portfolio_updates_total";
+pub const PORTFOLIO_CONSUMER_LAG_SECONDS: &str = "portfolio_consumer_lag_seconds";
+pub const PORTFOLIO_ORDER_REJECTIONS_TOTAL: &str = "portfolio_order_rejections_total";
+
 pub const AUTH_REPLAY_HITS_TOTAL: &str = "auth_replay_hits_total";
 pub const AUTH_REPLAY_EVICTIONS_TOTAL: &str = "auth_replay_evictions_total";
 pub const AUTH_REPLAY_STORE_FAILURES_TOTAL: &str = "auth_replay_store_failures_total";
@@ -337,6 +346,34 @@ impl DescriptionsMetrics {
         describe_counter!(
             MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL,
             "Total number of gap-affected candle windows skipped by the aggregator event-time correction cutoff"
+        );
+        describe_gauge!(
+            PORTFOLIO_CONNECTOR_CONNECTED,
+            "Whether the portfolio connector currently has a healthy exchange connection"
+        );
+        describe_gauge!(
+            PORTFOLIO_CONNECTOR_SUBSCRIPTIONS,
+            "Number of exchange accounts currently subscribed by the portfolio connector"
+        );
+        describe_counter!(
+            PORTFOLIO_CONNECTOR_RECONNECTS_TOTAL,
+            "Total number of portfolio connector reconnect attempts, labelled by exchange"
+        );
+        describe_gauge!(
+            PORTFOLIO_CONNECTOR_LAST_UPDATE_AGE_SECONDS,
+            "Age in seconds of the last portfolio update observed by the connector"
+        );
+        describe_counter!(
+            PORTFOLIO_UPDATES_TOTAL,
+            "Total number of portfolio updates, labelled by exchange and outcome"
+        );
+        describe_histogram!(
+            PORTFOLIO_CONSUMER_LAG_SECONDS,
+            "Lag in seconds between portfolio update occurrence and consumer application"
+        );
+        describe_counter!(
+            PORTFOLIO_ORDER_REJECTIONS_TOTAL,
+            "Total number of orders rejected by portfolio authorization, labelled by reason"
         );
         describe_counter!(
             AUTH_REPLAY_HITS_TOTAL,

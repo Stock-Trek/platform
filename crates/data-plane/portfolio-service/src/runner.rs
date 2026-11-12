@@ -1,9 +1,14 @@
 use crate::{
-    NatsOwnershipSource, NoopPortfolioFeed, OrderRequestDelivery, OrderRequestServer,
-    OrderRequestService, OwnershipConsumer, PortfolioAuthService, PortfolioConfig,
-    PortfolioService,
+    NatsConnectorHealthSink, NatsOwnershipSource, NatsUpdateSource, OrderRequestDelivery,
+    OrderRequestServer, OrderRequestService, OwnershipConsumer, PORTFOLIO_UPDATE_STREAM_PREFIX,
+    PortfolioAuthService, PortfolioConfig, PortfolioService, PortfolioUpdateConsumer,
+    PublishingPortfolioUpdateSink,
 };
 use platform_errors::BpResult;
+use platform_exchange_gateway::connector::{
+    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT,
+};
+use platform_nats::{EventPublisher, NatsPublisher};
 use platform_runtime::{Runtime, Service};
 use std::sync::Arc;
 
@@ -15,12 +20,33 @@ impl PortfolioRunner {
     pub async fn run(config: PortfolioConfig) -> BpResult<()> {
         SERVICE.init_logging(config.log_filter())?;
         let auth_service = PortfolioAuthService::connect(config.auth().clone()).await?;
-        let portfolio = Arc::new(PortfolioService::new(Arc::new(NoopPortfolioFeed::new())));
-        let source = Arc::new(NatsOwnershipSource::connect(config.ownership()).await?);
-        let consumer = OwnershipConsumer::new(
-            portfolio.clone(),
-            source,
+        let publisher: Arc<dyn EventPublisher> = Arc::new(Self::publisher(&config).await?);
+        let feed = config
+            .connector()
+            .feed(Arc::new(NatsConnectorHealthSink::new(
+                Arc::clone(&publisher),
+                CONNECTOR_HEALTH_SUBJECT,
+            )));
+        let portfolio = Arc::new(PortfolioService::with_freshness_policy(
+            Arc::clone(&feed),
+            config.freshness().policy(),
+        ));
+        let sink = Arc::new(PublishingPortfolioUpdateSink::new(
+            Arc::clone(&publisher),
+            Arc::clone(&portfolio),
+        ));
+        feed.set_update_sink(sink);
+        let ownership_source = Arc::new(NatsOwnershipSource::connect(config.ownership()).await?);
+        let update_source = Arc::new(NatsUpdateSource::connect(config.update()).await?);
+        let ownership_consumer = OwnershipConsumer::new(
+            Arc::clone(&portfolio),
+            ownership_source,
             config.ownership().retry_backoff(),
+        );
+        let update_consumer = PortfolioUpdateConsumer::new(
+            Arc::clone(&portfolio),
+            update_source,
+            config.update().retry_backoff(),
         );
         let service = Arc::new(
             OrderRequestService::with_jwks_url(auth_service, config.auth().jwks_url())?
@@ -34,8 +60,24 @@ impl PortfolioRunner {
                 .await?;
         tokio::try_join!(
             server.serve_with_shutdown(Runtime::shutdown_signal()),
-            consumer.run(Runtime::shutdown_signal())
+            ownership_consumer.run(Runtime::shutdown_signal()),
+            update_consumer.run(Runtime::shutdown_signal())
         )?;
         Ok(())
+    }
+
+    async fn publisher(config: &PortfolioConfig) -> BpResult<NatsPublisher> {
+        let publisher = NatsPublisher::connect(
+            config.update().nats_url(),
+            &format!("{}-publisher", config.update().client_name()),
+        )
+        .await?;
+        publisher
+            .ensure_stream(PORTFOLIO_UPDATE_STREAM_PREFIX)
+            .await?;
+        publisher
+            .ensure_stream(CONNECTOR_HEALTH_STREAM_PREFIX)
+            .await?;
+        Ok(publisher)
     }
 }

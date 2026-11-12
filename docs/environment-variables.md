@@ -83,6 +83,11 @@ required in some configurations, the condition is stated in its description.
 | `PORTFOLIO_OWNERSHIP_DURABLE` | Durable JetStream consumer name for ownership events. |
 | `PORTFOLIO_OWNERSHIP_NATS_URL` | NATS URL used to consume ownership events. |
 | `PORTFOLIO_OWNERSHIP_RETRY_BACKOFF_SECS` | Delay between ownership-consumer retries after an error, in seconds. |
+| `PORTFOLIO_UPDATE_CHECKPOINT_BUCKET` | NATS JetStream key-value bucket that stores the last processed portfolio-update sequence. |
+| `PORTFOLIO_UPDATE_CLIENT_NAME` | NATS client name used by the portfolio-service update consumer and publisher. |
+| `PORTFOLIO_UPDATE_DURABLE` | Durable JetStream consumer name for portfolio updates. |
+| `PORTFOLIO_UPDATE_NATS_URL` | NATS URL used to publish and consume portfolio updates. |
+| `PORTFOLIO_UPDATE_RETRY_BACKOFF_SECS` | Delay between portfolio-update consumer retries after an error, in seconds. |
 | `PORTFOLIO_VALKEY_KEY_PREFIX` | Prefix for replay-protection keys in Valkey. |
 | `PORTFOLIO_VALKEY_TIMEOUT_SECS` | Connection and command timeout for Valkey, in seconds. |
 | `PORTFOLIO_VALKEY_URL` | `redis://`, `rediss://`, `valkey://`, or `valkeys://` URL of the shared Valkey replay backend. |
@@ -94,6 +99,20 @@ required in some configurations, the condition is stated in its description.
 | `PORTFOLIO_USAGE_QUEUE_TIMEOUT_SECS` | Connection and command timeout for the usage queue, in seconds. |
 | `PORTFOLIO_USAGE_QUEUE_CAPACITY` | Maximum number of queued usage records before requests fail closed. |
 | `PORTFOLIO_USAGE_QUEUE_BATCH_SIZE` | Maximum number of usage records claimed by one drain. |
+
+#### Optional
+
+| Variable | Description |
+| --- | --- |
+| `PORTFOLIO_BINANCE_ENABLED` | Enables the Binance portfolio connector. Defaults to `false`. |
+| `PORTFOLIO_BINANCE_TESTNET` | Uses Binance testnet REST and WebSocket endpoints when connector URLs are not set explicitly. Defaults to `false`. |
+| `PORTFOLIO_BINANCE_REST_URL` | Binance REST base URL, including `/api/v3`. Defaults to `https://api.binance.com/api/v3`, or `https://testnet.binance.vision/api/v3` on testnet. |
+| `PORTFOLIO_BINANCE_WEBSOCKET_URL` | Binance user-data WebSocket base URL, excluding the listen key. Defaults to `wss://stream.binance.com:9443/ws`, or `wss://stream.testnet.binance.vision/ws` on testnet. |
+| `PORTFOLIO_BINANCE_CREDENTIALS` | JSON array of `{ "account", "api_key", "secret" }` objects. Required when the connector is enabled. |
+| `PORTFOLIO_BINANCE_LISTEN_KEY_REFRESH_SECS` | Listen-key keepalive interval, in seconds. Defaults to `1800`. |
+| `PORTFOLIO_BINANCE_RECONNECT_BACKOFF_SECS` | Delay before reconnecting a failed Binance user-data stream, in seconds. Defaults to `5`. |
+| `PORTFOLIO_MAX_UPDATE_AGE_SECS` | Maximum accepted portfolio-update age for the freshness gate, in seconds. Defaults to `60`. |
+| `PORTFOLIO_STALE_ORDER_POLICY` | Behaviour when portfolio data is stale: `allow`, `degrade`, or `reject`. Defaults to `degrade`. |
 
 Signed order verification appends usage records to the durable Valkey queue instead of writing
 `last_used_at` and audit outbox entries synchronously. The queue URL, prefix, and capacity must

@@ -12,6 +12,7 @@ pub mod klines;
 pub mod klines_limit;
 pub mod open_orders_status;
 pub mod order_status;
+pub mod portfolio;
 pub mod rate_limits;
 pub mod recv_window;
 pub mod request;

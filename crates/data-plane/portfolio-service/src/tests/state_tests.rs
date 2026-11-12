@@ -1,4 +1,4 @@
-use super::test_feed::Fixture;
+use super::test_feed_tests::Fixture;
 use crate::{AccountKey, PortfolioState};
 use stock_trek_types::cex::asset_id::AssetId;
 
@@ -85,4 +85,60 @@ fn state_projects_accounts_for_an_exchange() {
     let accounts = state.accounts_for_cex(first.cex_id());
     assert_eq!(accounts.len(), 2);
     assert!(accounts.contains(first.account_id()));
+}
+
+#[test]
+fn state_ignores_owner_scoped_updates_for_other_owners() {
+    let mut state = PortfolioState::new();
+    let account = Fixture::account("primary");
+    state.track_for_owner("alice", &account);
+    let update = crate::PortfolioUpdate::versioned(
+        account.clone(),
+        Some("bob".to_string()),
+        Fixture::portfolio(AssetId::Bitcoin, 3.0),
+        1,
+        chrono::Utc::now(),
+    );
+
+    assert_eq!(
+        state.apply_update_with_outcome(update),
+        crate::PortfolioUpdateOutcome::IgnoredUntracked
+    );
+    assert!(state.portfolio(&account).is_none());
+}
+
+#[test]
+fn state_rejects_updates_that_are_not_newer_than_the_stored_version() {
+    let mut state = PortfolioState::new();
+    let account = Fixture::account("primary");
+    state.track(&account);
+    let newer = crate::PortfolioUpdate::versioned(
+        account.clone(),
+        None,
+        Fixture::portfolio(AssetId::Bitcoin, 3.0),
+        2,
+        chrono::Utc::now(),
+    );
+    let older = crate::PortfolioUpdate::versioned(
+        account,
+        None,
+        Fixture::portfolio(AssetId::Bitcoin, 1.0),
+        1,
+        chrono::Utc::now(),
+    );
+
+    assert_eq!(
+        state.apply_update_with_outcome(newer),
+        crate::PortfolioUpdateOutcome::Applied
+    );
+    assert_eq!(
+        state.apply_update_with_outcome(older),
+        crate::PortfolioUpdateOutcome::IgnoredStale
+    );
+    assert_eq!(
+        state.snapshot()[&stock_trek_types::cex::cex_id::CexId::Binance]
+            [&stock_trek_types::cex::account_id::AccountId("primary".to_string())]
+            .asset_total(AssetId::Bitcoin),
+        3.0
+    );
 }

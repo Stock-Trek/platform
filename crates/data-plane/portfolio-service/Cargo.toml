@@ -13,11 +13,14 @@ parking_lot = { workspace = true }
 platform-auth-service = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http"] }
+platform-exchange-gateway = { workspace = true }
+platform-metrics = { workspace = true }
 platform-messages = { workspace = true }
 platform-nats = { workspace = true }
 platform-portfolio-ownership = { workspace = true }
 platform-runtime = { workspace = true }
 platform-types = { workspace = true }
+platform-type-bridge = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json", "rustls"] }
 secrecy = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
@@ -26,3 +29,6 @@ stock-trek = { workspace = true }
 stock-trek-types = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { workspace = true }
+
+[dev-dependencies]
+platform-exchange-types = { workspace = true }

@@ -1,4 +1,4 @@
-use super::test_feed::Fixture;
+use super::test_feed_tests::Fixture;
 use crate::{
     AccountKey, OwnershipApply, OwnershipConsumer, OwnershipEventSource, OwnershipMessage,
     PortfolioService,
@@ -6,6 +6,7 @@ use crate::{
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::BpResult;
+use platform_exchange_gateway::connector::PortfolioFeed;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use std::{collections::VecDeque, sync::Mutex, time::Duration};
 
@@ -119,6 +120,22 @@ async fn removal_clears_owner_state_feed_and_portfolio() {
 }
 
 #[tokio::test]
+async fn feed_failures_do_not_leave_pre_tracked_ownership_state() {
+    let (feed, service) = Fixture::service();
+    let account = Fixture::account("first");
+    feed.fail_next();
+
+    assert!(
+        service
+            .apply_ownership_event(&event("alice", "first", OwnershipAction::Add, 1))
+            .await
+            .is_err()
+    );
+    assert!(!service.is_tracked_for_owner("alice", &account));
+    assert_eq!(service.ownership_version(&account), None);
+}
+
+#[tokio::test]
 async fn an_account_can_transfer_after_the_previous_owner_removes_it() {
     let (feed, service) = Fixture::service();
     let account = Fixture::account("first");
@@ -181,7 +198,7 @@ async fn consumer_checkpoints_replays_and_acknowledges_events() {
         message(event("alice", "first", OwnershipAction::Remove, 2), 12),
     ]));
     let service = std::sync::Arc::new(PortfolioService::new(std::sync::Arc::new(
-        super::test_feed::RecordingFeed::default(),
+        super::test_feed_tests::RecordingFeed::default(),
     )));
     let consumer =
         OwnershipConsumer::new(service.clone(), source.clone(), Duration::from_millis(10));
@@ -199,7 +216,7 @@ async fn restart_replays_from_the_persisted_events() {
         1,
     )]));
     let first_service = std::sync::Arc::new(PortfolioService::new(std::sync::Arc::new(
-        super::test_feed::RecordingFeed::default(),
+        super::test_feed_tests::RecordingFeed::default(),
     )));
     OwnershipConsumer::new(
         first_service.clone(),
@@ -212,7 +229,7 @@ async fn restart_replays_from_the_persisted_events() {
     assert_eq!(first_source.checkpoints(), vec![1]);
 
     let second_service = std::sync::Arc::new(PortfolioService::new(std::sync::Arc::new(
-        super::test_feed::RecordingFeed::default(),
+        super::test_feed_tests::RecordingFeed::default(),
     )));
     let replay = std::sync::Arc::new(FakeSource::with_messages(vec![
         message(event("alice", "first", OwnershipAction::Add, 1), 1),
@@ -233,6 +250,62 @@ async fn restart_replays_from_the_persisted_events() {
     assert_eq!(
         second_service.ownership_version(&Fixture::account("first")),
         Some(2)
+    );
+}
+
+#[derive(Default)]
+struct SnapshotFeed {
+    service: Mutex<Option<std::sync::Arc<PortfolioService>>>,
+    applied: std::sync::atomic::AtomicBool,
+}
+
+#[async_trait]
+impl PortfolioFeed for SnapshotFeed {
+    async fn set_accounts(
+        &self,
+        _cex_id: stock_trek_types::cex::cex_id::CexId,
+        accounts: std::collections::BTreeSet<stock_trek_types::cex::account_id::AccountId>,
+    ) -> BpResult<()> {
+        if accounts.is_empty() {
+            return Ok(());
+        }
+        let service = self
+            .service
+            .lock()
+            .expect("service")
+            .as_ref()
+            .cloned()
+            .expect("service");
+        let account = accounts.iter().next().expect("account");
+        let applied = service.apply_portfolio_update(crate::PortfolioUpdate::versioned(
+            Fixture::account(&account.0),
+            None,
+            Fixture::portfolio(stock_trek_types::cex::asset_id::AssetId::Bitcoin, 5.0),
+            1,
+            Utc::now(),
+        )) == crate::PortfolioUpdateOutcome::Applied;
+        self.applied
+            .store(applied, std::sync::atomic::Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn connector_snapshot_during_sync_is_applied_for_the_new_owner() {
+    let feed = std::sync::Arc::new(SnapshotFeed::default());
+    let service = std::sync::Arc::new(PortfolioService::new(feed.clone()));
+    *feed.service.lock().expect("service") = Some(service.clone());
+
+    service
+        .apply_ownership_event(&event("alice", "first", OwnershipAction::Add, 1))
+        .await
+        .expect("add");
+
+    assert!(feed.applied.load(std::sync::atomic::Ordering::SeqCst));
+    assert!(
+        service
+            .user_account_portfolio("alice", &Fixture::account("first"))
+            .is_some()
     );
 }
 

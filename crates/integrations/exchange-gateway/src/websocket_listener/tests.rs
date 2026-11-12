@@ -56,3 +56,43 @@ fn filter_callback_does_not_hold_handlers_lock() {
     block_on(listener.on_message(serde_json::json!({ "value": 42 }))).unwrap();
     assert_eq!(*lock_was_free.lock(), Some(true));
 }
+
+#[tokio::test]
+async fn subscriber_receives_unmatched_events() {
+    let listener = WebsocketListener::new();
+    let mut stream = listener.subscribe();
+    listener
+        .on_message(serde_json::json!({ "event": "position" }))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        stream.next().await,
+        Some(serde_json::json!({ "event": "position" }))
+    );
+}
+
+#[tokio::test]
+async fn subscriber_receives_events_claimed_by_a_waiter() {
+    let listener = WebsocketListener::new();
+    let mut stream = listener.subscribe();
+    let waiter = listener
+        .waiter_for_filtered_response(Arc::new(|_| true))
+        .unwrap();
+    listener
+        .on_message(serde_json::json!({ "id": 1 }))
+        .await
+        .unwrap();
+
+    assert_eq!(waiter.await.unwrap(), serde_json::json!({ "id": 1 }));
+    assert_eq!(stream.next().await, Some(serde_json::json!({ "id": 1 })));
+}
+
+#[test]
+fn dropped_subscriber_is_removed() {
+    let listener = WebsocketListener::new();
+    let stream = listener.subscribe();
+    assert_eq!(listener.events.subscriber_count(), 1);
+    drop(stream);
+    assert_eq!(listener.events.subscriber_count(), 0);
+}

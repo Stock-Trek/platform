@@ -3,11 +3,13 @@ pub mod build_metrics;
 pub mod descriptions;
 pub mod event;
 pub mod market_data;
+pub mod portfolio;
 pub mod route;
 pub mod secret;
 pub mod sqs;
 
 pub use market_data::AggregatorMetrics;
+pub use portfolio::PortfolioMetrics;
 
 #[cfg(any(test, feature = "test-utils"))]
 pub mod test_utils;
