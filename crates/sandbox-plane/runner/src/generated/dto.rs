@@ -108,11 +108,11 @@ pub mod order_request_dto {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum OrderRequest {
         #[prost(message, tag = "1")]
-        Limit(crate::generated::dto::LimitOrderRequestDto),
+        Limit(super::LimitOrderRequestDto),
         #[prost(message, tag = "2")]
-        MarketBuy(crate::generated::dto::MarketBuyOrderRequestDto),
+        MarketBuy(super::MarketBuyOrderRequestDto),
         #[prost(message, tag = "3")]
-        MarketSell(crate::generated::dto::MarketSellOrderRequestDto),
+        MarketSell(super::MarketSellOrderRequestDto),
     }
 }
 #[derive(Clone, PartialEq, Eq, Hash, ::prost::Message)]
@@ -170,11 +170,11 @@ pub mod activation_dto {
     #[derive(Clone, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum Activation {
         #[prost(message, tag = "1")]
-        Immediate(crate::generated::dto::ImmediateActivationDto),
+        Immediate(super::ImmediateActivationDto),
         #[prost(message, tag = "2")]
-        PriceTriggered(crate::generated::dto::PriceTriggeredActivationDto),
+        PriceTriggered(super::PriceTriggeredActivationDto),
         #[prost(message, tag = "3")]
-        Trailing(crate::generated::dto::TrailingActivationDto),
+        Trailing(super::TrailingActivationDto),
     }
 }
 #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Message)]
@@ -211,9 +211,9 @@ pub mod quantity_dto {
     #[derive(Clone, Copy, PartialEq, Eq, Hash, ::prost::Oneof)]
     pub enum Quantity {
         #[prost(message, tag = "1")]
-        OfBase(crate::generated::dto::DecimalDto),
+        OfBase(super::DecimalDto),
         #[prost(message, tag = "2")]
-        OfQuote(crate::generated::dto::DecimalDto),
+        OfQuote(super::DecimalDto),
     }
 }
 #[derive(Clone, PartialEq, ::prost::Message)]
