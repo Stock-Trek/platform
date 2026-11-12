@@ -20,5 +20,6 @@ async fn main() -> BpResult<()> {
             .map(S3ArchiveRecovery::new)
             .map(Arc::new);
     SERVICE.init_logging(&config.log_filter)?;
+    let _metrics = SERVICE.init_metrics("platform/aggregator")?;
     Tasks::run(config, archive_recovery).await
 }

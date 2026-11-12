@@ -8,6 +8,7 @@ const SERVICE: Service = Service::new("platform-rebuilder");
 async fn main() -> BpResult<()> {
     let config = RebuildConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
+    let _metrics = SERVICE.init_metrics("platform/rebuilder")?;
     tokio::select! {
         result = config.run() => result,
         signal = Runtime::shutdown_signal() => {

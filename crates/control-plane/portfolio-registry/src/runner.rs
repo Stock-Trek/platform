@@ -17,6 +17,7 @@ pub struct RegistryRunner;
 impl RegistryRunner {
     pub async fn run(config: PortfolioRegistryConfig) -> BpResult<()> {
         SERVICE.init_logging(config.log_filter())?;
+        let _metrics = SERVICE.init_metrics("platform/portfolio-registry")?;
         let sdk_config = Aws::load_default_sdk_config().await;
         let store: Arc<dyn OwnershipStore> = Arc::new(DynamoDbOwnershipStore::new(
             Aws::dynamodb_client(&sdk_config),

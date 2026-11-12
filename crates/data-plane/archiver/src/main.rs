@@ -17,6 +17,7 @@ const SERVICE: Service = Service::new("platform-archiver");
 async fn main() -> BpResult<()> {
     let config = ArchiverConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
+    let _metrics = SERVICE.init_metrics("platform/archiver")?;
     let source = NatsArchiveSource::connect(&config).await?;
     let catalog = Arc::new(IcebergCatalog::connect(&config.iceberg).await?);
     let sink = S3ParquetSink::connect(&config, catalog).await?;

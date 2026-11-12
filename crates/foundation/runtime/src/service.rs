@@ -3,7 +3,7 @@
 //! Individual services still own their configuration and wiring, but every
 //! process starts with the same service name and logging setup.
 
-use crate::lambda::LambdaMetrics;
+use crate::{lambda::LambdaMetrics, process_metrics::ProcessMetrics};
 use metrics_cloudwatch_embedded::Collector;
 use platform_config::tracing_setup::TracingSetup;
 use platform_errors::BpResult;
@@ -31,6 +31,10 @@ impl Service {
         TracingSetup::setup(log_filter)?;
         info!(service = self.name, "service initialised");
         Ok(())
+    }
+
+    pub fn init_metrics(&self, namespace: &str) -> BpResult<ProcessMetrics> {
+        ProcessMetrics::init(namespace, self.name)
     }
 
     /// Installs the Lambda CloudWatch metrics recorder for this service.
