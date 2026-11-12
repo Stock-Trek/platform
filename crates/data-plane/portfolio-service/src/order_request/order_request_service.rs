@@ -1,9 +1,8 @@
-use super::SignedOrderSubmission;
-use crate::{AccountKey, PortfolioService};
+use crate::{AccountKey, PortfolioService, SignedOrderSubmission};
 use chrono::{DateTime, Utc};
 use platform_auth_service::{ApiToken, AuthService, JwksCache, OrderJwtClaims};
 use platform_errors::{BuildError, BuildResult};
-use platform_messages::order_request::UnsignedOrderRequest;
+use platform_messages::UnsignedOrderRequest;
 use std::sync::Arc;
 
 pub struct OrderRequestService {

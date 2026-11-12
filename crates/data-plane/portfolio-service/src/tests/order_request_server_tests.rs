@@ -1,7 +1,7 @@
 use super::order_request_server_fixture_tests::{Fixture, OWNER};
 use crate::{OrderRequestDelivery, OrderRequestServer, OrderRequestService};
 use chrono::Utc;
-use platform_messages::order_request::UnsignedOrderRequest;
+use platform_messages::UnsignedOrderRequest;
 use serde_json::json;
 use std::sync::Arc;
 use stock_trek::types::CexId;

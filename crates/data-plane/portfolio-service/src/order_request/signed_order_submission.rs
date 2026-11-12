@@ -1,6 +1,6 @@
 use platform_auth_service::SignedOrderRequest;
 use platform_errors::{BuildError, BuildResult};
-use platform_messages::order_request::UnsignedOrderRequest;
+use platform_messages::UnsignedOrderRequest;
 use serde::Serialize;
 use stock_trek_types::cex::{
     account_id::AccountId, asset_id::AssetId, cex_id::CexId, order_request::OrderRequest,
