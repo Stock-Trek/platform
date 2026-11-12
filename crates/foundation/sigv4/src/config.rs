@@ -1,8 +1,5 @@
 use crate::{SigV4Registry, SigV4Request, SigV4Signer, VerifiedCaller, verifier::SigV4Verifier};
-use platform_config::{
-    env_names::{SIGV4_CREDENTIALS, SIGV4_REGION, SIGV4_SERVICE},
-    env_vars::EnvVars,
-};
+use platform_config::{EnvVars, SIGV4_CREDENTIALS, SIGV4_REGION, SIGV4_SERVICE};
 use platform_errors::{BuildError, BuildResult};
 use std::time::SystemTime;
 
@@ -70,7 +67,11 @@ impl SigV4Config {
         ))
     }
 
-    pub fn verify(&self, request: &SigV4Request<'_>, now: SystemTime) -> BuildResult<VerifiedCaller> {
+    pub fn verify(
+        &self,
+        request: &SigV4Request<'_>,
+        now: SystemTime,
+    ) -> BuildResult<VerifiedCaller> {
         SigV4Verifier::new(
             self.region.clone(),
             self.service.clone(),

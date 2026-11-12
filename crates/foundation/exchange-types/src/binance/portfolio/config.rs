@@ -1,5 +1,5 @@
 use super::credentials::{BinanceCredentialConfig, CREDENTIALS};
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_types::url_scheme::UrlScheme;
 use std::time::Duration;
@@ -104,15 +104,20 @@ impl BinancePortfolioConfig {
         self.reconnect_backoff
     }
 
-    fn url(vars: &EnvVars, name: &str, default: &str, allowed: &[UrlScheme]) -> BuildResult<String> {
+    fn url(
+        vars: &EnvVars,
+        name: &str,
+        default: &str,
+        allowed: &[UrlScheme],
+    ) -> BuildResult<String> {
         let value = vars.optional(name)?.unwrap_or_else(|| default.to_string());
         Self::validate_url(name, &value, allowed)?;
         Ok(value)
     }
 
     fn validate_url(name: &str, value: &str, allowed: &[UrlScheme]) -> BuildResult<()> {
-        let parsed =
-            url::Url::parse(value).map_err(|error| BuildError::config_invalid_source(name, error))?;
+        let parsed = url::Url::parse(value)
+            .map_err(|error| BuildError::config_invalid_source(name, error))?;
         if !UrlScheme::from_url(&parsed).is_some_and(|scheme| allowed.contains(&scheme)) {
             return Err(BuildError::config_invalid(
                 name,
@@ -131,7 +136,10 @@ impl BinancePortfolioConfig {
 
     fn validate_duration(name: &str, value: Duration) -> BuildResult<()> {
         if value.is_zero() {
-            return Err(BuildError::config_invalid(name, "must be greater than zero"));
+            return Err(BuildError::config_invalid(
+                name,
+                "must be greater than zero",
+            ));
         }
         Ok(())
     }

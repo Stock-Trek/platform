@@ -9,7 +9,7 @@ use crate::SdkConfig;
 use aws_credential_types::Credentials;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use hmac::{Hmac, KeyInit, Mac};
-use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
+use platform_config::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BuildError, BuildResult};
 use serde::Serialize;
 use serde_json::{Value, json};

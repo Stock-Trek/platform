@@ -1,4 +1,4 @@
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::BuildResult;
 use platform_nats::StreamSpec;
 use std::time::Duration;

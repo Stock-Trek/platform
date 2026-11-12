@@ -5,7 +5,7 @@ use aws_credential_types::{
 };
 use aws_sdk_s3::{Client as S3Client, presigning::PresigningConfig, primitives::ByteStream};
 use platform_aws::SdkConfig;
-use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
+use platform_config::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BuildError, BuildResult, StorageError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 use std::{num::NonZeroU64, time::Duration};
@@ -136,7 +136,11 @@ impl S3 {
         Ok(UploadedObject { signed_get_url })
     }
 
-    pub(crate) async fn signed_get_url(&self, key: &str, deadline: Deadline) -> BuildResult<String> {
+    pub(crate) async fn signed_get_url(
+        &self,
+        key: &str,
+        deadline: Deadline,
+    ) -> BuildResult<String> {
         let target = format!("s3://{}/{key}", self.config.user_artifacts_bucket);
         let presigning_config = PresigningConfig::expires_in(self.config.signed_url_expiry)
             .map_err(|error| BuildError::config_invalid_source(S3_SIGNED_URL_EXPIRY_SECS, error))?;

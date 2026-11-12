@@ -1,7 +1,7 @@
 use platform_auth_service::{
     TokenCacheConfig, TokenUsageQueueConfig, ValkeyReplayStoreConfig, VaultTokenStoreConfig,
 };
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_types::url_scheme::UrlScheme;
 use secrecy::SecretString;
@@ -80,7 +80,10 @@ impl AuthConfig {
         let parsed = reqwest::Url::parse(&jwks_url)
             .map_err(|error| BuildError::config_invalid_source(JWKS_URL, error))?;
         if !UrlScheme::from_url(&parsed).is_some_and(UrlScheme::is_http) {
-            return Err(BuildError::config_invalid(JWKS_URL, "must use http or https"));
+            return Err(BuildError::config_invalid(
+                JWKS_URL,
+                "must use http or https",
+            ));
         }
         Ok(Self {
             vault,

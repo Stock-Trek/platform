@@ -1,4 +1,4 @@
-use crate::{Aws, SdkConfig, secrets::ssm_config::SsmConfig};
+use crate::{Aws, SdkConfig, ssm_config::SsmConfig};
 use aws_sdk_ssm::{
     error::ProvideErrorMetadata,
     operation::get_parameters_by_path::{GetParametersByPathError, GetParametersByPathOutput},
@@ -14,9 +14,9 @@ const SSM_OPERATION: &str = "SSM GetParametersByPath";
 
 /// A snapshot of the secrets under an SSM parameter path.
 #[derive(Clone, Default)]
-pub struct Secrets(HashMap<String, String>);
+pub struct SsmSecrets(HashMap<String, String>);
 
-impl Secrets {
+impl SsmSecrets {
     /// Loads every parameter under `config.path`, bounded by the supplied
     /// operation timeout and deadline.
     pub async fn load(

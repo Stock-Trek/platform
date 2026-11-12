@@ -1,5 +1,5 @@
 use crate::{FreshnessPolicy, StaleOrderPolicy};
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 
 const MAX_AGE_SECS: &str = "PORTFOLIO_MAX_UPDATE_AGE_SECS";

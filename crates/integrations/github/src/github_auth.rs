@@ -7,7 +7,7 @@ use jsonwebtoken::EncodingKey;
 use lru::LruCache;
 use octocrab::Octocrab;
 use parking_lot::Mutex;
-use platform_config::git::DirectoryLimits;
+use platform_config::DirectoryLimits;
 use platform_errors::{BuildError, BuildResult, GitHubError};
 use platform_time::timeouts::Timeouts;
 use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};
@@ -62,7 +62,11 @@ impl GitHubAuth {
         })
     }
 
-    pub fn installation(&self, host: &str, installation_id: u64) -> BuildResult<GitHubInstallation> {
+    pub fn installation(
+        &self,
+        host: &str,
+        installation_id: u64,
+    ) -> BuildResult<GitHubInstallation> {
         let host = self.allowed_hosts.validate(host)?;
         let key = (host.clone(), installation_id);
         let mut installations = self.installations.lock();

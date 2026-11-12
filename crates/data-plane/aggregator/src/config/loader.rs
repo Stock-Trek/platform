@@ -12,7 +12,7 @@ use super::env::{
 };
 use super::replay::ReplayStartPolicy;
 use platform_archive::RoutingBucket;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::AlignedWindow;
 use platform_nats::NatsSubject;
@@ -84,7 +84,10 @@ impl AggregatorConfig {
             vars.required_parsed(AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES)?;
         let closed_candle_memory_budget_bytes =
             usize::try_from(memory_budget_bytes).map_err(|error| {
-                BuildError::config_invalid_source(AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, error)
+                BuildError::config_invalid_source(
+                    AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES,
+                    error,
+                )
             })?;
         if closed_candle_memory_budget_bytes == 0 {
             return Err(BuildError::config_invalid(

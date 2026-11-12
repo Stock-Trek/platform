@@ -1,5 +1,5 @@
 use super::PortfolioConnectorConfig;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::BuildResult;
 use stock_trek_types::cex::cex_id::CexId;
 

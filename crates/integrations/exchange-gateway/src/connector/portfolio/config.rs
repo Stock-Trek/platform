@@ -2,7 +2,7 @@ use super::{
     ConnectorHealthSink, ExchangePortfolioConnector, GatewayPortfolioTransport, NoopPortfolioFeed,
     PortfolioCredentialSource, PortfolioFeed, PortfolioTransport, StaticPortfolioCredentials,
 };
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,

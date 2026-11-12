@@ -1,5 +1,5 @@
 use crate::source::StreamFormat;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Config;
 use platform_types::url_scheme::UrlScheme;
@@ -37,8 +37,9 @@ impl IngesterConfig {
         Self::validate_trade_streams(exchange, &websocket_url)?;
         let websocket_api_key = vars.optional(INGESTER_WEBSOCKET_API_KEY)?;
         let stream_format =
-            StreamFormat::for_exchange(&vars.required(INGESTER_STREAM_FORMAT)?, exchange)
-                .map_err(|error| BuildError::config_invalid_source(INGESTER_STREAM_FORMAT, error))?;
+            StreamFormat::for_exchange(&vars.required(INGESTER_STREAM_FORMAT)?, exchange).map_err(
+                |error| BuildError::config_invalid_source(INGESTER_STREAM_FORMAT, error),
+            )?;
         let nats_url = Config::required_nats_url(vars, INGESTER_NATS_URL)?;
         let nats_subject_prefix =
             Config::required_nats_subject(vars, INGESTER_NATS_SUBJECT_PREFIX)?;

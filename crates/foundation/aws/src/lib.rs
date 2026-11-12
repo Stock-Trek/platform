@@ -5,13 +5,17 @@
 //! stay consistent across the workspace.
 
 mod aws_client;
-pub mod presigned_post;
-pub mod secrets;
+mod presigned_post;
+mod ssm_config;
+mod ssm_secrets;
 
 #[cfg(test)]
 mod presigned_post_tests;
+#[cfg(test)]
+mod ssm_secrets_tests;
 
 pub use aws_client::Aws;
 pub use aws_config::{Region, SdkConfig};
 pub use presigned_post::{PresignedPost, PresignedPostSigner};
-pub use secrets::{SSM_DECRYPT_ENV, SSM_PATH_ENV, Secrets, SsmConfig};
+pub use ssm_config::*;
+pub use ssm_secrets::*;

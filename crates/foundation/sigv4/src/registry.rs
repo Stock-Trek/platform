@@ -1,5 +1,5 @@
 use crate::SigV4Credentials;
-use platform_config::env_names::SIGV4_CREDENTIALS;
+use platform_config::SIGV4_CREDENTIALS;
 use platform_errors::{BuildError, BuildResult};
 use serde::Deserialize;
 use std::collections::BTreeMap;

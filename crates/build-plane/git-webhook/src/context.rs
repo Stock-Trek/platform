@@ -4,8 +4,7 @@ use crate::{
     dto::event_converter::{EventConverter, EventConverters},
 };
 use aws_sdk_sqs::Client as SqsClient;
-use platform_aws::SdkConfig;
-use platform_aws::secrets::{Secrets, SsmConfig};
+use platform_aws::{SdkConfig, SsmConfig, SsmSecrets};
 use platform_errors::{BuildError, BuildResult, ErrorType, SecretsError};
 use platform_github::host_allow_list::HostAllowlist;
 use platform_metrics::secret::SecretMetrics;
@@ -141,7 +140,9 @@ impl RsWebhookContext {
 
         if let Some(retry_after) = self.remaining_backoff().await {
             SecretMetrics::record_secret_load_backoff_hit();
-            return Err(BuildError::Secrets(SecretsError::Unavailable { retry_after }));
+            return Err(BuildError::Secrets(SecretsError::Unavailable {
+                retry_after,
+            }));
         }
 
         SecretMetrics::record_secret_load_attempt();
@@ -161,13 +162,16 @@ impl RsWebhookContext {
                 }
                 let retry_after = self.jittered_backoff();
                 *self.backoff_until.lock().await = Some(Instant::now() + retry_after);
-                Err(BuildError::Secrets(SecretsError::Unavailable { retry_after }))
+                Err(BuildError::Secrets(SecretsError::Unavailable {
+                    retry_after,
+                }))
             }
         }
     }
 
     async fn try_load(&self, deadline: Deadline) -> BuildResult<Converters> {
-        let secrets = Secrets::load(&self.sdk_config, self.timeouts, deadline, &self.ssm).await?;
+        let secrets =
+            SsmSecrets::load(&self.sdk_config, self.timeouts, deadline, &self.ssm).await?;
         Ok(Arc::new(EventConverters::all(
             &secrets,
             self.allowed_hosts.clone(),

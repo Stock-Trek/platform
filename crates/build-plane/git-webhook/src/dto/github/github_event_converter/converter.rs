@@ -2,7 +2,7 @@ use crate::{
     dto::{event_converter::EventConverter, github::github_event_type::GitHubEventType},
     event_response::EventResponse,
 };
-use platform_aws::secrets::Secrets;
+use platform_aws::SsmSecrets;
 use platform_errors::{BuildError, BuildResult};
 use platform_github::host_allow_list::HostAllowlist;
 use platform_metrics::event::EventMetrics;
@@ -17,7 +17,7 @@ pub struct GitHubEventConverter {
 }
 
 impl GitHubEventConverter {
-    pub fn new(secrets: &Secrets, allowed_hosts: HostAllowlist) -> BuildResult<Self> {
+    pub fn new(secrets: &SsmSecrets, allowed_hosts: HostAllowlist) -> BuildResult<Self> {
         let secret = secrets.get(GITHUB_WEBHOOK_SECRET)?;
         if secret.is_empty() {
             Err(BuildError::config_empty(GITHUB_WEBHOOK_SECRET))?;

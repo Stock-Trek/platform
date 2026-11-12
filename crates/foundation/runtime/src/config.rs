@@ -4,8 +4,7 @@
 //! variables, but the common validation rules live here so every service
 //! rejects the same malformed values in the same way.
 
-use platform_config::env_names::RUST_LOG;
-use platform_config::env_vars::EnvVars;
+use platform_config::{EnvVars, RUST_LOG};
 use platform_errors::{BuildError, BuildResult};
 use platform_nats::{NatsAddress, NatsSubject};
 use std::{num::NonZeroUsize, time::Duration};

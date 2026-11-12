@@ -1,4 +1,4 @@
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use secrecy::{ExposeSecret, SecretString};
 use std::{fmt, net::SocketAddr};

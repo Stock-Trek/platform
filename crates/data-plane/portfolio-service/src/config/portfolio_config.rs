@@ -1,5 +1,5 @@
 use super::{AuthConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig, UpdateConfig};
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::BuildResult;
 use platform_exchange_gateway::connector::PortfolioConnectorConfig;
 use platform_runtime::Config;

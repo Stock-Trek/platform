@@ -1,5 +1,5 @@
 use super::{BinancePortfolioConfig, CREDENTIALS};
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BuildError, ConfigError};
 use secrecy::ExposeSecret;
 use std::time::Duration;
@@ -14,7 +14,9 @@ const BACKOFF: &str = "PORTFOLIO_BINANCE_RECONNECT_BACKOFF_SECS";
 struct Fixture;
 
 impl Fixture {
-    fn config(vars: &[(&str, &str)]) -> platform_errors::BuildResult<Option<BinancePortfolioConfig>> {
+    fn config(
+        vars: &[(&str, &str)],
+    ) -> platform_errors::BuildResult<Option<BinancePortfolioConfig>> {
         BinancePortfolioConfig::from_vars(&EnvVars::from_map(
             vars.iter()
                 .map(|(name, value)| ((*name).to_string(), (*value).to_string())),
