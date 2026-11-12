@@ -10,6 +10,7 @@ impl AuthRelayApp {
     pub async fn run() -> BpResult<()> {
         let config = AuthRelayConfig::from_env()?;
         SERVICE.init_logging(&config.log_filter)?;
+        let _metrics = SERVICE.init_metrics("platform/auth-relay")?;
         let relay = AuthRelay::connect(&config).await?;
         AuthRelayRunner::new(config, relay).run().await
     }

@@ -21,6 +21,7 @@ const NATS_CLIENT_NAME: &str = "platform-backfiller-events";
 async fn main() -> BpResult<()> {
     let config = BackfillerConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
+    let _metrics = SERVICE.init_metrics("platform/backfiller")?;
     let credentials = config.exchange_credentials().await?;
     let source = NatsGapMarkerSource::connect(&config).await?;
     let mut fetchers = FetcherRegistry::default();

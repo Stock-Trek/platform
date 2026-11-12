@@ -19,6 +19,7 @@ const SERVICE: Service = Service::new("platform-ingester");
 async fn main() -> BpResult<()> {
     let config = IngesterConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
+    let _metrics = SERVICE.init_metrics("platform/ingester")?;
     let publisher = Arc::new(NatsPublisher::connect(&config.nats_url, SERVICE.name()).await?);
     publisher.ensure_stream(&config.nats_subject_prefix).await?;
     let sequences =

@@ -19,6 +19,7 @@ pub struct PortfolioRunner;
 impl PortfolioRunner {
     pub async fn run(config: PortfolioConfig) -> BpResult<()> {
         SERVICE.init_logging(config.log_filter())?;
+        let _metrics = SERVICE.init_metrics("platform/portfolio-service")?;
         let auth_service = PortfolioAuthService::connect(config.auth().clone()).await?;
         let publisher: Arc<dyn EventPublisher> = Arc::new(Self::publisher(&config).await?);
         let feed = config

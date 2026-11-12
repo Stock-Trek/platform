@@ -15,6 +15,7 @@ const SERVICE: Service = Service::new("platform-run-invoker");
 async fn main() -> BpResult<()> {
     let config = RunInvokerConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
+    let _metrics = SERVICE.init_metrics("platform/run-invoker")?;
     let sdk_config = Aws::load_sdk_config(config.aws_timeouts).await;
     let store = RunStore::new(Aws::dynamodb_client(&sdk_config), config.table.clone());
     let s3 = Aws::s3_client(&sdk_config);

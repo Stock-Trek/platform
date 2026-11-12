@@ -14,6 +14,7 @@ pub struct AuthServiceRunner;
 impl AuthServiceRunner {
     pub async fn run(config: JwtServerConfig) -> BpResult<()> {
         SERVICE.init_logging(config.log_filter())?;
+        let _metrics = SERVICE.init_metrics("platform/auth-service")?;
         let store = Arc::new(VaultTokenStore::new(config.vault().clone())?);
         let replay = Arc::new(ValkeyReplayStore::connect(config.valkey().clone()).await?);
         let usage = Arc::new(ValkeyTokenUsageQueue::connect(config.usage_queue().clone()).await?);

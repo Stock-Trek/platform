@@ -20,6 +20,7 @@ const SERVICE: Service = Service::new("platform-compactor");
 async fn main() -> BpResult<()> {
     let config = CompactorConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
+    let _metrics = SERVICE.init_metrics("platform/compactor")?;
     let catalog = Arc::new(IcebergCatalog::connect(&config.iceberg).await?);
     let source = S3ArchiveSource::connect(&config, catalog.clone()).await?;
     let compactor = Compactor::connect(&config, catalog).await?;
