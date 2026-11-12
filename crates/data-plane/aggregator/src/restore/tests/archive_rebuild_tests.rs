@@ -3,9 +3,9 @@ use crate::checkpoint_record_tests::InMemoryStateStore;
 use crate::restore::tests::fixtures_tests::{Fixtures, VecArchive};
 use crate::shard_id::ShardId;
 use crate::state::{AggregatorState, DeduplicationKey, STATE_SCHEMA_VERSION};
-use platform_market_data::decoders::trade::TradeDecoderFactory;
+use platform_market_data::trade::TradeDecoderFactory;
 use platform_nats::ConsumerStart;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use stock_trek_types::cex::cex_id::CexId;
 

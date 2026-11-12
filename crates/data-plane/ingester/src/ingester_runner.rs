@@ -5,7 +5,7 @@ use crate::{
     websocket_source::MarketMessageSource,
 };
 use platform_errors::BuildResult;
-use platform_market_data::event::ParsedMessage;
+use platform_market_data::ParsedMessage;
 use platform_nats::EventPublisher;
 use platform_runtime::Runtime;
 use std::sync::Arc;

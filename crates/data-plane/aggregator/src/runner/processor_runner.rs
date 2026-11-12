@@ -17,7 +17,7 @@ use crate::{
 use platform_errors::BuildResult;
 use platform_metrics::AggregatorMetrics;
 use platform_runtime::Runtime;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
 
 /// Processes one shard's ordered inputs.

@@ -1,8 +1,8 @@
 use platform_exit_codes::ExitCode;
 use platform_runner::{
-    command::{Command, SimulationParameters},
-    convert::string::JsonString,
-    generated::dto::{PortfolioDto, StrategyContextDto},
+    Command, SimulationParameters,
+    dto::{PortfolioDto, StrategyContextDto},
+    string::JsonString,
 };
 use prost::Message;
 use std::{collections::BTreeMap, fs};

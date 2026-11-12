@@ -7,7 +7,7 @@ use crate::{
     websocket_id::ETWebsocketId,
 };
 use platform_errors::BuildResult;
-use platform_types::new_types::{TimestampMilliseconds, UsageCount};
+use platform_types::{TimestampMilliseconds, UsageCount};
 use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
 

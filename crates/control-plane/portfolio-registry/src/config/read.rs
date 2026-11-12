@@ -1,6 +1,6 @@
 use platform_config::EnvVars;
 use platform_errors::BuildResult;
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use std::net::SocketAddr;
 
 const BIND_ADDRESS: &str = "PORTFOLIO_REGISTRY_READ_BIND_ADDR";

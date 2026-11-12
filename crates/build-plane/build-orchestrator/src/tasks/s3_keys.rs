@@ -1,5 +1,5 @@
 use platform_errors::{BuildError, BuildResult, ValidationError};
-use platform_git::git_host::GitHost;
+use platform_git::GitHost;
 use platform_messages::SqsRefType;
 use std::fmt::Display;
 

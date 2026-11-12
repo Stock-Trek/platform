@@ -3,9 +3,9 @@ use crate::{
     archive_record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent},
 };
 use bytes::Bytes;
-use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle, MarketOhlcv};
-use platform_market_data::event::MarketEvent;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::MarketEvent;
+use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, MarketOhlcv};
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 

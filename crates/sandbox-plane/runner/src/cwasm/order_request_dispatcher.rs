@@ -2,7 +2,7 @@ use crate::cwasm::JwtCache;
 use platform_errors::{BuildError, BuildResult};
 use platform_messages::UnsignedOrderRequest;
 use platform_sigv4::SigV4Config;
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use std::time::Duration;
 use stock_trek::{
     actions::ResolvedAction,

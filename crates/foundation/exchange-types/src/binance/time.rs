@@ -12,7 +12,7 @@ use crate::{
     websocket_id::ETWebsocketId,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_types::new_types::{TimestampMilliseconds, UsageCount};
+use platform_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use serde::{Deserialize, Serialize};
 

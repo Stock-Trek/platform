@@ -1,7 +1,7 @@
 //! Builders for market data values used in tests.
 
 use crate::event::GapMarker;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
 impl GapMarker {

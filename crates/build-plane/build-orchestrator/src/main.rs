@@ -1,3 +1,9 @@
+mod aws_ops;
+mod config;
+mod context;
+mod sqs_handler;
+mod tasks;
+
 use crate::{config::OrchestratorConfig, context::RsOrchestratorContext, sqs_handler::SqsHandler};
 use aws_lambda_events::event::sqs::SqsEvent;
 use lambda_runtime::{LambdaEvent, service_fn};
@@ -5,12 +11,6 @@ use metrics_cloudwatch_embedded::lambda::service::run;
 use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Service;
 use std::sync::Arc;
-
-mod aws_ops;
-mod config;
-mod context;
-mod sqs_handler;
-mod tasks;
 
 const SERVICE: Service = Service::new("platform-build-orchestrator");
 

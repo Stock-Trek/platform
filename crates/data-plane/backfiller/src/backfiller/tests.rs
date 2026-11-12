@@ -6,9 +6,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_market_data::event::{GapMarker, MarketEvent};
+use platform_market_data::{GapMarker, MarketEvent};
 use platform_nats::EventPublisher;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use serde_json::json;
 use std::{
     collections::BTreeMap,

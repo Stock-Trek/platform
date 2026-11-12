@@ -9,8 +9,8 @@ use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_archive::{ArchivedMarketEvent, Bucket, ObjectKey};
 use platform_errors::{BuildError, BuildResult, Retryability};
-use platform_market_data::{candle::AlignedWindow, decoders::trade::Trade, event::MarketEvent};
-use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use platform_market_data::{AlignedWindow, MarketEvent, trade::Trade};
+use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use rust_decimal::Decimal;
 use std::collections::{BTreeMap, VecDeque};
 use std::sync::{

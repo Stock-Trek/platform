@@ -1,9 +1,6 @@
 use crate::routing_key::{RoutingBucket, RoutingKey};
-use platform_market_data::{
-    candle::{CandleKey, ClosedCandle},
-    event::MarketEvent,
-};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::{CandleKey, ClosedCandle, MarketEvent};
+use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use std::{cmp::Ordering, ops::Deref};
 use stock_trek_types::cex::cex_id::CexId;

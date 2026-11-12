@@ -1,5 +1,5 @@
 use crate::{build::BuildError, retryability::Retryability};
-use platform_types::{new_types::DurationSeconds, protocol::Protocol};
+use platform_types::{DurationSeconds, Protocol};
 
 #[derive(Debug, thiserror::Error, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]

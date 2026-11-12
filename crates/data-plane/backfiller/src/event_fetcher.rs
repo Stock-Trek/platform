@@ -1,8 +1,8 @@
 use crate::event_page_source::EventPageSource;
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult, ExchangeError};
-use platform_market_data::event::GapMarker;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::GapMarker;
+use platform_types::TimestampMilliseconds;
 use serde_json::Value;
 use std::{collections::HashMap, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;

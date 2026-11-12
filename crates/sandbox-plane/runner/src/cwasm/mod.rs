@@ -9,15 +9,10 @@
 //! (including the algorithm registry) run before the command is handled.
 
 pub mod backtest;
-mod invoker;
-
-#[cfg(test)]
-mod invoker_tests;
-
-pub use invoker::*;
 mod cwasm_artifact;
 mod guest_actions;
 mod guest_state;
+mod invoker;
 mod jwt_cache;
 mod jwt_fetcher;
 mod limits;
@@ -27,20 +22,20 @@ mod watchdog;
 mod workspace;
 
 #[cfg(test)]
+mod invoker_tests;
+#[cfg(test)]
 mod jwt_cache_tests;
-
 #[cfg(test)]
 mod order_request_dispatcher_tests;
-
 #[cfg(test)]
 mod runtime_tests;
-
 #[cfg(test)]
 mod tests;
 
 pub use cwasm_artifact::*;
 pub use guest_actions::*;
 pub use guest_state::Emit;
+pub use invoker::*;
 pub use jwt_cache::*;
 pub use limits::*;
 pub use order_request_dispatcher::*;

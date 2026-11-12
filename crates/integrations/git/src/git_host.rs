@@ -1,5 +1,5 @@
 use platform_errors::BuildResult;
-use platform_time::deadline_budget::Deadline;
+use platform_time::Deadline;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct GitFile {

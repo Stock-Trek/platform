@@ -16,7 +16,7 @@ use crate::state::AggregatorState;
 use platform_errors::{BuildResult, ErrorType};
 use platform_metrics::AggregatorMetrics;
 use platform_nats::ConsumerStart;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::future::Future;
 use std::time::{Duration, Instant};
 use tracing::{info, warn};

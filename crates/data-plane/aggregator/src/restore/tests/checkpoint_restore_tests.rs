@@ -6,7 +6,7 @@ use crate::restore::tests::fixtures_tests::{Fixtures, VecArchive};
 use crate::shard_id::ShardId;
 use crate::state::STATE_SCHEMA_VERSION;
 use platform_nats::ConsumerStart;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 

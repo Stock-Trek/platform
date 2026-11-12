@@ -2,7 +2,7 @@ use crate::portfolio::CexAccountPortfolio;
 use crate::{AccountKey, portfolio_codec::PortfolioUpdateWire};
 use chrono::{DateTime, Utc};
 use platform_errors::{BuildError, BuildResult};
-use platform_exchange_gateway::connector::ConnectorPortfolioUpdate;
+use platform_exchange_gateway::ConnectorPortfolioUpdate;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as DeError};
 
 #[derive(Debug, Clone)]

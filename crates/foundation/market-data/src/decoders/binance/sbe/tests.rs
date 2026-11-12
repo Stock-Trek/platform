@@ -7,7 +7,7 @@ use crate::event::ParsedMessage;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use iris::{Codec, ConnectionError};
 use platform_errors::IngesterError;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use tokio_websockets::Message;
 

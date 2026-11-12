@@ -5,7 +5,7 @@ use crate::shard_id::ShardId;
 use platform_archive::{ArchiveKind, ArchivePath, ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE};
 use platform_config::EnvVars;
 use platform_errors::{BuildError, ConfigError};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
 #[test]

@@ -3,7 +3,7 @@ use crate::{
 };
 use parking_lot::RwLock;
 use platform_errors::BuildResult;
-use platform_exchange_gateway::connector::PortfolioFeed;
+use platform_exchange_gateway::PortfolioFeed;
 use std::{collections::BTreeSet, sync::Arc};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 

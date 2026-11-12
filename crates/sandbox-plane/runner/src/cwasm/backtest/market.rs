@@ -1,7 +1,7 @@
 use platform_exit_codes::ExitCode;
-use platform_runner::convert::decimal::ToDecimal;
-use platform_runner::generated::dto::{
-    DecimalDto, MarketCandleDto, MarketCandlesDto, StrategyContextDto,
+use platform_runner::{
+    decimal::ToDecimal,
+    dto::{DecimalDto, MarketCandleDto, MarketCandlesDto, StrategyContextDto},
 };
 use rand::{Rng, rngs::StdRng};
 use rust_decimal::Decimal;

@@ -6,11 +6,10 @@ use crate::rebuild::{
 };
 use platform_archive::{
     ArchiveBucket, ArchiveKind, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey, ArchiveTableLayer,
-    RoutingBucket,
-    spill::{SpillRunReader, SpillRunWriter},
+    RoutingBucket, SpillRunReader, SpillRunWriter,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::candle::ClosedCandle;
+use platform_market_data::ClosedCandle;
 use std::path::PathBuf;
 
 type CandleOrderKey = (

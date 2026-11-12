@@ -14,7 +14,7 @@ use crate::{
     urls::Urls,
 };
 use platform_errors::BuildResult;
-use platform_types::new_types::{DurationNanoseconds, UsageCount};
+use platform_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, time::Duration};
 
 #[derive(Clone, Copy)]

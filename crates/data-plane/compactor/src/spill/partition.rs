@@ -1,6 +1,5 @@
 use platform_archive::{
-    ArchiveBatch, ArchiveKind, ArchivePath, ArchiveRecord, ArchiveSortKey,
-    spill::{SpillRun, SpillRunReader},
+    ArchiveBatch, ArchiveKind, ArchivePath, ArchiveRecord, ArchiveSortKey, SpillRun, SpillRunReader,
 };
 use platform_errors::{BuildError, BuildResult};
 use std::{cmp::Ordering, collections::BinaryHeap, path::PathBuf, vec::IntoIter};

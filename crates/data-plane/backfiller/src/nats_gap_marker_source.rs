@@ -1,11 +1,9 @@
 use crate::config::BackfillerConfig;
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_market_data::{
-    envelope_codec::EnvelopeCodec, event::GapMarker, market_event_subject::MarketEventSubject,
-};
-use platform_metrics::descriptions::{DECODE_KIND_GAP_MARKER, STAGE_BACKFILLER};
-use platform_metrics::market_data::MarketDataMetrics;
+use platform_market_data::{EnvelopeCodec, GapMarker, MarketEventSubject};
+use platform_metrics::MarketDataMetrics;
+use platform_metrics::{DECODE_KIND_GAP_MARKER, STAGE_BACKFILLER};
 use platform_nats::{JetStreamConsumer, Message};
 use tracing::warn;
 

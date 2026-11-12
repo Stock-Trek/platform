@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
-use platform_metrics::auth::AuthUsageQueueMetrics;
+use platform_metrics::AuthUsageQueueMetrics;
 use redis::{
     Client, RedisError, Script, Value,
     aio::{ConnectionManager, ConnectionManagerConfig},

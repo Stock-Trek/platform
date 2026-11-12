@@ -4,7 +4,7 @@ use arrow_array::{
     ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::{candle::ClosedCandle, envelope_codec::EnvelopeCodec};
+use platform_market_data::{ClosedCandle, EnvelopeCodec};
 use std::sync::Arc;
 
 impl ArchiveBatch {

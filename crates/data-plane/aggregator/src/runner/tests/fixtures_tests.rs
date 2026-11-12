@@ -10,12 +10,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::{
-    candle::{AlignedWindow, Candle, CandleKey, ClosedCandle},
-    event::MarketEvent,
-};
+use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, MarketEvent};
 use platform_nats::Message;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
@@ -163,7 +160,7 @@ impl Fixtures {
                 AlignedWindow::try_from("1m").unwrap(),
                 usize::MAX,
             )]),
-            correction_cutoff: platform_types::new_types::DurationMilliseconds(i64::MAX),
+            correction_cutoff: DurationMilliseconds(i64::MAX),
             closed_candle_memory_budget_bytes: usize::MAX,
             checkpoint_interval: std::time::Duration::from_secs(1),
             checkpoint_bucket: "aggregator_shards_checkpoints".to_string(),

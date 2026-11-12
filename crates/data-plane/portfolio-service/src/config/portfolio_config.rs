@@ -3,7 +3,7 @@ use crate::config::{
 };
 use platform_config::EnvVars;
 use platform_errors::BuildResult;
-use platform_exchange_gateway::connector::PortfolioConnectorConfig;
+use platform_exchange_gateway::PortfolioConnectorConfig;
 use platform_runtime::Config;
 
 #[derive(Debug, Clone)]

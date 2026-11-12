@@ -8,13 +8,12 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult, ExchangeError};
-use platform_exchange_gateway::clients::reqwest::ReqwestHttpClient;
-use platform_exchange_gateway::connector::Connector;
+use platform_exchange_gateway::{Connector, ReqwestHttpClient};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials, binance::exchange::BinanceExchange, encode::ByteEncoder,
     encrypt::EncryptionAlgorithm, signer::Signer,
 };
-use platform_market_data::event::GapMarker;
+use platform_market_data::GapMarker;
 use std::{sync::Arc, time::Duration};
 use stock_trek_types::cex::cex_id::CexId;
 

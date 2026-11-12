@@ -8,17 +8,11 @@ use crate::config::AggregatorConfig;
 use crate::shard_id::ShardId;
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::{
-    envelope_codec::EnvelopeCodec,
-    event::{GapMarker, MarketEvent},
-    market_event_subject::{EVENT_CATEGORY, GAP_CATEGORY},
-};
-use platform_metrics::descriptions::{
-    DECODE_KIND_GAP_MARKER, DECODE_KIND_MARKET_EVENT, STAGE_AGGREGATOR,
-};
-use platform_metrics::market_data::MarketDataMetrics;
+use platform_market_data::{EVENT_CATEGORY, EnvelopeCodec, GAP_CATEGORY, GapMarker, MarketEvent};
+use platform_metrics::MarketDataMetrics;
+use platform_metrics::{DECODE_KIND_GAP_MARKER, DECODE_KIND_MARKET_EVENT, STAGE_AGGREGATOR};
 use platform_nats::{ConsumerStart, JetStreamConsumer, Message};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use stock_trek_types::cex::cex_id::CexId;
 use tracing::warn;

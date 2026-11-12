@@ -1,11 +1,11 @@
 use crate::{config::ArchiverConfig, sink::ArchiveSink, source::ArchiveSource};
 use platform_archive::ArchiveBuffer;
 use platform_errors::BuildResult;
-use platform_metrics::descriptions::{
+use platform_metrics::MarketDataMetrics;
+use platform_metrics::{
     DROP_REASON_DUPLICATE, FLUSH_REASON_INTERVAL, FLUSH_REASON_SHUTDOWN, FLUSH_REASON_SIZE,
     STAGE_ARCHIVER,
 };
-use platform_metrics::market_data::MarketDataMetrics;
 use platform_runtime::Runtime;
 use std::time::Instant;
 use tokio::time::{self, MissedTickBehavior};

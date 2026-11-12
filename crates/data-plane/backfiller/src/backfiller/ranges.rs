@@ -1,5 +1,5 @@
 use crate::gap_retry_store::PendingGap;
-use platform_market_data::event::GapMarker;
+use platform_market_data::GapMarker;
 
 const FALLBACK_WINDOW_STEP: u64 = 1_000;
 

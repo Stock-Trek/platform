@@ -1,6 +1,6 @@
 use crate::SignedOrderSubmission;
 use platform_errors::{BuildError, BuildResult};
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use std::time::Duration;
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);

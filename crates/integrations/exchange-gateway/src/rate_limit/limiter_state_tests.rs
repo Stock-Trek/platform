@@ -1,5 +1,5 @@
 use crate::rate_limit::limiter_state::RateLimiterState;
-use platform_types::new_types::{DurationNanoseconds, UsageCount};
+use platform_types::{DurationNanoseconds, UsageCount};
 use std::{
     sync::{Arc, Mutex},
     time::{Duration, Instant},

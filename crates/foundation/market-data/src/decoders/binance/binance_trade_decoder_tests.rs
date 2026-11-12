@@ -4,10 +4,9 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_metrics::{
-    descriptions::{DROP_REASON_INVALID_TRADE, MARKET_DATA_DROPPED_EVENTS_TOTAL, STAGE_AGGREGATOR},
-    test_utils::TestRecorder,
+    DROP_REASON_INVALID_TRADE, MARKET_DATA_DROPPED_EVENTS_TOTAL, STAGE_AGGREGATOR, TestRecorder,
 };
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};

@@ -1,6 +1,6 @@
 use crate::{
-    AdminApi, ApiServer, DynamoDbOwnershipStore, OwnershipOutboxRelay, OwnershipStore,
-    PortfolioRegistryConfig, ReadApi, RegistryService,
+    AdminApi, ApiServer, DynamoDbOwnershipStore, OwnershipOutboxRelay, OwnershipStore, ReadApi,
+    RegistryService, config::PortfolioRegistryConfig,
 };
 use platform_auth_service::JwksCache;
 use platform_aws::Aws;

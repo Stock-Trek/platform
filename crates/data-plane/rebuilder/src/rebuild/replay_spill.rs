@@ -5,7 +5,8 @@ use crate::rebuild::{
     spill_sorter::SpillSorter,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::{decoders::trade::Trade, event::MarketEvent};
+use platform_market_data::{MarketEvent, trade::Trade};
+use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use std::{
     fs::File,
@@ -35,9 +36,7 @@ impl ReplayRecord {
         )
     }
 
-    pub fn event_timestamp(
-        event: &MarketEvent,
-    ) -> platform_types::new_types::TimestampMilliseconds {
+    pub fn event_timestamp(event: &MarketEvent) -> TimestampMilliseconds {
         event.exchange_timestamp.unwrap_or(event.received_at)
     }
 }

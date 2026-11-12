@@ -1,7 +1,7 @@
 //! Stable key-to-shard assignment for the aggregator shard stream.
 
 use platform_archive::{RoutingBucket, RoutingKey};
-use platform_market_data::{candle::CandleKey, decoders::trade::Trade};
+use platform_market_data::{CandleKey, trade::Trade};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};

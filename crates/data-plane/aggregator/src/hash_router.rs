@@ -12,11 +12,12 @@ use crate::{
 use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use platform_market_data::{
-    decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
-    event::{GapMarker, MarketEvent},
+    GapMarker, MarketEvent,
+    trade::{SharedTradeDecoder, TradeDecoderFactory},
 };
-use platform_metrics::descriptions::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
-use platform_metrics::market_data::MarketDataMetrics;
+use platform_metrics::{
+    DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, MarketDataMetrics, STAGE_AGGREGATOR,
+};
 use platform_nats::EventPublisher;
 use platform_runtime::Runtime;
 use std::collections::{BTreeSet, HashMap};

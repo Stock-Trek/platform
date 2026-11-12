@@ -2,7 +2,7 @@
 
 use metrics_cloudwatch_embedded::Collector;
 use platform_errors::BuildResult;
-use platform_metrics::descriptions::{COLD_STARTS_TOTAL, DescriptionsMetrics};
+use platform_metrics::{COLD_STARTS_TOTAL, DescriptionsMetrics};
 
 /// Installs the CloudWatch metrics recorder used by Lambda services.
 pub struct LambdaMetrics;

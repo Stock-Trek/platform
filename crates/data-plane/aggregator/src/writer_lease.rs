@@ -6,7 +6,7 @@ use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
 use platform_metrics::AggregatorMetrics;
 use platform_nats::KeyValue;
-use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::Duration;

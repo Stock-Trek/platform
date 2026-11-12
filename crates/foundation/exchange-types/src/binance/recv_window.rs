@@ -1,5 +1,5 @@
 use platform_errors::{BuildError, BuildResult};
-use platform_types::new_types::DurationMilliseconds;
+use platform_types::DurationMilliseconds;
 use serde::Serialize;
 use std::fmt;
 

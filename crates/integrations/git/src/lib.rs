@@ -1,1 +1,3 @@
-pub mod git_host;
+mod git_host;
+
+pub use git_host::{GitFile, GitHost};

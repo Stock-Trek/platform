@@ -5,7 +5,7 @@ use crate::rate_limit::{
 };
 use platform_errors::{BuildError, RateLimitError};
 use platform_exchange_types::rate_limited::RateLimitRestriction;
-use platform_types::new_types::{DurationNanoseconds, UsageCount};
+use platform_types::{DurationNanoseconds, UsageCount};
 use std::collections::HashMap;
 use std::time::Duration;
 

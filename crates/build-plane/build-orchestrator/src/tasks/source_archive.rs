@@ -1,5 +1,5 @@
 use platform_errors::{BuildError, BuildResult};
-use platform_git::git_host::GitFile;
+use platform_git::GitFile;
 use std::io::{Cursor, Write};
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 

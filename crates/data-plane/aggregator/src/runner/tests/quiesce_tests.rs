@@ -5,7 +5,7 @@ use crate::runner::{ProcessorRunner, QuiesceSignal};
 use crate::shard_id::ShardId;
 use crate::writer_lease::LeaseStore;
 use crate::writer_lease_tests::InMemoryLeaseStore;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::watch;

@@ -1,4 +1,4 @@
-use platform_runner::{convert::string::JsonString, generated::dto::StrategyContextDto};
+use platform_runner::{dto::StrategyContextDto, string::JsonString};
 use std::collections::BTreeMap;
 use stock_trek::types::{AssetId, CexId};
 

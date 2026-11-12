@@ -1,6 +1,5 @@
 use platform_archive::{
-    ArchiveBatch, ArchiveKind, ArchiveRecord, ArchiveRecordKey,
-    spill::{SpillRun, SpillRunReader},
+    ArchiveBatch, ArchiveKind, ArchiveRecord, ArchiveRecordKey, SpillRun, SpillRunReader,
 };
 use platform_errors::{BuildError, BuildResult};
 use std::{

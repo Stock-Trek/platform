@@ -3,7 +3,7 @@ use crate::{
     token_cache::CacheLookup,
 };
 use platform_errors::{AuthError, BuildError, BuildResult, ErrorType};
-use platform_metrics::auth::AuthTokenCacheMetrics;
+use platform_metrics::AuthTokenCacheMetrics;
 use std::{
     sync::Arc,
     time::{Duration, Instant},

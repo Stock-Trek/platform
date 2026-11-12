@@ -1,9 +1,9 @@
 use crate::config::BackfillerConfig;
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_market_data::event::GapMarker;
+use platform_market_data::GapMarker;
 use platform_nats::{JetStream, KeyValue, NatsSubject};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::Duration};
 use stock_trek_types::cex::cex_id::CexId;

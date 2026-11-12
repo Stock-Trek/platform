@@ -1,8 +1,8 @@
 use crate::{TokenAuditEvent, TokenAuditLog};
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_sqs::sqs::Sqs;
-use platform_time::deadline_budget::Deadline;
+use platform_sqs::Sqs;
+use platform_time::Deadline;
 use std::{
     sync::Arc,
     time::{Duration, SystemTime},

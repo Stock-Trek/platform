@@ -1,4 +1,4 @@
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use stock_trek_types::cex::cex_id::CexId;
 

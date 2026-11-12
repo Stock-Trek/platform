@@ -1,27 +1,25 @@
 use crate::{
     config::RebuildConfig,
     iceberg_event_reader::IcebergEventReader,
-    rebuild::{
-        RebuildOptions, RebuildStats, SpillUsage, candle_spill::CandleSpill,
-        replay_spill::ReplaySpill,
-    },
+    rebuild::{CandleRecords, CandleSpill, RebuildOptions, RebuildStats, ReplaySpill, SpillUsage},
     sink::{CandleRecordSource, CandleSink, S3CandleSink},
 };
-use platform_aggregator::processor::ProcessorConfig;
+use platform_aggregator::ProcessorConfig;
 use platform_archive::IcebergCatalog;
 use platform_errors::{BuildError, BuildResult};
+use platform_market_data::ClosedCandle;
 use std::{collections::HashMap, path::Path, sync::Arc};
 use tracing::info;
 
 /// Streams closed candles from the rebuild spill to the sink in object order,
 /// counting how many unique revisions reach the sink.
 struct RebuildCandles {
-    records: crate::rebuild::candle_spill::CandleRecords,
+    records: CandleRecords,
     emitted: usize,
 }
 
 impl RebuildCandles {
-    fn new(records: crate::rebuild::candle_spill::CandleRecords) -> Self {
+    fn new(records: CandleRecords) -> Self {
         Self {
             records,
             emitted: 0,
@@ -34,7 +32,7 @@ impl RebuildCandles {
 }
 
 impl CandleRecordSource for RebuildCandles {
-    fn next_candle(&mut self) -> BuildResult<Option<platform_market_data::candle::ClosedCandle>> {
+    fn next_candle(&mut self) -> BuildResult<Option<ClosedCandle>> {
         let candle = self.records.next_candle()?;
         if candle.is_some() {
             self.emitted += 1;

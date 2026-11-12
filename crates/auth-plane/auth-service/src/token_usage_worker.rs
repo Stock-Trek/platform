@@ -3,7 +3,7 @@ use crate::{
     auth_service::MAX_UPDATE_ATTEMPTS, token_store::TokenStore,
 };
 use platform_errors::{BuildError, BuildResult, ErrorType};
-use platform_metrics::auth::AuthUsageQueueMetrics;
+use platform_metrics::AuthUsageQueueMetrics;
 use std::{
     collections::HashMap,
     sync::Arc,

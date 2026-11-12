@@ -4,7 +4,7 @@ use crate::{
 use lambda_http::Request;
 use platform_aws::SsmSecrets;
 use platform_errors::BuildResult;
-use platform_github::host_allowlist::HostAllowlist;
+use platform_github::HostAllowlist;
 
 pub trait EventConverter: Send + Sync {
     fn event_response(&self, event: &Request) -> BuildResult<EventResponse>;

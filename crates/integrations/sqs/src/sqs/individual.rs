@@ -1,7 +1,7 @@
 use aws_sdk_sqs::error::ProvideErrorMetadata;
 use platform_errors::{BuildResult, SqsBatchFailure};
 use platform_messages::SqsMessage;
-use platform_time::deadline_budget::Deadline;
+use platform_time::Deadline;
 use std::time::Duration;
 
 use crate::sqs::Sqs;

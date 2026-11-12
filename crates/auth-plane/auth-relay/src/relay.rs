@@ -6,7 +6,7 @@ use platform_auth_service::{
 };
 use platform_aws::Aws;
 use platform_errors::BuildResult;
-use platform_sqs::sqs::{Sqs, SqsConfig};
+use platform_sqs::{Sqs, SqsConfig};
 use std::sync::Arc;
 
 pub struct AuthRelay {

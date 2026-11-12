@@ -3,7 +3,7 @@ use crate::{
     response::{ETHttpResponse, ETWebsocketResponse},
 };
 use platform_errors::BuildResult;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 
 pub trait ServerTimeHttpRequest<Response>: ETHttpRequest<Response = Response>
 where

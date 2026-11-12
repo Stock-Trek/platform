@@ -1,45 +1,31 @@
-pub mod archive_buffer;
-pub mod batch;
+mod archive_buffer;
+mod archive_handoff;
+mod archive_parquet;
+mod archive_record;
+mod batch;
+mod iceberg;
+mod layout;
+mod parquet_reader;
+mod quantization;
+mod routing_key;
+mod s3_object;
+mod source;
+mod spill;
 
 #[cfg(test)]
 mod archive_buffer_tests;
-
-pub mod archive_handoff;
-
 #[cfg(test)]
 mod archive_handoff_tests;
-
-pub mod archive_parquet;
-pub mod iceberg;
-pub mod layout;
-
 #[cfg(test)]
 mod archive_parquet_tests;
-
-pub mod parquet_reader;
-pub mod quantization;
-
-#[cfg(test)]
-mod quantization_tests;
-
-pub use quantization::*;
-pub mod archive_record;
-
 #[cfg(test)]
 mod archive_record_tests;
-
-pub mod routing_key;
-
+#[cfg(test)]
+mod quantization_tests;
 #[cfg(test)]
 mod routing_key_tests;
-
-pub mod s3_object;
-
 #[cfg(test)]
 mod s3_object_tests;
-
-pub mod source;
-pub mod spill;
 
 pub use archive_buffer::ArchiveBuffer;
 pub use archive_handoff::ArchiveHandoff;
@@ -58,7 +44,8 @@ pub use iceberg::{
 };
 pub use layout::{ArchiveBucket, ArchiveHour, ArchivePath};
 pub use parquet_reader::ParquetReader;
+pub use quantization::*;
 pub use routing_key::{ROUTING_BUCKET_COUNT, RoutingBucket, RoutingKey};
 pub use s3_object::{Bucket, ObjectKey, S3, S3Object};
 pub use source::SourceBatch;
-pub use spill::{SpillRun, SpillRunReader};
+pub use spill::{SpillRun, SpillRunReader, SpillRunWriter};

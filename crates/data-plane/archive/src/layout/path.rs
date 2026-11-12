@@ -6,7 +6,7 @@
 use crate::layout::hour::{ArchiveHour, DAY_FIELD, HOUR_FIELD, MONTH_FIELD, YEAR_FIELD};
 use crate::{ArchiveKind, ArchivePartition, routing_key::RoutingBucket};
 use platform_errors::{BuildError, BuildResult, DataError};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 
 /// The single place where archive object keys are built and parsed.
 pub struct ArchivePath;

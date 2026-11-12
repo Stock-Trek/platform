@@ -6,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_market_data::event::ParsedMessage;
+use platform_market_data::ParsedMessage;
 use platform_nats::EventPublisher;
 use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;

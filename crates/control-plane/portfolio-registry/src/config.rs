@@ -1,17 +1,15 @@
-use platform_config::EnvVars;
-use platform_errors::BuildResult;
-use platform_runtime::Config;
-
 mod admin;
 mod nats;
 mod read;
 mod store;
 mod stream;
 
-pub use admin::AdminConfig;
-pub use nats::RegistryNatsConfig;
-pub use read::ReadConfig;
-pub use store::RegistryStoreConfig;
+use crate::config::{
+    admin::AdminConfig, nats::RegistryNatsConfig, read::ReadConfig, store::RegistryStoreConfig,
+};
+use platform_config::EnvVars;
+use platform_errors::BuildResult;
+use platform_runtime::Config;
 
 #[derive(Debug, Clone)]
 pub struct PortfolioRegistryConfig {

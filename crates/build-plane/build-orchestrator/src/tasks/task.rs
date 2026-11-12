@@ -4,9 +4,9 @@ use crate::{
     tasks::{git_remote::GitRemote, s3_keys::S3Keys, source_archive::SourceArchive},
 };
 use platform_errors::BuildResult;
-use platform_git::git_host::GitHost;
+use platform_git::GitHost;
 use platform_messages::{GitSource, SqsDetail, SqsMessage, SqsRefType};
-use platform_time::request_context::RequestContext;
+use platform_time::RequestContext;
 use std::fmt::Display;
 
 const USER_GENERATED_DIRECTORY: &str = "src/algorithms";

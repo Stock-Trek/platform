@@ -1,5 +1,5 @@
 use crate::retryability::Retryability;
-use platform_types::new_types::ArithmeticError;
+use platform_types::ArithmeticError;
 use std::error::Error as StdError;
 
 #[derive(Debug, thiserror::Error, strum::IntoStaticStr)]

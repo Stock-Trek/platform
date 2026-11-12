@@ -5,9 +5,7 @@ use crate::{
     PublishingPortfolioUpdateSink, read_model::PortfolioReadModelStore,
 };
 use platform_errors::BuildResult;
-use platform_exchange_gateway::connector::{
-    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT,
-};
+use platform_exchange_gateway::{CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT};
 use platform_nats::{EventPublisher, NatsPublisher};
 use platform_portfolio_ownership::OWNERSHIP_STREAM_PREFIX;
 use platform_runtime::{Runtime, Service};

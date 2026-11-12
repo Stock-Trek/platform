@@ -2,8 +2,8 @@ use crate::{
     ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetStream,
     archive_record::{ArchiveRecord, ArchivedMarketEvent},
 };
-use platform_market_data::event::MarketEvent;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::MarketEvent;
+use platform_types::TimestampMilliseconds;
 use std::io::Cursor;
 use stock_trek_types::cex::cex_id::CexId;
 

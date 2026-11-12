@@ -7,7 +7,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_market_data::event::GapMarker;
+use platform_market_data::GapMarker;
 use platform_nats::EventPublisher;
 use stock_trek_types::cex::cex_id::CexId;
 

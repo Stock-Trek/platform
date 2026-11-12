@@ -1,6 +1,6 @@
 use platform_errors::{BuildError, BuildResult, SqsBatchFailure, SqsError};
 use platform_messages::SqsMessage;
-use platform_metrics::sqs::SqsMetrics;
+use platform_metrics::SqsMetrics;
 use serde::Serialize;
 
 use crate::sqs::Sqs;

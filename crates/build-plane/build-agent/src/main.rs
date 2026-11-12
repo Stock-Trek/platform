@@ -1,12 +1,3 @@
-use crate::{
-    build_agent::BuildAgent, build_handler::Handler, config::AgentConfig,
-    source_archive::SourceLimits,
-};
-use lambda_runtime::service_fn;
-use metrics_cloudwatch_embedded::lambda::service::run;
-use platform_errors::{BuildError, BuildResult};
-use platform_runtime::Service;
-
 mod artifacts;
 mod artifacts_compile;
 mod artifacts_publish;
@@ -21,6 +12,15 @@ mod signed_post_tests;
 mod source_archive;
 #[cfg(test)]
 mod source_archive_tests;
+
+use crate::{
+    build_agent::BuildAgent, build_handler::Handler, config::AgentConfig,
+    source_archive::SourceLimits,
+};
+use lambda_runtime::service_fn;
+use metrics_cloudwatch_embedded::lambda::service::run;
+use platform_errors::{BuildError, BuildResult};
+use platform_runtime::Service;
 
 const SERVICE: Service = Service::new("platform-build-agent");
 

@@ -14,7 +14,7 @@ use crate::config::replay::ReplayStartPolicy;
 use platform_archive::RoutingBucket;
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::candle::AlignedWindow;
+use platform_market_data::AlignedWindow;
 use platform_nats::NatsSubject;
 use platform_runtime::Config;
 use std::time::Duration;

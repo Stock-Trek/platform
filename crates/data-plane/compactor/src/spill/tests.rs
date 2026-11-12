@@ -1,7 +1,7 @@
 use crate::spill::{DedupeSpill, PartitionSpill};
 use platform_archive::{ArchiveKind, ArchiveRecord, ArchiveSortKey};
-use platform_market_data::event::MarketEvent;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::MarketEvent;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
 fn event(stream: &str, sequence: u64, timestamp: i64, received_at: i64) -> ArchiveRecord {

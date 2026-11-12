@@ -1,4 +1,4 @@
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use url::Url;
 
 #[test]

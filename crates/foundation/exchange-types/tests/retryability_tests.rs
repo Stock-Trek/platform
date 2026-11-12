@@ -8,7 +8,7 @@ use platform_exchange_types::{
     },
     klines::KlinesResponse,
 };
-use platform_types::new_types::DurationSeconds;
+use platform_types::DurationSeconds;
 
 fn response(
     status: u16,

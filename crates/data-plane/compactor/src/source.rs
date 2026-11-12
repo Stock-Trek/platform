@@ -5,7 +5,7 @@ use platform_archive::{
     SourceBatch,
 };
 use platform_errors::BuildResult;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,

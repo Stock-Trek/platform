@@ -1,5 +1,5 @@
-use platform_market_data::envelope_codec::EnvelopeCodec;
-use platform_market_data::event::GapMarker;
+use platform_market_data::EnvelopeCodec;
+use platform_market_data::GapMarker;
 use platform_nats::Message;
 
 #[test]

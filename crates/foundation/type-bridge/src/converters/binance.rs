@@ -20,7 +20,7 @@ use platform_exchange_types::binance::{
         BinanceTimeInForce,
     },
 };
-use platform_types::new_types::DurationMilliseconds;
+use platform_types::DurationMilliseconds;
 use std::collections::HashMap;
 use std::sync::LazyLock;
 use stock_trek_types::cex::{

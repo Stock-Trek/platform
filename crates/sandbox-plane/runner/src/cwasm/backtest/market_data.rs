@@ -1,14 +1,13 @@
+use crate::cwasm::backtest::spec::Spec;
 use platform_runner::{
-    convert::string::JsonString,
-    generated::dto::{MarketCandleDto, MarketOhlcvDto, StrategyContextDto},
+    dto::{MarketCandleDto, MarketOhlcvDto, StrategyContextDto},
+    string::JsonString,
 };
 use std::collections::BTreeMap;
 use stock_trek::{
     markets::{AlignedWindow, TimestampMillis},
     types::{AssetId, CexId},
 };
-
-use crate::cwasm::backtest::spec::Spec;
 
 pub(super) type MarketData = BTreeMap<CexId, BTreeMap<(AssetId, AssetId), BTreeMap<u32, Series>>>;
 

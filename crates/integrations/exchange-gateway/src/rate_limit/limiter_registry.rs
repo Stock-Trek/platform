@@ -2,7 +2,7 @@ use crate::rate_limit::rate_limiter::RateLimiter;
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult, RateLimitError};
 use platform_exchange_types::rate_limited::{RateLimit, RateLimitRestriction, RateUsage};
-use platform_types::new_types::{DurationNanoseconds, UsageCount};
+use platform_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use strum::IntoEnumIterator;
 use tracing::{debug, warn};

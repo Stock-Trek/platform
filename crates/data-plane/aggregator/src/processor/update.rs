@@ -1,7 +1,7 @@
 //! Outputs produced by applying one input to the keyed state.
 
 use crate::state::IncompleteWindow;
-use platform_market_data::candle::{AlignedWindow, Candle, ClosedCandle};
+use platform_market_data::{AlignedWindow, Candle, ClosedCandle};
 use std::collections::{BTreeMap, HashSet};
 
 /// Outputs produced by applying one input to the keyed state.

@@ -8,8 +8,8 @@ use crate::{
 use aws_sdk_lambda::Client as LambdaClient;
 use aws_sdk_sqs::Client as SqsClient;
 use platform_errors::BuildResult;
-use platform_github::github_auth::GitHubAuth;
-use platform_sqs::{message_dedup::SqsDedup, sqs::Sqs, sqs::SqsConfig};
+use platform_github::GitHubAuth;
+use platform_sqs::{Sqs, SqsConfig, SqsDedup};
 use std::time::Duration;
 
 pub struct RsOrchestratorContext {

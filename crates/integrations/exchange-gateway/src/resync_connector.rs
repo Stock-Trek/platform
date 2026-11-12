@@ -11,7 +11,7 @@ use platform_exchange_types::{
     rate_limited::RateLimit,
     request::{ETHttpRequest, ETWebsocketRequest},
 };
-use platform_types::new_types::{TimestampMilliseconds, UsageCount};
+use platform_types::{TimestampMilliseconds, UsageCount};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::{debug, warn};

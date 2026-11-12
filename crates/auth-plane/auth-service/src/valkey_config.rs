@@ -1,5 +1,5 @@
 use platform_errors::{BuildError, BuildResult};
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use reqwest::Url;
 use std::{fmt, time::Duration};
 

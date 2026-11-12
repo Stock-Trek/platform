@@ -1,7 +1,7 @@
 use crate::binance::portfolio::credentials::{BinanceCredentialConfig, CREDENTIALS};
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use std::time::Duration;
 
 const ENABLED: &str = "PORTFOLIO_BINANCE_ENABLED";

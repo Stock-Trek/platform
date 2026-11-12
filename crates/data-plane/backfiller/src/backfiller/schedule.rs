@@ -1,5 +1,5 @@
 use crate::gap_retry_store::PendingGap;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::collections::BTreeMap;
 use tokio::time::{Duration, Instant, sleep_until};
 

@@ -3,15 +3,13 @@ use crate::runner::ProcessorRunner;
 use crate::runner::tests::fixtures_tests::{FakeSink, Fixtures};
 use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
-use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle};
-use platform_market_data::decoders::trade::Trade;
-use platform_metrics::descriptions::{
+use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, trade::Trade};
+use platform_metrics::{
     MARKET_DATA_AGGREGATOR_CLOSED_CANDLES_EVICTED_TOTAL,
     MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL,
-    MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL,
+    MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_TRADES_TOTAL, TestRecorder,
 };
-use platform_metrics::test_utils::TestRecorder;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use std::collections::BTreeMap;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};

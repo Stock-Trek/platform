@@ -12,10 +12,10 @@ use platform_archive::{
 };
 use platform_errors::{BuildError, BuildResult};
 use platform_market_data::{
-    decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
-    event::MarketEvent,
+    MarketEvent,
+    trade::{SharedTradeDecoder, TradeDecoderFactory},
 };
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;

@@ -8,10 +8,9 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_errors::{BuildError, BuildResult, IngesterError};
-use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
-use platform_metrics::market_data::MarketDataMetrics;
+use platform_metrics::{DROP_REASON_INVALID_TRADE, MarketDataMetrics, STAGE_AGGREGATOR};
 use platform_type_bridge::BinanceConverter;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use serde_json::{Map, Value};
 use stock_trek_types::cex::trading_pair::TradingPair;

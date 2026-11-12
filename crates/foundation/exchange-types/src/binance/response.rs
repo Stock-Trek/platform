@@ -6,7 +6,7 @@ use crate::{
     websocket_id::ETWebsocketId,
 };
 use platform_errors::{BinanceError, BuildError, BuildResult, ExchangeError};
-use platform_types::new_types::{DurationNanoseconds, DurationSeconds, UsageCount};
+use platform_types::{DurationNanoseconds, DurationSeconds, UsageCount};
 use serde::{Deserialize, de::DeserializeOwned};
 use std::{collections::HashMap, fmt::Debug};
 

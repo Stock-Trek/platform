@@ -8,8 +8,8 @@
 use crate::state::gaps::{IncompleteWindow, KnownGap};
 use crate::state::streams::StreamProgress;
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::candle::{Candle, CandleKey};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::{Candle, CandleKey};
+use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 

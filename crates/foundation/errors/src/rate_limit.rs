@@ -1,5 +1,5 @@
 use crate::retryability::Retryability;
-use platform_types::new_types::{DurationNanoseconds, UsageCount};
+use platform_types::{DurationNanoseconds, UsageCount};
 
 #[derive(Debug, thiserror::Error, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]

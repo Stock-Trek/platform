@@ -1,8 +1,8 @@
-pub mod config;
-pub mod lambda;
-pub mod process_metrics;
-pub mod runtime;
-pub mod service;
+mod config;
+mod lambda;
+mod process_metrics;
+mod runtime;
+mod service;
 
 pub use config::Config;
 pub use lambda::LambdaMetrics;

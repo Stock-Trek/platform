@@ -1,7 +1,7 @@
 use crate::processor::CandleProcessor;
 use crate::processor::tests::fixtures_tests::Fixtures;
-use platform_market_data::candle::CandleKey;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::CandleKey;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 #[test]

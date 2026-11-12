@@ -1,6 +1,6 @@
 use crate::config::AggregatorConfig;
 use crate::config::config_validation::{ESTIMATED_BYTES_PER_CLOSED_CANDLE, RetentionLimits};
-use platform_market_data::candle::AlignedWindow;
+use platform_market_data::AlignedWindow;
 use std::collections::BTreeMap;
 use std::time::Duration;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};

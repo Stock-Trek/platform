@@ -4,7 +4,7 @@ use crate::installation::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::{BuildError, BuildResult, GitHubError};
-use platform_git::git_host::GitFile;
+use platform_git::GitFile;
 use std::path::Path;
 
 impl GitHubInstallation {

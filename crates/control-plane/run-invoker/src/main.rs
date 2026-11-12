@@ -1,19 +1,13 @@
-mod run_invoker;
-
-#[cfg(test)]
-mod run_invoker_tests;
-
-pub use run_invoker::RunInvokerConfig;
 mod invoker;
 mod request;
-
 #[cfg(test)]
 mod request_tests;
-
-pub use request::*;
+mod run_invoker;
+#[cfg(test)]
+mod run_invoker_tests;
 mod runner;
 
-use crate::{invoker::RunInvoker, runner::Runner};
+use crate::{invoker::RunInvoker, run_invoker::RunInvokerConfig, runner::Runner};
 use platform_aws::{Aws, PresignedPostSigner};
 use platform_errors::{BuildError, BuildResult, StorageError};
 use platform_run_store::RunStore;

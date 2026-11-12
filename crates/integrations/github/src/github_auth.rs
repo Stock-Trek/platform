@@ -9,7 +9,7 @@ use octocrab::Octocrab;
 use parking_lot::Mutex;
 use platform_config::DirectoryLimits;
 use platform_errors::{BuildError, BuildResult, GitHubError};
-use platform_time::timeouts::Timeouts;
+use platform_time::Timeouts;
 use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};
 
 const ENTERPRISE_API_PATH: &str = "api/v3";

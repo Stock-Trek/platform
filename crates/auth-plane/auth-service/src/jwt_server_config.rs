@@ -5,7 +5,7 @@ use crate::{
 use platform_config::{EnvVars, RUST_LOG};
 use platform_errors::BuildResult;
 use platform_sigv4::SigV4Config;
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use secrecy::SecretString;
 use std::{fmt, net::SocketAddr, time::Duration};
 

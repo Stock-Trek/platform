@@ -4,9 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult, ExchangeError};
-use platform_exchange_gateway::{
-    clients::reqwest::ReqwestHttpClient, connector::Connector, submission::SubmissionOutcome,
-};
+use platform_exchange_gateway::{Connector, ReqwestHttpClient, SubmissionOutcome};
 use platform_exchange_types::{
     binance::{
         book_ticker::BinanceBookTickerRequest,
@@ -16,7 +14,7 @@ use platform_exchange_types::{
     },
     request::ETHttpRequest,
 };
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
 
 /// Reads Binance REST pages used to reconstruct market-data gaps.

@@ -1,5 +1,5 @@
 use platform_errors::{BuildError, BuildResult, RateLimitError};
-use platform_types::new_types::{DurationNanoseconds, NonZero, UsageCount};
+use platform_types::{DurationNanoseconds, NonZero, UsageCount};
 use std::{
     sync::Arc,
     time::{Duration, Instant},

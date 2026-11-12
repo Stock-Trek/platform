@@ -4,7 +4,7 @@ use crate::replay_store::{
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
-use platform_metrics::auth::AuthReplayMetrics;
+use platform_metrics::AuthReplayMetrics;
 use std::{
     cmp::{Ordering, Reverse},
     collections::{BinaryHeap, HashMap},
