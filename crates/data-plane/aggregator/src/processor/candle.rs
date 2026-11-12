@@ -9,8 +9,8 @@ use platform_market_data::{
     AlignedWindow, Candle, CandleKey, ClosedCandle,
     trade::{Trade, TradeDecoderFactory},
 };
-use platform_metrics::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
 use platform_metrics::MarketDataMetrics;
+use platform_metrics::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
 use platform_types::TimestampMilliseconds;
 use stock_trek::markets::TimestampMillis;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};

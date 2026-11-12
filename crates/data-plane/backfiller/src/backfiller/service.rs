@@ -6,11 +6,11 @@ use crate::{
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::{BuildError, BuildResult};
 use platform_market_data::{EnvelopeCodec, GapMarker, MarketEvent, MarketEventSubject};
+use platform_metrics::MarketDataMetrics;
 use platform_metrics::{
     BACKFILL_OUTCOME_COVERED, BACKFILL_OUTCOME_EMPTY, BACKFILL_OUTCOME_ERROR,
     BACKFILL_OUTCOME_PARTIAL,
 };
-use platform_metrics::MarketDataMetrics;
 use platform_nats::EventPublisher;
 use platform_runtime::Runtime;
 use platform_types::TimestampMilliseconds;

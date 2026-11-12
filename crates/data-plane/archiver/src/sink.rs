@@ -7,8 +7,8 @@ use platform_archive::{
     S3,
 };
 use platform_errors::BuildResult;
-use platform_metrics::S3_OPERATION_ARCHIVE_UPLOAD;
 use platform_metrics::MarketDataMetrics;
+use platform_metrics::S3_OPERATION_ARCHIVE_UPLOAD;
 use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 use tracing::{info, warn};

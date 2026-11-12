@@ -3,10 +3,8 @@ use async_trait::async_trait;
 use platform_archive::{ArchiveRecord, ArchiveRecordKey, ArchivedMarketEvent, STATE_EPOCH_HEADER};
 use platform_errors::BuildResult;
 use platform_market_data::{ClosedCandle, EnvelopeCodec, MarketEvent, MarketEventSubject};
-use platform_metrics::{
-    DECODE_KIND_CLOSED_CANDLE, DECODE_KIND_MARKET_EVENT, STAGE_ARCHIVER,
-};
 use platform_metrics::MarketDataMetrics;
+use platform_metrics::{DECODE_KIND_CLOSED_CANDLE, DECODE_KIND_MARKET_EVENT, STAGE_ARCHIVER};
 use platform_nats::{ConsumerStart, JetStreamConsumer, Message};
 use std::collections::VecDeque;
 use tracing::warn;

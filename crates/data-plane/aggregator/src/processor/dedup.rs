@@ -7,8 +7,8 @@
 use crate::processor::{CandleProcessor, ProcessorUpdate};
 use crate::state::DeduplicationKey;
 use platform_market_data::MarketEvent;
-use platform_metrics::{DROP_REASON_DUPLICATE, STAGE_AGGREGATOR};
 use platform_metrics::MarketDataMetrics;
+use platform_metrics::{DROP_REASON_DUPLICATE, STAGE_AGGREGATOR};
 
 impl CandleProcessor {
     /// Records the event's sequence and returns whether it should be applied.

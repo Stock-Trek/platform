@@ -20,8 +20,8 @@ use platform_market_data::{
     trade::{SharedTradeDecoder, TradeDecoderFactory},
 };
 use platform_metrics::AggregatorMetrics;
-use platform_metrics::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
 use platform_metrics::MarketDataMetrics;
+use platform_metrics::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
 use platform_types::TimestampMilliseconds;
 use std::collections::{HashMap, hash_map::Entry};
 use std::sync::Arc;
