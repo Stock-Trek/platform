@@ -5,7 +5,7 @@ use aws_credential_types::provider::{ProvideCredentials, SharedCredentialsProvid
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::presigning::PresigningConfig;
 use chrono::Utc;
-use platform_aws::presigned_post::{PresignedPost, PresignedPostSigner};
+use platform_aws::{PresignedPost, PresignedPostSigner};
 use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BpError, BpResult, StorageError};
 use platform_run_store::{RunRecord, RunStore};

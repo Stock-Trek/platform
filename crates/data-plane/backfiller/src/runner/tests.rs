@@ -49,8 +49,7 @@ fn config() -> BackfillerConfig {
         gap_subject_prefix: "market.gaps".to_string(),
         event_subject_prefix: "market.events".to_string(),
         exchange_http_url: "https://example.invalid".to_string(),
-        ssm: platform_aws::secrets::SsmConfig::new("/platform/backfiller/test".to_string(), true)
-            .unwrap(),
+        ssm: platform_aws::SsmConfig::new("/platform/backfiller/test".to_string(), true).unwrap(),
     }
 }
 

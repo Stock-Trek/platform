@@ -1,4 +1,4 @@
-use crate::{Secrets, secrets::ssm_config::SsmConfig};
+use crate::{SsmSecrets, ssm_config::SsmConfig};
 use aws_sdk_ssm::{operation::get_parameters_by_path::GetParametersByPathOutput, types::Parameter};
 use platform_errors::BpError;
 use std::collections::HashMap;
@@ -34,7 +34,7 @@ fn path_is_normalised_and_validated() {
 #[test]
 fn parameters_are_keyed_by_their_final_path_segment() {
     let mut secrets = HashMap::new();
-    Secrets::insert_page(
+    SsmSecrets::insert_page(
         &mut secrets,
         &page(&[
             (
@@ -55,7 +55,7 @@ fn parameters_are_keyed_by_their_final_path_segment() {
 #[test]
 fn parameters_without_a_name_or_value_are_handled() {
     let mut secrets = HashMap::new();
-    Secrets::insert_page(
+    SsmSecrets::insert_page(
         &mut secrets,
         &page(&[
             ("/platform/git-webhook/production/", Some("ignored")),
@@ -75,7 +75,7 @@ fn parameters_without_a_name_or_value_are_handled() {
 
 #[test]
 fn missing_secrets_are_a_configuration_error() {
-    let secrets = Secrets::default();
+    let secrets = SsmSecrets::default();
 
     assert!(matches!(
         secrets.get("BACKFILLER_EXCHANGE_API_KEY"),
