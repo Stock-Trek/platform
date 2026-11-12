@@ -64,11 +64,13 @@ fn partition_spill_merges_runs_in_partition_and_sort_order() {
     }
 
     let partition_a = format!(
-        "kind=events/exchange=binance/stream=a/{}",
+        "kind=events/exchange={}/stream=a/{}",
+        CexId::Binance,
         event("a", 0, 0, 0).routing_bucket().segment()
     );
     let partition_b = format!(
-        "kind=events/exchange=binance/stream=b/{}",
+        "kind=events/exchange={}/stream=b/{}",
+        CexId::Binance,
         event("b", 0, 0, 0).routing_bucket().segment()
     );
     assert_eq!(

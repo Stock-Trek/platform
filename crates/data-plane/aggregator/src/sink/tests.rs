@@ -36,9 +36,9 @@ fn closed_candle_targets_are_deterministic_and_key_scoped() {
     assert_eq!(first_target, replay_target);
     assert_eq!(
         first_target.0,
-        "market.candles.binance.bitcoin.tether_usd.1m"
+        "market.candles.Binance.Bitcoin.TetherUSD.1m"
     );
-    assert!(first_target.1.contains("binance.bitcoin.tether_usd.1m"));
+    assert!(first_target.1.contains("Binance.Bitcoin.TetherUSD.1m"));
     assert!(first_target.1.contains("epoch=0"));
 }
 

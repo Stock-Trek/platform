@@ -4,10 +4,10 @@ use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
 #[test]
 fn account_key_round_trips_through_its_storage_form() {
-    let key = AccountKey::parse("binance", "primary").expect("parse");
+    let key = AccountKey::parse(&CexId::Binance.to_string(), "primary").expect("parse");
     assert_eq!(key.cex_id(), CexId::Binance);
     assert_eq!(key.account_id(), &AccountId::new("primary"));
-    assert_eq!(key.storage_key(), "binance:primary");
+    assert_eq!(key.storage_key(), format!("{}:primary", CexId::Binance));
     assert_eq!(
         key.into_parts(),
         (CexId::Binance, AccountId::new("primary"))
@@ -17,8 +17,8 @@ fn account_key_round_trips_through_its_storage_form() {
 #[test]
 fn account_key_rejects_unknown_exchanges_and_empty_accounts() {
     assert!(AccountKey::parse("kraken", "primary").is_err());
-    assert!(AccountKey::parse("binance", "").is_err());
-    assert!(AccountKey::parse("binance", " ").is_err());
+    assert!(AccountKey::parse(&CexId::Binance.to_string(), "").is_err());
+    assert!(AccountKey::parse(&CexId::Binance.to_string(), " ").is_err());
 }
 
 #[test]

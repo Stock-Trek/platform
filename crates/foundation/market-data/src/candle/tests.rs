@@ -194,7 +194,15 @@ fn key_uses_asset_ids_and_window_label() {
         TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
         AlignedWindow::try_from("1m").unwrap(),
     );
-    assert_eq!(key.subject_suffix(), "binance.bitcoin.tether_usd.1m");
+    assert_eq!(
+        key.subject_suffix(),
+        format!(
+            "{}.{}.{}.1m",
+            CexId::Binance,
+            AssetId::Bitcoin,
+            AssetId::TetherUSD
+        )
+    );
 }
 
 fn closed_candle(offset: u64, epoch: u64) -> ClosedCandle {

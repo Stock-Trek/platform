@@ -38,7 +38,8 @@ fn configured_exchange_is_selected_by_default() {
 #[test]
 fn topology_can_select_the_binance_connector() {
     let mut vars = Fixture::enabled();
-    vars.push((CONNECTOR_CEXES, "binance"));
+    let binance = CexId::Binance.to_string();
+    vars.push((CONNECTOR_CEXES, &binance));
     let config = Fixture::config(&vars).unwrap();
 
     assert_eq!(config.cex_ids(), vec![CexId::Binance]);
@@ -50,7 +51,8 @@ fn topology_can_disable_all_connectors() {
     vars.retain(|(name, _)| *name != ENABLED);
     vars.retain(|(name, _)| *name != CREDENTIALS);
     vars.push((ENABLED, "false"));
-    vars.push((CONNECTOR_CEXES, "binance"));
+    let binance = CexId::Binance.to_string();
+    vars.push((CONNECTOR_CEXES, &binance));
 
     assert!(Fixture::config(&vars).unwrap().cex_ids().is_empty());
 }

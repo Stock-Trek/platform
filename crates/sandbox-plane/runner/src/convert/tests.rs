@@ -153,7 +153,7 @@ impl Fixtures {
 
         PortfolioDto {
             cex_accounts_dto: HashMap::from([(
-                AssetId::Bitcoin.to_string(),
+                CexId::Binance.to_string(),
                 CexAccountsDto {
                     account_portfolios_dto: HashMap::from([(
                         "primary".to_string(),
@@ -645,7 +645,10 @@ fn portfolio_dto_converts() {
 #[test]
 fn portfolio_dto_requires_pending_order_fields() {
     let mut dto = Fixtures::portfolio_dto();
-    let accounts = dto.cex_accounts_dto.get_mut("Binance").unwrap();
+    let accounts = dto
+        .cex_accounts_dto
+        .get_mut(&CexId::Binance.to_string())
+        .unwrap();
     let account = accounts.account_portfolios_dto.get_mut("primary").unwrap();
     let orders = account.pending_orders_dto.get_mut("main").unwrap();
     orders.pending_orders_dto[0].order_request_dto = None;

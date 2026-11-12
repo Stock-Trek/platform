@@ -5018,6 +5018,7 @@ dependencies = [
  "secrecy",
  "serde",
  "serde_json",
+ "stock-trek-types",
  "subtle",
  "tokio",
  "tracing",
