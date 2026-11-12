@@ -1,5 +1,4 @@
-use platform_errors::{BpError, BpResult};
-use platform_exchange_types::{
+use crate::{
     binance::{exchange::BinanceExchange, response::BinanceResponse},
     encode::ByteEncoder,
     http::{HttpMethod, HttpRequest},
@@ -7,6 +6,7 @@ use platform_exchange_types::{
     request::{ETHttpRequest, ETRequest},
     signer::Signer,
 };
+use platform_errors::{BpError, BpResult};
 use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use serde::{Deserialize, Serialize};
 

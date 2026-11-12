@@ -4,14 +4,17 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
-platform-errors = { workspace = true }
-platform-types = { workspace = true }
+async-trait = { workspace = true }
 bs58 = { workspace = true }
+chrono = { workspace = true }
 data-encoding = { workspace = true }
 ed25519-compact = { workspace = true }
 hmac = { workspace = true }
 p256 = { workspace = true }
 p384 = { workspace = true }
+platform-config = { workspace = true }
+platform-errors = { workspace = true }
+platform-types = { workspace = true }
 query-params = { workspace = true }
 rsa = { workspace = true, features = ["sha2"] }
 rust_decimal = { workspace = true }
@@ -21,7 +24,11 @@ serde_json = { workspace = true }
 serde_with = { workspace = true }
 sha2 = { workspace = true }
 signature = { workspace = true }
+stock-trek-types = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
 strum = { workspace = true, features = ["derive"] }
+url = { workspace = true }
 
 [dev-dependencies]
 rand = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt"] }

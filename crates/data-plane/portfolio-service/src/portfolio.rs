@@ -1,7 +1,7 @@
 use crate::AccountKey;
+use crate::connector::ConnectorPortfolioUpdate;
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
-use platform_exchange_gateway::portfolio::PortfolioUpdate as GatewayPortfolioUpdate;
 use std::collections::BTreeMap;
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
@@ -10,10 +10,10 @@ pub use stock_trek::PendingOrder;
 pub type AccountPortfolio = stock_trek::CexAccountPortfolio;
 pub type AccountPortfolios = BTreeMap<CexId, BTreeMap<AccountId, AccountPortfolio>>;
 
-impl TryFrom<GatewayPortfolioUpdate> for PortfolioUpdate {
+impl TryFrom<ConnectorPortfolioUpdate> for PortfolioUpdate {
     type Error = BpError;
 
-    fn try_from(update: GatewayPortfolioUpdate) -> BpResult<Self> {
+    fn try_from(update: ConnectorPortfolioUpdate) -> BpResult<Self> {
         let portfolio = AccountPortfolio::new(
             update
                 .balances()

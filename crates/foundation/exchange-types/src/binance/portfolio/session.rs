@@ -1,8 +1,8 @@
-use super::transport::{BinanceAccountEvent, BinanceEventStream, BinanceTransport};
-use crate::portfolio::{PortfolioEvent, PortfolioPosition, PortfolioSession, PortfolioSnapshot};
-use async_trait::async_trait;
+use super::transport::{
+    AccountSnapshot, BinanceAccountEvent, BinanceEventStream, BinanceTransport,
+};
+use crate::api_key_credential::ApiKeyCredentials;
 use platform_errors::BpResult;
-use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use std::sync::Arc;
 use stock_trek_types::cex::account_id::AccountId;
 use tokio::sync::Mutex;
@@ -38,44 +38,24 @@ impl BinanceSession {
         })
     }
 
-    fn event(event: BinanceAccountEvent) -> PortfolioEvent {
-        match event {
-            BinanceAccountEvent::Position(event) => {
-                PortfolioEvent::Position(PortfolioPosition::new(
-                    event.version(),
-                    event.balances().clone(),
-                    event.occurred_at(),
-                ))
-            }
-            BinanceAccountEvent::ListenKeyExpired => PortfolioEvent::SessionExpired,
-        }
-    }
-}
-
-#[async_trait]
-impl PortfolioSession for BinanceSession {
-    async fn snapshot(&self) -> BpResult<PortfolioSnapshot> {
-        let snapshot = self.transport.account_snapshot(&self.credentials).await?;
-        Ok(PortfolioSnapshot::new(
-            snapshot.balances().clone(),
-            snapshot.occurred_at(),
-        ))
+    pub async fn snapshot(&self) -> BpResult<AccountSnapshot> {
+        self.transport.account_snapshot(&self.credentials).await
     }
 
-    async fn refresh(&self) -> BpResult<()> {
+    pub async fn refresh(&self) -> BpResult<()> {
         self.transport
             .keepalive_listen_key(&self.credentials, &self.listen_key)
             .await
     }
 
-    async fn close(&mut self) -> BpResult<()> {
+    pub async fn close(&mut self) -> BpResult<()> {
         self.transport
             .close_listen_key(&self.credentials, &self.listen_key)
             .await
     }
 
-    async fn next(&mut self) -> BpResult<Option<PortfolioEvent>> {
-        Ok(self.stream.lock().await.next().await?.map(Self::event))
+    pub async fn next(&mut self) -> BpResult<Option<BinanceAccountEvent>> {
+        self.stream.lock().await.next().await
     }
 }
 

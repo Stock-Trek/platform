@@ -1,6 +1,6 @@
-use super::{
-    ExchangePortfolioFeed, PortfolioConnection, PortfolioConnector, PortfolioFeed, PortfolioUpdate,
-    PortfolioUpdateApply, PortfolioUpdateSink,
+use crate::connector::{
+    ConnectorPortfolioUpdate, ExchangePortfolioFeed, PortfolioConnection, PortfolioConnector,
+    PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -86,7 +86,10 @@ struct NoopSink;
 
 #[async_trait]
 impl PortfolioUpdateSink for NoopSink {
-    async fn apply_update(&self, _update: PortfolioUpdate) -> BpResult<PortfolioUpdateApply> {
+    async fn apply_update(
+        &self,
+        _update: ConnectorPortfolioUpdate,
+    ) -> BpResult<PortfolioUpdateApply> {
         Ok(PortfolioUpdateApply::Applied)
     }
 }

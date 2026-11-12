@@ -1,4 +1,4 @@
-use super::{BinancePortfolioConfig, credentials::CREDENTIALS};
+use super::{BinancePortfolioConfig, CREDENTIALS};
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, ConfigError};
 use secrecy::ExposeSecret;

@@ -1,3 +1,4 @@
+use crate::{CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT};
 use crate::{
     NatsConnectorHealthSink, NatsOwnershipSource, NatsUpdateSource, OrderRequestDelivery,
     OrderRequestServer, OrderRequestService, OwnershipConsumer, PORTFOLIO_UPDATE_STREAM_PREFIX,
@@ -5,9 +6,6 @@ use crate::{
     PublishingPortfolioUpdateSink,
 };
 use platform_errors::BpResult;
-use platform_exchange_gateway::portfolio::{
-    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT,
-};
 use platform_nats::{EventPublisher, NatsPublisher};
 use platform_runtime::{Runtime, Service};
 use std::sync::Arc;

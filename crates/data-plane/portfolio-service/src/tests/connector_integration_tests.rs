@@ -1,16 +1,16 @@
 use super::order_request_fixture_tests::{Fixture as OrderFixture, OWNER};
 use super::test_feed::Fixture as PortfolioFixture;
+use crate::connector::{
+    ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
+    PortfolioCredentialSource, PortfolioEvent, PortfolioExchangeTransport, PortfolioFeed,
+    PortfolioPosition, PortfolioSession, PortfolioSnapshot, PortfolioUpdateApply,
+    PortfolioUpdateSink,
+};
 use crate::{OrderRequestService, PortfolioService, PortfolioUpdate};
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
 use platform_errors::BpResult;
-use platform_exchange_gateway::portfolio::{
-    ExchangePortfolioConnector, NoopConnectorHealthSink, PortfolioCredentialSource, PortfolioEvent,
-    PortfolioExchangeTransport, PortfolioFeed, PortfolioPosition, PortfolioSession,
-    PortfolioSnapshot, PortfolioUpdate as GatewayPortfolioUpdate, PortfolioUpdateApply,
-    PortfolioUpdateSink,
-};
 use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use secrecy::SecretString;
@@ -111,7 +111,10 @@ struct ServiceSink {
 
 #[async_trait]
 impl PortfolioUpdateSink for ServiceSink {
-    async fn apply_update(&self, update: GatewayPortfolioUpdate) -> BpResult<PortfolioUpdateApply> {
+    async fn apply_update(
+        &self,
+        update: ConnectorPortfolioUpdate,
+    ) -> BpResult<PortfolioUpdateApply> {
         let update = PortfolioUpdate::try_from(update)?;
         let outcome = self.service.apply_portfolio_update(update.clone());
         self.updates.lock().push(update);
@@ -194,7 +197,7 @@ async fn connector_updates_authorize_orders_before_and_after_recovery() {
     .expect("order before recovery");
 
     let restarted = Arc::new(PortfolioService::new(Arc::new(
-        platform_exchange_gateway::portfolio::NoopPortfolioFeed::new(),
+        crate::connector::NoopPortfolioFeed::new(),
     )));
     restarted
         .apply_ownership_event(&Fixture::ownership_event())

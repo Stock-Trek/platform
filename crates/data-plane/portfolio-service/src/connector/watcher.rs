@@ -1,6 +1,6 @@
 use super::{
-    ConnectorState, PortfolioEvent, PortfolioExchangeTransport, PortfolioPosition, PortfolioUpdate,
-    PortfolioUpdateApply, PortfolioUpdateSink, health_reporter::HealthReporter,
+    ConnectorPortfolioUpdate, ConnectorState, PortfolioEvent, PortfolioExchangeTransport,
+    PortfolioPosition, PortfolioUpdateApply, PortfolioUpdateSink, health_reporter::HealthReporter,
     session_state::SessionState,
 };
 use chrono::Utc;
@@ -162,7 +162,7 @@ impl Watcher {
         exchange_time: Option<chrono::DateTime<Utc>>,
         last_update: &mut Option<Instant>,
     ) -> BpResult<()> {
-        let update = PortfolioUpdate::new(
+        let update = ConnectorPortfolioUpdate::new(
             self.cex_id,
             self.account.clone(),
             balances.clone(),

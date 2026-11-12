@@ -1,8 +1,8 @@
-use super::{
-    ExchangePortfolioConnector, NoopConnectorHealthSink, PortfolioCredentialSource, PortfolioEvent,
-    PortfolioExchangeTransport, PortfolioFeed, PortfolioPosition, PortfolioSession,
-    PortfolioSnapshot, PortfolioUpdate, PortfolioUpdateApply, PortfolioUpdateSink,
-    StaticPortfolioCredentials,
+use crate::connector::{
+    ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
+    PortfolioCredentialSource, PortfolioEvent, PortfolioExchangeTransport, PortfolioFeed,
+    PortfolioPosition, PortfolioSession, PortfolioSnapshot, PortfolioUpdateApply,
+    PortfolioUpdateSink, StaticPortfolioCredentials,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -91,12 +91,15 @@ impl PortfolioSession for Session {
 }
 
 struct Sink {
-    updates: mpsc::UnboundedSender<PortfolioUpdate>,
+    updates: mpsc::UnboundedSender<ConnectorPortfolioUpdate>,
 }
 
 #[async_trait]
 impl PortfolioUpdateSink for Sink {
-    async fn apply_update(&self, update: PortfolioUpdate) -> BpResult<PortfolioUpdateApply> {
+    async fn apply_update(
+        &self,
+        update: ConnectorPortfolioUpdate,
+    ) -> BpResult<PortfolioUpdateApply> {
         self.updates.send(update).expect("receiver");
         Ok(PortfolioUpdateApply::Applied)
     }

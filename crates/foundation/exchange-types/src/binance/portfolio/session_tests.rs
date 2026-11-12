@@ -1,12 +1,11 @@
 use super::{
-    AccountPositionEvent, AccountSnapshot, BinanceAccountEvent, BinanceEventStream,
-    BinanceExchangeTransport, BinancePortfolioConfig, BinanceTransport,
+    AccountPositionEvent, AccountSnapshot, BinanceAccountEvent, BinanceEventStream, BinanceSession,
+    BinanceTransport,
 };
-use crate::portfolio::{PortfolioEvent, PortfolioExchangeTransport};
+use crate::api_key_credential::ApiKeyCredentials;
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::BpResult;
-use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use secrecy::SecretString;
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -14,9 +13,8 @@ use std::{
         Arc,
         atomic::{AtomicBool, AtomicUsize, Ordering},
     },
-    time::Duration,
 };
-use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
+use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId};
 
 struct Transport {
     closes: AtomicUsize,
@@ -87,48 +85,41 @@ impl BinanceEventStream for Stream {
 struct Fixture;
 
 impl Fixture {
-    fn config() -> BinancePortfolioConfig {
-        BinancePortfolioConfig::new(
-            "https://api.binance.com/api/v3",
-            "wss://stream.binance.com:9443/ws",
-            Duration::from_secs(3600),
-            Duration::from_millis(10),
-        )
-        .expect("config")
-    }
-
     fn credentials() -> ApiKeyCredentials {
         ApiKeyCredentials {
             api_key: "api-key".to_string(),
             secret: SecretString::from("secret"),
         }
     }
+
+    fn transport() -> Arc<Transport> {
+        Arc::new(Transport {
+            closes: AtomicUsize::new(0),
+            refreshes: AtomicUsize::new(0),
+            created: AtomicBool::new(false),
+        })
+    }
 }
 
 #[tokio::test]
 async fn session_opens_snapshots_refreshes_and_closes_the_listen_key() {
-    let transport = Arc::new(Transport {
-        closes: AtomicUsize::new(0),
-        refreshes: AtomicUsize::new(0),
-        created: AtomicBool::new(false),
-    });
-    let exchange = BinanceExchangeTransport::new(Fixture::config())
-        .with_transport(Arc::clone(&transport) as Arc<dyn BinanceTransport>);
-    assert_eq!(exchange.cex_id(), CexId::Binance);
-    assert_eq!(exchange.refresh_interval(), Duration::from_secs(3600));
-    assert_eq!(exchange.reconnect_backoff(), Duration::from_millis(10));
-
-    let mut session = exchange
-        .open_session(&AccountId::new("primary"), &Fixture::credentials())
-        .await
-        .expect("session");
+    let transport = Fixture::transport();
+    let session = BinanceSession::open(
+        Arc::clone(&transport) as Arc<dyn BinanceTransport>,
+        &AccountId::new("primary"),
+        &Fixture::credentials(),
+    )
+    .await
+    .expect("session");
     let snapshot = session.snapshot().await.expect("snapshot");
     assert_eq!(snapshot.balances().get(&AssetId::Bitcoin), Some(&1.0));
     session.refresh().await.expect("refresh");
     assert!(transport.created.load(Ordering::SeqCst));
     assert_eq!(transport.refreshes.load(Ordering::SeqCst), 1);
 
-    let PortfolioEvent::Position(position) = session.next().await.expect("event").expect("event")
+    let mut session = session;
+    let BinanceAccountEvent::Position(position) =
+        session.next().await.expect("event").expect("event")
     else {
         panic!("expected position");
     };
@@ -136,7 +127,7 @@ async fn session_opens_snapshots_refreshes_and_closes_the_listen_key() {
     assert_eq!(position.balances().get(&AssetId::TetherUSD), Some(&500.0));
     assert_eq!(
         session.next().await.expect("event"),
-        Some(PortfolioEvent::SessionExpired)
+        Some(BinanceAccountEvent::ListenKeyExpired)
     );
     assert_eq!(session.next().await.expect("event"), None);
 

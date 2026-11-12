@@ -1,7 +1,7 @@
+use crate::api_key_credential::ApiKeyCredentials;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use platform_errors::BpResult;
-use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use std::collections::BTreeMap;
 use stock_trek_types::cex::asset_id::AssetId;
 

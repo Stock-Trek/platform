@@ -1,4 +1,4 @@
-use super::PortfolioUpdate;
+use super::ConnectorPortfolioUpdate;
 use async_trait::async_trait;
 use platform_errors::BpResult;
 use std::{collections::BTreeSet, sync::Arc};
@@ -13,7 +13,10 @@ pub enum PortfolioUpdateApply {
 
 #[async_trait]
 pub trait PortfolioUpdateSink: Send + Sync {
-    async fn apply_update(&self, update: PortfolioUpdate) -> BpResult<PortfolioUpdateApply>;
+    async fn apply_update(
+        &self,
+        update: ConnectorPortfolioUpdate,
+    ) -> BpResult<PortfolioUpdateApply>;
 }
 
 #[async_trait]

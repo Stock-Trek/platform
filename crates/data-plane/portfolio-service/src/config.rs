@@ -1,15 +1,16 @@
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
-use platform_exchange_gateway::portfolio::PortfolioConnectorConfig;
 use platform_runtime::Config;
 
 mod auth;
+mod connector;
 mod freshness;
 mod order_request;
 mod ownership;
 mod update;
 
 pub use auth::AuthConfig;
+pub use connector::ConnectorConfig;
 pub use freshness::FreshnessConfig;
 pub use order_request::OrderRequestConfig;
 pub use ownership::OwnershipConfig;
@@ -23,7 +24,7 @@ pub struct PortfolioConfig {
     ownership: OwnershipConfig,
     update: UpdateConfig,
     freshness: FreshnessConfig,
-    connector: PortfolioConnectorConfig,
+    connector: ConnectorConfig,
 }
 
 impl PortfolioConfig {
@@ -39,7 +40,7 @@ impl PortfolioConfig {
             ownership: OwnershipConfig::from_vars(vars)?,
             update: UpdateConfig::from_vars(vars)?,
             freshness: FreshnessConfig::from_vars(vars)?,
-            connector: PortfolioConnectorConfig::from_vars(vars)?,
+            connector: ConnectorConfig::from_vars(vars)?,
         })
     }
 
@@ -67,7 +68,7 @@ impl PortfolioConfig {
         self.freshness
     }
 
-    pub fn connector(&self) -> &PortfolioConnectorConfig {
+    pub fn connector(&self) -> &ConnectorConfig {
         &self.connector
     }
 }

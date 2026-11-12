@@ -111,8 +111,8 @@ impl BinancePortfolioConfig {
     }
 
     fn validate_url(name: &str, value: &str, allowed: &[UrlScheme]) -> BpResult<()> {
-        let parsed = reqwest::Url::parse(value)
-            .map_err(|error| BpError::config_invalid_source(name, error))?;
+        let parsed =
+            url::Url::parse(value).map_err(|error| BpError::config_invalid_source(name, error))?;
         if !UrlScheme::from_url(&parsed).is_some_and(|scheme| allowed.contains(&scheme)) {
             return Err(BpError::config_invalid(
                 name,

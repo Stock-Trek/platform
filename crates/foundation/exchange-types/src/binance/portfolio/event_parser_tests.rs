@@ -1,6 +1,17 @@
 use super::{event_parser::EventParser, transport::BinanceAccountEvent};
-use platform_type_bridge::BinanceConverter;
 use stock_trek_types::cex::asset_id::AssetId;
+
+struct Fixture;
+
+impl Fixture {
+    fn mapping(asset: &str) -> Option<AssetId> {
+        match asset {
+            "BTC" => Some(AssetId::Bitcoin),
+            "USDT" => Some(AssetId::TetherUSD),
+            _ => None,
+        }
+    }
+}
 
 #[test]
 fn parses_position_events_into_mapped_balances() {
@@ -14,7 +25,7 @@ fn parses_position_events_into_mapped_balances() {
                 {"a": "USDT", "f": "250", "l": "0"}
             ]
         }),
-        BinanceConverter::ticker_mapping_static(),
+        &Fixture::mapping,
     )
     .expect("event")
     .expect("position");
@@ -30,7 +41,7 @@ fn parses_position_events_into_mapped_balances() {
 fn parses_listen_key_expiration_events() {
     let event = EventParser::parse(
         &serde_json::json!({"e": "listenKeyExpired", "E": 1_700_000_000_000_i64}),
-        BinanceConverter::ticker_mapping_static(),
+        &Fixture::mapping,
     )
     .expect("event")
     .expect("event");

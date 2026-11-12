@@ -5,15 +5,15 @@ use super::{
 };
 use chrono::{TimeZone, Utc};
 use platform_errors::{BpError, BpResult, ExchangeError};
-use platform_type_bridge::TickerMapping;
+use stock_trek_types::cex::asset_id::AssetId;
 
-pub(super) struct EventParser;
+pub struct EventParser;
 
 impl EventParser {
-    pub(super) fn parse(
-        value: &serde_json::Value,
-        mapping: &TickerMapping,
-    ) -> BpResult<Option<BinanceAccountEvent>> {
+    pub fn parse<F>(value: &serde_json::Value, mapping: &F) -> BpResult<Option<BinanceAccountEvent>>
+    where
+        F: Fn(&str) -> Option<AssetId>,
+    {
         let event = BinanceUserDataEvent::from_value(value)?;
         if event.is_listen_key_expired() {
             return Ok(Some(BinanceAccountEvent::ListenKeyExpired));
@@ -28,7 +28,6 @@ impl EventParser {
             return Ok(None);
         };
         let balances = BalanceParser::parse(
-            mapping,
             raw_balances
                 .iter()
                 .map(|balance| {
@@ -39,6 +38,7 @@ impl EventParser {
                     )
                 })
                 .collect::<Vec<_>>(),
+            mapping,
         )?;
         let occurred_at = Utc
             .timestamp_millis_opt(event.event_time())

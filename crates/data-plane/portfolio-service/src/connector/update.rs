@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct PortfolioUpdate {
+pub struct ConnectorPortfolioUpdate {
     cex_id: CexId,
     account_id: AccountId,
     balances: BTreeMap<AssetId, f64>,
@@ -12,7 +12,7 @@ pub struct PortfolioUpdate {
     exchange_time: Option<DateTime<Utc>>,
 }
 
-impl PortfolioUpdate {
+impl ConnectorPortfolioUpdate {
     pub fn new(
         cex_id: CexId,
         account_id: AccountId,

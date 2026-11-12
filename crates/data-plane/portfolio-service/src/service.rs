@@ -1,3 +1,4 @@
+use crate::connector::PortfolioFeed;
 use crate::{
     freshness::{FreshnessPolicy, PortfolioFreshness},
     ownership_registry::{OwnershipApply, OwnershipRegistry},
@@ -7,7 +8,6 @@ use crate::{
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use platform_errors::BpResult;
-use platform_exchange_gateway::portfolio::PortfolioFeed;
 use platform_metrics::PortfolioMetrics;
 use platform_portfolio_ownership::{AccountKey, OwnershipEvent};
 use std::{collections::BTreeSet, sync::Arc};
@@ -36,9 +36,7 @@ impl PortfolioService {
 
     #[cfg(test)]
     pub fn in_memory() -> Self {
-        Self::new(Arc::new(
-            platform_exchange_gateway::portfolio::NoopPortfolioFeed::new(),
-        ))
+        Self::new(Arc::new(crate::connector::NoopPortfolioFeed::new()))
     }
 
     #[cfg(test)]

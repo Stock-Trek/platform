@@ -1,10 +1,3 @@
-use super::{
-    balances::BalanceParser,
-    config::BinancePortfolioConfig,
-    event_parser::EventParser,
-    listen_key::BinanceListenKeyRequest,
-    transport::{AccountSnapshot, BinanceAccountEvent, BinanceEventStream, BinanceTransport},
-};
 use crate::{
     clients::reqwest::ReqwestHttpClient, connector::Connector, iris, submission::SubmissionOutcome,
     websocket_listener::WebsocketEventStream,
@@ -17,11 +10,16 @@ use platform_exchange_types::{
     binance::{
         account_status::BinanceAccountStatusRequest,
         exchange::BinanceExchange,
+        portfolio::{
+            AccountSnapshot, BalanceParser, BinanceAccountEvent, BinanceEventStream,
+            BinanceListenKeyRequest, BinancePortfolioConfig, BinanceTransport, EventParser,
+        },
         response::{BinanceResponse, BinanceResponsePayload},
     },
     encode::ByteEncoder,
     request::ETHttpRequest,
     signer::Signer,
+    ticker::Ticker,
 };
 use platform_type_bridge::{BinanceConverter, TickerMapping};
 use std::{collections::BTreeMap, time::Duration};
@@ -84,7 +82,9 @@ impl GatewayBinanceTransport {
         &self,
         balances: impl IntoIterator<Item = (String, String, String)>,
     ) -> BpResult<BTreeMap<AssetId, f64>> {
-        BalanceParser::parse(self.mapping, balances)
+        BalanceParser::parse(balances, &|asset| {
+            self.mapping.asset_id(&Ticker(asset.to_string())).copied()
+        })
     }
 }
 
@@ -181,7 +181,8 @@ impl BinanceEventStream for GatewayEventStream {
             let Some(value) = self.events.next().await else {
                 return Ok(None);
             };
-            if let Some(event) = EventParser::parse(&value, self.mapping)? {
+            let mapping = &|asset: &str| self.mapping.asset_id(&Ticker(asset.to_string())).copied();
+            if let Some(event) = EventParser::parse(&value, mapping)? {
                 return Ok(Some(event));
             }
         }

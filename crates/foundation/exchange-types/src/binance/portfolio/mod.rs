@@ -1,23 +1,23 @@
 mod balances;
 mod config;
-mod connection;
 mod credentials;
 mod event_parser;
-mod gateway_transport;
 mod listen_key;
 mod session;
 mod transport;
 mod user_data;
 
+pub use balances::BalanceParser;
 pub use config::BinancePortfolioConfig;
-pub use connection::BinanceExchangeTransport;
-pub use credentials::BinanceCredentialConfig;
-pub use gateway_transport::GatewayBinanceTransport;
+pub use credentials::{BinanceCredentialConfig, CREDENTIALS};
+pub use event_parser::EventParser;
+pub use listen_key::{BinanceListenKeyRequest, BinanceListenKeyResponse};
 pub use session::BinanceSession;
 pub use transport::{
     AccountPositionEvent, AccountSnapshot, BinanceAccountEvent, BinanceEventStream,
     BinanceTransport,
 };
+pub use user_data::{BinanceAccountBalanceEvent, BinanceUserDataEvent};
 
 #[cfg(test)]
 mod config_tests;

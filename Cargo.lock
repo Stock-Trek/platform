@@ -4795,14 +4795,11 @@ dependencies = [
  "httpdate",
  "iris",
  "parking_lot",
- "platform-config",
  "platform-errors",
  "platform-exchange-types",
- "platform-metrics",
  "platform-type-bridge",
  "platform-types",
  "reqwest 0.13.5",
- "secrecy",
  "serde",
  "serde_json",
  "stock-trek-types",
@@ -4816,12 +4813,15 @@ dependencies = [
 name = "platform-exchange-types"
 version = "0.2.0"
 dependencies = [
+ "async-trait",
  "bs58",
+ "chrono",
  "data-encoding",
  "ed25519-compact",
  "hmac 0.13.0",
  "p256",
  "p384",
+ "platform-config",
  "platform-errors",
  "platform-types",
  "query-params",
@@ -4834,7 +4834,10 @@ dependencies = [
  "serde_with",
  "sha2 0.11.1",
  "signature 2.2.0",
+ "stock-trek-types",
  "strum 0.28.0",
+ "tokio",
+ "url",
 ]
 
 [[package]]

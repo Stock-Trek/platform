@@ -1,22 +1,24 @@
-use super::{
-    ConnectorHealthSink, ExchangePortfolioConnector, NoopPortfolioFeed, PortfolioCredentialSource,
-    PortfolioExchangeTransport, PortfolioFeed, StaticPortfolioCredentials,
-    binance::{BinanceExchangeTransport, BinancePortfolioConfig},
+use crate::connector::{
+    BinanceExchangeTransport, ConnectorHealthSink, ExchangePortfolioConnector, NoopPortfolioFeed,
+    PortfolioCredentialSource, PortfolioExchangeTransport, PortfolioFeed,
+    StaticPortfolioCredentials,
 };
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
-use platform_exchange_types::api_key_credential::ApiKeyCredentials;
+use platform_exchange_types::{
+    api_key_credential::ApiKeyCredentials, binance::portfolio::BinancePortfolioConfig,
+};
 use secrecy::{ExposeSecret, SecretString};
 use std::{collections::BTreeMap, fmt, sync::Arc};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
 #[derive(Clone)]
-pub struct PortfolioConnectorConfig {
+pub struct ConnectorConfig {
     transports: Vec<Arc<dyn PortfolioExchangeTransport>>,
     credentials: Arc<dyn PortfolioCredentialSource>,
 }
 
-impl PortfolioConnectorConfig {
+impl ConnectorConfig {
     pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
         let mut transports: Vec<Arc<dyn PortfolioExchangeTransport>> = Vec::new();
         let mut credentials = BTreeMap::new();
@@ -51,10 +53,10 @@ impl PortfolioConnectorConfig {
     }
 }
 
-impl fmt::Debug for PortfolioConnectorConfig {
+impl fmt::Debug for ConnectorConfig {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         formatter
-            .debug_struct("PortfolioConnectorConfig")
+            .debug_struct("ConnectorConfig")
             .field(
                 "exchanges",
                 &self

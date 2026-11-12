@@ -1,22 +1,23 @@
 use platform_errors::{BpError, BpResult, ExchangeError};
-use platform_exchange_types::ticker::Ticker;
-use platform_type_bridge::TickerMapping;
 use std::collections::BTreeMap;
 use stock_trek_types::cex::asset_id::AssetId;
 
-pub(super) struct BalanceParser;
+pub struct BalanceParser;
 
 impl BalanceParser {
-    pub(super) fn parse(
-        mapping: &TickerMapping,
+    pub fn parse<F>(
         balances: impl IntoIterator<Item = (String, String, String)>,
-    ) -> BpResult<BTreeMap<AssetId, f64>> {
+        mapping: &F,
+    ) -> BpResult<BTreeMap<AssetId, f64>>
+    where
+        F: Fn(&str) -> Option<AssetId>,
+    {
         let mut parsed = BTreeMap::new();
         for (asset, free, locked) in balances {
-            let Some(asset_id) = mapping.asset_id(&Ticker(asset)) else {
+            let Some(asset_id) = mapping(&asset) else {
                 continue;
             };
-            parsed.insert(*asset_id, Self::decimal(&free)? + Self::decimal(&locked)?);
+            parsed.insert(asset_id, Self::decimal(&free)? + Self::decimal(&locked)?);
         }
         Ok(parsed)
     }
