@@ -1,6 +1,6 @@
 use crate::AuthRelayConfig;
 use platform_config::{AWS_CONNECT_TIMEOUT_SECS, AWS_OPERATION_TIMEOUT_SECS, EnvVars, RUST_LOG};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::time::Duration;
 
 const AUDIT_QUEUE_URL: &str = "AUTH_RELAY_AUDIT_QUEUE_URL";

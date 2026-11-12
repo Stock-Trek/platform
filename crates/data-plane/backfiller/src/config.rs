@@ -1,4 +1,4 @@
-use platform_aws::{Aws, SSM_DECRYPT_ENV, SSM_PATH_ENV, Secrets, SsmConfig};
+use platform_aws::{Aws, SSM_DECRYPT_ENV, SSM_PATH_ENV, SsmConfig, SsmSecrets};
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::{

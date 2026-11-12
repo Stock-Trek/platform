@@ -1,6 +1,6 @@
 use platform_auth_service::{TokenUsageQueueConfig, VaultTokenStoreConfig};
 use platform_config::{AWS_CONNECT_TIMEOUT_SECS, AWS_OPERATION_TIMEOUT_SECS, EnvVars};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_runtime::Config;
 use platform_time::timeouts::Timeouts;
 use platform_types::url_scheme::UrlScheme;
