@@ -1,5 +1,5 @@
 use platform_aws::{Aws, SSM_DECRYPT_ENV, SSM_PATH_ENV, SsmConfig, SsmSecrets};
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials, encrypt::EncryptionAlgorithm, urls::TradingMode,

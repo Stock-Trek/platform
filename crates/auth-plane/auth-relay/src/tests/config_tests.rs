@@ -1,6 +1,6 @@
 use crate::AuthRelayConfig;
-use platform_config::env_names::{AWS_CONNECT_TIMEOUT_SECS, AWS_OPERATION_TIMEOUT_SECS, RUST_LOG};
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
+use platform_config::{AWS_CONNECT_TIMEOUT_SECS, AWS_OPERATION_TIMEOUT_SECS, RUST_LOG};
 use platform_errors::{BpError, BpResult};
 use std::time::Duration;
 

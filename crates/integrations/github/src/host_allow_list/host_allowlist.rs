@@ -1,4 +1,4 @@
-use platform_config::env_names::GITHUB_ENTERPRISE_ALLOWED_HOSTS;
+use platform_config::GITHUB_ENTERPRISE_ALLOWED_HOSTS;
 use platform_errors::{BpError, BpResult, GitHubError};
 use platform_types::url_scheme::UrlScheme;
 use std::{

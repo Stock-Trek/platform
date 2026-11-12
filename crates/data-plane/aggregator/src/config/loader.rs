@@ -12,7 +12,7 @@ use super::env::{
 };
 use super::replay::ReplayStartPolicy;
 use platform_archive::RoutingBucket;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_market_data::candle::AlignedWindow;
 use platform_nats::NatsSubject;

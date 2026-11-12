@@ -1,5 +1,5 @@
 use crate::JwtServerConfig;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::BpResult;
 use std::{collections::HashMap, time::Duration};
 

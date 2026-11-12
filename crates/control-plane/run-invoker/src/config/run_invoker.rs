@@ -1,7 +1,7 @@
-use platform_config::env_names::{
+use platform_config::EnvVars;
+use platform_config::{
     AWS_CONNECT_TIMEOUT_SECS, AWS_OPERATION_TIMEOUT_SECS, RUST_LOG, S3_SIGNED_URL_EXPIRY_SECS,
 };
-use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
 use platform_time::timeouts::Timeouts;
 use std::time::Duration;

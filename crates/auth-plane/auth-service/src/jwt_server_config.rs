@@ -2,8 +2,8 @@ use crate::{
     JwtSigningKey, TokenCacheConfig, TokenUsageQueueConfig, ValkeyReplayStoreConfig,
     VaultTokenStoreConfig,
 };
-use platform_config::env_names::RUST_LOG;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
+use platform_config::RUST_LOG;
 use platform_errors::BpResult;
 use platform_sigv4::SigV4Config;
 use platform_types::url_scheme::UrlScheme;

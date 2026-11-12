@@ -1,6 +1,6 @@
 use super::types::{CommitsParams, GitHubCommit};
 use octocrab::{Octocrab, models::InstallationId};
-use platform_config::git::DirectoryLimits;
+use platform_config::DirectoryLimits;
 use platform_errors::{BpError, BpResult, GitHubError, TimeoutError};
 use platform_git::git_host::{GitFile, GitHost};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};

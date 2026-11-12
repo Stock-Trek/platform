@@ -1,5 +1,5 @@
 use super::credential_entry::CredentialEntry;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BpError, BpResult};
 use secrecy::SecretString;
 use std::{collections::BTreeSet, fmt};

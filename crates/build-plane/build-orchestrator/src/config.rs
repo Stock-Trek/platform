@@ -1,11 +1,11 @@
 use crate::aws_ops::s3::S3Config;
-use platform_config::env_names::{
+use platform_config::{
     AWS_CONNECT_TIMEOUT_SECS, AWS_LAMBDA_FUNCTION_NAME, AWS_OPERATION_TIMEOUT_SECS,
     BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS, BUILD_AGENT_TIMEOUT_SECS, DEADLINE_BUFFER_SECS,
     GITHUB_ENTERPRISE_ALLOWED_HOSTS, RUST_LOG, S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES,
     S3_SIGNED_URL_EXPIRY_SECS, SQS_QUEUE_URL,
 };
-use platform_config::{env_vars::EnvVars, git::DirectoryLimits};
+use platform_config::{DirectoryLimits, EnvVars};
 use platform_errors::{BpError, BpResult};
 use platform_github::{app_config::GitHubAppConfig, host_allow_list::HostAllowlist};
 use platform_time::timeouts::Timeouts;

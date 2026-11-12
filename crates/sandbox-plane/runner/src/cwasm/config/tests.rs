@@ -1,4 +1,4 @@
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BpError, BpResult, ConfigError};
 use std::time::Duration;
 
