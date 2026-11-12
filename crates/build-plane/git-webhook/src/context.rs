@@ -4,8 +4,7 @@ use crate::{
     dto::event_converter::{EventConverter, EventConverters},
 };
 use aws_sdk_sqs::Client as SqsClient;
-use platform_aws::SdkConfig;
-use platform_aws::secrets::{Secrets, SsmConfig};
+use platform_aws::{SdkConfig, SsmConfig, SsmSecrets};
 use platform_errors::{BpError, BpResult, ErrorType, SecretsError};
 use platform_github::host_allow_list::HostAllowlist;
 use platform_metrics::secret::SecretMetrics;
@@ -167,7 +166,8 @@ impl RsWebhookContext {
     }
 
     async fn try_load(&self, deadline: Deadline) -> BpResult<Converters> {
-        let secrets = Secrets::load(&self.sdk_config, self.timeouts, deadline, &self.ssm).await?;
+        let secrets =
+            SsmSecrets::load(&self.sdk_config, self.timeouts, deadline, &self.ssm).await?;
         Ok(Arc::new(EventConverters::all(
             &secrets,
             self.allowed_hosts.clone(),
