@@ -14,11 +14,15 @@ mod cwasm_artifact;
 mod guest_actions;
 mod guest_state;
 mod jwt_cache;
+mod jwt_fetcher;
 mod limits;
 mod order_request_dispatcher;
 mod runtime;
 mod watchdog;
 mod workspace;
+
+#[cfg(test)]
+mod jwt_cache_tests;
 
 #[cfg(test)]
 mod order_request_dispatcher_tests;
