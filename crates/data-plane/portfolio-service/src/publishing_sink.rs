@@ -1,10 +1,9 @@
-use crate::connector::{PortfolioUpdateApply, PortfolioUpdateSink};
-use crate::{
-    ConnectorPortfolioUpdate, PORTFOLIO_UPDATE_SUBJECT, PortfolioService, PortfolioUpdate,
-    PortfolioUpdateOutcome,
-};
+use crate::{PORTFOLIO_UPDATE_SUBJECT, PortfolioService, PortfolioUpdate, PortfolioUpdateOutcome};
 use async_trait::async_trait;
 use platform_errors::BpResult;
+use platform_exchange_gateway::connector::{
+    ConnectorPortfolioUpdate, PortfolioUpdateApply, PortfolioUpdateSink,
+};
 use platform_nats::EventPublisher;
 use std::sync::Arc;
 

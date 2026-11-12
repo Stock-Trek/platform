@@ -1,16 +1,14 @@
-use crate::connector::{
-    ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
-    PortfolioCredentialSource, PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink,
-    StaticPortfolioCredentials,
+use super::{
+    AccountEventStream, ConnectorPortfolioUpdate, ExchangePortfolioConnector,
+    NoopConnectorHealthSink, PortfolioCredentialSource, PortfolioFeed, PortfolioTransport,
+    PortfolioUpdateApply, PortfolioUpdateSink, StaticPortfolioCredentials,
 };
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::BpResult;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
-    portfolio::{
-        AccountEvent, AccountEventStream, AccountPositionEvent, AccountSnapshot, PortfolioTransport,
-    },
+    portfolio::{AccountEvent, AccountPositionEvent, AccountSnapshot},
 };
 use secrecy::SecretString;
 use std::{

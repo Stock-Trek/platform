@@ -1,5 +1,5 @@
-use crate::connector::PortfolioFeed;
 use crate::{AccountKey, AccountPortfolio, PortfolioService, PortfolioUpdate};
+use platform_exchange_gateway::connector::PortfolioFeed;
 use std::sync::Arc;
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 

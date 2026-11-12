@@ -1,9 +1,8 @@
 use super::AccountPortfolio;
-use crate::{
-    AccountKey, connector::ConnectorPortfolioUpdate, portfolio_codec::PortfolioUpdateWire,
-};
+use crate::{AccountKey, portfolio_codec::PortfolioUpdateWire};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
+use platform_exchange_gateway::connector::ConnectorPortfolioUpdate;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as DeError};
 
 #[derive(Debug, Clone)]

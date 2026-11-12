@@ -1,4 +1,4 @@
-use crate::connector::{
+use super::{
     ConnectorPortfolioUpdate, ExchangePortfolioFeed, PortfolioConnection, PortfolioConnector,
     PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink,
 };

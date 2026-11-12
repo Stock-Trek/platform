@@ -1,3 +1,4 @@
+use super::AccountEventStream;
 use super::GatewayPortfolioTransport;
 use crate::{
     clients::iris::IrisWebsocketClient, connector::Connector,
@@ -5,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::BpResult;
-use platform_exchange_types::portfolio::{AccountEvent, AccountEventStream, PortfolioExchange};
+use platform_exchange_types::portfolio::{AccountEvent, PortfolioExchange};
 use platform_type_bridge::TickerMapping;
 
 pub struct GatewayAccountEventStream<Exchange> {

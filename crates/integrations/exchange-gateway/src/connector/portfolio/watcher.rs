@@ -2,11 +2,10 @@ use super::{
     ConnectorPortfolioUpdate, ConnectorState, PortfolioUpdateApply, PortfolioUpdateSink,
     health_reporter::HealthReporter, session_state::SessionState,
 };
+use super::{PortfolioSession, PortfolioTransport};
 use chrono::Utc;
 use platform_errors::{BpError, BpResult};
-use platform_exchange_types::portfolio::{
-    AccountEvent, AccountPositionEvent, PortfolioSession, PortfolioTransport,
-};
+use platform_exchange_types::portfolio::{AccountEvent, AccountPositionEvent};
 use platform_metrics::PortfolioMetrics;
 use std::{sync::Arc, time::Instant};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};

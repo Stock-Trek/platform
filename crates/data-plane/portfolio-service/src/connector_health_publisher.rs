@@ -1,6 +1,6 @@
-use crate::connector::{ConnectorHealth, ConnectorHealthSink};
 use async_trait::async_trait;
 use platform_errors::BpResult;
+use platform_exchange_gateway::connector::{ConnectorHealth, ConnectorHealthSink};
 use platform_nats::EventPublisher;
 use std::sync::Arc;
 

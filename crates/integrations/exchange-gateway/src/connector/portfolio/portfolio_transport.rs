@@ -1,7 +1,7 @@
-use super::{AccountEventStream, AccountSnapshot};
-use crate::api_key_credential::ApiKeyCredentials;
+use super::AccountEventStream;
 use async_trait::async_trait;
 use platform_errors::BpResult;
+use platform_exchange_types::{api_key_credential::ApiKeyCredentials, portfolio::AccountSnapshot};
 use std::time::Duration;
 use stock_trek_types::cex::cex_id::CexId;
 

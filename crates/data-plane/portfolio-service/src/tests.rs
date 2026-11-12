@@ -1,10 +1,7 @@
 mod account_tests;
 mod config_tests;
 mod connector_integration_tests;
-mod connector_tests;
-mod feed_tests;
 mod freshness_tests;
-mod health_tests;
 mod order_request_auth_tests;
 mod order_request_error_tests;
 mod order_request_fixture_tests;

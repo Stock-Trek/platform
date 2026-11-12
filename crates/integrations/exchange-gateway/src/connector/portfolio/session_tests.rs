@@ -1,11 +1,11 @@
-use super::{
-    AccountEvent, AccountEventStream, AccountPositionEvent, AccountSnapshot, PortfolioSession,
-    PortfolioTransport,
-};
-use crate::api_key_credential::ApiKeyCredentials;
+use super::{AccountEventStream, PortfolioSession, PortfolioTransport};
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::BpResult;
+use platform_exchange_types::{
+    api_key_credential::ApiKeyCredentials,
+    portfolio::{AccountEvent, AccountPositionEvent, AccountSnapshot},
+};
 use secrecy::SecretString;
 use std::{
     collections::{BTreeMap, VecDeque},

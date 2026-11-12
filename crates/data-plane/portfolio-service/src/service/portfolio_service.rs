@@ -1,9 +1,9 @@
 use crate::{
-    connector::PortfolioFeed, freshness::FreshnessPolicy, ownership_registry::OwnershipRegistry,
-    state::PortfolioState,
+    freshness::FreshnessPolicy, ownership_registry::OwnershipRegistry, state::PortfolioState,
 };
 use parking_lot::RwLock;
 use platform_errors::BpResult;
+use platform_exchange_gateway::connector::PortfolioFeed;
 use std::{collections::BTreeSet, sync::Arc};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
@@ -30,7 +30,9 @@ impl PortfolioService {
 
     #[cfg(test)]
     pub fn in_memory() -> Self {
-        Self::new(Arc::new(crate::connector::NoopPortfolioFeed::new()))
+        Self::new(Arc::new(
+            platform_exchange_gateway::connector::NoopPortfolioFeed::new(),
+        ))
     }
 
     pub(super) async fn sync(

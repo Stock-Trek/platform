@@ -1,10 +1,10 @@
+use super::PortfolioTransport;
 use super::{
     ConnectorState, PortfolioConnection, PortfolioCredentialSource, PortfolioUpdateSink,
     account_watcher::AccountWatcher, health_reporter::HealthReporter, watcher::Watcher,
 };
 use async_trait::async_trait;
 use platform_errors::BpResult;
-use platform_exchange_types::portfolio::PortfolioTransport;
 use platform_metrics::PortfolioMetrics;
 use std::{
     collections::{BTreeMap, BTreeSet},

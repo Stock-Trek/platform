@@ -1,6 +1,9 @@
-use super::{AccountEvent, AccountEventStream, AccountSnapshot, PortfolioTransport};
-use crate::api_key_credential::ApiKeyCredentials;
+use super::{AccountEventStream, PortfolioTransport};
 use platform_errors::BpResult;
+use platform_exchange_types::{
+    api_key_credential::ApiKeyCredentials,
+    portfolio::{AccountEvent, AccountSnapshot},
+};
 use std::sync::Arc;
 use stock_trek_types::cex::account_id::AccountId;
 use tokio::sync::Mutex;

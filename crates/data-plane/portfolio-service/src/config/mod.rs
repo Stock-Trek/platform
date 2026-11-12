@@ -1,5 +1,4 @@
 mod auth;
-mod connector;
 mod freshness;
 mod order_request;
 mod ownership;
@@ -7,7 +6,6 @@ mod portfolio_config;
 mod update;
 
 pub use auth::AuthConfig;
-pub use connector::ConnectorConfig;
 pub use freshness::FreshnessConfig;
 pub use order_request::OrderRequestConfig;
 pub use ownership::OwnershipConfig;

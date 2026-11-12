@@ -1,4 +1,6 @@
-use super::gateway_account_event_stream::GatewayAccountEventStream;
+use super::{
+    AccountEventStream, PortfolioTransport, gateway_account_event_stream::GatewayAccountEventStream,
+};
 use crate::{
     clients::reqwest::ReqwestHttpClient, connector::Connector, iris, submission::SubmissionOutcome,
 };
@@ -7,7 +9,7 @@ use platform_errors::{BpError, BpResult, ExchangeError};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     encode::ByteEncoder,
-    portfolio::{AccountEventStream, AccountSnapshot, PortfolioExchange, PortfolioTransport},
+    portfolio::{AccountSnapshot, PortfolioExchange},
     request::ETHttpRequest,
     signer::Signer,
     ticker::Ticker,

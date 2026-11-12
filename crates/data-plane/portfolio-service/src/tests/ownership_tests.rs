@@ -1,5 +1,4 @@
 use super::test_feed_tests::Fixture;
-use crate::connector::PortfolioFeed;
 use crate::{
     AccountKey, OwnershipApply, OwnershipConsumer, OwnershipEventSource, OwnershipMessage,
     PortfolioService,
@@ -7,6 +6,7 @@ use crate::{
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::BpResult;
+use platform_exchange_gateway::connector::PortfolioFeed;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use std::{collections::VecDeque, sync::Mutex, time::Duration};
 

@@ -1,6 +1,5 @@
 mod auth_service;
 mod config;
-mod connector;
 mod connector_health_publisher;
 mod freshness;
 mod nats_ownership_source;
@@ -24,15 +23,7 @@ mod update_source;
 
 pub use auth_service::PortfolioAuthService;
 pub use config::{
-    AuthConfig, ConnectorConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig,
-    PortfolioConfig, UpdateConfig,
-};
-pub use connector::{
-    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT, ConnectorHealth, ConnectorHealthSink,
-    ConnectorPortfolioUpdate, ConnectorState, ExchangePortfolioConnector, ExchangePortfolioFeed,
-    NoopConnectorHealthSink, NoopPortfolioFeed, PortfolioConnection, PortfolioConnector,
-    PortfolioCredentialSource, PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink,
-    StaticPortfolioCredentials,
+    AuthConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig, PortfolioConfig, UpdateConfig,
 };
 pub use connector_health_publisher::NatsConnectorHealthSink;
 pub use freshness::{FreshnessPolicy, PortfolioFreshness, StaleOrderPolicy};

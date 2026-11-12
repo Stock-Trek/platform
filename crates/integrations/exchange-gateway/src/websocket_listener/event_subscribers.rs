@@ -1,3 +1,4 @@
+use super::{senders::Senders, websocket_event_stream::WebsocketEventStream};
 use parking_lot::Mutex;
 use serde_json::Value;
 use std::{
@@ -7,20 +8,12 @@ use std::{
         atomic::{AtomicU64, Ordering},
     },
 };
-use tokio::sync::mpsc::{UnboundedReceiver, UnboundedSender, unbounded_channel};
-
-type Senders = Arc<Mutex<BTreeMap<u64, UnboundedSender<Value>>>>;
+use tokio::sync::mpsc::unbounded_channel;
 
 #[derive(Clone)]
 pub(crate) struct EventSubscribers {
     senders: Senders,
     next_id: Arc<AtomicU64>,
-}
-
-pub struct WebsocketEventStream {
-    id: u64,
-    receiver: UnboundedReceiver<Value>,
-    senders: Senders,
 }
 
 impl EventSubscribers {
@@ -56,17 +49,5 @@ impl EventSubscribers {
 impl Default for EventSubscribers {
     fn default() -> Self {
         Self::new()
-    }
-}
-
-impl WebsocketEventStream {
-    pub async fn next(&mut self) -> Option<Value> {
-        self.receiver.recv().await
-    }
-}
-
-impl Drop for WebsocketEventStream {
-    fn drop(&mut self) {
-        self.senders.lock().remove(&self.id);
     }
 }

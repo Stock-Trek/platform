@@ -6,4 +6,4 @@ mod tests;
 mod websocket;
 
 pub use core::Connector;
-pub use portfolio::GatewayPortfolioTransport;
+pub use portfolio::*;

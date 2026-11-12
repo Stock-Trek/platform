@@ -1,3 +1,4 @@
+use super::PortfolioTransport;
 use super::{
     ConnectorHealthSink, ExchangePortfolioFeed, PortfolioConnector, PortfolioCredentialSource,
     PortfolioFeed, PortfolioUpdateSink, exchange_portfolio_connection::ExchangePortfolioConnection,
@@ -5,7 +6,6 @@ use super::{
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
-use platform_exchange_types::portfolio::PortfolioTransport;
 use std::{collections::BTreeMap, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
 

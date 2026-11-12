@@ -1,19 +1,18 @@
 use super::order_request_fixture_tests::{Fixture as OrderFixture, OWNER};
 use super::test_feed_tests::Fixture as PortfolioFixture;
-use crate::connector::{
-    ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
-    PortfolioCredentialSource, PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink,
-};
 use crate::{OrderRequestService, PortfolioService, PortfolioUpdate};
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
 use platform_errors::BpResult;
+use platform_exchange_gateway::connector::{
+    AccountEventStream, ConnectorPortfolioUpdate, ExchangePortfolioConnector,
+    NoopConnectorHealthSink, PortfolioCredentialSource, PortfolioFeed, PortfolioTransport,
+    PortfolioUpdateApply, PortfolioUpdateSink,
+};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
-    portfolio::{
-        AccountEvent, AccountEventStream, AccountPositionEvent, AccountSnapshot, PortfolioTransport,
-    },
+    portfolio::{AccountEvent, AccountPositionEvent, AccountSnapshot},
 };
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use secrecy::SecretString;
@@ -210,7 +209,7 @@ async fn connector_updates_authorize_orders_before_and_after_recovery() {
     .expect("order before recovery");
 
     let restarted = Arc::new(PortfolioService::new(Arc::new(
-        crate::connector::NoopPortfolioFeed::new(),
+        platform_exchange_gateway::connector::NoopPortfolioFeed::new(),
     )));
     restarted
         .apply_ownership_event(&Fixture::ownership_event())
