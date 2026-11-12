@@ -191,4 +191,3 @@ Steps:
 5. If the rotation fails, roll back to the previous Vault version and restart the
    connector.
 6. Verify update age recovers and no ownership events were lost.
-
