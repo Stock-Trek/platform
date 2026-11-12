@@ -1,24 +1,20 @@
-use crate::rebuild::{SpillUsage, spill::SpillMerge};
+use super::{
+    SpillUsage,
+    spill_codec::{SpillCodec, SpillReader, SpillWriter},
+    spill_merge::SpillRecords,
+    spill_sorter::SpillSorter,
+};
 use platform_errors::{BpError, BpResult};
 use platform_market_data::{decoders::trade::Trade, event::MarketEvent};
 use serde::{Deserialize, Serialize};
 use std::{
-    cmp::Ordering,
-    collections::BinaryHeap,
     fs::File,
     io::{BufRead, BufWriter, Write},
     path::{Path, PathBuf},
-    vec::IntoIter,
 };
 
-/// The decoded trading pair that owns a replay record.
 pub type PairKey = (String, String, String);
 
-/// One archived event together with the trades that belong to one pair.
-///
-/// An event can decode to trades for more than one pair, so the replay stages
-/// one record per pair and replays each pair's records through a shared
-/// processor, mirroring how the live router groups streams by pair.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReplayRecord {
     pub pair: PairKey,
@@ -26,8 +22,6 @@ pub struct ReplayRecord {
     pub trades: Vec<Trade>,
 }
 
-/// The replay order of a record: pair first, then the deterministic event
-/// order the rebuild has always used inside one pair.
 pub type ReplayKey = (PairKey, i64, u64, String, String);
 
 impl ReplayRecord {
@@ -48,190 +42,41 @@ impl ReplayRecord {
     }
 }
 
-/// Bounded external sorter for replay records.
-///
-/// Once the in-memory entries reach the configured record limit they are
-/// sorted by replay key and appended to a spill run. `finish` merges the runs
-/// back in replay order, so the caller consumes one pair group at a time
-/// without ever holding the whole run in memory.
-pub struct ReplaySpill {
-    directory: PathBuf,
-    limit: usize,
-    entries: Vec<(ReplayKey, ReplayRecord)>,
-    runs: Vec<PathBuf>,
-    generated: usize,
-    spilled: usize,
-    usage: SpillUsage,
-}
+#[derive(Clone)]
+struct ReplayCodec;
 
-impl ReplaySpill {
-    pub fn new(directory: impl Into<PathBuf>, limit: usize) -> BpResult<Self> {
-        let directory = directory.into();
-        std::fs::create_dir_all(&directory).map_err(|error| {
-            BpError::io(
-                "create rebuild spill directory",
-                directory.display().to_string(),
-                error,
-            )
-        })?;
-        Ok(Self {
-            directory,
-            limit: limit.max(1),
-            entries: Vec::new(),
-            runs: Vec::new(),
-            generated: 0,
-            spilled: 0,
-            usage: SpillUsage::default(),
-        })
+impl SpillCodec for ReplayCodec {
+    type Record = ReplayRecord;
+    type Key = ReplayKey;
+    type Reader = ReplayRunReader;
+    type Writer = ReplayRunWriter;
+
+    fn key(&self, record: &Self::Record) -> Self::Key {
+        record.key()
     }
 
-    pub fn push(&mut self, record: ReplayRecord) -> BpResult<()> {
-        let key = record.key();
-        self.entries.push((key, record));
-        if self.entries.len() >= self.limit {
-            self.spill()?;
-        }
-        Ok(())
+    fn label(&self) -> &'static str {
+        "event"
     }
 
-    pub fn spilled_records(&self) -> usize {
-        self.spilled
+    fn extension(&self) -> &'static str {
+        "jsonl"
     }
 
-    pub fn usage(&self) -> SpillUsage {
-        self.usage
+    fn dedupe_merges(&self) -> bool {
+        false
     }
 
-    pub fn finish(&mut self) -> BpResult<ReplayRecords> {
-        if self.runs.is_empty() {
-            self.entries
-                .sort_by(|(left, _), (right, _)| left.cmp(right));
-            let records = std::mem::take(&mut self.entries)
-                .into_iter()
-                .map(|(_, record)| record)
-                .collect::<Vec<_>>();
-            return Ok(ReplayRecords::Memory(records.into_iter()));
-        }
-
-        self.spill()?;
-        self.reduce_runs(SpillMerge::fanin(self.limit))?;
-        let readers = self
-            .runs
-            .iter()
-            .map(|path| ReplayRunReader::open(path))
-            .collect::<BpResult<Vec<_>>>()?;
-        Ok(ReplayRecords::Runs(ReplayMerge::new(readers)?))
+    fn prefer_latest_run(&self) -> bool {
+        false
     }
 
-    fn spill(&mut self) -> BpResult<()> {
-        if self.entries.is_empty() {
-            return Ok(());
-        }
-
-        self.entries
-            .sort_by(|(left, _), (right, _)| left.cmp(right));
-        let path = self.next_run_path("event-run");
-        self.write_run(&path)?;
-        self.spilled += self.entries.len();
-        self.runs.push(path);
-        self.entries.clear();
-        Ok(())
+    fn open(&self, path: &Path, _batch: usize) -> BpResult<Self::Reader> {
+        ReplayRunReader::open(path)
     }
 
-    fn reduce_runs(&mut self, fan_in: usize) -> BpResult<()> {
-        while self.runs.len() > fan_in {
-            let sources = std::mem::take(&mut self.runs);
-            let mut merged = Vec::new();
-            for chunk in sources.chunks(fan_in) {
-                if chunk.len() == 1 {
-                    merged.push(chunk[0].clone());
-                    continue;
-                }
-                let path = self.next_run_path("event-merge");
-                self.merge_runs(chunk, &path)?;
-                for source in chunk {
-                    std::fs::remove_file(source).map_err(|error| {
-                        BpError::io(
-                            "remove merged rebuild spill run",
-                            source.display().to_string(),
-                            error,
-                        )
-                    })?;
-                }
-                merged.push(path);
-            }
-            self.runs = merged;
-        }
-        Ok(())
-    }
-
-    fn next_run_path(&mut self, label: &str) -> PathBuf {
-        let path = self
-            .directory
-            .join(format!("{label}-{}.jsonl", self.generated));
-        self.generated += 1;
-        path
-    }
-
-    fn merge_runs(&mut self, runs: &[PathBuf], path: &Path) -> BpResult<()> {
-        let readers = runs
-            .iter()
-            .map(|run| ReplayRunReader::open(run))
-            .collect::<BpResult<Vec<_>>>()?;
-        let mut merge = ReplayMerge::new(readers)?;
-        let file = File::create(path).map_err(|error| {
-            BpError::io(
-                "create rebuild spill run",
-                path.display().to_string(),
-                error,
-            )
-        })?;
-        let mut writer = BufWriter::new(file);
-        while let Some(record) = merge.next_record()? {
-            serde_json::to_writer(&mut writer, &record).map_err(BpError::external)?;
-            writer.write_all(b"\n").map_err(|error| {
-                BpError::io("write rebuild spill run", path.display().to_string(), error)
-            })?;
-        }
-        writer.flush().map_err(|error| {
-            BpError::io("flush rebuild spill run", path.display().to_string(), error)
-        })?;
-        self.usage.record(path)
-    }
-
-    fn write_run(&mut self, path: &Path) -> BpResult<()> {
-        let file = File::create(path).map_err(|error| {
-            BpError::io(
-                "create rebuild spill run",
-                path.display().to_string(),
-                error,
-            )
-        })?;
-        let mut writer = BufWriter::new(file);
-        for (_, record) in &self.entries {
-            serde_json::to_writer(&mut writer, record).map_err(BpError::external)?;
-            writer.write_all(b"\n").map_err(|error| {
-                BpError::io("write rebuild spill run", path.display().to_string(), error)
-            })?;
-        }
-        writer.flush().map_err(|error| {
-            BpError::io("flush rebuild spill run", path.display().to_string(), error)
-        })?;
-        self.usage.record(path)
-    }
-}
-
-pub enum ReplayRecords {
-    Memory(IntoIter<ReplayRecord>),
-    Runs(ReplayMerge),
-}
-
-impl ReplayRecords {
-    pub fn next_record(&mut self) -> BpResult<Option<ReplayRecord>> {
-        match self {
-            Self::Memory(records) => Ok(records.next()),
-            Self::Runs(merge) => merge.next_record(),
-        }
+    fn create(&self, path: &Path, _batch: usize) -> BpResult<Self::Writer> {
+        ReplayRunWriter::create(path)
     }
 }
 
@@ -248,8 +93,12 @@ impl ReplayRunReader {
             lines: std::io::BufReader::new(file).lines(),
         })
     }
+}
 
-    fn next_record(&mut self) -> BpResult<Option<ReplayRecord>> {
+impl SpillReader for ReplayRunReader {
+    type Record = ReplayRecord;
+
+    fn read(&mut self) -> BpResult<Option<Self::Record>> {
         loop {
             let Some(line) = self.lines.next() else {
                 return Ok(None);
@@ -266,75 +115,88 @@ impl ReplayRunReader {
     }
 }
 
-struct ReplayEntry {
-    key: ReplayKey,
-    run: usize,
-    record: ReplayRecord,
+struct ReplayRunWriter {
+    path: PathBuf,
+    writer: BufWriter<File>,
 }
 
-impl PartialEq for ReplayEntry {
-    fn eq(&self, other: &Self) -> bool {
-        self.cmp(other) == Ordering::Equal
+impl ReplayRunWriter {
+    fn create(path: &Path) -> BpResult<Self> {
+        let file = File::create(path).map_err(|error| {
+            BpError::io(
+                "create rebuild spill run",
+                path.display().to_string(),
+                error,
+            )
+        })?;
+        Ok(Self {
+            path: path.to_path_buf(),
+            writer: BufWriter::new(file),
+        })
     }
 }
 
-impl Eq for ReplayEntry {}
+impl SpillWriter for ReplayRunWriter {
+    type Record = ReplayRecord;
 
-impl PartialOrd for ReplayEntry {
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+    fn write(&mut self, record: Self::Record) -> BpResult<()> {
+        serde_json::to_writer(&mut self.writer, &record).map_err(BpError::external)?;
+        self.writer.write_all(b"\n").map_err(|error| {
+            BpError::io(
+                "write rebuild spill run",
+                self.path.display().to_string(),
+                error,
+            )
+        })
+    }
+
+    fn finish(mut self) -> BpResult<()> {
+        self.writer.flush().map_err(|error| {
+            BpError::io(
+                "flush rebuild spill run",
+                self.path.display().to_string(),
+                error,
+            )
+        })
     }
 }
 
-impl Ord for ReplayEntry {
-    fn cmp(&self, other: &Self) -> Ordering {
-        // `BinaryHeap` is a max-heap, so reverse the key ordering to pop the
-        // smallest key first. For equal keys, prefer the earliest run so
-        // duplicates are emitted in read order, exactly like the stable sort
-        // of an in-memory group.
-        other
-            .key
-            .cmp(&self.key)
-            .then_with(|| other.run.cmp(&self.run))
+pub struct ReplaySpill {
+    sorter: SpillSorter<ReplayCodec>,
+}
+
+impl ReplaySpill {
+    pub fn new(directory: impl Into<PathBuf>, limit: usize) -> BpResult<Self> {
+        Ok(Self {
+            sorter: SpillSorter::with_codec(directory, limit, ReplayCodec)?,
+        })
+    }
+
+    pub fn push(&mut self, record: ReplayRecord) -> BpResult<()> {
+        self.sorter.push_record(record)
+    }
+
+    pub fn spilled_records(&self) -> usize {
+        self.sorter.spilled_records()
+    }
+
+    pub fn usage(&self) -> SpillUsage {
+        self.sorter.usage()
+    }
+
+    pub fn finish(&mut self) -> BpResult<ReplayRecords> {
+        Ok(ReplayRecords {
+            records: self.sorter.finish()?,
+        })
     }
 }
 
-pub struct ReplayMerge {
-    runs: Vec<ReplayRunReader>,
-    heap: BinaryHeap<ReplayEntry>,
+pub struct ReplayRecords {
+    records: SpillRecords<ReplayCodec>,
 }
 
-impl ReplayMerge {
-    fn new(mut runs: Vec<ReplayRunReader>) -> BpResult<Self> {
-        let mut heap = BinaryHeap::with_capacity(runs.len());
-        for (index, run) in runs.iter_mut().enumerate() {
-            if let Some(record) = run.next_record()? {
-                heap.push(ReplayEntry {
-                    key: record.key(),
-                    run: index,
-                    record,
-                });
-            }
-        }
-        Ok(Self { runs, heap })
-    }
-
-    fn advance(&mut self, run: usize) -> BpResult<()> {
-        if let Some(record) = self.runs[run].next_record()? {
-            self.heap.push(ReplayEntry {
-                key: record.key(),
-                run,
-                record,
-            });
-        }
-        Ok(())
-    }
-
-    fn next_record(&mut self) -> BpResult<Option<ReplayRecord>> {
-        let Some(entry) = self.heap.pop() else {
-            return Ok(None);
-        };
-        self.advance(entry.run)?;
-        Ok(Some(entry.record))
+impl ReplayRecords {
+    pub fn next_record(&mut self) -> BpResult<Option<ReplayRecord>> {
+        self.records.next_record()
     }
 }
