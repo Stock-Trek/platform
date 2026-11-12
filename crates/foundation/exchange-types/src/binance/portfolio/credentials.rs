@@ -1,7 +1,7 @@
+use super::credential_entry::CredentialEntry;
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
 use secrecy::SecretString;
-use serde::Deserialize;
 use std::{collections::BTreeSet, fmt};
 
 pub const CREDENTIALS: &str = "PORTFOLIO_BINANCE_CREDENTIALS";
@@ -77,11 +77,4 @@ impl fmt::Debug for BinanceCredentialConfig {
             .field("secret", &"[redacted]")
             .finish()
     }
-}
-
-#[derive(Deserialize)]
-struct CredentialEntry {
-    account: String,
-    api_key: String,
-    secret: String,
 }

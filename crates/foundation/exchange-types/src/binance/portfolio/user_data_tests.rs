@@ -1,4 +1,4 @@
-use super::user_data::BinanceUserDataEvent;
+use super::BinanceUserDataEvent;
 use serde_json::json;
 
 #[test]

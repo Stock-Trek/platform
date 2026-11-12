@@ -1,21 +1,40 @@
-mod connection;
-mod credentials;
-mod feed;
-mod health;
+mod account_watcher;
+mod connector_health;
+mod connector_health_contract;
+mod connector_health_sink;
+mod connector_portfolio_update;
+mod connector_state;
+mod exchange_portfolio_connection;
+mod exchange_portfolio_connector;
+mod exchange_portfolio_feed;
 mod health_reporter;
-mod port;
+mod noop_connector_health_sink;
+mod noop_portfolio_feed;
+mod portfolio_connection;
+mod portfolio_connector;
+mod portfolio_credential_source;
+mod portfolio_feed;
+mod portfolio_update_apply;
+mod portfolio_update_sink;
 mod session_state;
-mod update;
+mod static_portfolio_credentials;
 mod watcher;
 
-pub use connection::ExchangePortfolioConnector;
-pub use credentials::{PortfolioCredentialSource, StaticPortfolioCredentials};
-pub use feed::{ExchangePortfolioFeed, NoopPortfolioFeed, PortfolioFeed};
-pub use health::{
-    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT, ConnectorHealth, ConnectorHealthSink,
-    ConnectorState, NoopConnectorHealthSink,
+pub use connector_health::ConnectorHealth;
+pub use connector_health_contract::{
+    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT,
 };
-pub use port::{
-    PortfolioConnection, PortfolioConnector, PortfolioUpdateApply, PortfolioUpdateSink,
-};
-pub use update::ConnectorPortfolioUpdate;
+pub use connector_health_sink::ConnectorHealthSink;
+pub use connector_portfolio_update::ConnectorPortfolioUpdate;
+pub use connector_state::ConnectorState;
+pub use exchange_portfolio_connector::ExchangePortfolioConnector;
+pub use exchange_portfolio_feed::ExchangePortfolioFeed;
+pub use noop_connector_health_sink::NoopConnectorHealthSink;
+pub use noop_portfolio_feed::NoopPortfolioFeed;
+pub use portfolio_connection::PortfolioConnection;
+pub use portfolio_connector::PortfolioConnector;
+pub use portfolio_credential_source::PortfolioCredentialSource;
+pub use portfolio_feed::PortfolioFeed;
+pub use portfolio_update_apply::PortfolioUpdateApply;
+pub use portfolio_update_sink::PortfolioUpdateSink;
+pub use static_portfolio_credentials::StaticPortfolioCredentials;
