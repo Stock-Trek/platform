@@ -1,4 +1,5 @@
 use crate::{AccountKey, AccountPortfolio, PortfolioService, PortfolioUpdate};
+use platform_exchange_gateway::portfolio::PortfolioFeed;
 use std::sync::Arc;
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 
@@ -26,7 +27,7 @@ impl RecordingFeed {
 }
 
 #[async_trait::async_trait]
-impl crate::PortfolioFeed for RecordingFeed {
+impl PortfolioFeed for RecordingFeed {
     async fn set_accounts(
         &self,
         cex_id: CexId,

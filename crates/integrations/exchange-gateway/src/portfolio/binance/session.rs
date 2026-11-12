@@ -1,32 +1,30 @@
 use super::{
+    config::BinancePortfolioConfig,
     credentials::BinanceCredentialSource,
     health_reporter::HealthReporter,
-    session_updates::SessionState,
+    session_state::SessionState,
     transport::{BinanceAccountEvent, BinanceTransport},
 };
-use crate::{AccountKey, PortfolioUpdateSink, health::ConnectorState};
+use crate::portfolio::{ConnectorState, PortfolioUpdateSink};
 use chrono::Utc;
 use platform_errors::{BpError, BpResult};
 use platform_metrics::PortfolioMetrics;
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Instant};
+use stock_trek_types::cex::account_id::AccountId;
 use tokio::{
     sync::watch,
     time::{Instant as TokioInstant, interval_at, sleep},
 };
 
 const CEX: &str = "binance";
-const HEALTH_INTERVAL: Duration = Duration::from_secs(30);
+const HEALTH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
 
 pub(super) struct WatcherConfig {
-    pub(super) account: AccountKey,
+    pub(super) account: AccountId,
+    pub(super) config: Arc<BinancePortfolioConfig>,
     pub(super) transport: Arc<dyn BinanceTransport>,
     pub(super) credentials: Arc<dyn BinanceCredentialSource>,
-    pub(super) sink: Option<Arc<dyn PortfolioUpdateSink>>,
-    pub(super) listen_key_refresh: Duration,
-    pub(super) reconnect_backoff: Duration,
+    pub(super) sink: Arc<dyn PortfolioUpdateSink>,
     pub(super) health: HealthReporter,
     pub(super) shutdown: watch::Receiver<bool>,
 }
@@ -45,14 +43,14 @@ impl WatcherConfig {
                     PortfolioMetrics::record_connection_state(CEX, false);
                     PortfolioMetrics::record_reconnect(CEX);
                     tracing::warn!(
-                        account = %self.account.account_id().0,
+                        account = %self.account.0,
                         %error,
                         "portfolio feed session failed"
                     );
                     self.publish_health(ConnectorState::Disconnected, state.last_update)
                         .await;
                     tokio::select! {
-                        _ = sleep(self.reconnect_backoff) => {}
+                        _ = sleep(self.config.reconnect_backoff()) => {}
                         changed = shutdown.changed() => {
                             if changed.is_err() || *shutdown.borrow() {
                                 return;
@@ -104,8 +102,8 @@ impl WatcherConfig {
         self.publish_health(ConnectorState::Connected, state.last_update)
             .await;
         let mut keepalive = interval_at(
-            TokioInstant::now() + self.listen_key_refresh,
-            self.listen_key_refresh,
+            TokioInstant::now() + self.config.listen_key_refresh(),
+            self.config.listen_key_refresh(),
         );
         let mut heartbeat = interval_at(TokioInstant::now() + HEALTH_INTERVAL, HEALTH_INTERVAL);
         loop {

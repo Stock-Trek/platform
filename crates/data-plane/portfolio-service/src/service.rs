@@ -1,21 +1,17 @@
 use crate::{
-    feed::{PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink},
     freshness::{FreshnessPolicy, PortfolioFreshness},
     ownership_registry::{OwnershipApply, OwnershipRegistry},
     portfolio::{AccountPortfolio, AccountPortfolios, PortfolioUpdate},
     state::{PortfolioState, PortfolioUpdateMetadata, PortfolioUpdateOutcome},
 };
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parking_lot::RwLock;
 use platform_errors::BpResult;
+use platform_exchange_gateway::portfolio::PortfolioFeed;
 use platform_metrics::PortfolioMetrics;
 use platform_portfolio_ownership::{AccountKey, OwnershipEvent};
 use std::{collections::BTreeSet, sync::Arc};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
-
-#[cfg(test)]
-use crate::feed::NoopPortfolioFeed;
 
 pub struct PortfolioService {
     state: RwLock<PortfolioState>,
@@ -40,7 +36,9 @@ impl PortfolioService {
 
     #[cfg(test)]
     pub fn in_memory() -> Self {
-        Self::new(Arc::new(NoopPortfolioFeed::new()))
+        Self::new(Arc::new(
+            platform_exchange_gateway::portfolio::NoopPortfolioFeed::new(),
+        ))
     }
 
     #[cfg(test)]
@@ -227,15 +225,11 @@ impl PortfolioService {
     }
 
     pub fn apply_update(&self, update: PortfolioUpdate) -> bool {
-        self.apply_portfolio_update(update) == PortfolioUpdateApply::Applied
+        self.apply_portfolio_update(update) == PortfolioUpdateOutcome::Applied
     }
 
-    pub fn apply_portfolio_update(&self, update: PortfolioUpdate) -> PortfolioUpdateApply {
-        match self.state.write().apply_update_with_outcome(update) {
-            PortfolioUpdateOutcome::Applied => PortfolioUpdateApply::Applied,
-            PortfolioUpdateOutcome::IgnoredUntracked => PortfolioUpdateApply::IgnoredUntracked,
-            PortfolioUpdateOutcome::IgnoredStale => PortfolioUpdateApply::IgnoredStale,
-        }
+    pub fn apply_portfolio_update(&self, update: PortfolioUpdate) -> PortfolioUpdateOutcome {
+        self.state.write().apply_update_with_outcome(update)
     }
 
     pub fn update_metadata(&self, account: &AccountKey) -> Option<PortfolioUpdateMetadata> {
@@ -296,12 +290,5 @@ impl PortfolioService {
             return Ok(());
         }
         self.feed.set_accounts(cex_id, next).await
-    }
-}
-
-#[async_trait]
-impl PortfolioUpdateSink for PortfolioService {
-    async fn apply_update(&self, update: PortfolioUpdate) -> BpResult<PortfolioUpdateApply> {
-        Ok(self.apply_portfolio_update(update))
     }
 }

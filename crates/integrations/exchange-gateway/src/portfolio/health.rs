@@ -1,3 +1,4 @@
+use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
 use serde::{Deserialize, Serialize};
@@ -66,5 +67,26 @@ impl ConnectorHealth {
 
     pub fn from_bytes(payload: &[u8]) -> BpResult<Self> {
         serde_json::from_slice(payload).map_err(BpError::external)
+    }
+}
+
+#[async_trait]
+pub trait ConnectorHealthSink: Send + Sync {
+    async fn publish(&self, health: ConnectorHealth) -> BpResult<()>;
+}
+
+#[derive(Debug, Default)]
+pub struct NoopConnectorHealthSink;
+
+impl NoopConnectorHealthSink {
+    pub fn new() -> Self {
+        Self
+    }
+}
+
+#[async_trait]
+impl ConnectorHealthSink for NoopConnectorHealthSink {
+    async fn publish(&self, _health: ConnectorHealth) -> BpResult<()> {
+        Ok(())
     }
 }

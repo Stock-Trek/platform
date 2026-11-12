@@ -20,7 +20,6 @@ platform-messages = { workspace = true }
 platform-nats = { workspace = true }
 platform-portfolio-ownership = { workspace = true }
 platform-runtime = { workspace = true }
-platform-type-bridge = { workspace = true }
 platform-types = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json", "rustls"] }
 secrecy = { workspace = true }

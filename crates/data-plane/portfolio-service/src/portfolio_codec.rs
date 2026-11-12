@@ -128,7 +128,10 @@ impl PortfolioUpdate {
         serde_json::from_slice(payload).map_err(BpError::external)
     }
 
-    fn with_optional_exchange_time(mut self, exchange_time: Option<DateTime<Utc>>) -> Self {
+    pub(crate) fn with_optional_exchange_time(
+        mut self,
+        exchange_time: Option<DateTime<Utc>>,
+    ) -> Self {
         if let Some(exchange_time) = exchange_time {
             self = self.with_exchange_time(exchange_time);
         }

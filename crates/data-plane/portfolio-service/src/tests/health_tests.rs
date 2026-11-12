@@ -1,7 +1,7 @@
-use crate::{
+use chrono::Utc;
+use platform_exchange_gateway::portfolio::{
     CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT, ConnectorHealth, ConnectorState,
 };
-use chrono::Utc;
 use stock_trek_types::cex::cex_id::CexId;
 
 #[test]

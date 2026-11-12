@@ -1,16 +1,14 @@
 use super::{
-    credentials::BinanceCredentialSource, health_reporter::HealthReporter, session::WatcherConfig,
-    transport::BinanceTransport,
+    config::BinancePortfolioConfig, credentials::BinanceCredentialSource,
+    gateway_transport::GatewayBinanceTransport, health_reporter::HealthReporter,
+    session::WatcherConfig, transport::BinanceTransport,
 };
-use crate::{
-    AccountKey,
-    feed::{PortfolioConnection, PortfolioConnector, PortfolioUpdateSink},
-    health::ConnectorState,
+use crate::portfolio::{
+    ConnectorState, PortfolioConnection, PortfolioConnector, PortfolioUpdateSink,
 };
 use async_trait::async_trait;
 use platform_errors::{BpError, BpResult};
 use platform_metrics::PortfolioMetrics;
-use platform_nats::EventPublisher;
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -26,42 +24,50 @@ use tokio::{
 const CEX: &str = "binance";
 
 pub struct BinancePortfolioConnector {
+    config: Arc<BinancePortfolioConfig>,
     transport: Arc<dyn BinanceTransport>,
     credentials: Arc<dyn BinanceCredentialSource>,
-    listen_key_refresh: Duration,
-    reconnect_backoff: Duration,
     health: HealthReporter,
 }
 
 impl BinancePortfolioConnector {
     pub fn new(
-        transport: Arc<dyn BinanceTransport>,
+        config: BinancePortfolioConfig,
         credentials: Arc<dyn BinanceCredentialSource>,
-        listen_key_refresh: Duration,
-        reconnect_backoff: Duration,
+        health: Arc<dyn crate::portfolio::ConnectorHealthSink>,
     ) -> Self {
+        let transport = Arc::new(GatewayBinanceTransport::new(config.clone()));
         Self {
+            config: Arc::new(config),
             transport,
             credentials,
-            listen_key_refresh,
-            reconnect_backoff,
-            health: HealthReporter::default(),
+            health: HealthReporter::new(health),
         }
     }
 
-    pub fn with_health_publisher(
-        mut self,
-        publisher: Arc<dyn EventPublisher>,
-        subject: impl Into<String>,
-    ) -> Self {
-        self.health = HealthReporter::new(Some(publisher), subject);
+    pub fn with_transport(mut self, transport: Arc<dyn BinanceTransport>) -> Self {
+        self.transport = transport;
         self
     }
 
-    async fn connect_with_sink_optional(
+    fn connection(&self, sink: Arc<dyn PortfolioUpdateSink>) -> Arc<dyn PortfolioConnection> {
+        Arc::new(BinancePortfolioConnection {
+            config: Arc::clone(&self.config),
+            transport: Arc::clone(&self.transport),
+            credentials: Arc::clone(&self.credentials),
+            sink,
+            health: self.health.clone(),
+            watchers: Mutex::new(BTreeMap::new()),
+        })
+    }
+}
+
+#[async_trait]
+impl PortfolioConnector for BinancePortfolioConnector {
+    async fn connect(
         &self,
         cex_id: CexId,
-        sink: Option<Arc<dyn PortfolioUpdateSink>>,
+        sink: Arc<dyn PortfolioUpdateSink>,
     ) -> BpResult<Arc<dyn PortfolioConnection>> {
         if cex_id != CexId::Binance {
             return Err(BpError::bad_value(
@@ -70,35 +76,11 @@ impl BinancePortfolioConnector {
                 "only Binance is supported",
             ));
         }
-        let connection = Arc::new(BinancePortfolioConnection {
-            transport: Arc::clone(&self.transport),
-            credentials: Arc::clone(&self.credentials),
-            sink,
-            listen_key_refresh: self.listen_key_refresh,
-            reconnect_backoff: self.reconnect_backoff,
-            health: self.health.clone(),
-            watchers: Mutex::new(BTreeMap::new()),
-        });
-        connection
-            .health
+        let connection = self.connection(sink);
+        self.health
             .publish(ConnectorState::Connecting, 0, None)
             .await;
         Ok(connection)
-    }
-}
-
-#[async_trait]
-impl PortfolioConnector for BinancePortfolioConnector {
-    async fn connect(&self, cex_id: CexId) -> BpResult<Arc<dyn PortfolioConnection>> {
-        self.connect_with_sink_optional(cex_id, None).await
-    }
-
-    async fn connect_with_sink(
-        &self,
-        cex_id: CexId,
-        sink: Arc<dyn PortfolioUpdateSink>,
-    ) -> BpResult<Arc<dyn PortfolioConnection>> {
-        self.connect_with_sink_optional(cex_id, Some(sink)).await
     }
 }
 
@@ -108,11 +90,10 @@ struct Watcher {
 }
 
 struct BinancePortfolioConnection {
+    config: Arc<BinancePortfolioConfig>,
     transport: Arc<dyn BinanceTransport>,
     credentials: Arc<dyn BinanceCredentialSource>,
-    sink: Option<Arc<dyn PortfolioUpdateSink>>,
-    listen_key_refresh: Duration,
-    reconnect_backoff: Duration,
+    sink: Arc<dyn PortfolioUpdateSink>,
     health: HealthReporter,
     watchers: Mutex<BTreeMap<AccountId, Watcher>>,
 }
@@ -130,12 +111,11 @@ impl BinancePortfolioConnection {
         let (shutdown, receiver) = watch::channel(false);
         let task = tokio::spawn(
             WatcherConfig {
-                account: AccountKey::new(CexId::Binance, &account.0),
+                account,
+                config: Arc::clone(&self.config),
                 transport: Arc::clone(&self.transport),
                 credentials: Arc::clone(&self.credentials),
-                sink: self.sink.clone(),
-                listen_key_refresh: self.listen_key_refresh,
-                reconnect_backoff: self.reconnect_backoff,
+                sink: Arc::clone(&self.sink),
                 health: self.health.clone(),
                 shutdown: receiver,
             }

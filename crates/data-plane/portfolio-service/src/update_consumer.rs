@@ -1,4 +1,4 @@
-use crate::{PortfolioService, PortfolioUpdateApply, PortfolioUpdateSource};
+use crate::{PortfolioService, PortfolioUpdateOutcome, PortfolioUpdateSource};
 use platform_errors::BpResult;
 use platform_metrics::PortfolioMetrics;
 use std::{future::Future, sync::Arc, time::Duration};
@@ -29,7 +29,7 @@ impl PortfolioUpdateConsumer {
             let lag = chrono::Utc::now().signed_duration_since(update.occurred_at());
             PortfolioMetrics::record_consumer_lag(lag.to_std().unwrap_or_default());
             match self.service.apply_portfolio_update(update.clone()) {
-                PortfolioUpdateApply::Applied => {
+                PortfolioUpdateOutcome::Applied => {
                     PortfolioMetrics::record_update_outcome("binance", "applied");
                     tracing::debug!(
                         account = %update.account().storage_key(),
@@ -37,7 +37,7 @@ impl PortfolioUpdateConsumer {
                         "applied portfolio update"
                     );
                 }
-                PortfolioUpdateApply::IgnoredUntracked => {
+                PortfolioUpdateOutcome::IgnoredUntracked => {
                     PortfolioMetrics::record_update_outcome("binance", "untracked");
                     tracing::debug!(
                         account = %update.account().storage_key(),
@@ -45,7 +45,7 @@ impl PortfolioUpdateConsumer {
                         "ignored portfolio update for untracked account"
                     );
                 }
-                PortfolioUpdateApply::IgnoredStale => {
+                PortfolioUpdateOutcome::IgnoredStale => {
                     PortfolioMetrics::record_update_outcome("binance", "stale");
                     tracing::debug!(
                         account = %update.account().storage_key(),

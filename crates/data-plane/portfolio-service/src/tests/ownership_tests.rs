@@ -6,6 +6,7 @@ use crate::{
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::BpResult;
+use platform_exchange_gateway::portfolio::PortfolioFeed;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use std::{collections::VecDeque, sync::Mutex, time::Duration};
 
@@ -259,7 +260,7 @@ struct SnapshotFeed {
 }
 
 #[async_trait]
-impl crate::PortfolioFeed for SnapshotFeed {
+impl PortfolioFeed for SnapshotFeed {
     async fn set_accounts(
         &self,
         _cex_id: stock_trek_types::cex::cex_id::CexId,
@@ -282,7 +283,7 @@ impl crate::PortfolioFeed for SnapshotFeed {
             Fixture::portfolio(stock_trek_types::cex::asset_id::AssetId::Bitcoin, 5.0),
             1,
             Utc::now(),
-        )) == crate::PortfolioUpdateApply::Applied;
+        )) == crate::PortfolioUpdateOutcome::Applied;
         self.applied
             .store(applied, std::sync::atomic::Ordering::SeqCst);
         Ok(())

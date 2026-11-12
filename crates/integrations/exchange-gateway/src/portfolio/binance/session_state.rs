@@ -1,12 +1,10 @@
 use super::session::WatcherConfig;
-use crate::{
-    AccountPortfolio, PortfolioUpdate, feed::PortfolioUpdateApply, health::ConnectorState,
-};
+use crate::portfolio::{ConnectorState, PortfolioUpdate, PortfolioUpdateApply};
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::BpResult;
 use platform_metrics::PortfolioMetrics;
 use std::{collections::BTreeMap, time::Instant};
-use stock_trek_types::cex::asset_id::AssetId;
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 
 const CEX: &str = "binance";
 
@@ -64,17 +62,15 @@ impl WatcherConfig {
         exchange_time: Option<DateTime<Utc>>,
         last_update: &mut Option<Instant>,
     ) -> BpResult<()> {
-        let Some(sink) = &self.sink else {
-            return Ok(());
-        };
-        let portfolio =
-            AccountPortfolio::new(balances.clone(), Vec::new()).map_err(BpError::external)?;
-        let mut update =
-            PortfolioUpdate::versioned(self.account.clone(), None, portfolio, version, occurred_at);
-        if let Some(exchange_time) = exchange_time {
-            update = update.with_exchange_time(exchange_time);
-        }
-        match sink.apply_update(update).await? {
+        let update = PortfolioUpdate::new(
+            CexId::Binance,
+            self.account.clone(),
+            balances.clone(),
+            version,
+            occurred_at,
+        )
+        .with_optional_exchange_time(exchange_time);
+        match self.sink.apply_update(update).await? {
             PortfolioUpdateApply::Applied => {
                 PortfolioMetrics::record_update_outcome(CEX, "applied");
             }

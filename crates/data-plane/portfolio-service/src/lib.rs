@@ -1,9 +1,7 @@
 mod auth_service;
-mod binance_connector;
 mod config;
-mod feed;
+mod connector_health_publisher;
 mod freshness;
-mod health;
 mod nats_ownership_source;
 mod nats_update_source;
 mod order_delivery;
@@ -24,23 +22,12 @@ mod update_consumer;
 mod update_source;
 
 pub use auth_service::PortfolioAuthService;
-pub use binance_connector::{
-    AccountPositionEvent, AccountSnapshot, BinanceAccountEvent, BinanceCredentialSource,
-    BinanceEventStream, BinancePortfolioConnector, BinanceTransport, GatewayBinanceTransport,
-    StaticBinanceCredentials,
-};
 pub use config::{
     AuthConfig, BinanceConfig, BinanceCredentialConfig, FreshnessConfig, OrderRequestConfig,
     OwnershipConfig, PortfolioConfig, UpdateConfig,
 };
-pub use feed::{
-    GroupingPortfolioFeed, NoopPortfolioFeed, PortfolioConnection, PortfolioConnector,
-    PortfolioFeed, PortfolioUpdateApply, PortfolioUpdateSink,
-};
+pub use connector_health_publisher::NatsConnectorHealthSink;
 pub use freshness::{FreshnessPolicy, PortfolioFreshness, StaleOrderPolicy};
-pub use health::{
-    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT, ConnectorHealth, ConnectorState,
-};
 pub use nats_ownership_source::NatsOwnershipSource;
 pub use nats_update_source::NatsUpdateSource;
 pub use order_delivery::OrderRequestDelivery;

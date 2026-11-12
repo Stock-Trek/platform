@@ -3,6 +3,7 @@ pub mod clients;
 mod clock;
 pub mod connector;
 mod panic_guard;
+pub mod portfolio;
 pub mod rate_limit;
 mod retry_after;
 pub mod submission;

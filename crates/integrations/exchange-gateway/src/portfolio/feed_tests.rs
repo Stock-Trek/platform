@@ -1,4 +1,7 @@
-use crate::{GroupingPortfolioFeed, PortfolioConnection, PortfolioConnector, PortfolioFeed};
+use super::{
+    ExchangePortfolioFeed, PortfolioConnection, PortfolioConnector, PortfolioFeed, PortfolioUpdate,
+    PortfolioUpdateApply, PortfolioUpdateSink,
+};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::BpResult;
@@ -37,18 +40,24 @@ struct FakeConnector {
 }
 
 impl FakeConnector {
-    fn feed() -> (Arc<FakeState>, GroupingPortfolioFeed) {
+    fn feed() -> (Arc<FakeState>, ExchangePortfolioFeed) {
         let state = Arc::new(FakeState::default());
         let connector = Arc::new(Self {
             state: Arc::clone(&state),
         });
-        (state, GroupingPortfolioFeed::new(connector))
+        let feed = ExchangePortfolioFeed::new(connector);
+        feed.set_update_sink(Arc::new(NoopSink));
+        (state, feed)
     }
 }
 
 #[async_trait]
 impl PortfolioConnector for FakeConnector {
-    async fn connect(&self, _cex_id: CexId) -> BpResult<Arc<dyn PortfolioConnection>> {
+    async fn connect(
+        &self,
+        _cex_id: CexId,
+        _sink: Arc<dyn PortfolioUpdateSink>,
+    ) -> BpResult<Arc<dyn PortfolioConnection>> {
         self.state.connects.fetch_add(1, Ordering::SeqCst);
         Ok(Arc::new(FakeConnection {
             state: Arc::clone(&self.state),
@@ -73,8 +82,17 @@ impl PortfolioConnection for FakeConnection {
     }
 }
 
+struct NoopSink;
+
+#[async_trait]
+impl PortfolioUpdateSink for NoopSink {
+    async fn apply_update(&self, _update: PortfolioUpdate) -> BpResult<PortfolioUpdateApply> {
+        Ok(PortfolioUpdateApply::Applied)
+    }
+}
+
 #[tokio::test]
-async fn grouping_feed_reuses_one_connection_per_exchange() {
+async fn exchange_feed_reuses_one_connection_per_exchange() {
     let (state, feed) = FakeConnector::feed();
     feed.set_accounts(CexId::Binance, BTreeSet::from([AccountId::new("first")]))
         .await
@@ -96,7 +114,7 @@ async fn grouping_feed_reuses_one_connection_per_exchange() {
 }
 
 #[tokio::test]
-async fn grouping_feed_disconnects_an_exchange_without_accounts() {
+async fn exchange_feed_disconnects_an_exchange_without_accounts() {
     let (state, feed) = FakeConnector::feed();
     feed.set_accounts(CexId::Binance, BTreeSet::from([AccountId::new("first")]))
         .await
@@ -110,7 +128,7 @@ async fn grouping_feed_disconnects_an_exchange_without_accounts() {
 }
 
 #[tokio::test]
-async fn grouping_feed_reconnects_after_an_exchange_is_removed() {
+async fn exchange_feed_reconnects_after_an_exchange_is_removed() {
     let (state, feed) = FakeConnector::feed();
     feed.set_accounts(CexId::Binance, BTreeSet::from([AccountId::new("first")]))
         .await
@@ -124,4 +142,19 @@ async fn grouping_feed_reconnects_after_an_exchange_is_removed() {
 
     assert_eq!(state.connects(), 2);
     assert_eq!(feed.connection_count().await, 1);
+}
+
+#[tokio::test]
+async fn exchange_feed_requires_a_configured_sink() {
+    let state = Arc::new(FakeState::default());
+    let connector = Arc::new(FakeConnector {
+        state: Arc::clone(&state),
+    });
+    let feed = ExchangePortfolioFeed::new(connector);
+    assert!(
+        feed.set_accounts(CexId::Binance, BTreeSet::from([AccountId::new("first")]))
+            .await
+            .is_err()
+    );
+    assert_eq!(state.connects(), 0);
 }

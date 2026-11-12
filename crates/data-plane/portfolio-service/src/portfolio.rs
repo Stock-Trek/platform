@@ -1,5 +1,7 @@
+use crate::AccountKey;
 use chrono::{DateTime, Utc};
-use platform_portfolio_ownership::AccountKey;
+use platform_errors::{BpError, BpResult};
+use platform_exchange_gateway::portfolio::PortfolioUpdate as GatewayPortfolioUpdate;
 use std::collections::BTreeMap;
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
@@ -7,6 +9,29 @@ pub use stock_trek::PendingOrder;
 
 pub type AccountPortfolio = stock_trek::CexAccountPortfolio;
 pub type AccountPortfolios = BTreeMap<CexId, BTreeMap<AccountId, AccountPortfolio>>;
+
+impl TryFrom<GatewayPortfolioUpdate> for PortfolioUpdate {
+    type Error = BpError;
+
+    fn try_from(update: GatewayPortfolioUpdate) -> BpResult<Self> {
+        let portfolio = AccountPortfolio::new(
+            update
+                .balances()
+                .iter()
+                .map(|(asset, total)| (*asset, *total)),
+            Vec::new(),
+        )
+        .map_err(BpError::external)?;
+        Ok(Self::versioned(
+            AccountKey::from((update.cex_id(), update.account_id().clone())),
+            None,
+            portfolio,
+            update.version(),
+            update.occurred_at(),
+        )
+        .with_optional_exchange_time(update.exchange_time()))
+    }
+}
 
 pub const PORTFOLIO_UPDATE_SCHEMA_VERSION: u32 = 1;
 pub const PORTFOLIO_UPDATE_STREAM_PREFIX: &str = "portfolio.updates.v1";

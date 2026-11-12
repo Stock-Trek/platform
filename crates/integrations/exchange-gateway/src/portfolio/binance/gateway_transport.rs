@@ -1,15 +1,16 @@
 use super::{
     balances::BalanceParser,
+    config::BinancePortfolioConfig,
     event_parser::EventParser,
     transport::{AccountSnapshot, BinanceAccountEvent, BinanceEventStream, BinanceTransport},
+};
+use crate::{
+    clients::reqwest::ReqwestHttpClient, connector::Connector, iris, submission::SubmissionOutcome,
+    websocket_listener::WebsocketEventStream,
 };
 use async_trait::async_trait;
 use chrono::{TimeZone, Utc};
 use platform_errors::{BpError, BpResult, ExchangeError};
-use platform_exchange_gateway::{
-    clients::reqwest::ReqwestHttpClient, connector::Connector, iris, submission::SubmissionOutcome,
-    websocket_listener::WebsocketEventStream,
-};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     binance::{
@@ -23,7 +24,6 @@ use platform_exchange_types::{
     signer::Signer,
 };
 use platform_type_bridge::{BinanceConverter, TickerMapping};
-use platform_types::protocol::Protocol;
 use std::{collections::BTreeMap, time::Duration};
 use stock_trek_types::cex::asset_id::AssetId;
 
@@ -31,26 +31,16 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_RETRIES: u8 = 3;
 
 pub struct GatewayBinanceTransport {
-    rest_url: String,
-    websocket_url: String,
+    config: BinancePortfolioConfig,
     mapping: &'static TickerMapping,
 }
 
 impl GatewayBinanceTransport {
-    pub fn new(rest_url: impl Into<String>, websocket_url: impl Into<String>) -> BpResult<Self> {
-        let rest_url = rest_url.into();
-        let websocket_url = websocket_url.into();
-        Protocol::Http
-            .validate_url("binance rest url", &rest_url)
-            .map_err(BpError::external)?;
-        Protocol::Websocket
-            .validate_url("binance websocket url", &websocket_url)
-            .map_err(BpError::external)?;
-        Ok(Self {
-            rest_url,
-            websocket_url: websocket_url.trim_end_matches('/').to_string(),
+    pub fn new(config: BinancePortfolioConfig) -> Self {
+        Self {
+            config,
             mapping: BinanceConverter::ticker_mapping_static(),
-        })
+        }
     }
 
     fn http_connector(
@@ -58,7 +48,7 @@ impl GatewayBinanceTransport {
         credentials: &ApiKeyCredentials,
     ) -> BpResult<Connector<BinanceExchange, ReqwestHttpClient>> {
         Connector::try_new_http_reqwest(
-            self.rest_url.clone(),
+            self.config.rest_url().to_string(),
             BinanceExchange,
             BinanceExchange::signer_hmac_sha256(credentials.clone())?,
             REQUEST_TIMEOUT,
@@ -150,7 +140,7 @@ impl BinanceTransport for GatewayBinanceTransport {
     }
 
     async fn open_stream(&self, listen_key: &str) -> BpResult<Box<dyn BinanceEventStream>> {
-        let url = format!("{}/{listen_key}", self.websocket_url);
+        let url = format!("{}/{listen_key}", self.config.websocket_url());
         let connector = Connector::try_new_websocket_iris(
             url,
             BinanceExchange,
@@ -179,8 +169,7 @@ impl BinanceTransport for GatewayBinanceTransport {
 }
 
 struct GatewayEventStream {
-    _connector:
-        Connector<BinanceExchange, platform_exchange_gateway::clients::iris::IrisWebsocketClient>,
+    _connector: Connector<BinanceExchange, crate::clients::iris::IrisWebsocketClient>,
     events: WebsocketEventStream,
     mapping: &'static TickerMapping,
 }

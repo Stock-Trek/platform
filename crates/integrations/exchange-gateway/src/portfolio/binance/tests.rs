@@ -1,13 +1,14 @@
 use super::{
-    BinancePortfolioConnector,
+    BinancePortfolioConfig, BinancePortfolioConnector,
     credentials::BinanceCredentialSource,
     transport::{
         AccountPositionEvent, AccountSnapshot, BinanceAccountEvent, BinanceEventStream,
         BinanceTransport,
     },
 };
-use crate::{
-    AccountKey, PortfolioConnector, PortfolioUpdate, PortfolioUpdateApply, PortfolioUpdateSink,
+use crate::portfolio::{
+    NoopConnectorHealthSink, PortfolioConnector, PortfolioUpdate, PortfolioUpdateApply,
+    PortfolioUpdateSink,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -29,7 +30,7 @@ struct Credentials;
 
 #[async_trait]
 impl BinanceCredentialSource for Credentials {
-    async fn credentials(&self, _account: &AccountKey) -> BpResult<ApiKeyCredentials> {
+    async fn credentials(&self, _account_id: &AccountId) -> BpResult<ApiKeyCredentials> {
         Ok(ApiKeyCredentials {
             api_key: "api-key".to_string(),
             secret: SecretString::from("secret"),
@@ -113,21 +114,33 @@ impl PortfolioUpdateSink for Sink {
     }
 }
 
+fn config() -> BinancePortfolioConfig {
+    BinancePortfolioConfig::new(
+        "https://api.binance.com/api/v3",
+        "wss://stream.binance.com:9443/ws",
+        Duration::from_secs(3600),
+        Duration::from_millis(10),
+    )
+    .expect("config")
+}
+
 #[tokio::test]
 async fn connector_streams_snapshot_and_position_updates_to_the_sink() {
     let transport = Arc::new(Transport {
         closes: AtomicUsize::new(0),
         created: AtomicBool::new(false),
     });
-    let connector = Arc::new(BinancePortfolioConnector::new(
-        transport.clone(),
-        Arc::new(Credentials),
-        Duration::from_secs(3600),
-        Duration::from_millis(10),
-    ));
+    let connector = Arc::new(
+        BinancePortfolioConnector::new(
+            config(),
+            Arc::new(Credentials),
+            Arc::new(NoopConnectorHealthSink::new()),
+        )
+        .with_transport(transport.clone()),
+    );
     let (sender, mut receiver) = mpsc::unbounded_channel();
     let connection = connector
-        .connect_with_sink(CexId::Binance, Arc::new(Sink { updates: sender }))
+        .connect(CexId::Binance, Arc::new(Sink { updates: sender }))
         .await
         .expect("connect");
     connection
@@ -139,54 +152,19 @@ async fn connector_streams_snapshot_and_position_updates_to_the_sink() {
         .await
         .expect("snapshot timeout")
         .expect("snapshot");
-    assert_eq!(snapshot.account().account_id().0, "primary");
-    assert_eq!(snapshot.portfolio().asset_total(AssetId::Bitcoin), 1.0);
+    assert_eq!(snapshot.account_id().0, "primary");
+    assert_eq!(snapshot.balances().get(&AssetId::Bitcoin), Some(&1.0));
     assert!(snapshot.version() > 0);
 
     let position = tokio::time::timeout(Duration::from_secs(2), receiver.recv())
         .await
         .expect("position timeout")
         .expect("position");
-    assert_eq!(position.portfolio().asset_total(AssetId::Bitcoin), 1.0);
-    assert_eq!(position.portfolio().asset_total(AssetId::TetherUSD), 500.0);
+    assert_eq!(position.balances().get(&AssetId::Bitcoin), Some(&1.0));
+    assert_eq!(position.balances().get(&AssetId::TetherUSD), Some(&500.0));
     assert!(position.version() > snapshot.version());
 
     assert!(transport.created.load(Ordering::SeqCst));
     connection.disconnect().await.expect("disconnect");
     assert_eq!(transport.closes.load(Ordering::SeqCst), 1);
-}
-
-#[test]
-fn parses_position_events_into_mapped_balances() {
-    let event = super::event_parser::EventParser::parse(
-        &serde_json::json!({
-            "e": "outboundAccountPosition",
-            "E": 1_700_000_000_000_i64,
-            "u": 42,
-            "B": [
-                {"a": "BTC", "f": "1.5", "l": "0.5"},
-                {"a": "USDT", "f": "250", "l": "0"}
-            ]
-        }),
-        platform_type_bridge::BinanceConverter::ticker_mapping_static(),
-    )
-    .expect("event")
-    .expect("position");
-    let BinanceAccountEvent::Position(event) = event else {
-        panic!("expected position");
-    };
-    assert_eq!(event.version(), 42);
-    assert_eq!(event.balances().get(&AssetId::Bitcoin), Some(&2.0));
-    assert_eq!(event.balances().get(&AssetId::TetherUSD), Some(&250.0));
-}
-
-#[test]
-fn parses_listen_key_expiration_events() {
-    let event = super::event_parser::EventParser::parse(
-        &serde_json::json!({"e": "listenKeyExpired", "E": 1_700_000_000_000_i64}),
-        platform_type_bridge::BinanceConverter::ticker_mapping_static(),
-    )
-    .expect("event")
-    .expect("event");
-    assert_eq!(event, BinanceAccountEvent::ListenKeyExpired);
 }
