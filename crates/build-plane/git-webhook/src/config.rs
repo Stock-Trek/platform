@@ -1,9 +1,8 @@
-use platform_aws::secrets::{SSM_DECRYPT_ENV, SSM_PATH_ENV, SsmConfig};
+use platform_aws::{SSM_DECRYPT_ENV, SSM_PATH_ENV, SsmConfig};
 use platform_config::{
     AWS_CONNECT_TIMEOUT_SECS, AWS_LAMBDA_FUNCTION_NAME, AWS_OPERATION_TIMEOUT_SECS,
-    DEADLINE_BUFFER_SECS, GITHUB_ENTERPRISE_ALLOWED_HOSTS, RUST_LOG, SQS_QUEUE_URL,
+    DEADLINE_BUFFER_SECS, EnvVars, GITHUB_ENTERPRISE_ALLOWED_HOSTS, RUST_LOG, SQS_QUEUE_URL,
 };
-use platform_config::EnvVars;
 use platform_errors::BpResult;
 use platform_github::host_allow_list::HostAllowlist;
 use platform_time::timeouts::Timeouts;

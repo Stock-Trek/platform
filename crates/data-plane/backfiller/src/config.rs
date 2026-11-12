@@ -1,7 +1,4 @@
-use platform_aws::{
-    Aws,
-    secrets::{SSM_DECRYPT_ENV, SSM_PATH_ENV, Secrets, SsmConfig},
-};
+use platform_aws::{Aws, SSM_DECRYPT_ENV, SSM_PATH_ENV, SsmConfig, SsmSecrets};
 use platform_config::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_exchange_types::{
@@ -71,7 +68,7 @@ impl BackfillerConfig {
             SystemTime::now() + SECRETS_LOAD_DEADLINE,
             SECRETS_LOAD_BUFFER,
         );
-        let secrets = Secrets::load(&sdk_config, timeouts, deadline, &self.ssm).await?;
+        let secrets = SsmSecrets::load(&sdk_config, timeouts, deadline, &self.ssm).await?;
         let names = ExchangeSecretNames::new(self.exchange, self.trading_mode);
         let api_key = secrets.get(&names.api_key)?;
         let api_secret = secrets.get(&names.api_secret)?;
