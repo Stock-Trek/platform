@@ -8,7 +8,7 @@ use platform_exchange_types::{
     response::{ETHttpResponse, ETResponse, ETWebsocketResponse},
     websocket_id::ETWebsocketId,
 };
-use platform_types::new_types::{DurationNanoseconds, DurationSeconds, UsageCount};
+use platform_types::{DurationNanoseconds, DurationSeconds, UsageCount};
 use serde_json::json;
 
 #[test]

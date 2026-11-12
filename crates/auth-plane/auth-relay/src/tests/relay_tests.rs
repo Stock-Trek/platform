@@ -6,7 +6,7 @@ use platform_auth_service::{
     TokenStore, TokenUsageQueueConfig, VaultTokenStoreConfig,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_time::timeouts::Timeouts;
+use platform_time::Timeouts;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},

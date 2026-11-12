@@ -6,8 +6,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, trade::Trade};
+use platform_types::TimestampMilliseconds;
+use rust_decimal::Decimal;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
@@ -131,9 +132,6 @@ fn key(interval: &str) -> CandleKey {
 }
 
 fn candle(interval: &str, close: f64) -> Candle {
-    use platform_market_data::decoders::trade::Trade;
-    use rust_decimal::Decimal;
-
     let trade = Trade {
         exchange: CexId::Binance,
         trading_pair: TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),

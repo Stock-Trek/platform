@@ -3,8 +3,8 @@ use crate::market_source::MarketInput;
 use crate::runner::ProcessorRunner;
 use crate::runner::tests::fixtures_tests::{FakeSink, FakeSource, Fixtures};
 use crate::shard_id::ShardId;
-use platform_market_data::event::GapMarker;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::GapMarker;
+use platform_types::TimestampMilliseconds;
 use std::sync::{Arc, Mutex};
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 

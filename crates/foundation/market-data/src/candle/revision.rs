@@ -1,6 +1,6 @@
 use crate::candle::body::Candle;
 use crate::candle::key::CandleKey;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 
 /// Deterministic revision of a closed candle.

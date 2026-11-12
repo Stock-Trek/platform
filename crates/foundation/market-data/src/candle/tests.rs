@@ -2,7 +2,7 @@ use crate::{
     candle::{Candle, CandleKey, ClosedCandle},
     decoders::trade::Trade,
 };
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use stock_trek::markets::{AlignedWindow, TimestampMillis};
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};

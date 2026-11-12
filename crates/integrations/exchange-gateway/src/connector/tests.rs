@@ -14,7 +14,7 @@ use platform_exchange_types::{
     rate_limited::RateLimitRestriction,
     signer::Signer,
 };
-use platform_types::new_types::UsageCount;
+use platform_types::UsageCount;
 use std::{future::poll_fn, task::Poll, time::Duration};
 
 struct UnknownOutcomeClient;

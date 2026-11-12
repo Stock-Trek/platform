@@ -16,13 +16,13 @@ use crate::{
 };
 use platform_errors::BuildResult;
 use platform_market_data::{
-    decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
-    event::{GapMarker, MarketEvent},
+    GapMarker, MarketEvent,
+    trade::{SharedTradeDecoder, TradeDecoderFactory},
 };
 use platform_metrics::AggregatorMetrics;
-use platform_metrics::descriptions::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
-use platform_metrics::market_data::MarketDataMetrics;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_metrics::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
+use platform_metrics::MarketDataMetrics;
+use platform_types::TimestampMilliseconds;
 use std::collections::{HashMap, hash_map::Entry};
 use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;

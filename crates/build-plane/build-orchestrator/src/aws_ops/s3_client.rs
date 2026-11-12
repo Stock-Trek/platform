@@ -7,7 +7,7 @@ use aws_sdk_s3::{Client as S3Client, presigning::PresigningConfig, primitives::B
 use platform_aws::SdkConfig;
 use platform_config::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BuildError, BuildResult, StorageError, TimeoutError};
-use platform_time::{deadline_budget::Deadline, timeouts::Timeouts};
+use platform_time::{Deadline, Timeouts};
 use std::{num::NonZeroU64, time::Duration};
 
 #[derive(Debug, Clone)]

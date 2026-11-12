@@ -1,8 +1,8 @@
 use crate::processor::tests::fixtures_tests::Fixtures;
 use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::state::{AggregatorState, SequenceRange};
-use platform_market_data::candle::{AlignedWindow, CandleKey};
-use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use platform_market_data::{AlignedWindow, CandleKey};
+use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 #[test]

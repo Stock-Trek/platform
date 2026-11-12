@@ -1,9 +1,6 @@
-use platform_market_data::{
-    envelope_codec::EnvelopeCodec,
-    event::{GapMarker, MarketEvent},
-};
+use platform_market_data::{EnvelopeCodec, GapMarker, MarketEvent};
 use platform_nats::Message;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
 use crate::{MarketInput, NatsMarketSource};

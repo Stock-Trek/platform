@@ -4,8 +4,8 @@ use crate::config::env::{
     AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::candle::AlignedWindow;
-use platform_types::new_types::DurationMilliseconds;
+use platform_market_data::AlignedWindow;
+use platform_types::DurationMilliseconds;
 use std::collections::{BTreeMap, BTreeSet};
 use std::time::Duration;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};

@@ -1,27 +1,21 @@
-pub mod asset_ids_to_tickers;
-pub mod asset_limits;
-pub mod conversion;
+mod asset_ids_to_tickers;
+mod asset_limits;
+mod conversion;
+mod converters;
+mod exchange_info;
+mod floats_to_decimals;
+mod response;
+mod semantic_checker;
+mod session_authentication;
+mod ticker_map;
+mod trading_limits;
 
 #[cfg(test)]
 mod conversion_tests;
-
-pub mod converters;
-pub mod exchange_info;
-pub mod floats_to_decimals;
-pub mod response;
-pub mod semantic_checker;
-pub mod session_authentication;
-pub mod ticker_map;
-
 #[cfg(test)]
 mod ticker_map_tests;
-
-pub mod trading_limits;
-
 #[cfg(test)]
 mod trading_limits_tests;
-
-pub mod util;
 
 pub use crate::{
     asset_limits::TBAssetLimits,

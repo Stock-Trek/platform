@@ -6,9 +6,9 @@ use crate::runner::tests::fixtures_tests::{
 };
 use crate::shard_id::ShardId;
 use crate::state::DeduplicationKey;
-use platform_market_data::event::GapMarker;
+use platform_market_data::GapMarker;
 use platform_nats::Message;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::sync::{Arc, Mutex};
 use stock_trek_types::cex::cex_id::CexId;
 

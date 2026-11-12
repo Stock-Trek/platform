@@ -1,43 +1,32 @@
 //! Market-data candle aggregation service.
 
-pub mod checkpoint_record;
-
-#[cfg(test)]
-pub(crate) mod checkpoint_record_tests;
-
-pub mod config;
-pub mod writer_lease;
-
-#[cfg(test)]
-pub(crate) mod writer_lease_tests;
-
-pub mod hash_router;
-pub mod processor;
-pub mod restore;
-
-#[cfg(test)]
-mod hash_router_tests;
-
-pub mod runner;
-pub mod shard_id;
-
-#[cfg(test)]
-mod shard_id_tests;
-
-pub mod candle_sink;
+mod candle_sink;
+mod checkpoint_record;
+mod config;
+mod hash_router;
+mod market_source;
+mod processor;
+mod restore;
+mod runner;
+mod shard_id;
+mod state;
+mod supervisor;
+mod writer_lease;
 
 #[cfg(test)]
 mod candle_sink_tests;
-
-pub mod market_source;
-
+#[cfg(test)]
+mod checkpoint_record_tests;
+#[cfg(test)]
+mod hash_router_tests;
 #[cfg(test)]
 mod market_source_tests;
-
-pub mod state;
-pub mod supervisor;
+#[cfg(test)]
+mod shard_id_tests;
 #[cfg(test)]
 mod supervisor_tests;
+#[cfg(test)]
+mod writer_lease_tests;
 
 pub use candle_sink::{ClosedCandlePublisher, NatsCandleSink, OpenCandleStore};
 pub use checkpoint_record::{CheckpointRecord, NatsStateStore, StateStore};
@@ -46,7 +35,7 @@ pub use hash_router::{HashRouter, NatsRouter};
 pub use market_source::{
     MarketInput, MarketSource, NatsMarketSource, NatsShardSource, SourceRecord,
 };
-pub use processor::{CandleProcessor, ProcessorConfig, ProcessorUpdate};
+pub use processor::{CandleProcessor, ProcessorConfig};
 pub use restore::{
     ArchiveRecoveryConfig, ArchivedEventSource, RestoreOptions, RestoreSource, RestoredShard,
     S3ArchiveRecovery, S3ArchivedEventSource,

@@ -2,10 +2,7 @@ use crate::config::AggregatorConfig;
 use async_trait::async_trait;
 use futures::{StreamExt, TryStreamExt, stream};
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::{
-    candle::{Candle, CandleKey, ClosedCandle},
-    envelope_codec::EnvelopeCodec,
-};
+use platform_market_data::{Candle, CandleKey, ClosedCandle, EnvelopeCodec};
 use platform_nats::{JetStream, KeyValue, NatsPublisher};
 use std::collections::HashMap;
 use std::sync::Arc;

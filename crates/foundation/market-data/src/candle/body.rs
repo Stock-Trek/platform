@@ -2,7 +2,7 @@ use crate::candle::AlignedWindow;
 use crate::candle::key::CandleKey;
 use crate::decoders::trade::Trade;
 use platform_errors::{BuildError, BuildResult};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 use serde::{Deserialize, Serialize};
 use stock_trek::markets::MarketOhlcv;

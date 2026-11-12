@@ -3,7 +3,7 @@ use crate::{
     response::{ETHttpResponse, ETWebsocketResponse},
 };
 use platform_errors::BuildResult;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 
 pub trait KlinesHttpRequest<Response>: ETHttpRequest<Response = Response>

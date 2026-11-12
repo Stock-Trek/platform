@@ -1,7 +1,9 @@
 use platform_errors::BuildResult;
 use platform_runtime::Runtime;
-use std::future::Future;
-use std::time::{Duration, Instant};
+use std::{
+    future::Future,
+    time::{Duration, Instant},
+};
 use tracing::{error, warn};
 
 pub struct Supervisor;

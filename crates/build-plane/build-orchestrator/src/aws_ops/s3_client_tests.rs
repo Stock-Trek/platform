@@ -1,7 +1,7 @@
 use crate::aws_ops::s3_client::{S3, S3Config};
 use aws_credential_types::{Credentials, provider::SharedCredentialsProvider};
 use platform_aws::{Region, SdkConfig};
-use platform_time::{deadline_budget::Deadline, timeouts::Timeout, timeouts::Timeouts};
+use platform_time::{Deadline, Timeout, Timeouts};
 use std::{num::NonZeroU64, time::Duration};
 
 fn s3_client() -> (S3, Credentials) {

@@ -1,8 +1,8 @@
 use crate::gap_retry_store::{
     GapRetryStore, InMemoryGapRetryStore, MAX_RETRY_DELAY, PendingGap, RETRY_DELAY,
 };
-use platform_market_data::event::GapMarker;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::GapMarker;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
 impl InMemoryGapRetryStore {

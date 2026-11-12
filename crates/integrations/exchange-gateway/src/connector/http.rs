@@ -10,7 +10,7 @@ use platform_exchange_types::{
     exchange::ETExchange, http::HttpResponse, rate_limited::RateLimitRestriction,
     request::ETHttpRequest, response::ETHttpResponse, server_time::ServerTimeResponse,
 };
-use platform_types::new_types::UsageCount;
+use platform_types::UsageCount;
 use std::time::Instant;
 use tracing::{debug, warn};
 

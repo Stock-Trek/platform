@@ -5,7 +5,7 @@ use crate::{
     server_time::{ServerTimeHttpRequest, ServerTimeResponse, ServerTimeWebsocketRequest},
     urls::Urls,
 };
-use platform_types::new_types::UsageCount;
+use platform_types::UsageCount;
 use std::collections::HashMap;
 
 pub trait ETExchange {

@@ -1,7 +1,7 @@
 //! Interval and lateness settings shared by live processing and recovery.
 
-use platform_market_data::candle::AlignedWindow;
-use platform_types::new_types::DurationMilliseconds;
+use platform_market_data::AlignedWindow;
+use platform_types::DurationMilliseconds;
 use std::collections::BTreeMap;
 
 /// Interval and lateness settings shared by live processing and recovery.

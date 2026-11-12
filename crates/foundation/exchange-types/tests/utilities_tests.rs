@@ -2,7 +2,7 @@ use platform_exchange_types::{
     binance::{klines_limit::BinanceKlinesLimit, recv_window::BinanceRecvWindow},
     encode::ByteEncoder,
 };
-use platform_types::new_types::{DurationMilliseconds, NonZero, UsageCount};
+use platform_types::{DurationMilliseconds, NonZero, UsageCount};
 
 #[test]
 fn percent_encoding_preserves_unreserved_bytes() {

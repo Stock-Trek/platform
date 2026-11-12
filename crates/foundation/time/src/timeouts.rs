@@ -1,6 +1,6 @@
 use crate::deadline_budget::Deadline;
 use platform_errors::BuildResult;
-use platform_types::new_types::NonZeroDuration;
+use platform_types::NonZeroDuration;
 use std::time::Duration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

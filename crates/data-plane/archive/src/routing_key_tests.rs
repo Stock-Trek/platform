@@ -1,5 +1,6 @@
 use crate::{RoutingBucket, RoutingKey};
-use platform_market_data::event::MarketEvent;
+use platform_market_data::MarketEvent;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 fn bitcoin_pair() -> TradingPair {
@@ -27,7 +28,7 @@ fn events_and_candles_for_the_same_pair_share_a_routing_key() {
         stream: "btcusdt@trade".to_string(),
         sequence: Some(1),
         exchange_timestamp: None,
-        received_at: platform_types::new_types::TimestampMilliseconds(0),
+        received_at: TimestampMilliseconds(0),
         payload: String::new(),
     };
 

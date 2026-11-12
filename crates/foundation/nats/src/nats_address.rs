@@ -1,6 +1,6 @@
 use async_nats::{Client, ConnectOptions};
 use platform_errors::{BuildError, BuildResult, NatsError};
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use url::Url;
 
 pub(super) const DEFAULT_NATS_PORT: u16 = 4222;

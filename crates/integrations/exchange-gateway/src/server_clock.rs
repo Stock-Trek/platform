@@ -1,6 +1,6 @@
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult, ConnectorError, SystemError};
-use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::{
     sync::atomic::{AtomicI64, Ordering},
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},

@@ -7,9 +7,10 @@ use crate::{
     },
     sink::{CandleRecordSource, CandleSink, S3CandleSink},
 };
-use platform_aggregator::processor::ProcessorConfig;
+use platform_aggregator::ProcessorConfig;
 use platform_archive::IcebergCatalog;
 use platform_errors::{BuildError, BuildResult};
+use platform_market_data::ClosedCandle;
 use std::{collections::HashMap, path::Path, sync::Arc};
 use tracing::info;
 
@@ -34,7 +35,7 @@ impl RebuildCandles {
 }
 
 impl CandleRecordSource for RebuildCandles {
-    fn next_candle(&mut self) -> BuildResult<Option<platform_market_data::candle::ClosedCandle>> {
+    fn next_candle(&mut self) -> BuildResult<Option<ClosedCandle>> {
         let candle = self.records.next_candle()?;
         if candle.is_some() {
             self.emitted += 1;

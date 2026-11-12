@@ -39,7 +39,7 @@ use cwasm::{
     backtest,
 };
 use platform_exit_codes::ExitCode;
-use platform_runner::command::{Command, RunRequest};
+use platform_runner::{Command, RunRequest};
 use std::io::{self, Read};
 
 const MAX_RUN_REQUEST_BYTES: u64 = 1024 * 1024;

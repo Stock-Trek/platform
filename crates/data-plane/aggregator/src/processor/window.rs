@@ -7,8 +7,8 @@
 
 use crate::processor::{CandleProcessor, ProcessorUpdate};
 use crate::state::IncompleteWindow;
-use platform_market_data::{candle::ClosedCandle, event::GapMarker};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::{ClosedCandle, GapMarker};
+use platform_types::TimestampMilliseconds;
 use std::collections::HashSet;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 use tracing::warn;

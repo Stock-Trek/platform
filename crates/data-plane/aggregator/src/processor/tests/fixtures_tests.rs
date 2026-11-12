@@ -1,10 +1,6 @@
 use crate::processor::ProcessorConfig;
-use platform_market_data::{
-    candle::AlignedWindow,
-    decoders::trade::Trade,
-    event::{GapMarker, MarketEvent},
-};
-use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use platform_market_data::{AlignedWindow, GapMarker, MarketEvent, trade::Trade};
+use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use rust_decimal::Decimal;
 use std::collections::BTreeMap;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};

@@ -5,11 +5,10 @@ use crate::processor::{ProcessorConfig, ProcessorUpdate};
 use crate::state::{AggregatorState, SequenceRange, StreamProgress};
 use platform_errors::BuildResult;
 use platform_market_data::{
-    candle::{AlignedWindow, ClosedCandle},
-    decoders::trade::{Trade, TradeDecoderFactory},
-    event::{GapMarker, MarketEvent},
+    AlignedWindow, ClosedCandle, GapMarker, MarketEvent,
+    trade::{Trade, TradeDecoderFactory},
 };
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
 /// Pure keyed candle processor.

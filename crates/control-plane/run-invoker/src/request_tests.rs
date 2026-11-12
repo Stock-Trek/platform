@@ -44,7 +44,7 @@ fn request() -> RunRequest {
 #[test]
 fn serialises_the_runner_contract() {
     let json = request().to_json().unwrap();
-    let request: platform_runner::command::RunRequest = serde_json::from_str(&json).unwrap();
+    let request: platform_runner::RunRequest = serde_json::from_str(&json).unwrap();
     assert_eq!(
         request.cwasm_get_url,
         "https://bucket.s3.example/runner.cwasm?X-Amz-Signature=signed"
@@ -59,7 +59,7 @@ fn serialises_the_runner_contract() {
     assert_eq!(request.auth_service_url, "https://auth.example/jwt");
     assert_eq!(request.owner, "demo-owner");
     match request.command {
-        platform_runner::command::Command::Algorithm { strategy_name } => {
+        platform_runner::Command::Algorithm { strategy_name } => {
             assert_eq!(strategy_name, "MyStrategy")
         }
         other => panic!("unexpected command: {other:?}"),

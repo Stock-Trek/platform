@@ -7,20 +7,21 @@
 //! subject layout and JSON envelope codec are also defined here so every
 //! producer and consumer uses the same contract.
 
-pub mod candle;
-pub mod decoders;
-pub mod envelope_codec;
+mod candle;
+mod decoders;
+mod envelope_codec;
+mod event;
+mod market_event_subject;
 
 #[cfg(test)]
 mod envelope_codec_tests;
-
-pub use envelope_codec::*;
-pub mod event;
-pub mod market_event_subject;
-
 #[cfg(test)]
 mod market_event_subject_tests;
-
-pub use market_event_subject::*;
 #[cfg(any(test, feature = "test-utils"))]
-pub mod test_utils;
+mod test_utils;
+
+pub use candle::*;
+pub use decoders::*;
+pub use envelope_codec::*;
+pub use event::*;
+pub use market_event_subject::*;

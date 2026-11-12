@@ -4,8 +4,8 @@ use platform_config::{
     DEADLINE_BUFFER_SECS, EnvVars, GITHUB_ENTERPRISE_ALLOWED_HOSTS, RUST_LOG, SQS_QUEUE_URL,
 };
 use platform_errors::BuildResult;
-use platform_github::host_allowlist::HostAllowlist;
-use platform_time::timeouts::Timeouts;
+use platform_github::HostAllowlist;
+use platform_time::Timeouts;
 use std::{num::NonZeroUsize, time::Duration};
 
 const WEBHOOK_COLD_START_REFRESH_TIMEOUT_SECS: &str = "WEBHOOK_COLD_START_REFRESH_TIMEOUT_SECS";

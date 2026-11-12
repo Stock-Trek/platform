@@ -5,12 +5,9 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_market_data::{
-    candle::CandleKey,
-    event::{GapMarker, MarketEvent},
-};
+use platform_market_data::{AlignedWindow, CandleKey, GapMarker, MarketEvent};
 use platform_nats::EventPublisher;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::sync::{Arc, Mutex as StdMutex};
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 
@@ -100,10 +97,10 @@ fn every_interval_for_a_pair_uses_the_same_shard() {
     let first = CandleKey::new(
         CexId::Binance,
         stock_trek_types::cex::trading_pair::TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
-        platform_market_data::candle::AlignedWindow::try_from("1m").unwrap(),
+        AlignedWindow::try_from("1m").unwrap(),
     );
     let second = CandleKey {
-        interval: platform_market_data::candle::AlignedWindow::try_from("5m").unwrap(),
+        interval: AlignedWindow::try_from("5m").unwrap(),
         ..first.clone()
     };
 
@@ -175,13 +172,13 @@ async fn router_publishes_to_shard_subject_then_acknowledges() {
         shard_subject_prefix: "aggregator.shards".to_string(),
         shard_count: 4,
         shard_index: None,
-        intervals: vec![platform_market_data::candle::AlignedWindow::try_from("1m").unwrap()],
+        intervals: vec![AlignedWindow::try_from("1m").unwrap()],
         allowed_lateness: std::time::Duration::from_millis(5_000),
         max_closed_candles_per_interval: std::collections::BTreeMap::from([(
-            platform_market_data::candle::AlignedWindow::try_from("1m").unwrap(),
+            AlignedWindow::try_from("1m").unwrap(),
             usize::MAX,
         )]),
-        correction_cutoff: platform_types::new_types::DurationMilliseconds(i64::MAX),
+        correction_cutoff: DurationMilliseconds(i64::MAX),
         closed_candle_memory_budget_bytes: usize::MAX,
         checkpoint_interval: std::time::Duration::from_secs(5),
         checkpoint_bucket: "aggregator_shards_checkpoints".to_string(),

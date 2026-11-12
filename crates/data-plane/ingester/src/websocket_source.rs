@@ -6,16 +6,12 @@ use iris::{
 };
 use platform_errors::{BuildError, BuildResult, ExchangeError, IngesterError};
 use platform_market_data::{
-    decoders::{
-        codec::{CodecFactory, CodecHandle, SharedCodec},
-        frame::DecodedFrame,
-    },
-    event::ParsedMessage,
+    ParsedMessage,
+    codec::{CodecFactory, CodecHandle, SharedCodec},
+    frame::DecodedFrame,
 };
-use platform_metrics::descriptions::{
-    DECODE_KIND_FRAME, DROP_REASON_CHANNEL_CLOSED, STAGE_INGESTER,
-};
-use platform_metrics::market_data::MarketDataMetrics;
+use platform_metrics::MarketDataMetrics;
+use platform_metrics::{DECODE_KIND_FRAME, DROP_REASON_CHANNEL_CLOSED, STAGE_INGESTER};
 use std::{fmt, str::FromStr, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
 use tokio::sync::mpsc;

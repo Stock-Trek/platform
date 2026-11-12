@@ -1,8 +1,8 @@
 use crate::event_fetcher::{BackfilledEvent, FetcherRegistry, MissingEventFetcher};
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_market_data::event::GapMarker;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::GapMarker;
+use platform_types::TimestampMilliseconds;
 use std::sync::{Arc, Mutex};
 use stock_trek_types::cex::cex_id::CexId;
 

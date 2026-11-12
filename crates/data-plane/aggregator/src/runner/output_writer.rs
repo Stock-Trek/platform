@@ -15,7 +15,7 @@ use crate::{
     state::AggregatorState,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::candle::{Candle, CandleKey, ClosedCandle};
+use platform_market_data::{Candle, CandleKey, ClosedCandle};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};

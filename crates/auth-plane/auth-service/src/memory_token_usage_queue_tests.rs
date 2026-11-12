@@ -2,7 +2,7 @@ use crate::{TokenUsage, TokenUsageQueue, TokenUsageReservation};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
-use platform_metrics::auth::AuthUsageQueueMetrics;
+use platform_metrics::AuthUsageQueueMetrics;
 use std::{
     collections::VecDeque,
     sync::atomic::{AtomicU64, Ordering},

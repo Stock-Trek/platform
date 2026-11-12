@@ -6,7 +6,7 @@ use crate::{
 use async_trait::async_trait;
 use platform_archive::{ArchiveKind, SourceBatch};
 use platform_errors::BuildResult;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::sync::{Arc, Mutex};
 
 struct FakeSource {

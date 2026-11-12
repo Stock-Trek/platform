@@ -5,19 +5,15 @@ use crate::{
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::{
-    envelope_codec::EnvelopeCodec,
-    event::{GapMarker, MarketEvent},
-    market_event_subject::MarketEventSubject,
-};
-use platform_metrics::descriptions::{
+use platform_market_data::{EnvelopeCodec, GapMarker, MarketEvent, MarketEventSubject};
+use platform_metrics::{
     BACKFILL_OUTCOME_COVERED, BACKFILL_OUTCOME_EMPTY, BACKFILL_OUTCOME_ERROR,
     BACKFILL_OUTCOME_PARTIAL,
 };
-use platform_metrics::market_data::MarketDataMetrics;
+use platform_metrics::MarketDataMetrics;
 use platform_nats::EventPublisher;
 use platform_runtime::Runtime;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use serde_json::json;
 use std::{
     collections::{BTreeMap, HashSet},

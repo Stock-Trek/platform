@@ -1,9 +1,8 @@
 use crate::{ArchiveKind, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey, ArchivedMarketEvent};
 use platform_market_data::{
-    candle::{AlignedWindow, CandleKey, ClosedCandle, MarketOhlcv},
-    event::MarketEvent,
+    AlignedWindow, Candle, CandleKey, ClosedCandle, MarketEvent, MarketOhlcv,
 };
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 fn event() -> ArchiveRecord {
@@ -21,7 +20,7 @@ fn event() -> ArchiveRecord {
 }
 
 fn closed_candle() -> ArchiveRecord {
-    let candle = platform_market_data::candle::Candle {
+    let candle = Candle {
         key: CandleKey::new(
             CexId::Binance,
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),

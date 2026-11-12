@@ -10,15 +10,14 @@
 //! the event stream nor the candle output is ever fully materialized in
 //! memory. Output can be written to either the raw or the compacted layer.
 
-pub mod config;
-pub mod iceberg_event_reader;
+mod config;
+mod iceberg_event_reader;
+mod rebuild;
+mod runner;
+mod sink;
 
 #[cfg(test)]
 mod iceberg_event_reader_tests;
 
+pub use config::{RebuildConfig, RebuildSourceLayer};
 pub use iceberg_event_reader::*;
-pub mod rebuild;
-pub mod runner;
-pub mod sink;
-
-pub use crate::config::RebuildSourceLayer;

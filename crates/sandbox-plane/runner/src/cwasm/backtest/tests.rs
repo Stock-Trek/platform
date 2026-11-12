@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use platform_runner::command::SimulationParameters;
+use platform_runner::SimulationParameters;
 use rand::{SeedableRng, rngs::StdRng};
 use serde_json::Value;
 use std::{

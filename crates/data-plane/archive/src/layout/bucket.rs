@@ -1,7 +1,7 @@
 use crate::layout::ArchivePath;
 use crate::{ArchiveKind, ArchivePartition, ArchiveRecord, routing_key::RoutingBucket};
 use platform_errors::BuildResult;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 
 /// A record kind and the hourly bucket it belongs to.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]

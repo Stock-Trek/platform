@@ -5,7 +5,7 @@ use crate::runner::ProcessorRunner;
 use crate::runner::tests::fixtures_tests::{FakeSink, FakeSource, Fixtures, SignalingSource};
 use crate::shard_id::ShardId;
 use crate::state::{AggregatorState, DeduplicationKey};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::sync::atomic::AtomicUsize;
 use std::sync::{Arc, Mutex};
 use stock_trek_types::cex::cex_id::CexId;

@@ -3,7 +3,7 @@ use platform_auth_service::{
 };
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use secrecy::SecretString;
 use std::fmt;
 use std::time::Duration;

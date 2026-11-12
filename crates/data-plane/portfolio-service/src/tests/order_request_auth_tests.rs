@@ -1,6 +1,7 @@
 use crate::tests::order_request_fixture_tests::{Fixture, OWNER};
 use crate::{AccountKey, PortfolioService};
 use chrono::Utc;
+use platform_exchange_gateway::NoopPortfolioFeed;
 use platform_messages::UnsignedOrderRequest;
 use std::sync::Arc;
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
@@ -129,9 +130,7 @@ async fn signs_for_the_authenticated_owner_not_the_body_owner() {
 }
 
 fn in_memory_portfolio_feed() -> PortfolioService {
-    PortfolioService::new(Arc::new(
-        platform_exchange_gateway::connector::NoopPortfolioFeed::new(),
-    ))
+    PortfolioService::new(Arc::new(NoopPortfolioFeed::new()))
 }
 
 #[tokio::test]

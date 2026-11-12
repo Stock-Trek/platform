@@ -13,7 +13,7 @@ use crate::{
 };
 use platform_errors::{BuildError, BuildResult, ErrorType};
 use platform_metrics::AggregatorMetrics;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
 use std::time::Instant;
 use tracing::warn;

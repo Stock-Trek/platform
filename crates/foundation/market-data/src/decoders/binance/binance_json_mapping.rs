@@ -3,7 +3,7 @@ use crate::{
     event::ParsedMessage,
 };
 use platform_errors::IngesterError;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use serde_json::{Map, Value};
 
 const EVENT_TYPE: &str = "e";

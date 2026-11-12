@@ -1,6 +1,6 @@
 use metrics_cloudwatch_embedded::{Builder, Collector};
 use platform_errors::BuildResult;
-use platform_metrics::descriptions::DescriptionsMetrics;
+use platform_metrics::DescriptionsMetrics;
 use std::io;
 use std::ops::Deref;
 

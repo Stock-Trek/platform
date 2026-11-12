@@ -6,7 +6,7 @@ use crate::{
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::BuildResult;
-use platform_exchange_gateway::connector::PortfolioFeed;
+use platform_exchange_gateway::PortfolioFeed;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use std::{collections::VecDeque, sync::Mutex, time::Duration};
 use stock_trek::types::CexId;

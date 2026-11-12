@@ -1,9 +1,5 @@
-use platform_market_data::{
-    candle::{AlignedWindow, Candle},
-    decoders::trade::Trade,
-    event::GapMarker,
-};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::{AlignedWindow, Candle, GapMarker, trade::Trade};
+use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 

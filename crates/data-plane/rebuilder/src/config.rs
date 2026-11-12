@@ -1,9 +1,9 @@
 use platform_archive::{ArchiveTableLayer, IcebergConfig};
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::candle::AlignedWindow;
+use platform_market_data::AlignedWindow;
 use platform_runtime::Config;
-use platform_types::new_types::DurationMilliseconds;
+use platform_types::DurationMilliseconds;
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use strum::VariantArray;

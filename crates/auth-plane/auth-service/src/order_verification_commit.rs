@@ -4,7 +4,7 @@ use crate::{
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{BuildError, BuildResult};
-use platform_metrics::auth::AuthReplayMetrics;
+use platform_metrics::AuthReplayMetrics;
 
 impl AuthService {
     pub(crate) async fn reserve_order_request_replay(

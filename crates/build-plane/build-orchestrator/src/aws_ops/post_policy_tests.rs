@@ -1,8 +1,12 @@
+use crate::aws_ops::post_policy::{PresignedPost, PresignedPostSigner};
 use aws_credential_types::Credentials;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use std::collections::BTreeMap;
-use std::num::NonZeroU64;
-use std::time::{Duration, SystemTime};
+use serde_json::{Value, json};
+use std::{
+    collections::BTreeMap,
+    num::NonZeroU64,
+    time::{Duration, SystemTime},
+};
 
 impl PresignedPost {
     pub(crate) fn for_test(
@@ -17,10 +21,6 @@ impl PresignedPost {
         }
     }
 }
-
-use serde_json::{Value, json};
-
-use crate::aws_ops::post_policy::{PresignedPost, PresignedPostSigner};
 
 #[test]
 fn signs_post_policy_with_session_token() {

@@ -1,6 +1,6 @@
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_exchange_gateway::connector::{ConnectorHealth, ConnectorHealthSink};
+use platform_exchange_gateway::{ConnectorHealth, ConnectorHealthSink};
 use platform_nats::EventPublisher;
 use std::sync::Arc;
 

@@ -5,7 +5,7 @@ use crate::{
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use iris::Codec;
 use platform_errors::IngesterError;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use serde_json::json;
 use tokio_websockets::Message;
 

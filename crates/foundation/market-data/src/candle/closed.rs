@@ -1,6 +1,6 @@
 use crate::candle::body::Candle;
 use crate::candle::revision::CandleRevision;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 
 /// A candle that has left its aggregation window and is ready to be archived.

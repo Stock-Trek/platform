@@ -4,9 +4,9 @@
 use crate::config::{AggregatorConfig, ReplayStartPolicy};
 use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
-use platform_market_data::candle::AlignedWindow;
+use platform_market_data::AlignedWindow;
 use platform_nats::ConsumerStart;
-use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::collections::BTreeMap;
 
 /// The state and source position a shard should start from.

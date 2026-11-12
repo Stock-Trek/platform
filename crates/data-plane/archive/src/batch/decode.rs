@@ -4,11 +4,11 @@ use arrow_array::{
     Array, ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::candle::{
+use platform_market_data::{
     AlignedWindow, Candle, CandleKey, CandleRevision, ClosedCandle, MarketOhlcv,
 };
-use platform_market_data::{envelope_codec::EnvelopeCodec, event::MarketEvent};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::{EnvelopeCodec, MarketEvent};
+use platform_types::TimestampMilliseconds;
 use std::{fmt::Display, io::ErrorKind, str::FromStr};
 use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 

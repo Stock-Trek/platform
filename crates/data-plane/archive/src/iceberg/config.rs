@@ -1,6 +1,6 @@
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 
 pub const ICEBERG_CATALOG_URI: &str = "ICEBERG_CATALOG_URI";
 pub const ICEBERG_CATALOG_WAREHOUSE: &str = "ICEBERG_CATALOG_WAREHOUSE";

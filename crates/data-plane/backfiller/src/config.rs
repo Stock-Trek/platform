@@ -5,8 +5,8 @@ use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials, encrypt::EncryptionAlgorithm, urls::TradingMode,
 };
 use platform_runtime::Config;
-use platform_time::{deadline_budget::Deadline, timeouts::Timeouts};
-use platform_types::url_scheme::UrlScheme;
+use platform_time::{Deadline, Timeouts};
+use platform_types::UrlScheme;
 use secrecy::SecretString;
 use std::time::{Duration, SystemTime};
 use stock_trek_types::cex::cex_id::CexId;

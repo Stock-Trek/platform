@@ -1,6 +1,6 @@
 use crate::server_clock::Clock;
 use platform_errors::{BuildError, ConnectorError};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::time::Duration;
 
 #[test]

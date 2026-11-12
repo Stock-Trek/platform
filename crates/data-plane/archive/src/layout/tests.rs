@@ -1,8 +1,8 @@
 use crate::layout::{ArchiveHour, ArchivePath};
 use crate::{ArchiveKind, ArchivePartition, routing_key::RoutingBucket};
 use chrono::{TimeZone, Utc};
-use platform_market_data::candle::{AlignedWindow, CandleKey};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::{AlignedWindow, CandleKey};
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 fn timestamp(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> i64 {

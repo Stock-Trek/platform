@@ -1,8 +1,8 @@
 use crate::config::replay::ReplayStartPolicy;
 use crate::processor::ProcessorConfig;
 use crate::shard_id::ShardId;
-use platform_market_data::candle::AlignedWindow;
-use platform_types::new_types::DurationMilliseconds;
+use platform_market_data::AlignedWindow;
+use platform_types::DurationMilliseconds;
 use std::time::Duration;
 
 #[derive(Debug, Clone)]

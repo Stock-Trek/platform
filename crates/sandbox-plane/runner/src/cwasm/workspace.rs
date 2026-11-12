@@ -1,5 +1,5 @@
 use platform_exit_codes::ExitCode;
-use platform_runner::command::Command;
+use platform_runner::Command;
 use std::{fs, path::Path};
 
 pub const STRATEGY_CONTEXT_FILE_NAME: &str = "strategy-context.bin";

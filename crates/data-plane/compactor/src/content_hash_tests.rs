@@ -1,7 +1,7 @@
 use crate::content_hash::ContentId;
 use platform_archive::ArchiveRecord;
-use platform_market_data::event::MarketEvent;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::MarketEvent;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
 fn event(payload: &str) -> ArchiveRecord {

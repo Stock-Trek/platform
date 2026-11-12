@@ -1,7 +1,10 @@
-pub mod message_dedup;
-pub mod sqs;
+mod message_dedup;
+mod sqs;
 
 #[cfg(test)]
 mod message_dedup_tests;
 
-pub use message_dedup::*;
+pub use crate::{
+    message_dedup::{SqsDedup, SqsDedupGuard},
+    sqs::{Sqs, SqsConfig},
+};

@@ -6,7 +6,7 @@ use aws_sdk_lambda::Client as LambdaClient;
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use aws_sdk_ssm::Client as SsmClient;
-use platform_time::timeouts::Timeouts;
+use platform_time::Timeouts;
 
 /// Shared AWS configuration and client construction.
 pub struct Aws;

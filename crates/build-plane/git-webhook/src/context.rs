@@ -6,10 +6,10 @@ use crate::{
 use aws_sdk_sqs::Client as SqsClient;
 use platform_aws::{SdkConfig, SsmConfig, SsmSecrets};
 use platform_errors::{BuildError, BuildResult, ErrorType, SecretsError};
-use platform_github::host_allowlist::HostAllowlist;
-use platform_metrics::secret::SecretMetrics;
-use platform_sqs::sqs::{Sqs, SqsConfig};
-use platform_time::{deadline_budget::Deadline, timeouts::Timeouts};
+use platform_github::HostAllowlist;
+use platform_metrics::SecretMetrics;
+use platform_sqs::{Sqs, SqsConfig};
+use platform_time::{Deadline, Timeouts};
 use std::{
     sync::{
         Arc,

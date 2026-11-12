@@ -17,10 +17,7 @@ use platform_exchange_types::{
     response::ETResponse,
     signer::Signer,
 };
-use platform_types::{
-    new_types::{TimestampMilliseconds, UsageCount},
-    protocol::Protocol,
-};
+use platform_types::{Protocol, TimestampMilliseconds, UsageCount};
 use std::{collections::HashMap, sync::Arc, time::Duration};
 use strum::IntoEnumIterator;
 

@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use platform_metrics::auth::AuthTokenCacheMetrics;
+use platform_metrics::AuthTokenCacheMetrics;
 use std::time::{Duration, Instant};
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]

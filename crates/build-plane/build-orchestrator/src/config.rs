@@ -6,9 +6,9 @@ use platform_config::{
     S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES, S3_SIGNED_URL_EXPIRY_SECS, SQS_QUEUE_URL,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_github::{app_config::GitHubAppConfig, host_allowlist::HostAllowlist};
-use platform_time::timeouts::Timeouts;
-use platform_types::url_scheme::UrlScheme;
+use platform_github::{GitHubAppConfig, HostAllowlist};
+use platform_time::Timeouts;
+use platform_types::UrlScheme;
 use std::{num::NonZeroUsize, time::Duration};
 
 const AWS_ENDPOINT_URL_S3: &str = "AWS_ENDPOINT_URL_S3";

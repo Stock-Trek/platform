@@ -1,16 +1,12 @@
 use crate::sequence_tracker::{SequenceObservation, SequenceStore, SequenceTracker};
 use platform_errors::BuildResult;
 use platform_market_data::{
-    envelope_codec::EnvelopeCodec,
-    event::{GapMarker, MarketEvent, ParsedMessage},
-    market_event_subject::MarketEventSubject,
+    EnvelopeCodec, GapMarker, MarketEvent, MarketEventSubject, ParsedMessage,
 };
-use platform_metrics::descriptions::{
-    DROP_REASON_DUPLICATE, DROP_REASON_OUT_OF_ORDER, STAGE_INGESTER,
-};
-use platform_metrics::market_data::MarketDataMetrics;
+use platform_metrics::MarketDataMetrics;
+use platform_metrics::{DROP_REASON_DUPLICATE, DROP_REASON_OUT_OF_ORDER, STAGE_INGESTER};
 use platform_nats::{EventPublisher, NatsSubject};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,

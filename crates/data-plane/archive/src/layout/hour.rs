@@ -1,6 +1,6 @@
 use crate::quantization::{Quantization, QuantizedTime, TopOfHour};
 use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::str::FromStr;
 
 pub(super) const YEAR_FIELD: &str = "year=";

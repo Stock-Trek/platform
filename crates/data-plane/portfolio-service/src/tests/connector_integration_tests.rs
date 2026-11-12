@@ -5,10 +5,10 @@ use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
 use platform_errors::BuildResult;
-use platform_exchange_gateway::connector::{
+use platform_exchange_gateway::{
     AccountEventStream, ConnectorPortfolioUpdate, ExchangePortfolioConnector,
-    NoopConnectorHealthSink, PortfolioCredentialSource, PortfolioFeed, PortfolioTransport,
-    PortfolioUpdateApply, PortfolioUpdateSink,
+    NoopConnectorHealthSink, NoopPortfolioFeed, PortfolioCredentialSource, PortfolioFeed,
+    PortfolioTransport, PortfolioUpdateApply, PortfolioUpdateSink,
 };
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
@@ -208,9 +208,7 @@ async fn connector_updates_authorize_orders_before_and_after_recovery() {
     .await
     .expect("order before recovery");
 
-    let restarted = Arc::new(PortfolioService::new(Arc::new(
-        platform_exchange_gateway::connector::NoopPortfolioFeed::new(),
-    )));
+    let restarted = Arc::new(PortfolioService::new(Arc::new(NoopPortfolioFeed::new())));
     restarted
         .apply_ownership_event(&Fixture::ownership_event())
         .await

@@ -1,6 +1,6 @@
 use parking_lot::Mutex;
 use platform_exit_codes::ExitCode;
-use platform_runner::command::Command;
+use platform_runner::Command;
 use std::{
     collections::BTreeMap,
     panic::{AssertUnwindSafe, catch_unwind},

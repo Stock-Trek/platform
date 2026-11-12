@@ -6,7 +6,7 @@ use platform_archive::{
     IcebergDataFile, ObjectKey, RoutingBucket, S3,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::candle::ClosedCandle;
+use platform_market_data::ClosedCandle;
 use std::{
     fs::File,
     io::Read,

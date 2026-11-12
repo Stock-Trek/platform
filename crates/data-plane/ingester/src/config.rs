@@ -2,7 +2,7 @@ use crate::websocket_source::StreamFormat;
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Config;
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use std::collections::HashMap;
 use stock_trek_types::cex::cex_id::CexId;
 use url::Url;

@@ -14,7 +14,7 @@ use platform_exchange_types::{
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use secrecy::SecretString;
 use serde_json::{Value, json};

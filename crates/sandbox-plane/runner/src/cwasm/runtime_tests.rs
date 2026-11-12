@@ -3,7 +3,7 @@ use crate::cwasm::{
     STRATEGY_CONTEXT_FILE_NAME, WasmRunner,
 };
 use platform_exit_codes::ExitCode;
-use platform_runner::command::Command;
+use platform_runner::Command;
 use serde_json::{Value, json};
 use std::{
     path::Path,

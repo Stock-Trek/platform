@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
 use platform_nats::Message;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::collections::HashMap;
 
 /// In-memory state store used by tests.

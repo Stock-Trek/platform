@@ -15,9 +15,7 @@ mod runner;
 #[cfg(test)]
 mod tests;
 
-pub use config::{
-    AdminConfig, PortfolioRegistryConfig, ReadConfig, RegistryNatsConfig, RegistryStoreConfig,
-};
+pub use config::PortfolioRegistryConfig;
 pub use dynamodb_ownership_store::{DynamoDbOwnershipStore, OWNER_INDEX};
 pub use mapping::AccountMapping;
 #[cfg(test)]

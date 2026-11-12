@@ -1,22 +1,19 @@
+mod config;
+mod context;
+mod delivery_dedup;
+#[cfg(test)]
+mod delivery_dedup_tests;
+mod dto;
+mod event_response;
+mod responses;
+mod webhook_handler;
+
 use crate::{config::WebhookConfig, context::RsWebhookContext, webhook_handler::WebhookHandler};
 use lambda_http::{Request, service_fn};
 use metrics_cloudwatch_embedded::lambda::service::run_http;
 use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Service;
 use std::sync::Arc;
-
-mod config;
-mod context;
-mod delivery_dedup;
-
-#[cfg(test)]
-mod delivery_dedup_tests;
-
-pub use delivery_dedup::*;
-mod dto;
-mod event_response;
-mod responses;
-mod webhook_handler;
 
 const SERVICE: Service = Service::new("platform-git-webhook");
 

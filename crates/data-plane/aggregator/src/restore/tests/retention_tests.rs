@@ -5,8 +5,8 @@ use crate::restore::restored_shard::RestoreSource;
 use crate::restore::tests::fixtures_tests::{Fixtures, VecArchive};
 use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
-use platform_market_data::candle::{AlignedWindow, Candle, CandleKey};
-use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use platform_market_data::{AlignedWindow, Candle, CandleKey};
+use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::collections::BTreeMap;
 use stock_trek_types::cex::cex_id::CexId;
 

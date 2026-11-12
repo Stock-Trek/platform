@@ -1,7 +1,4 @@
-use platform_types::{
-    new_types::{DurationNanoseconds, UsageCount},
-    protocol::Protocol,
-};
+use platform_types::{DurationNanoseconds, Protocol, UsageCount};
 use serde::Deserialize;
 use strum::{Display, EnumIter};
 

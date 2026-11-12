@@ -1,6 +1,6 @@
 use crate::EnvVars;
 use platform_errors::{BuildError, ConfigError};
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use std::{ffi::OsString, time::Duration};
 
 fn env_vars<I, K, V>(values: I) -> EnvVars

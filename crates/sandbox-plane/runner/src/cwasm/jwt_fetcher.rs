@@ -1,7 +1,7 @@
 use platform_errors::{BuildError, BuildResult};
 use platform_messages::{JwtRequest, JwtResponse};
 use platform_sigv4::{SigV4Config, SigV4Signer};
-use platform_types::url_scheme::UrlScheme;
+use platform_types::UrlScheme;
 use std::{
     collections::BTreeMap,
     time::{Duration, SystemTime, UNIX_EPOCH},

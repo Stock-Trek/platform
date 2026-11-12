@@ -1,5 +1,5 @@
 use platform_exit_codes::ExitCode;
-use platform_runner::command::Command;
+use platform_runner::Command;
 use std::{path::Path, time::Duration};
 use wasmtime::{Config, Engine, Linker, Memory, Module, Store, TypedFunc};
 use wasmtime_wasi::{I32Exit, p1::add_to_linker_sync};

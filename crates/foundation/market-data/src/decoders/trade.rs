@@ -1,6 +1,6 @@
 use crate::{decoders::binance::binance_trade_decoder::BinanceTradeDecoder, event::MarketEvent};
 use platform_errors::{BuildError, BuildResult, ExchangeError};
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;

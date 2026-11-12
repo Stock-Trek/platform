@@ -9,11 +9,11 @@ use crate::restore::replay::{ArchivedEventSource, S3ArchivedEventSource};
 use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
 use platform_errors::BuildResult;
-use platform_market_data::candle::AlignedWindow;
+use platform_market_data::AlignedWindow;
 use platform_metrics::AggregatorMetrics;
-use platform_metrics::descriptions::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
-use platform_metrics::market_data::MarketDataMetrics;
-use platform_types::new_types::DurationMilliseconds;
+use platform_metrics::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
+use platform_metrics::MarketDataMetrics;
+use platform_types::DurationMilliseconds;
 use std::collections::{BTreeMap, HashMap};
 use tracing::warn;
 

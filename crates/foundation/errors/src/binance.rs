@@ -1,5 +1,5 @@
 use crate::{ErrorType, exchange::ExchangeError, retryability::Retryability};
-use platform_types::new_types::DurationSeconds;
+use platform_types::DurationSeconds;
 use serde::Deserialize;
 
 #[derive(Deserialize, Debug, Clone)]

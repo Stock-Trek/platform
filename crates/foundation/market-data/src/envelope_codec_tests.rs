@@ -3,7 +3,7 @@ use crate::{
     envelope_codec::EnvelopeCodec,
     event::{GapMarker, MarketEvent},
 };
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 fn event() -> MarketEvent {

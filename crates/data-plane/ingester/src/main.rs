@@ -1,22 +1,14 @@
 mod config;
-mod message_ingester;
-
-#[cfg(test)]
-mod message_ingester_tests;
-
-pub use message_ingester::*;
 mod ingester_runner;
-
 #[cfg(test)]
 mod ingester_runner_tests;
-
-mod sequence_tracker;
-
+mod message_ingester;
 #[cfg(test)]
-pub(crate) mod sequence_tracker_tests;
-
+mod message_ingester_tests;
+mod sequence_tracker;
+#[cfg(test)]
+mod sequence_tracker_tests;
 mod websocket_source;
-
 #[cfg(test)]
 mod websocket_source_tests;
 

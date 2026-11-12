@@ -6,12 +6,12 @@
 
 use crate::processor::{CandleProcessor, ProcessorUpdate};
 use platform_market_data::{
-    candle::{AlignedWindow, Candle, CandleKey, ClosedCandle},
-    decoders::trade::{Trade, TradeDecoderFactory},
+    AlignedWindow, Candle, CandleKey, ClosedCandle,
+    trade::{Trade, TradeDecoderFactory},
 };
-use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
-use platform_metrics::market_data::MarketDataMetrics;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_metrics::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
+use platform_metrics::MarketDataMetrics;
+use platform_types::TimestampMilliseconds;
 use stock_trek::markets::TimestampMillis;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 use tracing::warn;

@@ -1,6 +1,6 @@
 use crate::{ArchiveBuffer, ArchiveRecord};
-use platform_market_data::event::MarketEvent;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_market_data::MarketEvent;
+use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
 fn event(sequence: u64) -> ArchiveRecord {

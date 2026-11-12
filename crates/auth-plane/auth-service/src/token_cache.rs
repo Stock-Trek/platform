@@ -1,7 +1,7 @@
 use crate::{ApiToken, TokenCacheConfig};
 use lru::LruCache;
 use parking_lot::Mutex;
-use platform_metrics::auth::AuthTokenCacheMetrics;
+use platform_metrics::AuthTokenCacheMetrics;
 use std::{
     num::NonZeroUsize,
     sync::atomic::{AtomicU64, Ordering},

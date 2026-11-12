@@ -1,7 +1,7 @@
 use crate::{TokenAuditLog, TokenStore, token_audit_outbox::TokenAuditOutbox};
 use chrono::{DateTime, Utc};
 use platform_errors::{BuildError, BuildResult, ErrorType};
-use platform_metrics::auth::AuthAuditRelayMetrics;
+use platform_metrics::AuthAuditRelayMetrics;
 use std::{
     sync::Arc,
     time::{Duration, Instant},

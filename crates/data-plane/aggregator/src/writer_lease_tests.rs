@@ -5,7 +5,7 @@ use crate::{
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::BuildResult;
-use platform_types::new_types::TimestampMilliseconds;
+use platform_types::TimestampMilliseconds;
 use std::collections::HashMap;
 use std::time::Duration;
 

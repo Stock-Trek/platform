@@ -3,7 +3,7 @@ use platform_config::{
     S3_SIGNED_URL_EXPIRY_SECS,
 };
 use platform_errors::BuildResult;
-use platform_time::timeouts::Timeouts;
+use platform_time::Timeouts;
 use std::time::Duration;
 
 const RUN_INVOKER_AUTH_SERVICE_URL: &str = "RUN_INVOKER_AUTH_SERVICE_URL";

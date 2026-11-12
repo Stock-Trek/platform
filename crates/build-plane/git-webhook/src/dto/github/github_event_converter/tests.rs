@@ -3,7 +3,7 @@ use crate::{dto::event_converter::EventConverter, event_response::EventResponse}
 use hmac::{Hmac, KeyInit, Mac};
 use lambda_http::Body;
 use platform_errors::{BuildError, BuildResult, GitHubError};
-use platform_github::host_allowlist::HostAllowlist;
+use platform_github::HostAllowlist;
 use sha2::Sha256;
 
 const SECRET: &str = "top-secret";

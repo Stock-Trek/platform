@@ -12,7 +12,7 @@ use crate::writer_lease::WriterLease;
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
 use platform_nats::{JetStream, KeyValue, Message};
-use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
+use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
 
 /// A complete checkpoint for one aggregator shard.

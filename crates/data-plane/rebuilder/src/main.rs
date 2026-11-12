@@ -1,5 +1,5 @@
 use platform_errors::{BuildError, BuildResult};
-use platform_rebuilder::config::RebuildConfig;
+use platform_rebuilder::RebuildConfig;
 use platform_runtime::{Runtime, Service};
 
 const SERVICE: Service = Service::new("platform-rebuilder");
