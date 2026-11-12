@@ -1,4 +1,4 @@
-use super::test_feed_tests::Fixture;
+use crate::tests::test_feed_tests::Fixture;
 use crate::{
     PortfolioUpdateMetadata,
     read_model::{OwnershipRecord, PortfolioReadModel, PortfolioRecord},

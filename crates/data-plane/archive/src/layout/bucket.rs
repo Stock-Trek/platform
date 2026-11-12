@@ -1,4 +1,4 @@
-use super::ArchivePath;
+use crate::layout::ArchivePath;
 use crate::{ArchiveKind, ArchivePartition, ArchiveRecord, routing_key::RoutingBucket};
 use platform_errors::BuildResult;
 use platform_types::new_types::TimestampMilliseconds;

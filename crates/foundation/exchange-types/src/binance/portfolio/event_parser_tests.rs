@@ -1,4 +1,4 @@
-use super::event_parser::EventParser;
+use crate::binance::portfolio::event_parser::EventParser;
 use crate::portfolio::AccountEvent;
 use stock_trek_types::cex::asset_id::AssetId;
 

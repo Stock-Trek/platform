@@ -1,5 +1,5 @@
-use super::PortfolioTransport;
-use super::{
+use crate::connector::portfolio::PortfolioTransport;
+use crate::connector::portfolio::{
     ConnectorHealthSink, ExchangePortfolioFeed, PortfolioConnector, PortfolioCredentialSource,
     PortfolioFeed, PortfolioUpdateSink, exchange_portfolio_connection::ExchangePortfolioConnection,
     health_reporter::HealthReporter,
@@ -47,7 +47,7 @@ impl PortfolioConnector for ExchangePortfolioConnector {
         &self,
         cex_id: CexId,
         sink: Arc<dyn PortfolioUpdateSink>,
-    ) -> BuildResult<Arc<dyn super::PortfolioConnection>> {
+    ) -> BuildResult<Arc<dyn crate::connector::portfolio::PortfolioConnection>> {
         let Some(transport) = self.transports.get(&cex_id) else {
             return Err(BuildError::bad_value(
                 "portfolio connector",

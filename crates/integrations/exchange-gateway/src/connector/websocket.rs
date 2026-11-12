@@ -1,4 +1,4 @@
-use super::Connector;
+use crate::connector::Connector;
 use crate::{
     clients::client::WebsocketClient,
     rate_limit::limiter_registry::RateLimitGuard,

@@ -1,5 +1,5 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::OrderRequestSigner;
+use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BuildError};
 use secrecy::{ExposeSecret, SecretString};

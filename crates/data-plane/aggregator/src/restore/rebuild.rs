@@ -4,8 +4,8 @@
 //! replaying the compacted event archive plus the raw tail that has not been
 //! compacted yet.
 
-use super::replay::{ArchivedEventSource, S3ArchivedEventSource};
 use crate::processor::{CandleProcessor, ProcessorConfig};
+use crate::restore::replay::{ArchivedEventSource, S3ArchivedEventSource};
 use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
 use platform_errors::BuildResult;

@@ -1,4 +1,4 @@
-use super::{
+use crate::installation::{
     GitHubInstallation,
     types::{GitHubRepo, InstallationRepositoriesResponse, RepositoriesParams},
 };

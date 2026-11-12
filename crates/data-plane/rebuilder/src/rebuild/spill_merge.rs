@@ -1,4 +1,4 @@
-use super::spill_codec::{SpillCodec, SpillReader};
+use crate::rebuild::spill_codec::{SpillCodec, SpillReader};
 use platform_errors::BuildResult;
 use std::{cmp::Ordering, collections::BinaryHeap, vec::IntoIter};
 

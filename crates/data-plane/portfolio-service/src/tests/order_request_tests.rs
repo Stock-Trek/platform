@@ -1,5 +1,5 @@
-use super::order_request_fixture_tests::{Fixture, OWNER};
 use crate::OrderRequestService;
+use crate::tests::order_request_fixture_tests::{Fixture, OWNER};
 use chrono::Utc;
 use platform_auth_service::MemoryTokenStore;
 use std::sync::Arc;

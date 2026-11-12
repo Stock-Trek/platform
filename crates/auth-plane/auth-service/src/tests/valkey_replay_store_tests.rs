@@ -2,7 +2,7 @@ use crate::{ConsumeResult, ReplayKey, ReplayStore, ValkeyReplayStore, ValkeyRepl
 use chrono::{DateTime, Duration, Utc};
 use tokio::net::TcpListener;
 
-use super::valkey_test_server_tests::FakeValkey;
+use crate::tests::valkey_test_server_tests::FakeValkey;
 
 struct ValkeyReplayFixture;
 

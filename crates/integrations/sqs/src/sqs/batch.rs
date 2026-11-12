@@ -6,7 +6,7 @@ use platform_time::deadline_budget::Deadline;
 use serde::Serialize;
 use std::time::Duration;
 
-use super::Sqs;
+use crate::sqs::Sqs;
 
 impl Sqs {
     /// Sends every message, splitting them into as many service batches as the

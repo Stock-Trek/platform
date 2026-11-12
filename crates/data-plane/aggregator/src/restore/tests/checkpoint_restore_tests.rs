@@ -1,8 +1,8 @@
-use super::fixtures_tests::{Fixtures, VecArchive};
 use crate::checkpoint_record::{CheckpointRecord, StateStore};
 use crate::checkpoint_record_tests::InMemoryStateStore;
 use crate::config::ReplayStartPolicy;
 use crate::restore::restored_shard::RestoreSource;
+use crate::restore::tests::fixtures_tests::{Fixtures, VecArchive};
 use crate::shard_id::ShardId;
 use crate::state::STATE_SCHEMA_VERSION;
 use platform_nats::ConsumerStart;

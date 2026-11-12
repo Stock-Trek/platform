@@ -1,4 +1,4 @@
-use super::JwtCache;
+use crate::cwasm::JwtCache;
 use platform_errors::{BuildError, BuildResult};
 use platform_messages::UnsignedOrderRequest;
 use platform_sigv4::SigV4Config;

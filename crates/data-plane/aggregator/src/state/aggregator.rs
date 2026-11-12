@@ -5,8 +5,8 @@
 //! update of this state, so replaying the same event log produces the same
 //! candles and the same incompleteness records.
 
-use super::gaps::{IncompleteWindow, KnownGap};
-use super::streams::StreamProgress;
+use crate::state::gaps::{IncompleteWindow, KnownGap};
+use crate::state::streams::StreamProgress;
 use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::{Candle, CandleKey};
 use platform_types::new_types::TimestampMilliseconds;
@@ -39,10 +39,10 @@ pub struct AggregatorState {
     /// A key can hold more than one window while an allowed-lateness window is
     /// still open, so late trades can update the correct candle instead of
     /// reopening a closed one.
-    #[serde(with = "super::candles::open_candles")]
+    #[serde(with = "crate::state::candles::open_candles")]
     pub open_candles: HashMap<CandleKey, Vec<Candle>>,
     /// Closed candles retained so late or backfilled trades can revise them.
-    #[serde(default, with = "super::candles::open_candles")]
+    #[serde(default, with = "crate::state::candles::open_candles")]
     pub closed_candles: HashMap<CandleKey, Vec<Candle>>,
     /// Last routed source sequence whose effects are included in this state.
     pub last_processed_sequence: Option<u64>,

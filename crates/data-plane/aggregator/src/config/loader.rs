@@ -1,5 +1,5 @@
-use super::aggregator::AggregatorConfig;
-use super::env::{
+use crate::config::aggregator::AggregatorConfig;
+use crate::config::env::{
     AGGREGATOR_ALLOWED_LATENESS_MS, AGGREGATOR_CHECKPOINT_BUCKET,
     AGGREGATOR_CHECKPOINT_INTERVAL_SECS, AGGREGATOR_CHECKPOINT_PREFIX,
     AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, AGGREGATOR_CLOSED_CANDLE_SUBJECT_PREFIX,
@@ -10,7 +10,7 @@ use super::env::{
     AGGREGATOR_SHARD_INDEX, AGGREGATOR_SHARD_SUBJECT_PREFIX, AGGREGATOR_STATE_SCHEMA_VERSION,
     AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS,
 };
-use super::replay::ReplayStartPolicy;
+use crate::config::replay::ReplayStartPolicy;
 use platform_archive::RoutingBucket;
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};

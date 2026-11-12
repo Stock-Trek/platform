@@ -1,4 +1,4 @@
-use super::types::{CommitsParams, GitHubCommit};
+use crate::installation::types::{CommitsParams, GitHubCommit};
 use octocrab::{Octocrab, models::InstallationId};
 use platform_config::DirectoryLimits;
 use platform_errors::{BuildError, BuildResult, GitHubError, TimeoutError};

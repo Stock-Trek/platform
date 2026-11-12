@@ -1,4 +1,4 @@
-use super::{handlers::Handlers, waiter_state::WaiterState};
+use crate::websocket_listener::{handlers::Handlers, waiter_state::WaiterState};
 use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use std::{

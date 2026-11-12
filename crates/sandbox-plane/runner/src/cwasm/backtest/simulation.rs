@@ -11,7 +11,9 @@ use stock_trek::actions::ResolvedAction;
 
 use crate::cwasm::{Emit, PORTFOLIO_FILE_NAME, STRATEGY_CONTEXT_FILE_NAME, WasmRunner};
 
-use super::{Balances, PriceMap, orders::OrderProcessor, portfolio::Portfolio, spec::Spec};
+use crate::cwasm::backtest::{
+    Balances, PriceMap, orders::OrderProcessor, portfolio::Portfolio, spec::Spec,
+};
 
 const GUEST_ROOT: &str = "/";
 const PROGRAM_NAME: &str = "cwasm-invoker";

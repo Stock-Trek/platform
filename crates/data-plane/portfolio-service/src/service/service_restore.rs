@@ -1,4 +1,4 @@
-use super::PortfolioService;
+use crate::service::PortfolioService;
 use crate::{
     AccountKey,
     read_model::{PortfolioReadModel, PortfolioRecord},

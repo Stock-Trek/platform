@@ -1,5 +1,5 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
-use super::token_usage_queue_fixture_tests::ToggleTokenUsageQueue;
+use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
+use crate::tests::token_usage_queue_fixture_tests::ToggleTokenUsageQueue;
 use crate::{MemoryTokenUsageQueue, TokenAuditAction, TokenUsageWorker};
 use chrono::Utc;
 use std::sync::Arc;

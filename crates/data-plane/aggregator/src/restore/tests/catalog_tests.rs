@@ -1,6 +1,6 @@
-use super::fixtures_tests::Fixtures;
 use crate::config::ReplayStartPolicy;
 use crate::restore::catalog::{ArchiveObject, ArchiveRecoveryConfig};
+use crate::restore::tests::fixtures_tests::Fixtures;
 use crate::shard_id::ShardId;
 use platform_archive::{ArchiveKind, ArchivePath, ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE};
 use platform_config::EnvVars;

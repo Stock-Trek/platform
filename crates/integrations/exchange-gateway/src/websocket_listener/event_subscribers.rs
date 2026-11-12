@@ -1,4 +1,4 @@
-use super::{senders::Senders, websocket_event_stream::WebsocketEventStream};
+use crate::websocket_listener::{senders::Senders, websocket_event_stream::WebsocketEventStream};
 use parking_lot::Mutex;
 use serde_json::Value;
 use std::{

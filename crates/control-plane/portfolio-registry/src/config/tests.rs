@@ -1,4 +1,4 @@
-use super::PortfolioRegistryConfig;
+use crate::config::PortfolioRegistryConfig;
 use platform_config::EnvVars;
 use platform_errors::BpResult;
 use std::time::Duration;

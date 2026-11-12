@@ -4,7 +4,7 @@
 //! candle, or creates a closed correction for a window that has already
 //! expired. Event-time watermarks decide which case applies.
 
-use super::{CandleProcessor, ProcessorUpdate};
+use crate::processor::{CandleProcessor, ProcessorUpdate};
 use platform_market_data::{
     candle::{AlignedWindow, Candle, CandleKey, ClosedCandle},
     decoders::trade::{Trade, TradeDecoderFactory},

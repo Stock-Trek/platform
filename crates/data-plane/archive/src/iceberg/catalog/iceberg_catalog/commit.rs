@@ -1,4 +1,4 @@
-use super::IcebergCatalog;
+use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use crate::iceberg::{ArchiveIcebergTable, catalog::IcebergDataFile};
 use iceberg::{
     spec::{DataContentType, DataFile, DataFileBuilder, DataFileFormat, Struct},

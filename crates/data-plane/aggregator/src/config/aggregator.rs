@@ -1,4 +1,4 @@
-use super::replay::ReplayStartPolicy;
+use crate::config::replay::ReplayStartPolicy;
 use crate::processor::ProcessorConfig;
 use crate::shard_id::ShardId;
 use platform_market_data::candle::AlignedWindow;

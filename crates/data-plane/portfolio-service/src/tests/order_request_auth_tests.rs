@@ -1,4 +1,4 @@
-use super::order_request_fixture_tests::{Fixture, OWNER};
+use crate::tests::order_request_fixture_tests::{Fixture, OWNER};
 use crate::{AccountKey, PortfolioService};
 use chrono::Utc;
 use platform_messages::UnsignedOrderRequest;

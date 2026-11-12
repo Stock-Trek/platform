@@ -3,8 +3,8 @@
 //! Discovers the archive objects that make up a shard's recovery history
 //! through the compacted/raw Iceberg handoff.
 
-use super::replay::S3ArchivedEventSource;
 use crate::config::ReplayStartPolicy;
+use crate::restore::replay::S3ArchivedEventSource;
 use crate::shard_id::ShardId;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{

@@ -1,4 +1,4 @@
-use super::GitHubEventConverter;
+use crate::dto::github::github_event_converter::GitHubEventConverter;
 use crate::{
     dto::github::github_types::{GitHubInstallation, GitHubRefType, GitHubRepository},
     event_response::EventResponse,

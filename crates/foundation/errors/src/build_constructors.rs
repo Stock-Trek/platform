@@ -1,4 +1,4 @@
-use super::BuildError;
+use crate::BuildError;
 #[cfg(feature = "http")]
 use crate::http::HttpError;
 #[cfg(feature = "storage")]

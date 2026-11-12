@@ -1,4 +1,4 @@
-use super::PortfolioFeed;
+use crate::connector::portfolio::PortfolioFeed;
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 use std::collections::BTreeSet;

@@ -1,4 +1,4 @@
-use super::support_tests::TestFixture;
+use crate::tests::support_tests::TestFixture;
 use crate::{
     ApiToken,
     api_token::{MAX_OWNER_LENGTH, MAX_SECRET_LENGTH, MAX_TOKEN_ID_LENGTH},

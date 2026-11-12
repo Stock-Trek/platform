@@ -1,4 +1,4 @@
-use super::{BinanceAccountBalanceEvent, wire_event::WireEvent};
+use crate::binance::portfolio::{BinanceAccountBalanceEvent, wire_event::WireEvent};
 use platform_errors::{BuildError, BuildResult};
 
 #[derive(Debug, Clone, PartialEq, Eq)]

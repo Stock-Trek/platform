@@ -1,4 +1,4 @@
-use super::{ConnectorPortfolioUpdate, PortfolioUpdateApply};
+use crate::connector::portfolio::{ConnectorPortfolioUpdate, PortfolioUpdateApply};
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 

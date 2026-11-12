@@ -1,5 +1,5 @@
-use super::IcebergDataFile;
 use crate::iceberg::ArchiveIcebergTable;
+use crate::iceberg::catalog::IcebergDataFile;
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
 use std::collections::HashSet;

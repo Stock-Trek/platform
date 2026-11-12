@@ -1,5 +1,5 @@
-use super::support_tests::{OWNER, TestFixture};
 use crate::JwtServer;
+use crate::tests::support_tests::{OWNER, TestFixture};
 use platform_sigv4::{SigV4Config, SigV4Registry};
 use reqwest::StatusCode;
 use serde_json::{Value, json};

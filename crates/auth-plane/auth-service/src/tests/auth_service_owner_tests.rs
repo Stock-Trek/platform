@@ -1,4 +1,4 @@
-use super::support_tests::TestFixture;
+use crate::tests::support_tests::TestFixture;
 use crate::{ApiToken, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BuildError};

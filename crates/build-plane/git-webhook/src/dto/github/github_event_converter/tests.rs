@@ -1,4 +1,4 @@
-use super::GitHubEventConverter;
+use crate::dto::github::github_event_converter::GitHubEventConverter;
 use crate::{dto::event_converter::EventConverter, event_response::EventResponse};
 use hmac::{Hmac, KeyInit, Mac};
 use lambda_http::Body;

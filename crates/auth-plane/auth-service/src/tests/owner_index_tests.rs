@@ -1,4 +1,4 @@
-use super::{
+use crate::tests::{
     support_tests::{AuthServiceBuilder, OWNER, TestFixture},
     vault_kv_server_tests::MockVault,
 };

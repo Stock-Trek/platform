@@ -61,9 +61,9 @@ fn parses_stale_order_policy_names() {
 
 #[tokio::test]
 async fn order_authorization_uses_the_configured_staleness_policy() {
-    let feed = std::sync::Arc::new(super::test_feed_tests::RecordingFeed::default());
-    let account = super::test_feed_tests::Fixture::account("primary");
-    let portfolio = super::test_feed_tests::Fixture::portfolio(
+    let feed = std::sync::Arc::new(crate::tests::test_feed_tests::RecordingFeed::default());
+    let account = crate::tests::test_feed_tests::Fixture::account("primary");
+    let portfolio = crate::tests::test_feed_tests::Fixture::portfolio(
         stock_trek_types::cex::asset_id::AssetId::Bitcoin,
         1.0,
     );

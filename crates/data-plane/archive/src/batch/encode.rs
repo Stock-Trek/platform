@@ -1,5 +1,5 @@
-use super::ArchiveBatch;
 use crate::archive_record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent};
+use crate::batch::ArchiveBatch;
 use arrow_array::{
     ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };

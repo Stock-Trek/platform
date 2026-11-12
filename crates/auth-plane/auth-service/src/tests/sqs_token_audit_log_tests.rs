@@ -1,4 +1,4 @@
-use super::{
+use crate::tests::{
     sqs_audit_mock_tests::{MockAuditQueue, RecreateOnSecondGet},
     support_tests::{AuthServiceBuilder, TestFixture},
 };

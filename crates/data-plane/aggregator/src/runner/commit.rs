@@ -1,6 +1,6 @@
 //! Checkpointing and source acknowledgement for a shard writer.
 
-use super::{ProcessorRunner, output_writer::CandleOutputWriter, writer::Writer};
+use crate::runner::{ProcessorRunner, output_writer::CandleOutputWriter, writer::Writer};
 use crate::{
     candle_sink::{ClosedCandlePublisher, OpenCandleStore},
     checkpoint_record::{CheckpointRecord, StateStore},

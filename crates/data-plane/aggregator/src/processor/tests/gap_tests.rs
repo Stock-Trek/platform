@@ -1,5 +1,5 @@
-use super::fixtures_tests::Fixtures;
 use crate::processor::CandleProcessor;
+use crate::processor::tests::fixtures_tests::Fixtures;
 use platform_market_data::candle::CandleKey;
 use platform_market_data::event::GapMarker;
 use platform_types::new_types::TimestampMilliseconds;

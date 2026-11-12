@@ -1,5 +1,5 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
-use super::token_usage_queue_fixture_tests::ToggleTokenUsageQueue;
+use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
+use crate::tests::token_usage_queue_fixture_tests::ToggleTokenUsageQueue;
 use crate::{TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenAuditRelay};
 use async_trait::async_trait;
 use chrono::Utc;

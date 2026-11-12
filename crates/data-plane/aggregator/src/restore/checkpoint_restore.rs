@@ -6,12 +6,12 @@
 //! rebuilt from the compacted event archive plus the raw tail that has not been
 //! compacted yet.
 
-use super::rebuild::RebuiltArchiveState;
-use super::replay::ArchivedEventSource;
-use super::restored_shard::{RestoreOptions, RestoreSource, RestoredShard};
 use crate::checkpoint_record::StateStore;
 use crate::config::ReplayStartPolicy;
 use crate::processor::ProcessorConfig;
+use crate::restore::rebuild::RebuiltArchiveState;
+use crate::restore::replay::ArchivedEventSource;
+use crate::restore::restored_shard::{RestoreOptions, RestoreSource, RestoredShard};
 use crate::state::AggregatorState;
 use platform_errors::{BuildResult, ErrorType};
 use platform_metrics::AggregatorMetrics;

@@ -1,4 +1,4 @@
-use super::support_tests::TestFixture;
+use crate::tests::support_tests::TestFixture;
 use chrono::Utc;
 use platform_errors::{AuthError, BuildError};
 use secrecy::ExposeSecret;

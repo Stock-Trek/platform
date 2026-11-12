@@ -1,4 +1,4 @@
-use super::BinanceSbeCodec;
+use crate::decoders::binance::sbe::BinanceSbeCodec;
 use platform_errors::IngesterError;
 use rust_decimal::Decimal;
 

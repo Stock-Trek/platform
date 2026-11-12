@@ -1,5 +1,5 @@
-use super::aggregator::AggregatorConfig;
-use super::env::{
+use crate::config::aggregator::AggregatorConfig;
+use crate::config::env::{
     AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, AGGREGATOR_CORRECTION_CUTOFF_MS,
     AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
 };
@@ -198,7 +198,7 @@ impl RetentionLimits {
     ) -> BuildResult<Self> {
         if shard_count == 0 {
             return Err(BuildError::config_invalid(
-                super::env::AGGREGATOR_SHARD_COUNT,
+                crate::config::env::AGGREGATOR_SHARD_COUNT,
                 "must be greater than zero",
             ));
         }

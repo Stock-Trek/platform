@@ -1,4 +1,4 @@
-use super::BuildError;
+use crate::BuildError;
 use crate::ErrorType;
 use crate::connector::SendFailure;
 #[cfg(feature = "github")]

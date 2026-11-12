@@ -1,4 +1,4 @@
-use super::senders::Senders;
+use crate::websocket_listener::senders::Senders;
 use serde_json::Value;
 use tokio::sync::mpsc::UnboundedReceiver;
 

@@ -1,4 +1,4 @@
-use super::support_tests::{OWNER, TestFixture};
+use crate::tests::support_tests::{OWNER, TestFixture};
 use crate::{
     JWT_SIGNING_ALGORITHM, JwksCache, JwtServer, JwtSigningKey, JwtVerifier, OrderJwtClaims,
 };

@@ -8,7 +8,7 @@ use stock_trek::{
     types::{AssetId, CexId},
 };
 
-use super::spec::Spec;
+use crate::cwasm::backtest::spec::Spec;
 
 pub(super) type MarketData = BTreeMap<CexId, BTreeMap<(AssetId, AssetId), BTreeMap<u32, Series>>>;
 

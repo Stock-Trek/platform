@@ -1,4 +1,6 @@
-use super::{asset_balance_wire::AssetBalanceWire, pending_order_wire::PendingOrderWire};
+use crate::portfolio_codec::{
+    asset_balance_wire::AssetBalanceWire, pending_order_wire::PendingOrderWire,
+};
 use crate::{
     AccountKey, CexAccountPortfolio, PORTFOLIO_UPDATE_SCHEMA_VERSION, PendingOrder, PortfolioUpdate,
 };

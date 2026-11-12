@@ -1,6 +1,6 @@
-use super::fixtures_tests::{FakeSink, Fixtures, SignalingSource};
 use crate::checkpoint_record_tests::InMemoryStateStore;
 use crate::market_source::MarketInput;
+use crate::runner::tests::fixtures_tests::{FakeSink, Fixtures, SignalingSource};
 use crate::runner::{ProcessorRunner, QuiesceSignal};
 use crate::shard_id::ShardId;
 use crate::writer_lease::LeaseStore;

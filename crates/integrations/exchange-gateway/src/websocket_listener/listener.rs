@@ -1,4 +1,4 @@
-use super::{
+use crate::websocket_listener::{
     arc_predicate::ArcPredicate, event_subscribers::EventSubscribers, handlers::Handlers,
     response_handler::ResponseHandler, waiter_for_response::WaiterForResponse,
     waiter_state::WaiterState, websocket_event_stream::WebsocketEventStream,

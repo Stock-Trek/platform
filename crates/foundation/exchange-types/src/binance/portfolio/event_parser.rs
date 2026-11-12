@@ -1,4 +1,4 @@
-use super::BinanceUserDataEvent;
+use crate::binance::portfolio::BinanceUserDataEvent;
 use crate::portfolio::{AccountEvent, AccountPositionEvent, BalanceParser};
 use chrono::{TimeZone, Utc};
 use platform_errors::{BuildError, BuildResult, ExchangeError};
