@@ -414,10 +414,3 @@ impl From<NonZeroDuration> for std::time::Duration {
         value.get()
     }
 }
-
-pub type NonZeroDurationSeconds = NonZero<DurationSeconds>;
-pub type NonZeroDurationMilliseconds = NonZero<DurationMilliseconds>;
-pub type NonZeroDurationMicroseconds = NonZero<DurationMicroseconds>;
-pub type NonZeroDurationNanoseconds = NonZero<DurationNanoseconds>;
-pub type NonZeroUsageCount = NonZero<UsageCount>;
-pub type NonZeroTimestampMilliseconds = NonZero<TimestampMilliseconds>;

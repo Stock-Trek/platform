@@ -14,18 +14,6 @@ impl AuthService {
         self.issue_jwt_with_token(&token, now)
     }
 
-    pub async fn issue_jwt(
-        &self,
-        token_id: &str,
-        secret: impl crate::SecretInput,
-        now: DateTime<Utc>,
-    ) -> BpResult<IssuedJwt> {
-        let token = self
-            .authenticate(token_id, secret, Some(TokenScope::OrdersWrite), now)
-            .await?;
-        self.issue_jwt_with_token(&token, now)
-    }
-
     fn issue_jwt_with_token(&self, token: &ApiToken, now: DateTime<Utc>) -> BpResult<IssuedJwt> {
         Self::ensure_active(token, now)?;
         Self::ensure_scope(token, TokenScope::OrdersWrite)?;

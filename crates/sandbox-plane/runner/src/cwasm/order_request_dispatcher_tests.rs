@@ -39,13 +39,13 @@ impl Fixture {
         .unwrap()
     }
 
-    fn dispatcher(url: &str) -> OrderRequestDispatcher {
-        OrderRequestDispatcher::new(url, DEAD_AUTH, OWNER).unwrap()
-    }
-
     fn sigv4() -> SigV4Config {
         let registry = SigV4Registry::from_parts("AKID", "secret", OWNER, None).unwrap();
         SigV4Config::new(registry, "eu-west-1", "execute-api").unwrap()
+    }
+
+    fn dispatcher(url: &str) -> OrderRequestDispatcher {
+        Self::authenticated_dispatcher(url, DEAD_AUTH)
     }
 
     fn authenticated_dispatcher(url: &str, auth_service_url: &str) -> OrderRequestDispatcher {
@@ -141,24 +141,49 @@ impl TestServer {
 
 #[test]
 fn rejects_an_invalid_order_request_url() {
-    assert!(OrderRequestDispatcher::new("not a url", DEAD_AUTH, OWNER).is_err());
+    assert!(
+        OrderRequestDispatcher::with_sigv4("not a url", DEAD_AUTH, OWNER, &Fixture::sigv4())
+            .is_err()
+    );
 }
 
 #[test]
 fn rejects_a_non_http_order_request_url() {
-    assert!(OrderRequestDispatcher::new("file:///tmp/orders", DEAD_AUTH, OWNER).is_err());
+    assert!(
+        OrderRequestDispatcher::with_sigv4(
+            "file:///tmp/orders",
+            DEAD_AUTH,
+            OWNER,
+            &Fixture::sigv4()
+        )
+        .is_err()
+    );
 }
 
 #[test]
 fn rejects_an_invalid_auth_service_url() {
     assert!(
-        OrderRequestDispatcher::new("http://127.0.0.1:1/orders", "file:///tmp/jwt", OWNER).is_err()
+        OrderRequestDispatcher::with_sigv4(
+            "http://127.0.0.1:1/orders",
+            "file:///tmp/jwt",
+            OWNER,
+            &Fixture::sigv4(),
+        )
+        .is_err()
     );
 }
 
 #[test]
 fn rejects_an_empty_owner() {
-    assert!(OrderRequestDispatcher::new("http://127.0.0.1:1/orders", DEAD_AUTH, "").is_err());
+    assert!(
+        OrderRequestDispatcher::with_sigv4(
+            "http://127.0.0.1:1/orders",
+            DEAD_AUTH,
+            "",
+            &Fixture::sigv4()
+        )
+        .is_err()
+    );
 }
 
 #[tokio::test]

@@ -10,8 +10,14 @@ mod jwt_server_connection;
 mod jwt_server_request;
 mod jwt_signing_key;
 mod jwt_verifier;
+#[cfg(any(test, feature = "test-utils"))]
+#[path = "memory_replay_store_tests.rs"]
 mod memory_replay_store;
+#[cfg(any(test, feature = "test-utils"))]
+#[path = "memory_token_store_tests.rs"]
 mod memory_token_store;
+#[cfg(any(test, feature = "test-utils"))]
+#[path = "memory_token_usage_queue_tests.rs"]
 mod memory_token_usage_queue;
 mod order_jwt_claims;
 mod order_jwt_issuance;
@@ -87,8 +93,11 @@ pub use jwt_server::JwtServer;
 pub use jwt_server_config::JwtServerConfig;
 pub use jwt_signing_key::{DEFAULT_JWT_KEY_ID, JWT_SIGNING_ALGORITHM, JwtSigningKey};
 pub use jwt_verifier::JwtVerifier;
+#[cfg(any(test, feature = "test-utils"))]
 pub use memory_replay_store::{DEFAULT_REPLAY_CAPACITY, MemoryReplayStore};
+#[cfg(any(test, feature = "test-utils"))]
 pub use memory_token_store::MemoryTokenStore;
+#[cfg(any(test, feature = "test-utils"))]
 pub use memory_token_usage_queue::MemoryTokenUsageQueue;
 pub use order_jwt_claims::{IssuedJwt, OrderJwtClaims};
 pub use order_request_context::OrderRequestContext;

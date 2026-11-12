@@ -55,11 +55,6 @@ pub struct WasmRunner {
 }
 
 impl WasmRunner {
-    #[allow(dead_code)]
-    pub fn new() -> wasmtime::Result<Self> {
-        Self::with_limits(ExecutionLimits::default())
-    }
-
     pub fn with_limits(limits: ExecutionLimits) -> wasmtime::Result<Self> {
         Ok(Self {
             engine: Engine::new(&Self::config())?,

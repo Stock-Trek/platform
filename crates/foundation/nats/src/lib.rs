@@ -10,7 +10,6 @@ mod kv;
 mod message;
 mod publisher;
 mod subject;
-mod subscriber;
 
 pub use address::NatsAddress;
 pub use consumer::{ConsumerStart, JetStreamConsumer};
@@ -19,4 +18,3 @@ pub use kv::KeyValue;
 pub use message::Message;
 pub use publisher::{EventPublisher, NatsPublisher, PublishAck};
 pub use subject::NatsSubject;
-pub use subscriber::NatsSubscriber;

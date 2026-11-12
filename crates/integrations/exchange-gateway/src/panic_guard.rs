@@ -1,5 +1,4 @@
 use std::{
-    any::Any,
     cell::RefCell,
     future::{Future, poll_fn},
     panic::{AssertUnwindSafe, PanicHookInfo, catch_unwind},
@@ -14,7 +13,6 @@ thread_local! {
 static PANIC_HOOK: Once = Once::new();
 
 pub(crate) struct CaughtPanic {
-    payload: Box<dyn Any + Send>,
     message: String,
 }
 
@@ -22,24 +20,19 @@ impl CaughtPanic {
     pub(crate) fn message(&self) -> &str {
         &self.message
     }
-
-    pub(crate) fn into_payload(self) -> Box<dyn Any + Send> {
-        self.payload
-    }
 }
 
 pub(crate) struct PanicUtils;
 
 impl PanicUtils {
-    /// Runs `f`, converting a panic into an `Err` containing the panic payload
+    /// Runs `f`, converting a panic into an `Err` containing the panic message.
     pub(crate) fn catch_panic<F, R>(f: F) -> Result<R, CaughtPanic>
     where
         F: FnOnce() -> R,
     {
         Self::install_panic_hook();
         Self::clear_panic_message();
-        catch_unwind(AssertUnwindSafe(f)).map_err(|payload| CaughtPanic {
-            payload,
+        catch_unwind(AssertUnwindSafe(f)).map_err(|_| CaughtPanic {
             message: Self::take_panic_message(),
         })
     }
