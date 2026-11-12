@@ -11,7 +11,7 @@ use platform_archive::{
     ArchiveHandoff, ArchiveKind, ArchivePath, Bucket, IcebergCatalog, IcebergConfig, ObjectKey,
     RoutingBucket, S3,
 };
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BpError, BpResult};
 use std::sync::Arc;
 use tokio::sync::{OnceCell, Semaphore};

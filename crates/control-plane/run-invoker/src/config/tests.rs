@@ -1,5 +1,5 @@
 use super::RunInvokerConfig;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use std::time::Duration;
 
 fn full_vars() -> Vec<(&'static str, &'static str)> {

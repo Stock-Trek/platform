@@ -1,5 +1,5 @@
 use super::credentials::{BinanceCredentialConfig, CREDENTIALS};
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_types::url_scheme::UrlScheme;
 use std::time::Duration;

@@ -1,5 +1,5 @@
 use crate::source::StreamFormat;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_runtime::Config;
 use platform_types::url_scheme::UrlScheme;

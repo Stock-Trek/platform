@@ -1,8 +1,8 @@
-use platform_config::env_names::{
+use platform_config::{
     AWS_LAMBDA_FUNCTION_NAME, BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS, BUILD_AGENT_TIMEOUT_SECS,
     RUST_LOG, S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES,
 };
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::BpResult;
 use std::{num::NonZeroU64, path::PathBuf, time::Duration};
 

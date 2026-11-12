@@ -5,7 +5,7 @@
 
 use crate::{lambda::LambdaMetrics, process_metrics::ProcessMetrics};
 use metrics_cloudwatch_embedded::Collector;
-use platform_config::tracing_setup::TracingSetup;
+use platform_config::TracingSetup;
 use platform_errors::BpResult;
 use tracing::info;
 

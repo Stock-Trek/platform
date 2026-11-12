@@ -7,7 +7,7 @@ use jsonwebtoken::EncodingKey;
 use lru::LruCache;
 use octocrab::Octocrab;
 use parking_lot::Mutex;
-use platform_config::git::DirectoryLimits;
+use platform_config::DirectoryLimits;
 use platform_errors::{BpError, BpResult, GitHubError};
 use platform_time::timeouts::Timeouts;
 use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};

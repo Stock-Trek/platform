@@ -1,8 +1,5 @@
 use crate::{SigV4Registry, SigV4Request, SigV4Signer, VerifiedCaller, verifier::SigV4Verifier};
-use platform_config::{
-    env_names::{SIGV4_CREDENTIALS, SIGV4_REGION, SIGV4_SERVICE},
-    env_vars::EnvVars,
-};
+use platform_config::{EnvVars, SIGV4_CREDENTIALS, SIGV4_REGION, SIGV4_SERVICE};
 use platform_errors::{BpError, BpResult};
 use std::time::SystemTime;
 

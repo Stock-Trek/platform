@@ -1,5 +1,5 @@
 use platform_archive::IcebergConfig;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::BpResult;
 use platform_runtime::Config;
 use std::time::Duration;

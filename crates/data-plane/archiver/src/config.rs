@@ -1,5 +1,5 @@
 use platform_archive::IcebergConfig;
-use platform_config::env_vars::EnvVars;
+use platform_config::EnvVars;
 use platform_errors::{BpError, BpResult};
 use platform_nats::ACK_WAIT;
 use platform_runtime::Config;

@@ -5,7 +5,7 @@ use aws_credential_types::{
 };
 use aws_sdk_s3::{Client as S3Client, presigning::PresigningConfig, primitives::ByteStream};
 use platform_aws::SdkConfig;
-use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
+use platform_config::S3_SIGNED_URL_EXPIRY_SECS;
 use platform_errors::{BpError, BpResult, StorageError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 use std::{num::NonZeroU64, time::Duration};
