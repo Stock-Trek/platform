@@ -55,7 +55,10 @@ impl JwksFetcher {
                 response.status()
             ))));
         }
-        let jwks = response.json::<JwkSet>().await.map_err(BuildError::external)?;
+        let jwks = response
+            .json::<JwkSet>()
+            .await
+            .map_err(BuildError::external)?;
         if jwks.keys.is_empty() {
             return Err(BuildError::auth_invalid_jwt("JWKS contains no keys"));
         }

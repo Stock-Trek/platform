@@ -54,8 +54,10 @@ pub trait Converter {
         trading_precision: TradingPrecision,
         cex_preferences: &CexPreferences,
     ) -> BuildResult<Self::OrderRequest>;
-    fn asset_limits_response(&self, response: Self::AssetLimitsResponse)
-    -> BuildResult<TBAssetLimits>;
+    fn asset_limits_response(
+        &self,
+        response: Self::AssetLimitsResponse,
+    ) -> BuildResult<TBAssetLimits>;
     fn exchange_info_response(
         &self,
         response: Self::ExchangeInfoResponse,

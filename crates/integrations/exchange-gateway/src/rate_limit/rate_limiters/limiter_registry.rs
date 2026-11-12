@@ -70,7 +70,11 @@ impl RateLimiters {
         let _guard = self.acquisition_lock.lock();
         self.refund_unlocked(restriction, cost)
     }
-    fn refund_unlocked(&self, restriction: RateLimitRestriction, cost: UsageCount) -> BuildResult<()> {
+    fn refund_unlocked(
+        &self,
+        restriction: RateLimitRestriction,
+        cost: UsageCount,
+    ) -> BuildResult<()> {
         if let Some(limiter) = self.limiters.get(&restriction) {
             limiter.refund(cost)
         } else {

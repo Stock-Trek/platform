@@ -128,7 +128,12 @@ impl KeyValue {
     ///
     /// A concurrent writer causes a revision conflict instead of silently
     /// overwriting the newer value.
-    pub async fn update(&self, key: &str, value: &[u8], expected_revision: u64) -> BuildResult<u64> {
+    pub async fn update(
+        &self,
+        key: &str,
+        value: &[u8],
+        expected_revision: u64,
+    ) -> BuildResult<u64> {
         NatsSubject::validate_named("KV key", key)?;
         self.store
             .update(key, value.to_vec().into(), expected_revision)

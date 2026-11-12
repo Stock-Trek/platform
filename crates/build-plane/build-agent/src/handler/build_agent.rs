@@ -28,7 +28,10 @@ impl BuildAgent {
         }
     }
 
-    pub(crate) fn handle_error(error: BuildError, started_at: Instant) -> BuildResult<BuildOutcome> {
+    pub(crate) fn handle_error(
+        error: BuildError,
+        started_at: Instant,
+    ) -> BuildResult<BuildOutcome> {
         let duration = started_at.elapsed();
         if error.retryability().is_retryable() {
             BuildMetrics::record_retryable_failure(error.error_type(), duration);

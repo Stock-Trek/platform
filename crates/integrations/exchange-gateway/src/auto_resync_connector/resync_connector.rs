@@ -145,9 +145,9 @@ where
         drop(handle.sender); // let the loop drain
         match handle.join.await {
             Ok(()) => Ok(()),
-            Err(e) if e.is_panic() => {
-                Err(BuildError::Connector(ConnectorError::AutoResyncClockPanicked))
-            }
+            Err(e) if e.is_panic() => Err(BuildError::Connector(
+                ConnectorError::AutoResyncClockPanicked,
+            )),
             Err(_) => Ok(()),
         }
     }
@@ -174,7 +174,9 @@ where
                         .is_err()
                 {
                     *resync_handle = None;
-                    return Err(BuildError::Connector(ConnectorError::AutoResyncClockStopped));
+                    return Err(BuildError::Connector(
+                        ConnectorError::AutoResyncClockStopped,
+                    ));
                 }
                 debug!(?frequency, "updating auto-resync clock sync frequency");
                 return Ok(());
@@ -192,7 +194,9 @@ where
         }
         match first_sync_receiver.await {
             Ok(result) => result,
-            Err(_) => Err(BuildError::Connector(ConnectorError::AutoResyncClockPanicked)),
+            Err(_) => Err(BuildError::Connector(
+                ConnectorError::AutoResyncClockPanicked,
+            )),
         }
     }
 }

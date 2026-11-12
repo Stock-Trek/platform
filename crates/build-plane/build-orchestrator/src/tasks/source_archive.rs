@@ -15,7 +15,9 @@ impl SourceArchive {
             archive
                 .start_file(format!("{USER_GENERATED_PREFIX}{}", file.path), options)
                 .map_err(BuildError::from)?;
-            archive.write_all(&file.contents).map_err(BuildError::from)?;
+            archive
+                .write_all(&file.contents)
+                .map_err(BuildError::from)?;
         }
         Ok(archive.finish().map_err(BuildError::from)?.into_inner())
     }

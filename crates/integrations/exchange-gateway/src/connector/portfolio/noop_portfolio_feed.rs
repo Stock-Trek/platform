@@ -15,7 +15,11 @@ impl NoopPortfolioFeed {
 
 #[async_trait]
 impl PortfolioFeed for NoopPortfolioFeed {
-    async fn set_accounts(&self, _cex_id: CexId, _accounts: BTreeSet<AccountId>) -> BuildResult<()> {
+    async fn set_accounts(
+        &self,
+        _cex_id: CexId,
+        _accounts: BTreeSet<AccountId>,
+    ) -> BuildResult<()> {
         Ok(())
     }
 }

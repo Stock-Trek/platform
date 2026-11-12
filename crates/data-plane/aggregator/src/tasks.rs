@@ -94,7 +94,10 @@ impl Tasks {
         }
     }
 
-    async fn run_router(config: AggregatorConfig, publisher: Arc<NatsPublisher>) -> BuildResult<()> {
+    async fn run_router(
+        config: AggregatorConfig,
+        publisher: Arc<NatsPublisher>,
+    ) -> BuildResult<()> {
         let source = NatsMarketSource::connect(&config).await?;
         NatsRouter::new(config, source, publisher).run().await
     }

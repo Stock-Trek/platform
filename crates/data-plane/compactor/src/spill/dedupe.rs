@@ -24,7 +24,11 @@ pub struct DedupeSpill {
 }
 
 impl DedupeSpill {
-    pub fn new(kind: ArchiveKind, directory: impl Into<PathBuf>, limit: usize) -> BuildResult<Self> {
+    pub fn new(
+        kind: ArchiveKind,
+        directory: impl Into<PathBuf>,
+        limit: usize,
+    ) -> BuildResult<Self> {
         let directory = directory.into();
         std::fs::create_dir_all(&directory).map_err(|error| {
             BuildError::io(

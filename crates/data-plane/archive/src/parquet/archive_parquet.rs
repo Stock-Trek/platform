@@ -173,7 +173,10 @@ impl ArchiveParquet {
     ///
     /// The reader fetches the Parquet footer/metadata and only the column chunks
     /// needed for each record batch through the S3 transfer manager.
-    pub async fn decode_reader(kind: ArchiveKind, reader: ParquetReader) -> BuildResult<ArchiveBatch> {
+    pub async fn decode_reader(
+        kind: ArchiveKind,
+        reader: ParquetReader,
+    ) -> BuildResult<ArchiveBatch> {
         let mut stream = ArchiveParquetStream::new(kind, reader).await?;
         let mut records = Vec::new();
         while let Some(batch) = stream.next_batch().await? {

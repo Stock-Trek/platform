@@ -36,7 +36,11 @@ impl SignedPost {
         })
     }
 
-    pub fn new(url: String, fields: BTreeMap<String, String>, timeout: Duration) -> BuildResult<Self> {
+    pub fn new(
+        url: String,
+        fields: BTreeMap<String, String>,
+        timeout: Duration,
+    ) -> BuildResult<Self> {
         let key = fields.get(KEY_FIELD).ok_or_else(|| {
             BuildError::Config(ConfigError::Build(format!(
                 "signed_post.fields must include a {KEY_FIELD} field containing {FILENAME_VARIABLE}"
@@ -99,9 +103,9 @@ impl SignedPost {
 
     /// Upload `path` using `name` as the S3 object name.
     pub async fn upload_named(&self, path: &Path, name: &Path) -> BuildResult<()> {
-        let metadata = tokio::fs::metadata(path)
-            .await
-            .map_err(|source| BuildError::io("read artifact", path.display().to_string(), source))?;
+        let metadata = tokio::fs::metadata(path).await.map_err(|source| {
+            BuildError::io("read artifact", path.display().to_string(), source)
+        })?;
         let size = metadata.len();
         self.check_artifact_size(path, size)?;
         let file_name = Self::upload_name(name)?;

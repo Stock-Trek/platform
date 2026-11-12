@@ -1,5 +1,5 @@
 use super::JwtCache;
-use platform_errors::{BuildResult, BuildError};
+use platform_errors::{BuildError, BuildResult};
 use platform_messages::order_request::UnsignedOrderRequest;
 use platform_sigv4::SigV4Config;
 use platform_types::url_scheme::UrlScheme;

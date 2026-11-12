@@ -131,7 +131,10 @@ async fn update_uses_the_read_version_and_rejects_stale_cas() {
         .await
         .unwrap_err();
 
-    assert!(matches!(error, BuildError::Auth(AuthError::Conflict { .. })));
+    assert!(matches!(
+        error,
+        BuildError::Auth(AuthError::Conflict { .. })
+    ));
     assert_eq!(fixture.server.current("token-a").unwrap().1, 2);
     assert_eq!(
         fixture.server.current("token-a").unwrap().0,

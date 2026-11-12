@@ -52,7 +52,10 @@ impl ApiToken {
         let created_at = Self::string_field(value, CREATED_AT)?;
         let created_at = DateTime::parse_from_rfc3339(&created_at)
             .map_err(|e| {
-                BuildError::auth_invalid_field(CREATED_AT, format!("not an RFC 3339 timestamp: {e}"))
+                BuildError::auth_invalid_field(
+                    CREATED_AT,
+                    format!("not an RFC 3339 timestamp: {e}"),
+                )
             })?
             .with_timezone(&Utc);
         let metadata = TokenMetadata::from_value(value)?;

@@ -47,11 +47,11 @@ impl BinanceEventPageSource {
             .map_err(|error| BuildError::exchange("await Binance backfill response", error))?
         {
             SubmissionOutcome::Submitted(response) => Ok(response),
-            SubmissionOutcome::Unknown { .. } => {
-                Err(BuildError::Exchange(ExchangeError::UnknownSubmissionOutcome {
+            SubmissionOutcome::Unknown { .. } => Err(BuildError::Exchange(
+                ExchangeError::UnknownSubmissionOutcome {
                     exchange: "Binance",
-                }))
-            }
+                },
+            )),
         }
     }
 

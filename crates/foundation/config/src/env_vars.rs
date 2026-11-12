@@ -176,7 +176,8 @@ impl EnvVars {
     /// Reads and validates a required tracing filter.
     pub fn required_log_filter(&self, name: &str) -> BuildResult<String> {
         let value = self.required(name)?;
-        EnvFilter::try_new(&value).map_err(|error| BuildError::config_invalid_source(name, error))?;
+        EnvFilter::try_new(&value)
+            .map_err(|error| BuildError::config_invalid_source(name, error))?;
         Ok(value)
     }
 

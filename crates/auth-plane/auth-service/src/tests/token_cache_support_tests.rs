@@ -101,7 +101,10 @@ impl TokenStore for TestStore {
         self.inner.commit(mutation, event).await
     }
 
-    async fn commit_rotation(&self, transaction: &crate::TokenRotationTransaction) -> BuildResult<()> {
+    async fn commit_rotation(
+        &self,
+        transaction: &crate::TokenRotationTransaction,
+    ) -> BuildResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 }

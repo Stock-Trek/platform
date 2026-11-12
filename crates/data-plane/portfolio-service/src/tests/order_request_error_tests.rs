@@ -6,7 +6,10 @@ use serde_json::json;
 #[test]
 fn maps_signing_failures_to_public_statuses() {
     let cases = [
-        (BuildError::unknown_token("ghost"), OrderRequestError::NotFound),
+        (
+            BuildError::unknown_token("ghost"),
+            OrderRequestError::NotFound,
+        ),
         (
             BuildError::auth_invalid_field("owner", "has no active API token"),
             OrderRequestError::NotFound,

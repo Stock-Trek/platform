@@ -26,7 +26,8 @@ impl NatsAddress {
     }
 
     fn parse_named(name: &str, value: &str) -> BuildResult<Self> {
-        let url = Url::parse(value).map_err(|error| BuildError::config_invalid_source(name, error))?;
+        let url =
+            Url::parse(value).map_err(|error| BuildError::config_invalid_source(name, error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_nats) {
             return Err(BuildError::config_invalid(
                 name,

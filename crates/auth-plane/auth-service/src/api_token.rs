@@ -62,7 +62,10 @@ impl ApiToken {
 
     fn validate_secret(secret: &str) -> BuildResult<()> {
         if secret.trim().is_empty() {
-            return Err(BuildError::auth_invalid_field("secret", "must not be empty"));
+            return Err(BuildError::auth_invalid_field(
+                "secret",
+                "must not be empty",
+            ));
         }
         if secret.chars().count() > MAX_SECRET_LENGTH {
             return Err(BuildError::auth_invalid_field(
@@ -129,7 +132,10 @@ impl ApiToken {
 
     pub fn validate_id(id: &str) -> BuildResult<()> {
         if id.is_empty() {
-            return Err(BuildError::auth_invalid_field("token_id", "must not be empty"));
+            return Err(BuildError::auth_invalid_field(
+                "token_id",
+                "must not be empty",
+            ));
         }
         if id.len() > MAX_TOKEN_ID_LENGTH {
             return Err(BuildError::auth_invalid_field(

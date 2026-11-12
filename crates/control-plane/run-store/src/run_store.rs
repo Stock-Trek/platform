@@ -121,7 +121,11 @@ impl RunStore {
     }
 
     /// Marks a claimed run as completed.
-    pub async fn complete(&self, record: &RunRecord, completed_at: DateTime<Utc>) -> BuildResult<()> {
+    pub async fn complete(
+        &self,
+        record: &RunRecord,
+        completed_at: DateTime<Utc>,
+    ) -> BuildResult<()> {
         self.finish(record, RunStatus::Completed, None, completed_at)
             .await
     }

@@ -28,7 +28,10 @@ impl WebhookOutcome {
         })
     }
 
-    fn failure(error_type: &'static str, response: BuildResult<Response<Body>>) -> BuildResult<Self> {
+    fn failure(
+        error_type: &'static str,
+        response: BuildResult<Response<Body>>,
+    ) -> BuildResult<Self> {
         Ok(Self {
             response: response?,
             error_type: Some(error_type),

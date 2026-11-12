@@ -96,7 +96,9 @@ impl EncryptionAlgorithm {
             Self::RsaSha256 => {
                 let signing_key = Self::rsa_signing_key(api_key_credentials.secret.expose_secret())
                     .map_err(|e| {
-                        BuildError::Exchange(ExchangeError::CryptoKey(format!("RSA key error: {e}")))
+                        BuildError::Exchange(ExchangeError::CryptoKey(format!(
+                            "RSA key error: {e}"
+                        )))
                     })?;
                 Ok(Encryptor::RsaSha256(Box::new(signing_key)))
             }

@@ -123,7 +123,12 @@ impl AuthService {
         }
     }
 
-    async fn record_signing_failure(&self, token: &ApiToken, now: DateTime<Utc>, error: &BuildError) {
+    async fn record_signing_failure(
+        &self,
+        token: &ApiToken,
+        now: DateTime<Utc>,
+        error: &BuildError,
+    ) {
         let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
             .with_token(token.id(), Some(token.owner()))
             .failure(error.to_string());

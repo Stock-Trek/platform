@@ -168,7 +168,10 @@ impl TokenStore for CachedTokenStore {
         self.inner.commit_rotation(transaction).await
     }
 
-    async fn materialize_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
+    async fn materialize_rotation(
+        &self,
+        transaction: &TokenRotationTransaction,
+    ) -> BuildResult<()> {
         let result = self.inner.materialize_rotation(transaction).await;
         self.invalidate(transaction.original().id());
         self.invalidate(transaction.replacement().id());

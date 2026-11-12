@@ -191,8 +191,12 @@ impl ArchivePath {
         ))
     }
 
-    fn hour(bucket_start: TimestampMilliseconds, operation: &'static str) -> BuildResult<ArchiveHour> {
-        ArchiveHour::from_timestamp(bucket_start)
-            .ok_or(BuildError::Data(DataError::DateTimeOutOfRange { operation }))
+    fn hour(
+        bucket_start: TimestampMilliseconds,
+        operation: &'static str,
+    ) -> BuildResult<ArchiveHour> {
+        ArchiveHour::from_timestamp(bucket_start).ok_or(BuildError::Data(
+            DataError::DateTimeOutOfRange { operation },
+        ))
     }
 }

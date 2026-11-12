@@ -37,9 +37,9 @@ impl PortfolioFeed for RecordingFeed {
             .fail_next
             .swap(false, std::sync::atomic::Ordering::SeqCst)
         {
-            return Err(platform_errors::BuildError::external(std::io::Error::other(
-                "feed failed",
-            )));
+            return Err(platform_errors::BuildError::external(
+                std::io::Error::other("feed failed"),
+            ));
         }
         self.calls.lock().push(FeedCall { cex_id, accounts });
         Ok(())

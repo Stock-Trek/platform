@@ -135,7 +135,10 @@ where
         Exchange::listen_key_ack(response)
     }
 
-    async fn account_snapshot(&self, credentials: &ApiKeyCredentials) -> BuildResult<AccountSnapshot> {
+    async fn account_snapshot(
+        &self,
+        credentials: &ApiKeyCredentials,
+    ) -> BuildResult<AccountSnapshot> {
         let connector = self.http_connector(credentials)?;
         let response = Self::submit(&connector, Exchange::account_snapshot_request()).await?;
         let mapping = self.mapping;

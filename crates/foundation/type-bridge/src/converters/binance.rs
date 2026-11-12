@@ -66,10 +66,9 @@ impl Converter for BinanceConverter {
     ) -> BuildResult<Self::AssetLimitsRequest> {
         let symbol = match self.ticker_mapping().symbol(trading_pair) {
             None => {
-                return Err(BuildError::Validation(ValidationError::MissingValue(format!(
-                    "Symbol for trading pair: {:?}",
-                    trading_pair
-                ))));
+                return Err(BuildError::Validation(ValidationError::MissingValue(
+                    format!("Symbol for trading pair: {:?}", trading_pair),
+                )));
             }
             Some(symbol) => symbol,
         };

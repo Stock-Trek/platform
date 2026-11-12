@@ -10,7 +10,10 @@ pub struct LambdaMetrics;
 impl LambdaMetrics {
     /// Creates the embedded CloudWatch recorder, enables the cold-start metric,
     /// and describes every platform metric.
-    pub fn init(namespace: &str, function_name: impl Into<String>) -> BuildResult<&'static Collector> {
+    pub fn init(
+        namespace: &str,
+        function_name: impl Into<String>,
+    ) -> BuildResult<&'static Collector> {
         let recorder = metrics_cloudwatch_embedded::Builder::new()
             .cloudwatch_namespace(namespace.to_owned())
             .with_dimension("function", function_name.into())

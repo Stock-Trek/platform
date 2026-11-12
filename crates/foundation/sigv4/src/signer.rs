@@ -38,7 +38,8 @@ impl SigV4Signer {
         body: &[u8],
         now: SystemTime,
     ) -> BuildResult<()> {
-        let url = Url::parse(url).map_err(|error| BuildError::config_invalid_source("url", error))?;
+        let url =
+            Url::parse(url).map_err(|error| BuildError::config_invalid_source("url", error))?;
         if !matches!(url.scheme(), "http" | "https") {
             return Err(BuildError::config_invalid(
                 "url",

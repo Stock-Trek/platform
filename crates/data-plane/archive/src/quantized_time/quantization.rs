@@ -100,7 +100,10 @@ impl QuantizedTime {
     }
 
     #[allow(unused)]
-    pub fn previous_top(top: DateTime<Utc>, quantization: Quantization) -> BuildResult<DateTime<Utc>> {
+    pub fn previous_top(
+        top: DateTime<Utc>,
+        quantization: Quantization,
+    ) -> BuildResult<DateTime<Utc>> {
         match quantization {
             Quantization::Minutes(top_of_minute) => {
                 Self::checked_sub(top, Duration::minutes(top_of_minute as i64))

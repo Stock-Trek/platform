@@ -158,7 +158,10 @@ pub trait TokenStore: Send + Sync {
     /// This only changes token state. Audit events are owned by
     /// [`TokenStore::commit_rotation`] and must already be persisted by the
     /// time this method is called.
-    async fn materialize_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
+    async fn materialize_rotation(
+        &self,
+        transaction: &TokenRotationTransaction,
+    ) -> BuildResult<()> {
         let replacement = transaction.replacement();
         let existing = match self.get(replacement.id()).await? {
             Some(existing) => Some(existing),

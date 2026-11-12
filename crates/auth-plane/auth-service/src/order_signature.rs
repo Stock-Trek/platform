@@ -12,7 +12,10 @@ pub struct OrderRequestSigner {
 impl OrderRequestSigner {
     pub fn new(secret: &SecretString) -> BuildResult<Self> {
         if secret.expose_secret().trim().is_empty() {
-            return Err(BuildError::auth_invalid_field("secret", "must not be empty"));
+            return Err(BuildError::auth_invalid_field(
+                "secret",
+                "must not be empty",
+            ));
         }
         let mac =
             Hmac::<Sha256>::new_from_slice(secret.expose_secret().as_bytes()).map_err(|e| {

@@ -59,7 +59,11 @@ pub struct JwtCache {
 }
 
 impl JwtCache {
-    pub fn with_sigv4(url: &str, owner: impl Into<String>, sigv4: &SigV4Config) -> BuildResult<Self> {
+    pub fn with_sigv4(
+        url: &str,
+        owner: impl Into<String>,
+        sigv4: &SigV4Config,
+    ) -> BuildResult<Self> {
         Ok(Self::from_fetcher(JwtFetcher::with_sigv4(
             url, owner, sigv4,
         )?))

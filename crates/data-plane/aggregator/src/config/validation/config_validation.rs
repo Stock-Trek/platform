@@ -263,7 +263,10 @@ impl AggregatorConfig {
         allowed_lateness: Duration,
     ) -> BuildResult<DurationMilliseconds> {
         if value == 0 {
-            return Err(BuildError::config_invalid(name, "must be greater than zero"));
+            return Err(BuildError::config_invalid(
+                name,
+                "must be greater than zero",
+            ));
         }
         if Duration::from_millis(value) < allowed_lateness {
             return Err(BuildError::config_invalid(

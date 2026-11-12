@@ -27,7 +27,10 @@ pub trait PortfolioTransport: Send + Sync {
         listen_key: &str,
     ) -> BuildResult<()>;
 
-    async fn account_snapshot(&self, credentials: &ApiKeyCredentials) -> BuildResult<AccountSnapshot>;
+    async fn account_snapshot(
+        &self,
+        credentials: &ApiKeyCredentials,
+    ) -> BuildResult<AccountSnapshot>;
 
     async fn open_stream(&self, listen_key: &str) -> BuildResult<Box<dyn AccountEventStream>>;
 }

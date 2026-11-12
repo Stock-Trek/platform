@@ -101,7 +101,10 @@ impl TokenMetadata {
 
     fn validate_scopes(scopes: &[TokenScope]) -> BuildResult<()> {
         if scopes.is_empty() {
-            return Err(BuildError::auth_invalid_field("scopes", "must not be empty"));
+            return Err(BuildError::auth_invalid_field(
+                "scopes",
+                "must not be empty",
+            ));
         }
         let mut seen = HashSet::new();
         if scopes.iter().any(|scope| !seen.insert(*scope)) {

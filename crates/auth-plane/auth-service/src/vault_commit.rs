@@ -74,7 +74,9 @@ impl VaultClient {
                     .await
                 {
                     Ok(()) => return Ok(()),
-                    Err(BuildError::Auth(platform_errors::AuthError::TokenExists { .. })) => continue,
+                    Err(BuildError::Auth(platform_errors::AuthError::TokenExists { .. })) => {
+                        continue;
+                    }
                     Err(error) => return Err(error),
                 },
                 Some((data, version)) => {
@@ -91,7 +93,9 @@ impl VaultClient {
                         .await
                     {
                         Ok(()) => return Ok(()),
-                        Err(BuildError::Auth(platform_errors::AuthError::Conflict { .. })) => continue,
+                        Err(BuildError::Auth(platform_errors::AuthError::Conflict { .. })) => {
+                            continue;
+                        }
                         Err(error) => return Err(error),
                     }
                 }

@@ -49,7 +49,9 @@ impl TryFrom<char> for BinanceRateLimitInterval {
             'm' => Ok(Self::MINUTE),
             'h' => Ok(Self::HOUR),
             'd' => Ok(Self::DAY),
-            other => Err(BuildError::Exchange(ExchangeError::ParseError(other.into()))),
+            other => Err(BuildError::Exchange(ExchangeError::ParseError(
+                other.into(),
+            ))),
         }
     }
 }
@@ -79,9 +81,9 @@ impl TryFrom<BinanceRateLimitType> for RateLimitRestriction {
             BinanceRateLimitType::ORDERS => Ok(RateLimitRestriction::OrderCount),
             BinanceRateLimitType::RAW_REQUESTS => Ok(RateLimitRestriction::RawRequests),
             BinanceRateLimitType::REQUEST_WEIGHT => Ok(RateLimitRestriction::Weight),
-            BinanceRateLimitType::Unknown => Err(BuildError::Exchange(ExchangeError::UnknownValue(
-                "BinanceRateLimitType".into(),
-            ))),
+            BinanceRateLimitType::Unknown => Err(BuildError::Exchange(
+                ExchangeError::UnknownValue("BinanceRateLimitType".into()),
+            )),
         }
     }
 }

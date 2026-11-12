@@ -27,7 +27,11 @@ pub(super) struct JwtFetcher {
 }
 
 impl JwtFetcher {
-    pub fn with_sigv4(url: &str, owner: impl Into<String>, sigv4: &SigV4Config) -> BuildResult<Self> {
+    pub fn with_sigv4(
+        url: &str,
+        owner: impl Into<String>,
+        sigv4: &SigV4Config,
+    ) -> BuildResult<Self> {
         let owner = owner.into().trim().to_string();
         if owner.is_empty() {
             return Err(BuildError::auth_invalid_field("owner", "must not be empty"));
@@ -64,8 +68,8 @@ impl JwtFetcher {
     }
 
     pub async fn fetch(&self) -> BuildResult<FetchedJwt> {
-        let body =
-            serde_json::to_vec(&JwtRequest::new(self.owner.clone())).map_err(BuildError::external)?;
+        let body = serde_json::to_vec(&JwtRequest::new(self.owner.clone()))
+            .map_err(BuildError::external)?;
         let mut headers =
             BTreeMap::from([("content-type".to_string(), "application/json".to_string())]);
         if let Some(signer) = &self.signer {

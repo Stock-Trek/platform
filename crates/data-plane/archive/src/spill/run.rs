@@ -14,8 +14,9 @@ pub struct SpillRun;
 
 impl SpillRun {
     pub fn write(path: &Path, batch: &ArchiveBatch) -> BuildResult<()> {
-        let file = File::create(path)
-            .map_err(|error| BuildError::io("create spill run", path.display().to_string(), error))?;
+        let file = File::create(path).map_err(|error| {
+            BuildError::io("create spill run", path.display().to_string(), error)
+        })?;
         let mut writer = ArchiveParquetWriter::try_new(batch.kind(), file)?;
         writer.write(batch)?;
         writer.close()
@@ -40,8 +41,9 @@ impl SpillRunWriter {
         kind: ArchiveKind,
         batch_size: usize,
     ) -> BuildResult<Self> {
-        let file = File::create(path)
-            .map_err(|error| BuildError::io("create spill run", path.display().to_string(), error))?;
+        let file = File::create(path).map_err(|error| {
+            BuildError::io("create spill run", path.display().to_string(), error)
+        })?;
         Ok(Self {
             kind,
             writer: ArchiveParquetWriter::try_new(kind, file)?,

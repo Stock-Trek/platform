@@ -31,7 +31,9 @@ impl EventPublisher for RecordingPublisher {
         let mut fail_next = self.fail_next.lock().expect("fail_next");
         if *fail_next {
             *fail_next = false;
-            return Err(BuildError::external(std::io::Error::other("publish failed")));
+            return Err(BuildError::external(std::io::Error::other(
+                "publish failed",
+            )));
         }
         self.published
             .lock()

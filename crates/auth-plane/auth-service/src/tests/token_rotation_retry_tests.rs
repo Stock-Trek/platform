@@ -86,7 +86,10 @@ impl TokenStore for FailingMaterializeStore {
         self.inner.commit_rotation(transaction).await
     }
 
-    async fn materialize_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
+    async fn materialize_rotation(
+        &self,
+        transaction: &TokenRotationTransaction,
+    ) -> BuildResult<()> {
         if self.fail_before.swap(false, Ordering::SeqCst) {
             return Err(Self::transient_error());
         }

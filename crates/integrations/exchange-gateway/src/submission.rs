@@ -35,7 +35,9 @@ impl<'connector, Request, Response, VerificationRequest>
             future: Box::pin(future),
         }
     }
-    pub async fn wait(self) -> BuildResult<SubmissionOutcome<Request, Response, VerificationRequest>> {
+    pub async fn wait(
+        self,
+    ) -> BuildResult<SubmissionOutcome<Request, Response, VerificationRequest>> {
         self.future.await
     }
 }

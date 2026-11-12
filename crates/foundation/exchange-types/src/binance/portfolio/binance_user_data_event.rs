@@ -11,7 +11,8 @@ pub struct BinanceUserDataEvent {
 
 impl BinanceUserDataEvent {
     pub fn from_value(value: &serde_json::Value) -> BuildResult<Self> {
-        let wire: WireEvent = serde_json::from_value(value.clone()).map_err(BuildError::external)?;
+        let wire: WireEvent =
+            serde_json::from_value(value.clone()).map_err(BuildError::external)?;
         Ok(Self {
             event_type: wire.event_type,
             event_time: wire.event_time,

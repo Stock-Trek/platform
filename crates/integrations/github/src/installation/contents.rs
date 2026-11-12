@@ -195,11 +195,13 @@ impl GitHubInstallation {
             }
             Some("utf8") => Ok(Some(content.as_bytes().to_vec())),
             Some("none") | None if content.is_empty() => Ok(None),
-            Some(encoding) => Err(BuildError::GitHub(GitHubError::UnsupportedContentEncoding {
-                repo_id,
-                path: path.to_owned(),
-                encoding: encoding.to_owned(),
-            })),
+            Some(encoding) => Err(BuildError::GitHub(
+                GitHubError::UnsupportedContentEncoding {
+                    repo_id,
+                    path: path.to_owned(),
+                    encoding: encoding.to_owned(),
+                },
+            )),
             None => Ok(Some(content.as_bytes().to_vec())),
         }
     }

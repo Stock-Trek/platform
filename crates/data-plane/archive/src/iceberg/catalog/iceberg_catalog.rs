@@ -135,7 +135,10 @@ impl ArchiveCatalog for IcebergCatalog {
         self.commit_files(table, files, source_files).await
     }
 
-    async fn registered_data_files(&self, table: ArchiveIcebergTable) -> BuildResult<HashSet<String>> {
+    async fn registered_data_files(
+        &self,
+        table: ArchiveIcebergTable,
+    ) -> BuildResult<HashSet<String>> {
         let table = self.ensure_table(table).await?;
         self.registered_paths(&table).await
     }

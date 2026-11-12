@@ -13,7 +13,10 @@ pub trait ArchiveCatalog: Send + Sync {
         source_files: Option<&[String]>,
     ) -> BuildResult<()>;
 
-    async fn registered_data_files(&self, table: ArchiveIcebergTable) -> BuildResult<HashSet<String>>;
+    async fn registered_data_files(
+        &self,
+        table: ArchiveIcebergTable,
+    ) -> BuildResult<HashSet<String>>;
 
     /// Lists the live data files in a table.
     ///
@@ -29,8 +32,10 @@ pub trait ArchiveCatalog: Send + Sync {
         )))
     }
 
-    async fn processed_source_files(&self, table: ArchiveIcebergTable)
-    -> BuildResult<HashSet<String>>;
+    async fn processed_source_files(
+        &self,
+        table: ArchiveIcebergTable,
+    ) -> BuildResult<HashSet<String>>;
 
     /// Reads the compacted data files and the processed raw-source set from one
     /// table snapshot.

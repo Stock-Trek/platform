@@ -143,7 +143,11 @@ impl BinanceTradeDecoder {
         BinanceConverter::ticker_mapping_static().trading_pair_from_symbol(symbol)
     }
 
-    fn decimal_field(&self, data: &Map<String, Value>, field: &'static str) -> BuildResult<Decimal> {
+    fn decimal_field(
+        &self,
+        data: &Map<String, Value>,
+        field: &'static str,
+    ) -> BuildResult<Decimal> {
         let value = data
             .get(field)
             .and_then(Value::as_str)

@@ -58,7 +58,11 @@ impl PortfolioService {
         Ok(true)
     }
 
-    pub async fn untrack_user_account(&self, owner: &str, account: AccountKey) -> BuildResult<bool> {
+    pub async fn untrack_user_account(
+        &self,
+        owner: &str,
+        account: AccountKey,
+    ) -> BuildResult<bool> {
         if !self.state.read().is_tracked_for_owner(owner, &account) {
             return Ok(false);
         }

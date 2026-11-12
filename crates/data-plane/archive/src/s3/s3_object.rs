@@ -130,8 +130,8 @@ impl S3 {
             .into_paginator()
             .send();
         while let Some(page_result) = paginator.next().await {
-            let page =
-                page_result.map_err(|error| BuildError::s3("list objects", target.clone(), error))?;
+            let page = page_result
+                .map_err(|error| BuildError::s3("list objects", target.clone(), error))?;
             for object in page.contents() {
                 if let Some(key) = object.key() {
                     files.push(S3Object {

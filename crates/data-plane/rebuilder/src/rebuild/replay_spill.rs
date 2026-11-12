@@ -103,8 +103,8 @@ impl SpillReader for ReplayRunReader {
             let Some(line) = self.lines.next() else {
                 return Ok(None);
             };
-            let line =
-                line.map_err(|error| BuildError::io("read rebuild spill run", String::new(), error))?;
+            let line = line
+                .map_err(|error| BuildError::io("read rebuild spill run", String::new(), error))?;
             if line.is_empty() {
                 continue;
             }

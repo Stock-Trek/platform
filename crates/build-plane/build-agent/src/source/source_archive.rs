@@ -64,10 +64,9 @@ impl Source {
             .map_err(|source| {
                 BuildError::http_request("create user source download client", url, source)
             })?;
-        let response =
-            client.get(url).send().await.map_err(|source| {
-                BuildError::http_request("download user source archive", url, source)
-            })?;
+        let response = client.get(url).send().await.map_err(|source| {
+            BuildError::http_request("download user source archive", url, source)
+        })?;
         let status = response.status();
         if !status.is_success() {
             let body = Self::read_body(response, url, limits.max_archive_bytes)
@@ -208,7 +207,11 @@ impl Source {
         Ok(files)
     }
 
-    fn add_extracted_bytes(current: u64, additional: u64, max_bytes: NonZeroU64) -> BuildResult<u64> {
+    fn add_extracted_bytes(
+        current: u64,
+        additional: u64,
+        max_bytes: NonZeroU64,
+    ) -> BuildResult<u64> {
         let size = current.saturating_add(additional);
         if size > max_bytes.get() {
             return Err(BuildError::Storage(StorageError::ExtractedSourceTooLarge {

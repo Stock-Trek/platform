@@ -13,7 +13,8 @@ pub trait GitHost<RepoId>: Send + Sync {
     fn host(&self) -> &str;
     fn parse_repo_id(&self, repo_id: &str) -> BuildResult<RepoId>;
     async fn repo_ids(&self, deadline: Deadline) -> BuildResult<Vec<RepoId>>;
-    async fn repo_default_branch(&self, repo_id: RepoId, deadline: Deadline) -> BuildResult<String>;
+    async fn repo_default_branch(&self, repo_id: RepoId, deadline: Deadline)
+    -> BuildResult<String>;
     async fn ref_commit(
         &self,
         repo_id: RepoId,

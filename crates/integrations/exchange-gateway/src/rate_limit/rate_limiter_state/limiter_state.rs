@@ -35,7 +35,9 @@ impl RateLimiterState {
         now: Arc<dyn Fn() -> Instant + Send + Sync>,
     ) -> BuildResult<Self> {
         if capacity_per_interval <= UsageCount::ZERO {
-            return Err(BuildError::RateLimit(RateLimitError::InvalidRateLimitCapacity));
+            return Err(BuildError::RateLimit(
+                RateLimitError::InvalidRateLimitCapacity,
+            ));
         }
         let interval_nanos = NonZero::new(interval_nanos)
             .map_err(|_| BuildError::RateLimit(RateLimitError::InvalidRateLimitInterval))?;

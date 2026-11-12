@@ -80,7 +80,11 @@ impl AuthService {
         Self::ensure_active(original, now)
     }
 
-    async fn rotation_lineage_contains(&self, token: &ApiToken, candidate: &str) -> BuildResult<bool> {
+    async fn rotation_lineage_contains(
+        &self,
+        token: &ApiToken,
+        candidate: &str,
+    ) -> BuildResult<bool> {
         let mut next = token.metadata().rotated_from().map(str::to_string);
         let mut visited = HashSet::new();
         while let Some(id) = next {
