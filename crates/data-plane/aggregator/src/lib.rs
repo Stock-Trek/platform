@@ -17,8 +17,8 @@ pub use config::{AggregatorConfig, ReplayStartPolicy};
 pub use lease::{LeaseStore, NatsLeaseStore, WriterLease};
 pub use processor::{CandleProcessor, ProcessorConfig, ProcessorUpdate};
 pub use restore::{
-    ArchiveRecoveryConfig, ArchivedEventSource, EmptyArchivedEventSource, RestoreOptions,
-    RestoreSource, RestoredShard, S3ArchiveRecovery, S3ArchivedEventSource,
+    ArchiveRecoveryConfig, ArchivedEventSource, RestoreOptions, RestoreSource, RestoredShard,
+    S3ArchiveRecovery, S3ArchivedEventSource,
 };
 pub use router::{HashRouter, NatsRouter};
 pub use runner::{ProcessorRunner, QuiesceReceiver, QuiesceSignal};

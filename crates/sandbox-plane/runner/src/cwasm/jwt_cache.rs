@@ -33,11 +33,6 @@ pub struct JwtCache {
 }
 
 impl JwtCache {
-    #[allow(dead_code)]
-    pub fn new(url: &str, owner: impl Into<String>) -> BpResult<Self> {
-        Self::with_optional_signer(url, owner.into(), None)
-    }
-
     pub fn with_sigv4(url: &str, owner: impl Into<String>, sigv4: &SigV4Config) -> BpResult<Self> {
         let owner = owner.into().trim().to_string();
         if owner.is_empty() {

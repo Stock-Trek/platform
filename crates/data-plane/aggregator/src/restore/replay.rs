@@ -28,16 +28,6 @@ pub trait ArchivedEventSource: Send {
     async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>>;
 }
 
-/// Archive source used when recovery from archived events is not configured.
-pub struct EmptyArchivedEventSource;
-
-#[async_trait]
-impl ArchivedEventSource for EmptyArchivedEventSource {
-    async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>> {
-        Ok(None)
-    }
-}
-
 /// Replays archive event objects from S3 for one shard.
 ///
 /// Objects are read in bounded Parquet batches through ranged S3 requests, so

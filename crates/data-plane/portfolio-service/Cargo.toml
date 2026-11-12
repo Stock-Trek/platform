@@ -31,4 +31,5 @@ tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-th
 tracing = { workspace = true }
 
 [dev-dependencies]
+platform-auth-service = { workspace = true, features = ["test-utils"] }
 platform-exchange-types = { workspace = true }

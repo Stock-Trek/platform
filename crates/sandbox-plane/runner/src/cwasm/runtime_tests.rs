@@ -194,7 +194,7 @@ fn capture() -> (Emit, CapturedLines) {
 
 #[test]
 fn runs_the_guest_entry_with_host_written_arguments() {
-    let runner = WasmRunner::new().unwrap();
+    let runner = WasmRunner::with_limits(ExecutionLimits::default()).unwrap();
     let file = artifact(METADATA_WAT);
     let (emit, lines) = capture();
 
@@ -212,7 +212,7 @@ fn runs_the_guest_entry_with_host_written_arguments() {
 
 #[test]
 fn exposes_the_env_imports_used_by_the_runner() {
-    let runner = WasmRunner::new().unwrap();
+    let runner = WasmRunner::with_limits(ExecutionLimits::default()).unwrap();
     let file = artifact(QUEUE_ABI_WAT);
     let (emit, lines) = capture();
 
@@ -240,7 +240,7 @@ fn exposes_the_env_imports_used_by_the_runner() {
 
 #[test]
 fn passes_the_guest_exit_code_through() {
-    let runner = WasmRunner::new().unwrap();
+    let runner = WasmRunner::with_limits(ExecutionLimits::default()).unwrap();
     let file = artifact(EXIT_WAT);
     let (emit, lines) = capture();
 
@@ -252,7 +252,7 @@ fn passes_the_guest_exit_code_through() {
 
 #[test]
 fn reports_a_trapped_guest_as_a_runner_panic() {
-    let runner = WasmRunner::new().unwrap();
+    let runner = WasmRunner::with_limits(ExecutionLimits::default()).unwrap();
     let file = artifact(TRAP_WAT);
     let (emit, lines) = capture();
 
@@ -264,7 +264,7 @@ fn reports_a_trapped_guest_as_a_runner_panic() {
 
 #[test]
 fn reports_an_invalid_artifact_as_not_loaded() {
-    let runner = WasmRunner::new().unwrap();
+    let runner = WasmRunner::with_limits(ExecutionLimits::default()).unwrap();
     let file = NamedTempFile::new().unwrap();
     std::fs::write(file.path(), b"not a cwasm artifact").unwrap();
     let (emit, lines) = capture();
@@ -323,7 +323,7 @@ fn interrupts_a_guest_that_exceeds_its_table_limit() {
 
 #[test]
 fn does_not_expose_host_files_outside_the_guest_workspace() {
-    let runner = WasmRunner::new().unwrap();
+    let runner = WasmRunner::with_limits(ExecutionLimits::default()).unwrap();
     let file = artifact(OPEN_HOST_FILE_WAT);
     let (emit, lines) = capture();
 
@@ -401,7 +401,7 @@ fn includes_the_program_name_expected_by_the_guest_entry() {
 
 #[test]
 fn initializes_the_guest_before_running_it() {
-    let runner = WasmRunner::new().unwrap();
+    let runner = WasmRunner::with_limits(ExecutionLimits::default()).unwrap();
     let file = artifact(INITIALIZE_WAT);
     let (emit, lines) = capture();
 

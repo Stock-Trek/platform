@@ -21,12 +21,6 @@ pub struct OrderRequestDispatcher {
 }
 
 impl OrderRequestDispatcher {
-    #[allow(dead_code)]
-    pub fn new(url: &str, auth_service_url: &str, owner: impl Into<String>) -> BpResult<Self> {
-        let owner = owner.into();
-        Self::with_jwt(url, owner.clone(), JwtCache::new(auth_service_url, owner)?)
-    }
-
     pub fn with_sigv4(
         url: &str,
         auth_service_url: &str,

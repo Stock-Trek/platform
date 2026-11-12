@@ -45,39 +45,6 @@ impl AggregatorState {
                 .state,
         )
     }
-
-    /// Replays all archived events for one shard into fresh keyed state with
-    /// the configured schema version.
-    ///
-    /// Archive recovery continues the highest state epoch observed on the
-    /// replayed events instead of starting a new output lineage. Replaying the
-    /// same archived inputs therefore reproduces the same deterministic output
-    /// ids; callers that intentionally regenerate outputs under a new lineage,
-    /// such as the rebuilder, must assign a fresh epoch themselves.
-    #[allow(clippy::too_many_arguments)]
-    pub async fn rebuild_from_archive_with_schema(
-        archive: &mut dyn ArchivedEventSource,
-        shard: ShardId,
-        intervals: &[AlignedWindow],
-        shard_count: usize,
-        allowed_lateness: DurationMilliseconds,
-        max_closed_candles_per_interval: BTreeMap<AlignedWindow, usize>,
-        correction_cutoff: DurationMilliseconds,
-        state_schema_version: u32,
-    ) -> BpResult<Self> {
-        let config = ProcessorConfig::new(
-            intervals.to_vec(),
-            allowed_lateness,
-            max_closed_candles_per_interval,
-            correction_cutoff,
-        )
-        .with_state_schema_version(state_schema_version);
-        Ok(
-            RebuiltArchiveState::rebuild(archive, shard, shard_count, config)
-                .await?
-                .state,
-        )
-    }
 }
 
 impl RebuiltArchiveState {
