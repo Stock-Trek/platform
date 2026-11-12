@@ -1,34 +1,41 @@
-use crate::{JwtVerifier, OrderJwtClaims};
+use crate::{
+    JwtVerifier, OrderJwtClaims,
+    jwks_fetcher::{JwksFetcher, Source},
+};
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{Header, decode_header, jwk::JwkSet};
+use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult};
 use std::{
     io,
     time::{Duration, Instant},
 };
-use tokio::sync::Mutex;
+use tokio::sync::watch;
 
 const DEFAULT_JWKS_TTL: Duration = Duration::from_secs(300);
-const JWKS_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
-
-enum Source {
-    Remote {
-        client: reqwest::Client,
-        url: String,
-    },
-    Static,
-}
+const FAILURE_BACKOFF: Duration = Duration::from_secs(1);
 
 #[derive(Default)]
 struct CacheState {
     verifier: Option<JwtVerifier>,
     fetched_at: Option<Instant>,
+    refreshing: bool,
+    retry_after: Option<Instant>,
+    generation: u64,
+}
+
+enum Action {
+    Verify(JwtVerifier),
+    Refresh,
+    Wait,
+    Unavailable,
 }
 
 pub struct JwksCache {
     source: Source,
     ttl: Duration,
     state: Mutex<CacheState>,
+    refresh: watch::Sender<u64>,
 }
 
 impl JwksCache {
@@ -43,34 +50,26 @@ impl JwksCache {
                 "must be greater than zero",
             ));
         }
-        let url = url.into();
-        let parsed = reqwest::Url::parse(&url)
-            .map_err(|error| BpError::auth_invalid_field("jwks_url", error.to_string()))?;
-        if !matches!(parsed.scheme(), "http" | "https") {
-            return Err(BpError::auth_invalid_field(
-                "jwks_url",
-                "must use http or https",
-            ));
-        }
-        let client = reqwest::Client::builder()
-            .timeout(JWKS_REQUEST_TIMEOUT)
-            .build()
-            .map_err(BpError::external)?;
+        let fetcher = JwksFetcher::new(url)?;
+        let (refresh, _) = watch::channel(0);
         Ok(Self {
-            source: Source::Remote { client, url },
+            source: Source::Remote(fetcher),
             ttl,
             state: Mutex::new(CacheState::default()),
+            refresh,
         })
     }
 
     pub fn from_jwks(jwks: JwkSet) -> Self {
+        let (refresh, _) = watch::channel(0);
         Self {
             source: Source::Static,
             ttl: DEFAULT_JWKS_TTL,
             state: Mutex::new(CacheState {
                 verifier: Some(JwtVerifier::new(jwks)),
-                fetched_at: None,
+                ..CacheState::default()
             }),
+            refresh,
         }
     }
 
@@ -79,14 +78,12 @@ impl JwksCache {
             decode_header(jwt).map_err(|error| BpError::auth_invalid_jwt(error.to_string()))?;
         match &self.source {
             Source::Static => {
-                let state = self.state.lock().await;
-                state
-                    .verifier
-                    .as_ref()
+                let verifier = self.state.lock().verifier.clone();
+                verifier
                     .ok_or_else(|| BpError::auth_invalid_jwt("JWKS cache is empty"))?
                     .verify_with_header(&header, jwt, now)
             }
-            Source::Remote { .. } => self.verify_remote(&header, jwt, now).await,
+            Source::Remote(_) => self.verify_remote(&header, jwt, now).await,
         }
     }
 
@@ -96,51 +93,107 @@ impl JwksCache {
         jwt: &str,
         now: DateTime<Utc>,
     ) -> BpResult<OrderJwtClaims> {
-        let mut state = self.state.lock().await;
-        let is_fresh = state
-            .fetched_at
-            .is_some_and(|fetched_at| fetched_at.elapsed() < self.ttl);
-        if is_fresh
-            && let Some(verifier) = &state.verifier
-            && verifier.has_key_for_header(header)
-        {
-            return verifier.verify_with_header(header, jwt, now);
-        }
-        match self.fetch().await {
-            Ok(verifier) => {
-                let verified = verifier.verify_with_header(header, jwt, now);
-                *state = CacheState {
-                    verifier: Some(verifier),
-                    fetched_at: Some(Instant::now()),
-                };
-                verified
-            }
-            Err(error) => {
-                if let Some(verifier) = &state.verifier
-                    && verifier.has_key_for_header(header)
-                {
+        loop {
+            let mut refreshed = self.refresh.subscribe();
+            match self.action(header) {
+                Action::Verify(verifier) => {
                     return verifier.verify_with_header(header, jwt, now);
                 }
-                Err(error)
+                Action::Unavailable => {
+                    return Err(BpError::external(io::Error::other(
+                        "JWKS refresh is backing off after an earlier failure",
+                    )));
+                }
+                Action::Wait => {
+                    let _ = refreshed.changed().await;
+                }
+                Action::Refresh => {
+                    let fetched = self.source.fetch().await;
+                    match fetched {
+                        Ok(verifier) => {
+                            self.install(verifier.clone());
+                            return verifier.verify_with_header(header, jwt, now);
+                        }
+                        Err(error) => {
+                            self.record_failure();
+                            if let Some(verifier) = self.stale_verifier(header) {
+                                return verifier.verify_with_header(header, jwt, now);
+                            }
+                            return Err(error);
+                        }
+                    }
+                }
             }
         }
     }
 
-    async fn fetch(&self) -> BpResult<JwtVerifier> {
-        let Source::Remote { client, url } = &self.source else {
-            return Err(BpError::auth_invalid_jwt("JWKS source is not remote"));
+    fn action(&self, header: &Header) -> Action {
+        let mut state = self.state.lock();
+        let now = Instant::now();
+        if state.refreshing {
+            return match &state.verifier {
+                Some(verifier) if verifier.has_key_for_header(header) => {
+                    Action::Verify(verifier.clone())
+                }
+                _ => Action::Wait,
+            };
+        }
+        let is_fresh = state
+            .fetched_at
+            .is_some_and(|fetched_at| fetched_at.elapsed() < self.ttl);
+        if let Some(verifier) = &state.verifier {
+            if is_fresh && verifier.has_key_for_header(header) {
+                return Action::Verify(verifier.clone());
+            }
+            if state
+                .retry_after
+                .is_some_and(|retry_after| now < retry_after)
+            {
+                return if verifier.has_key_for_header(header) {
+                    Action::Verify(verifier.clone())
+                } else {
+                    Action::Unavailable
+                };
+            }
+        } else if state
+            .retry_after
+            .is_some_and(|retry_after| now < retry_after)
+        {
+            return Action::Unavailable;
+        }
+        state.refreshing = true;
+        Action::Refresh
+    }
+
+    fn stale_verifier(&self, header: &Header) -> Option<JwtVerifier> {
+        self.state
+            .lock()
+            .verifier
+            .clone()
+            .filter(|verifier| verifier.has_key_for_header(header))
+    }
+
+    fn install(&self, verifier: JwtVerifier) {
+        let generation = {
+            let mut state = self.state.lock();
+            state.verifier = Some(verifier);
+            state.fetched_at = Some(Instant::now());
+            state.refreshing = false;
+            state.retry_after = None;
+            state.generation = state.generation.wrapping_add(1);
+            state.generation
         };
-        let response = client.get(url).send().await.map_err(BpError::external)?;
-        if !response.status().is_success() {
-            return Err(BpError::external(io::Error::other(format!(
-                "JWKS request failed with status {}",
-                response.status()
-            ))));
-        }
-        let jwks = response.json::<JwkSet>().await.map_err(BpError::external)?;
-        if jwks.keys.is_empty() {
-            return Err(BpError::auth_invalid_jwt("JWKS contains no keys"));
-        }
-        Ok(JwtVerifier::new(jwks))
+        self.refresh.send_replace(generation);
+    }
+
+    fn record_failure(&self) {
+        let generation = {
+            let mut state = self.state.lock();
+            state.refreshing = false;
+            state.retry_after = Some(Instant::now() + FAILURE_BACKOFF);
+            state.generation = state.generation.wrapping_add(1);
+            state.generation
+        };
+        self.refresh.send_replace(generation);
     }
 }

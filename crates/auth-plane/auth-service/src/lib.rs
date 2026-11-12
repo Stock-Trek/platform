@@ -4,6 +4,7 @@ mod auth_service;
 mod auth_service_runner;
 mod entry;
 mod jwks_cache;
+mod jwks_fetcher;
 mod jwt_server;
 mod jwt_server_config;
 mod jwt_server_connection;

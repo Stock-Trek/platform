@@ -38,6 +38,10 @@ struct JwksServer {
 
 impl JwksServer {
     async fn start(jwks: &JwkSet) -> Self {
+        Self::start_with_delay(jwks, StdDuration::ZERO).await
+    }
+
+    async fn start_with_delay(jwks: &JwkSet, delay: StdDuration) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let body = Arc::new(RwLock::new(serde_json::to_string(jwks).unwrap()));
@@ -56,6 +60,7 @@ impl JwksServer {
                         let mut request = [0_u8; 2048];
                         let _ = stream.read(&mut request).await;
                         requests.fetch_add(1, Ordering::SeqCst);
+                        tokio::time::sleep(delay).await;
                         let body = body.read().unwrap().clone();
                         let response = format!(
                             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
@@ -123,6 +128,31 @@ async fn refreshes_jwks_when_a_token_references_a_new_key() {
     cache.verify(second_token.token(), now).await.unwrap();
 
     assert_eq!(server.requests(), 2);
+}
+
+#[tokio::test]
+async fn concurrent_verifications_share_a_single_refresh() {
+    let signer = Fixture::signer("issuer-a");
+    let server = JwksServer::start_with_delay(signer.jwks(), StdDuration::from_millis(100)).await;
+    let cache = Arc::new(JwksCache::with_ttl(server.url(), StdDuration::from_secs(60)).unwrap());
+    let token = signer
+        .sign(&Fixture::claims(Utc::now()))
+        .unwrap()
+        .token()
+        .to_string();
+    let mut tasks = Vec::new();
+    for _ in 0..8 {
+        let cache = cache.clone();
+        let token = token.clone();
+        tasks.push(tokio::spawn(async move {
+            cache.verify(&token, Utc::now()).await
+        }));
+    }
+
+    for task in tasks {
+        assert!(task.await.unwrap().is_ok());
+    }
+    assert_eq!(server.requests(), 1);
 }
 
 #[tokio::test]

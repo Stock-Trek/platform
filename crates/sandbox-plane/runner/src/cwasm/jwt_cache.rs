@@ -1,157 +1,176 @@
+use super::jwt_fetcher::{FetchedJwt, JwtFetcher};
+use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult};
-use platform_messages::jwt::{JwtRequest, JwtResponse};
-use platform_sigv4::{SigV4Config, SigV4Signer};
-use platform_types::url_scheme::UrlScheme;
+use platform_sigv4::SigV4Config;
 use std::{
-    collections::BTreeMap,
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    io,
+    sync::Arc,
+    time::{Duration, SystemTime},
 };
-use tokio::sync::Mutex;
+use tokio::sync::watch;
 
-const REFRESH_MARGIN_SECS: u64 = 30;
-const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
-const READ_TIMEOUT: Duration = Duration::from_secs(10);
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
+const FAILURE_BACKOFF: Duration = Duration::from_secs(1);
 
 struct CachedJwt {
     token: String,
     refresh_at: SystemTime,
+    expires_at: SystemTime,
 }
 
 impl CachedJwt {
     fn is_fresh(&self, now: SystemTime) -> bool {
         now < self.refresh_at
     }
+
+    fn is_usable(&self, now: SystemTime) -> bool {
+        now < self.expires_at
+    }
+}
+
+impl From<FetchedJwt> for CachedJwt {
+    fn from(fetched: FetchedJwt) -> Self {
+        Self {
+            token: fetched.token,
+            refresh_at: fetched.refresh_at,
+            expires_at: fetched.expires_at,
+        }
+    }
+}
+
+#[derive(Default)]
+struct CacheState {
+    cached: Option<CachedJwt>,
+    refreshing: bool,
+    retry_after: Option<SystemTime>,
+    generation: u64,
+}
+
+enum Action {
+    Return(String),
+    Refresh,
+    Wait,
+    Unavailable,
 }
 
 pub struct JwtCache {
-    url: reqwest::Url,
-    owner: String,
-    client: reqwest::Client,
-    signer: Option<SigV4Signer>,
-    cached: Mutex<Option<CachedJwt>>,
+    fetcher: Arc<JwtFetcher>,
+    state: Mutex<CacheState>,
+    refresh: watch::Sender<u64>,
 }
 
 impl JwtCache {
     pub fn with_sigv4(url: &str, owner: impl Into<String>, sigv4: &SigV4Config) -> BpResult<Self> {
-        let owner = owner.into().trim().to_string();
-        if owner.is_empty() {
-            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
-        }
-        let signer = sigv4.signer_for_owner(&owner)?;
-        Self::with_optional_signer(url, owner, Some(signer))
+        Ok(Self::from_fetcher(JwtFetcher::with_sigv4(
+            url, owner, sigv4,
+        )?))
     }
 
-    fn with_optional_signer(
-        url: &str,
-        owner: String,
-        signer: Option<SigV4Signer>,
-    ) -> BpResult<Self> {
-        let owner = owner.trim().to_string();
-        let url = reqwest::Url::parse(url)
-            .map_err(|error| BpError::config_invalid_source("auth_service_url", error))?;
-        if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
-            return Err(BpError::config_invalid(
-                "auth_service_url",
-                "must use the http or https scheme",
-            ));
+    fn from_fetcher(fetcher: JwtFetcher) -> Self {
+        let (refresh, _) = watch::channel(0);
+        Self {
+            fetcher: Arc::new(fetcher),
+            state: Mutex::new(CacheState::default()),
+            refresh,
         }
-        if owner.is_empty() {
-            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
-        }
-        let client = reqwest::Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .read_timeout(READ_TIMEOUT)
-            .timeout(REQUEST_TIMEOUT)
-            .build()
-            .map_err(BpError::external)?;
-        Ok(Self {
-            url,
-            owner,
-            client,
-            signer,
-            cached: Mutex::new(None),
-        })
     }
 
     pub async fn token(&self) -> BpResult<String> {
-        if let Some(token) = self.cached_token().await {
-            return Ok(token);
+        loop {
+            let mut refreshed = self.refresh.subscribe();
+            match self.action() {
+                Action::Return(token) => return Ok(token),
+                Action::Unavailable => {
+                    return Err(BpError::external(io::Error::other(
+                        "JWT refresh is backing off after an earlier failure",
+                    )));
+                }
+                Action::Wait => {
+                    let _ = refreshed.changed().await;
+                }
+                Action::Refresh => {
+                    let fetched = self.fetcher.fetch().await;
+                    match fetched {
+                        Ok(fetched) => {
+                            let token = fetched.token.clone();
+                            self.install(fetched);
+                            return Ok(token);
+                        }
+                        Err(error) => {
+                            self.record_failure();
+                            if let Some(token) = self.usable_token() {
+                                return Ok(token);
+                            }
+                            return Err(error);
+                        }
+                    }
+                }
+            }
         }
-        let mut cached = self.cached.lock().await;
-        if let Some(value) = cached.as_ref()
-            && value.is_fresh(SystemTime::now())
+    }
+
+    fn action(&self) -> Action {
+        let mut state = self.state.lock();
+        let now = SystemTime::now();
+        if state.refreshing {
+            return match &state.cached {
+                Some(cached) if cached.is_usable(now) => Action::Return(cached.token.clone()),
+                _ => Action::Wait,
+            };
+        }
+        if let Some(cached) = &state.cached {
+            if cached.is_fresh(now) {
+                return Action::Return(cached.token.clone());
+            }
+            if state
+                .retry_after
+                .is_some_and(|retry_after| now < retry_after)
+            {
+                return if cached.is_usable(now) {
+                    Action::Return(cached.token.clone())
+                } else {
+                    Action::Unavailable
+                };
+            }
+        } else if state
+            .retry_after
+            .is_some_and(|retry_after| now < retry_after)
         {
-            return Ok(value.token.clone());
+            return Action::Unavailable;
         }
-        let fetched = self.fetch().await?;
-        let token = fetched.token.clone();
-        *cached = Some(fetched);
-        Ok(token)
+        state.refreshing = true;
+        Action::Refresh
     }
 
-    async fn cached_token(&self) -> Option<String> {
-        let cached = self.cached.lock().await;
-        cached
+    fn usable_token(&self) -> Option<String> {
+        let now = SystemTime::now();
+        self.state
+            .lock()
+            .cached
             .as_ref()
-            .filter(|value| value.is_fresh(SystemTime::now()))
-            .map(|value| value.token.clone())
+            .filter(|cached| cached.is_usable(now))
+            .map(|cached| cached.token.clone())
     }
 
-    async fn fetch(&self) -> BpResult<CachedJwt> {
-        let body =
-            serde_json::to_vec(&JwtRequest::new(self.owner.clone())).map_err(BpError::external)?;
-        let mut headers =
-            BTreeMap::from([("content-type".to_string(), "application/json".to_string())]);
-        if let Some(signer) = &self.signer {
-            signer.sign(
-                "POST",
-                self.url.as_str(),
-                &mut headers,
-                &body,
-                SystemTime::now(),
-            )?;
-        }
-        let mut request = self.client.post(self.url.clone()).body(body);
-        for (name, value) in headers {
-            request = request.header(name, value);
-        }
-        let response = request
-            .send()
-            .await
-            .map_err(|error| BpError::http_request("fetch JWT", self.url.as_str(), error))?;
-        let status = response.status();
-        if !status.is_success() {
-            let body = response.text().await.unwrap_or_default();
-            return Err(BpError::http_rejected(
-                "fetch JWT",
-                self.url.as_str(),
-                status.as_u16(),
-                body,
-            ));
-        }
-        let response: JwtResponse = response
-            .json()
-            .await
-            .map_err(|error| BpError::http_request("fetch JWT", self.url.as_str(), error))?;
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(BpError::external)?
-            .as_secs() as i64;
-        let lifetime = response.expires_at_unix() - now;
-        if response.token().trim().is_empty() || lifetime <= 0 {
-            return Err(BpError::auth_invalid_jwt(
-                "auth service returned an unusable JWT",
-            ));
-        }
-        let refresh_after = if lifetime as u64 > REFRESH_MARGIN_SECS {
-            lifetime as u64 - REFRESH_MARGIN_SECS
-        } else {
-            (lifetime as u64).max(1) / 2
+    fn install(&self, fetched: FetchedJwt) {
+        let generation = {
+            let mut state = self.state.lock();
+            state.cached = Some(fetched.into());
+            state.refreshing = false;
+            state.retry_after = None;
+            state.generation = state.generation.wrapping_add(1);
+            state.generation
         };
-        Ok(CachedJwt {
-            token: response.token().to_string(),
-            refresh_at: SystemTime::now() + Duration::from_secs(refresh_after),
-        })
+        self.refresh.send_replace(generation);
+    }
+
+    fn record_failure(&self) {
+        let generation = {
+            let mut state = self.state.lock();
+            state.refreshing = false;
+            state.retry_after = Some(SystemTime::now() + FAILURE_BACKOFF);
+            state.generation = state.generation.wrapping_add(1);
+            state.generation
+        };
+        self.refresh.send_replace(generation);
     }
 }
