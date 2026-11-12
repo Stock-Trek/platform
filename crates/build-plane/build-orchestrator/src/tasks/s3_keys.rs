@@ -1,6 +1,6 @@
 use platform_errors::{BuildError, BuildResult, ValidationError};
 use platform_git::git_host::GitHost;
-use platform_messages::sqs_message::SqsRefType;
+use platform_messages::SqsRefType;
 use std::fmt::Display;
 
 const SOURCE_PREFIX: &str = "source/";

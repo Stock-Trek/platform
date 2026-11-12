@@ -1,6 +1,6 @@
 use aws_sdk_sqs::Client as SqsClient;
 use platform_errors::{BuildError, BuildResult, SqsError};
-use platform_messages::sqs_message::SQS_MAX_BATCH_BYTES;
+use platform_messages::SQS_MAX_BATCH_BYTES;
 use platform_time::timeouts::Timeouts;
 
 use super::SqsConfig;

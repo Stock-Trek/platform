@@ -1,5 +1,5 @@
 use crate::sqs_dedup::SqsDedup;
-use platform_messages::sqs_message::{GitSource, SqsDetail, SqsMessage, SqsRefType};
+use platform_messages::{GitSource, SqsDetail, SqsMessage, SqsRefType};
 use std::{num::NonZeroUsize, time::Duration};
 
 fn message(commit_hash: &str) -> SqsMessage {

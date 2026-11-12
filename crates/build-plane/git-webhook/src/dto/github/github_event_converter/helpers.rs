@@ -5,7 +5,7 @@ use crate::{
 };
 use hmac::{Hmac, KeyInit, Mac};
 use platform_errors::{BuildError, BuildResult, GitHubError};
-use platform_messages::sqs_message::{GitSource, SqsDetail, SqsMessage, SqsRefType};
+use platform_messages::{GitSource, SqsDetail, SqsMessage, SqsRefType};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 

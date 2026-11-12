@@ -1,7 +1,7 @@
 use crate::handler::Handler;
 use lambda_runtime::LambdaEvent;
 use platform_errors::{BuildError, BuildResult, ErrorType};
-use platform_messages::build_request::{BuildOutcome, BuildRequest};
+use platform_messages::{BuildOutcome, BuildRequest};
 use platform_metrics::build_metrics::BuildMetrics;
 use std::time::{Instant, SystemTime};
 

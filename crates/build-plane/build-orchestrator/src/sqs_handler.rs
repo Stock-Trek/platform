@@ -3,7 +3,7 @@ use aws_lambda_events::event::sqs::{SqsBatchResponse, SqsEvent, SqsMessage};
 use futures::{StreamExt, stream};
 use lambda_runtime::LambdaEvent;
 use platform_errors::{BuildError, BuildResult, ErrorType, SqsError};
-use platform_messages::sqs_message::SqsMessage as PlatformSqsMessage;
+use platform_messages::SqsMessage as PlatformSqsMessage;
 use platform_metrics::{route::RouteMetrics, sqs::SqsMetrics};
 use platform_time::{deadline::Deadline, request_context::RequestContext};
 

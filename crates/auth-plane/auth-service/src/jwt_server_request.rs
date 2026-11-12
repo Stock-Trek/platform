@@ -9,7 +9,7 @@ use hyper::{
     body::{Bytes, Incoming},
     header::{CONTENT_LENGTH, HeaderMap},
 };
-use platform_messages::jwt::{JwtRequest, JwtResponse};
+use platform_messages::{JwtRequest, JwtResponse};
 use platform_sigv4::{SigV4Config, SigV4Request};
 use serde::Serialize;
 use std::{collections::BTreeMap, time::Duration, time::SystemTime};

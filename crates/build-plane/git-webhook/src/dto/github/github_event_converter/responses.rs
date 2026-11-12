@@ -16,7 +16,7 @@ use crate::{
     event_response::EventResponse,
 };
 use platform_errors::{BuildError, BuildResult, HttpError};
-use platform_messages::sqs_message::SqsDetail;
+use platform_messages::SqsDetail;
 use platform_metrics::event::EventMetrics;
 
 impl GitHubEventConverter {

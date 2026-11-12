@@ -1,8 +1,7 @@
 use crate::aws_ops::presigned_post::PresignedPost;
 use platform_errors::BuildResult;
 use platform_messages::{
-    build_request::{BuildRequest as BuildRequestPayload, BuildRequestSignedPost},
-    sqs_message::{GitSource, SqsRefType},
+    BuildRequest as BuildRequestPayload, BuildRequestSignedPost, GitSource, SqsRefType,
 };
 
 pub struct BuildRequest {

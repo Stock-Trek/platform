@@ -1,6 +1,6 @@
 use platform_errors::BuildResult;
 use platform_github::{github_auth::GitHubAuth, installation::GitHubInstallation};
-use platform_messages::sqs_message::GitSource;
+use platform_messages::GitSource;
 
 pub enum GitRemote {
     GitHub(GitHubInstallation),

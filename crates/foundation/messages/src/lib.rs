@@ -1,4 +1,12 @@
-pub mod build_request;
-pub mod jwt;
-pub mod order_request;
-pub mod sqs_message;
+mod jwt;
+mod request_payload;
+mod sqs;
+mod unsigned_order_request;
+
+#[cfg(test)]
+mod request_payload_tests;
+
+pub use jwt::*;
+pub use request_payload::*;
+pub use sqs::*;
+pub use unsigned_order_request::*;

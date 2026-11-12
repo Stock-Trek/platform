@@ -1,4 +1,4 @@
-use platform_messages::sqs_message::SqsMessage;
+use platform_messages::SqsMessage;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum EventResponse {

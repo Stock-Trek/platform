@@ -1,6 +1,6 @@
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::{BuildError, BuildResult, ConfigError, StorageError};
-use platform_messages::build_request::{BuildRequestSignedPost, FILENAME_VARIABLE, KEY_FIELD};
+use platform_messages::{BuildRequestSignedPost, FILENAME_VARIABLE, KEY_FIELD};
 use std::{
     collections::BTreeMap,
     num::NonZeroU64,

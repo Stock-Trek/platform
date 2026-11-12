@@ -3,10 +3,7 @@ use crate::{
     source::SourceLimits,
 };
 use platform_errors::{BuildError, ConfigError, ErrorType, TimeoutError};
-use platform_messages::{
-    build_request::{BuildRequest, BuildRequestSignedPost},
-    sqs_message::SqsRefType,
-};
+use platform_messages::{BuildRequest, BuildRequestSignedPost, SqsRefType};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};

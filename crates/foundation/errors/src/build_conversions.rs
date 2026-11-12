@@ -11,7 +11,7 @@ use crate::system::SystemError;
 use crate::timeout::TimeoutError;
 #[cfg(feature = "lambda")]
 use lambda_runtime::Diagnostic;
-use platform_messages::sqs_message::SqsMessageError;
+use platform_messages::SqsMessageError;
 use platform_types::{new_types::ArithmeticError, protocol::ProtocolError};
 use std::time::Duration;
 
