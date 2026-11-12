@@ -1,5 +1,5 @@
-use super::{PortfolioState, PortfolioUpdateMetadata, PortfolioUpdateOutcome};
 use crate::portfolio::{CexAccountPortfolio, PortfolioUpdate};
+use crate::state::{PortfolioState, PortfolioUpdateMetadata, PortfolioUpdateOutcome};
 use chrono::{DateTime, Utc};
 use platform_portfolio_ownership::AccountKey;
 

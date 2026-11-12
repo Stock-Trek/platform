@@ -2,7 +2,7 @@ use platform_runner::{convert::string::JsonString, generated::dto::StrategyConte
 use std::collections::BTreeMap;
 use stock_trek::types::{AssetId, CexId};
 
-use super::{
+use crate::cwasm::backtest::{
     market_data::{MarketData, Series},
     spec::Spec,
 };

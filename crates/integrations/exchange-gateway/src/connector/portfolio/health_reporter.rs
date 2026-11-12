@@ -1,4 +1,6 @@
-use super::{CONNECTOR_HEALTH_SUBJECT, ConnectorHealth, ConnectorHealthSink, ConnectorState};
+use crate::connector::portfolio::{
+    CONNECTOR_HEALTH_SUBJECT, ConnectorHealth, ConnectorHealthSink, ConnectorState,
+};
 use chrono::Utc;
 use platform_metrics::PortfolioMetrics;
 use std::{sync::Arc, time::Instant};

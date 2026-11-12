@@ -1,4 +1,4 @@
-use super::ConnectorHealth;
+use crate::connector::portfolio::ConnectorHealth;
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 

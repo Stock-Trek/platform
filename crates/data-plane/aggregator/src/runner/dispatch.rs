@@ -1,6 +1,6 @@
 //! Source input dispatch, candle publishing and idle flushing.
 
-use super::{
+use crate::runner::{
     ProcessorRunner, QuiesceReceiver, commit::CommitState, output_writer::CandleOutputWriter,
     writer::Writer,
 };

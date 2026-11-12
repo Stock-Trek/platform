@@ -1,5 +1,5 @@
-use super::{arc_predicate::ArcPredicate, waiter_state::WaiterState};
 use crate::panic_guard::PanicUtils;
+use crate::websocket_listener::{arc_predicate::ArcPredicate, waiter_state::WaiterState};
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult, ConnectorError};
 use std::sync::Arc;

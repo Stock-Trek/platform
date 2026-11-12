@@ -1,4 +1,6 @@
-use super::{Artifacts, COMPILE_OUTPUT_FILE, USER_GENERATED_ARCHIVE, USER_GENERATED_DIR};
+use crate::artifacts::{
+    Artifacts, COMPILE_OUTPUT_FILE, USER_GENERATED_ARCHIVE, USER_GENERATED_DIR,
+};
 use platform_errors::{BuildError, BuildResult, ConfigError, IoError};
 use std::{
     fs as std_fs,

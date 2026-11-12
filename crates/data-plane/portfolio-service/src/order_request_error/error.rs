@@ -1,4 +1,4 @@
-use super::public_error_body::PublicErrorBody;
+use crate::order_request_error::public_error_body::PublicErrorBody;
 use http_body_util::Full;
 use hyper::{Response, StatusCode, body::Bytes};
 use platform_errors::{AuthError, BuildError, SystemError};

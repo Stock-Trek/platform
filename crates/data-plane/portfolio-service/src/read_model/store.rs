@@ -1,4 +1,4 @@
-use super::{OwnershipRecord, PortfolioReadModel, PortfolioRecord};
+use crate::read_model::{OwnershipRecord, PortfolioReadModel, PortfolioRecord};
 use platform_errors::{BuildError, BuildResult};
 use platform_nats::KeyValue;
 

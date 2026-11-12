@@ -1,4 +1,4 @@
-use super::support_tests::{AuthServiceBuilder, TestFixture};
+use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{ApiToken, AuthService, RevocationReason, RevokedBy};
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, BuildError};

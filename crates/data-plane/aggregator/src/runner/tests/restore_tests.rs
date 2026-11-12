@@ -1,8 +1,8 @@
-use super::fixtures_tests::{FakeSink, FakeSource, Fixtures, SignalingSource};
 use crate::checkpoint_record::{CheckpointRecord, StateStore};
 use crate::checkpoint_record_tests::InMemoryStateStore;
 use crate::market_source::MarketInput;
 use crate::runner::ProcessorRunner;
+use crate::runner::tests::fixtures_tests::{FakeSink, FakeSource, Fixtures, SignalingSource};
 use crate::shard_id::ShardId;
 use crate::state::{AggregatorState, DeduplicationKey};
 use platform_types::new_types::TimestampMilliseconds;
@@ -47,7 +47,7 @@ async fn restores_state_and_skips_inputs_already_in_the_archive() {
 #[tokio::test]
 async fn idle_flush_after_restore_does_not_fail_without_a_source_record() {
     let shard = ShardId::new(0);
-    let signal = super::super::QuiesceSignal::new();
+    let signal = crate::runner::QuiesceSignal::new();
     let trigger = signal.clone();
     let source = SignalingSource {
         records: Vec::new(),
@@ -80,7 +80,7 @@ async fn idle_flush_after_restore_does_not_fail_without_a_source_record() {
 #[tokio::test]
 async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
     let shard = ShardId::new(0);
-    let signal = super::super::QuiesceSignal::new();
+    let signal = crate::runner::QuiesceSignal::new();
     let trigger = signal.clone();
     let source = SignalingSource {
         records: Vec::new(),
@@ -119,7 +119,7 @@ async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
 #[tokio::test]
 async fn idle_flush_after_archive_restore_does_not_reuse_a_stale_checkpoint_position() {
     let shard = ShardId::new(0);
-    let signal = super::super::QuiesceSignal::new();
+    let signal = crate::runner::QuiesceSignal::new();
     let trigger = signal.clone();
     let source = SignalingSource {
         records: Vec::new(),

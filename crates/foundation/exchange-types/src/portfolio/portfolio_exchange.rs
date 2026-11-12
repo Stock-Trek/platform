@@ -1,4 +1,4 @@
-use super::{AccountEvent, AccountSnapshot};
+use crate::portfolio::{AccountEvent, AccountSnapshot};
 use crate::{
     api_key_credential::ApiKeyCredentials, exchange::ETExchange, request::ETHttpRequest,
     signer::Signer,

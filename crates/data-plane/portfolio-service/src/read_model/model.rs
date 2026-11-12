@@ -1,4 +1,4 @@
-use super::{OwnershipRecord, PortfolioRecord};
+use crate::read_model::{OwnershipRecord, PortfolioRecord};
 
 #[derive(Debug, Default)]
 pub struct PortfolioReadModel {

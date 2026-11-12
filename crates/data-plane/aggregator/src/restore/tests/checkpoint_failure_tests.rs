@@ -1,7 +1,7 @@
-use super::fixtures_tests::{FailingStateStore, Fixtures, VecArchive};
 use crate::checkpoint_record::{CheckpointRecord, StateStore};
 use crate::checkpoint_record_tests::InMemoryStateStore;
 use crate::restore::restored_shard::RestoreSource;
+use crate::restore::tests::fixtures_tests::{FailingStateStore, Fixtures, VecArchive};
 use crate::shard_id::ShardId;
 use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use platform_archive::ICEBERG_CATALOG_URI;

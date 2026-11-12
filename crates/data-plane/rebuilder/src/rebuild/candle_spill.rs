@@ -1,4 +1,4 @@
-use super::{
+use crate::rebuild::{
     SpillUsage,
     spill_codec::{SpillCodec, SpillReader, SpillWriter},
     spill_merge::SpillRecords,

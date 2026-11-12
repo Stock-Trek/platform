@@ -1,4 +1,4 @@
-use super::support_tests::AuthServiceBuilder;
+use crate::tests::support_tests::AuthServiceBuilder;
 use crate::{AuthService, AuthServiceConfig};
 use chrono::Duration;
 use platform_errors::{AuthError, BuildError, BuildResult};

@@ -1,4 +1,4 @@
-use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
+use crate::tests::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{
     AuthService, ConsumeResult, MemoryReplayStore, MemoryTokenStore, ReplayReservation,
     ReplayStore, ReplayStoreError,

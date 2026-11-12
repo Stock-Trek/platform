@@ -3,7 +3,7 @@ use platform_messages::SqsMessage;
 use platform_metrics::sqs::SqsMetrics;
 use serde::Serialize;
 
-use super::Sqs;
+use crate::sqs::Sqs;
 
 impl Sqs {
     pub(super) fn serialize<T: Serialize>(messages: &[T]) -> BuildResult<Vec<String>> {

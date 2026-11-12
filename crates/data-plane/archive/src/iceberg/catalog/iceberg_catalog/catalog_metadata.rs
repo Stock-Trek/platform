@@ -1,5 +1,5 @@
-use super::super::IcebergDataFile;
-use super::IcebergCatalog;
+use crate::iceberg::catalog::IcebergDataFile;
+use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use iceberg::table::Table;
 use std::collections::{HashMap, HashSet};
 

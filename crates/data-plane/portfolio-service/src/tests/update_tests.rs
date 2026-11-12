@@ -1,4 +1,4 @@
-use super::test_feed_tests::{Fixture, RecordingFeed};
+use crate::tests::test_feed_tests::{Fixture, RecordingFeed};
 use crate::{
     PortfolioService, PortfolioUpdate, PortfolioUpdateConsumer, PortfolioUpdateMessage,
     PortfolioUpdateSource,

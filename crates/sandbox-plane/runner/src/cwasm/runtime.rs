@@ -4,7 +4,7 @@ use std::{path::Path, time::Duration};
 use wasmtime::{Config, Engine, Linker, Memory, Module, Store, TypedFunc};
 use wasmtime_wasi::{I32Exit, p1::add_to_linker_sync};
 
-use super::{
+use crate::cwasm::{
     GuestWorkspace,
     guest_state::{Emit, GuestState},
     limits::ExecutionLimits,

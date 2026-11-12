@@ -1,4 +1,4 @@
-use super::{BinanceListenKeyRequest, BinanceListenKeyResponse, EventParser};
+use crate::binance::portfolio::{BinanceListenKeyRequest, BinanceListenKeyResponse, EventParser};
 use crate::{
     api_key_credential::ApiKeyCredentials,
     binance::{

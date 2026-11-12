@@ -1,6 +1,6 @@
-use super::fixtures_tests::{FakeSink, Fixtures};
 use crate::processor::{CandleProcessor, ProcessorUpdate};
 use crate::runner::ProcessorRunner;
+use crate::runner::tests::fixtures_tests::{FakeSink, Fixtures};
 use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
 use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle};
@@ -66,7 +66,7 @@ async fn count_only_retention_updates_reach_metrics_without_publishing_candles()
     };
 
     metrics::with_local_recorder(&recorder, || {
-        ProcessorRunner::<super::fixtures_tests::FakeSource, FakeSink>::record_update_metrics(
+        ProcessorRunner::<crate::runner::tests::fixtures_tests::FakeSource, FakeSink>::record_update_metrics(
             ShardId::new(0),
             &processor,
             &update,

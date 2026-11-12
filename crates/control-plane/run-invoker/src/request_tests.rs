@@ -1,4 +1,4 @@
-use super::request::{RunCommand, RunRequest};
+use crate::request::{RunCommand, RunRequest};
 use chrono::{DateTime, Utc};
 use platform_aws::PresignedPost;
 use platform_run_store::{CwasmArtifact, RunRecord};

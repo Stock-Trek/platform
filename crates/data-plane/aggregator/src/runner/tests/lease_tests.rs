@@ -1,5 +1,5 @@
-use super::fixtures_tests::{FakeSink, FakeSource, Fixtures};
 use crate::runner::ProcessorRunner;
+use crate::runner::tests::fixtures_tests::{FakeSink, FakeSource, Fixtures};
 use crate::shard_id::ShardId;
 use crate::writer_lease::LeaseStore;
 use crate::writer_lease_tests::InMemoryLeaseStore;

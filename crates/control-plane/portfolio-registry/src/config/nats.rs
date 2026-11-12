@@ -1,4 +1,4 @@
-use super::stream::NatsStreamConfig;
+use crate::config::stream::NatsStreamConfig;
 use platform_config::EnvVars;
 use platform_errors::BuildResult;
 use platform_runtime::Config;

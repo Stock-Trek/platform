@@ -1,4 +1,4 @@
-use super::artifact::*;
+use crate::artifacts::artifact::*;
 use crate::signed_post::SignedPost;
 use platform_errors::{BuildError, ConfigError};
 use std::{collections::BTreeMap, time::Duration};

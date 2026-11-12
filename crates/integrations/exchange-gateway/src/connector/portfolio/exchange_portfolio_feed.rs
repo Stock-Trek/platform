@@ -1,4 +1,6 @@
-use super::{PortfolioConnection, PortfolioConnector, PortfolioFeed, PortfolioUpdateSink};
+use crate::connector::portfolio::{
+    PortfolioConnection, PortfolioConnector, PortfolioFeed, PortfolioUpdateSink,
+};
 use async_trait::async_trait;
 use parking_lot::RwLock;
 use platform_errors::{BuildError, BuildResult};

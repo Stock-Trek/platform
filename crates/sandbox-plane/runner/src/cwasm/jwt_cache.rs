@@ -1,4 +1,4 @@
-use super::jwt_fetcher::{FetchedJwt, JwtFetcher};
+use crate::cwasm::jwt_fetcher::{FetchedJwt, JwtFetcher};
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
 use platform_sigv4::SigV4Config;

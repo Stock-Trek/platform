@@ -1,4 +1,4 @@
-use super::support_tests::{AuthServiceBuilder, OWNER};
+use crate::tests::support_tests::{AuthServiceBuilder, OWNER};
 use crate::{
     ApiToken, JwtServer, OwnerIndex, TokenAuditEvent, TokenMutation, TokenRotationTransaction,
     TokenStore, jwt_server_error::JwtServerError,

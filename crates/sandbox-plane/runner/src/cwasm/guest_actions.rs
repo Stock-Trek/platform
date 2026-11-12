@@ -1,8 +1,8 @@
 use serde_json::Value;
 use std::sync::{Arc, Mutex};
 
-use super::Emit;
-use super::guest_state::GuestState;
+use crate::cwasm::Emit;
+use crate::cwasm::guest_state::GuestState;
 
 #[derive(Clone, Default)]
 pub struct GuestActions {

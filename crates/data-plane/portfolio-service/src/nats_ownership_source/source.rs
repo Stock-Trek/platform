@@ -1,4 +1,4 @@
-use super::ownership_checkpoint::OwnershipCheckpoint;
+use crate::nats_ownership_source::ownership_checkpoint::OwnershipCheckpoint;
 use crate::{
     OwnershipConfig,
     ownership_source::{OwnershipEventSource, OwnershipMessage},

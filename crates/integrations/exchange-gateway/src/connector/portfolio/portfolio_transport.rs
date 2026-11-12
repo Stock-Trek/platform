@@ -1,4 +1,4 @@
-use super::AccountEventStream;
+use crate::connector::portfolio::AccountEventStream;
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 use platform_exchange_types::{api_key_credential::ApiKeyCredentials, portfolio::AccountSnapshot};

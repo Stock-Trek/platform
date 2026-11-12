@@ -8,7 +8,7 @@ use prost::Message;
 use std::{collections::BTreeMap, fs};
 use stock_trek::{errors::StockTrekError, markets::AlignedWindow, types::AssetId};
 
-use super::{Balances, market_data::Series, slots::MarketSlot};
+use crate::cwasm::backtest::{Balances, market_data::Series, slots::MarketSlot};
 
 pub(super) struct Spec {
     pub(super) strategy_name: String,

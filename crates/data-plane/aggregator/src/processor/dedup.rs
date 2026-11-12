@@ -4,7 +4,7 @@
 //! or redelivered events must not be folded into candles twice, and duplicates
 //! are recorded as a dropped-event metric.
 
-use super::{CandleProcessor, ProcessorUpdate};
+use crate::processor::{CandleProcessor, ProcessorUpdate};
 use crate::state::DeduplicationKey;
 use platform_market_data::event::MarketEvent;
 use platform_metrics::descriptions::{DROP_REASON_DUPLICATE, STAGE_AGGREGATOR};

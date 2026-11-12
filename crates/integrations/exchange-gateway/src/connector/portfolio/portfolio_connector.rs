@@ -1,4 +1,4 @@
-use super::{PortfolioConnection, PortfolioUpdateSink};
+use crate::connector::portfolio::{PortfolioConnection, PortfolioUpdateSink};
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 use std::sync::Arc;

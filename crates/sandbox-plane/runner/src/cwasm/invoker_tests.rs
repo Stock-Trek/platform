@@ -2,7 +2,7 @@ use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult, ConfigError};
 use std::time::Duration;
 
-use super::invoker::InvokerConfig;
+use crate::cwasm::invoker::InvokerConfig;
 
 const EXECUTION_TIMEOUT_SECS: &str = "CWASM_INVOKER_EXECUTION_TIMEOUT_SECS";
 const MAX_GUEST_MEMORY_BYTES: &str = "CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES";

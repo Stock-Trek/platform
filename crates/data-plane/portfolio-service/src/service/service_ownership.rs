@@ -1,4 +1,4 @@
-use super::PortfolioService;
+use crate::service::PortfolioService;
 use crate::{ownership_registry::OwnershipApply, read_model::OwnershipRecord};
 use platform_errors::BuildResult;
 use platform_portfolio_ownership::{AccountKey, OwnershipEvent};

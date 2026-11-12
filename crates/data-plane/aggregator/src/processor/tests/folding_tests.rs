@@ -1,4 +1,4 @@
-use super::fixtures_tests::Fixtures;
+use crate::processor::tests::fixtures_tests::Fixtures;
 use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::state::{AggregatorState, SequenceRange};
 use platform_market_data::candle::{AlignedWindow, CandleKey};

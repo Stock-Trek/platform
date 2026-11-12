@@ -1,4 +1,4 @@
-use super::{ArchiveHour, ArchivePath};
+use crate::layout::{ArchiveHour, ArchivePath};
 use crate::{ArchiveKind, ArchivePartition, routing_key::RoutingBucket};
 use chrono::{TimeZone, Utc};
 use platform_market_data::candle::{AlignedWindow, CandleKey};

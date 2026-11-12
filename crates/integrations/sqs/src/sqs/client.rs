@@ -3,7 +3,7 @@ use platform_errors::{BuildError, BuildResult, SqsError};
 use platform_messages::SQS_MAX_BATCH_BYTES;
 use platform_time::timeouts::Timeouts;
 
-use super::SqsConfig;
+use crate::sqs::SqsConfig;
 
 const SQS_MAX_BATCH_ENTRIES: usize = 10;
 

@@ -1,7 +1,7 @@
 use futures::SinkExt;
 use serde_json::Value;
 
-use super::spec::Spec;
+use crate::cwasm::backtest::spec::Spec;
 
 pub(super) struct ResultPublisher;
 

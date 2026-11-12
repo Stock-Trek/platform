@@ -1,4 +1,4 @@
-use super::support_tests::TEST_SIGNATURE;
+use crate::tests::support_tests::TEST_SIGNATURE;
 use crate::{OrderRequestContext, SignedOrderRequest};
 use chrono::{DateTime, Duration, Timelike};
 use platform_errors::{AuthError, BuildError};

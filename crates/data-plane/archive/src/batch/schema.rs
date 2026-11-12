@@ -1,5 +1,5 @@
-use super::ArchiveBatch;
 use crate::archive_record::ArchiveKind;
+use crate::batch::ArchiveBatch;
 use arrow_schema::{DataType, Field, Schema, SchemaRef};
 use std::{collections::HashMap, sync::Arc};
 

@@ -1,5 +1,5 @@
-use super::{PortfolioState, PortfolioUpdateMetadata};
 use crate::portfolio::CexAccountPortfolio;
+use crate::state::{PortfolioState, PortfolioUpdateMetadata};
 use platform_portfolio_ownership::AccountKey;
 
 impl PortfolioState {

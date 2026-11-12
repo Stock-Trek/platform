@@ -1,4 +1,4 @@
-use super::PortfolioConnectorConfig;
+use crate::connector::portfolio::PortfolioConnectorConfig;
 use platform_config::EnvVars;
 use platform_errors::BuildResult;
 use stock_trek_types::cex::cex_id::CexId;

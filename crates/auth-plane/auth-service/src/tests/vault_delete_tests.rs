@@ -1,4 +1,4 @@
-use super::{
+use crate::tests::{
     support_tests::TestFixture, vault_kv_server_tests::MockVault,
     vault_kv_state_tests::CapturedRequest,
 };

@@ -8,7 +8,7 @@ use stock_trek::{
     types::{AccountId, AssetId, CexId, OrderRequest, Quantity, Side},
 };
 
-use super::{Balances, PriceMap, order_events::OrderEvents};
+use crate::cwasm::backtest::{Balances, PriceMap, order_events::OrderEvents};
 
 pub(super) struct OrderProcessor;
 
