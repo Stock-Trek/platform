@@ -6,11 +6,12 @@ use crate::{
     signed_post::SignedPost,
 };
 use platform_errors::{BuildError, ConfigError};
-use std::{collections::BTreeMap, time::Duration};
 use std::{
+    collections::BTreeMap,
     fs as std_fs,
     io::Cursor,
     path::{Path, PathBuf},
+    time::Duration,
 };
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
