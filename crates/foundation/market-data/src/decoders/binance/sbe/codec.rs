@@ -1,4 +1,4 @@
-use super::groups::SbeGroupExt;
+use crate::decoders::binance::sbe::groups::SbeGroupExt;
 use crate::{
     decoders::{
         binary_cursor::BinaryCursor,

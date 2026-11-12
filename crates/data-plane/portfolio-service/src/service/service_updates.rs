@@ -1,6 +1,6 @@
-use super::PortfolioService;
 #[cfg(test)]
 use crate::portfolio::CexAccountPortfolio;
+use crate::service::PortfolioService;
 use crate::{
     freshness::PortfolioFreshness,
     portfolio::PortfolioUpdate,

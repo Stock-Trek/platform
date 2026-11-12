@@ -3,7 +3,7 @@
 //! Provides the event source abstraction used by state rebuilds and streams
 //! archive event objects from S3 in bounded Parquet batches.
 
-use super::catalog::{ArchiveObject, ArchiveRecoveryConfig, S3ArchiveRecovery};
+use crate::restore::catalog::{ArchiveObject, ArchiveRecoveryConfig, S3ArchiveRecovery};
 use crate::shard_id::ShardId;
 use async_trait::async_trait;
 use aws_sdk_s3_transfer_manager::Client as TransferClient;

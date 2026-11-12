@@ -1,4 +1,4 @@
-use super::PresignedPostSigner;
+use crate::PresignedPostSigner;
 use aws_credential_types::Credentials;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde_json::{Value, json};

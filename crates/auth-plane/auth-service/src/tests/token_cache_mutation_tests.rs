@@ -1,4 +1,4 @@
-use super::{
+use crate::tests::{
     support_tests::TestFixture,
     token_cache_support_tests::{Fixture, TestStore},
 };

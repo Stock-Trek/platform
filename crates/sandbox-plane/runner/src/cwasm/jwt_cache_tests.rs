@@ -1,4 +1,4 @@
-use super::JwtCache;
+use crate::cwasm::JwtCache;
 use platform_sigv4::{SigV4Config, SigV4Registry};
 use std::{
     net::SocketAddr,

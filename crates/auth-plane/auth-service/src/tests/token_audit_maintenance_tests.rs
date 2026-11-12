@@ -1,4 +1,4 @@
-use super::support_tests::TestFixture;
+use crate::tests::support_tests::TestFixture;
 use crate::{MemoryTokenAuditLog, TokenAuditAction};
 use chrono::{Duration, Utc};
 use std::sync::Arc;

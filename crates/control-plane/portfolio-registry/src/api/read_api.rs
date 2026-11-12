@@ -1,5 +1,5 @@
-use super::{ApiError, RequestHandler, bearer, empty_response, json_response};
 use crate::RegistryService;
+use crate::api::{ApiError, RequestHandler, bearer, empty_response, json_response};
 use async_trait::async_trait;
 use chrono::Utc;
 use http_body_util::Full;

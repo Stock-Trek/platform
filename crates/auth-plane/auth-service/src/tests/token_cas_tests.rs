@@ -1,4 +1,4 @@
-use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
+use crate::tests::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{
     ApiToken, AuthService, MemoryTokenStore, RevocationReason, RevokedBy, TokenAuditEvent,
     TokenMutation, TokenRotationTransaction, TokenStore,

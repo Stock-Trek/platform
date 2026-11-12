@@ -1,4 +1,4 @@
-use super::{AccountEventStream, PortfolioSession, PortfolioTransport};
+use crate::connector::portfolio::{AccountEventStream, PortfolioSession, PortfolioTransport};
 use async_trait::async_trait;
 use chrono::Utc;
 use platform_errors::BuildResult;

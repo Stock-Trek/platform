@@ -5,7 +5,7 @@
 //! incomplete and publish those revisions. When a backfill has supplied every
 //! missing sequence, the affected windows are marked complete and republished.
 
-use super::{CandleProcessor, ProcessorUpdate};
+use crate::processor::{CandleProcessor, ProcessorUpdate};
 use crate::state::IncompleteWindow;
 use platform_market_data::{candle::ClosedCandle, event::GapMarker};
 use platform_types::new_types::TimestampMilliseconds;

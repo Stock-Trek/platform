@@ -1,5 +1,5 @@
-use super::AccountEventStream;
-use super::GatewayPortfolioTransport;
+use crate::connector::portfolio::AccountEventStream;
+use crate::connector::portfolio::GatewayPortfolioTransport;
 use crate::{
     clients::iris::IrisWebsocketClient, connector::Connector,
     websocket_listener::WebsocketEventStream,

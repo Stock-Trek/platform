@@ -1,4 +1,4 @@
-use super::order_request_server_fixture_tests::{Fixture, OWNER};
+use crate::tests::order_request_server_fixture_tests::{Fixture, OWNER};
 use crate::{OrderRequestDelivery, OrderRequestServer, OrderRequestService};
 use chrono::Utc;
 use platform_messages::UnsignedOrderRequest;

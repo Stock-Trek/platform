@@ -1,8 +1,8 @@
-use super::{
+use crate::connector::portfolio::{
     ConnectorPortfolioUpdate, ConnectorState, PortfolioUpdateApply, PortfolioUpdateSink,
     health_reporter::HealthReporter, session_state::SessionState,
 };
-use super::{PortfolioSession, PortfolioTransport};
+use crate::connector::portfolio::{PortfolioSession, PortfolioTransport};
 use chrono::Utc;
 use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::portfolio::{AccountEvent, AccountPositionEvent};
@@ -20,7 +20,7 @@ pub(super) struct Watcher {
     pub(super) cex_id: CexId,
     pub(super) account: AccountId,
     pub(super) transport: Arc<dyn PortfolioTransport>,
-    pub(super) credentials: Arc<dyn super::PortfolioCredentialSource>,
+    pub(super) credentials: Arc<dyn crate::connector::portfolio::PortfolioCredentialSource>,
     pub(super) sink: Arc<dyn PortfolioUpdateSink>,
     pub(super) health: HealthReporter,
     pub(super) shutdown: watch::Receiver<bool>,

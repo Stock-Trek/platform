@@ -1,4 +1,4 @@
-use super::{BinancePortfolioConfig, CREDENTIALS};
+use crate::binance::portfolio::{BinancePortfolioConfig, CREDENTIALS};
 use platform_config::EnvVars;
 use platform_errors::{BuildError, ConfigError};
 use secrecy::ExposeSecret;

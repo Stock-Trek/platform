@@ -1,4 +1,4 @@
-use super::AlignedWindow;
+use crate::candle::AlignedWindow;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};

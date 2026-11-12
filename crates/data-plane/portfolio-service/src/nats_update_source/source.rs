@@ -1,4 +1,4 @@
-use super::update_checkpoint::UpdateCheckpoint;
+use crate::nats_update_source::update_checkpoint::UpdateCheckpoint;
 use crate::{
     UpdateConfig,
     portfolio::{PORTFOLIO_UPDATE_STREAM_PREFIX, PORTFOLIO_UPDATE_SUBJECT, PortfolioUpdate},

@@ -1,4 +1,4 @@
-use super::{
+use crate::connector::portfolio::{
     AccountEventStream, ConnectorPortfolioUpdate, ExchangePortfolioConnector,
     NoopConnectorHealthSink, PortfolioCredentialSource, PortfolioFeed, PortfolioTransport,
     PortfolioUpdateApply, PortfolioUpdateSink, StaticPortfolioCredentials,

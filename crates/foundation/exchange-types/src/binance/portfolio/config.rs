@@ -1,4 +1,4 @@
-use super::credentials::{BinanceCredentialConfig, CREDENTIALS};
+use crate::binance::portfolio::credentials::{BinanceCredentialConfig, CREDENTIALS};
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_types::url_scheme::UrlScheme;

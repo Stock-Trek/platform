@@ -1,4 +1,4 @@
-use super::BinanceUserDataEvent;
+use crate::binance::portfolio::BinanceUserDataEvent;
 use serde_json::json;
 
 #[test]

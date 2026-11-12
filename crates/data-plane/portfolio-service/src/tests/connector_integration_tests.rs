@@ -1,5 +1,5 @@
-use super::order_request_fixture_tests::{Fixture as OrderFixture, OWNER};
-use super::test_feed_tests::Fixture as PortfolioFixture;
+use crate::tests::order_request_fixture_tests::{Fixture as OrderFixture, OWNER};
+use crate::tests::test_feed_tests::Fixture as PortfolioFixture;
 use crate::{OrderRequestService, PortfolioService, PortfolioUpdate};
 use async_trait::async_trait;
 use chrono::Utc;

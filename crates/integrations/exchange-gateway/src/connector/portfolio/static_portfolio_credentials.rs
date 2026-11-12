@@ -1,4 +1,4 @@
-use super::PortfolioCredentialSource;
+use crate::connector::portfolio::PortfolioCredentialSource;
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::api_key_credential::ApiKeyCredentials;

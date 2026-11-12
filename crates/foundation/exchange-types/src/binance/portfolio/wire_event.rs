@@ -1,4 +1,4 @@
-use super::wire_balance::WireBalance;
+use crate::binance::portfolio::wire_balance::WireBalance;
 use serde::Deserialize;
 
 #[allow(non_snake_case)]

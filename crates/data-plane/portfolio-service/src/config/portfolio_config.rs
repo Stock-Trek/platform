@@ -1,4 +1,6 @@
-use super::{AuthConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig, UpdateConfig};
+use crate::config::{
+    AuthConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig, UpdateConfig,
+};
 use platform_config::EnvVars;
 use platform_errors::BuildResult;
 use platform_exchange_gateway::connector::PortfolioConnectorConfig;

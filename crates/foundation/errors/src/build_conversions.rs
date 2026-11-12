@@ -1,4 +1,4 @@
-use super::BuildError;
+use crate::BuildError;
 #[cfg(feature = "lambda")]
 use crate::ErrorType;
 #[cfg(feature = "http")]

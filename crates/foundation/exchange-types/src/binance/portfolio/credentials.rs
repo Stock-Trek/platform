@@ -1,4 +1,4 @@
-use super::credential_entry::CredentialEntry;
+use crate::binance::portfolio::credential_entry::CredentialEntry;
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use secrecy::SecretString;

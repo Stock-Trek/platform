@@ -1,4 +1,4 @@
-use super::JetStream;
+use crate::jetstream::JetStream;
 use async_nats::jetstream::stream;
 use platform_errors::{BuildError, BuildResult};
 use std::time::Duration;

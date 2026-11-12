@@ -5,7 +5,7 @@ mod commit;
 mod catalog_metadata_tests;
 mod scan;
 
-use super::{ArchiveCatalog, IcebergDataFile};
+use crate::iceberg::catalog::{ArchiveCatalog, IcebergDataFile};
 use crate::iceberg::{ArchiveIcebergTable, IcebergConfig};
 use async_trait::async_trait;
 use iceberg::{

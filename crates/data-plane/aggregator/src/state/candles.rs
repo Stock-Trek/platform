@@ -1,6 +1,6 @@
 //! Candle storage, lookup, equality, and serialization for aggregator state.
 
-use super::AggregatorState;
+use crate::state::AggregatorState;
 use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::{AlignedWindow, Candle, CandleKey};
 use platform_types::new_types::TimestampMilliseconds;

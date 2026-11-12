@@ -1,4 +1,4 @@
-use super::support_tests::{AuthServiceBuilder, TestFixture};
+use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{SecretInput, TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenMutation};
 use async_trait::async_trait;
 use chrono::Utc;

@@ -1,4 +1,4 @@
-use super::support_tests::{AuthServiceBuilder, TestFixture};
+use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{
     ApiToken, MemoryTokenAuditLog, MemoryTokenStore, TokenAuditAction, TokenAuditEvent,
     TokenMutation, TokenRotationTransaction, TokenStore,

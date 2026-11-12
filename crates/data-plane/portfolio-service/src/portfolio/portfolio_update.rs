@@ -1,4 +1,4 @@
-use super::CexAccountPortfolio;
+use crate::portfolio::CexAccountPortfolio;
 use crate::{AccountKey, portfolio_codec::PortfolioUpdateWire};
 use chrono::{DateTime, Utc};
 use platform_errors::{BuildError, BuildResult};

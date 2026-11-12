@@ -8,7 +8,7 @@ use rust_decimal::Decimal;
 use std::collections::BTreeMap;
 use stock_trek::markets::{AlignedWindow, TimestampMillis};
 
-use super::{PriceMap, market_data::Series, portfolio::Portfolio, spec::Spec};
+use crate::cwasm::backtest::{PriceMap, market_data::Series, portfolio::Portfolio, spec::Spec};
 
 impl Spec {
     pub(super) fn step_context(

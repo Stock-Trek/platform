@@ -1,5 +1,5 @@
-use super::body::Candle;
-use super::revision::CandleRevision;
+use crate::candle::body::Candle;
+use crate::candle::revision::CandleRevision;
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 

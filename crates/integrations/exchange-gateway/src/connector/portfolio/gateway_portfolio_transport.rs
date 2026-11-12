@@ -1,4 +1,4 @@
-use super::{
+use crate::connector::portfolio::{
     AccountEventStream, PortfolioTransport, gateway_account_event_stream::GatewayAccountEventStream,
 };
 use crate::{

@@ -13,9 +13,9 @@ use stock_trek::{
     types::{AccountId, AssetId, CexId, OrderRequest, Quantity, Side},
 };
 
-use super::orders::OrderProcessor;
-use super::portfolio::Portfolio;
-use super::{BackTest, Balances, PriceMap};
+use crate::cwasm::backtest::orders::OrderProcessor;
+use crate::cwasm::backtest::portfolio::Portfolio;
+use crate::cwasm::backtest::{BackTest, Balances, PriceMap};
 
 fn balances() -> Balances {
     BTreeMap::from([(

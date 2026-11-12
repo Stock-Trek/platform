@@ -1,4 +1,4 @@
-use super::{
+use crate::tests::{
     vault_http_tests::VaultHttp,
     vault_kv_state_tests::{CapturedRequest, VaultKvState},
 };

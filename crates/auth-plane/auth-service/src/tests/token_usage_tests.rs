@@ -1,4 +1,4 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
+use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{RevocationReason, RevokedBy};
 use chrono::{Duration, Utc};
 use secrecy::ExposeSecret;

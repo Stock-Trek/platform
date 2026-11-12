@@ -1,4 +1,4 @@
-use super::token_usage_queue_fixture_tests::ImmediateTokenUsageQueue;
+use crate::tests::token_usage_queue_fixture_tests::ImmediateTokenUsageQueue;
 use crate::{
     ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenStore, ReplayStore,
     TokenAuditLog, TokenAuditRelay, TokenExpiry, TokenMetadata, TokenOptions, TokenScope,

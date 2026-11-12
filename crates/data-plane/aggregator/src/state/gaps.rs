@@ -1,8 +1,8 @@
 //! Gap markers and the candle windows they affect.
 
-use super::AggregatorState;
-use super::sequence::SequenceRange;
-use super::streams::StreamProgress;
+use crate::state::AggregatorState;
+use crate::state::sequence::SequenceRange;
+use crate::state::streams::StreamProgress;
 use platform_market_data::candle::CandleKey;
 use platform_market_data::event::GapMarker;
 use platform_types::new_types::TimestampMilliseconds;

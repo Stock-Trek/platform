@@ -1,5 +1,5 @@
-use super::PortfolioTransport;
-use super::{
+use crate::connector::portfolio::PortfolioTransport;
+use crate::connector::portfolio::{
     ConnectorState, PortfolioConnection, PortfolioCredentialSource, PortfolioUpdateSink,
     account_watcher::AccountWatcher, health_reporter::HealthReporter, watcher::Watcher,
 };

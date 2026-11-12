@@ -4,7 +4,7 @@ use platform_messages::SqsMessage;
 use platform_time::deadline_budget::Deadline;
 use std::time::Duration;
 
-use super::Sqs;
+use crate::sqs::Sqs;
 
 impl Sqs {
     /// Sends each message with an individual `SendMessage` call.

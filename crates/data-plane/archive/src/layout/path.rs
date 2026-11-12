@@ -3,7 +3,7 @@
 //! Both services build keys through this module so the hourly partitioning and
 //! prefix handling cannot drift apart.
 
-use super::hour::{ArchiveHour, DAY_FIELD, HOUR_FIELD, MONTH_FIELD, YEAR_FIELD};
+use crate::layout::hour::{ArchiveHour, DAY_FIELD, HOUR_FIELD, MONTH_FIELD, YEAR_FIELD};
 use crate::{ArchiveKind, ArchivePartition, routing_key::RoutingBucket};
 use platform_errors::{BuildError, BuildResult, DataError};
 use platform_types::new_types::TimestampMilliseconds;
@@ -184,8 +184,8 @@ impl ArchivePath {
     }
 
     /// Parse both the kind and the hourly bucket from an object key.
-    pub fn parse_key(path: &str) -> Option<super::ArchiveBucket> {
-        Some(super::ArchiveBucket::from_parts(
+    pub fn parse_key(path: &str) -> Option<crate::layout::ArchiveBucket> {
+        Some(crate::layout::ArchiveBucket::from_parts(
             Self::kind(path)?,
             Self::bucket_start_from_key(path)?,
         ))

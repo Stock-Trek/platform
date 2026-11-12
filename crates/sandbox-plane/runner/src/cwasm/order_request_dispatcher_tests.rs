@@ -12,7 +12,7 @@ use tokio::{
     task::JoinHandle,
 };
 
-use super::OrderRequestDispatcher;
+use crate::cwasm::OrderRequestDispatcher;
 
 const OWNER: &str = "runner-owner";
 const DEAD_AUTH: &str = "http://127.0.0.1:1/jwt";

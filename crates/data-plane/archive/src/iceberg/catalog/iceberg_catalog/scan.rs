@@ -1,5 +1,5 @@
-use super::IcebergCatalog;
 use crate::iceberg::catalog::IcebergDataFile;
+use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use futures::TryStreamExt;
 use iceberg::table::Table;
 use platform_errors::BuildResult;

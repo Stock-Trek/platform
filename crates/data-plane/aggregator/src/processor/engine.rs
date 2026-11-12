@@ -1,7 +1,7 @@
 //! The keyed candle processor that coordinates folding, deduplication, and
 //! window expiry.
 
-use super::{ProcessorConfig, ProcessorUpdate};
+use crate::processor::{ProcessorConfig, ProcessorUpdate};
 use crate::state::{AggregatorState, SequenceRange, StreamProgress};
 use platform_errors::BuildResult;
 use platform_market_data::{

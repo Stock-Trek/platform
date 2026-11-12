@@ -1,4 +1,4 @@
-use super::{
+use crate::connector::portfolio::{
     ConnectorHealthSink, ExchangePortfolioConnector, GatewayPortfolioTransport, NoopPortfolioFeed,
     PortfolioCredentialSource, PortfolioFeed, PortfolioTransport, StaticPortfolioCredentials,
 };

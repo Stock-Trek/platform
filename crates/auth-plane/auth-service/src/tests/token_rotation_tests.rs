@@ -1,4 +1,4 @@
-use super::support_tests::{AuthServiceBuilder, TestFixture};
+use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{AuthService, api_token::MAX_TOKEN_ID_LENGTH};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BuildError};

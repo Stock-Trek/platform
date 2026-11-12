@@ -1,4 +1,4 @@
-use super::run_invoker::RunInvokerConfig;
+use crate::run_invoker::RunInvokerConfig;
 use platform_config::EnvVars;
 use std::time::Duration;
 

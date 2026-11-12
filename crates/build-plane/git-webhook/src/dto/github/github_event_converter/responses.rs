@@ -1,4 +1,4 @@
-use super::{
+use crate::dto::github::github_event_converter::{
     GitHubEventConverter,
     converter::{NO_ACTION, UNKNOWN_ACTION},
 };

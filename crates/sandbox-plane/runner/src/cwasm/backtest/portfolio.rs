@@ -1,4 +1,4 @@
-use super::Balances;
+use crate::cwasm::backtest::Balances;
 use platform_runner::generated::dto::{
     AssetCountDto, AssetIdDto, CexAccountPortfolioDto, CexAccountsDto, DecimalDto, PortfolioDto,
 };

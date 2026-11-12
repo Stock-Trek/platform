@@ -1,4 +1,4 @@
-use super::{AccountEventStream, PortfolioTransport};
+use crate::connector::portfolio::{AccountEventStream, PortfolioTransport};
 use platform_errors::BuildResult;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,

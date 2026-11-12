@@ -1,7 +1,7 @@
 //! Per-stream event-time progress and deduplication.
 
-use super::AggregatorState;
-use super::sequence::SequenceRange;
+use crate::state::AggregatorState;
+use crate::state::sequence::SequenceRange;
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use stock_trek_types::cex::cex_id::CexId;

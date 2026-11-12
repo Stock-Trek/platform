@@ -1,4 +1,4 @@
-use super::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
+use crate::tests::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction, TokenAuditEvent};
 use chrono::{Duration, Utc};
 use std::sync::Arc;

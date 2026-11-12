@@ -1,4 +1,4 @@
-use super::support_tests::{ORDER_REQUEST, TestFixture};
+use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{InvalidOrderRequest, OrderRequestVerification};
 use chrono::Utc;
 

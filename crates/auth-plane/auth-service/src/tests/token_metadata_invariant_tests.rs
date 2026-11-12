@@ -1,5 +1,5 @@
-use super::support_tests::TestFixture;
 use crate::ApiToken;
+use crate::tests::support_tests::TestFixture;
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, BuildError};
 use serde_json::{Value, json};

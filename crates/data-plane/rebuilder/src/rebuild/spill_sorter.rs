@@ -1,4 +1,4 @@
-use super::{
+use crate::rebuild::{
     SpillUsage,
     spill::SpillMergeLimits,
     spill_codec::{SpillCodec, SpillWriter},

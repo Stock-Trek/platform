@@ -1,5 +1,5 @@
-use super::body::Candle;
-use super::key::CandleKey;
+use crate::candle::body::Candle;
+use crate::candle::key::CandleKey;
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 

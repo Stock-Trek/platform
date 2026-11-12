@@ -11,7 +11,7 @@ use stock_trek::types::{AccountId, AssetId, CexId};
 
 use crate::cwasm::WasmRunner;
 
-use super::{publish::ResultPublisher, simulation::Simulation, spec::Spec};
+use crate::cwasm::backtest::{publish::ResultPublisher, simulation::Simulation, spec::Spec};
 
 pub(super) type Balances = BTreeMap<CexId, BTreeMap<AccountId, BTreeMap<AssetId, f64>>>;
 pub(super) type PriceMap = BTreeMap<(CexId, AssetId, AssetId), f64>;

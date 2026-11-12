@@ -1,6 +1,6 @@
 //! Shard processing worker lifecycle.
 
-use super::{
+use crate::runner::{
     commit::CommitState, output_writer::CandleOutputWriter, quiesce::QuiesceReceiver,
     writer::Writer,
 };
@@ -26,7 +26,7 @@ use std::sync::Arc;
 /// [`CandleProcessor`], publishes outputs, checkpoints the keyed state
 /// periodically and at shutdown, and only then acknowledges the source records.
 ///
-/// A coordinator can install a [`super::QuiesceSignal`] with
+/// A coordinator can install a [`crate::runner::QuiesceSignal`] with
 /// [`ProcessorRunner::with_quiesce_signal`]. The running worker then stops
 /// polling for new inputs, drains and checkpoints accepted records, and releases
 /// its lease before exiting so ownership can move to another writer.

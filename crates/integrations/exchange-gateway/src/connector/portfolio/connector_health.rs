@@ -1,4 +1,4 @@
-use super::ConnectorState;
+use crate::connector::portfolio::ConnectorState;
 use chrono::{DateTime, Utc};
 use platform_errors::{BuildError, BuildResult};
 use serde::{Deserialize, Serialize};

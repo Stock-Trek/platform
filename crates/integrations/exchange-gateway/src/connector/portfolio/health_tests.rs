@@ -1,4 +1,4 @@
-use super::{
+use crate::connector::portfolio::{
     CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT, ConnectorHealth, ConnectorState,
 };
 use chrono::Utc;
