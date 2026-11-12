@@ -5,7 +5,7 @@ use lambda_runtime::LambdaEvent;
 use platform_errors::{BuildError, BuildResult, ErrorType, SqsError};
 use platform_messages::SqsMessage as PlatformSqsMessage;
 use platform_metrics::{route::RouteMetrics, sqs::SqsMetrics};
-use platform_time::{deadline::Deadline, request_context::RequestContext};
+use platform_time::{deadline_budget::Deadline, request_context::RequestContext};
 
 pub struct SqsHandler;
 

@@ -1,8 +1,8 @@
 use crate::{
+    archive_parquet::ArchiveParquetWriter,
+    archive_parquet::{ArchiveParquet, ArchiveParquetBatches},
+    archive_record::{ArchiveKind, ArchiveRecord},
     batch::ArchiveBatch,
-    parquet::ArchiveParquetWriter,
-    parquet::{ArchiveParquet, ArchiveParquetBatches},
-    record::{ArchiveKind, ArchiveRecord},
 };
 use platform_errors::{BuildError, BuildResult};
 use std::{fs::File, path::Path, vec::IntoIter};

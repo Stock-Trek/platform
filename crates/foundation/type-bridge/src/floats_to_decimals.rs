@@ -1,4 +1,4 @@
-use crate::trading_precision::TradingPrecision;
+use crate::trading_limits::TradingPrecision;
 use platform_errors::BuildResult;
 use rust_decimal::{Decimal, RoundingStrategy, prelude::ToPrimitive};
 use stock_trek_types::cex::{

@@ -1,4 +1,4 @@
-use crate::{artifacts::Artifacts, s3::SignedPost, source::SourceLimits};
+use crate::{artifacts::Artifacts, signed_post::SignedPost, source_archive::SourceLimits};
 use platform_errors::{BuildError, BuildResult, TimeoutError};
 use platform_messages::BuildRequest;
 use std::{

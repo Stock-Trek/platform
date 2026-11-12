@@ -1,6 +1,6 @@
 use crate::{
-    binance::parser::BinanceEventParser, event_page_source::EventPageSource,
-    fetcher::BackfilledEvent,
+    binance::parser::BinanceEventParser, event_fetcher::BackfilledEvent,
+    event_page_source::EventPageSource,
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult, ExchangeError};

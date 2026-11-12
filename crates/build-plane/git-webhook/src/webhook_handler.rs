@@ -10,7 +10,7 @@ use platform_errors::{
 };
 use platform_messages::SqsMessage;
 use platform_metrics::{event::EventMetrics, route::RouteMetrics};
-use platform_time::{deadline::Deadline, request_context::RequestContext};
+use platform_time::{deadline_budget::Deadline, request_context::RequestContext};
 
 const WEBHOOK_ROUTE: &str = "webhook";
 const ERROR_TYPE_HTTP: &str = "http";

@@ -2,8 +2,8 @@
 
 use crate::{
     config::AggregatorConfig,
-    lease::{LeaseStore, WriterLease},
-    shard::ShardId,
+    shard_id::ShardId,
+    writer_lease::{LeaseStore, WriterLease},
 };
 use platform_errors::{BuildError, BuildResult};
 use platform_metrics::AggregatorMetrics;

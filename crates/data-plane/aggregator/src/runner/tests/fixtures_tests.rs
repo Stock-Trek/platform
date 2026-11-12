@@ -1,11 +1,11 @@
 use crate::runner::QuiesceSignal;
 use crate::{
-    checkpoint::{CheckpointRecord, StateStore},
+    candle_sink::{ClosedCandlePublisher, OpenCandleStore},
+    checkpoint_record::{CheckpointRecord, StateStore},
     config::AggregatorConfig,
+    market_source::{MarketInput, MarketSource, SourceRecord},
     processor::ProcessorUpdate,
-    shard::ShardId,
-    sink::{ClosedCandlePublisher, OpenCandleStore},
-    source::{MarketInput, MarketSource, SourceRecord},
+    shard_id::ShardId,
     state::AggregatorState,
 };
 use async_trait::async_trait;
@@ -214,6 +214,6 @@ impl Fixtures {
         update: &ProcessorUpdate,
         state: &AggregatorState,
     ) -> Vec<CandleKey> {
-        crate::runner::output::CandleOutputWriter::closed_open_keys(update, state)
+        crate::runner::output_writer::CandleOutputWriter::closed_open_keys(update, state)
     }
 }

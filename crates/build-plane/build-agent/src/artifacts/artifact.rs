@@ -1,4 +1,4 @@
-use crate::{s3::SignedPost, source::SourceLimits};
+use crate::{signed_post::SignedPost, source_archive::SourceLimits};
 use platform_errors::{BuildError, BuildResult};
 use std::{
     io::Write,

@@ -1,5 +1,5 @@
 use crate::{
-    content_id::ContentId,
+    content_hash::ContentId,
     spill::{PartitionItem, PartitionRecords},
 };
 use platform_archive::{ArchiveBatch, ArchiveKind, ArchiveParquetWriter};

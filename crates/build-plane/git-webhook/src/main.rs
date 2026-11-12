@@ -7,7 +7,12 @@ use std::sync::Arc;
 
 mod config;
 mod context;
-mod dedup;
+mod delivery_dedup;
+
+#[cfg(test)]
+mod delivery_dedup_tests;
+
+pub use delivery_dedup::*;
 mod dto;
 mod event_response;
 mod responses;

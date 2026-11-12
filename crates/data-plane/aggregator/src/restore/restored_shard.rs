@@ -2,7 +2,7 @@
 //! archive-backed state rebuild.
 
 use crate::config::{AggregatorConfig, ReplayStartPolicy};
-use crate::shard::ShardId;
+use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
 use platform_market_data::candle::AlignedWindow;
 use platform_nats::ConsumerStart;

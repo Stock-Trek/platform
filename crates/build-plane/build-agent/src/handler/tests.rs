@@ -1,6 +1,6 @@
 use crate::{
     handler::{BuildAgent, Handler},
-    source::SourceLimits,
+    source_archive::SourceLimits,
 };
 use platform_errors::{BuildError, ConfigError, ErrorType, TimeoutError};
 use platform_messages::{BuildRequest, BuildRequestSignedPost, SqsRefType};

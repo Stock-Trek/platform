@@ -1,5 +1,5 @@
 use crate::{
-    aws_ops::build_request::BuildRequest,
+    aws_ops::request::BuildRequest,
     context::RsOrchestratorContext,
     tasks::{git_remote::GitRemote, s3_keys::S3Keys, source_archive::SourceArchive},
 };

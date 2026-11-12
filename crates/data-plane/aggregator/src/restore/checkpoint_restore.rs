@@ -9,7 +9,7 @@
 use super::rebuild::RebuiltArchiveState;
 use super::replay::ArchivedEventSource;
 use super::restored_shard::{RestoreOptions, RestoreSource, RestoredShard};
-use crate::checkpoint::StateStore;
+use crate::checkpoint_record::StateStore;
 use crate::config::ReplayStartPolicy;
 use crate::processor::ProcessorConfig;
 use crate::state::AggregatorState;

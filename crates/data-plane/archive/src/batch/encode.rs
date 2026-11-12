@@ -1,10 +1,10 @@
 use super::ArchiveBatch;
-use crate::record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent};
+use crate::archive_record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent};
 use arrow_array::{
     ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::{candle::ClosedCandle, envelope::EnvelopeCodec};
+use platform_market_data::{candle::ClosedCandle, envelope_codec::EnvelopeCodec};
 use std::sync::Arc;
 
 impl ArchiveBatch {
@@ -134,7 +134,7 @@ impl ArchiveBatch {
                     )),
                     Arc::new(UInt64Array::from_iter_values(candles.iter().map(
                         |closed| {
-                            crate::routing::RoutingKey::for_pair(
+                            crate::routing_key::RoutingKey::for_pair(
                                 closed.candle().key.exchange,
                                 &closed.candle().key.trading_pair,
                             )

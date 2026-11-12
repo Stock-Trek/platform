@@ -1,8 +1,8 @@
 use super::fixtures_tests::{FakeSink, FakeSource, Fixtures};
-use crate::checkpoint::tests::InMemoryStateStore;
+use crate::checkpoint_record_tests::InMemoryStateStore;
+use crate::market_source::MarketInput;
 use crate::runner::ProcessorRunner;
-use crate::shard::ShardId;
-use crate::source::MarketInput;
+use crate::shard_id::ShardId;
 use platform_market_data::event::GapMarker;
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::{Arc, Mutex};

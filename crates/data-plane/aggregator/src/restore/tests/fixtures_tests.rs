@@ -1,9 +1,9 @@
-use crate::checkpoint::{CheckpointRecord, StateStore};
+use crate::checkpoint_record::{CheckpointRecord, StateStore};
 use crate::config::ReplayStartPolicy;
 use crate::restore::catalog::ArchiveObject;
 use crate::restore::replay::ArchivedEventSource;
 use crate::restore::restored_shard::RestoreOptions;
-use crate::shard::ShardId;
+use crate::shard_id::ShardId;
 use crate::state::STATE_SCHEMA_VERSION;
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};

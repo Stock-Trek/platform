@@ -1,5 +1,8 @@
+mod catalog_metadata;
 mod commit;
-mod metadata;
+
+#[cfg(test)]
+mod catalog_metadata_tests;
 mod scan;
 
 use super::{ArchiveCatalog, IcebergDataFile};

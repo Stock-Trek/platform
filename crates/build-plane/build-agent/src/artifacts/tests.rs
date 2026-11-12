@@ -1,5 +1,5 @@
 use super::artifact::*;
-use crate::s3::SignedPost;
+use crate::signed_post::SignedPost;
 use platform_errors::{BuildError, ConfigError};
 use std::{collections::BTreeMap, time::Duration};
 use std::{
@@ -24,7 +24,7 @@ impl Artifacts {
             source_get_url,
             source_dir,
             build_cache_dir,
-            crate::source::SourceLimits::default(),
+            crate::source_archive::SourceLimits::default(),
         )
     }
 }

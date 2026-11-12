@@ -1,10 +1,10 @@
 use crate::decoders::{
     binance::{
-        json::{BinanceJsonCodec, BinanceJsonMapping},
+        binance_json_mapping::{BinanceJsonCodec, BinanceJsonMapping},
         sbe::BinanceSbeCodec,
     },
     frame::DecodedFrame,
-    json::{EnvelopeJsonMapping, MappedJsonCodec},
+    json_mapping::{EnvelopeJsonMapping, MappedJsonCodec},
 };
 use iris::{Codec, ConnectionError};
 use platform_errors::IngesterError;

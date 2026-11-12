@@ -4,7 +4,7 @@
 //! prefix handling cannot drift apart.
 
 use super::hour::{ArchiveHour, DAY_FIELD, HOUR_FIELD, MONTH_FIELD, YEAR_FIELD};
-use crate::{ArchiveKind, ArchivePartition, routing::RoutingBucket};
+use crate::{ArchiveKind, ArchivePartition, routing_key::RoutingBucket};
 use platform_errors::{BuildError, BuildResult, DataError};
 use platform_types::new_types::TimestampMilliseconds;
 

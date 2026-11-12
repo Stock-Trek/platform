@@ -1,4 +1,4 @@
-use crate::decoders::binary::BinaryCursor;
+use crate::decoders::binary_cursor::BinaryCursor;
 use platform_errors::IngesterError;
 
 /// SBE group header and the location of its entries within the frame.

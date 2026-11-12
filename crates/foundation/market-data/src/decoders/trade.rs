@@ -1,4 +1,4 @@
-use crate::{decoders::binance::trade::BinanceTradeDecoder, event::MarketEvent};
+use crate::{decoders::binance::binance_trade_decoder::BinanceTradeDecoder, event::MarketEvent};
 use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;

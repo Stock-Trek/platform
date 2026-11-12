@@ -1,4 +1,6 @@
-use crate::{config::AgentConfig, handler::BuildAgent, handler::Handler, source::SourceLimits};
+use crate::{
+    config::AgentConfig, handler::BuildAgent, handler::Handler, source_archive::SourceLimits,
+};
 use lambda_runtime::service_fn;
 use metrics_cloudwatch_embedded::lambda::service::run;
 use platform_errors::{BuildError, BuildResult};
@@ -7,8 +9,16 @@ use platform_runtime::Service;
 mod artifacts;
 mod config;
 mod handler;
-mod s3;
-mod source;
+mod signed_post;
+
+#[cfg(test)]
+mod signed_post_tests;
+
+pub use signed_post::*;
+mod source_archive;
+
+#[cfg(test)]
+mod source_archive_tests;
 
 const SERVICE: Service = Service::new("platform-build-agent");
 

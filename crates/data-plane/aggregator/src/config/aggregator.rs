@@ -1,6 +1,6 @@
 use super::replay::ReplayStartPolicy;
 use crate::processor::ProcessorConfig;
-use crate::shard::ShardId;
+use crate::shard_id::ShardId;
 use platform_market_data::candle::AlignedWindow;
 use platform_types::new_types::DurationMilliseconds;
 use std::time::Duration;

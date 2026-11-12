@@ -11,7 +11,12 @@
 //! memory. Output can be written to either the raw or the compacted layer.
 
 pub mod config;
-pub mod events;
+pub mod iceberg_event_reader;
+
+#[cfg(test)]
+mod iceberg_event_reader_tests;
+
+pub use iceberg_event_reader::*;
 pub mod rebuild;
 pub mod runner;
 pub mod sink;

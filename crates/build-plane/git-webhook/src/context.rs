@@ -1,15 +1,15 @@
 use crate::{
     config::WebhookConfig,
-    dedup::DeliveryDedup,
+    delivery_dedup::DeliveryDedup,
     dto::event_converter::{EventConverter, EventConverters},
 };
 use aws_sdk_sqs::Client as SqsClient;
 use platform_aws::{SdkConfig, SsmConfig, SsmSecrets};
 use platform_errors::{BuildError, BuildResult, ErrorType, SecretsError};
-use platform_github::host_allow_list::HostAllowlist;
+use platform_github::host_allowlist::HostAllowlist;
 use platform_metrics::secret::SecretMetrics;
 use platform_sqs::sqs::{Sqs, SqsConfig};
-use platform_time::{deadline::Deadline, timeouts::Timeouts};
+use platform_time::{deadline_budget::Deadline, timeouts::Timeouts};
 use std::{
     sync::{
         Arc,

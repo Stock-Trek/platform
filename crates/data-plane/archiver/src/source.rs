@@ -3,7 +3,8 @@ use async_trait::async_trait;
 use platform_archive::{ArchiveRecord, ArchiveRecordKey, ArchivedMarketEvent, STATE_EPOCH_HEADER};
 use platform_errors::BuildResult;
 use platform_market_data::{
-    candle::ClosedCandle, envelope::EnvelopeCodec, event::MarketEvent, subject::MarketEventSubject,
+    candle::ClosedCandle, envelope_codec::EnvelopeCodec, event::MarketEvent,
+    market_event_subject::MarketEventSubject,
 };
 use platform_metrics::descriptions::{
     DECODE_KIND_CLOSED_CANDLE, DECODE_KIND_MARKET_EVENT, STAGE_ARCHIVER,

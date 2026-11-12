@@ -1,4 +1,4 @@
-use crate::trading_precision::TradingPrecision;
+use crate::trading_limits::TradingPrecision;
 use std::collections::HashMap;
 use stock_trek_types::cex::trading_pair::TradingPair;
 

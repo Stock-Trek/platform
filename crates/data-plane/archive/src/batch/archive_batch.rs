@@ -1,4 +1,4 @@
-use crate::record::{ArchiveKind, ArchiveRecord};
+use crate::archive_record::{ArchiveKind, ArchiveRecord};
 use platform_errors::{BuildError, BuildResult};
 use std::io::ErrorKind;
 

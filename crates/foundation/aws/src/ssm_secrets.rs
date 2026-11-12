@@ -4,7 +4,7 @@ use aws_sdk_ssm::{
     operation::get_parameters_by_path::{GetParametersByPathError, GetParametersByPathOutput},
 };
 use platform_errors::{BuildError, BuildResult, Retryability, SecretsError, TimeoutError};
-use platform_time::{deadline::Deadline, timeouts::Timeouts};
+use platform_time::{deadline_budget::Deadline, timeouts::Timeouts};
 use std::collections::HashMap;
 
 /// Environment variable controlling whether SSM parameters are decrypted.

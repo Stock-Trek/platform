@@ -6,7 +6,7 @@
 
 use super::replay::{ArchivedEventSource, S3ArchivedEventSource};
 use crate::processor::{CandleProcessor, ProcessorConfig};
-use crate::shard::ShardId;
+use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
 use platform_errors::BuildResult;
 use platform_market_data::candle::AlignedWindow;

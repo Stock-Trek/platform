@@ -1,9 +1,9 @@
 use super::fixtures_tests::{Fixtures, VecArchive};
-use crate::checkpoint::tests::InMemoryStateStore;
-use crate::checkpoint::{CheckpointRecord, StateStore};
+use crate::checkpoint_record::{CheckpointRecord, StateStore};
+use crate::checkpoint_record_tests::InMemoryStateStore;
 use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::restore::restored_shard::RestoreSource;
-use crate::shard::ShardId;
+use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
 use platform_market_data::candle::{AlignedWindow, Candle, CandleKey};
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};

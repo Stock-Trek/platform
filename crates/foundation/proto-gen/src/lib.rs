@@ -1,3 +1,6 @@
-mod generator;
+mod proto_gen;
 
-pub use generator::{GENERATED_DIR, ProtoGen};
+#[cfg(test)]
+mod proto_gen_tests;
+
+pub use proto_gen::{GENERATED_DIR, ProtoGen};

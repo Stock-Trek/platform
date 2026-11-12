@@ -1,15 +1,31 @@
 mod backfiller;
 mod binance;
 mod config;
+mod event_fetcher;
 mod event_page_source;
-mod fetcher;
-mod gap_marker_source;
-mod retry;
-mod runner;
+
+#[cfg(test)]
+mod event_fetcher_tests;
+
+mod nats_gap_marker_source;
+
+#[cfg(test)]
+mod nats_gap_marker_source_tests;
+
+mod gap_retry_store;
+
+#[cfg(test)]
+mod gap_retry_store_tests;
+
+mod backfiller_runner;
+
+#[cfg(test)]
+mod backfiller_runner_tests;
 
 use crate::{
-    binance::fetcher::BinanceGapFetcher, config::BackfillerConfig, fetcher::FetcherRegistry,
-    gap_marker_source::NatsGapMarkerSource, retry::NatsGapRetryStore, runner::BackfillerRunner,
+    backfiller_runner::BackfillerRunner, binance::fetcher::BinanceGapFetcher,
+    config::BackfillerConfig, event_fetcher::FetcherRegistry, gap_retry_store::NatsGapRetryStore,
+    nats_gap_marker_source::NatsGapMarkerSource,
 };
 use platform_errors::BuildResult;
 use platform_nats::NatsPublisher;
