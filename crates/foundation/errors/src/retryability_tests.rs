@@ -1,4 +1,4 @@
-use super::*;
+use crate::Retryability;
 
 #[test]
 fn predicates_match_the_retryability_variant() {

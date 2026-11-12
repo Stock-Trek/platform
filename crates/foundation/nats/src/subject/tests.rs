@@ -1,4 +1,4 @@
-use super::*;
+use crate::NatsSubject;
 
 #[test]
 fn rejects_publish_subjects_with_wildcards_or_empty_tokens() {

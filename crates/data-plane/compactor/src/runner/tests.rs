@@ -1,7 +1,8 @@
-use super::*;
-use crate::compactor::BatchCompactor;
-use crate::compactor::CompactionStats;
-use crate::source::ArchiveBatchSource;
+use crate::{
+    compactor::{BatchCompactor, CompactionStats},
+    runner::CompactorRunner,
+    source::ArchiveBatchSource,
+};
 use async_trait::async_trait;
 use platform_archive::{ArchiveKind, SourceBatch};
 use platform_errors::BuildResult;

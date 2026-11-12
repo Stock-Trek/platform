@@ -1,4 +1,4 @@
-use super::*;
+use crate::{NatsAddress, address::DEFAULT_NATS_PORT};
 
 #[test]
 fn parses_nats_url_with_auth_and_default_port() {

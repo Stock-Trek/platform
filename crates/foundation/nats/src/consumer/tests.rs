@@ -1,4 +1,4 @@
-use super::*;
+use crate::{ConsumerStart, JetStreamConsumer};
 use async_nats::jetstream::consumer::DeliverPolicy;
 
 #[test]

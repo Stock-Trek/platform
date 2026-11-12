@@ -1,4 +1,4 @@
-use super::*;
+use crate::decoders::binary::BinaryCursor;
 
 #[test]
 fn reads_advance_the_cursor() {

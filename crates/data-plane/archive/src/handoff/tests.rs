@@ -1,5 +1,4 @@
-use super::*;
-use crate::{ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, IcebergDataFile};
+use crate::{ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind, IcebergDataFile};
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 use std::collections::HashSet;

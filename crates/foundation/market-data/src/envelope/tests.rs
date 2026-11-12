@@ -1,6 +1,6 @@
-use super::*;
 use crate::{
     candle::{AlignedWindow, Candle, CandleKey, ClosedCandle},
+    envelope::EnvelopeCodec,
     event::{GapMarker, MarketEvent},
 };
 use platform_types::new_types::TimestampMilliseconds;

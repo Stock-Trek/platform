@@ -1,5 +1,6 @@
-use super::*;
-use crate::{clients::client::HttpClient, clock::Clock, submission::SubmissionOutcome};
+use crate::{
+    clients::client::HttpClient, clock::Clock, connector::Connector, submission::SubmissionOutcome,
+};
 use platform_errors::{BuildError, BuildResult, ConnectorError, RateLimitError, SendFailure};
 use platform_exchange_types::{
     binance::{

@@ -1,9 +1,8 @@
-use super::*;
+use crate::aws_ops::s3::{S3, S3Config};
 use aws_credential_types::{Credentials, provider::SharedCredentialsProvider};
 use platform_aws::{Region, SdkConfig};
 use platform_time::{deadline::Deadline, timeouts::Timeout, timeouts::Timeouts};
-use std::num::NonZeroU64;
-use std::time::Duration;
+use std::{num::NonZeroU64, time::Duration};
 
 fn s3_client() -> (S3, Credentials) {
     let credentials = Credentials::new(

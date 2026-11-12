@@ -1,8 +1,12 @@
-use super::*;
-use crate::source::SourceLimits;
+use crate::{
+    handler::{BuildAgent, Handler},
+    source::SourceLimits,
+};
 use platform_errors::{BuildError, ConfigError, ErrorType, TimeoutError};
-use platform_messages::build_request::BuildRequest;
-use platform_messages::{build_request::BuildRequestSignedPost, sqs_message::SqsRefType};
+use platform_messages::{
+    build_request::{BuildRequest, BuildRequestSignedPost},
+    sqs_message::SqsRefType,
+};
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};

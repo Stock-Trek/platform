@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 use platform_nats::{JetStream, KeyValue};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum SequenceObservation {
@@ -65,7 +65,7 @@ impl SequenceStore for NatsSequenceStore {
 }
 
 mod next_sequence {
-    use super::*;
+    use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(next: &Option<u128>, serializer: S) -> Result<S::Ok, S::Error>
     where

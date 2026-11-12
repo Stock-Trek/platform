@@ -1,4 +1,4 @@
-use super::*;
+use crate::rebuild::RebuildOptions;
 use crate::rebuild::{
     candle_spill::CandleSpill, rebuild_options::RebuildStats, replay_spill::ReplaySpill,
 };

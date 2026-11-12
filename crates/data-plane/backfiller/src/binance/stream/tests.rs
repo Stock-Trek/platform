@@ -1,4 +1,4 @@
-use super::*;
+use crate::binance::stream::{MarketStream, MarketStreamKind};
 use platform_exchange_types::binance::klines::BinanceKlinesInterval;
 
 #[test]

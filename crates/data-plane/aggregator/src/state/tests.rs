@@ -1,11 +1,16 @@
-use super::*;
-use platform_market_data::candle::{AlignedWindow, Candle};
-use platform_market_data::decoders::trade::Trade;
-use platform_market_data::event::GapMarker;
+use platform_market_data::{
+    candle::{AlignedWindow, Candle},
+    decoders::trade::Trade,
+    event::GapMarker,
+};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
-use stock_trek_types::cex::cex_id::CexId;
-use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
+
+use crate::{
+    AggregatorState, DeduplicationKey, IncompleteWindow, MAX_SEEN_SEQUENCE_RANGES,
+    STATE_SCHEMA_VERSION, SequenceRange, StreamProgress,
+};
 
 fn pair() -> TradingPair {
     TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD)

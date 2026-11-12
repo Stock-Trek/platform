@@ -1,8 +1,10 @@
-use super::*;
+use crate::WebsocketListener;
 use parking_lot::Mutex;
-use std::sync::Arc;
-use std::task::{Context, Poll};
-use std::{future::Future, task::Waker};
+use std::{
+    future::Future,
+    sync::Arc,
+    task::{Context, Poll, Waker},
+};
 
 fn block_on<F: Future>(future: F) -> F::Output {
     let waker = Waker::noop();

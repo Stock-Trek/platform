@@ -1,4 +1,4 @@
-use super::*;
+use crate::deadline::Deadline;
 use platform_errors::{BuildError, TimeoutError};
 use std::time::{Duration, SystemTime};
 

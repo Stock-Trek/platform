@@ -1,7 +1,6 @@
-use super::*;
+use crate::ShardId;
 use platform_archive::{RoutingBucket, RoutingKey};
-use stock_trek_types::cex::asset_id::AssetId;
-use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 fn pair() -> TradingPair {
     TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD)

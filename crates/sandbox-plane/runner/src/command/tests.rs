@@ -1,4 +1,5 @@
-use super::*;
+use crate::command::{Command, RunRequest, SimulationParameters, TradingPair};
+use stock_trek::types::AssetId;
 
 #[test]
 fn deserialises_camel_case_command_payloads() {
@@ -230,8 +231,8 @@ fn deserialises_the_back_test_command() {
     assert_eq!(
         trading_pairs,
         &[TradingPair {
-            base: "Bitcoin".to_string(),
-            quote: "TetherUSD".to_string(),
+            base: AssetId::Bitcoin.to_string(),
+            quote: AssetId::TetherUSD.to_string(),
         }]
     );
     assert_eq!(windows, &[5, 12]);

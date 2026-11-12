@@ -1,4 +1,4 @@
-use super::*;
+use crate::content_id::ContentId;
 use platform_archive::ArchiveRecord;
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;

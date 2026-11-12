@@ -1,4 +1,10 @@
-use super::*;
+use crate::{
+    JetStream, StreamSpec,
+    jetstream::{
+        DEFAULT_DUPLICATE_WINDOW, DEFAULT_STREAM_REPLICAS, STREAM_MAX_AGE, STREAM_MAX_BYTES,
+        STREAM_MAX_MESSAGES,
+    },
+};
 use async_nats::jetstream::stream;
 use std::time::Duration;
 

@@ -1,4 +1,4 @@
-use super::*;
+use crate::spill::{DedupeSpill, PartitionSpill};
 use platform_archive::{ArchiveKind, ArchiveRecord, ArchiveSortKey};
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;

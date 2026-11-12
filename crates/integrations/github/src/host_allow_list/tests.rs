@@ -1,4 +1,4 @@
-use super::*;
+use crate::host_allow_list::{DEFAULT_HOST, HostAllowlist};
 use platform_errors::{BuildError, GitHubError};
 
 fn allowlist() -> HostAllowlist {

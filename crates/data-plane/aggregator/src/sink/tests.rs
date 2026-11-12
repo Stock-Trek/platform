@@ -1,6 +1,8 @@
-use super::*;
-use platform_market_data::candle::{AlignedWindow, Candle, ClosedCandle};
-use platform_market_data::decoders::trade::Trade;
+use crate::NatsCandleSink;
+use platform_market_data::{
+    candle::{AlignedWindow, Candle, ClosedCandle},
+    decoders::trade::Trade,
+};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};

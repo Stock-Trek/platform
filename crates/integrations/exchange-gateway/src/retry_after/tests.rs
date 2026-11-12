@@ -1,4 +1,4 @@
-use super::*;
+use crate::retry_after::RetryAfter;
 use std::time::{Duration, SystemTime};
 
 #[test]

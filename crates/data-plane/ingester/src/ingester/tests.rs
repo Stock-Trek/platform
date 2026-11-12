@@ -1,5 +1,7 @@
-use super::*;
-use crate::sequence::tests::InMemorySequenceStore;
+use crate::{
+    ingester::{IngestOptions, Ingester},
+    sequence::tests::InMemorySequenceStore,
+};
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 use platform_market_data::event::ParsedMessage;

@@ -1,5 +1,4 @@
-use super::*;
-use crate::config::RebuildSourceLayer;
+use crate::{config::RebuildSourceLayer, events::IcebergEventReader};
 use async_trait::async_trait;
 use platform_archive::{ArchiveCatalog, ArchiveIcebergTable, IcebergDataFile};
 use platform_errors::BuildResult;
