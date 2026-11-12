@@ -1,9 +1,9 @@
-use super::*;
 use crate::{
     config::BackfillerConfig,
     fetcher::{BackfilledEvent, MissingEventFetcher},
     gap_marker_source::GapMarkerSource,
     retry::InMemoryGapRetryStore,
+    runner::BackfillerRunner,
 };
 use async_trait::async_trait;
 use platform_errors::BuildResult;

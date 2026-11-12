@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use platform_errors::BuildResult;
 use std::{collections::HashMap, sync::Mutex};
 
+use crate::sequence::{NatsSequenceStore, SequenceObservation, SequenceStore, SequenceTracker};
+
 /// Sequence state kept in process memory.
 #[derive(Debug, Default)]
 pub struct InMemorySequenceStore {
@@ -33,8 +35,6 @@ impl SequenceStore for InMemorySequenceStore {
         Ok(())
     }
 }
-
-use super::*;
 
 trait SequenceTrackerTestExt {
     fn last(&self) -> Option<u64>;

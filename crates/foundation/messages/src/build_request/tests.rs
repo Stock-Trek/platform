@@ -1,8 +1,9 @@
-use super::*;
-use crate::sqs_message::SqsRefType;
+use crate::{
+    build_request::{BuildOutcome, BuildRequest, BuildRequestSignedPost, KEY_FIELD},
+    sqs_message::SqsRefType,
+};
 use serde_json::json;
-use std::collections::BTreeMap;
-use std::num::NonZeroU64;
+use std::{collections::BTreeMap, num::NonZeroU64};
 
 fn request() -> BuildRequest {
     BuildRequest {

@@ -1,6 +1,5 @@
-use super::*;
 use crate::{
-    LeaseStore, StateStore,
+    LeaseStore, ProcessorRunner, StateStore,
     checkpoint::tests::InMemoryStateStore,
     config::AggregatorConfig,
     lease::tests::InMemoryLeaseStore,

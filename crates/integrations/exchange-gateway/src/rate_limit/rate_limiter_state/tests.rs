@@ -1,8 +1,9 @@
-use super::*;
+use crate::rate_limit::rate_limiter_state::RateLimiterState;
 use platform_types::new_types::{DurationNanoseconds, UsageCount};
-use std::sync::Arc;
-use std::sync::Mutex;
-use std::time::{Duration, Instant};
+use std::{
+    sync::{Arc, Mutex},
+    time::{Duration, Instant},
+};
 
 fn state_with_clock(now: Instant) -> RateLimiterState {
     RateLimiterState::with_clock(

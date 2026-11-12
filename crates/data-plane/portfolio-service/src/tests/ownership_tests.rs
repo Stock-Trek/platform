@@ -9,6 +9,7 @@ use platform_errors::BuildResult;
 use platform_exchange_gateway::connector::PortfolioFeed;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use std::{collections::VecDeque, sync::Mutex, time::Duration};
+use stock_trek::types::CexId;
 
 #[derive(Default)]
 struct FakeSource {
@@ -311,8 +312,8 @@ async fn connector_snapshot_during_sync_is_applied_for_the_new_owner() {
 
 #[test]
 fn account_key_parses_validated_exchange_and_account() {
-    let key = AccountKey::parse("binance", "primary").expect("parse");
-    assert_eq!(key.storage_key(), "binance:primary");
+    let key = AccountKey::parse(CexId::Binance.to_string().as_str(), "primary").expect("parse");
+    assert_eq!(key.storage_key(), format!("{}:primary", CexId::Binance));
     assert!(AccountKey::parse("unknown", "primary").is_err());
-    assert!(AccountKey::parse("binance", " ").is_err());
+    assert!(AccountKey::parse(CexId::Binance.to_string().as_str(), " ").is_err());
 }

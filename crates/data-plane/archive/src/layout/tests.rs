@@ -83,7 +83,10 @@ fn raw_and_compacted_keys_share_the_hourly_layout() {
             "/file.parquet"
         )
         .unwrap(),
-        "market-data/compacted/kind=events/exchange=binance/stream=btc_usdt@trade/bucket=00007/year=2024/month=01/day=02/hour=03/file.parquet"
+        format!(
+            "market-data/compacted/kind=events/exchange={}/stream=btc_usdt@trade/bucket=00007/year=2024/month=01/day=02/hour=03/file.parquet",
+            CexId::Binance
+        )
     );
     assert_eq!(
         ArchivePath::compacted_key(
@@ -94,7 +97,12 @@ fn raw_and_compacted_keys_share_the_hourly_layout() {
             "data.parquet"
         )
         .unwrap(),
-        "kind=candles/exchange=binance/base=bitcoin/quote=tether_usd/interval=1h/bucket=00007/year=2024/month=01/day=02/hour=03/data.parquet"
+        format!(
+            "kind=candles/exchange={}/base={}/quote={}/interval=1h/bucket=00007/year=2024/month=01/day=02/hour=03/data.parquet",
+            CexId::Binance,
+            AssetId::Bitcoin,
+            AssetId::TetherUSD
+        )
     );
 }
 

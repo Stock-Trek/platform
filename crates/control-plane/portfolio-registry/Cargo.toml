@@ -21,6 +21,7 @@ platform-types = { workspace = true }
 secrecy = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
+stock-trek-types = { workspace = true }
 subtle = { workspace = true }
 tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { workspace = true }

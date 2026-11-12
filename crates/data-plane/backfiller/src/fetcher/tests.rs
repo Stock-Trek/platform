@@ -1,4 +1,4 @@
-use super::*;
+use crate::fetcher::{BackfilledEvent, FetcherRegistry, MissingEventFetcher};
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 use platform_market_data::event::GapMarker;

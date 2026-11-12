@@ -9,11 +9,11 @@ use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 fn canonical_payload_contains_the_routing_fields() {
     let payload = serde_json::to_value(Fixture::unsigned(OWNER)).unwrap();
 
-    assert_eq!(payload["cex"], "binance");
+    assert_eq!(payload["cex"], CexId::Binance.to_string().as_str());
     assert_eq!(payload["account"], "account-1");
     assert_eq!(payload["owner"], OWNER);
     assert_eq!(
-        payload["orderRequest"]["market_buy"]["tag"],
+        payload["orderRequest"]["MarketBuy"]["tag"],
         "strategy-entry"
     );
 }

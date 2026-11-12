@@ -1,6 +1,5 @@
-use super::*;
 use crate::{
-    ArchiveParquet, ArchiveParquetWriter,
+    ArchiveBatch, ArchiveParquet, ArchiveParquetWriter,
     record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent},
 };
 use bytes::Bytes;

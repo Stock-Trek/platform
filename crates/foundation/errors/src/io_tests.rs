@@ -79,8 +79,8 @@ fn wrapped_io_error_uses_the_source_error_kind() {
 
 #[cfg(unix)]
 mod unix {
-    use super::*;
-    use std::os::unix::process::ExitStatusExt;
+    use crate::{Retryability, io_tests::command_failed};
+    use std::{os::unix::process::ExitStatusExt, process::ExitStatus};
 
     #[test]
     fn compile_failure_exit_code_is_permanent() {

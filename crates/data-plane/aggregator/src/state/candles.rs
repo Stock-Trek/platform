@@ -4,7 +4,6 @@ use super::AggregatorState;
 use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::{AlignedWindow, Candle, CandleKey};
 use platform_types::new_types::TimestampMilliseconds;
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::collections::HashMap;
 
 impl AggregatorState {
@@ -156,7 +155,9 @@ impl AggregatorState {
 
 /// Serializes grouped open candles as one deterministically sorted list.
 pub(super) mod open_candles {
-    use super::*;
+    use platform_market_data::candle::{Candle, CandleKey};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+    use std::collections::HashMap;
 
     pub fn serialize<S>(
         candles: &HashMap<CandleKey, Vec<Candle>>,

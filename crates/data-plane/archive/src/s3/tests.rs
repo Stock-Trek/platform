@@ -1,4 +1,4 @@
-use super::*;
+use crate::{Bucket, ObjectKey, S3};
 
 #[test]
 fn parses_s3_uris_and_rejects_incomplete_ones() {

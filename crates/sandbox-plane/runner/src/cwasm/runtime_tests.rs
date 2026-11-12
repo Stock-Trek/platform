@@ -1,4 +1,7 @@
-use super::*;
+use crate::cwasm::{
+    DEFAULT_MAX_GUEST_MEMORY_BYTES, Emit, ExecutionLimits, GuestWorkspace, PORTFOLIO_FILE_NAME,
+    STRATEGY_CONTEXT_FILE_NAME, WasmRunner,
+};
 use platform_exit_codes::ExitCode;
 use platform_runner::command::Command;
 use serde_json::{Value, json};

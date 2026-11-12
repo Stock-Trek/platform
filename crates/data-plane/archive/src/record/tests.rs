@@ -1,6 +1,8 @@
-use super::*;
-use platform_market_data::candle::{AlignedWindow, CandleKey, ClosedCandle, MarketOhlcv};
-use platform_market_data::event::MarketEvent;
+use crate::{ArchiveKind, ArchiveRecord, ArchiveRecordKey, ArchiveSortKey, ArchivedMarketEvent};
+use platform_market_data::{
+    candle::{AlignedWindow, CandleKey, ClosedCandle, MarketOhlcv},
+    event::MarketEvent,
+};
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
@@ -127,12 +129,20 @@ fn partitions_sanitize_path_segments() {
     let partition = event().partition();
     assert_eq!(
         partition.path(),
-        "kind=events/exchange=binance/stream=btc_usdt@trade"
+        format!(
+            "kind=events/exchange={}/stream=btc_usdt@trade",
+            CexId::Binance
+        )
     );
 
     let partition = closed_candle().partition();
     assert_eq!(
         partition.path(),
-        "kind=candles/exchange=binance/base=bitcoin/quote=tether_usd/interval=1m"
+        format!(
+            "kind=candles/exchange={}/base={}/quote={}/interval=1m",
+            CexId::Binance,
+            AssetId::Bitcoin,
+            AssetId::TetherUSD
+        )
     );
 }

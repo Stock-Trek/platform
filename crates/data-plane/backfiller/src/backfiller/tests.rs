@@ -1,5 +1,5 @@
-use super::*;
 use crate::{
+    backfiller::{BackfillOptions, BackfillService},
     fetcher::{BackfilledEvent, MissingEventFetcher},
     gap_marker_source::GapMarkerSource,
     retry::{GapRetryStore, InMemoryGapRetryStore, PendingGap},

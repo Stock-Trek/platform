@@ -1,4 +1,4 @@
-use super::*;
+use crate::{GENERATED_DIR, ProtoGen};
 use std::path::Path;
 
 #[test]

@@ -1,4 +1,4 @@
-use super::*;
+use crate::TickerMapping;
 use bimap::BiHashMap;
 use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 

@@ -1,4 +1,4 @@
-use super::*;
+use crate::Message;
 
 #[test]
 fn converts_async_nats_messages() {

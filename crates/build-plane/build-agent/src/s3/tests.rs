@@ -1,11 +1,8 @@
-use super::*;
+use crate::s3::{POLICY_FIELD, SignedPost};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use platform_errors::ErrorType;
-use platform_errors::{BuildError, StorageError};
+use platform_errors::{BuildError, ErrorType, StorageError};
 use serde_json::json;
-use std::collections::BTreeMap;
-use std::num::NonZeroU64;
-use std::time::Duration;
+use std::{collections::BTreeMap, num::NonZeroU64, time::Duration};
 
 fn signed_post(policy: Option<&str>, max_artifact_size_bytes: Option<NonZeroU64>) -> SignedPost {
     let mut fields = BTreeMap::from([("key".to_string(), "artifacts/${filename}".to_string())]);

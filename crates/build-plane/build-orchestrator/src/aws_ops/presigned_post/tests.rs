@@ -1,4 +1,3 @@
-use super::*;
 use aws_credential_types::Credentials;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use std::collections::BTreeMap;
@@ -20,6 +19,8 @@ impl PresignedPost {
 }
 
 use serde_json::{Value, json};
+
+use crate::aws_ops::presigned_post::{PresignedPost, PresignedPostSigner};
 
 #[test]
 fn signs_post_policy_with_session_token() {

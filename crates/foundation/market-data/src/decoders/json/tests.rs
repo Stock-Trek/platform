@@ -1,4 +1,4 @@
-use super::*;
+use crate::decoders::json::{EnvelopeJsonMapping, MappedJsonCodec};
 use iris::Codec;
 use platform_errors::IngesterError;
 use serde_json::json;

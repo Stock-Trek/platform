@@ -1,5 +1,7 @@
-use super::*;
-use crate::sequence::tests::InMemorySequenceStore;
+use crate::{
+    ingester::{IngestOptions, Ingester},
+    sequence::tests::InMemorySequenceStore,
+};
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 use platform_market_data::event::ParsedMessage;
@@ -106,7 +108,10 @@ async fn publishes_events_in_sequence_order() {
 
     let messages = publisher.messages();
     assert_eq!(messages.len(), 2);
-    assert_eq!(messages[0].0, "market.events.binance.btcusdt-trade");
+    assert_eq!(
+        messages[0].0,
+        format!("market.events.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[1].1["sequence"], 2);
 }
 
@@ -120,11 +125,17 @@ async fn publishes_a_gap_marker_before_the_observed_event() {
 
     let messages = publisher.messages();
     assert_eq!(messages.len(), 3);
-    assert_eq!(messages[1].0, "market.gaps.binance.btcusdt-trade");
+    assert_eq!(
+        messages[1].0,
+        format!("market.gaps.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[1].1["missing_from"], 11);
     assert_eq!(messages[1].1["missing_to"], 12);
     assert_eq!(messages[1].1["observed_sequence"], 13);
-    assert_eq!(messages[2].0, "market.events.binance.btcusdt-trade");
+    assert_eq!(
+        messages[2].0,
+        format!("market.events.{}.btcusdt-trade", CexId::Binance)
+    );
 }
 
 #[tokio::test]
@@ -139,11 +150,17 @@ async fn a_failed_publish_creates_a_gap_for_the_next_event() {
 
     let messages = publisher.messages();
     assert_eq!(messages.len(), 3);
-    assert_eq!(messages[1].0, "market.gaps.binance.btcusdt-trade");
+    assert_eq!(
+        messages[1].0,
+        format!("market.gaps.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[1].1["missing_from"], 11);
     assert_eq!(messages[1].1["missing_to"], 11);
     assert_eq!(messages[1].1["observed_sequence"], 12);
-    assert_eq!(messages[2].0, "market.events.binance.btcusdt-trade");
+    assert_eq!(
+        messages[2].0,
+        format!("market.events.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[2].1["sequence"], 12);
 }
 
@@ -158,7 +175,10 @@ async fn a_failed_first_publish_creates_a_gap_for_the_next_event() {
 
     let messages = publisher.messages();
     assert_eq!(messages.len(), 2);
-    assert_eq!(messages[0].0, "market.gaps.binance.btcusdt-trade");
+    assert_eq!(
+        messages[0].0,
+        format!("market.gaps.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[0].1["missing_from"], 10);
     assert_eq!(messages[0].1["missing_to"], 10);
     assert_eq!(messages[1].1["sequence"], 11);
@@ -175,7 +195,10 @@ async fn a_failed_first_publish_at_sequence_zero_does_not_underflow() {
 
     let messages = publisher.messages();
     assert_eq!(messages.len(), 2);
-    assert_eq!(messages[0].0, "market.gaps.binance.btcusdt-trade");
+    assert_eq!(
+        messages[0].0,
+        format!("market.gaps.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[0].1["previous_sequence"], 0);
     assert_eq!(messages[0].1["missing_from"], 0);
     assert_eq!(messages[0].1["missing_to"], 0);
@@ -197,7 +220,10 @@ async fn a_failed_event_after_a_gap_is_not_suppressed() {
     assert_eq!(messages.len(), 4);
     assert_eq!(messages[1].1["missing_from"], 11);
     assert_eq!(messages[1].1["missing_to"], 12);
-    assert_eq!(messages[2].0, "market.gaps.binance.btcusdt-trade");
+    assert_eq!(
+        messages[2].0,
+        format!("market.gaps.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[2].1["missing_from"], 13);
     assert_eq!(messages[2].1["missing_to"], 13);
     assert_eq!(messages[3].1["sequence"], 14);
@@ -218,7 +244,10 @@ async fn restart_detects_gaps_that_happened_while_the_ingester_was_down() {
 
     let messages = publisher.messages();
     assert_eq!(messages.len(), 3);
-    assert_eq!(messages[1].0, "market.gaps.binance.btcusdt-trade");
+    assert_eq!(
+        messages[1].0,
+        format!("market.gaps.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[1].1["missing_from"], 11);
     assert_eq!(messages[1].1["missing_to"], 12);
     assert_eq!(messages[1].1["observed_sequence"], 13);
@@ -242,7 +271,10 @@ async fn restart_after_a_failed_final_publish_detects_the_gap() {
 
     let messages = publisher.messages();
     assert_eq!(messages.len(), 3);
-    assert_eq!(messages[1].0, "market.gaps.binance.btcusdt-trade");
+    assert_eq!(
+        messages[1].0,
+        format!("market.gaps.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[1].1["missing_from"], 11);
     assert_eq!(messages[1].1["missing_to"], 11);
     assert_eq!(messages[1].1["observed_sequence"], 12);
@@ -265,7 +297,10 @@ async fn restart_after_a_failed_first_publish_detects_the_gap() {
 
     let messages = publisher.messages();
     assert_eq!(messages.len(), 2);
-    assert_eq!(messages[0].0, "market.gaps.binance.btcusdt-trade");
+    assert_eq!(
+        messages[0].0,
+        format!("market.gaps.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[0].1["missing_from"], 10);
     assert_eq!(messages[0].1["missing_to"], 10);
     assert_eq!(messages[1].1["sequence"], 11);
@@ -317,7 +352,10 @@ async fn previous_update_ids_report_only_the_missing_range() {
 
     let messages = publisher.messages();
     assert_eq!(messages.len(), 3);
-    assert_eq!(messages[1].0, "market.gaps.binance.btcusdt-trade");
+    assert_eq!(
+        messages[1].0,
+        format!("market.gaps.{}.btcusdt-trade", CexId::Binance)
+    );
     assert_eq!(messages[1].1["missing_from"], 101);
     assert_eq!(messages[1].1["missing_to"], 115);
     assert_eq!(messages[1].1["observed_sequence"], 120);

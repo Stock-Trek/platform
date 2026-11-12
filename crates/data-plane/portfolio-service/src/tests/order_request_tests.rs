@@ -61,7 +61,7 @@ async fn serializes_the_signed_submission_for_delivery() {
         .unwrap();
     let body = serde_json::to_value(&submission).unwrap();
 
-    assert_eq!(body["cex"], "binance");
+    assert_eq!(body["cex"], CexId::Binance.to_string());
     assert_eq!(body["account"], "account-1");
     assert_eq!(body["owner"], OWNER);
     assert_eq!(body["tokenId"], submission.token_id());

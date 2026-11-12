@@ -4,6 +4,7 @@ use chrono::Utc;
 use platform_messages::order_request::UnsignedOrderRequest;
 use serde_json::json;
 use std::sync::Arc;
+use stock_trek::types::CexId;
 
 #[tokio::test]
 async fn signs_received_requests_and_delivers_them() {
@@ -32,7 +33,7 @@ async fn signs_received_requests_and_delivers_them() {
 
     assert!(response.status().is_success());
     let body: serde_json::Value = serde_json::from_str(&downstream.await.unwrap()).unwrap();
-    assert_eq!(body["cex"], "binance");
+    assert_eq!(body["cex"], CexId::Binance.to_string());
     assert_eq!(body["account"], "account-1");
     assert_eq!(body["owner"], OWNER);
     assert_eq!(body["tokenId"], token.id());

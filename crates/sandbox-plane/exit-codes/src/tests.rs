@@ -1,4 +1,4 @@
-use super::*;
+use crate::ExitCode;
 
 #[test]
 fn from_code_returns_known_variants() {

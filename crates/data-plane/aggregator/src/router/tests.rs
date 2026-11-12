@@ -1,15 +1,18 @@
-use super::*;
-use crate::shard::ShardId;
-use crate::source::{MarketInput, MarketSource, SourceRecord};
+use crate::{
+    HashRouter, NatsRouter,
+    shard::ShardId,
+    source::{MarketInput, MarketSource, SourceRecord},
+};
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_market_data::candle::CandleKey;
-use platform_market_data::event::{GapMarker, MarketEvent};
+use platform_market_data::{
+    candle::CandleKey,
+    event::{GapMarker, MarketEvent},
+};
 use platform_nats::EventPublisher;
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::{Arc, Mutex as StdMutex};
-use stock_trek_types::cex::asset_id::AssetId;
-use stock_trek_types::cex::cex_id::CexId;
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 
 fn trade_event() -> MarketEvent {
     MarketEvent {

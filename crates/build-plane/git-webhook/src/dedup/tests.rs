@@ -1,6 +1,5 @@
-use super::*;
-use std::num::NonZeroUsize;
-use std::time::Duration;
+use crate::dedup::DeliveryDedup;
+use std::{num::NonZeroUsize, time::Duration};
 
 impl DeliveryDedup {
     pub fn is_duplicate(&self, delivery_id: &str) -> bool {

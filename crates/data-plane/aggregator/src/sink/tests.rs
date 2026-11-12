@@ -1,6 +1,8 @@
-use super::*;
-use platform_market_data::candle::{AlignedWindow, Candle, ClosedCandle};
-use platform_market_data::decoders::trade::Trade;
+use crate::NatsCandleSink;
+use platform_market_data::{
+    candle::{AlignedWindow, Candle, ClosedCandle},
+    decoders::trade::Trade,
+};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
@@ -34,9 +36,9 @@ fn closed_candle_targets_are_deterministic_and_key_scoped() {
     assert_eq!(first_target, replay_target);
     assert_eq!(
         first_target.0,
-        "market.candles.binance.bitcoin.tether_usd.1m"
+        "market.candles.Binance.Bitcoin.TetherUSD.1m"
     );
-    assert!(first_target.1.contains("binance.bitcoin.tether_usd.1m"));
+    assert!(first_target.1.contains("Binance.Bitcoin.TetherUSD.1m"));
     assert!(first_target.1.contains("epoch=0"));
 }
 

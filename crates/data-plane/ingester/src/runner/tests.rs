@@ -1,6 +1,6 @@
-use super::*;
 use crate::{
     config::IngesterConfig,
+    runner::IngesterRunner,
     sequence::tests::InMemorySequenceStore,
     source::{MarketMessageSource, StreamFormat},
 };

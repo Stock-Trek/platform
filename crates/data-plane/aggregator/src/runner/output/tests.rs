@@ -1,6 +1,6 @@
-use super::*;
 use crate::{
     processor::ProcessorUpdate,
+    runner::output::CandleOutputWriter,
     sink::{ClosedCandlePublisher, OpenCandleStore},
     state::AggregatorState,
 };
@@ -8,8 +8,10 @@ use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::{AlignedWindow, Candle, CandleKey, ClosedCandle};
 use platform_types::new_types::TimestampMilliseconds;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
+use std::sync::{
+    Arc, Mutex,
+    atomic::{AtomicUsize, Ordering},
+};
 use std::time::Duration;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 use tokio::sync::Notify;

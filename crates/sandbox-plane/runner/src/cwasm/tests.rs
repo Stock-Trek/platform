@@ -1,8 +1,7 @@
-use super::*;
+use crate::cwasm::{CWASM_FILE_NAME, Cwasm, CwasmIntegrity, CwasmLimits, WASMTIME_VERSION};
 use platform_errors::{BuildError, ErrorType, StorageError};
 use sha2::{Digest, Sha256};
-use std::num::NonZeroU64;
-use std::time::Duration;
+use std::{num::NonZeroU64, time::Duration};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 async fn server(response: &'static [u8]) -> (String, tokio::task::JoinHandle<()>) {

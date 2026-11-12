@@ -1,6 +1,8 @@
-use super::*;
-use crate::rate_limit::rate_limiter::RateLimiter;
-use crate::rate_limit::rate_limiter_state::RateLimiterState;
+use crate::rate_limit::{
+    rate_limiter::RateLimiter,
+    rate_limiter_state::RateLimiterState,
+    rate_limiters::{RateLimitGuard, RateLimiters},
+};
 use platform_errors::{BuildError, RateLimitError};
 use platform_exchange_types::rate_limited::RateLimitRestriction;
 use platform_types::new_types::{DurationNanoseconds, UsageCount};

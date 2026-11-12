@@ -8,6 +8,7 @@ use std::{
     sync::{Arc, Mutex},
     time::Duration as StdDuration,
 };
+use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Default)]
 struct RecordingPublisher {
@@ -54,7 +55,7 @@ async fn add_is_audited_and_published_once() {
     let (store, service) = service();
     let at = Utc::now();
     let mapping = service
-        .add("alice", "binance", "first", at)
+        .add("alice", &CexId::Binance.to_string(), "first", at)
         .await
         .expect("add");
     assert!(mapping.is_active());
@@ -92,11 +93,16 @@ async fn rapid_add_and_remove_keep_both_outbox_events() {
     let (store, service) = service();
     let at = Utc::now();
     service
-        .add("alice", "binance", "first", at)
+        .add("alice", &CexId::Binance.to_string(), "first", at)
         .await
         .expect("add");
     let removed = service
-        .remove("alice", "binance", "first", at + Duration::seconds(1))
+        .remove(
+            "alice",
+            &CexId::Binance.to_string(),
+            "first",
+            at + Duration::seconds(1),
+        )
         .await
         .expect("remove");
     assert!(!removed.is_active());
@@ -126,17 +132,24 @@ async fn duplicate_add_is_idempotent_and_owner_isolation_is_enforced() {
     let (store, service) = service();
     let at = Utc::now();
     let first = service
-        .add("alice", "binance", "first", at)
+        .add("alice", &CexId::Binance.to_string(), "first", at)
         .await
         .expect("add");
     let duplicate = service
-        .add("alice", "binance", "first", at + Duration::seconds(1))
+        .add(
+            "alice",
+            &CexId::Binance.to_string(),
+            "first",
+            at + Duration::seconds(1),
+        )
         .await
         .expect("duplicate");
     assert_eq!(duplicate.version(), first.version());
     assert_eq!(store.pending_events(10).await.expect("pending").len(), 1);
 
-    let conflict = service.add("bob", "binance", "first", at).await;
+    let conflict = service
+        .add("bob", &CexId::Binance.to_string(), "first", at)
+        .await;
     assert!(conflict.is_err());
     assert!(service.accounts("bob").await.expect("bob").is_empty());
     assert_eq!(service.accounts("alice").await.expect("alice").len(), 1);
@@ -146,7 +159,7 @@ async fn duplicate_add_is_idempotent_and_owner_isolation_is_enforced() {
 async fn failed_publish_leaves_the_event_pending() {
     let (store, service) = service();
     service
-        .add("alice", "binance", "first", Utc::now())
+        .add("alice", &CexId::Binance.to_string(), "first", Utc::now())
         .await
         .expect("add");
     let publisher = Arc::new(RecordingPublisher::default());
@@ -169,11 +182,16 @@ async fn removed_accounts_are_not_returned_by_owner_reads() {
     let (_, service) = service();
     let at = Utc::now();
     service
-        .add("alice", "binance", "first", at)
+        .add("alice", &CexId::Binance.to_string(), "first", at)
         .await
         .expect("add");
     service
-        .remove("alice", "binance", "first", at + Duration::seconds(1))
+        .remove(
+            "alice",
+            &CexId::Binance.to_string(),
+            "first",
+            at + Duration::seconds(1),
+        )
         .await
         .expect("remove");
     assert!(

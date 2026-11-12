@@ -1,11 +1,11 @@
-use super::*;
-use crate::decoders::trade::Trade;
+use crate::{
+    candle::{Candle, CandleKey, ClosedCandle},
+    decoders::trade::Trade,
+};
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use stock_trek::markets::{AlignedWindow, TimestampMillis};
-use stock_trek_types::cex::asset_id::AssetId;
-use stock_trek_types::cex::cex_id::CexId;
-use stock_trek_types::cex::trading_pair::TradingPair;
+use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 use strum::{IntoEnumIterator, VariantArray};
 
 fn decimal(value: &str) -> Decimal {
@@ -194,7 +194,15 @@ fn key_uses_asset_ids_and_window_label() {
         TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
         AlignedWindow::try_from("1m").unwrap(),
     );
-    assert_eq!(key.subject_suffix(), "binance.bitcoin.tether_usd.1m");
+    assert_eq!(
+        key.subject_suffix(),
+        format!(
+            "{}.{}.{}.1m",
+            CexId::Binance,
+            AssetId::Bitcoin,
+            AssetId::TetherUSD
+        )
+    );
 }
 
 fn closed_candle(offset: u64, epoch: u64) -> ClosedCandle {

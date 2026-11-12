@@ -1,4 +1,6 @@
-use super::*;
+use crate::retry::{
+    GapRetryStore, InMemoryGapRetryStore, MAX_RETRY_DELAY, PendingGap, RETRY_DELAY,
+};
 use platform_market_data::event::GapMarker;
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;

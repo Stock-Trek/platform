@@ -1,8 +1,6 @@
-use super::*;
-use crate::{BinanceConverter, MinMaxStep, TBExchangeInfo, TradingPrecision};
+use crate::{BinanceConverter, Converter, MinMaxStep, TBExchangeInfo, TradingPrecision};
 use platform_errors::{BuildError, ValidationError};
-use rust_decimal::Decimal;
-use rust_decimal::RoundingStrategy;
+use rust_decimal::{Decimal, RoundingStrategy};
 use std::collections::HashMap;
 use stock_trek_types::cex::{
     activation::Activation,

@@ -1,5 +1,4 @@
-use super::*;
-use crate::ArchiveKind;
+use crate::{ArchiveIcebergTable, ArchiveKind, ArchiveTableLayer};
 use iceberg::spec::{PrimitiveType, Type};
 
 #[test]

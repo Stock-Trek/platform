@@ -1,9 +1,10 @@
-use super::*;
-use platform_errors::ErrorType;
-use platform_errors::{BuildError, StorageError};
-use std::io::{Cursor, Write};
-use std::num::NonZeroU64;
-use std::time::Duration;
+use crate::source::{Source, SourceLimits};
+use platform_errors::{BuildError, ErrorType, StorageError};
+use std::{
+    io::{Cursor, Write},
+    num::NonZeroU64,
+    time::Duration,
+};
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 fn archive(files: &[(&str, &[u8])]) -> Vec<u8> {

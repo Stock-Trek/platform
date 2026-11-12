@@ -1,4 +1,4 @@
-use super::*;
+use crate::{MinMaxStep, TradingPrecision};
 use platform_errors::{BuildError, ValidationError};
 use rust_decimal::{Decimal, RoundingStrategy};
 
