@@ -10,7 +10,7 @@ use hyper::{
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
 use platform_errors::BuildError;
-use platform_messages::order_request::UnsignedOrderRequest;
+use platform_messages::UnsignedOrderRequest;
 use std::{convert::Infallible, sync::Arc, time::Duration};
 use tokio::{net::TcpStream, sync::watch, time::timeout};
 

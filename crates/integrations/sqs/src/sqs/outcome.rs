@@ -1,5 +1,5 @@
 use platform_errors::{BuildError, BuildResult, SqsBatchFailure, SqsError};
-use platform_messages::sqs_message::SqsMessage;
+use platform_messages::SqsMessage;
 use platform_metrics::sqs::SqsMetrics;
 use serde::Serialize;
 

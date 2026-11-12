@@ -1,6 +1,6 @@
 use crate::{
-    build_request::{BuildOutcome, BuildRequest, BuildRequestSignedPost, KEY_FIELD},
-    sqs_message::SqsRefType,
+    request_payload::{BuildOutcome, BuildRequest, BuildRequestSignedPost, KEY_FIELD},
+    sqs::SqsRefType,
 };
 use serde_json::json;
 use std::{collections::BTreeMap, num::NonZeroU64};

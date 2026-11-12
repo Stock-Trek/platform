@@ -1,8 +1,5 @@
 use crate::aws_ops::{build_request::BuildRequest, presigned_post::PresignedPost};
-use platform_messages::{
-    build_request::BuildRequest as BuildRequestPayload,
-    sqs_message::{GitSource, SqsRefType},
-};
+use platform_messages::{BuildRequest as BuildRequestPayload, GitSource, SqsRefType};
 use std::{collections::BTreeMap, num::NonZeroU64};
 
 fn request(commit_hash: Option<&str>, max_artifact_size_bytes: NonZeroU64) -> BuildRequest {

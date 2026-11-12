@@ -5,7 +5,7 @@ use platform_auth_service::{
     MemoryTokenUsageQueue, TokenMetadata, TokenScope, TokenStore,
 };
 use platform_errors::BuildResult;
-use platform_messages::order_request::UnsignedOrderRequest;
+use platform_messages::UnsignedOrderRequest;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use stock_trek_types::cex::{
     account_id::AccountId, activation::Activation, asset_id::AssetId, cex_id::CexId,

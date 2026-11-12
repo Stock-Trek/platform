@@ -1,5 +1,5 @@
 use crate::retryability::Retryability;
-use platform_messages::sqs_message::SqsMessage;
+use platform_messages::SqsMessage;
 
 #[derive(Debug, thiserror::Error, strum::IntoStaticStr)]
 #[strum(serialize_all = "snake_case")]

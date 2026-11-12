@@ -1,7 +1,7 @@
 use super::order_request_fixture_tests::{Fixture, OWNER};
 use crate::{AccountKey, PortfolioService};
 use chrono::Utc;
-use platform_messages::order_request::UnsignedOrderRequest;
+use platform_messages::UnsignedOrderRequest;
 use std::sync::Arc;
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 

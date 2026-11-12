@@ -1,7 +1,7 @@
 use aws_credential_types::Credentials;
 use platform_aws::{PresignedPost as BasePost, PresignedPostSigner as SharedSigner};
 use platform_errors::BuildResult;
-use platform_messages::build_request::BuildRequestSignedPost;
+use platform_messages::BuildRequestSignedPost;
 use serde_json::json;
 use std::{
     collections::BTreeMap,

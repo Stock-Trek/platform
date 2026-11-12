@@ -5,7 +5,7 @@ use crate::{
 };
 use platform_errors::BuildResult;
 use platform_git::git_host::GitHost;
-use platform_messages::sqs_message::{GitSource, SqsDetail, SqsMessage, SqsRefType};
+use platform_messages::{GitSource, SqsDetail, SqsMessage, SqsRefType};
 use platform_time::request_context::RequestContext;
 use std::fmt::Display;
 

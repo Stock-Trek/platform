@@ -8,7 +8,7 @@ use lambda_http::{Body, Request, RequestExt};
 use platform_errors::{
     BuildError, BuildResult, ErrorType, GitHubError, HttpError, SecretsError, SqsError,
 };
-use platform_messages::sqs_message::SqsMessage;
+use platform_messages::SqsMessage;
 use platform_metrics::{event::EventMetrics, route::RouteMetrics};
 use platform_time::{deadline::Deadline, request_context::RequestContext};
 

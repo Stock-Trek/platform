@@ -1,4 +1,4 @@
-use crate::sqs_message::SqsRefType;
+use crate::sqs::SqsRefType;
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeMap, num::NonZeroU64};
 

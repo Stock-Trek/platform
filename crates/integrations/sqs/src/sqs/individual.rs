@@ -1,6 +1,6 @@
 use aws_sdk_sqs::error::ProvideErrorMetadata;
 use platform_errors::{BuildResult, SqsBatchFailure};
-use platform_messages::sqs_message::SqsMessage;
+use platform_messages::SqsMessage;
 use platform_time::deadline::Deadline;
 use std::time::Duration;
 

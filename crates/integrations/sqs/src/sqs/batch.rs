@@ -1,6 +1,6 @@
 use aws_sdk_sqs::{error::ProvideErrorMetadata, types::SendMessageBatchRequestEntry};
 use platform_errors::{BuildResult, SqsBatchFailure};
-use platform_messages::sqs_message::SqsMessage;
+use platform_messages::SqsMessage;
 use platform_metrics::sqs::SqsMetrics;
 use platform_time::deadline::Deadline;
 use serde::Serialize;
