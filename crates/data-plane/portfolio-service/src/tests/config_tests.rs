@@ -129,15 +129,77 @@ fn reads_every_value_from_the_environment() {
         "portfolio-checkpoints"
     );
     assert_eq!(config.ownership().retry_backoff(), Duration::from_secs(3));
+    assert_eq!(config.ownership().stream().replicas(), 3);
+    assert_eq!(
+        config.ownership().stream().max_age(),
+        Duration::from_secs(30 * 24 * 60 * 60)
+    );
+    assert_eq!(config.ownership().stream().max_bytes(), 1024 * 1024 * 1024);
+    assert_eq!(config.ownership().stream().max_messages(), 10_000_000);
     assert_eq!(config.update().nats_url(), "nats://nats.example.com:4222");
     assert_eq!(config.update().client_name(), "portfolio-service-updates");
     assert_eq!(config.update().durable(), "portfolio-updates");
     assert_eq!(config.update().checkpoint_bucket(), "portfolio-checkpoints");
     assert_eq!(config.update().retry_backoff(), Duration::from_secs(2));
+    assert_eq!(config.update().stream().replicas(), 3);
+    assert_eq!(
+        config.update().stream().max_age(),
+        Duration::from_secs(7 * 24 * 60 * 60)
+    );
+    assert_eq!(
+        config.update().stream().max_bytes(),
+        10 * 1024 * 1024 * 1024
+    );
+    assert_eq!(config.update().stream().max_messages(), 100_000_000);
     assert_eq!(
         config.freshness().policy().max_age(),
         chrono::Duration::seconds(60)
     );
+}
+
+#[test]
+fn reads_stream_provisioning_overrides() {
+    let mut vars = ALL_VARS.to_vec();
+    vars.extend([
+        ("PORTFOLIO_OWNERSHIP_STREAM_REPLICAS", "5"),
+        ("PORTFOLIO_OWNERSHIP_STREAM_MAX_AGE_SECS", "60"),
+        ("PORTFOLIO_OWNERSHIP_STREAM_MAX_BYTES", "2048"),
+        ("PORTFOLIO_OWNERSHIP_STREAM_MAX_MESSAGES", "20"),
+        ("PORTFOLIO_OWNERSHIP_STREAM_DUPLICATE_WINDOW_SECS", "30"),
+    ]);
+    let config = Fixture::config(&vars).unwrap();
+
+    assert_eq!(config.ownership().stream().replicas(), 5);
+    assert_eq!(
+        config.ownership().stream().max_age(),
+        Duration::from_secs(60)
+    );
+    assert_eq!(config.ownership().stream().max_bytes(), 2048);
+    assert_eq!(config.ownership().stream().max_messages(), 20);
+    assert_eq!(
+        config.ownership().stream().duplicate_window(),
+        Duration::from_secs(30)
+    );
+}
+
+#[test]
+fn rejects_invalid_stream_provisioning_overrides() {
+    for (name, value) in [
+        ("PORTFOLIO_UPDATE_STREAM_REPLICAS", "0"),
+        ("PORTFOLIO_UPDATE_STREAM_REPLICAS", "6"),
+        ("PORTFOLIO_UPDATE_STREAM_MAX_AGE_SECS", "0"),
+        ("PORTFOLIO_UPDATE_STREAM_MAX_BYTES", "0"),
+        ("PORTFOLIO_UPDATE_STREAM_MAX_MESSAGES", "0"),
+        ("PORTFOLIO_UPDATE_STREAM_DUPLICATE_WINDOW_SECS", "0"),
+        (
+            "PORTFOLIO_OWNERSHIP_STREAM_DUPLICATE_WINDOW_SECS",
+            "2592001",
+        ),
+    ] {
+        let mut vars = ALL_VARS.to_vec();
+        vars.push((name, value));
+        assert!(Fixture::config(&vars).is_err(), "{name}={value}");
+    }
 }
 
 #[test]

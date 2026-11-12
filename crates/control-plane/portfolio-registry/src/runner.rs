@@ -25,7 +25,9 @@ impl RegistryRunner {
         ));
         let publisher =
             NatsPublisher::connect(config.nats().url(), config.nats().client_name()).await?;
-        publisher.ensure_stream(OWNERSHIP_STREAM_PREFIX).await?;
+        publisher
+            .ensure_stream_spec(&config.nats().stream().spec(OWNERSHIP_STREAM_PREFIX))
+            .await?;
         let publisher: Arc<dyn EventPublisher> = Arc::new(publisher);
         let service = Arc::new(RegistryService::new(store.clone()));
         let relay = OwnershipOutboxRelay::new(store, publisher, config.nats().outbox_interval())?;

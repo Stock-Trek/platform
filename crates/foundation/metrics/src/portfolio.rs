@@ -55,6 +55,27 @@ impl PortfolioMetrics {
         histogram!(PORTFOLIO_CONSUMER_LAG_SECONDS).record(lag.as_secs_f64());
     }
 
+    pub fn record_ownership_lag(lag: Duration) {
+        histogram!(PORTFOLIO_OWNERSHIP_LAG_SECONDS).record(lag.as_secs_f64());
+    }
+
+    pub fn record_ownership_outcome(outcome: &'static str) {
+        counter!(
+            PORTFOLIO_OWNERSHIP_OUTCOMES_TOTAL,
+            "outcome" => outcome,
+        )
+        .increment(1);
+    }
+
+    pub fn record_apply_failure(stage: &'static str, operation: &'static str) {
+        counter!(
+            PORTFOLIO_APPLY_FAILURES_TOTAL,
+            "stage" => stage,
+            "operation" => operation,
+        )
+        .increment(1);
+    }
+
     pub fn record_order_rejection(reason: &'static str) {
         counter!(
             PORTFOLIO_ORDER_REJECTIONS_TOTAL,

@@ -1,4 +1,5 @@
 mod portfolio_state;
+mod portfolio_state_restore;
 mod portfolio_state_snapshots;
 mod portfolio_state_updates;
 mod portfolio_state_versioning;
