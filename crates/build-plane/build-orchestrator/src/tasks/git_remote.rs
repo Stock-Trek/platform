@@ -1,4 +1,4 @@
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_github::{github_auth::GitHubAuth, installation::GitHubInstallation};
 use platform_messages::sqs_message::GitSource;
 
@@ -7,7 +7,7 @@ pub enum GitRemote {
 }
 
 impl GitRemote {
-    pub fn from_source(github_auth: &GitHubAuth, source: &GitSource) -> BpResult<Self> {
+    pub fn from_source(github_auth: &GitHubAuth, source: &GitSource) -> BuildResult<Self> {
         match source {
             GitSource::GitHub {
                 host,

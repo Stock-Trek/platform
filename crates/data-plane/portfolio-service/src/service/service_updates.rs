@@ -7,7 +7,7 @@ use crate::{
     state::{PortfolioUpdateMetadata, PortfolioUpdateOutcome},
 };
 use chrono::{DateTime, Utc};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_metrics::PortfolioMetrics;
 use platform_portfolio_ownership::AccountKey;
 
@@ -41,10 +41,10 @@ impl PortfolioService {
         owner: &str,
         account: &AccountKey,
         now: DateTime<Utc>,
-    ) -> BpResult<PortfolioFreshness> {
+    ) -> BuildResult<PortfolioFreshness> {
         if !self.is_tracked_for_owner(owner, account) {
             PortfolioMetrics::record_order_rejection("not_owned");
-            return Err(platform_errors::BpError::auth_invalid_field(
+            return Err(platform_errors::BuildError::auth_invalid_field(
                 "account",
                 "is not owned by the authenticated owner",
             ));

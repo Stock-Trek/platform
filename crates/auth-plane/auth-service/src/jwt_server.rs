@@ -1,5 +1,5 @@
 use crate::{AuthService, jwt_server_connection::JwtServerConnection};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Runtime;
 use platform_sigv4::SigV4Config;
 use std::{future::Future, net::SocketAddr, sync::Arc, time::Duration};
@@ -22,7 +22,7 @@ pub struct JwtServer {
 }
 
 impl JwtServer {
-    pub async fn bind(address: SocketAddr, service: AuthService) -> BpResult<Self> {
+    pub async fn bind(address: SocketAddr, service: AuthService) -> BuildResult<Self> {
         Self::bind_with_sigv4(address, service, SigV4Config::from_env()?).await
     }
 
@@ -30,10 +30,10 @@ impl JwtServer {
         address: SocketAddr,
         service: AuthService,
         sigv4: SigV4Config,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let listener = TcpListener::bind(address)
             .await
-            .map_err(BpError::external)?;
+            .map_err(BuildError::external)?;
         Ok(Self {
             listener,
             service: Arc::new(service),
@@ -42,13 +42,13 @@ impl JwtServer {
         })
     }
 
-    pub async fn serve(self) -> BpResult<()> {
+    pub async fn serve(self) -> BuildResult<()> {
         self.serve_with_shutdown(Runtime::shutdown_signal()).await
     }
 
-    pub async fn serve_with_shutdown<F>(self, shutdown: F) -> BpResult<()>
+    pub async fn serve_with_shutdown<F>(self, shutdown: F) -> BuildResult<()>
     where
-        F: Future<Output = BpResult<()>> + Send,
+        F: Future<Output = BuildResult<()>> + Send,
     {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let mut connections = JoinSet::new();
@@ -96,8 +96,8 @@ impl JwtServer {
         result
     }
 
-    pub fn local_addr(&self) -> BpResult<SocketAddr> {
-        self.listener.local_addr().map_err(BpError::external)
+    pub fn local_addr(&self) -> BuildResult<SocketAddr> {
+        self.listener.local_addr().map_err(BuildError::external)
     }
 
     async fn drain(connections: &mut JoinSet<()>) {

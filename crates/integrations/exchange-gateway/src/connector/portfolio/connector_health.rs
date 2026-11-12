@@ -1,6 +1,6 @@
 use super::ConnectorState;
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use serde::{Deserialize, Serialize};
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -50,11 +50,11 @@ impl ConnectorHealth {
         self.occurred_at
     }
 
-    pub fn to_bytes(&self) -> BpResult<Vec<u8>> {
+    pub fn to_bytes(&self) -> BuildResult<Vec<u8>> {
         Ok(serde_json::to_vec(self)?)
     }
 
-    pub fn from_bytes(payload: &[u8]) -> BpResult<Self> {
-        serde_json::from_slice(payload).map_err(BpError::external)
+    pub fn from_bytes(payload: &[u8]) -> BuildResult<Self> {
+        serde_json::from_slice(payload).map_err(BuildError::external)
     }
 }

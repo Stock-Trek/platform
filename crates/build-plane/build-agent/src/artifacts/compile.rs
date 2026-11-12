@@ -3,7 +3,7 @@ use super::{
     WASM_TARGET, WASMTIME, WORKSPACE_ENTRIES,
 };
 use crate::source::Source;
-use platform_errors::{BpError, BpResult, ConfigError, ValidationError};
+use platform_errors::{BuildError, BuildResult, ConfigError, ValidationError};
 use std::{
     fs as std_fs, io,
     path::{Path, PathBuf},
@@ -13,17 +13,17 @@ use tokio::process::Command;
 use tracing::info;
 
 impl Artifacts {
-    pub fn prepare_workspace(&self) -> BpResult<()> {
+    pub fn prepare_workspace(&self) -> BuildResult<()> {
         let workspace = self.build_dir.path();
         if !self.source_dir.join("Cargo.toml").is_file() {
-            return Err(BpError::Config(ConfigError::Build(format!(
+            return Err(BuildError::Config(ConfigError::Build(format!(
                 "build workspace source {} does not contain Cargo.toml",
                 self.source_dir.display()
             ))));
         }
 
         std_fs::create_dir_all(workspace).map_err(|source| {
-            BpError::io(
+            BuildError::io(
                 "prepare build workspace",
                 workspace.display().to_string(),
                 source,
@@ -36,7 +36,7 @@ impl Artifacts {
             }
             let to = workspace.join(entry);
             Self::copy_path(&from, &to).map_err(|source| {
-                BpError::io(
+                BuildError::io(
                     "copy build workspace entry",
                     from.display().to_string(),
                     source,
@@ -46,7 +46,7 @@ impl Artifacts {
         Ok(())
     }
 
-    pub async fn unpack_source(&self) -> BpResult<Vec<PathBuf>> {
+    pub async fn unpack_source(&self) -> BuildResult<Vec<PathBuf>> {
         let source = Source::download(&self.source_get_url, self.source_limits).await?;
         source.extract(
             self.build_dir.path(),
@@ -54,10 +54,10 @@ impl Artifacts {
         )
     }
 
-    pub fn validate_user_generated(sources: &[PathBuf]) -> BpResult<()> {
+    pub fn validate_user_generated(sources: &[PathBuf]) -> BuildResult<()> {
         for path in sources {
             stock_trek_check::verify::verify(path.display().to_string()).map_err(|error| {
-                BpError::Validation(ValidationError::InvalidValue {
+                BuildError::Validation(ValidationError::InvalidValue {
                     name: format!("user generated code {}", path.display()),
                     value: error.to_string(),
                 })
@@ -67,7 +67,7 @@ impl Artifacts {
         Ok(())
     }
 
-    pub async fn build_wasm(&self, target_dir: &Path) -> BpResult<PathBuf> {
+    pub async fn build_wasm(&self, target_dir: &Path) -> BuildResult<PathBuf> {
         let workspace = self.build_dir.path();
         let manifest = workspace.join(WASM_MANIFEST);
         let module = target_dir
@@ -91,12 +91,12 @@ impl Artifacts {
             .output()
             .await
             .map_err(|source| {
-                BpError::io("compile artifact", module.display().to_string(), source)
+                BuildError::io("compile artifact", module.display().to_string(), source)
             })?;
         self.set_compile_output(Self::command_output("cargo build", &output));
 
         if !output.status.success() {
-            return Err(BpError::command_failed(
+            return Err(BuildError::command_failed(
                 "compile artifact",
                 module,
                 output.status,
@@ -116,10 +116,10 @@ impl Artifacts {
     /// The prebuilt target directory baked into the image is copied into a
     /// fresh temporary directory every time, so cargo never sees artifacts
     /// produced by user code from an earlier invocation.
-    pub async fn prepare_target_dir(&self) -> BpResult<TempDir> {
+    pub async fn prepare_target_dir(&self) -> BuildResult<TempDir> {
         let cache_root = self.build_cache_dir.clone();
         std_fs::create_dir_all(&cache_root).map_err(|source| {
-            BpError::io(
+            BuildError::io(
                 "prepare build cache",
                 cache_root.display().to_string(),
                 source,
@@ -129,7 +129,7 @@ impl Artifacts {
             .prefix("platform-target-")
             .tempdir_in(&cache_root)
             .map_err(|source| {
-                BpError::io(
+                BuildError::io(
                     "prepare build cache",
                     cache_root.display().to_string(),
                     source,
@@ -143,12 +143,12 @@ impl Artifacts {
             tokio::task::spawn_blocking(move || Self::copy_path(&from, &to))
                 .await
                 .map_err(|source| {
-                    BpError::Config(ConfigError::Build(format!(
+                    BuildError::Config(ConfigError::Build(format!(
                         "failed to prepare build cache: {source}"
                     )))
                 })?
                 .map_err(|source| {
-                    BpError::io(
+                    BuildError::io(
                         "copy build cache",
                         target_dir.path().display().to_string(),
                         source,
@@ -159,7 +159,7 @@ impl Artifacts {
         Ok(target_dir)
     }
 
-    pub async fn compile_wasm(&self, module: &Path) -> BpResult<PathBuf> {
+    pub async fn compile_wasm(&self, module: &Path) -> BuildResult<PathBuf> {
         let output = self.build_dir.path().join(CWASM_ARTIFACT_FILE);
         let command_output = Command::new(WASMTIME)
             .arg("compile")
@@ -174,12 +174,12 @@ impl Artifacts {
             .output()
             .await
             .map_err(|source| {
-                BpError::io("compile artifact", module.display().to_string(), source)
+                BuildError::io("compile artifact", module.display().to_string(), source)
             })?;
         self.set_compile_output(Self::command_output("wasmtime compile", &command_output));
 
         if !command_output.status.success() {
-            return Err(BpError::command_failed(
+            return Err(BuildError::command_failed(
                 "compile artifact",
                 module.to_path_buf(),
                 command_output.status,

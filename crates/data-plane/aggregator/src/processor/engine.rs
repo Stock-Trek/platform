@@ -3,7 +3,7 @@
 
 use super::{ProcessorConfig, ProcessorUpdate};
 use crate::state::{AggregatorState, SequenceRange, StreamProgress};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::{
     candle::{AlignedWindow, ClosedCandle},
     decoders::trade::{Trade, TradeDecoderFactory},
@@ -29,10 +29,10 @@ impl CandleProcessor {
         Self { config, state }
     }
 
-    pub fn from_state(config: ProcessorConfig, mut state: AggregatorState) -> BpResult<Self> {
+    pub fn from_state(config: ProcessorConfig, mut state: AggregatorState) -> BuildResult<Self> {
         state.ensure_schema_compatible_with(config.state_schema_version)?;
         if !state.candles_use_intervals(&config.intervals) {
-            return Err(platform_errors::BpError::config_invalid(
+            return Err(platform_errors::BuildError::config_invalid(
                 "aggregator state",
                 "restored candle intervals are not configured",
             ));

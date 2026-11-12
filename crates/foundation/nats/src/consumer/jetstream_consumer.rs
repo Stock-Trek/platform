@@ -11,7 +11,7 @@ use async_nats::{
     },
 };
 use futures::StreamExt;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::time::Duration;
 
 const DEFAULT_EXPIRES: Duration = Duration::from_secs(1);
@@ -66,7 +66,7 @@ impl JetStreamConsumer {
         stream_subject_prefix: &str,
         filter_subject: &str,
         durable: &str,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         Self::connect_from(
             url,
             name,
@@ -93,7 +93,7 @@ impl JetStreamConsumer {
         filter_subject: &str,
         durable: &str,
         start_sequence: Option<u64>,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         Self::connect_with_start(
             url,
             name,
@@ -117,7 +117,7 @@ impl JetStreamConsumer {
         filter_subject: &str,
         durable: &str,
         start: ConsumerStart,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         Self::connect_with_start_and_ack_wait(
             url,
             name,
@@ -144,7 +144,7 @@ impl JetStreamConsumer {
         durable: &str,
         start: ConsumerStart,
         ack_wait: Duration,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let address = NatsAddress::parse(url)?;
         NatsSubject::validate_named("filter subject", filter_subject)?;
         let stream = JetStream::stream_name(stream_subject_prefix);
@@ -239,7 +239,7 @@ impl JetStreamConsumer {
 
     /// Fetches up to `batch` messages, waiting up to `expires` for the first
     /// one. An empty result means nothing was available in the window.
-    pub async fn fetch(&self, batch: usize, expires: Duration) -> BpResult<Vec<Message>> {
+    pub async fn fetch(&self, batch: usize, expires: Duration) -> BuildResult<Vec<Message>> {
         let expires = if expires.is_zero() {
             DEFAULT_EXPIRES
         } else {
@@ -267,7 +267,7 @@ impl JetStreamConsumer {
 
     /// Acknowledges a fetched message. Redelivery after a lost acknowledgement
     /// keeps processing restart-safe and idempotent.
-    pub async fn ack(&self, message: &Message) -> BpResult<()> {
+    pub async fn ack(&self, message: &Message) -> BuildResult<()> {
         let Some(reply) = &message.reply_to else {
             return Ok(());
         };

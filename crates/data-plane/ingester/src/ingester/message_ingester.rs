@@ -1,5 +1,5 @@
 use crate::sequence::{SequenceObservation, SequenceStore, SequenceTracker};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::{
     envelope::EnvelopeCodec,
     event::{GapMarker, MarketEvent, ParsedMessage},
@@ -53,7 +53,7 @@ impl<P: EventPublisher> Ingester<P> {
         }
     }
 
-    pub async fn ingest(&mut self, message: ParsedMessage) -> BpResult<()> {
+    pub async fn ingest(&mut self, message: ParsedMessage) -> BuildResult<()> {
         let ParsedMessage {
             stream,
             sequence,
@@ -148,7 +148,7 @@ impl<P: EventPublisher> Ingester<P> {
         event: &MarketEvent,
         first_sequence: u64,
         sequence: u64,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let result = self.publisher.publish(subject, &event.encode()?).await;
         let tracker = self.sequence_tracker(&event.stream).await?;
         match &result {
@@ -163,7 +163,7 @@ impl<P: EventPublisher> Ingester<P> {
         result
     }
 
-    async fn sequence_tracker(&mut self, stream: &str) -> BpResult<&mut SequenceTracker> {
+    async fn sequence_tracker(&mut self, stream: &str) -> BuildResult<&mut SequenceTracker> {
         if !self.loaded_streams.contains(stream) {
             let key = self.sequence_key(stream);
             let tracker = self.store.load(&key).await?.unwrap_or_default();
@@ -171,7 +171,7 @@ impl<P: EventPublisher> Ingester<P> {
             self.loaded_streams.insert(stream.to_string());
         }
         self.sequences.get_mut(stream).ok_or_else(|| {
-            platform_errors::BpError::bad_value(
+            platform_errors::BuildError::bad_value(
                 "sequence tracker",
                 stream,
                 "sequence tracker is not loaded",
@@ -179,7 +179,7 @@ impl<P: EventPublisher> Ingester<P> {
         })
     }
 
-    async fn persist_sequence(&self, stream: &str) -> BpResult<()> {
+    async fn persist_sequence(&self, stream: &str) -> BuildResult<()> {
         let Some(tracker) = self.sequences.get(stream) else {
             return Ok(());
         };

@@ -1,6 +1,6 @@
 //! Process-level runtime helpers shared by services across the workspace.
 
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::future::Future;
 use tracing::info;
 
@@ -13,7 +13,7 @@ impl Runtime {
     /// Service loops select on this future so every service logs and handles
     /// shutdown in the same way. On Unix this listens for both `SIGINT`
     /// (Ctrl-C) and `SIGTERM`, the signal containers use to stop a process.
-    pub async fn shutdown_signal() -> BpResult<()> {
+    pub async fn shutdown_signal() -> BuildResult<()> {
         #[cfg(unix)]
         {
             let mut terminate =
@@ -36,9 +36,9 @@ impl Runtime {
     /// Service loops pass their main work here instead of repeating the same
     /// `tokio::select!` shutdown arm. When shutdown wins, the work future is
     /// dropped and `Ok(())` is returned so callers can run finalisation steps.
-    pub async fn run_until_shutdown<F>(work: F) -> BpResult<()>
+    pub async fn run_until_shutdown<F>(work: F) -> BuildResult<()>
     where
-        F: Future<Output = BpResult<()>>,
+        F: Future<Output = BuildResult<()>>,
     {
         tokio::select! {
             result = work => result,

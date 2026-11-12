@@ -8,7 +8,7 @@ use lru::LruCache;
 use octocrab::Octocrab;
 use parking_lot::Mutex;
 use platform_config::DirectoryLimits;
-use platform_errors::{BpError, BpResult, GitHubError};
+use platform_errors::{BuildError, BuildResult, GitHubError};
 use platform_time::timeouts::Timeouts;
 use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};
 
@@ -32,7 +32,7 @@ impl GitHubAuth {
         timeouts: Timeouts,
         allowed_hosts: HostAllowlist,
         max_cached_installations: NonZeroUsize,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         Self::with_directory_limits(
             config,
             timeouts,
@@ -48,9 +48,9 @@ impl GitHubAuth {
         allowed_hosts: HostAllowlist,
         max_cached_installations: NonZeroUsize,
         directory_limits: DirectoryLimits,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let key = EncodingKey::from_rsa_pem(config.private_key.as_bytes())
-            .map_err(|error| BpError::config_invalid_source("GitHub App private key", error))?;
+            .map_err(|error| BuildError::config_invalid_source("GitHub App private key", error))?;
         Ok(Self {
             app_id: config.app_id,
             key,
@@ -62,7 +62,11 @@ impl GitHubAuth {
         })
     }
 
-    pub fn installation(&self, host: &str, installation_id: u64) -> BpResult<GitHubInstallation> {
+    pub fn installation(
+        &self,
+        host: &str,
+        installation_id: u64,
+    ) -> BuildResult<GitHubInstallation> {
         let host = self.allowed_hosts.validate(host)?;
         let key = (host.clone(), installation_id);
         let mut installations = self.installations.lock();
@@ -85,7 +89,7 @@ impl GitHubAuth {
     /// caching it on first use. The public GitHub host uses octocrab's default
     /// base URI; any other host is treated as GitHub Enterprise and routed
     /// through `https://<host>/api/v3`.
-    fn app(&self, host: &str) -> BpResult<Arc<Octocrab>> {
+    fn app(&self, host: &str) -> BuildResult<Arc<Octocrab>> {
         let mut apps = self.apps.lock();
         if let Some(app) = apps.get(host) {
             return Ok(Arc::clone(app));
@@ -94,7 +98,7 @@ impl GitHubAuth {
         if host != DEFAULT_HOST {
             let base_uri = format!("https://{host}/{ENTERPRISE_API_PATH}");
             builder = builder.base_uri(base_uri).map_err(|error| {
-                BpError::config_invalid_source(format!("GitHub Enterprise host {host}"), error)
+                BuildError::config_invalid_source(format!("GitHub Enterprise host {host}"), error)
             })?;
         }
         let app = Arc::new(
@@ -102,7 +106,7 @@ impl GitHubAuth {
                 .set_connect_timeout(self.timeouts.connect.into())
                 .set_read_timeout(self.timeouts.operation.into())
                 .build()
-                .map_err(|error| BpError::GitHub(GitHubError::BuildClient(error)))?,
+                .map_err(|error| BuildError::GitHub(GitHubError::BuildClient(error)))?,
         );
         apps.insert(host.to_owned(), Arc::clone(&app));
         Ok(app)

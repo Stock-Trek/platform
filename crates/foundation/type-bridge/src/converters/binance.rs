@@ -3,7 +3,7 @@ use crate::{
     asset_limits::TBAssetLimits,
 };
 use bimap::BiHashMap;
-use platform_errors::{BpError, BpResult, ExchangeError, ValidationError};
+use platform_errors::{BuildError, BuildResult, ExchangeError, ValidationError};
 use platform_exchange_types::binance::{
     asset_limits::{BinanceAssetLimitsRequest, BinanceAssetLimitsResponse},
     exchange::BinanceExchange,
@@ -63,13 +63,12 @@ impl Converter for BinanceConverter {
         &self,
         trading_pair: &TradingPair,
         cex_preferences: &CexPreferences,
-    ) -> BpResult<Self::AssetLimitsRequest> {
+    ) -> BuildResult<Self::AssetLimitsRequest> {
         let symbol = match self.ticker_mapping().symbol(trading_pair) {
             None => {
-                return Err(BpError::Validation(ValidationError::MissingValue(format!(
-                    "Symbol for trading pair: {:?}",
-                    trading_pair
-                ))));
+                return Err(BuildError::Validation(ValidationError::MissingValue(
+                    format!("Symbol for trading pair: {:?}", trading_pair),
+                )));
             }
             Some(symbol) => symbol,
         };
@@ -80,7 +79,7 @@ impl Converter for BinanceConverter {
         .ok();
         Ok(request)
     }
-    fn exchange_info_request(&self) -> BpResult<Self::ExchangeInfoRequest> {
+    fn exchange_info_request(&self) -> BuildResult<Self::ExchangeInfoRequest> {
         Ok(BinanceExchangeInfoRequest::Permissions {
             permissions: BinanceExchangeInfoPermissions::List(vec![
                 BinanceExchangeInfoPermission::SPOT,
@@ -93,7 +92,7 @@ impl Converter for BinanceConverter {
         order_request: OrderRequest<AssetId, f64>,
         trading_precision: TradingPrecision,
         cex_preferences: &CexPreferences,
-    ) -> BpResult<Self::OrderRequest> {
+    ) -> BuildResult<Self::OrderRequest> {
         let precise =
             self.try_convert_precise(order_request, cex_preferences, trading_precision)?;
         let (base, quote, side, activation, quantity, quote_order_qty, price, time_in_force, tag) =
@@ -197,7 +196,7 @@ impl Converter for BinanceConverter {
                 TimeInForce::GoodTillCancelled => BinanceTimeInForce::GTC,
                 TimeInForce::ImmediateOrCancel => BinanceTimeInForce::IOC,
                 other => {
-                    return Err(BpError::Validation(ValidationError::Unsupported {
+                    return Err(BuildError::Validation(ValidationError::Unsupported {
                         name: "time_in_force".into(),
                         value: other.to_string(),
                     }));
@@ -236,7 +235,7 @@ impl Converter for BinanceConverter {
     fn asset_limits_response(
         &self,
         response: BinanceResponse<BinanceAssetLimitsResponse>,
-    ) -> BpResult<TBAssetLimits> {
+    ) -> BuildResult<TBAssetLimits> {
         let payload = Self::success_payload(response)?;
         let ticker_mapping = self.ticker_mapping();
         let mut asset_limits = HashMap::new();
@@ -260,7 +259,7 @@ impl Converter for BinanceConverter {
     fn exchange_info_response(
         &self,
         response: Self::ExchangeInfoResponse,
-    ) -> BpResult<TBExchangeInfo> {
+    ) -> BuildResult<TBExchangeInfo> {
         let payload = Self::success_payload(response)?;
         let asset_tickers = self.ticker_mapping();
         let mut trading_precisions = HashMap::new();
@@ -286,7 +285,7 @@ impl Converter for BinanceConverter {
         }
         Ok(TBExchangeInfo { trading_precisions })
     }
-    fn order_response(&self, response: Self::OrderResponse) -> BpResult<OrderResponse> {
+    fn order_response(&self, response: Self::OrderResponse) -> BuildResult<OrderResponse> {
         let payload = Self::success_payload(response)?;
         let BinanceSpotOrderResponse {
             clientOrderId,
@@ -307,13 +306,13 @@ impl Converter for BinanceConverter {
             Some(BinanceOrderStatus::PENDING_NEW) => OrderStatus::New,
             Some(BinanceOrderStatus::REJECTED) => OrderStatus::Rejected,
             Some(other) => {
-                return Err(BpError::Validation(ValidationError::Unsupported {
+                return Err(BuildError::Validation(ValidationError::Unsupported {
                     name: "status".into(),
                     value: other.to_string(),
                 }));
             }
             None => {
-                return Err(BpError::Validation(ValidationError::MissingValue(
+                return Err(BuildError::Validation(ValidationError::MissingValue(
                     "status".into(),
                 )));
             }
@@ -329,10 +328,10 @@ impl Converter for BinanceConverter {
 }
 
 impl BinanceConverter {
-    fn success_payload<R>(response: BinanceResponse<R>) -> BpResult<R> {
+    fn success_payload<R>(response: BinanceResponse<R>) -> BuildResult<R> {
         match response.payload {
             BinanceResponsePayload::Success(payload) => Ok(payload),
-            BinanceResponsePayload::Failure(error) => Err(BpError::Exchange(
+            BinanceResponsePayload::Failure(error) => Err(BuildError::Exchange(
                 ExchangeError::BadResponse(error.to_string()),
             )),
         }
@@ -377,7 +376,7 @@ impl BinanceConverter {
         map.insert(AssetId::WrappedEthereum, "WETH".into());
         TickerMapping::new(map, None)
     }
-    fn binance_base_limit(filters: &Vec<BinanceSymbolFilter>) -> BpResult<MinMaxStep> {
+    fn binance_base_limit(filters: &Vec<BinanceSymbolFilter>) -> BuildResult<MinMaxStep> {
         for filter in filters {
             if let BinanceSymbolFilter::LOT_SIZE {
                 minQty,
@@ -392,7 +391,7 @@ impl BinanceConverter {
                 });
             }
         }
-        Err(BpError::Validation(ValidationError::MissingValue(
+        Err(BuildError::Validation(ValidationError::MissingValue(
             "LOT_SIZE filter in symbol filters".into(),
         )))
     }
@@ -417,7 +416,7 @@ impl BinanceConverter {
         }
         base_limit
     }
-    fn binance_quote(filters: &Vec<BinanceSymbolFilter>) -> BpResult<MinMaxStep> {
+    fn binance_quote(filters: &Vec<BinanceSymbolFilter>) -> BuildResult<MinMaxStep> {
         for filter in filters {
             if let BinanceSymbolFilter::PRICE_FILTER {
                 maxPrice,
@@ -432,7 +431,7 @@ impl BinanceConverter {
                 });
             }
         }
-        Err(BpError::Validation(ValidationError::MissingValue(
+        Err(BuildError::Validation(ValidationError::MissingValue(
             "PRICE_FILTER in symbol filters".into(),
         )))
     }

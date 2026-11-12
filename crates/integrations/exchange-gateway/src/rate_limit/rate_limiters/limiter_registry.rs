@@ -1,6 +1,6 @@
 use crate::rate_limit::rate_limiter::RateLimiter;
 use parking_lot::Mutex;
-use platform_errors::{BpError, BpResult, RateLimitError};
+use platform_errors::{BuildError, BuildResult, RateLimitError};
 use platform_exchange_types::rate_limited::{RateLimit, RateLimitRestriction, RateUsage};
 use platform_types::new_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -25,7 +25,7 @@ impl RateLimiters {
             acquisition_lock: Arc::new(Mutex::new(())),
         }
     }
-    pub fn remaining_capacity(&self) -> BpResult<HashMap<RateLimit, UsageCount>> {
+    pub fn remaining_capacity(&self) -> BuildResult<HashMap<RateLimit, UsageCount>> {
         let mut capacities = HashMap::new();
         for (restriction, limiter) in &self.limiters {
             for (interval_nanos, remaining) in limiter.remaining_capacity()? {
@@ -40,12 +40,12 @@ impl RateLimiters {
         }
         Ok(capacities)
     }
-    pub fn did_acquire(&self, costs: &[(RateLimitRestriction, UsageCount)]) -> BpResult<()> {
+    pub fn did_acquire(&self, costs: &[(RateLimitRestriction, UsageCount)]) -> BuildResult<()> {
         let _guard = self.acquisition_lock.lock();
         for limiter in self.limiters.values() {
             if limiter.is_throttled()? {
                 debug!("rate limiter is throttled, rejecting request");
-                return Err(BpError::RateLimit(RateLimitError::RateLimited));
+                return Err(BuildError::RateLimit(RateLimitError::RateLimited));
             }
         }
         let mut acquired = Vec::with_capacity(costs.len());
@@ -60,24 +60,28 @@ impl RateLimiters {
         }
         Ok(())
     }
-    fn refund_acquired(&self, acquired: &[(RateLimitRestriction, UsageCount)]) -> BpResult<()> {
+    fn refund_acquired(&self, acquired: &[(RateLimitRestriction, UsageCount)]) -> BuildResult<()> {
         for &(restriction, cost) in acquired {
             self.refund_unlocked(restriction, cost)?;
         }
         Ok(())
     }
-    pub fn refund(&self, restriction: RateLimitRestriction, cost: UsageCount) -> BpResult<()> {
+    pub fn refund(&self, restriction: RateLimitRestriction, cost: UsageCount) -> BuildResult<()> {
         let _guard = self.acquisition_lock.lock();
         self.refund_unlocked(restriction, cost)
     }
-    fn refund_unlocked(&self, restriction: RateLimitRestriction, cost: UsageCount) -> BpResult<()> {
+    fn refund_unlocked(
+        &self,
+        restriction: RateLimitRestriction,
+        cost: UsageCount,
+    ) -> BuildResult<()> {
         if let Some(limiter) = self.limiters.get(&restriction) {
             limiter.refund(cost)
         } else {
             Ok(())
         }
     }
-    pub fn set_usage(&self, usage: &HashMap<RateLimit, RateUsage>) -> BpResult<()> {
+    pub fn set_usage(&self, usage: &HashMap<RateLimit, RateUsage>) -> BuildResult<()> {
         for (restriction, limiter) in &self.limiters {
             let restriction_usage = usage
                 .iter()
@@ -88,7 +92,7 @@ impl RateLimiters {
         }
         Ok(())
     }
-    pub fn set_retry_after(&self, retry_after: Duration) -> BpResult<()> {
+    pub fn set_retry_after(&self, retry_after: Duration) -> BuildResult<()> {
         warn!(
             ?retry_after,
             "exchange requested Retry-After, throttling requests"

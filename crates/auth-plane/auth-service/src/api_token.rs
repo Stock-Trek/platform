@@ -1,6 +1,6 @@
 use crate::TokenMetadata;
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use secrecy::{ExposeSecret, SecretString};
 use subtle::ConstantTimeEq;
 
@@ -24,7 +24,7 @@ impl ApiToken {
         secret: SecretString,
         created_at: DateTime<Utc>,
         metadata: TokenMetadata,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let id = id.into();
         let owner = owner.into();
         let owner = Self::validated_owner(&owner)?.to_string();
@@ -39,20 +39,20 @@ impl ApiToken {
         Ok(token)
     }
 
-    pub(crate) fn validate(&self) -> BpResult<()> {
+    pub(crate) fn validate(&self) -> BuildResult<()> {
         Self::validate_id(&self.id)?;
         Self::validated_owner(&self.owner)?;
         Self::validate_secret(self.secret.expose_secret())?;
         self.metadata.validate()?;
         self.validate_temporal()?;
         if self.metadata.rotated_from() == Some(self.id.as_str()) {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "rotated_from",
                 "must refer to a different token",
             ));
         }
         if self.metadata.replaced_by() == Some(self.id.as_str()) {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "replaced_by",
                 "must refer to a different token",
             ));
@@ -60,18 +60,21 @@ impl ApiToken {
         Ok(())
     }
 
-    fn validate_secret(secret: &str) -> BpResult<()> {
+    fn validate_secret(secret: &str) -> BuildResult<()> {
         if secret.trim().is_empty() {
-            return Err(BpError::auth_invalid_field("secret", "must not be empty"));
+            return Err(BuildError::auth_invalid_field(
+                "secret",
+                "must not be empty",
+            ));
         }
         if secret.chars().count() > MAX_SECRET_LENGTH {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "secret",
                 format!("must be at most {MAX_SECRET_LENGTH} characters"),
             ));
         }
         if secret.chars().any(char::is_control) {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "secret",
                 "must not contain control characters",
             ));
@@ -107,19 +110,19 @@ impl ApiToken {
             .into()
     }
 
-    pub fn validated_owner(owner: &str) -> BpResult<&str> {
+    pub fn validated_owner(owner: &str) -> BuildResult<&str> {
         let owner = owner.trim();
         if owner.is_empty() {
-            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
+            return Err(BuildError::auth_invalid_field("owner", "must not be empty"));
         }
         if owner.chars().count() > MAX_OWNER_LENGTH {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "owner",
                 format!("must be at most {MAX_OWNER_LENGTH} characters"),
             ));
         }
         if owner.chars().any(char::is_control) {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "owner",
                 "must not contain control characters",
             ));
@@ -127,12 +130,15 @@ impl ApiToken {
         Ok(owner)
     }
 
-    pub fn validate_id(id: &str) -> BpResult<()> {
+    pub fn validate_id(id: &str) -> BuildResult<()> {
         if id.is_empty() {
-            return Err(BpError::auth_invalid_field("token_id", "must not be empty"));
+            return Err(BuildError::auth_invalid_field(
+                "token_id",
+                "must not be empty",
+            ));
         }
         if id.len() > MAX_TOKEN_ID_LENGTH {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "token_id",
                 format!("must be at most {MAX_TOKEN_ID_LENGTH} characters"),
             ));
@@ -143,7 +149,7 @@ impl ApiToken {
         if valid {
             Ok(())
         } else {
-            Err(BpError::auth_invalid_field(
+            Err(BuildError::auth_invalid_field(
                 "token_id",
                 "must only contain ASCII letters, digits, '-' and '_'",
             ))

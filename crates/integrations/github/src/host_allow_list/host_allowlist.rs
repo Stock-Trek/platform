@@ -1,5 +1,5 @@
 use platform_config::GITHUB_ENTERPRISE_ALLOWED_HOSTS;
-use platform_errors::{BpError, BpResult, GitHubError};
+use platform_errors::{BuildError, BuildResult, GitHubError};
 use platform_types::url_scheme::UrlScheme;
 use std::{
     collections::HashMap,
@@ -59,7 +59,7 @@ impl HostAllowlist {
     ///
     /// [`DEFAULT_HOST`] is always included with the default HTTPS port, even if
     /// it is omitted from `hosts` or configured with another port.
-    pub fn from_hosts<I, S>(hosts: I) -> BpResult<Self>
+    pub fn from_hosts<I, S>(hosts: I) -> BuildResult<Self>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
@@ -77,9 +77,9 @@ impl HostAllowlist {
         self.validate(host).is_ok()
     }
 
-    pub fn validate(&self, host: &str) -> Result<String, BpError> {
+    pub fn validate(&self, host: &str) -> Result<String, BuildError> {
         let (name, port) = Self::parse(host.trim()).ok_or_else(|| {
-            BpError::GitHub(GitHubError::HostInvalid {
+            BuildError::GitHub(GitHubError::HostInvalid {
                 host: host.to_owned(),
             })
         })?;
@@ -100,24 +100,24 @@ impl HostAllowlist {
     /// allowlist entry. The returned host is rebuilt from the allowlist's
     /// policy, so callers must use it rather than any part of the original
     /// string.
-    pub fn validate_url(&self, url: &str) -> Result<String, BpError> {
+    pub fn validate_url(&self, url: &str) -> Result<String, BuildError> {
         let parsed = Url::parse(url).map_err(|_| {
-            BpError::GitHub(GitHubError::HostInvalid {
+            BuildError::GitHub(GitHubError::HostInvalid {
                 host: url.to_owned(),
             })
         })?;
         if !UrlScheme::from_url(&parsed).is_some_and(UrlScheme::is_https) {
-            return Err(BpError::GitHub(GitHubError::HostInvalid {
+            return Err(BuildError::GitHub(GitHubError::HostInvalid {
                 host: url.to_owned(),
             }));
         }
         if !parsed.username().is_empty() || parsed.password().is_some() {
-            return Err(BpError::GitHub(GitHubError::HostInvalid {
+            return Err(BuildError::GitHub(GitHubError::HostInvalid {
                 host: url.to_owned(),
             }));
         }
         let (name, port) = Self::host_from_url(&parsed).ok_or_else(|| {
-            BpError::GitHub(GitHubError::HostInvalid {
+            BuildError::GitHub(GitHubError::HostInvalid {
                 host: url.to_owned(),
             })
         })?;
@@ -128,14 +128,14 @@ impl HostAllowlist {
     /// [`HostAllowlist::validate_url`]. `name` is an already-normalized host
     /// and `port` is the port parsed from `input`; the returned host is rebuilt
     /// from the port owned by the allowlist entry.
-    fn check(&self, name: &str, port: Option<u16>, input: &str) -> Result<String, BpError> {
+    fn check(&self, name: &str, port: Option<u16>, input: &str) -> Result<String, BuildError> {
         let Some(policy) = self.hosts.get(name) else {
-            return Err(BpError::GitHub(GitHubError::HostNotAllowed {
+            return Err(BuildError::GitHub(GitHubError::HostNotAllowed {
                 host: input.to_owned(),
             }));
         };
         if !policy.allows(port) {
-            return Err(BpError::GitHub(GitHubError::HostNotAllowed {
+            return Err(BuildError::GitHub(GitHubError::HostNotAllowed {
                 host: input.to_owned(),
             }));
         }
@@ -151,9 +151,9 @@ impl HostAllowlist {
         Some((name, url.port()))
     }
 
-    fn validated(host: &str) -> BpResult<(String, Option<u16>)> {
+    fn validated(host: &str) -> BuildResult<(String, Option<u16>)> {
         Self::parse(host).ok_or_else(|| {
-            BpError::config_invalid(
+            BuildError::config_invalid(
                 GITHUB_ENTERPRISE_ALLOWED_HOSTS,
                 format!(
                     "{host:?} is not a hostname, IP address, or host:port (expected e.g. \"ghe.example.com\", \"ghe.example.com:8443\", or \"[2001:db8::1]:8443\")"

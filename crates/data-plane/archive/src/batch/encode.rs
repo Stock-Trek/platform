@@ -3,16 +3,16 @@ use crate::record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent};
 use arrow_array::{
     ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_market_data::{candle::ClosedCandle, envelope::EnvelopeCodec};
 use std::sync::Arc;
 
 impl ArchiveBatch {
-    pub fn to_record_batch(&self) -> BpResult<RecordBatch> {
+    pub fn to_record_batch(&self) -> BuildResult<RecordBatch> {
         Self::record_batch(self.kind, &self.records)
     }
 
-    pub fn record_batch(kind: ArchiveKind, records: &[ArchiveRecord]) -> BpResult<RecordBatch> {
+    pub fn record_batch(kind: ArchiveKind, records: &[ArchiveRecord]) -> BuildResult<RecordBatch> {
         match kind {
             ArchiveKind::Events => {
                 let events = Self::events(records)?;
@@ -45,10 +45,10 @@ impl ArchiveBatch {
                     .map(|closed| {
                         let payload = closed.revision().encode()?;
                         Ok(std::str::from_utf8(&payload)
-                            .map_err(BpError::external)?
+                            .map_err(BuildError::external)?
                             .to_string())
                     })
-                    .collect::<BpResult<Vec<_>>>()?;
+                    .collect::<BuildResult<Vec<_>>>()?;
                 let revision_ids = candles
                     .iter()
                     .map(|closed| closed.message_id())
@@ -147,7 +147,7 @@ impl ArchiveBatch {
         }
     }
 
-    fn events(records: &[ArchiveRecord]) -> BpResult<Vec<&ArchivedMarketEvent>> {
+    fn events(records: &[ArchiveRecord]) -> BuildResult<Vec<&ArchivedMarketEvent>> {
         records
             .iter()
             .map(|record| match record {
@@ -159,7 +159,7 @@ impl ArchiveBatch {
             .collect()
     }
 
-    fn candles(records: &[ArchiveRecord]) -> BpResult<Vec<&ClosedCandle>> {
+    fn candles(records: &[ArchiveRecord]) -> BuildResult<Vec<&ClosedCandle>> {
         records
             .iter()
             .map(|record| match record {

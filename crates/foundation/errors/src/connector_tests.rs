@@ -1,8 +1,7 @@
-use super::*;
-use crate::BpError;
+use crate::{BuildError, ConnectorError, SendFailure};
 
-fn source() -> BpError {
-    BpError::external("test failure")
+fn source() -> BuildError {
+    BuildError::external("test failure")
 }
 
 #[test]
@@ -40,7 +39,7 @@ fn converting_a_bp_error_does_not_claim_the_request_was_not_sent() {
 
 #[test]
 fn converting_an_existing_connector_error_preserves_it() {
-    let converted = ConnectorError::from(BpError::Connector(ConnectorError::NotConnected));
+    let converted = ConnectorError::from(BuildError::Connector(ConnectorError::NotConnected));
 
     assert!(matches!(converted, ConnectorError::NotConnected));
     assert_eq!(converted.send_failure(), None);

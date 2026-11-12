@@ -1,7 +1,7 @@
 use super::public_error_body::PublicErrorBody;
 use http_body_util::Full;
 use hyper::{Response, StatusCode, body::Bytes};
-use platform_errors::{AuthError, BpError, SystemError};
+use platform_errors::{AuthError, BuildError, SystemError};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OrderRequestError {
@@ -59,41 +59,41 @@ impl OrderRequestError {
         }
     }
 
-    pub fn from_authentication_error(error: &BpError) -> Self {
+    pub fn from_authentication_error(error: &BuildError) -> Self {
         match error {
-            BpError::Auth(_) if error.retryability().is_retryable() => Self::ServiceUnavailable,
-            BpError::Auth(_) => Self::Unauthorized,
+            BuildError::Auth(_) if error.retryability().is_retryable() => Self::ServiceUnavailable,
+            BuildError::Auth(_) => Self::Unauthorized,
             error if error.retryability().is_retryable() => Self::ServiceUnavailable,
             _ => Self::Internal,
         }
     }
 
-    pub fn from_signing_error(error: &BpError) -> Self {
+    pub fn from_signing_error(error: &BuildError) -> Self {
         match error {
-            BpError::Auth(AuthError::UnknownToken { .. }) => Self::NotFound,
-            BpError::Auth(AuthError::InvalidField { field: "owner", .. }) => Self::NotFound,
-            BpError::Auth(AuthError::InvalidField {
+            BuildError::Auth(AuthError::UnknownToken { .. }) => Self::NotFound,
+            BuildError::Auth(AuthError::InvalidField { field: "owner", .. }) => Self::NotFound,
+            BuildError::Auth(AuthError::InvalidField {
                 field: "account" | "scope",
                 ..
             }) => Self::Forbidden,
-            BpError::Auth(AuthError::MissingScope { .. }) => Self::Forbidden,
-            BpError::Auth(
+            BuildError::Auth(AuthError::MissingScope { .. }) => Self::Forbidden,
+            BuildError::Auth(
                 AuthError::InvalidSecret { .. }
                 | AuthError::Revoked { .. }
                 | AuthError::Expired { .. }
                 | AuthError::RotationOverlapEnded { .. }
                 | AuthError::InvalidJwt { .. },
             ) => Self::Unauthorized,
-            BpError::Auth(AuthError::Store { .. } | AuthError::Unavailable { .. })
-            | BpError::Auth(AuthError::Conflict { .. })
+            BuildError::Auth(AuthError::Store { .. } | AuthError::Unavailable { .. })
+            | BuildError::Auth(AuthError::Conflict { .. })
                 if error.retryability().is_retryable() =>
             {
                 Self::ServiceUnavailable
             }
-            BpError::Auth(AuthError::InvalidField { .. } | AuthError::TokenExists { .. }) => {
+            BuildError::Auth(AuthError::InvalidField { .. } | AuthError::TokenExists { .. }) => {
                 Self::InvalidRequest
             }
-            BpError::System(SystemError::External(_)) => Self::InvalidRequest,
+            BuildError::System(SystemError::External(_)) => Self::InvalidRequest,
             error if error.retryability().is_retryable() => Self::ServiceUnavailable,
             _ => Self::Internal,
         }

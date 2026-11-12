@@ -1,6 +1,6 @@
 use crate::{AuthService, TokenAuditAction, TokenAuditEvent, TokenMutation};
 use chrono::{DateTime, Utc};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 
 impl AuthService {
     /// Deletes expired tokens one at a time.
@@ -9,7 +9,7 @@ impl AuthService {
     /// records its `Deleted` audit event. A failure after some tokens have
     /// already been purged leaves those deletions in place; the caller can
     /// safely retry because the operation is idempotent.
-    pub(crate) async fn purge_expired_tokens(&self, now: DateTime<Utc>) -> BpResult<usize> {
+    pub(crate) async fn purge_expired_tokens(&self, now: DateTime<Utc>) -> BuildResult<usize> {
         let mut ids = self.store.ids().await?;
         ids.sort();
         ids.dedup();

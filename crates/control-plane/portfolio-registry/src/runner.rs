@@ -4,7 +4,7 @@ use crate::{
 };
 use platform_auth_service::JwksCache;
 use platform_aws::Aws;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_nats::{EventPublisher, NatsPublisher};
 use platform_portfolio_ownership::OWNERSHIP_STREAM_PREFIX;
 use platform_runtime::{Runtime, Service};
@@ -15,7 +15,7 @@ const SERVICE: Service = Service::new("platform-portfolio-registry");
 pub struct RegistryRunner;
 
 impl RegistryRunner {
-    pub async fn run(config: PortfolioRegistryConfig) -> BpResult<()> {
+    pub async fn run(config: PortfolioRegistryConfig) -> BuildResult<()> {
         SERVICE.init_logging(config.log_filter())?;
         let _metrics = SERVICE.init_metrics("platform/portfolio-registry")?;
         let sdk_config = Aws::load_default_sdk_config().await;

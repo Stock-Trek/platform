@@ -1,6 +1,6 @@
 use crate::{FreshnessPolicy, StaleOrderPolicy};
 use platform_config::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 
 const MAX_AGE_SECS: &str = "PORTFOLIO_MAX_UPDATE_AGE_SECS";
 const STALE_ORDER_POLICY: &str = "PORTFOLIO_STALE_ORDER_POLICY";
@@ -12,12 +12,12 @@ pub struct FreshnessConfig {
 }
 
 impl FreshnessConfig {
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         let max_age_secs = vars
             .optional_parsed::<u64>(MAX_AGE_SECS)?
             .unwrap_or(DEFAULT_MAX_AGE_SECS);
         if max_age_secs == 0 {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 MAX_AGE_SECS,
                 "must be greater than zero",
             ));

@@ -1,6 +1,6 @@
 use super::PortfolioConnectorConfig;
 use platform_config::EnvVars;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use stock_trek_types::cex::cex_id::CexId;
 
 const ENABLED: &str = "PORTFOLIO_BINANCE_ENABLED";
@@ -10,7 +10,7 @@ const CONNECTOR_CEXES: &str = "PORTFOLIO_CONNECTOR_CEXES";
 struct Fixture;
 
 impl Fixture {
-    fn config(vars: &[(&str, &str)]) -> BpResult<PortfolioConnectorConfig> {
+    fn config(vars: &[(&str, &str)]) -> BuildResult<PortfolioConnectorConfig> {
         PortfolioConnectorConfig::from_vars(&EnvVars::from_map(
             vars.iter()
                 .map(|(name, value)| ((*name).to_string(), (*value).to_string())),

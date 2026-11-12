@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::{collections::HashMap, sync::Arc};
 
 #[derive(Clone, Default)]
@@ -41,23 +41,23 @@ pub struct MemoryTokenStore {
 
 #[async_trait]
 impl TokenStore for MemoryTokenStore {
-    async fn put(&self, token: &ApiToken) -> BpResult<()> {
+    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
         token.validate()?;
         let mut state = self.state.lock();
         if state.tokens.contains_key(token.id()) {
-            return Err(BpError::token_exists(token.id()));
+            return Err(BuildError::token_exists(token.id()));
         }
         state.tokens.insert(token.id().to_string(), token.clone());
         state.upsert_owner_token(token);
         Ok(())
     }
 
-    async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         ApiToken::validate_id(id)?;
         Ok(self.state.lock().tokens.get(id).cloned())
     }
 
-    async fn delete(&self, id: &str) -> BpResult<()> {
+    async fn delete(&self, id: &str) -> BuildResult<()> {
         ApiToken::validate_id(id)?;
         let mut state = self.state.lock();
         let owner = state
@@ -70,7 +70,7 @@ impl TokenStore for MemoryTokenStore {
         Ok(())
     }
 
-    async fn delete_if(&self, expected: &ApiToken) -> BpResult<bool> {
+    async fn delete_if(&self, expected: &ApiToken) -> BuildResult<bool> {
         expected.validate()?;
         let mut state = self.state.lock();
         let Some(token) = state.tokens.get(expected.id()) else {
@@ -84,11 +84,11 @@ impl TokenStore for MemoryTokenStore {
         Ok(true)
     }
 
-    async fn owner_index(&self, owner: &str) -> BpResult<Option<OwnerIndex>> {
+    async fn owner_index(&self, owner: &str) -> BuildResult<Option<OwnerIndex>> {
         Ok(self.state.lock().owner_indexes.get(owner).cloned())
     }
 
-    async fn put_owner_index(&self, index: &OwnerIndex) -> BpResult<()> {
+    async fn put_owner_index(&self, index: &OwnerIndex) -> BuildResult<()> {
         self.state
             .lock()
             .owner_indexes
@@ -96,37 +96,37 @@ impl TokenStore for MemoryTokenStore {
         Ok(())
     }
 
-    async fn owner_indexes(&self) -> BpResult<Vec<OwnerIndex>> {
+    async fn owner_indexes(&self) -> BuildResult<Vec<OwnerIndex>> {
         let state = self.state.lock();
         let mut indexes: Vec<_> = state.owner_indexes.values().cloned().collect();
         indexes.sort_by(|left, right| left.owner().cmp(right.owner()));
         Ok(indexes)
     }
 
-    async fn index_owner_token(&self, token: &ApiToken) -> BpResult<()> {
+    async fn index_owner_token(&self, token: &ApiToken) -> BuildResult<()> {
         self.state.lock().upsert_owner_token(token);
         Ok(())
     }
 
-    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BpResult<()> {
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BuildResult<()> {
         self.state.lock().remove_owner_token(owner, id);
         Ok(())
     }
 
-    async fn ids(&self) -> BpResult<Vec<String>> {
+    async fn ids(&self) -> BuildResult<Vec<String>> {
         let mut ids: Vec<String> = self.state.lock().tokens.keys().cloned().collect();
         ids.sort();
         Ok(ids)
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
         token.validate()?;
         let mut state = self.state.lock();
         let Some(stored) = state.tokens.get(token.id()) else {
-            return Err(BpError::unknown_token(token.id()));
+            return Err(BuildError::unknown_token(token.id()));
         };
         if stored.to_value() != expected.to_value() {
-            return Err(BpError::token_conflict(token.id()));
+            return Err(BuildError::token_conflict(token.id()));
         }
         state.tokens.insert(token.id().to_string(), token.clone());
         state.remove_token_indexes(expected);
@@ -134,7 +134,7 @@ impl TokenStore for MemoryTokenStore {
         Ok(())
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
         self.commit_events(mutation, vec![event]).await
     }
 
@@ -142,7 +142,7 @@ impl TokenStore for MemoryTokenStore {
         &self,
         mutation: TokenMutation,
         mut events: Vec<TokenAuditEvent>,
-    ) -> BpResult<bool> {
+    ) -> BuildResult<bool> {
         for event in &mut events {
             TokenAuditOutbox::ensure_event_id(event);
         }
@@ -151,7 +151,7 @@ impl TokenStore for MemoryTokenStore {
             TokenMutation::Create(token) => {
                 token.validate()?;
                 if state.tokens.contains_key(token.id()) {
-                    return Err(BpError::token_exists(token.id()));
+                    return Err(BuildError::token_exists(token.id()));
                 }
                 state.tokens.insert(token.id().to_string(), token.clone());
                 state.upsert_owner_token(&token);
@@ -161,10 +161,10 @@ impl TokenStore for MemoryTokenStore {
             TokenMutation::Update { expected, token } => {
                 token.validate()?;
                 let Some(stored) = state.tokens.get(token.id()) else {
-                    return Err(BpError::unknown_token(token.id()));
+                    return Err(BuildError::unknown_token(token.id()));
                 };
                 if stored.to_value() != expected.to_value() {
-                    return Err(BpError::token_conflict(token.id()));
+                    return Err(BuildError::token_conflict(token.id()));
                 }
                 state.tokens.insert(token.id().to_string(), token.clone());
                 state.remove_token_indexes(&expected);
@@ -188,12 +188,12 @@ impl TokenStore for MemoryTokenStore {
         }
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
         let mut state = self.state.lock();
         if let Some(existing) = state.rotations.get(transaction.transaction_id())
             && !existing.has_same_rotation(transaction)
         {
-            return Err(BpError::token_conflict(transaction.original().id()));
+            return Err(BuildError::token_conflict(transaction.original().id()));
         }
         state.rotations.insert(
             transaction.transaction_id().to_string(),
@@ -202,14 +202,14 @@ impl TokenStore for MemoryTokenStore {
         Ok(())
     }
 
-    async fn append_audit(&self, mut event: TokenAuditEvent) -> BpResult<()> {
+    async fn append_audit(&self, mut event: TokenAuditEvent) -> BuildResult<()> {
         TokenAuditOutbox::ensure_event_id(&mut event);
         let event_id = TokenAuditOutbox::require_event_id(&event)?.to_string();
         self.state.lock().standalone_audits.insert(event_id, event);
         Ok(())
     }
 
-    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
         let state = self.state.lock();
         let mut events: Vec<_> = state.standalone_audits.values().cloned().collect();
         events.sort_by(|left, right| {
@@ -220,19 +220,19 @@ impl TokenStore for MemoryTokenStore {
         Ok(events)
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
         self.state.lock().standalone_audits.remove(event_id);
         Ok(())
     }
 
-    async fn pending_rotations(&self) -> BpResult<Vec<TokenRotationTransaction>> {
+    async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
         let state = self.state.lock();
         let mut transactions: Vec<_> = state.rotations.values().cloned().collect();
         transactions.sort_by(|left, right| left.transaction_id().cmp(right.transaction_id()));
         Ok(transactions)
     }
 
-    async fn acknowledge_rotation(&self, transaction_id: &str) -> BpResult<()> {
+    async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
         self.state.lock().rotations.remove(transaction_id);
         Ok(())
     }

@@ -12,7 +12,7 @@ use crate::{
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use rust_decimal::Decimal;
@@ -101,7 +101,7 @@ pub enum BinanceKlinesInterval {
 }
 
 impl TryFrom<&str> for BinanceKlinesInterval {
-    type Error = BpError;
+    type Error = BuildError;
 
     fn try_from(value: &str) -> Result<Self, Self::Error> {
         match value.trim() {
@@ -121,7 +121,7 @@ impl TryFrom<&str> for BinanceKlinesInterval {
             "3d" => Ok(Self::THREE_DAY),
             "1w" => Ok(Self::ONE_WEEK),
             "1M" => Ok(Self::ONE_MONTH),
-            other => Err(BpError::bad_value(
+            other => Err(BuildError::bad_value(
                 "interval",
                 other,
                 "unsupported kline interval",
@@ -157,11 +157,11 @@ impl KlinesHttpRequest<BinanceResponse<BinanceKlinesResponse>> for BinanceKlines
 impl KlinesWebsocketRequest<BinanceResponse<BinanceKlinesResponse>> for BinanceKlinesRequest {}
 
 impl KlinesResponse for BinanceResponse<BinanceKlinesResponse> {
-    fn klines(&self) -> BpResult<Vec<Kline>> {
+    fn klines(&self) -> BuildResult<Vec<Kline>> {
         match &self.payload {
             BinanceResponsePayload::Failure(error) => {
                 let retry_after = self.metadata.retry_after.or_else(|| error.retry_after());
-                Err(BpError::Exchange(
+                Err(BuildError::Exchange(
                     error.exchange_error(self.metadata.status, retry_after),
                 ))
             }
@@ -178,7 +178,7 @@ impl KlinesResponse for BinanceResponse<BinanceKlinesResponse> {
 }
 
 impl TryFrom<&BinanceKlineResponse> for Kline {
-    type Error = BpError;
+    type Error = BuildError;
     fn try_from(value: &BinanceKlineResponse) -> Result<Self, Self::Error> {
         let open_time = value.0;
         let close_time = value.6;
@@ -246,9 +246,9 @@ impl BinanceKlineResponse {
         &self.10
     }
 
-    fn str_to_decimal(name: &str, value: &str) -> BpResult<Decimal> {
+    fn str_to_decimal(name: &str, value: &str) -> BuildResult<Decimal> {
         Decimal::from_str_exact(value)
-            .map_err(|error| BpError::bad_value(name, value, error.to_string()))
+            .map_err(|error| BuildError::bad_value(name, value, error.to_string()))
     }
 }
 
@@ -284,7 +284,7 @@ impl ETHttpRequest for BinanceKlinesRequest {
     fn http_method(&self) -> HttpMethod {
         HttpMethod::GET
     }
-    fn try_into_http(self, signer: &Signer) -> BpResult<HttpRequest> {
+    fn try_into_http(self, signer: &Signer) -> BuildResult<HttpRequest> {
         BinanceRequestFactory::try_into_http(self, signer)
     }
 }
@@ -300,7 +300,7 @@ impl ETWebsocketRequest for BinanceKlinesRequest {
         self,
         signer: &Signer,
         id: ETWebsocketId,
-    ) -> BpResult<(String, WebsocketResponseMatcher)> {
+    ) -> BuildResult<(String, WebsocketResponseMatcher)> {
         BinanceRequestFactory::try_into_websocket(self, signer, id)
     }
 }

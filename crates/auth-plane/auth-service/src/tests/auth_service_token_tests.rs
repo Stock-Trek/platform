@@ -1,6 +1,6 @@
 use super::support_tests::TestFixture;
 use chrono::Utc;
-use platform_errors::{AuthError, BpError};
+use platform_errors::{AuthError, BuildError};
 use secrecy::ExposeSecret;
 use std::sync::Arc;
 
@@ -16,7 +16,7 @@ async fn adding_a_duplicate_token_fails_without_replacing_it() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::TokenExists { .. }))
+        Err(BuildError::Auth(AuthError::TokenExists { .. }))
     ));
     let stored = service.token("token-a").await.unwrap();
     assert_eq!(stored.owner(), original.owner());
@@ -95,7 +95,7 @@ async fn looking_up_an_unknown_token_fails() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::UnknownToken { .. }))
+        Err(BuildError::Auth(AuthError::UnknownToken { .. }))
     ));
 }
 
@@ -123,7 +123,7 @@ async fn authentication_rejects_the_wrong_secret() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::InvalidSecret { ref token_id }))
+        Err(BuildError::Auth(AuthError::InvalidSecret { ref token_id }))
             if token_id == added.id()
     ));
 }
@@ -138,7 +138,7 @@ async fn authenticating_an_unknown_token_fails() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::UnknownToken { .. }))
+        Err(BuildError::Auth(AuthError::UnknownToken { .. }))
     ));
 }
 
@@ -150,17 +150,17 @@ async fn rejects_path_traversal_token_ids_before_store_access() {
         let error = service.token(id).await;
         assert!(matches!(
             error,
-            Err(BpError::Auth(AuthError::InvalidField { .. }))
+            Err(BuildError::Auth(AuthError::InvalidField { .. }))
         ));
         let error = service.delete_token(id, Utc::now()).await;
         assert!(matches!(
             error,
-            Err(BpError::Auth(AuthError::InvalidField { .. }))
+            Err(BuildError::Auth(AuthError::InvalidField { .. }))
         ));
         let error = service.authenticate(id, "secret", None, Utc::now()).await;
         assert!(matches!(
             error,
-            Err(BpError::Auth(AuthError::InvalidField { .. }))
+            Err(BuildError::Auth(AuthError::InvalidField { .. }))
         ));
     }
 }

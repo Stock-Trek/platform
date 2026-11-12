@@ -2,7 +2,7 @@ use super::*;
 use crate::shard::ShardId;
 use crate::source::{MarketInput, MarketSource, SourceRecord};
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::candle::CandleKey;
 use platform_market_data::event::{GapMarker, MarketEvent};
 use platform_nats::EventPublisher;
@@ -118,7 +118,7 @@ struct FakeSource {
 
 #[async_trait]
 impl MarketSource for FakeSource {
-    async fn next_input(&mut self) -> BpResult<Option<SourceRecord>> {
+    async fn next_input(&mut self) -> BuildResult<Option<SourceRecord>> {
         if self.records.is_empty() {
             Ok(None)
         } else {
@@ -126,7 +126,7 @@ impl MarketSource for FakeSource {
         }
     }
 
-    async fn ack(&mut self, _record: &SourceRecord) -> BpResult<()> {
+    async fn ack(&mut self, _record: &SourceRecord) -> BuildResult<()> {
         *self.acked.lock().unwrap() += 1;
         Ok(())
     }
@@ -141,7 +141,7 @@ struct FakePublisher {
 
 #[async_trait]
 impl EventPublisher for FakePublisher {
-    async fn publish(&self, subject: &str, payload: &[u8]) -> BpResult<()> {
+    async fn publish(&self, subject: &str, payload: &[u8]) -> BuildResult<()> {
         self.published
             .lock()
             .unwrap()

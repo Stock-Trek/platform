@@ -1,6 +1,6 @@
 use crate::{ApiToken, AuthService, TokenMetadata};
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::collections::HashSet;
 
 impl AuthService {
@@ -9,7 +9,7 @@ impl AuthService {
         original: &ApiToken,
         replacement_id: &str,
         now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
+    ) -> BuildResult<ApiToken> {
         self.ensure_rotation_allowed(original, replacement_id, now)
             .await?;
         if let Some(existing) = self.stored_token(replacement_id).await? {
@@ -17,7 +17,7 @@ impl AuthService {
             return Ok(existing);
         }
         let expires_at = now.checked_add_signed(self.token_lifetime).ok_or_else(|| {
-            BpError::auth_invalid_field("token_lifetime", "is outside the supported range")
+            BuildError::auth_invalid_field("token_lifetime", "is outside the supported range")
         })?;
         let metadata = TokenMetadata::new(expires_at, original.metadata().scopes().iter())?;
         let mut replacement = ApiToken::generate(replacement_id, original.owner(), now, metadata)?;
@@ -29,7 +29,7 @@ impl AuthService {
         original: &ApiToken,
         replacement_id: &str,
         overlap_until: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
+    ) -> BuildResult<ApiToken> {
         let mut retired = original.clone();
         retired
             .metadata
@@ -41,11 +41,11 @@ impl AuthService {
     pub(crate) fn ensure_replacement_matches(
         original: &ApiToken,
         replacement: &ApiToken,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         if replacement.owner() != original.owner()
             || replacement.metadata().rotated_from() != Some(original.id())
         {
-            return Err(BpError::token_conflict(original.id()));
+            return Err(BuildError::token_conflict(original.id()));
         }
         Ok(())
     }
@@ -55,15 +55,15 @@ impl AuthService {
         original: &ApiToken,
         replacement_id: &str,
         now: DateTime<Utc>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         if let Some(replacement) = original.metadata().replaced_by() {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "token_id",
                 format!("has already been rotated to {replacement:?}"),
             ));
         }
         if original.metadata().rotated_from() == Some(replacement_id) {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "replacement_id",
                 "must not refer to the token this token was rotated from",
             ));
@@ -72,7 +72,7 @@ impl AuthService {
             .rotation_lineage_contains(original, replacement_id)
             .await?
         {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "replacement_id",
                 "must not reuse a token id from this token's rotation lineage",
             ));
@@ -80,7 +80,11 @@ impl AuthService {
         Self::ensure_active(original, now)
     }
 
-    async fn rotation_lineage_contains(&self, token: &ApiToken, candidate: &str) -> BpResult<bool> {
+    async fn rotation_lineage_contains(
+        &self,
+        token: &ApiToken,
+        candidate: &str,
+    ) -> BuildResult<bool> {
         let mut next = token.metadata().rotated_from().map(str::to_string);
         let mut visited = HashSet::new();
         while let Some(id) = next {
@@ -98,10 +102,10 @@ impl AuthService {
         Ok(false)
     }
 
-    pub(crate) fn rotation_overlap_until(&self, now: DateTime<Utc>) -> BpResult<DateTime<Utc>> {
+    pub(crate) fn rotation_overlap_until(&self, now: DateTime<Utc>) -> BuildResult<DateTime<Utc>> {
         now.checked_add_signed(self.rotation_overlap)
             .ok_or_else(|| {
-                BpError::auth_invalid_field("rotation_overlap", "is outside the supported range")
+                BuildError::auth_invalid_field("rotation_overlap", "is outside the supported range")
             })
     }
 }

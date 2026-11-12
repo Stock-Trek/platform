@@ -1,10 +1,13 @@
 use super::PortfolioService;
 use crate::{ownership_registry::OwnershipApply, read_model::OwnershipRecord};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_portfolio_ownership::{AccountKey, OwnershipEvent};
 
 impl PortfolioService {
-    pub async fn apply_ownership_event(&self, event: &OwnershipEvent) -> BpResult<OwnershipApply> {
+    pub async fn apply_ownership_event(
+        &self,
+        event: &OwnershipEvent,
+    ) -> BuildResult<OwnershipApply> {
         if !self.ownership.read().accepts(event) {
             return Ok(self.ownership.write().apply(event));
         }

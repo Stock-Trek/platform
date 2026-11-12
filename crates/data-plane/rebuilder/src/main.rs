@@ -1,11 +1,11 @@
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_rebuilder::config::RebuildConfig;
 use platform_runtime::{Runtime, Service};
 
 const SERVICE: Service = Service::new("platform-rebuilder");
 
 #[tokio::main]
-async fn main() -> BpResult<()> {
+async fn main() -> BuildResult<()> {
     let config = RebuildConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let _metrics = SERVICE.init_metrics("platform/rebuilder")?;
@@ -13,7 +13,7 @@ async fn main() -> BpResult<()> {
         result = config.run() => result,
         signal = Runtime::shutdown_signal() => {
             signal?;
-            Err(BpError::external(
+            Err(BuildError::external(
                 "rebuild interrupted by shutdown before completion",
             ))
         }

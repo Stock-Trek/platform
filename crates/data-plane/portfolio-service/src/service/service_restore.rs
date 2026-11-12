@@ -3,12 +3,12 @@ use crate::{
     AccountKey,
     read_model::{PortfolioReadModel, PortfolioRecord},
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::collections::BTreeSet;
 use stock_trek_types::cex::cex_id::CexId;
 
 impl PortfolioService {
-    pub fn restore(&self, model: PortfolioReadModel) -> BpResult<()> {
+    pub fn restore(&self, model: PortfolioReadModel) -> BuildResult<()> {
         let (ownership, portfolios) = model.into_parts();
         {
             let mut state = self.state.write();
@@ -32,7 +32,7 @@ impl PortfolioService {
         Ok(())
     }
 
-    pub async fn sync_feed(&self) -> BpResult<()> {
+    pub async fn sync_feed(&self) -> BuildResult<()> {
         let cex_ids = self
             .state
             .read()

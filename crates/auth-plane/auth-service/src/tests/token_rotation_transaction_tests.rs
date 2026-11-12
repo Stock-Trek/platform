@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -39,9 +39,9 @@ impl ToggleAudit {
 
 #[async_trait]
 impl TokenAuditLog for ToggleAudit {
-    async fn record(&self, event: TokenAuditEvent) -> BpResult<()> {
+    async fn record(&self, event: TokenAuditEvent) -> BuildResult<()> {
         if self.failing.load(Ordering::SeqCst) {
-            return Err(platform_errors::BpError::auth_store(
+            return Err(platform_errors::BuildError::auth_store(
                 "audit",
                 "rotation-test",
                 true,

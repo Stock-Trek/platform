@@ -1,7 +1,7 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{ApiToken, AuthService, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BpError};
+use platform_errors::{AuthError, BuildError};
 
 struct ScopeFixture;
 
@@ -80,7 +80,7 @@ async fn rejects_tokens_without_scopes() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::InvalidField {
+        Err(BuildError::Auth(AuthError::InvalidField {
             field: "scopes",
             ..
         }))
@@ -102,7 +102,7 @@ async fn read_only_tokens_cannot_sign_orders() {
 
     assert!(matches!(
         error,
-        BpError::Auth(AuthError::MissingScope { .. })
+        BuildError::Auth(AuthError::MissingScope { .. })
     ));
 }
 

@@ -3,7 +3,7 @@ use platform_archive::{
     ArchiveBatch, ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind,
     ArchiveParquetStream, IcebergDataFile, ParquetReader, S3,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use tracing::info;
 
 use crate::config::RebuildSourceLayer;
@@ -32,7 +32,7 @@ impl IcebergEventReader {
     pub async fn connect(
         catalog: &dyn ArchiveCatalog,
         source_layer: RebuildSourceLayer,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let (source_layer, handoff) = Self::discover(catalog, source_layer).await?;
         let transfer_client = S3::transfer_client().await;
         let files = handoff.files().cloned().collect::<Vec<_>>();
@@ -70,7 +70,7 @@ impl IcebergEventReader {
         self.handoff.len()
     }
 
-    pub async fn next_batch(&mut self) -> BpResult<Option<ArchiveBatch>> {
+    pub async fn next_batch(&mut self) -> BuildResult<Option<ArchiveBatch>> {
         loop {
             let mut stream = match self.stream.take() {
                 Some(stream) => stream,
@@ -82,7 +82,7 @@ impl IcebergEventReader {
                     self.file_records = 0;
                     let (bucket, key) = S3::parse_uri(&file.file_path)?;
                     let file_size = u64::try_from(file.file_size_in_bytes).map_err(|error| {
-                        BpError::external(std::io::Error::new(
+                        BuildError::external(std::io::Error::new(
                             std::io::ErrorKind::InvalidData,
                             format!(
                                 "event file {} has invalid size {}: {error}",
@@ -119,7 +119,7 @@ impl IcebergEventReader {
     pub async fn discover(
         catalog: &dyn ArchiveCatalog,
         source_layer: RebuildSourceLayer,
-    ) -> BpResult<(RebuildSourceLayer, ArchiveHandoff)> {
+    ) -> BuildResult<(RebuildSourceLayer, ArchiveHandoff)> {
         match source_layer {
             RebuildSourceLayer::Raw => {
                 let mut raw = catalog

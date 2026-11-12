@@ -4,7 +4,7 @@ use super::{
 };
 use super::{PortfolioSession, PortfolioTransport};
 use chrono::Utc;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::portfolio::{AccountEvent, AccountPositionEvent};
 use platform_metrics::PortfolioMetrics;
 use std::{sync::Arc, time::Instant};
@@ -64,7 +64,7 @@ impl Watcher {
         &self,
         shutdown: &mut watch::Receiver<bool>,
         state: &mut SessionState,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let credentials = self
             .credentials
             .credentials(self.cex_id, &self.account)
@@ -82,7 +82,7 @@ impl Watcher {
         session: &mut PortfolioSession,
         shutdown: &mut watch::Receiver<bool>,
         state: &mut SessionState,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let snapshot = session.snapshot().await?;
         state.replace_snapshot(snapshot.balances().clone(), snapshot.occurred_at());
         state.version = SessionState::next_version(state.version, 0);
@@ -117,9 +117,9 @@ impl Watcher {
                 }
                 event = session.next() => {
                     match event? {
-                        None => return Err(BpError::external(std::io::Error::other("portfolio event stream closed"))),
+                        None => return Err(BuildError::external(std::io::Error::other("portfolio event stream closed"))),
                         Some(AccountEvent::SessionExpired) => {
-                            return Err(BpError::external(std::io::Error::other("portfolio session expired")));
+                            return Err(BuildError::external(std::io::Error::other("portfolio session expired")));
                         }
                         Some(AccountEvent::Position(event)) => {
                             self.apply_position(event, state).await?;
@@ -134,7 +134,7 @@ impl Watcher {
         &self,
         event: AccountPositionEvent,
         state: &mut SessionState,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         if event.occurred_at() < state.last_exchange_time {
             return Ok(());
         }
@@ -161,7 +161,7 @@ impl Watcher {
         occurred_at: chrono::DateTime<Utc>,
         exchange_time: Option<chrono::DateTime<Utc>>,
         last_update: &mut Option<Instant>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let update = ConnectorPortfolioUpdate::new(
             self.cex_id,
             self.account.clone(),

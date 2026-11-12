@@ -2,7 +2,7 @@ use crate::{
     AccountKey, OwnershipApply, OwnershipEventSource, PortfolioService,
     read_model::PortfolioReadModelStore,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_metrics::PortfolioMetrics;
 use std::{future::Future, sync::Arc, time::Duration};
 
@@ -32,7 +32,7 @@ impl OwnershipConsumer {
         self
     }
 
-    pub async fn run_once(&self) -> BpResult<usize> {
+    pub async fn run_once(&self) -> BuildResult<usize> {
         let mut processed = 0;
         while let Some(message) = self.next().await? {
             let lag = chrono::Utc::now().signed_duration_since(message.event().occurred_at());
@@ -89,13 +89,13 @@ impl OwnershipConsumer {
         Ok(processed)
     }
 
-    async fn next(&self) -> BpResult<Option<crate::OwnershipMessage>> {
+    async fn next(&self) -> BuildResult<Option<crate::OwnershipMessage>> {
         self.source.next().await.inspect_err(|_| {
             PortfolioMetrics::record_apply_failure("ownership", "fetch");
         })
     }
 
-    async fn persist(&self, account: &AccountKey) -> BpResult<()> {
+    async fn persist(&self, account: &AccountKey) -> BuildResult<()> {
         let Some(store) = &self.store else {
             return Ok(());
         };
@@ -108,9 +108,9 @@ impl OwnershipConsumer {
         }
     }
 
-    pub async fn run<F>(&self, shutdown: F) -> BpResult<()>
+    pub async fn run<F>(&self, shutdown: F) -> BuildResult<()>
     where
-        F: Future<Output = BpResult<()>> + Send,
+        F: Future<Output = BuildResult<()>> + Send,
     {
         tokio::pin!(shutdown);
         loop {

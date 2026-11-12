@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::Utc;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -29,45 +29,45 @@ impl FailingStore {
 
 #[async_trait]
 impl TokenStore for FailingStore {
-    async fn put(&self, token: &ApiToken) -> BpResult<()> {
+    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         self.inner.get(id).await
     }
 
-    async fn delete(&self, id: &str) -> BpResult<()> {
+    async fn delete(&self, id: &str) -> BuildResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn ids(&self) -> BpResult<Vec<String>> {
+    async fn ids(&self) -> BuildResult<Vec<String>> {
         self.inner.ids().await
     }
 
-    async fn owner_index(&self, owner: &str) -> BpResult<Option<OwnerIndex>> {
+    async fn owner_index(&self, owner: &str) -> BuildResult<Option<OwnerIndex>> {
         self.inner.owner_index(owner).await
     }
 
-    async fn put_owner_index(&self, index: &OwnerIndex) -> BpResult<()> {
+    async fn put_owner_index(&self, index: &OwnerIndex) -> BuildResult<()> {
         self.inner.put_owner_index(index).await
     }
 
-    async fn owner_indexes(&self) -> BpResult<Vec<OwnerIndex>> {
+    async fn owner_indexes(&self) -> BuildResult<Vec<OwnerIndex>> {
         self.inner.owner_indexes().await
     }
 
-    async fn index_owner_token(&self, token: &ApiToken) -> BpResult<()> {
+    async fn index_owner_token(&self, token: &ApiToken) -> BuildResult<()> {
         self.inner.index_owner_token(token).await
     }
 
-    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BpResult<()> {
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BuildResult<()> {
         self.inner.remove_owner_index_token(owner, id).await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
         if token.id() == self.fail_on_id && self.fail_pending.swap(false, Ordering::SeqCst) {
-            return Err(BpError::auth_store(
+            return Err(BuildError::auth_store(
                 "update",
                 token.id(),
                 true,
@@ -77,11 +77,11 @@ impl TokenStore for FailingStore {
         self.inner.update(expected, token).await
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
         match mutation {
             TokenMutation::Create(token) => {
                 self.inner.commit(TokenMutation::Create(token), event).await
@@ -102,15 +102,15 @@ impl TokenStore for FailingStore {
         }
     }
 
-    async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+    async fn append_audit(&self, event: TokenAuditEvent) -> BuildResult<()> {
         self.inner.append_audit(event).await
     }
 
-    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
         self.inner.pending_audits().await
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
         self.inner.acknowledge_audit(event_id).await
     }
 }
@@ -130,9 +130,9 @@ impl RacingStore {
         }
     }
 
-    async fn revoke_concurrently(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
+    async fn revoke_concurrently(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
         let Some(mut current) = self.inner.get(token.id()).await? else {
-            return Err(BpError::unknown_token(token.id()));
+            return Err(BuildError::unknown_token(token.id()));
         };
         current.metadata.revoke(
             Utc::now(),
@@ -145,62 +145,62 @@ impl RacingStore {
 
 #[async_trait]
 impl TokenStore for RacingStore {
-    async fn put(&self, token: &ApiToken) -> BpResult<()> {
+    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         self.inner.get(id).await
     }
 
-    async fn delete(&self, id: &str) -> BpResult<()> {
+    async fn delete(&self, id: &str) -> BuildResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn ids(&self) -> BpResult<Vec<String>> {
+    async fn ids(&self) -> BuildResult<Vec<String>> {
         self.inner.ids().await
     }
 
-    async fn owner_index(&self, owner: &str) -> BpResult<Option<OwnerIndex>> {
+    async fn owner_index(&self, owner: &str) -> BuildResult<Option<OwnerIndex>> {
         self.inner.owner_index(owner).await
     }
 
-    async fn put_owner_index(&self, index: &OwnerIndex) -> BpResult<()> {
+    async fn put_owner_index(&self, index: &OwnerIndex) -> BuildResult<()> {
         self.inner.put_owner_index(index).await
     }
 
-    async fn owner_indexes(&self) -> BpResult<Vec<OwnerIndex>> {
+    async fn owner_indexes(&self) -> BuildResult<Vec<OwnerIndex>> {
         self.inner.owner_indexes().await
     }
 
-    async fn index_owner_token(&self, token: &ApiToken) -> BpResult<()> {
+    async fn index_owner_token(&self, token: &ApiToken) -> BuildResult<()> {
         self.inner.index_owner_token(token).await
     }
 
-    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BpResult<()> {
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BuildResult<()> {
         self.inner.remove_owner_index_token(owner, id).await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
         if token.id() == self.race_on_id && self.race_pending.swap(false, Ordering::SeqCst) {
             self.revoke_concurrently(expected, token).await?;
         }
         self.inner.update(expected, token).await
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 
-    async fn pending_rotations(&self) -> BpResult<Vec<TokenRotationTransaction>> {
+    async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
         self.inner.pending_rotations().await
     }
 
-    async fn acknowledge_rotation(&self, transaction_id: &str) -> BpResult<()> {
+    async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
         self.inner.acknowledge_rotation(transaction_id).await
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
         match mutation {
             TokenMutation::Create(token) => {
                 self.inner.commit(TokenMutation::Create(token), event).await
@@ -221,15 +221,15 @@ impl TokenStore for RacingStore {
         }
     }
 
-    async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+    async fn append_audit(&self, event: TokenAuditEvent) -> BuildResult<()> {
         self.inner.append_audit(event).await
     }
 
-    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
         self.inner.pending_audits().await
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
         self.inner.acknowledge_audit(event_id).await
     }
 }
@@ -251,7 +251,7 @@ impl OwnerRevocationFixture {
         service.token(id).await.unwrap().metadata().is_revoked()
     }
 
-    async fn revoke_owner(service: &AuthService) -> BpResult<Vec<ApiToken>> {
+    async fn revoke_owner(service: &AuthService) -> BuildResult<Vec<ApiToken>> {
         service
             .revoke_tokens_for_owner(
                 "owner-a",

@@ -1,6 +1,6 @@
 use crate::rate_limit::rate_limiter_state::RateLimiterState;
 use parking_lot::Mutex;
-use platform_errors::{BpError, BpResult, RateLimitError};
+use platform_errors::{BuildError, BuildResult, RateLimitError};
 use platform_exchange_types::rate_limited::RateUsage;
 use platform_types::new_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, sync::Arc, time::Duration};
@@ -16,7 +16,7 @@ impl RateLimiter {
             rate_limiters: Arc::new(Mutex::new(states.to_vec())),
         }
     }
-    pub fn did_acquire(&self, cost: UsageCount) -> BpResult<()> {
+    pub fn did_acquire(&self, cost: UsageCount) -> BuildResult<()> {
         let mut limiters_guard = self.rate_limiters.lock();
         let lowest_exceeded_limit = limiters_guard
             .iter()
@@ -24,7 +24,7 @@ impl RateLimiter {
             .min_by_key(|limiter| limiter.capacity_per_interval())
             .map(|limiter| (limiter.capacity_per_interval(), limiter.interval_nanos()));
         if let Some((capacity, interval_nanos)) = lowest_exceeded_limit {
-            return Err(BpError::RateLimit(
+            return Err(BuildError::RateLimit(
                 RateLimitError::RequestExceedsRateLimit {
                     cost,
                     capacity,
@@ -43,7 +43,7 @@ impl RateLimiter {
         }
         Ok(())
     }
-    pub fn remaining_capacity(&self) -> BpResult<HashMap<DurationNanoseconds, UsageCount>> {
+    pub fn remaining_capacity(&self) -> BuildResult<HashMap<DurationNanoseconds, UsageCount>> {
         let mut limiters_guard = self.rate_limiters.lock();
         let mut capacities = HashMap::new();
         for limiter in limiters_guard.iter_mut() {
@@ -51,7 +51,7 @@ impl RateLimiter {
         }
         Ok(capacities)
     }
-    pub fn refund(&self, cost: UsageCount) -> BpResult<()> {
+    pub fn refund(&self, cost: UsageCount) -> BuildResult<()> {
         let mut limiters_guard = self.rate_limiters.lock();
         for limiter in limiters_guard.iter_mut() {
             limiter.refund(cost);
@@ -61,7 +61,7 @@ impl RateLimiter {
     pub fn set_usage(
         &self,
         interval_usage: &HashMap<DurationNanoseconds, RateUsage>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let mut limiters_guard = self.rate_limiters.lock();
         for (interval_nanos, rate_usage) in interval_usage {
             let mut matched_existing = false;
@@ -84,11 +84,11 @@ impl RateLimiter {
         }
         Ok(())
     }
-    pub fn is_throttled(&self) -> BpResult<bool> {
+    pub fn is_throttled(&self) -> BuildResult<bool> {
         let limiters_guard = self.rate_limiters.lock();
         Ok(limiters_guard.iter().any(RateLimiterState::is_throttled))
     }
-    pub fn throttle(&self, retry_after: Duration) -> BpResult<()> {
+    pub fn throttle(&self, retry_after: Duration) -> BuildResult<()> {
         let mut limiters_guard = self.rate_limiters.lock();
         for limiter in limiters_guard.iter_mut() {
             limiter.throttle_after(retry_after);

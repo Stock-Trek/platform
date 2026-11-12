@@ -3,7 +3,7 @@ use crate::record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent};
 use arrow_array::{
     Array, ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::{
     AlignedWindow, Candle, CandleKey, CandleRevision, ClosedCandle, MarketOhlcv,
 };
@@ -13,7 +13,7 @@ use std::{fmt::Display, io::ErrorKind, str::FromStr};
 use stock_trek_types::cex::{asset_id::AssetId, trading_pair::TradingPair};
 
 impl ArchiveBatch {
-    pub fn from_record_batch(kind: ArchiveKind, batch: &RecordBatch) -> BpResult<Self> {
+    pub fn from_record_batch(kind: ArchiveKind, batch: &RecordBatch) -> BuildResult<Self> {
         let records = match kind {
             ArchiveKind::Events => Self::decode_events(batch)?
                 .into_iter()
@@ -27,7 +27,7 @@ impl ArchiveBatch {
         Ok(Self { kind, records })
     }
 
-    fn decode_events(batch: &RecordBatch) -> BpResult<Vec<ArchivedMarketEvent>> {
+    fn decode_events(batch: &RecordBatch) -> BuildResult<Vec<ArchivedMarketEvent>> {
         let exchange = Self::string_column(batch, "exchange")?;
         let stream = Self::string_column(batch, "stream")?;
         let sequence = Self::u64_column(batch, "sequence")?;
@@ -63,7 +63,7 @@ impl ArchiveBatch {
             .collect()
     }
 
-    fn decode_candles(batch: &RecordBatch) -> BpResult<Vec<ClosedCandle>> {
+    fn decode_candles(batch: &RecordBatch) -> BuildResult<Vec<ClosedCandle>> {
         let exchange = Self::string_column(batch, "exchange")?;
         let base = Self::string_column(batch, "base")?;
         let quote = Self::string_column(batch, "quote")?;
@@ -192,48 +192,48 @@ impl ArchiveBatch {
             .collect()
     }
 
-    fn array<'a>(batch: &'a RecordBatch, name: &str) -> BpResult<&'a ArrayRef> {
+    fn array<'a>(batch: &'a RecordBatch, name: &str) -> BuildResult<&'a ArrayRef> {
         batch
             .column_by_name(name)
             .ok_or_else(|| Self::column_error(name))
     }
 
-    fn string_column<'a>(batch: &'a RecordBatch, name: &str) -> BpResult<&'a StringArray> {
+    fn string_column<'a>(batch: &'a RecordBatch, name: &str) -> BuildResult<&'a StringArray> {
         Self::array(batch, name)?
             .as_any()
             .downcast_ref::<StringArray>()
             .ok_or_else(|| Self::column_error(name))
     }
 
-    fn i64_column<'a>(batch: &'a RecordBatch, name: &str) -> BpResult<&'a Int64Array> {
+    fn i64_column<'a>(batch: &'a RecordBatch, name: &str) -> BuildResult<&'a Int64Array> {
         Self::array(batch, name)?
             .as_any()
             .downcast_ref::<Int64Array>()
             .ok_or_else(|| Self::column_error(name))
     }
 
-    fn u64_column<'a>(batch: &'a RecordBatch, name: &str) -> BpResult<&'a UInt64Array> {
+    fn u64_column<'a>(batch: &'a RecordBatch, name: &str) -> BuildResult<&'a UInt64Array> {
         Self::array(batch, name)?
             .as_any()
             .downcast_ref::<UInt64Array>()
             .ok_or_else(|| Self::column_error(name))
     }
 
-    fn f64_column<'a>(batch: &'a RecordBatch, name: &str) -> BpResult<&'a Float64Array> {
+    fn f64_column<'a>(batch: &'a RecordBatch, name: &str) -> BuildResult<&'a Float64Array> {
         Self::array(batch, name)?
             .as_any()
             .downcast_ref::<Float64Array>()
             .ok_or_else(|| Self::column_error(name))
     }
 
-    fn boolean_column<'a>(batch: &'a RecordBatch, name: &str) -> BpResult<&'a BooleanArray> {
+    fn boolean_column<'a>(batch: &'a RecordBatch, name: &str) -> BuildResult<&'a BooleanArray> {
         Self::array(batch, name)?
             .as_any()
             .downcast_ref::<BooleanArray>()
             .ok_or_else(|| Self::column_error(name))
     }
 
-    fn parse<T>(value: &str, column: &str) -> BpResult<T>
+    fn parse<T>(value: &str, column: &str) -> BuildResult<T>
     where
         T: FromStr,
         T::Err: Display,
@@ -243,12 +243,12 @@ impl ArchiveBatch {
             .map_err(|error| Self::invalid_value(column, value, error))
     }
 
-    fn timestamp(value: i64, column: &str) -> BpResult<u64> {
+    fn timestamp(value: i64, column: &str) -> BuildResult<u64> {
         u64::try_from(value).map_err(|error| Self::invalid_value(column, value, error))
     }
 
-    fn invalid_value(column: &str, value: impl Display, reason: impl Display) -> BpError {
-        BpError::io(
+    fn invalid_value(column: &str, value: impl Display, reason: impl Display) -> BuildError {
+        BuildError::io(
             "decode archived parquet",
             column.to_string(),
             std::io::Error::new(
@@ -258,8 +258,8 @@ impl ArchiveBatch {
         )
     }
 
-    fn column_error(name: &str) -> BpError {
-        BpError::io(
+    fn column_error(name: &str) -> BuildError {
+        BuildError::io(
             "decode archived parquet",
             name.to_string(),
             std::io::Error::new(

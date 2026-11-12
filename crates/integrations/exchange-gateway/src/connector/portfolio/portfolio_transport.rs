@@ -1,6 +1,6 @@
 use super::AccountEventStream;
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_exchange_types::{api_key_credential::ApiKeyCredentials, portfolio::AccountSnapshot};
 use std::time::Duration;
 use stock_trek_types::cex::cex_id::CexId;
@@ -13,21 +13,24 @@ pub trait PortfolioTransport: Send + Sync {
 
     fn reconnect_backoff(&self) -> Duration;
 
-    async fn create_listen_key(&self, credentials: &ApiKeyCredentials) -> BpResult<String>;
+    async fn create_listen_key(&self, credentials: &ApiKeyCredentials) -> BuildResult<String>;
 
     async fn keepalive_listen_key(
         &self,
         credentials: &ApiKeyCredentials,
         listen_key: &str,
-    ) -> BpResult<()>;
+    ) -> BuildResult<()>;
 
     async fn close_listen_key(
         &self,
         credentials: &ApiKeyCredentials,
         listen_key: &str,
-    ) -> BpResult<()>;
+    ) -> BuildResult<()>;
 
-    async fn account_snapshot(&self, credentials: &ApiKeyCredentials) -> BpResult<AccountSnapshot>;
+    async fn account_snapshot(
+        &self,
+        credentials: &ApiKeyCredentials,
+    ) -> BuildResult<AccountSnapshot>;
 
-    async fn open_stream(&self, listen_key: &str) -> BpResult<Box<dyn AccountEventStream>>;
+    async fn open_stream(&self, listen_key: &str) -> BuildResult<Box<dyn AccountEventStream>>;
 }

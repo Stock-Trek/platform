@@ -1,4 +1,4 @@
-use platform_errors::{AuthError, BpError};
+use platform_errors::{AuthError, BuildError};
 use reqwest::{
     Error, StatusCode,
     header::{HeaderMap, RETRY_AFTER},
@@ -31,9 +31,9 @@ impl VaultWriteOutcome {
 pub(crate) struct VaultError;
 
 impl VaultError {
-    pub fn transport(operation: &'static str, target: &str, error: Error) -> BpError {
+    pub fn transport(operation: &'static str, target: &str, error: Error) -> BuildError {
         let retryable = Self::retryable_transport(&error);
-        BpError::auth_store(operation, target, retryable, error)
+        BuildError::auth_store(operation, target, retryable, error)
     }
 
     pub fn response(
@@ -42,17 +42,17 @@ impl VaultError {
         status: StatusCode,
         headers: &HeaderMap,
         body: String,
-    ) -> BpError {
+    ) -> BuildError {
         let retryable = Self::retryable_status(status);
         if retryable && let Some(retry_after) = Self::retry_after(headers) {
-            return BpError::Auth(AuthError::Unavailable { retry_after });
+            return BuildError::Auth(AuthError::Unavailable { retry_after });
         }
         if status == StatusCode::TOO_MANY_REQUESTS {
-            return BpError::Auth(AuthError::Unavailable {
+            return BuildError::Auth(AuthError::Unavailable {
                 retry_after: DEFAULT_RETRY_AFTER,
             });
         }
-        BpError::auth_store(
+        BuildError::auth_store(
             operation,
             target,
             retryable,

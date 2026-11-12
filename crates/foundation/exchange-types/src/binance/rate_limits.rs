@@ -1,5 +1,5 @@
 use crate::rate_limited::RateLimitRestriction;
-use platform_errors::{BpError, ExchangeError};
+use platform_errors::{BuildError, ExchangeError};
 use platform_types::new_types::DurationNanoseconds;
 use serde::Deserialize;
 use strum::Display;
@@ -41,7 +41,7 @@ pub enum BinanceRateLimitType {
 pub struct BinanceRateLimits;
 
 impl TryFrom<char> for BinanceRateLimitInterval {
-    type Error = BpError;
+    type Error = BuildError;
 
     fn try_from(value: char) -> Result<Self, Self::Error> {
         match value.to_ascii_lowercase() {
@@ -49,13 +49,15 @@ impl TryFrom<char> for BinanceRateLimitInterval {
             'm' => Ok(Self::MINUTE),
             'h' => Ok(Self::HOUR),
             'd' => Ok(Self::DAY),
-            other => Err(BpError::Exchange(ExchangeError::ParseError(other.into()))),
+            other => Err(BuildError::Exchange(ExchangeError::ParseError(
+                other.into(),
+            ))),
         }
     }
 }
 
 impl TryFrom<BinanceRateLimitInterval> for DurationNanoseconds {
-    type Error = BpError;
+    type Error = BuildError;
 
     fn try_from(value: BinanceRateLimitInterval) -> Result<Self, Self::Error> {
         match value {
@@ -63,7 +65,7 @@ impl TryFrom<BinanceRateLimitInterval> for DurationNanoseconds {
             BinanceRateLimitInterval::HOUR => Ok(DurationNanoseconds(60 * 60 * 1_000_000_000)),
             BinanceRateLimitInterval::MINUTE => Ok(DurationNanoseconds(60 * 1_000_000_000)),
             BinanceRateLimitInterval::SECOND => Ok(DurationNanoseconds(1_000_000_000)),
-            BinanceRateLimitInterval::Unknown => Err(BpError::Exchange(
+            BinanceRateLimitInterval::Unknown => Err(BuildError::Exchange(
                 ExchangeError::UnknownValue("BinanceRateLimitInterval".into()),
             )),
         }
@@ -71,7 +73,7 @@ impl TryFrom<BinanceRateLimitInterval> for DurationNanoseconds {
 }
 
 impl TryFrom<BinanceRateLimitType> for RateLimitRestriction {
-    type Error = BpError;
+    type Error = BuildError;
 
     fn try_from(value: BinanceRateLimitType) -> Result<Self, Self::Error> {
         match value {
@@ -79,9 +81,9 @@ impl TryFrom<BinanceRateLimitType> for RateLimitRestriction {
             BinanceRateLimitType::ORDERS => Ok(RateLimitRestriction::OrderCount),
             BinanceRateLimitType::RAW_REQUESTS => Ok(RateLimitRestriction::RawRequests),
             BinanceRateLimitType::REQUEST_WEIGHT => Ok(RateLimitRestriction::Weight),
-            BinanceRateLimitType::Unknown => Err(BpError::Exchange(ExchangeError::UnknownValue(
-                "BinanceRateLimitType".into(),
-            ))),
+            BinanceRateLimitType::Unknown => Err(BuildError::Exchange(
+                ExchangeError::UnknownValue("BinanceRateLimitType".into()),
+            )),
         }
     }
 }

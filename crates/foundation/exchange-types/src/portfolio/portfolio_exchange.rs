@@ -3,7 +3,7 @@ use crate::{
     api_key_credential::ApiKeyCredentials, exchange::ETExchange, request::ETHttpRequest,
     signer::Signer,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 
 pub trait PortfolioExchange: ETExchange<Credentials = ApiKeyCredentials> {
@@ -12,7 +12,7 @@ pub trait PortfolioExchange: ETExchange<Credentials = ApiKeyCredentials> {
 
     fn cex_id(&self) -> CexId;
 
-    fn signer(credentials: &ApiKeyCredentials) -> BpResult<Signer>;
+    fn signer(credentials: &ApiKeyCredentials) -> BuildResult<Signer>;
 
     fn create_listen_key_request() -> Self::ListenKeyRequest;
 
@@ -22,21 +22,21 @@ pub trait PortfolioExchange: ETExchange<Credentials = ApiKeyCredentials> {
 
     fn listen_key(
         response: <Self::ListenKeyRequest as ETHttpRequest>::Response,
-    ) -> BpResult<String>;
+    ) -> BuildResult<String>;
 
     fn listen_key_ack(
         response: <Self::ListenKeyRequest as ETHttpRequest>::Response,
-    ) -> BpResult<()>;
+    ) -> BuildResult<()>;
 
     fn account_snapshot_request() -> Self::SnapshotRequest;
 
     fn account_snapshot(
         response: <Self::SnapshotRequest as ETHttpRequest>::Response,
         mapping: &dyn Fn(&str) -> Option<AssetId>,
-    ) -> BpResult<AccountSnapshot>;
+    ) -> BuildResult<AccountSnapshot>;
 
     fn account_event(
         value: &serde_json::Value,
         mapping: &dyn Fn(&str) -> Option<AssetId>,
-    ) -> BpResult<Option<AccountEvent>>;
+    ) -> BuildResult<Option<AccountEvent>>;
 }

@@ -2,7 +2,7 @@ use crate::{
     http::HttpResponse,
     rate_limited::{RateLimit, RateUsage},
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_types::new_types::DurationSeconds;
 use std::{collections::HashMap, fmt::Debug};
 
@@ -15,12 +15,12 @@ pub trait ETHttpResponse: ETResponse
 where
     Self: Sized,
 {
-    fn try_from_http(response: HttpResponse) -> BpResult<Self>;
+    fn try_from_http(response: HttpResponse) -> BuildResult<Self>;
 }
 
 pub trait ETWebsocketResponse: ETResponse
 where
     Self: Sized,
 {
-    fn try_from_websocket(response: serde_json::Value) -> BpResult<Self>;
+    fn try_from_websocket(response: serde_json::Value) -> BuildResult<Self>;
 }

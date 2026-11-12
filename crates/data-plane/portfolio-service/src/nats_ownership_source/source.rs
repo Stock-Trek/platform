@@ -4,7 +4,7 @@ use crate::{
     ownership_source::{OwnershipEventSource, OwnershipMessage},
 };
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_nats::{JetStreamConsumer, KeyValue, NatsSubject};
 use platform_portfolio_ownership::{
     OWNERSHIP_EVENT_SUBJECT, OWNERSHIP_STREAM_PREFIX, OwnershipEvent,
@@ -19,7 +19,7 @@ pub struct NatsOwnershipSource {
 }
 
 impl NatsOwnershipSource {
-    pub async fn connect(config: &OwnershipConfig) -> BpResult<Self> {
+    pub async fn connect(config: &OwnershipConfig) -> BuildResult<Self> {
         let checkpoints =
             KeyValue::connect(config.nats_url(), CONSUMER_NAME, config.checkpoint_bucket()).await?;
         let checkpoint_key = format!(
@@ -52,12 +52,12 @@ impl NatsOwnershipSource {
 
 #[async_trait]
 impl OwnershipEventSource for NatsOwnershipSource {
-    async fn next(&self) -> BpResult<Option<OwnershipMessage>> {
+    async fn next(&self) -> BuildResult<Option<OwnershipMessage>> {
         let Some(message) = self.consumer.next_message_unacked().await else {
             return Ok(None);
         };
         let sequence = message.stream_sequence.ok_or_else(|| {
-            BpError::bad_value(
+            BuildError::bad_value(
                 "ownership message",
                 message.subject.clone(),
                 "missing sequence",
@@ -71,13 +71,13 @@ impl OwnershipEventSource for NatsOwnershipSource {
         )))
     }
 
-    async fn checkpoint(&self, sequence: u64) -> BpResult<()> {
+    async fn checkpoint(&self, sequence: u64) -> BuildResult<()> {
         let payload = OwnershipCheckpoint::new(sequence).to_bytes()?;
         self.checkpoints.put(&self.checkpoint_key, &payload).await?;
         Ok(())
     }
 
-    async fn acknowledge(&self, message: &OwnershipMessage) -> BpResult<()> {
+    async fn acknowledge(&self, message: &OwnershipMessage) -> BuildResult<()> {
         match message.raw() {
             Some(raw) => self.consumer.ack(raw).await,
             None => Ok(()),

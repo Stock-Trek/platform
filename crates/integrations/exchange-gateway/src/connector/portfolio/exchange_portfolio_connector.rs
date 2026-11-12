@@ -5,7 +5,7 @@ use super::{
     health_reporter::HealthReporter,
 };
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::{collections::BTreeMap, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -47,9 +47,9 @@ impl PortfolioConnector for ExchangePortfolioConnector {
         &self,
         cex_id: CexId,
         sink: Arc<dyn PortfolioUpdateSink>,
-    ) -> BpResult<Arc<dyn super::PortfolioConnection>> {
+    ) -> BuildResult<Arc<dyn super::PortfolioConnection>> {
         let Some(transport) = self.transports.get(&cex_id) else {
-            return Err(BpError::bad_value(
+            return Err(BuildError::bad_value(
                 "portfolio connector",
                 cex_id.to_string(),
                 "is not supported",

@@ -3,7 +3,7 @@ use crate::rebuild::{
     replay_spill::{PairKey, ReplayRecord, ReplayRecords, ReplaySpill},
 };
 use platform_aggregator::processor::{CandleProcessor, ProcessorConfig};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::decoders::trade::{SharedTradeDecoder, Trade, TradeDecoderFactory};
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;
@@ -61,7 +61,7 @@ impl RebuildOptions {
         decoders: &mut HashMap<CexId, SharedTradeDecoder>,
         replay: &mut ReplaySpill,
         stats: &mut RebuildStats,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         stats.events_read += 1;
         let decoder = match decoders.get(&event.exchange) {
             Some(decoder) => decoder.clone(),
@@ -124,7 +124,7 @@ impl RebuildOptions {
         events: ReplayRecords,
         candles: &mut CandleSpill,
         stats: &mut RebuildStats,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let max_interval = self
             .processor
             .intervals
@@ -214,7 +214,7 @@ impl RebuildOptions {
         last_timestamp: Option<TimestampMilliseconds>,
         candles: &mut CandleSpill,
         stats: &mut RebuildStats,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let Some(processor) = processor else {
             return Ok(());
         };

@@ -1,6 +1,6 @@
 use platform_archive::{ArchiveTableLayer, IcebergConfig};
 use platform_config::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::AlignedWindow;
 use platform_runtime::Config;
 use platform_types::new_types::DurationMilliseconds;
@@ -41,12 +41,12 @@ impl RebuildSourceLayer {
         }
     }
 
-    fn parse(value: &str) -> BpResult<Self> {
+    fn parse(value: &str) -> BuildResult<Self> {
         match value {
             "auto" => Ok(Self::Auto),
             "raw" => Ok(Self::Raw),
             "compacted" => Ok(Self::Compacted),
-            other => Err(BpError::config_invalid(
+            other => Err(BuildError::config_invalid(
                 REBUILDER_SOURCE_LAYER,
                 format!("must be auto, raw, or compacted, got {other}"),
             )),
@@ -77,11 +77,11 @@ pub struct RebuildConfig {
 }
 
 impl RebuildConfig {
-    pub fn from_env() -> BpResult<Self> {
+    pub fn from_env() -> BuildResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(REBUILDER_S3_BUCKET)?;
         let output_prefix = vars.required(REBUILDER_OUTPUT_PREFIX)?;
@@ -92,20 +92,20 @@ impl RebuildConfig {
             Self::max_closed_candles_per_interval(vars, &intervals)?;
         let correction_cutoff_ms: u64 = vars.required_parsed(REBUILDER_CORRECTION_CUTOFF_MS)?;
         if correction_cutoff_ms == 0 {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 REBUILDER_CORRECTION_CUTOFF_MS,
                 "must be greater than zero",
             ));
         }
         if correction_cutoff_ms < u64::try_from(allowed_lateness.0.max(0)).unwrap_or(0) {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 REBUILDER_CORRECTION_CUTOFF_MS,
                 format!("must be at least {REBUILDER_ALLOWED_LATENESS_MS}"),
             ));
         }
         let correction_cutoff =
             DurationMilliseconds(i64::try_from(correction_cutoff_ms).map_err(|error| {
-                BpError::config_invalid_source(REBUILDER_CORRECTION_CUTOFF_MS, error)
+                BuildError::config_invalid_source(REBUILDER_CORRECTION_CUTOFF_MS, error)
             })?);
         let source_layer = RebuildSourceLayer::parse(&vars.required(REBUILDER_SOURCE_LAYER)?)?;
         let output_layer = Self::output_layer(vars)?;
@@ -115,10 +115,10 @@ impl RebuildConfig {
             vars,
             REBUILDER_BUCKET_MILLIS,
         )?)
-        .map_err(|error| BpError::config_invalid_source(REBUILDER_BUCKET_MILLIS, error))?;
+        .map_err(|error| BuildError::config_invalid_source(REBUILDER_BUCKET_MILLIS, error))?;
         let spill_records = vars.required_parsed(REBUILDER_SPILL_RECORDS)?;
         if spill_records == 0 {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 REBUILDER_SPILL_RECORDS,
                 "must be greater than zero",
             ));
@@ -150,7 +150,7 @@ impl RebuildConfig {
     fn max_closed_candles_per_interval(
         vars: &EnvVars,
         intervals: &[AlignedWindow],
-    ) -> BpResult<BTreeMap<AlignedWindow, usize>> {
+    ) -> BuildResult<BTreeMap<AlignedWindow, usize>> {
         let value = vars.required(REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL)?;
         let mut caps = BTreeMap::new();
         for entry in value
@@ -159,34 +159,34 @@ impl RebuildConfig {
             .filter(|entry| !entry.is_empty())
         {
             let Some((label, count)) = entry.split_once('=') else {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL,
                     format!("entry {entry:?} must use <interval>=<count>"),
                 ));
             };
             let interval = AlignedWindow::try_from(label.trim()).map_err(|error| {
-                BpError::config_invalid_source(REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL, error)
+                BuildError::config_invalid_source(REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL, error)
             })?;
             if !intervals.contains(&interval) {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL,
                     format!("interval {interval} is not an AlignedWindow interval"),
                 ));
             }
             let count: usize = count.trim().parse().map_err(|error| {
-                BpError::config_invalid(
+                BuildError::config_invalid(
                     REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL,
                     format!("invalid candle count for {interval}: {error}"),
                 )
             })?;
             if count == 0 {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL,
                     format!("interval {interval} must have a positive candle count"),
                 ));
             }
             if caps.insert(interval, count).is_some() {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL,
                     format!("interval {interval} is listed more than once"),
                 ));
@@ -196,7 +196,7 @@ impl RebuildConfig {
             .iter()
             .find(|interval| !caps.contains_key(interval))
         {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 REBUILDER_MAX_CLOSED_CANDLES_PER_INTERVAL,
                 format!("missing a candle count for interval {missing}"),
             ));
@@ -204,12 +204,12 @@ impl RebuildConfig {
         Ok(caps)
     }
 
-    fn output_layer(vars: &EnvVars) -> BpResult<ArchiveTableLayer> {
+    fn output_layer(vars: &EnvVars) -> BuildResult<ArchiveTableLayer> {
         let value = vars.required(REBUILDER_OUTPUT_LAYER)?;
         match value.as_str() {
             "raw" => Ok(ArchiveTableLayer::Raw),
             "compacted" => Ok(ArchiveTableLayer::Compacted),
-            other => Err(BpError::config_invalid(
+            other => Err(BuildError::config_invalid(
                 REBUILDER_OUTPUT_LAYER,
                 format!("must be raw or compacted, got {other}"),
             )),

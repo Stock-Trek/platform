@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_messages::jwt::{JwtRequest, JwtResponse};
 use platform_sigv4::{SigV4Config, SigV4Signer};
 use platform_types::url_scheme::UrlScheme;
@@ -27,24 +27,28 @@ pub(super) struct JwtFetcher {
 }
 
 impl JwtFetcher {
-    pub fn with_sigv4(url: &str, owner: impl Into<String>, sigv4: &SigV4Config) -> BpResult<Self> {
+    pub fn with_sigv4(
+        url: &str,
+        owner: impl Into<String>,
+        sigv4: &SigV4Config,
+    ) -> BuildResult<Self> {
         let owner = owner.into().trim().to_string();
         if owner.is_empty() {
-            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
+            return Err(BuildError::auth_invalid_field("owner", "must not be empty"));
         }
         let signer = sigv4.signer_for_owner(&owner)?;
         Self::with_signer(url, owner, Some(signer))
     }
 
-    fn with_signer(url: &str, owner: String, signer: Option<SigV4Signer>) -> BpResult<Self> {
+    fn with_signer(url: &str, owner: String, signer: Option<SigV4Signer>) -> BuildResult<Self> {
         let owner = owner.trim().to_string();
         if owner.is_empty() {
-            return Err(BpError::auth_invalid_field("owner", "must not be empty"));
+            return Err(BuildError::auth_invalid_field("owner", "must not be empty"));
         }
         let url = reqwest::Url::parse(url)
-            .map_err(|error| BpError::config_invalid_source("auth_service_url", error))?;
+            .map_err(|error| BuildError::config_invalid_source("auth_service_url", error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "auth_service_url",
                 "must use the http or https scheme",
             ));
@@ -54,7 +58,7 @@ impl JwtFetcher {
             .read_timeout(READ_TIMEOUT)
             .timeout(REQUEST_TIMEOUT)
             .build()
-            .map_err(BpError::external)?;
+            .map_err(BuildError::external)?;
         Ok(Self {
             url,
             owner,
@@ -63,9 +67,9 @@ impl JwtFetcher {
         })
     }
 
-    pub async fn fetch(&self) -> BpResult<FetchedJwt> {
-        let body =
-            serde_json::to_vec(&JwtRequest::new(self.owner.clone())).map_err(BpError::external)?;
+    pub async fn fetch(&self) -> BuildResult<FetchedJwt> {
+        let body = serde_json::to_vec(&JwtRequest::new(self.owner.clone()))
+            .map_err(BuildError::external)?;
         let mut headers =
             BTreeMap::from([("content-type".to_string(), "application/json".to_string())]);
         if let Some(signer) = &self.signer {
@@ -84,11 +88,11 @@ impl JwtFetcher {
         let response = request
             .send()
             .await
-            .map_err(|error| BpError::http_request("fetch JWT", self.url.as_str(), error))?;
+            .map_err(|error| BuildError::http_request("fetch JWT", self.url.as_str(), error))?;
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(BpError::http_rejected(
+            return Err(BuildError::http_rejected(
                 "fetch JWT",
                 self.url.as_str(),
                 status.as_u16(),
@@ -98,14 +102,14 @@ impl JwtFetcher {
         let response: JwtResponse = response
             .json()
             .await
-            .map_err(|error| BpError::http_request("fetch JWT", self.url.as_str(), error))?;
+            .map_err(|error| BuildError::http_request("fetch JWT", self.url.as_str(), error))?;
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(BpError::external)?
+            .map_err(BuildError::external)?
             .as_secs() as i64;
         let lifetime = response.expires_at_unix() - now;
         if response.token().trim().is_empty() || lifetime <= 0 {
-            return Err(BpError::auth_invalid_jwt(
+            return Err(BuildError::auth_invalid_jwt(
                 "auth service returned an unusable JWT",
             ));
         }

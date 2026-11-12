@@ -1,5 +1,5 @@
 use crate::SignedOrderSubmission;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_types::url_scheme::UrlScheme;
 use std::time::Duration;
 
@@ -13,11 +13,11 @@ pub struct OrderRequestDelivery {
 }
 
 impl OrderRequestDelivery {
-    pub fn new(url: &str) -> BpResult<Self> {
+    pub fn new(url: &str) -> BuildResult<Self> {
         let url = reqwest::Url::parse(url)
-            .map_err(|error| BpError::config_invalid_source("order_request_url", error))?;
+            .map_err(|error| BuildError::config_invalid_source("order_request_url", error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "order_request_url",
                 "must use the http or https scheme",
             ));
@@ -27,11 +27,11 @@ impl OrderRequestDelivery {
             .read_timeout(READ_TIMEOUT)
             .timeout(REQUEST_TIMEOUT)
             .build()
-            .map_err(BpError::external)?;
+            .map_err(BuildError::external)?;
         Ok(Self { url, client })
     }
 
-    pub async fn deliver(&self, submission: &SignedOrderSubmission) -> BpResult<()> {
+    pub async fn deliver(&self, submission: &SignedOrderSubmission) -> BuildResult<()> {
         let response = self
             .client
             .post(self.url.clone())
@@ -39,12 +39,12 @@ impl OrderRequestDelivery {
             .send()
             .await
             .map_err(|error| {
-                BpError::http_request("deliver signed order request", self.url.as_str(), error)
+                BuildError::http_request("deliver signed order request", self.url.as_str(), error)
             })?;
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(BpError::http_rejected(
+            return Err(BuildError::http_rejected(
                 "deliver signed order request",
                 self.url.as_str(),
                 status.as_u16(),

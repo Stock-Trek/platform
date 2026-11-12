@@ -1,6 +1,6 @@
 use crate::{TokenAuditLog, TokenStore, token_audit_outbox::TokenAuditOutbox};
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult, ErrorType};
+use platform_errors::{BuildError, BuildResult, ErrorType};
 use platform_metrics::auth::AuthAuditRelayMetrics;
 use std::{
     sync::Arc,
@@ -26,14 +26,14 @@ impl TokenAuditRelay {
         self.store.clone()
     }
 
-    pub async fn drain(&self) -> BpResult<usize> {
+    pub async fn drain(&self) -> BuildResult<usize> {
         let started = Instant::now();
         let result = self.drain_once().await;
         AuthAuditRelayMetrics::record_drain_duration(started.elapsed());
         result
     }
 
-    async fn drain_once(&self) -> BpResult<usize> {
+    async fn drain_once(&self) -> BuildResult<usize> {
         let rotations = self
             .store
             .pending_rotations()
@@ -107,11 +107,11 @@ impl TokenAuditRelay {
         Ok(delivered)
     }
 
-    pub async fn relay(&self) -> BpResult<usize> {
+    pub async fn relay(&self) -> BuildResult<usize> {
         self.drain().await
     }
 
-    fn record_failure(operation: &'static str, error: BpError) -> BpError {
+    fn record_failure(operation: &'static str, error: BuildError) -> BuildError {
         AuthAuditRelayMetrics::record_failure(operation, error.error_type());
         error
     }

@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_metrics::auth::AuthReplayMetrics;
 use redis::{
     Client, Script,
@@ -28,9 +28,9 @@ pub struct ValkeyReplayStore {
 }
 
 impl ValkeyReplayStore {
-    pub fn new(config: ValkeyReplayStoreConfig) -> BpResult<Self> {
+    pub fn new(config: ValkeyReplayStoreConfig) -> BuildResult<Self> {
         let client = Client::open(config.url()).map_err(|error| {
-            platform_errors::BpError::config_invalid_source("valkey_url", error)
+            platform_errors::BuildError::config_invalid_source("valkey_url", error)
         })?;
         let manager_config = ConnectionManagerConfig::new()
             .set_connection_timeout(config.timeout())
@@ -45,7 +45,7 @@ impl ValkeyReplayStore {
         })
     }
 
-    pub async fn connect(config: ValkeyReplayStoreConfig) -> BpResult<Self> {
+    pub async fn connect(config: ValkeyReplayStoreConfig) -> BuildResult<Self> {
         let store = Self::new(config)?;
         ValkeyError::result(store.connection().await)?;
         Ok(store)

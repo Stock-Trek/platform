@@ -1,5 +1,4 @@
-use super::*;
-use crate::Retryability;
+use crate::{AuthError, Retryability};
 use std::time::Duration;
 
 #[test]

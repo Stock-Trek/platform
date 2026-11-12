@@ -1,6 +1,6 @@
 use crate::{config::ArchiverConfig, sink::ArchiveSink, source::ArchiveSource};
 use platform_archive::ArchiveBuffer;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_metrics::descriptions::{
     DROP_REASON_DUPLICATE, FLUSH_REASON_INTERVAL, FLUSH_REASON_SHUTDOWN, FLUSH_REASON_SIZE,
     STAGE_ARCHIVER,
@@ -30,7 +30,7 @@ where
         }
     }
 
-    pub async fn run(self) -> BpResult<()> {
+    pub async fn run(self) -> BuildResult<()> {
         let Self {
             config,
             mut source,
@@ -66,7 +66,7 @@ where
         sink: &K,
         buffer: &mut ArchiveBuffer,
         flush_ticker: &mut time::Interval,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         loop {
             tokio::select! {
                 record = source.next_record() => {
@@ -86,7 +86,7 @@ where
                             }
                         }
                         Ok(None) => {
-                            return Err(platform_errors::BpError::external(
+                            return Err(platform_errors::BuildError::external(
                                 "archive source ended before shutdown was requested",
                             ));
                         }
@@ -108,7 +108,7 @@ where
         sink: &K,
         buffer: &mut ArchiveBuffer,
         reason: &'static str,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         if buffer.is_empty() {
             return Ok(());
         }

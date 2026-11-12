@@ -1,7 +1,6 @@
 use crate::AuthRelayConfig;
-use platform_config::EnvVars;
-use platform_config::{AWS_CONNECT_TIMEOUT_SECS, AWS_OPERATION_TIMEOUT_SECS, RUST_LOG};
-use platform_errors::{BpError, BpResult};
+use platform_config::{AWS_CONNECT_TIMEOUT_SECS, AWS_OPERATION_TIMEOUT_SECS, EnvVars, RUST_LOG};
+use platform_errors::{BuildError, BuildResult};
 use std::time::Duration;
 
 const AUDIT_QUEUE_URL: &str = "AUTH_RELAY_AUDIT_QUEUE_URL";
@@ -36,14 +35,14 @@ const ALL_VARS: [(&str, &str); 14] = [
 struct ConfigFixture;
 
 impl ConfigFixture {
-    fn config(vars: &[(&str, &str)]) -> BpResult<AuthRelayConfig> {
+    fn config(vars: &[(&str, &str)]) -> BuildResult<AuthRelayConfig> {
         AuthRelayConfig::from_vars(&EnvVars::from_map(
             vars.iter()
                 .map(|(name, value)| ((*name).to_string(), (*value).to_string())),
         ))
     }
 
-    fn with(name: &str, value: &str) -> BpResult<AuthRelayConfig> {
+    fn with(name: &str, value: &str) -> BuildResult<AuthRelayConfig> {
         let vars: Vec<(&str, &str)> = ALL_VARS
             .iter()
             .copied()
@@ -119,7 +118,7 @@ fn requires_every_variable() {
         assert!(
             matches!(
                 error,
-                BpError::Config(platform_errors::ConfigError::Missing { name: missing })
+                BuildError::Config(platform_errors::ConfigError::Missing { name: missing })
                     if missing == name
             ),
             "{name}"
@@ -146,7 +145,7 @@ fn rejects_empty_values() {
         assert!(
             matches!(
                 error,
-                BpError::Config(platform_errors::ConfigError::Empty { name: empty })
+                BuildError::Config(platform_errors::ConfigError::Empty { name: empty })
                     if empty == name
             ),
             "{name}"

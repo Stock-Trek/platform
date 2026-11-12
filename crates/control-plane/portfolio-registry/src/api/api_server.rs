@@ -1,5 +1,5 @@
 use super::{ApiConnection, RequestHandler};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Runtime;
 use std::{future::Future, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{
@@ -19,10 +19,10 @@ pub struct ApiServer {
 }
 
 impl ApiServer {
-    pub async fn bind(address: SocketAddr, handler: Arc<dyn RequestHandler>) -> BpResult<Self> {
+    pub async fn bind(address: SocketAddr, handler: Arc<dyn RequestHandler>) -> BuildResult<Self> {
         let listener = TcpListener::bind(address)
             .await
-            .map_err(BpError::external)?;
+            .map_err(BuildError::external)?;
         Ok(Self {
             listener,
             handler,
@@ -30,13 +30,13 @@ impl ApiServer {
         })
     }
 
-    pub async fn serve(self) -> BpResult<()> {
+    pub async fn serve(self) -> BuildResult<()> {
         self.serve_with_shutdown(Runtime::shutdown_signal()).await
     }
 
-    pub async fn serve_with_shutdown<F>(self, shutdown: F) -> BpResult<()>
+    pub async fn serve_with_shutdown<F>(self, shutdown: F) -> BuildResult<()>
     where
-        F: Future<Output = BpResult<()>> + Send,
+        F: Future<Output = BuildResult<()>> + Send,
     {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let mut connections = JoinSet::new();
@@ -47,7 +47,7 @@ impl ApiServer {
                 accepted = self.listener.accept() => {
                     let (stream, peer) = match accepted {
                         Ok(accepted) => accepted,
-                        Err(error) => break Err(BpError::external(error)),
+                        Err(error) => break Err(BuildError::external(error)),
                     };
                     let permit = match self.slots.clone().try_acquire_owned() {
                         Ok(permit) => permit,

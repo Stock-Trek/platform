@@ -1,5 +1,5 @@
 use platform_config::EnvVars;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_sigv4::SigV4Config;
 
 use crate::cwasm::{CwasmLimits, ExecutionLimits};
@@ -18,11 +18,11 @@ pub struct InvokerConfig {
 }
 
 impl InvokerConfig {
-    pub fn from_env() -> BpResult<Self> {
+    pub fn from_env() -> BuildResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         let execution = ExecutionLimits::with_table_elements(
             vars.required_positive_duration_secs(EXECUTION_TIMEOUT_SECS)?,
             vars.required_nonzero_usize(MAX_GUEST_MEMORY_BYTES)?.get(),

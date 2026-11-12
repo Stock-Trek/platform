@@ -3,7 +3,7 @@ use super::super::env::{
     AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, AGGREGATOR_CORRECTION_CUTOFF_MS,
     AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::AlignedWindow;
 use platform_types::new_types::DurationMilliseconds;
 use std::collections::{BTreeMap, BTreeSet};
@@ -14,7 +14,7 @@ use strum::EnumCount;
 pub(in crate::config) const ESTIMATED_BYTES_PER_CLOSED_CANDLE: u64 = 512;
 
 impl AggregatorConfig {
-    pub(in crate::config) fn validate_kv_bucket(name: &str, bucket: &str) -> BpResult<()> {
+    pub(in crate::config) fn validate_kv_bucket(name: &str, bucket: &str) -> BuildResult<()> {
         let valid = !bucket.is_empty()
             && bucket.chars().all(|character| {
                 character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
@@ -22,7 +22,7 @@ impl AggregatorConfig {
         if valid {
             Ok(())
         } else {
-            Err(BpError::config_invalid(
+            Err(BuildError::config_invalid(
                 name,
                 "must only contain alphanumeric characters, dashes, and underscores",
             ))
@@ -33,37 +33,37 @@ impl AggregatorConfig {
         name: &str,
         value: &str,
         intervals: &[AlignedWindow],
-    ) -> BpResult<BTreeMap<AlignedWindow, usize>> {
+    ) -> BuildResult<BTreeMap<AlignedWindow, usize>> {
         let mut caps = BTreeMap::new();
         for entry in value.split(',').map(str::trim).filter(|v| !v.is_empty()) {
             let Some((label, count)) = entry.split_once('=') else {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     name,
                     format!("entry {entry:?} must use <interval>=<count>"),
                 ));
             };
             let interval = AlignedWindow::try_from(label.trim())
-                .map_err(|error| BpError::config_invalid_source(name, error))?;
+                .map_err(|error| BuildError::config_invalid_source(name, error))?;
             if !intervals.contains(&interval) {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     name,
                     format!("interval {} is not an AlignedWindow interval", interval),
                 ));
             }
             let count: usize = count.trim().parse().map_err(|error| {
-                BpError::config_invalid(
+                BuildError::config_invalid(
                     name,
                     format!("invalid candle count for {}: {error}", interval),
                 )
             })?;
             if count == 0 {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     name,
                     format!("interval {} must have a positive candle count", interval),
                 ));
             }
             if caps.insert(interval, count).is_some() {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     name,
                     format!("interval {} is listed more than once", interval),
                 ));
@@ -77,7 +77,7 @@ impl AggregatorConfig {
             .map(|interval| interval.label())
             .collect::<Vec<_>>();
         if !missing.is_empty() {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 name,
                 format!(
                     "missing a candle count for interval(s): {}",
@@ -91,7 +91,7 @@ impl AggregatorConfig {
             .map(|interval| interval.label())
             .collect::<Vec<_>>();
         if !unknown.is_empty() {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 name,
                 format!("unknown interval(s): {}", unknown.join(", ")),
             ));
@@ -110,7 +110,7 @@ impl AggregatorConfig {
         allowed_lateness: Duration,
         correction_cutoff_ms: u64,
         memory_budget_bytes: usize,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let configured = intervals.iter().copied().collect::<BTreeSet<_>>();
         let missing = configured
             .iter()
@@ -118,7 +118,7 @@ impl AggregatorConfig {
             .map(|interval| interval.label())
             .collect::<Vec<_>>();
         if !missing.is_empty() {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
                 format!(
                     "missing a candle count for interval(s): {}",
@@ -132,27 +132,27 @@ impl AggregatorConfig {
             .map(|interval| interval.label())
             .collect::<Vec<_>>();
         if !unknown.is_empty() {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
                 format!("unknown interval(s): {}", unknown.join(", ")),
             ));
         }
         if caps.values().any(|cap| *cap == 0) {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
                 "every interval must have a positive candle count",
             ));
         }
 
         if correction_cutoff_ms == 0 {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 AGGREGATOR_CORRECTION_CUTOFF_MS,
                 "must be greater than zero",
             ));
         }
         let correction_cutoff = Duration::from_millis(correction_cutoff_ms);
         if correction_cutoff < allowed_lateness {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 AGGREGATOR_CORRECTION_CUTOFF_MS,
                 format!("must be at least AGGREGATOR_ALLOWED_LATENESS_MS ({allowed_lateness:?})"),
             ));
@@ -160,10 +160,10 @@ impl AggregatorConfig {
 
         let limits = RetentionLimits::calculate(intervals, caps, shard_count)?;
         let memory_budget_bytes = u64::try_from(memory_budget_bytes).map_err(|error| {
-            BpError::config_invalid_source(AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, error)
+            BuildError::config_invalid_source(AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES, error)
         })?;
         if limits.estimated_memory_bytes > memory_budget_bytes {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES,
                 format!(
                     "worst-case closed-candle state needs {} bytes for {} retained candles per shard \
@@ -195,9 +195,9 @@ impl RetentionLimits {
         intervals: &[AlignedWindow],
         caps: &BTreeMap<AlignedWindow, usize>,
         shard_count: usize,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         if shard_count == 0 {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 super::super::env::AGGREGATOR_SHARD_COUNT,
                 "must be greater than zero",
             ));
@@ -248,8 +248,8 @@ impl RetentionLimits {
             .join(",")
     }
 
-    fn overflow_error() -> BpError {
-        BpError::config_invalid(
+    fn overflow_error() -> BuildError {
+        BuildError::config_invalid(
             AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL,
             "retention calculation overflowed",
         )
@@ -261,18 +261,21 @@ impl AggregatorConfig {
         name: &str,
         value: u64,
         allowed_lateness: Duration,
-    ) -> BpResult<DurationMilliseconds> {
+    ) -> BuildResult<DurationMilliseconds> {
         if value == 0 {
-            return Err(BpError::config_invalid(name, "must be greater than zero"));
+            return Err(BuildError::config_invalid(
+                name,
+                "must be greater than zero",
+            ));
         }
         if Duration::from_millis(value) < allowed_lateness {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 name,
                 format!("must be at least AGGREGATOR_ALLOWED_LATENESS_MS ({allowed_lateness:?})"),
             ));
         }
         let value =
-            i64::try_from(value).map_err(|error| BpError::config_invalid_source(name, error))?;
+            i64::try_from(value).map_err(|error| BuildError::config_invalid_source(name, error))?;
         Ok(DurationMilliseconds(value))
     }
 }

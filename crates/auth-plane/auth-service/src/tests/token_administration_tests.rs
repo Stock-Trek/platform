@@ -1,7 +1,7 @@
 use super::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{ApiToken, AuthService, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BpError};
+use platform_errors::{AuthError, BuildError};
 
 struct AdministrationFixture;
 
@@ -24,10 +24,10 @@ impl AdministrationFixture {
             .unwrap()
     }
 
-    fn assert_missing_scope(error: BpError, expected: &str) {
+    fn assert_missing_scope(error: BuildError, expected: &str) {
         assert!(matches!(
             error,
-            BpError::Auth(AuthError::MissingScope { ref scope, .. }) if scope == expected
+            BuildError::Auth(AuthError::MissingScope { ref scope, .. }) if scope == expected
         ));
     }
 }

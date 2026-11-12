@@ -1,6 +1,6 @@
 use aws_credential_types::Credentials;
 use platform_aws::{PresignedPost as BasePost, PresignedPostSigner as SharedSigner};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_messages::build_request::BuildRequestSignedPost;
 use serde_json::json;
 use std::{
@@ -55,7 +55,7 @@ impl PresignedPostSigner {
         key_prefix: &str,
         now: SystemTime,
         expires_in: Duration,
-    ) -> BpResult<PresignedPost> {
+    ) -> BuildResult<PresignedPost> {
         let max_artifact_size_bytes = self.max_artifact_size_bytes.get();
         let post = self.signer.sign(
             credentials,

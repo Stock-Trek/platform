@@ -1,7 +1,7 @@
 use super::*;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use platform_errors::ErrorType;
-use platform_errors::{BpError, StorageError};
+use platform_errors::{BuildError, StorageError};
 use serde_json::json;
 use std::collections::BTreeMap;
 use std::num::NonZeroU64;
@@ -71,7 +71,7 @@ async fn rejects_oversized_artifacts_before_uploading() {
 
     assert!(matches!(
         error,
-        BpError::Storage(StorageError::ArtifactTooLarge { .. })
+        BuildError::Storage(StorageError::ArtifactTooLarge { .. })
     ));
     assert_eq!(error.error_type(), "artifact_too_large");
     assert!(error.to_string().contains("maximum artifact size"));

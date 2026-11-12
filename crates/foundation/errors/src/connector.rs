@@ -1,6 +1,8 @@
 #[cfg(feature = "http")]
 use crate::http::HttpError;
-use crate::{bp::BpError, retryability::Retryability, system::SystemError, timeout::TimeoutError};
+use crate::{
+    build::BuildError, retryability::Retryability, system::SystemError, timeout::TimeoutError,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[non_exhaustive]
@@ -38,7 +40,7 @@ pub enum ConnectorError {
     #[error("Failed to parse HTTP response: {source}")]
     HttpParseError {
         #[source]
-        source: Box<BpError>,
+        source: Box<BuildError>,
     },
     #[error("Clock sync frequency must be at least 1 minute")]
     InvalidSyncFrequency,
@@ -50,23 +52,23 @@ pub enum ConnectorError {
     Send {
         failure: SendFailure,
         #[source]
-        source: Box<BpError>,
+        source: Box<BuildError>,
     },
     #[error("Connector was not initialised with a websocket listener")]
     WebsocketListenerMissing,
     #[error("Failed to parse websocket response: {source}")]
     WebsocketParseError {
         #[source]
-        source: Box<BpError>,
+        source: Box<BuildError>,
     },
 }
 
 impl ConnectorError {
     pub fn external(source: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Self::from(BpError::external(source))
+        Self::from(BuildError::external(source))
     }
 
-    pub fn send_not_sent(source: BpError) -> Self {
+    pub fn send_not_sent(source: BuildError) -> Self {
         Self::Send {
             failure: SendFailure::NotSent,
             source: Box::new(source),
@@ -74,17 +76,17 @@ impl ConnectorError {
     }
 
     pub fn send_not_sent_external(source: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Self::send_not_sent(BpError::external(source))
+        Self::send_not_sent(BuildError::external(source))
     }
 
-    pub fn send_failed(source: BpError) -> Self {
+    pub fn send_failed(source: BuildError) -> Self {
         Self::Send {
             failure: SendFailure::Failed,
             source: Box::new(source),
         }
     }
 
-    pub fn send_unknown(source: BpError) -> Self {
+    pub fn send_unknown(source: BuildError) -> Self {
         Self::Send {
             failure: SendFailure::Unknown,
             source: Box::new(source),
@@ -92,7 +94,7 @@ impl ConnectorError {
     }
 
     pub fn send_unknown_external(source: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Self::send_unknown(BpError::external(source))
+        Self::send_unknown(BuildError::external(source))
     }
 
     pub fn send_failure(&self) -> Option<SendFailure> {
@@ -106,13 +108,13 @@ impl ConnectorError {
         match self {
             Self::GatewayHttpStatus { status } => Retryability::from_http_status(*status),
             Self::Send { source, .. } => match source.as_ref() {
-                BpError::Timeout(TimeoutError::TimedOut)
-                | BpError::System(SystemError::External(_)) => Retryability::Retryable,
-                BpError::Connector(Self::GatewayHttpStatus { status }) => {
+                BuildError::Timeout(TimeoutError::TimedOut)
+                | BuildError::System(SystemError::External(_)) => Retryability::Retryable,
+                BuildError::Connector(Self::GatewayHttpStatus { status }) => {
                     Retryability::from_http_status(*status)
                 }
                 #[cfg(feature = "http")]
-                BpError::Http(HttpError::Request { source, .. }) => {
+                BuildError::Http(HttpError::Request { source, .. }) => {
                     Retryability::from_reqwest(source)
                 }
                 _ => Retryability::Permanent,
@@ -122,10 +124,10 @@ impl ConnectorError {
     }
 }
 
-impl From<BpError> for ConnectorError {
-    fn from(source: BpError) -> Self {
+impl From<BuildError> for ConnectorError {
+    fn from(source: BuildError) -> Self {
         match source {
-            BpError::Connector(error) => error,
+            BuildError::Connector(error) => error,
             source => Self::Send {
                 failure: SendFailure::Unknown,
                 source: Box::new(source),

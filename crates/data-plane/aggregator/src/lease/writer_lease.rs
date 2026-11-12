@@ -1,7 +1,7 @@
 use crate::config::AggregatorConfig;
 use crate::shard::ShardId;
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_metrics::AggregatorMetrics;
 use platform_nats::KeyValue;
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
@@ -46,7 +46,7 @@ impl WriterLease {
         shard: ShardId,
         owner_id: &str,
         ttl: Duration,
-    ) -> BpResult<WriterLease> {
+    ) -> BuildResult<WriterLease> {
         let mut waiting = false;
         loop {
             if let Some(lease) = leases.acquire(shard, owner_id, ttl).await? {
@@ -91,13 +91,13 @@ pub trait LeaseStore: Send + Sync {
         shard: ShardId,
         owner_id: &str,
         ttl: Duration,
-    ) -> BpResult<Option<WriterLease>>;
+    ) -> BuildResult<Option<WriterLease>>;
 
-    async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BpResult<Option<WriterLease>>;
+    async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BuildResult<Option<WriterLease>>;
 
-    async fn release(&self, lease: &WriterLease) -> BpResult<()>;
+    async fn release(&self, lease: &WriterLease) -> BuildResult<()>;
 
-    async fn current(&self, shard: ShardId) -> BpResult<Option<WriterLease>>;
+    async fn current(&self, shard: ShardId) -> BuildResult<Option<WriterLease>>;
 }
 
 /// Leases stored in the aggregator checkpoint bucket.
@@ -106,7 +106,7 @@ pub struct NatsLeaseStore {
 }
 
 impl NatsLeaseStore {
-    pub async fn connect(config: &AggregatorConfig) -> BpResult<Self> {
+    pub async fn connect(config: &AggregatorConfig) -> BuildResult<Self> {
         let values = KeyValue::connect(
             &config.nats_url,
             "platform-aggregator-leases",
@@ -116,7 +116,7 @@ impl NatsLeaseStore {
         Ok(Self { values })
     }
 
-    async fn load(&self, shard: ShardId) -> BpResult<Option<(WriterLease, u64)>> {
+    async fn load(&self, shard: ShardId) -> BuildResult<Option<(WriterLease, u64)>> {
         let Some((payload, revision)) = self
             .values
             .get_with_revision(&WriterLease::key(shard))
@@ -136,7 +136,7 @@ impl LeaseStore for NatsLeaseStore {
         shard: ShardId,
         owner_id: &str,
         ttl: Duration,
-    ) -> BpResult<Option<WriterLease>> {
+    ) -> BuildResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
         let key = WriterLease::key(shard);
         let Some((existing, revision)) = self.load(shard).await? else {
@@ -151,7 +151,7 @@ impl LeaseStore for NatsLeaseStore {
                 Ok(_) => Ok(Some(lease)),
                 Err(_) => {
                     let Some((current, _)) = self.load(shard).await? else {
-                        return Err(BpError::bad_value(
+                        return Err(BuildError::bad_value(
                             "aggregator lease",
                             shard.to_string(),
                             "lease creation conflicted without a visible holder",
@@ -160,7 +160,7 @@ impl LeaseStore for NatsLeaseStore {
                     if current.owner_id != owner_id && !current.is_expired(now) {
                         Ok(None)
                     } else {
-                        Err(BpError::bad_value(
+                        Err(BuildError::bad_value(
                             "aggregator lease",
                             shard.to_string(),
                             "lease creation conflicted; retry acquisition",
@@ -191,7 +191,7 @@ impl LeaseStore for NatsLeaseStore {
         }
     }
 
-    async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BpResult<Option<WriterLease>> {
+    async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BuildResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
         let Some((current, revision)) = self.load(lease.shard).await? else {
             return Ok(None);
@@ -212,7 +212,7 @@ impl LeaseStore for NatsLeaseStore {
         }
     }
 
-    async fn release(&self, lease: &WriterLease) -> BpResult<()> {
+    async fn release(&self, lease: &WriterLease) -> BuildResult<()> {
         let Some((mut current, revision)) = self.load(lease.shard).await? else {
             return Ok(());
         };
@@ -228,7 +228,7 @@ impl LeaseStore for NatsLeaseStore {
         Ok(())
     }
 
-    async fn current(&self, shard: ShardId) -> BpResult<Option<WriterLease>> {
+    async fn current(&self, shard: ShardId) -> BuildResult<Option<WriterLease>> {
         Ok(self.load(shard).await?.map(|(lease, _)| lease))
     }
 }

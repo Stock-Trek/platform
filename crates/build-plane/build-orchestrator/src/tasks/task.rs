@@ -3,7 +3,7 @@ use crate::{
     context::RsOrchestratorContext,
     tasks::{git_remote::GitRemote, s3_keys::S3Keys, source_archive::SourceArchive},
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_git::git_host::GitHost;
 use platform_messages::sqs_message::{GitSource, SqsDetail, SqsMessage, SqsRefType};
 use platform_time::request_context::RequestContext;
@@ -45,7 +45,7 @@ impl Task {
     pub async fn handle(
         &self,
         request_context: RequestContext<&RsOrchestratorContext>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         match self {
             Self::AllReposAdd { source } => {
                 match GitRemote::from_source(&request_context.context.github_auth, source)? {
@@ -92,7 +92,7 @@ impl Task {
         request_context: RequestContext<&RsOrchestratorContext>,
         source: &GitSource,
         remote: &Remote,
-    ) -> BpResult<()>
+    ) -> BuildResult<()>
     where
         RepoId: Display,
         Remote: GitHost<RepoId>,
@@ -110,7 +110,7 @@ impl Task {
         request_context: RequestContext<&RsOrchestratorContext>,
         source: &GitSource,
         repo_ids: &[String],
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let messages = repo_ids
             .iter()
             .map(|repo_id| SqsMessage {
@@ -132,7 +132,7 @@ impl Task {
         source: &GitSource,
         remote: &Remote,
         repo_id: &str,
-    ) -> BpResult<()>
+    ) -> BuildResult<()>
     where
         RepoId: Display + Clone,
         Remote: GitHost<RepoId>,
@@ -161,7 +161,7 @@ impl Task {
         ref_name: &str,
         ref_type: SqsRefType,
         commit_hash: Option<String>,
-    ) -> BpResult<()>
+    ) -> BuildResult<()>
     where
         RepoId: Display + Clone,
         Remote: GitHost<RepoId>,

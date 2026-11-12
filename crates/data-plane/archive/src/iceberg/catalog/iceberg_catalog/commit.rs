@@ -5,7 +5,7 @@ use iceberg::{
     table::Table,
     transaction::{ApplyTransactionAction, Transaction},
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::time::Duration;
 use tokio::time::sleep;
 use tracing::{info, warn};
@@ -19,7 +19,7 @@ impl IcebergCatalog {
         table: ArchiveIcebergTable,
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         if files.is_empty() && source_files.is_none() {
             return Ok(());
         }
@@ -55,7 +55,7 @@ impl IcebergCatalog {
             let data_files = files
                 .iter()
                 .map(|file| self.data_file(&current, file))
-                .collect::<BpResult<Vec<_>>>()?;
+                .collect::<BuildResult<Vec<_>>>()?;
             let snapshot_properties = Self::snapshot_properties(files, source_files);
 
             let transaction = Transaction::new(&current);
@@ -102,7 +102,7 @@ impl IcebergCatalog {
         }
 
         Err(last_error.unwrap_or_else(|| {
-            BpError::external(std::io::Error::other(
+            BuildError::external(std::io::Error::other(
                 "Iceberg commit failed without a reported error",
             ))
         }))
@@ -113,7 +113,7 @@ impl IcebergCatalog {
         table: &Table,
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
-    ) -> BpResult<bool> {
+    ) -> BuildResult<bool> {
         if let Some(source_files) = source_files {
             let processed = Self::source_files_from_metadata(table);
             return Ok(source_files.iter().all(|file| processed.contains(file)));
@@ -126,9 +126,9 @@ impl IcebergCatalog {
         Ok(files.iter().all(|file| paths.contains(&file.file_path)))
     }
 
-    fn data_file(&self, table: &Table, file: &IcebergDataFile) -> BpResult<DataFile> {
+    fn data_file(&self, table: &Table, file: &IcebergDataFile) -> BuildResult<DataFile> {
         let record_count = u64::try_from(file.record_count).map_err(|_| {
-            BpError::external(std::io::Error::new(
+            BuildError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!(
                     "Iceberg data file {} has a negative record count {}",
@@ -137,7 +137,7 @@ impl IcebergCatalog {
             ))
         })?;
         let file_size_in_bytes = u64::try_from(file.file_size_in_bytes).map_err(|_| {
-            BpError::external(std::io::Error::new(
+            BuildError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!(
                     "Iceberg data file {} has a negative size {}",
@@ -156,7 +156,7 @@ impl IcebergCatalog {
             .file_size_in_bytes(file_size_in_bytes)
             .build()
             .map_err(|error| {
-                BpError::external(std::io::Error::other(format!(
+                BuildError::external(std::io::Error::other(format!(
                     "build Iceberg data file: {error}"
                 )))
             })

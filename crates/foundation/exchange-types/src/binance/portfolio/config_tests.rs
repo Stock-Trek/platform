@@ -1,6 +1,6 @@
 use super::{BinancePortfolioConfig, CREDENTIALS};
 use platform_config::EnvVars;
-use platform_errors::{BpError, ConfigError};
+use platform_errors::{BuildError, ConfigError};
 use secrecy::ExposeSecret;
 use std::time::Duration;
 
@@ -14,7 +14,9 @@ const BACKOFF: &str = "PORTFOLIO_BINANCE_RECONNECT_BACKOFF_SECS";
 struct Fixture;
 
 impl Fixture {
-    fn config(vars: &[(&str, &str)]) -> platform_errors::BpResult<Option<BinancePortfolioConfig>> {
+    fn config(
+        vars: &[(&str, &str)],
+    ) -> platform_errors::BuildResult<Option<BinancePortfolioConfig>> {
         BinancePortfolioConfig::from_vars(&EnvVars::from_map(
             vars.iter()
                 .map(|(name, value)| ((*name).to_string(), (*value).to_string())),
@@ -100,7 +102,7 @@ fn explicit_endpoints_override_testnet_defaults() {
 fn enabling_the_connector_requires_credentials() {
     assert!(matches!(
         Fixture::config(&[(ENABLED, "true")]).unwrap_err(),
-        BpError::Config(ConfigError::Missing { name }) if name == CREDENTIALS
+        BuildError::Config(ConfigError::Missing { name }) if name == CREDENTIALS
     ));
 }
 

@@ -15,7 +15,7 @@ use crate::{
     },
     event_response::EventResponse,
 };
-use platform_errors::{BpError, BpResult, HttpError};
+use platform_errors::{BuildError, BuildResult, HttpError};
 use platform_messages::sqs_message::SqsDetail;
 use platform_metrics::event::EventMetrics;
 
@@ -24,9 +24,9 @@ impl GitHubEventConverter {
         &self,
         request: &lambda_http::Request,
         delivery_id: Option<String>,
-    ) -> BpResult<EventResponse> {
+    ) -> BuildResult<EventResponse> {
         let event: GitHubEventInstallation = serde_json::from_slice(request.body())
-            .map_err(|error| BpError::Http(HttpError::Serde(error)))?;
+            .map_err(|error| BuildError::Http(HttpError::Serde(error)))?;
         let installation_id = event.installation.id;
         let action = event.action;
         match action {
@@ -63,9 +63,9 @@ impl GitHubEventConverter {
         &self,
         request: &lambda_http::Request,
         delivery_id: Option<String>,
-    ) -> BpResult<EventResponse> {
+    ) -> BuildResult<EventResponse> {
         let event: GitHubEventInstallationRepositories = serde_json::from_slice(request.body())
-            .map_err(|error| BpError::Http(HttpError::Serde(error)))?;
+            .map_err(|error| BuildError::Http(HttpError::Serde(error)))?;
         let action = event.action;
         match action {
             GitHubEventInstallationRepositoriesAction::Added => {}
@@ -93,9 +93,9 @@ impl GitHubEventConverter {
         &self,
         request: &lambda_http::Request,
         delivery_id: Option<String>,
-    ) -> BpResult<EventResponse> {
+    ) -> BuildResult<EventResponse> {
         let event: GitHubEventRepository = serde_json::from_slice(request.body())
-            .map_err(|error| BpError::Http(HttpError::Serde(error)))?;
+            .map_err(|error| BuildError::Http(HttpError::Serde(error)))?;
         let installation_id = event.installation.id;
         let repo_id = Self::repo_id(event.repository);
         let action = event.action;
@@ -120,9 +120,9 @@ impl GitHubEventConverter {
         &self,
         request: &lambda_http::Request,
         delivery_id: Option<String>,
-    ) -> BpResult<EventResponse> {
+    ) -> BuildResult<EventResponse> {
         let event: GitHubEventRef = serde_json::from_slice(request.body())
-            .map_err(|error| BpError::Http(HttpError::Serde(error)))?;
+            .map_err(|error| BuildError::Http(HttpError::Serde(error)))?;
         let Some(ref_type) = Self::ref_type(&event.ref_type) else {
             EventMetrics::record_ignored_event("create", &event.ref_type.to_string());
             return Ok(EventResponse::Ignore);
@@ -136,7 +136,7 @@ impl GitHubEventConverter {
         Self::accept(host, delivery_id, event.installation.id, detail)
     }
 
-    pub fn ping_response(&self) -> BpResult<EventResponse> {
+    pub fn ping_response(&self) -> BuildResult<EventResponse> {
         Ok(EventResponse::Pong)
     }
 
@@ -144,9 +144,9 @@ impl GitHubEventConverter {
         &self,
         request: &lambda_http::Request,
         delivery_id: Option<String>,
-    ) -> BpResult<EventResponse> {
+    ) -> BuildResult<EventResponse> {
         let event: GitHubEventPush = serde_json::from_slice(request.body())
-            .map_err(|error| BpError::Http(HttpError::Serde(error)))?;
+            .map_err(|error| BuildError::Http(HttpError::Serde(error)))?;
         let GitHubEventPush {
             after,
             created,

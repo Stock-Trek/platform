@@ -1,5 +1,5 @@
 use crate::trading_precision::TradingPrecision;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use rust_decimal::{Decimal, RoundingStrategy, prelude::ToPrimitive};
 use stock_trek_types::cex::{
     activation::Activation, asset_id::AssetId, order_request::OrderRequest,
@@ -22,7 +22,7 @@ impl FloatsToDecimals {
     pub fn floats_to_decimals(
         &self,
         order_request: OrderRequest<AssetId, f64>,
-    ) -> BpResult<OrderRequest<AssetId, Decimal>> {
+    ) -> BuildResult<OrderRequest<AssetId, Decimal>> {
         match order_request {
             OrderRequest::Limit {
                 activation,
@@ -72,7 +72,7 @@ impl FloatsToDecimals {
         }
     }
 
-    fn activation(&self, activation: Activation<f64>) -> BpResult<Activation<Decimal>> {
+    fn activation(&self, activation: Activation<f64>) -> BuildResult<Activation<Decimal>> {
         match activation {
             Activation::Immediate => Ok(Activation::Immediate),
             Activation::PriceTriggered {
@@ -105,7 +105,7 @@ impl FloatsToDecimals {
             }),
         }
     }
-    fn base_quantity(&self, quantity: f64, is_limit: bool) -> BpResult<Decimal> {
+    fn base_quantity(&self, quantity: f64, is_limit: bool) -> BuildResult<Decimal> {
         if is_limit {
             self.trading_precision
                 .to_valid_base_limit(quantity, self.rounding.quantity)
@@ -114,11 +114,11 @@ impl FloatsToDecimals {
                 .to_valid_base_market(quantity, self.rounding.quantity)
         }
     }
-    fn quote_quantity(&self, quantity: f64) -> BpResult<Decimal> {
+    fn quote_quantity(&self, quantity: f64) -> BuildResult<Decimal> {
         self.trading_precision
             .to_valid_quote(quantity, self.rounding.quantity)
     }
-    fn price(&self, price: f64) -> BpResult<Decimal> {
+    fn price(&self, price: f64) -> BuildResult<Decimal> {
         self.trading_precision
             .to_valid_quote(price, self.rounding.price)
     }
@@ -128,7 +128,7 @@ impl FloatsToDecimals {
             .to_u32()
             .unwrap_or(callback_rate_bps)
     }
-    fn quantity(&self, quantity: Quantity<f64>, is_limit: bool) -> BpResult<Quantity<Decimal>> {
+    fn quantity(&self, quantity: Quantity<f64>, is_limit: bool) -> BuildResult<Quantity<Decimal>> {
         match quantity {
             Quantity::OfBase(q) => Ok(Quantity::OfBase(self.base_quantity(q, is_limit)?)),
             Quantity::OfQuote(q) => Ok(Quantity::OfQuote(self.quote_quantity(q)?)),

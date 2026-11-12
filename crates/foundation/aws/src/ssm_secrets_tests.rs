@@ -1,6 +1,6 @@
 use crate::{SsmSecrets, ssm_config::SsmConfig};
 use aws_sdk_ssm::{operation::get_parameters_by_path::GetParametersByPathOutput, types::Parameter};
-use platform_errors::BpError;
+use platform_errors::BuildError;
 use std::collections::HashMap;
 
 fn page(names: &[(&str, Option<&str>)]) -> GetParametersByPathOutput {
@@ -79,6 +79,6 @@ fn missing_secrets_are_a_configuration_error() {
 
     assert!(matches!(
         secrets.get("BACKFILLER_EXCHANGE_API_KEY"),
-        Err(BpError::Config(_))
+        Err(BuildError::Config(_))
     ));
 }

@@ -3,7 +3,7 @@ use crate::{
     TokenMutation, TokenOptions,
 };
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 
 impl AuthService {
     pub(crate) async fn add_token(
@@ -13,9 +13,9 @@ impl AuthService {
         created_at: DateTime<Utc>,
         options: TokenOptions,
         now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
+    ) -> BuildResult<ApiToken> {
         if created_at > now {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "created_at",
                 "must not be in the future",
             ));
@@ -23,13 +23,13 @@ impl AuthService {
         let expires_at = match options.expiry() {
             TokenExpiry::At(expires_at) => {
                 if expires_at <= created_at {
-                    return Err(BpError::auth_invalid_field(
+                    return Err(BuildError::auth_invalid_field(
                         "expires_at",
                         "must be after the creation time",
                     ));
                 }
                 if expires_at <= now {
-                    return Err(BpError::auth_invalid_field(
+                    return Err(BuildError::auth_invalid_field(
                         "expires_at",
                         "must be in the future",
                     ));
@@ -38,16 +38,16 @@ impl AuthService {
             }
             TokenExpiry::After(lifetime) => {
                 if lifetime <= Duration::zero() {
-                    return Err(BpError::auth_invalid_field(
+                    return Err(BuildError::auth_invalid_field(
                         "expires_at",
                         "must be greater than zero",
                     ));
                 }
                 let expires_at = created_at.checked_add_signed(lifetime).ok_or_else(|| {
-                    BpError::auth_invalid_field("expires_at", "is outside the supported range")
+                    BuildError::auth_invalid_field("expires_at", "is outside the supported range")
                 })?;
                 if expires_at <= now {
-                    return Err(BpError::auth_invalid_field(
+                    return Err(BuildError::auth_invalid_field(
                         "expires_at",
                         "must be in the future",
                     ));
@@ -74,18 +74,18 @@ impl AuthService {
         }
     }
 
-    pub(crate) async fn token(&self, id: &str) -> BpResult<ApiToken> {
+    pub(crate) async fn token(&self, id: &str) -> BuildResult<ApiToken> {
         self.stored_token(id)
             .await?
-            .ok_or_else(|| BpError::unknown_token(id))
+            .ok_or_else(|| BuildError::unknown_token(id))
     }
 
-    pub(crate) async fn stored_token(&self, id: &str) -> BpResult<Option<ApiToken>> {
+    pub(crate) async fn stored_token(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         ApiToken::validate_id(id)?;
         let token = self.store.get(id).await?;
         if let Some(token) = &token {
             if token.id() != id {
-                return Err(BpError::auth_store(
+                return Err(BuildError::auth_store(
                     "read",
                     id,
                     false,
@@ -94,7 +94,7 @@ impl AuthService {
             }
             token
                 .validate()
-                .map_err(|error| BpError::auth_store("read", id, false, error))?;
+                .map_err(|error| BuildError::auth_store("read", id, false, error))?;
         }
         Ok(token)
     }

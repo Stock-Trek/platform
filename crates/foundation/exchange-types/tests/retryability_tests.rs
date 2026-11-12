@@ -1,5 +1,5 @@
 use platform_errors::{
-    BinanceError, BinanceErrorData, BpError, ErrorType, ExchangeError, Retryability,
+    BinanceError, BinanceErrorData, BuildError, ErrorType, ExchangeError, Retryability,
 };
 use platform_exchange_types::{
     binance::{
@@ -60,7 +60,7 @@ fn exchange_failure_preserves_code_message_status_and_retry_after() {
     let failure = response(429, Some(DurationSeconds(7)), error(-1003, None))
         .klines()
         .unwrap_err();
-    let BpError::Exchange(ExchangeError::Response {
+    let BuildError::Exchange(ExchangeError::Response {
         code,
         message,
         status,
@@ -98,7 +98,7 @@ fn exchange_failure_computes_retry_after_from_error_data() {
     )
     .klines()
     .unwrap_err();
-    let BpError::Exchange(ExchangeError::Response { retry_after, .. }) = failure else {
+    let BuildError::Exchange(ExchangeError::Response { retry_after, .. }) = failure else {
         panic!("expected exchange response failure");
     };
     assert_eq!(retry_after, Some(DurationSeconds(3)));
@@ -106,8 +106,8 @@ fn exchange_failure_computes_retry_after_from_error_data() {
 
 #[test]
 fn binance_error_can_be_wrapped_by_bp_error() {
-    let error = BpError::from(error(-1003, None));
-    assert!(matches!(error, BpError::Binance(_)));
+    let error = BuildError::from(error(-1003, None));
+    assert!(matches!(error, BuildError::Binance(_)));
     assert_eq!(error.retryability(), Retryability::Retryable);
     assert_eq!(error.error_type(), "binance");
 }

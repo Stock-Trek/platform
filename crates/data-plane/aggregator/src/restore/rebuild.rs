@@ -8,7 +8,7 @@ use super::replay::{ArchivedEventSource, S3ArchivedEventSource};
 use crate::processor::{CandleProcessor, ProcessorConfig};
 use crate::shard::ShardId;
 use crate::state::AggregatorState;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::candle::AlignedWindow;
 use platform_metrics::AggregatorMetrics;
 use platform_metrics::descriptions::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
@@ -32,7 +32,7 @@ impl AggregatorState {
         allowed_lateness: DurationMilliseconds,
         max_closed_candles_per_interval: BTreeMap<AlignedWindow, usize>,
         correction_cutoff: DurationMilliseconds,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let config = ProcessorConfig::new(
             intervals.to_vec(),
             allowed_lateness,
@@ -53,7 +53,7 @@ impl RebuiltArchiveState {
         shard: ShardId,
         shard_count: usize,
         config: ProcessorConfig,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let mut processor = CandleProcessor::with_config(config);
         let mut decoders = HashMap::new();
         let mut replayed = 0_u64;

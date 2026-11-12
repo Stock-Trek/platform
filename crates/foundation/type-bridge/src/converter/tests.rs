@@ -1,6 +1,6 @@
 use super::*;
 use crate::{BinanceConverter, MinMaxStep, TBExchangeInfo, TradingPrecision};
-use platform_errors::{BpError, ValidationError};
+use platform_errors::{BuildError, ValidationError};
 use rust_decimal::Decimal;
 use rust_decimal::RoundingStrategy;
 use std::collections::HashMap;
@@ -83,6 +83,6 @@ fn trading_converter_rejects_pairs_without_precision() {
 
     assert!(matches!(
         result,
-        Err(BpError::Validation(ValidationError::MissingValue(_)))
+        Err(BuildError::Validation(ValidationError::MissingValue(_)))
     ));
 }

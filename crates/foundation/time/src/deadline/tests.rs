@@ -1,5 +1,5 @@
 use super::*;
-use platform_errors::{BpError, TimeoutError};
+use platform_errors::{BuildError, TimeoutError};
 use std::time::{Duration, SystemTime};
 
 #[test]
@@ -19,7 +19,7 @@ fn expired_deadline_has_no_time_left() {
     assert_eq!(deadline.remaining_or_zero(), Duration::ZERO);
     assert!(matches!(
         deadline.fail_if_exceeded(),
-        Err(BpError::Timeout(TimeoutError::DeadlineExceeded))
+        Err(BuildError::Timeout(TimeoutError::DeadlineExceeded))
     ));
 }
 

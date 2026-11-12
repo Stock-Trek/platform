@@ -1,15 +1,15 @@
 use crate::{ApiToken, vault_client::VaultClient, vault_write::WriteCondition};
-use platform_errors::{AuthError, BpError, BpResult};
+use platform_errors::{AuthError, BuildError, BuildResult};
 use reqwest::{Method, StatusCode};
 use serde_json::{Map, Value};
 
 impl VaultClient {
-    pub(crate) async fn delete(&self, id: &str) -> BpResult<()> {
+    pub(crate) async fn delete(&self, id: &str) -> BuildResult<()> {
         ApiToken::validate_id(id)?;
         self.delete_key(id).await
     }
 
-    pub(crate) async fn delete_key(&self, key: &str) -> BpResult<()> {
+    pub(crate) async fn delete_key(&self, key: &str) -> BuildResult<()> {
         let response = self
             .send(
                 "delete",
@@ -25,7 +25,7 @@ impl VaultClient {
             .map(|_| ())
     }
 
-    pub(crate) async fn delete_if(&self, expected: &ApiToken) -> BpResult<bool> {
+    pub(crate) async fn delete_if(&self, expected: &ApiToken) -> BuildResult<bool> {
         expected.validate()?;
         let Some((data, version)) = self.get_value_entry(expected.id()).await? else {
             return Ok(false);
@@ -63,7 +63,7 @@ impl VaultClient {
         Value::Object(value)
     }
 
-    pub(crate) fn is_conflict(error: &BpError) -> bool {
-        matches!(error, BpError::Auth(AuthError::Conflict { .. }))
+    pub(crate) fn is_conflict(error: &BuildError) -> bool {
+        matches!(error, BuildError::Auth(AuthError::Conflict { .. }))
     }
 }

@@ -5,7 +5,7 @@ use crate::{
     clients::reqwest::ReqwestHttpClient, connector::Connector, iris, submission::SubmissionOutcome,
 };
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     encode::ByteEncoder,
@@ -61,7 +61,7 @@ where
     fn http_connector(
         &self,
         credentials: &ApiKeyCredentials,
-    ) -> BpResult<Connector<Exchange, ReqwestHttpClient>> {
+    ) -> BuildResult<Connector<Exchange, ReqwestHttpClient>> {
         Connector::try_new_http_reqwest(
             self.rest_url.clone(),
             self.exchange.clone(),
@@ -74,13 +74,13 @@ where
     async fn submit<Request>(
         connector: &Connector<Exchange, ReqwestHttpClient>,
         request: Request,
-    ) -> BpResult<Request::Response>
+    ) -> BuildResult<Request::Response>
     where
         Request: ETHttpRequest<Exchange = Exchange> + Send,
     {
         match connector.submit_http(request)?.wait().await? {
             SubmissionOutcome::Submitted(response) => Ok(response),
-            SubmissionOutcome::Unknown { .. } => Err(BpError::Exchange(
+            SubmissionOutcome::Unknown { .. } => Err(BuildError::Exchange(
                 ExchangeError::BadResponse("portfolio request outcome is unknown".to_string()),
             )),
         }
@@ -104,7 +104,7 @@ where
         self.reconnect_backoff
     }
 
-    async fn create_listen_key(&self, credentials: &ApiKeyCredentials) -> BpResult<String> {
+    async fn create_listen_key(&self, credentials: &ApiKeyCredentials) -> BuildResult<String> {
         let connector = self.http_connector(credentials)?;
         let response = Self::submit(&connector, Exchange::create_listen_key_request()).await?;
         Exchange::listen_key(response)
@@ -114,7 +114,7 @@ where
         &self,
         credentials: &ApiKeyCredentials,
         listen_key: &str,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let connector = self.http_connector(credentials)?;
         let response = Self::submit(
             &connector,
@@ -128,21 +128,24 @@ where
         &self,
         credentials: &ApiKeyCredentials,
         listen_key: &str,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let connector = self.http_connector(credentials)?;
         let response =
             Self::submit(&connector, Exchange::close_listen_key_request(listen_key)).await?;
         Exchange::listen_key_ack(response)
     }
 
-    async fn account_snapshot(&self, credentials: &ApiKeyCredentials) -> BpResult<AccountSnapshot> {
+    async fn account_snapshot(
+        &self,
+        credentials: &ApiKeyCredentials,
+    ) -> BuildResult<AccountSnapshot> {
         let connector = self.http_connector(credentials)?;
         let response = Self::submit(&connector, Exchange::account_snapshot_request()).await?;
         let mapping = self.mapping;
         Exchange::account_snapshot(response, &|asset| Self::asset_id(mapping, asset))
     }
 
-    async fn open_stream(&self, listen_key: &str) -> BpResult<Box<dyn AccountEventStream>> {
+    async fn open_stream(&self, listen_key: &str) -> BuildResult<Box<dyn AccountEventStream>> {
         let url = format!("{}/{listen_key}", self.websocket_url);
         let connector = Connector::try_new_websocket_iris(
             url,
@@ -156,7 +159,7 @@ where
             .websocket_listener
             .as_ref()
             .ok_or_else(|| {
-                BpError::Exchange(ExchangeError::BadResponse(
+                BuildError::Exchange(ExchangeError::BadResponse(
                     "websocket listener is missing".to_string(),
                 ))
             })?

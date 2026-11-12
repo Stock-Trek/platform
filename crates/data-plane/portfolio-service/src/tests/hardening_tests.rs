@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::{
     collections::VecDeque,
     sync::{
@@ -39,16 +39,16 @@ impl RecordingUpdateSource {
 
 #[async_trait]
 impl PortfolioUpdateSource for RecordingUpdateSource {
-    async fn next(&self) -> BpResult<Option<PortfolioUpdateMessage>> {
+    async fn next(&self) -> BuildResult<Option<PortfolioUpdateMessage>> {
         Ok(self.messages.lock().pop_front())
     }
 
-    async fn checkpoint(&self, sequence: u64) -> BpResult<()> {
+    async fn checkpoint(&self, sequence: u64) -> BuildResult<()> {
         self.checkpoints.lock().push(sequence);
         Ok(())
     }
 
-    async fn acknowledge(&self, _message: &PortfolioUpdateMessage) -> BpResult<()> {
+    async fn acknowledge(&self, _message: &PortfolioUpdateMessage) -> BuildResult<()> {
         self.acknowledged.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }

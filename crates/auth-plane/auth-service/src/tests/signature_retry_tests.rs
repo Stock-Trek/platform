@@ -3,7 +3,7 @@ use super::token_usage_queue_fixture_tests::ToggleTokenUsageQueue;
 use crate::{TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenAuditRelay};
 use async_trait::async_trait;
 use chrono::Utc;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -29,11 +29,11 @@ impl FailingSignatureVerifiedAuditLog {
 
 #[async_trait]
 impl TokenAuditLog for FailingSignatureVerifiedAuditLog {
-    async fn record(&self, event: TokenAuditEvent) -> BpResult<()> {
+    async fn record(&self, event: TokenAuditEvent) -> BuildResult<()> {
         if event.action == TokenAuditAction::SignatureVerified
             && !self.failed.swap(true, Ordering::SeqCst)
         {
-            return Err(BpError::auth_invalid_field("audit", "queue unavailable"));
+            return Err(BuildError::auth_invalid_field("audit", "queue unavailable"));
         }
         self.events.lock().expect("audit events lock").push(event);
         Ok(())

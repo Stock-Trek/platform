@@ -1,6 +1,6 @@
 use super::PortfolioCredentialSource;
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use std::collections::BTreeMap;
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
@@ -23,12 +23,12 @@ impl PortfolioCredentialSource for StaticPortfolioCredentials {
         &self,
         cex_id: CexId,
         account_id: &AccountId,
-    ) -> BpResult<ApiKeyCredentials> {
+    ) -> BuildResult<ApiKeyCredentials> {
         self.credentials
             .get(&(cex_id, account_id.clone()))
             .cloned()
             .ok_or_else(|| {
-                BpError::bad_value(
+                BuildError::bad_value(
                     "portfolio account",
                     format!("{cex_id}:{}", account_id.0),
                     "has no configured credentials",

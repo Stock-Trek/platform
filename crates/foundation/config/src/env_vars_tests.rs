@@ -1,5 +1,5 @@
 use super::*;
-use platform_errors::{BpError, ConfigError};
+use platform_errors::{BuildError, ConfigError};
 use platform_types::url_scheme::UrlScheme;
 use std::ffi::OsString;
 use std::time::Duration;
@@ -24,13 +24,13 @@ fn required_reports_missing_and_empty_values() {
     let vars = env_vars(Vec::<(String, String)>::new());
     assert!(matches!(
         vars.required("MISSING").unwrap_err(),
-        BpError::Config(ConfigError::Missing { name }) if name == "MISSING"
+        BuildError::Config(ConfigError::Missing { name }) if name == "MISSING"
     ));
 
     let vars = env_vars([("EMPTY", "")]);
     assert!(matches!(
         vars.required("EMPTY").unwrap_err(),
-        BpError::Config(ConfigError::Empty { name }) if name == "EMPTY"
+        BuildError::Config(ConfigError::Empty { name }) if name == "EMPTY"
     ));
 }
 
@@ -39,7 +39,7 @@ fn required_parsed_reports_invalid_values() {
     let vars = env_vars([("COUNT", "not a number")]);
     assert!(matches!(
         vars.required_parsed::<usize>("COUNT").unwrap_err(),
-        BpError::Config(ConfigError::Invalid { name, .. }) if name == "COUNT"
+        BuildError::Config(ConfigError::Invalid { name, .. }) if name == "COUNT"
     ));
 }
 
@@ -53,7 +53,7 @@ fn optional_parsed_treats_missing_and_empty_values_as_none() {
     let vars = env_vars([("COUNT", "not a number")]);
     assert!(matches!(
         vars.optional_parsed::<usize>("COUNT").unwrap_err(),
-        BpError::Config(ConfigError::Invalid { name, .. }) if name == "COUNT"
+        BuildError::Config(ConfigError::Invalid { name, .. }) if name == "COUNT"
     ));
 }
 
@@ -135,7 +135,7 @@ fn required_reports_not_unicode_without_exposing_the_value() {
 
     assert!(matches!(
         &error,
-        BpError::Config(ConfigError::NotUnicode { name }) if name == "SECRET"
+        BuildError::Config(ConfigError::NotUnicode { name }) if name == "SECRET"
     ));
     assert!(!error.to_string().contains("super-secret"));
 }

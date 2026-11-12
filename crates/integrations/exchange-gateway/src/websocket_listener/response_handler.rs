@@ -1,7 +1,7 @@
 use super::{arc_predicate::ArcPredicate, waiter_state::WaiterState};
 use crate::panic_guard::PanicUtils;
 use parking_lot::Mutex;
-use platform_errors::{BpError, BpResult, ConnectorError};
+use platform_errors::{BuildError, BuildResult, ConnectorError};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -15,11 +15,11 @@ impl ResponseHandler {
         Self { state, filter }
     }
 
-    pub fn handle(&self, response: &serde_json::Value) -> BpResult<bool> {
+    pub fn handle(&self, response: &serde_json::Value) -> BuildResult<bool> {
         let is_handled = match PanicUtils::catch_panic(|| (self.filter)(response)) {
             Ok(is_handled) => is_handled,
             Err(panic) => {
-                let error = BpError::Connector(ConnectorError::CallbackPanicked(
+                let error = BuildError::Connector(ConnectorError::CallbackPanicked(
                     panic.message().to_string(),
                 ));
                 let mut state = self.state.lock();

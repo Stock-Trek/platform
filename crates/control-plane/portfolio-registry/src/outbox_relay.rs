@@ -1,5 +1,5 @@
 use crate::OwnershipStore;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_nats::EventPublisher;
 use platform_portfolio_ownership::OWNERSHIP_EVENT_SUBJECT;
 use std::{future::Future, sync::Arc, time::Duration};
@@ -19,9 +19,9 @@ impl OwnershipOutboxRelay {
         store: Arc<dyn OwnershipStore>,
         publisher: Arc<dyn EventPublisher>,
         interval: Duration,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         if interval.is_zero() {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "outbox interval",
                 "must be greater than zero",
             ));
@@ -34,7 +34,7 @@ impl OwnershipOutboxRelay {
         })
     }
 
-    pub(crate) async fn flush_once(&self) -> BpResult<usize> {
+    pub(crate) async fn flush_once(&self) -> BuildResult<usize> {
         let events = self.store.pending_events(BATCH_SIZE).await?;
         let count = events.len();
         for event in events {
@@ -45,9 +45,9 @@ impl OwnershipOutboxRelay {
         Ok(count)
     }
 
-    pub(crate) async fn run<F>(&self, shutdown: F) -> BpResult<()>
+    pub(crate) async fn run<F>(&self, shutdown: F) -> BuildResult<()>
     where
-        F: Future<Output = BpResult<()>> + Send,
+        F: Future<Output = BuildResult<()>> + Send,
     {
         let mut ticker = interval(self.interval);
         ticker.set_missed_tick_behavior(MissedTickBehavior::Delay);

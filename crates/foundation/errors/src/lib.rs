@@ -1,34 +1,53 @@
-pub mod auth;
-pub mod binance;
-pub mod bp;
-pub mod config;
-pub mod connector;
-pub mod data;
-pub mod decimal;
+mod auth;
+#[cfg(test)]
+mod auth_tests;
+mod binance;
+mod build;
+mod build_classification;
+mod build_constructors;
+mod build_conversions;
+mod config;
+mod connector;
+#[cfg(test)]
+mod connector_tests;
+mod data;
+#[cfg(test)]
+mod data_tests;
+mod decimal;
 mod error_type;
-pub mod exchange;
+mod exchange;
 #[cfg(feature = "github")]
-pub mod github;
+mod github;
 #[cfg(feature = "http")]
-pub mod http;
-pub mod ingester;
-pub mod io;
+mod http;
+mod ingester;
+mod io;
+#[cfg(test)]
+mod io_tests;
 #[cfg(feature = "lambda")]
-pub mod lambda;
-pub mod nats;
-pub mod rate_limit;
-pub mod retryability;
-pub mod secrets;
-pub mod sqs;
+mod lambda;
+mod nats;
+mod rate_limit;
+mod retryability;
+#[cfg(test)]
+mod retryability_tests;
+mod secrets;
+#[cfg(test)]
+mod secrets_tests;
+mod sqs;
 #[cfg(feature = "storage")]
-pub mod storage;
-pub mod system;
-pub mod timeout;
-pub mod validation;
+mod storage;
+#[cfg(test)]
+mod storage_tests;
+mod system;
+#[cfg(test)]
+mod system_tests;
+mod timeout;
+mod validation;
 
 pub use auth::AuthError;
 pub use binance::{BinanceError, BinanceErrorData};
-pub use bp::{BpError, BpResult};
+pub use build::{BuildError, BuildResult};
 pub use config::ConfigError;
 pub use connector::{ConnectorError, SendFailure};
 pub use data::DataError;

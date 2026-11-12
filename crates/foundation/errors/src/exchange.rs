@@ -1,4 +1,4 @@
-use crate::{bp::BpError, retryability::Retryability};
+use crate::{build::BuildError, retryability::Retryability};
 use platform_types::{new_types::DurationSeconds, protocol::Protocol};
 
 #[derive(Debug, thiserror::Error, strum::IntoStaticStr)]
@@ -25,7 +25,7 @@ pub enum ExchangeError {
     Exchange {
         operation: &'static str,
         #[source]
-        source: Box<BpError>,
+        source: Box<BuildError>,
     },
     #[error("Cannot find a symbol for trading pair {trading_pair}")]
     MissingSymbol { trading_pair: String },

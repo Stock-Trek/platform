@@ -1,6 +1,6 @@
 use crate::{TokenMetadata, TokenScope};
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use serde_json::{Value, json};
 
 const EXPIRES_AT: &str = "expires_at";
@@ -28,32 +28,32 @@ impl TokenMetadata {
         })
     }
 
-    pub fn from_value(value: &Value) -> BpResult<Self> {
+    pub fn from_value(value: &Value) -> BuildResult<Self> {
         let scopes = match value.get(SCOPES) {
             Some(Value::Array(scopes)) => scopes
                 .iter()
                 .map(|scope| {
                     let scope = scope.as_str().ok_or_else(|| {
-                        BpError::auth_invalid_field(SCOPES, "must contain only strings")
+                        BuildError::auth_invalid_field(SCOPES, "must contain only strings")
                     })?;
                     scope.parse::<TokenScope>().map_err(|_| {
-                        BpError::auth_invalid_field(
+                        BuildError::auth_invalid_field(
                             SCOPES,
                             format!("{scope:?} is not a valid token scope"),
                         )
                     })
                 })
-                .collect::<BpResult<Vec<_>>>()?,
+                .collect::<BuildResult<Vec<_>>>()?,
             Some(_) => {
-                return Err(BpError::auth_invalid_field(
+                return Err(BuildError::auth_invalid_field(
                     SCOPES,
                     "must be an array of strings",
                 ));
             }
-            None => return Err(BpError::auth_invalid_field(SCOPES, "is required")),
+            None => return Err(BuildError::auth_invalid_field(SCOPES, "is required")),
         };
         let expires_at = Self::timestamp(value, EXPIRES_AT)?
-            .ok_or_else(|| BpError::auth_invalid_field(EXPIRES_AT, "is required"))?;
+            .ok_or_else(|| BuildError::auth_invalid_field(EXPIRES_AT, "is required"))?;
         let mut metadata = Self::new(expires_at, scopes.iter())?;
         metadata.revoked_at = Self::timestamp(value, REVOKED_AT)?;
         metadata.revocation_reason = Self::enumeration(value, REVOCATION_REASON)?;
@@ -66,7 +66,7 @@ impl TokenMetadata {
         Ok(metadata)
     }
 
-    fn enumeration<T>(value: &Value, field: &'static str) -> BpResult<Option<T>>
+    fn enumeration<T>(value: &Value, field: &'static str) -> BuildResult<Option<T>>
     where
         T: std::str::FromStr,
         T::Err: std::fmt::Display,
@@ -77,28 +77,28 @@ impl TokenMetadata {
         value
             .parse::<T>()
             .map(Some)
-            .map_err(|error| BpError::auth_invalid_field(field, error.to_string()))
+            .map_err(|error| BuildError::auth_invalid_field(field, error.to_string()))
     }
 
-    fn string(value: &Value, field: &'static str) -> BpResult<Option<String>> {
+    fn string(value: &Value, field: &'static str) -> BuildResult<Option<String>> {
         match value.get(field) {
             None | Some(Value::Null) => Ok(None),
             Some(Value::String(value)) => Ok(Some(value.clone())),
-            Some(_) => Err(BpError::auth_invalid_field(
+            Some(_) => Err(BuildError::auth_invalid_field(
                 field,
                 "must be a string or null",
             )),
         }
     }
 
-    fn timestamp(value: &Value, field: &'static str) -> BpResult<Option<DateTime<Utc>>> {
+    fn timestamp(value: &Value, field: &'static str) -> BuildResult<Option<DateTime<Utc>>> {
         let Some(value) = Self::string(value, field)? else {
             return Ok(None);
         };
         DateTime::parse_from_rfc3339(&value)
             .map(|value| Some(value.with_timezone(&Utc)))
             .map_err(|e| {
-                BpError::auth_invalid_field(field, format!("not an RFC 3339 timestamp: {e}"))
+                BuildError::auth_invalid_field(field, format!("not an RFC 3339 timestamp: {e}"))
             })
     }
 }

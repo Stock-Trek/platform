@@ -1,6 +1,6 @@
 use super::*;
 use crate::source::SourceLimits;
-use platform_errors::{BpError, ConfigError, ErrorType, TimeoutError};
+use platform_errors::{BuildError, ConfigError, ErrorType, TimeoutError};
 use platform_messages::build_request::BuildRequest;
 use platform_messages::{build_request::BuildRequestSignedPost, sqs_message::SqsRefType};
 use std::collections::BTreeMap;
@@ -32,7 +32,7 @@ fn handler(timeout: Duration, failure_publish_budget: Duration) -> Handler {
 
 #[test]
 fn permanent_build_errors_are_returned_as_structured_outcomes() {
-    let error = BpError::Config(ConfigError::Build("compile failed".to_string()));
+    let error = BuildError::Config(ConfigError::Build("compile failed".to_string()));
 
     let outcome = BuildAgent::handle_error(error, Instant::now() - Duration::from_secs(1)).unwrap();
 
@@ -45,7 +45,7 @@ fn permanent_build_errors_are_returned_as_structured_outcomes() {
 
 #[test]
 fn retryable_build_errors_are_returned_so_lambda_retries_the_invocation() {
-    let error = BpError::Timeout(TimeoutError::BuildTimeout(Duration::from_secs(300)));
+    let error = BuildError::Timeout(TimeoutError::BuildTimeout(Duration::from_secs(300)));
 
     let error =
         BuildAgent::handle_error(error, Instant::now() - Duration::from_secs(1)).unwrap_err();
@@ -70,7 +70,7 @@ async fn handle_rejects_invalid_signed_post_before_building() {
         .await
         .unwrap_err();
 
-    assert!(matches!(error, BpError::Config(_)));
+    assert!(matches!(error, BuildError::Config(_)));
 }
 
 #[test]

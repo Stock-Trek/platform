@@ -1,6 +1,6 @@
 use crate::SigV4Credentials;
 use platform_config::SIGV4_CREDENTIALS;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use serde::Deserialize;
 use std::collections::BTreeMap;
 
@@ -26,9 +26,9 @@ pub struct SigV4Registry {
 }
 
 impl SigV4Registry {
-    pub fn from_json(value: &str) -> BpResult<Self> {
+    pub fn from_json(value: &str) -> BuildResult<Self> {
         let entries = serde_json::from_str::<Vec<RegistryEntry>>(value)
-            .map_err(|error| BpError::config_invalid_source(SIGV4_CREDENTIALS, error))?;
+            .map_err(|error| BuildError::config_invalid_source(SIGV4_CREDENTIALS, error))?;
         Self::from_entries(entries)
     }
 
@@ -37,7 +37,7 @@ impl SigV4Registry {
         secret_access_key: impl Into<String>,
         owner: impl Into<String>,
         session_token: Option<String>,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let entries = vec![RegistryEntry {
             access_key_id: access_key_id.into(),
             secret_access_key: secret_access_key.into(),
@@ -47,16 +47,16 @@ impl SigV4Registry {
         Self::from_entries(entries)
     }
 
-    pub fn credentials_for_owner(&self, owner: &str) -> BpResult<&SigV4Credentials> {
+    pub fn credentials_for_owner(&self, owner: &str) -> BuildResult<&SigV4Credentials> {
         let mut matching = self.callers.values().filter(|caller| caller.owner == owner);
         let caller = matching.next().ok_or_else(|| {
-            BpError::config_invalid(
+            BuildError::config_invalid(
                 SIGV4_CREDENTIALS,
                 format!("no credentials for owner {owner}"),
             )
         })?;
         if matching.next().is_some() {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 SIGV4_CREDENTIALS,
                 format!("multiple credentials for owner {owner}"),
             ));
@@ -70,9 +70,9 @@ impl SigV4Registry {
             .map(|caller| (&caller.credentials, caller.owner.as_str()))
     }
 
-    fn from_entries(entries: Vec<RegistryEntry>) -> BpResult<Self> {
+    fn from_entries(entries: Vec<RegistryEntry>) -> BuildResult<Self> {
         if entries.is_empty() {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 SIGV4_CREDENTIALS,
                 "must contain at least one credential",
             ));
@@ -91,7 +91,7 @@ impl SigV4Registry {
                 .insert(entry.owner.clone(), access_key_id.clone())
                 .is_some()
             {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     SIGV4_CREDENTIALS,
                     format!("duplicate owner {}", entry.owner),
                 ));
@@ -106,7 +106,7 @@ impl SigV4Registry {
                 )
                 .is_some()
             {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     SIGV4_CREDENTIALS,
                     "duplicate access key id",
                 ));
@@ -115,15 +115,15 @@ impl SigV4Registry {
         Ok(Self { callers })
     }
 
-    fn validate_owner(owner: &str) -> BpResult<()> {
+    fn validate_owner(owner: &str) -> BuildResult<()> {
         if owner.is_empty() {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 SIGV4_CREDENTIALS,
                 "owner must not be empty",
             ));
         }
         if owner.trim() != owner || owner.chars().any(char::is_control) {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 SIGV4_CREDENTIALS,
                 "owner must not contain surrounding whitespace or control characters",
             ));

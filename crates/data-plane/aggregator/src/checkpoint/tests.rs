@@ -6,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_nats::Message;
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::HashMap;
@@ -38,16 +38,16 @@ impl InMemoryStateStore {
 
 #[async_trait]
 impl StateStore for InMemoryStateStore {
-    async fn load(&self, shard: ShardId) -> BpResult<Option<CheckpointRecord>> {
+    async fn load(&self, shard: ShardId) -> BuildResult<Option<CheckpointRecord>> {
         Ok(self.get(shard))
     }
 
-    async fn save(&self, checkpoint: &CheckpointRecord) -> BpResult<()> {
+    async fn save(&self, checkpoint: &CheckpointRecord) -> BuildResult<()> {
         let mut checkpoints = self.checkpoints.lock();
         if let Some((_, existing)) = checkpoints.get(&checkpoint.shard)
             && !existing.is_writable_by(&checkpoint.writer_id, checkpoint.fencing_token)
         {
-            return Err(BpError::bad_value(
+            return Err(BuildError::bad_value(
                 "checkpoint fencing token",
                 checkpoint.fencing_token.to_string(),
                 format!(

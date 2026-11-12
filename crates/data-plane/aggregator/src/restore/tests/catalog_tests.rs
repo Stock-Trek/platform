@@ -4,7 +4,7 @@ use crate::restore::catalog::{ArchiveObject, ArchiveRecoveryConfig};
 use crate::shard::ShardId;
 use platform_archive::{ArchiveKind, ArchivePath, ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE};
 use platform_config::EnvVars;
-use platform_errors::{BpError, ConfigError};
+use platform_errors::{BuildError, ConfigError};
 use platform_types::new_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -131,7 +131,7 @@ fn archive_recovery_config_is_required_for_policies_that_replay_the_archive() {
     for policy in [ReplayStartPolicy::Checkpoint, ReplayStartPolicy::Archive] {
         assert!(matches!(
             ArchiveRecoveryConfig::from_vars_for_policy(&vars, policy).unwrap_err(),
-            BpError::Config(ConfigError::Missing { name })
+            BuildError::Config(ConfigError::Missing { name })
                 if name == ICEBERG_CATALOG_URI
         ));
     }
@@ -158,7 +158,7 @@ fn optional_archive_recovery_config_validates_a_configured_catalog() {
 
     assert!(matches!(
         ArchiveRecoveryConfig::optional_from_vars(&vars).unwrap_err(),
-        BpError::Config(ConfigError::Missing { name })
+        BuildError::Config(ConfigError::Missing { name })
             if name == ICEBERG_CATALOG_WAREHOUSE
     ));
 }

@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult, ValidationError};
+use platform_errors::{BuildError, BuildResult, ValidationError};
 
 pub struct NatsSubject;
 
@@ -28,13 +28,13 @@ impl NatsSubject {
         normalized
     }
 
-    pub fn validate(subject: &str) -> BpResult<()> {
+    pub fn validate(subject: &str) -> BuildResult<()> {
         Self::validate_named("NATS subject", subject)
     }
 
     /// Validates a NATS subject, reporting errors against `name` so callers can
     /// identify the configuration value that was invalid.
-    pub fn validate_named(name: &str, subject: &str) -> BpResult<()> {
+    pub fn validate_named(name: &str, subject: &str) -> BuildResult<()> {
         let invalid = subject.is_empty()
             || subject.split('.').any(|token| {
                 token.is_empty()
@@ -43,7 +43,7 @@ impl NatsSubject {
                     })
             });
         if invalid {
-            return Err(BpError::Validation(ValidationError::InvalidValue {
+            return Err(BuildError::Validation(ValidationError::InvalidValue {
                 name: name.to_string(),
                 value: subject.to_string(),
             }));

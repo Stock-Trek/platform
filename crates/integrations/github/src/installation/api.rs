@@ -2,12 +2,12 @@ use super::{
     GitHubInstallation,
     types::{GitHubRepo, InstallationRepositoriesResponse, RepositoriesParams},
 };
-use platform_errors::{BpError, BpResult, GitHubError};
+use platform_errors::{BuildError, BuildResult, GitHubError};
 
 const REPOS_PER_PAGE: u32 = 100;
 
 impl GitHubInstallation {
-    pub async fn repos(&self) -> BpResult<Vec<GitHubRepo>> {
+    pub async fn repos(&self) -> BuildResult<Vec<GitHubRepo>> {
         let mut repos = Vec::new();
         let mut page = 1;
         loop {
@@ -22,7 +22,7 @@ impl GitHubInstallation {
                     Some(&params),
                 )
                 .await
-                .map_err(|error| BpError::GitHub(GitHubError::ListRepositories(error)))?;
+                .map_err(|error| BuildError::GitHub(GitHubError::ListRepositories(error)))?;
             let received = response.repositories.len();
             repos.extend(response.repositories);
             if received < REPOS_PER_PAGE as usize {
@@ -33,18 +33,18 @@ impl GitHubInstallation {
         Ok(repos)
     }
 
-    pub async fn repo(&self, repo_id: u64) -> BpResult<GitHubRepo> {
+    pub async fn repo(&self, repo_id: u64) -> BuildResult<GitHubRepo> {
         self.client
             .get::<GitHubRepo, _, _>(format!("/repositories/{repo_id}"), None::<&()>)
             .await
             .map_err(|error| {
                 if Self::is_not_found(&error) {
-                    BpError::GitHub(GitHubError::RepositoryNotFound {
+                    BuildError::GitHub(GitHubError::RepositoryNotFound {
                         repo_id,
                         source: error,
                     })
                 } else {
-                    BpError::GitHub(GitHubError::GetRepository {
+                    BuildError::GitHub(GitHubError::GetRepository {
                         repo_id,
                         source: error,
                     })

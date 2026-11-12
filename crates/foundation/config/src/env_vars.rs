@@ -1,5 +1,5 @@
 use chrono::{DateTime, NaiveDate, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_types::url_scheme::UrlScheme;
 use std::{
     collections::HashMap,
@@ -42,17 +42,17 @@ impl EnvVars {
     }
 
     /// Reads a required UTF-8 variable.
-    pub fn required(&self, name: &str) -> BpResult<String> {
+    pub fn required(&self, name: &str) -> BuildResult<String> {
         let value = self
             .vars
             .get(OsStr::new(name))
-            .ok_or_else(|| BpError::config_missing(name))?;
+            .ok_or_else(|| BuildError::config_missing(name))?;
         let value = value
             .clone()
             .into_string()
-            .map_err(|_| BpError::config_not_unicode(name))?;
+            .map_err(|_| BuildError::config_not_unicode(name))?;
         if value.is_empty() {
-            return Err(BpError::config_empty(name));
+            return Err(BuildError::config_empty(name));
         }
         Ok(value)
     }
@@ -61,42 +61,42 @@ impl EnvVars {
     ///
     /// This is only useful for diagnostics: the value is converted lossily and
     /// must not be used as configuration.
-    pub fn required_lossy(&self, name: &str) -> BpResult<String> {
+    pub fn required_lossy(&self, name: &str) -> BuildResult<String> {
         let value = self
             .vars
             .get(OsStr::new(name))
-            .ok_or_else(|| BpError::config_missing(name))?;
+            .ok_or_else(|| BuildError::config_missing(name))?;
         if value.is_empty() {
-            return Err(BpError::config_empty(name));
+            return Err(BuildError::config_empty(name));
         }
         Ok(value.to_string_lossy().into_owned())
     }
 
     /// Reads an optional UTF-8 variable. Missing and empty values yield `None`.
-    pub fn optional(&self, name: &str) -> BpResult<Option<String>> {
+    pub fn optional(&self, name: &str) -> BuildResult<Option<String>> {
         let Some(value) = self.vars.get(OsStr::new(name)) else {
             return Ok(None);
         };
         let value = value
             .clone()
             .into_string()
-            .map_err(|_| BpError::config_not_unicode(name))?;
+            .map_err(|_| BuildError::config_not_unicode(name))?;
         Ok((!value.is_empty()).then_some(value))
     }
 
     /// Reads and parses a required variable.
-    pub fn required_parsed<T>(&self, name: &str) -> BpResult<T>
+    pub fn required_parsed<T>(&self, name: &str) -> BuildResult<T>
     where
         T: std::str::FromStr,
         T::Err: std::error::Error + Send + Sync + 'static,
     {
         self.required(name)?
             .parse::<T>()
-            .map_err(|error| BpError::config_invalid_source(name, error))
+            .map_err(|error| BuildError::config_invalid_source(name, error))
     }
 
     /// Reads and parses an optional variable.
-    pub fn optional_parsed<T>(&self, name: &str) -> BpResult<Option<T>>
+    pub fn optional_parsed<T>(&self, name: &str) -> BuildResult<Option<T>>
     where
         T: std::str::FromStr,
         T::Err: std::error::Error + Send + Sync + 'static,
@@ -105,59 +105,59 @@ impl EnvVars {
             Some(value) => value
                 .parse::<T>()
                 .map(Some)
-                .map_err(|error| BpError::config_invalid_source(name, error)),
+                .map_err(|error| BuildError::config_invalid_source(name, error)),
             None => Ok(None),
         }
     }
 
     /// Reads a required duration expressed as whole seconds.
-    pub fn required_duration_secs(&self, name: &str) -> BpResult<Duration> {
+    pub fn required_duration_secs(&self, name: &str) -> BuildResult<Duration> {
         Ok(Duration::from_secs(self.required_parsed(name)?))
     }
 
     /// Reads a required duration expressed as a positive number of seconds.
-    pub fn required_positive_duration_secs(&self, name: &str) -> BpResult<Duration> {
+    pub fn required_positive_duration_secs(&self, name: &str) -> BuildResult<Duration> {
         let secs = self.required_parsed(name)?;
         Self::positive_duration_secs(name, secs)
     }
 
     /// Reads a required, non-zero `usize`.
-    pub fn required_nonzero_usize(&self, name: &str) -> BpResult<NonZeroUsize> {
+    pub fn required_nonzero_usize(&self, name: &str) -> BuildResult<NonZeroUsize> {
         let value: usize = self.required_parsed(name)?;
         NonZeroUsize::new(value)
-            .ok_or_else(|| BpError::config_invalid(name, "must be greater than zero"))
+            .ok_or_else(|| BuildError::config_invalid(name, "must be greater than zero"))
     }
 
     /// Reads a required, non-zero `u64`.
-    pub fn required_nonzero_u64(&self, name: &str) -> BpResult<NonZeroU64> {
+    pub fn required_nonzero_u64(&self, name: &str) -> BuildResult<NonZeroU64> {
         let value: u64 = self.required_parsed(name)?;
         NonZeroU64::new(value)
-            .ok_or_else(|| BpError::config_invalid(name, "must be greater than zero"))
+            .ok_or_else(|| BuildError::config_invalid(name, "must be greater than zero"))
     }
 
     /// Reads a required path.
-    pub fn required_path(&self, name: &str) -> BpResult<PathBuf> {
+    pub fn required_path(&self, name: &str) -> BuildResult<PathBuf> {
         Ok(PathBuf::from(self.required(name)?))
     }
 
     /// Reads a required comma-separated list.
-    pub fn required_csv(&self, name: &str) -> BpResult<Vec<String>> {
+    pub fn required_csv(&self, name: &str) -> BuildResult<Vec<String>> {
         Ok(Self::split_csv(&self.required(name)?))
     }
 
     /// Reads a required RFC 3339 timestamp or `YYYY-MM-DD` date.
-    pub fn required_timestamp(&self, name: &str) -> BpResult<DateTime<Utc>> {
+    pub fn required_timestamp(&self, name: &str) -> BuildResult<DateTime<Utc>> {
         let value = self.required(name)?;
         Self::parse_timestamp(name, value.trim())
     }
 
     /// Reads a required URL and validates its scheme.
-    pub fn required_url(&self, name: &str, allowed_schemes: &[UrlScheme]) -> BpResult<String> {
+    pub fn required_url(&self, name: &str, allowed_schemes: &[UrlScheme]) -> BuildResult<String> {
         let value = self.required(name)?;
         let url =
-            Url::parse(&value).map_err(|error| BpError::config_invalid_source(name, error))?;
+            Url::parse(&value).map_err(|error| BuildError::config_invalid_source(name, error))?;
         if !UrlScheme::from_url(&url).is_some_and(|scheme| allowed_schemes.contains(&scheme)) {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 name,
                 format!(
                     "must use one of the schemes {}, got \"{}\"",
@@ -174,19 +174,20 @@ impl EnvVars {
     }
 
     /// Reads and validates a required tracing filter.
-    pub fn required_log_filter(&self, name: &str) -> BpResult<String> {
+    pub fn required_log_filter(&self, name: &str) -> BuildResult<String> {
         let value = self.required(name)?;
-        EnvFilter::try_new(&value).map_err(|error| BpError::config_invalid_source(name, error))?;
+        EnvFilter::try_new(&value)
+            .map_err(|error| BuildError::config_invalid_source(name, error))?;
         Ok(value)
     }
 
-    fn positive_duration_secs(name: &str, secs: u64) -> BpResult<Duration> {
+    fn positive_duration_secs(name: &str, secs: u64) -> BuildResult<Duration> {
         let secs = NonZeroU64::new(secs)
-            .ok_or_else(|| BpError::config_invalid(name, "must be greater than zero"))?;
+            .ok_or_else(|| BuildError::config_invalid(name, "must be greater than zero"))?;
         Ok(Duration::from_secs(secs.get()))
     }
 
-    fn parse_timestamp(name: &str, value: &str) -> BpResult<DateTime<Utc>> {
+    fn parse_timestamp(name: &str, value: &str) -> BuildResult<DateTime<Utc>> {
         if let Ok(date_time) = DateTime::parse_from_rfc3339(value) {
             return Ok(date_time.with_timezone(&Utc));
         }
@@ -199,8 +200,8 @@ impl EnvVars {
         Err(Self::invalid_timestamp(name, value))
     }
 
-    fn invalid_timestamp(name: &str, value: &str) -> BpError {
-        BpError::config_invalid(
+    fn invalid_timestamp(name: &str, value: &str) -> BuildError {
+        BuildError::config_invalid(
             name,
             format!("must be an RFC 3339 timestamp or YYYY-MM-DD date, got {value}"),
         )

@@ -1,5 +1,5 @@
 use crate::{s3::SignedPost, source::SourceLimits};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::{
     io::Write,
     path::PathBuf,
@@ -43,9 +43,9 @@ impl Artifacts {
         source_dir: PathBuf,
         build_cache_dir: PathBuf,
         source_limits: SourceLimits,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let build_dir = tempfile::tempdir().map_err(|source| {
-            BpError::io(
+            BuildError::io(
                 "create build directory",
                 "temporary build directory",
                 source,
@@ -62,7 +62,7 @@ impl Artifacts {
         })
     }
 
-    pub async fn compile(&self) -> BpResult<PathBuf> {
+    pub async fn compile(&self) -> BuildResult<PathBuf> {
         self.prepare_workspace()?;
         let sources = self.unpack_source().await?;
         Self::validate_user_generated(&sources)?;

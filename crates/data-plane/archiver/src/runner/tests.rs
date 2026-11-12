@@ -4,7 +4,7 @@ use crate::sink::ArchiveSink;
 use crate::source::ArchiveSource;
 use async_trait::async_trait;
 use platform_archive::ArchiveRecord;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::event::MarketEvent;
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::{Arc, Mutex};
@@ -19,9 +19,9 @@ struct FakeSource {
 
 #[async_trait]
 impl ArchiveSource for FakeSource {
-    async fn next_record(&mut self) -> BpResult<Option<ArchiveRecord>> {
+    async fn next_record(&mut self) -> BuildResult<Option<ArchiveRecord>> {
         if self.fail {
-            return Err(platform_errors::BpError::external("source failed"));
+            return Err(platform_errors::BuildError::external("source failed"));
         }
         if self.records.is_empty() {
             Ok(None)
@@ -30,7 +30,7 @@ impl ArchiveSource for FakeSource {
         }
     }
 
-    async fn ack(&mut self, _record: &ArchiveRecord) -> BpResult<()> {
+    async fn ack(&mut self, _record: &ArchiveRecord) -> BuildResult<()> {
         *self.acked.lock().expect("acked lock") += 1;
         Ok(())
     }
@@ -44,9 +44,9 @@ struct FakeSink {
 
 #[async_trait]
 impl ArchiveSink for FakeSink {
-    async fn write(&self, records: &mut [ArchiveRecord]) -> BpResult<()> {
+    async fn write(&self, records: &mut [ArchiveRecord]) -> BuildResult<()> {
         if self.fail {
-            return Err(platform_errors::BpError::bad_value(
+            return Err(platform_errors::BuildError::bad_value(
                 "sink",
                 "test",
                 "write failed",

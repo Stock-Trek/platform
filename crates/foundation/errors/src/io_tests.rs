@@ -1,8 +1,9 @@
-use super::*;
-use crate::Retryability;
-use std::io::{Error, ErrorKind};
-use std::path::PathBuf;
-use std::process::ExitStatus;
+use crate::{IoError, Retryability};
+use std::{
+    io::{Error, ErrorKind},
+    path::PathBuf,
+    process::ExitStatus,
+};
 
 fn command_failed(status: ExitStatus) -> IoError {
     IoError::CommandFailed {

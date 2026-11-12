@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::time::SystemTime;
 use time::{Date, Month, OffsetDateTime, Time};
 
@@ -22,7 +22,7 @@ impl AmzDate {
         (date, amz_date)
     }
 
-    pub(crate) fn parse(value: &str) -> BpResult<SystemTime> {
+    pub(crate) fn parse(value: &str) -> BuildResult<SystemTime> {
         let bytes = value.as_bytes();
         if bytes.len() != 16 || bytes[8] != b'T' || bytes[15] != b'Z' {
             return Err(Self::invalid("x-amz-date has an invalid format"));
@@ -41,14 +41,14 @@ impl AmzDate {
         Ok(date.with_time(time).assume_utc().into())
     }
 
-    fn number(bytes: &[u8]) -> BpResult<u32> {
+    fn number(bytes: &[u8]) -> BuildResult<u32> {
         std::str::from_utf8(bytes)
             .ok()
             .and_then(|value| value.parse().ok())
             .ok_or_else(|| Self::invalid("x-amz-date has an invalid number"))
     }
 
-    fn invalid(message: impl Into<String>) -> BpError {
-        BpError::auth_invalid_jwt(message)
+    fn invalid(message: impl Into<String>) -> BuildError {
+        BuildError::auth_invalid_jwt(message)
     }
 }

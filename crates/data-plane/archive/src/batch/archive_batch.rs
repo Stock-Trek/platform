@@ -1,5 +1,5 @@
 use crate::record::{ArchiveKind, ArchiveRecord};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::io::ErrorKind;
 
 #[derive(Debug, Clone)]
@@ -9,14 +9,14 @@ pub struct ArchiveBatch {
 }
 
 impl ArchiveBatch {
-    pub fn new(kind: ArchiveKind, records: Vec<ArchiveRecord>) -> BpResult<Self> {
+    pub fn new(kind: ArchiveKind, records: Vec<ArchiveRecord>) -> BuildResult<Self> {
         if let Some(record) = records.iter().find(|record| record.kind() != kind) {
             return Err(Self::kind_mismatch(kind, record));
         }
         Ok(Self { kind, records })
     }
 
-    pub fn push(&mut self, record: ArchiveRecord) -> BpResult<()> {
+    pub fn push(&mut self, record: ArchiveRecord) -> BuildResult<()> {
         if record.kind() != self.kind {
             return Err(Self::kind_mismatch(self.kind, &record));
         }
@@ -48,8 +48,8 @@ impl ArchiveBatch {
         self.records.is_empty()
     }
 
-    pub fn kind_mismatch(expected: ArchiveKind, record: &ArchiveRecord) -> BpError {
-        BpError::io(
+    pub fn kind_mismatch(expected: ArchiveKind, record: &ArchiveRecord) -> BuildError {
+        BuildError::io(
             "encode archived parquet",
             expected.label(),
             std::io::Error::new(

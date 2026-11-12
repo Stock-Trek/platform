@@ -5,7 +5,7 @@ use crate::{
     gap_marker_source::GapMarkerSource,
     retry::GapRetryStore,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_nats::EventPublisher;
 use std::sync::Arc;
 use tracing::info;
@@ -32,7 +32,7 @@ where
         }
     }
 
-    pub async fn run<R>(self, retries: R) -> BpResult<()>
+    pub async fn run<R>(self, retries: R) -> BuildResult<()>
     where
         R: GapRetryStore + 'static,
     {

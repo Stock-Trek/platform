@@ -1,5 +1,5 @@
 use crate::{compactor::BatchCompactor, config::CompactorConfig, source::ArchiveBatchSource};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_runtime::Runtime;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{info, warn};
@@ -23,7 +23,7 @@ where
         }
     }
 
-    pub async fn run(self) -> BpResult<()> {
+    pub async fn run(self) -> BuildResult<()> {
         let Self {
             config,
             source,
@@ -42,7 +42,7 @@ where
         Runtime::run_until_shutdown(Self::run_cycles(&source, &compactor, &mut ticker)).await
     }
 
-    async fn run_cycles(source: &S, compactor: &C, ticker: &mut time::Interval) -> BpResult<()> {
+    async fn run_cycles(source: &S, compactor: &C, ticker: &mut time::Interval) -> BuildResult<()> {
         loop {
             ticker.tick().await;
             if let Err(error) = Self::run_cycle(source, compactor).await {
@@ -51,7 +51,7 @@ where
         }
     }
 
-    pub(crate) async fn run_cycle(source: &S, compactor: &C) -> BpResult<()> {
+    pub(crate) async fn run_cycle(source: &S, compactor: &C) -> BuildResult<()> {
         let batches = source.pending_batches().await?;
         info!(batches = batches.len(), "scanning archive for compaction");
         for batch in batches {

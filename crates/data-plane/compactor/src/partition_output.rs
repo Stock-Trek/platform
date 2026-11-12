@@ -3,7 +3,7 @@ use crate::{
     spill::{PartitionItem, PartitionRecords},
 };
 use platform_archive::{ArchiveBatch, ArchiveKind, ArchiveParquetWriter};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::{
     fs::File,
     path::{Path, PathBuf},
@@ -21,12 +21,12 @@ pub(crate) struct PartitionOutput {
 }
 
 impl PartitionOutput {
-    fn finish(mut self, writer: ArchiveParquetWriter<File>) -> BpResult<Self> {
+    fn finish(mut self, writer: ArchiveParquetWriter<File>) -> BuildResult<Self> {
         writer.close()?;
         self.content_id = self.content.value();
         self.length = std::fs::metadata(&self.path)
             .map_err(|error| {
-                BpError::io(
+                BuildError::io(
                     "read compacted parquet file size",
                     self.path.display().to_string(),
                     error,
@@ -40,7 +40,7 @@ impl PartitionOutput {
         kind: ArchiveKind,
         mut records: PartitionRecords,
         directory: &Path,
-    ) -> BpResult<Vec<Self>> {
+    ) -> BuildResult<Vec<Self>> {
         let mut outputs = Vec::new();
         let mut current: Option<(Self, ArchiveParquetWriter<File>)> = None;
         let mut buffer = ArchiveBatch::new(kind, Vec::with_capacity(OUTPUT_BATCH_SIZE))?;
@@ -63,7 +63,7 @@ impl PartitionOutput {
 
                 let path = directory.join(format!("compacted-{}.parquet", outputs.len()));
                 let file = File::create(&path).map_err(|error| {
-                    BpError::io(
+                    BuildError::io(
                         "create compacted partition file",
                         path.display().to_string(),
                         error,

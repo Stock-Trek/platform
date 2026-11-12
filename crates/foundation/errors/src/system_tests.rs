@@ -1,5 +1,4 @@
-use super::*;
-use crate::Retryability;
+use crate::{Retryability, SystemError};
 
 #[tokio::test]
 async fn panicked_task_is_permanent() {

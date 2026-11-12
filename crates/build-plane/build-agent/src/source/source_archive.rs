@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult, IoError, StorageError};
+use platform_errors::{BuildError, BuildResult, IoError, StorageError};
 use std::{
     io::{Cursor, Read, Write},
     num::NonZeroU64,
@@ -57,24 +57,23 @@ pub struct Source {
 }
 
 impl Source {
-    pub async fn download(url: &str, limits: SourceLimits) -> BpResult<Self> {
+    pub async fn download(url: &str, limits: SourceLimits) -> BuildResult<Self> {
         let client = reqwest::Client::builder()
             .timeout(limits.download_timeout)
             .build()
             .map_err(|source| {
-                BpError::http_request("create user source download client", url, source)
+                BuildError::http_request("create user source download client", url, source)
             })?;
-        let response =
-            client.get(url).send().await.map_err(|source| {
-                BpError::http_request("download user source archive", url, source)
-            })?;
+        let response = client.get(url).send().await.map_err(|source| {
+            BuildError::http_request("download user source archive", url, source)
+        })?;
         let status = response.status();
         if !status.is_success() {
             let body = Self::read_body(response, url, limits.max_archive_bytes)
                 .await
                 .map(|bytes| String::from_utf8_lossy(&bytes).into_owned())
                 .unwrap_or_default();
-            return Err(BpError::http_rejected(
+            return Err(BuildError::http_rejected(
                 "download user source archive",
                 url,
                 status.as_u16(),
@@ -90,14 +89,14 @@ impl Source {
         mut response: reqwest::Response,
         url: &str,
         max_bytes: NonZeroU64,
-    ) -> BpResult<Vec<u8>> {
+    ) -> BuildResult<Vec<u8>> {
         if let Some(length) = response.content_length() {
             Self::ensure_archive_within_limit(length, max_bytes)?;
         }
 
         let mut bytes = Vec::new();
         while let Some(chunk) = response.chunk().await.map_err(|source| {
-            BpError::http_request("read user source archive response", url, source)
+            BuildError::http_request("read user source archive response", url, source)
         })? {
             let size = Self::size_after(bytes.len(), chunk.len());
             Self::ensure_archive_within_limit(size, max_bytes)?;
@@ -106,9 +105,9 @@ impl Source {
         Ok(bytes)
     }
 
-    fn ensure_archive_within_limit(size: u64, max_bytes: NonZeroU64) -> BpResult<()> {
+    fn ensure_archive_within_limit(size: u64, max_bytes: NonZeroU64) -> BuildResult<()> {
         if size > max_bytes.get() {
-            return Err(BpError::Storage(StorageError::SourceArchiveTooLarge {
+            return Err(BuildError::Storage(StorageError::SourceArchiveTooLarge {
                 size,
                 max_bytes: max_bytes.get(),
             }));
@@ -126,9 +125,9 @@ impl Source {
         &self,
         destination: &Path,
         max_extracted_bytes: NonZeroU64,
-    ) -> BpResult<Vec<PathBuf>> {
+    ) -> BuildResult<Vec<PathBuf>> {
         let mut archive = ZipArchive::new(Cursor::new(&self.bytes))
-            .map_err(|error| BpError::Io(IoError::Zip(error)))?;
+            .map_err(|error| BuildError::Io(IoError::Zip(error)))?;
 
         // Validate every path and the declared uncompressed size before writing
         // anything, so a malformed archive cannot leave a partially extracted
@@ -139,10 +138,10 @@ impl Source {
         for index in 0..entry_count {
             let entry = archive
                 .by_index(index)
-                .map_err(|error| BpError::Io(IoError::Zip(error)))?;
+                .map_err(|error| BuildError::Io(IoError::Zip(error)))?;
             let name = entry
                 .name()
-                .map_err(|error| BpError::Io(IoError::Zip(error)))?;
+                .map_err(|error| BuildError::Io(IoError::Zip(error)))?;
             entries.push(Self::entry_path(&name)?);
             if !entry.is_dir() {
                 declared_bytes =
@@ -155,11 +154,11 @@ impl Source {
         for (index, relative) in entries.into_iter().enumerate() {
             let mut entry = archive
                 .by_index(index)
-                .map_err(|error| BpError::Io(IoError::Zip(error)))?;
+                .map_err(|error| BuildError::Io(IoError::Zip(error)))?;
             let path = destination.join(relative);
             if entry.is_dir() {
                 std::fs::create_dir_all(&path).map_err(|source| {
-                    BpError::io(
+                    BuildError::io(
                         "create source directory",
                         path.display().to_string(),
                         source,
@@ -169,7 +168,7 @@ impl Source {
             }
             if let Some(parent) = path.parent() {
                 std::fs::create_dir_all(parent).map_err(|source| {
-                    BpError::io(
+                    BuildError::io(
                         "create source directory",
                         parent.display().to_string(),
                         source,
@@ -177,20 +176,20 @@ impl Source {
                 })?;
             }
             let mut output = std::fs::File::create(&path).map_err(|source| {
-                BpError::io("write source file", path.display().to_string(), source)
+                BuildError::io("write source file", path.display().to_string(), source)
             })?;
             let allowance = max_extracted_bytes.get().saturating_sub(extracted_bytes);
             let mut limited = (&mut entry).take(allowance.saturating_add(1));
             let written = std::io::copy(&mut limited, &mut output).map_err(|source| {
-                BpError::io("write source file", path.display().to_string(), source)
+                BuildError::io("write source file", path.display().to_string(), source)
             })?;
             output.flush().map_err(|source| {
-                BpError::io("write source file", path.display().to_string(), source)
+                BuildError::io("write source file", path.display().to_string(), source)
             })?;
             if written > allowance {
                 drop(output);
                 let _ = std::fs::remove_file(&path);
-                return Err(BpError::Storage(StorageError::ExtractedSourceTooLarge {
+                return Err(BuildError::Storage(StorageError::ExtractedSourceTooLarge {
                     size: extracted_bytes.saturating_add(written),
                     max_bytes: max_extracted_bytes.get(),
                 }));
@@ -208,10 +207,14 @@ impl Source {
         Ok(files)
     }
 
-    fn add_extracted_bytes(current: u64, additional: u64, max_bytes: NonZeroU64) -> BpResult<u64> {
+    fn add_extracted_bytes(
+        current: u64,
+        additional: u64,
+        max_bytes: NonZeroU64,
+    ) -> BuildResult<u64> {
         let size = current.saturating_add(additional);
         if size > max_bytes.get() {
-            return Err(BpError::Storage(StorageError::ExtractedSourceTooLarge {
+            return Err(BuildError::Storage(StorageError::ExtractedSourceTooLarge {
                 size,
                 max_bytes: max_bytes.get(),
             }));
@@ -219,9 +222,9 @@ impl Source {
         Ok(size)
     }
 
-    fn entry_path(name: &str) -> BpResult<PathBuf> {
+    fn entry_path(name: &str) -> BuildResult<PathBuf> {
         if name.contains('\\') {
-            return Err(BpError::invalid_path(name));
+            return Err(BuildError::invalid_path(name));
         }
         let path = Path::new(name);
         if path.as_os_str().is_empty()
@@ -229,10 +232,10 @@ impl Source {
                 .components()
                 .any(|component| !matches!(component, Component::Normal(_)))
         {
-            return Err(BpError::invalid_path(name));
+            return Err(BuildError::invalid_path(name));
         }
         if path != Path::new(USER_GENERATED_DIR) && !path.starts_with(USER_GENERATED_PREFIX) {
-            return Err(BpError::invalid_path(name));
+            return Err(BuildError::invalid_path(name));
         }
         Ok(path.to_path_buf())
     }

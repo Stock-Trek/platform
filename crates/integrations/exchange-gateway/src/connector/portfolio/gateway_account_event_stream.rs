@@ -5,7 +5,7 @@ use crate::{
     websocket_listener::WebsocketEventStream,
 };
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_exchange_types::portfolio::{AccountEvent, PortfolioExchange};
 use platform_type_bridge::TickerMapping;
 
@@ -34,7 +34,7 @@ impl<Exchange> AccountEventStream for GatewayAccountEventStream<Exchange>
 where
     Exchange: PortfolioExchange + Send + Sync + 'static,
 {
-    async fn next(&mut self) -> BpResult<Option<AccountEvent>> {
+    async fn next(&mut self) -> BuildResult<Option<AccountEvent>> {
         loop {
             let Some(value) = self.events.next().await else {
                 return Ok(None);

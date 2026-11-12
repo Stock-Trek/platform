@@ -1,7 +1,7 @@
 use super::support_tests::TestFixture;
 use crate::{ApiToken, MemoryTokenStore, TokenStore};
 use chrono::Utc;
-use platform_errors::{AuthError, BpError};
+use platform_errors::{AuthError, BuildError};
 
 struct StoreValidationFixture;
 
@@ -18,10 +18,10 @@ impl StoreValidationFixture {
         token
     }
 
-    fn assert_invalid_metadata<T>(result: Result<T, BpError>) {
+    fn assert_invalid_metadata<T>(result: Result<T, BuildError>) {
         assert!(matches!(
             result,
-            Err(BpError::Auth(AuthError::InvalidField {
+            Err(BuildError::Auth(AuthError::InvalidField {
                 field: "revocation_reason",
                 ..
             }))
@@ -46,7 +46,7 @@ async fn memory_store_rejects_self_referencing_lineage() {
 
     assert!(matches!(
         result,
-        Err(BpError::Auth(AuthError::InvalidField {
+        Err(BuildError::Auth(AuthError::InvalidField {
             field: "rotated_from",
             ..
         }))

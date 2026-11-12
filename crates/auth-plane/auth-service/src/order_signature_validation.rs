@@ -3,14 +3,14 @@ use crate::{
     SignedOrderRequest, TokenAuditAction, TokenAuditEvent, order_verification::CLOCK_SKEW_SECONDS,
 };
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::{AuthError, BpError, BpResult};
+use platform_errors::{AuthError, BuildError, BuildResult};
 
 impl AuthService {
     pub(crate) async fn signature_token(
         &self,
         token_id: &str,
         now: DateTime<Utc>,
-    ) -> BpResult<Option<ApiToken>> {
+    ) -> BuildResult<Option<ApiToken>> {
         if let Err(error) = ApiToken::validate_id(token_id) {
             self.record_signature_rejected(token_id, None, now, &error.to_string())
                 .await;
@@ -18,7 +18,7 @@ impl AuthService {
         }
         match self.token(token_id).await {
             Ok(token) => Ok(Some(token)),
-            Err(error) if matches!(error, BpError::Auth(AuthError::UnknownToken { .. })) => {
+            Err(error) if matches!(error, BuildError::Auth(AuthError::UnknownToken { .. })) => {
                 self.record_signature_rejected(token_id, None, now, &error.to_string())
                     .await;
                 Ok(None)
@@ -69,7 +69,7 @@ impl AuthService {
         token: Option<&ApiToken>,
         now: DateTime<Utc>,
         reason: InvalidOrderRequest,
-    ) -> BpResult<OrderRequestVerification> {
+    ) -> BuildResult<OrderRequestVerification> {
         self.record_signature_rejected(token_id, token, now, reason.detail())
             .await;
         Ok(OrderRequestVerification::Invalid(reason))
@@ -80,8 +80,8 @@ impl AuthService {
         token_id: &str,
         token: Option<&ApiToken>,
         now: DateTime<Utc>,
-        error: &BpError,
-    ) -> BpResult<OrderRequestVerification> {
+        error: &BuildError,
+    ) -> BuildResult<OrderRequestVerification> {
         self.record_signature_rejected(token_id, token, now, &error.to_string())
             .await;
         tracing::warn!(%error, "order request verification will be retried");

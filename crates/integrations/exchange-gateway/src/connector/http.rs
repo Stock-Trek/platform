@@ -5,7 +5,7 @@ use crate::{
     retry_after::RetryAfter,
     submission::{Submission, SubmissionOutcome},
 };
-use platform_errors::{BpError, BpResult, ConnectorError, RateLimitError, SendFailure};
+use platform_errors::{BuildError, BuildResult, ConnectorError, RateLimitError, SendFailure};
 use platform_exchange_types::{
     exchange::ETExchange, http::HttpResponse, rate_limited::RateLimitRestriction,
     request::ETHttpRequest, response::ETHttpResponse, server_time::ServerTimeResponse,
@@ -19,7 +19,7 @@ where
     Exchange: ETExchange,
     Client: HttpClient,
 {
-    pub async fn sync_clock_http(&self) -> BpResult<()> {
+    pub async fn sync_clock_http(&self) -> BuildResult<()> {
         debug!(exchange = self.exchange.name(), "syncing clock over HTTP");
         let server_time_request = self.exchange.server_time_request_http();
         let costs = self.validate_rate_limits(&server_time_request)?;
@@ -27,7 +27,7 @@ where
             Ok(http_request) => http_request,
             Err(error) => {
                 self.refund(costs)?;
-                return Err(BpError::external(error));
+                return Err(BuildError::external(error));
             }
         };
         let start = Instant::now();
@@ -40,7 +40,7 @@ where
             self.handle_http_response::<Exchange::ServerTimeResponseHttp>(http_response)?;
         let server_time = response
             .server_time()
-            .map_err(|_| BpError::Connector(ConnectorError::MissingServerTime))?;
+            .map_err(|_| BuildError::Connector(ConnectorError::MissingServerTime))?;
         self.clock.sync(server_time, round_trip_time)?;
         debug!(
             exchange = self.exchange.name(),
@@ -52,7 +52,7 @@ where
     pub fn submit_http<'connector, Request>(
         &'connector self,
         request: Request,
-    ) -> BpResult<Submission<'connector, Request, Request::Response, Request::VerificationRequest>>
+    ) -> BuildResult<Submission<'connector, Request, Request::Response, Request::VerificationRequest>>
     where
         Request: ETHttpRequest<Exchange = Exchange> + Send + 'connector,
         Exchange: Sync,
@@ -61,7 +61,7 @@ where
         let future = async move {
             let costs = self
                 .validate_rate_limits(&request)
-                .map_err(BpError::send_not_sent)?;
+                .map_err(BuildError::send_not_sent)?;
             self.send_http(request, costs).await
         };
         Ok(Submission::new(future))
@@ -70,7 +70,7 @@ where
         &self,
         mut request: Request,
         mut costs: Vec<(RateLimitRestriction, UsageCount)>,
-    ) -> BpResult<SubmissionOutcome<Request, Request::Response, Request::VerificationRequest>>
+    ) -> BuildResult<SubmissionOutcome<Request, Request::Response, Request::VerificationRequest>>
     where
         Request: ETHttpRequest<Exchange = Exchange> + Send,
         Exchange: Sync,
@@ -90,7 +90,7 @@ where
                 Err(error) => {
                     return self.submission_error_http(
                         request,
-                        BpError::send_not_sent(error),
+                        BuildError::send_not_sent(error),
                         costs,
                     );
                 }
@@ -101,7 +101,7 @@ where
                 Err(error) => {
                     return self.submission_error_http(
                         request,
-                        BpError::send_not_sent_external(error),
+                        BuildError::send_not_sent_external(error),
                         costs,
                     );
                 }
@@ -136,7 +136,7 @@ where
             }
         }
     }
-    fn handle_http_response<Response>(&self, http_response: HttpResponse) -> BpResult<Response>
+    fn handle_http_response<Response>(&self, http_response: HttpResponse) -> BuildResult<Response>
     where
         Response: ETHttpResponse,
     {
@@ -145,18 +145,18 @@ where
         if status == 429 {
             if let Ok(response) = Response::try_from_http(http_response) {
                 self.set_rate_limits(&response)
-                    .map_err(BpError::send_failed)?;
+                    .map_err(BuildError::send_failed)?;
             }
             if let Some(retry_after) = retry_after {
                 self.rate_limiters
                     .set_retry_after(retry_after)
-                    .map_err(BpError::send_failed)?;
+                    .map_err(BuildError::send_failed)?;
             }
             warn!(
                 exchange = self.exchange.name(),
                 status, "exchange rate limited the request"
             );
-            return Err(BpError::send_failed(BpError::RateLimit(
+            return Err(BuildError::send_failed(BuildError::RateLimit(
                 RateLimitError::RateLimited,
             )));
         }
@@ -168,40 +168,40 @@ where
             if let Some(retry_after) = retry_after {
                 self.rate_limiters
                     .set_retry_after(retry_after)
-                    .map_err(BpError::send_unknown)?;
+                    .map_err(BuildError::send_unknown)?;
                 // The exchange responded but is throttling us. The request reached
                 // the exchange, so it cannot be reported as not sent.
-                return Err(BpError::send_unknown(BpError::RateLimit(
+                return Err(BuildError::send_unknown(BuildError::RateLimit(
                     RateLimitError::RateLimited,
                 )));
             }
-            let error = BpError::Connector(ConnectorError::GatewayHttpStatus { status });
+            let error = BuildError::Connector(ConnectorError::GatewayHttpStatus { status });
             return Err(if status >= 500 {
-                BpError::send_unknown(error)
+                BuildError::send_unknown(error)
             } else {
-                BpError::send_failed(error)
+                BuildError::send_failed(error)
             });
         }
         if let Some(retry_after) = retry_after {
             self.rate_limiters
                 .set_retry_after(retry_after)
-                .map_err(BpError::send_unknown)?;
+                .map_err(BuildError::send_unknown)?;
         }
         let response = Response::try_from_http(http_response).map_err(|source| {
-            BpError::send_unknown(BpError::Connector(ConnectorError::HttpParseError {
+            BuildError::send_unknown(BuildError::Connector(ConnectorError::HttpParseError {
                 source: Box::new(source),
             }))
         })?;
         self.set_rate_limits(&response)
-            .map_err(BpError::send_unknown)?;
+            .map_err(BuildError::send_unknown)?;
         Ok(response)
     }
     fn submission_error_http<Request>(
         &self,
         request: Request,
-        error: BpError,
+        error: BuildError,
         costs: Vec<(RateLimitRestriction, UsageCount)>,
-    ) -> BpResult<SubmissionOutcome<Request, Request::Response, Request::VerificationRequest>>
+    ) -> BuildResult<SubmissionOutcome<Request, Request::Response, Request::VerificationRequest>>
     where
         Request: ETHttpRequest,
     {

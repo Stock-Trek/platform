@@ -2,7 +2,7 @@ use crate::{
     request::{ETHttpRequest, ETWebsocketRequest},
     response::{ETHttpResponse, ETWebsocketResponse},
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_types::new_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 
@@ -19,7 +19,7 @@ where
 }
 
 pub trait KlinesResponse {
-    fn klines(&self) -> BpResult<Vec<Kline>>;
+    fn klines(&self) -> BuildResult<Vec<Kline>>;
 }
 
 #[derive(Debug, Clone)]

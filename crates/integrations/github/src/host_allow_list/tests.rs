@@ -1,5 +1,5 @@
 use super::*;
-use platform_errors::{BpError, GitHubError};
+use platform_errors::{BuildError, GitHubError};
 
 fn allowlist() -> HostAllowlist {
     HostAllowlist::from_hosts([DEFAULT_HOST, "ghe.example.com"]).unwrap()
@@ -113,7 +113,7 @@ fn rejects_non_https_schemes() {
 fn rejects_non_allowlisted_host() {
     assert!(matches!(
         allowlist().validate_url("https://evil.com/"),
-        Err(BpError::GitHub(GitHubError::HostNotAllowed { .. }))
+        Err(BuildError::GitHub(GitHubError::HostNotAllowed { .. }))
     ));
 }
 

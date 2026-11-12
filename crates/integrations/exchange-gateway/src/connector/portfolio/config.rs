@@ -3,7 +3,7 @@ use super::{
     PortfolioCredentialSource, PortfolioFeed, PortfolioTransport, StaticPortfolioCredentials,
 };
 use platform_config::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     binance::{exchange::BinanceExchange, portfolio::BinancePortfolioConfig},
@@ -26,7 +26,7 @@ pub struct PortfolioConnectorConfig {
 }
 
 impl PortfolioConnectorConfig {
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         let mut transports: Vec<Arc<dyn PortfolioTransport>> = Vec::new();
         let mut credentials = BTreeMap::new();
         let selected = Self::selected_cexes(vars)?;
@@ -77,23 +77,23 @@ impl PortfolioConnectorConfig {
             .collect()
     }
 
-    fn selected_cexes(vars: &EnvVars) -> BpResult<Option<BTreeSet<CexId>>> {
+    fn selected_cexes(vars: &EnvVars) -> BuildResult<Option<BTreeSet<CexId>>> {
         let Some(value) = vars.optional(CONNECTOR_CEXES)? else {
             return Ok(None);
         };
         let mut selected = BTreeSet::new();
         for exchange in value.split(',').map(str::trim) {
             if exchange.is_empty() {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     CONNECTOR_CEXES,
                     "contains an empty exchange",
                 ));
             }
             let exchange = exchange.parse::<CexId>().map_err(|_| {
-                BpError::config_invalid(CONNECTOR_CEXES, format!("unknown exchange {exchange}"))
+                BuildError::config_invalid(CONNECTOR_CEXES, format!("unknown exchange {exchange}"))
             })?;
             if !selected.insert(exchange) {
-                return Err(BpError::config_invalid(
+                return Err(BuildError::config_invalid(
                     CONNECTOR_CEXES,
                     format!("duplicate exchange {exchange}"),
                 ));

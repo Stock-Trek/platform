@@ -1,5 +1,5 @@
 use super::spill_codec::{SpillCodec, SpillReader};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::{cmp::Ordering, collections::BinaryHeap, vec::IntoIter};
 
 pub(crate) enum SpillRecords<C: SpillCodec> {
@@ -8,7 +8,7 @@ pub(crate) enum SpillRecords<C: SpillCodec> {
 }
 
 impl<C: SpillCodec> SpillRecords<C> {
-    pub(crate) fn next_record(&mut self) -> BpResult<Option<C::Record>> {
+    pub(crate) fn next_record(&mut self) -> BuildResult<Option<C::Record>> {
         match self {
             Self::Memory(records) => Ok(records.next()),
             Self::Runs(merge) => merge.next_record(),
@@ -53,7 +53,7 @@ pub(crate) struct SpillMerge<C: SpillCodec> {
 }
 
 impl<C: SpillCodec> SpillMerge<C> {
-    pub(crate) fn new(mut runs: Vec<C::Reader>, codec: C) -> BpResult<Self> {
+    pub(crate) fn new(mut runs: Vec<C::Reader>, codec: C) -> BuildResult<Self> {
         let mut heap = BinaryHeap::with_capacity(runs.len());
         let prefer_latest = codec.prefer_latest_run();
         let precedence = |run: usize| {
@@ -72,7 +72,7 @@ impl<C: SpillCodec> SpillMerge<C> {
         Ok(Self { runs, heap, codec })
     }
 
-    pub(crate) fn next_record(&mut self) -> BpResult<Option<C::Record>> {
+    pub(crate) fn next_record(&mut self) -> BuildResult<Option<C::Record>> {
         let Some(best) = self.heap.pop() else {
             return Ok(None);
         };
@@ -92,7 +92,7 @@ impl<C: SpillCodec> SpillMerge<C> {
         Ok(Some(best.record))
     }
 
-    fn advance(&mut self, run: usize) -> BpResult<()> {
+    fn advance(&mut self, run: usize) -> BuildResult<()> {
         if let Some(record) = self.runs[run].read()? {
             let precedence = if self.codec.prefer_latest_run() {
                 run

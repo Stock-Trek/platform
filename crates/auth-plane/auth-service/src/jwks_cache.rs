@@ -5,7 +5,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{Header, decode_header, jwk::JwkSet};
 use parking_lot::Mutex;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::{
     io,
     time::{Duration, Instant},
@@ -39,13 +39,13 @@ pub struct JwksCache {
 }
 
 impl JwksCache {
-    pub fn new(url: impl Into<String>) -> BpResult<Self> {
+    pub fn new(url: impl Into<String>) -> BuildResult<Self> {
         Self::with_ttl(url, DEFAULT_JWKS_TTL)
     }
 
-    pub fn with_ttl(url: impl Into<String>, ttl: Duration) -> BpResult<Self> {
+    pub fn with_ttl(url: impl Into<String>, ttl: Duration) -> BuildResult<Self> {
         if ttl.is_zero() {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "jwks_ttl",
                 "must be greater than zero",
             ));
@@ -73,14 +73,14 @@ impl JwksCache {
         }
     }
 
-    pub async fn verify(&self, jwt: &str, now: DateTime<Utc>) -> BpResult<OrderJwtClaims> {
+    pub async fn verify(&self, jwt: &str, now: DateTime<Utc>) -> BuildResult<OrderJwtClaims> {
         let header =
-            decode_header(jwt).map_err(|error| BpError::auth_invalid_jwt(error.to_string()))?;
+            decode_header(jwt).map_err(|error| BuildError::auth_invalid_jwt(error.to_string()))?;
         match &self.source {
             Source::Static => {
                 let verifier = self.state.lock().verifier.clone();
                 verifier
-                    .ok_or_else(|| BpError::auth_invalid_jwt("JWKS cache is empty"))?
+                    .ok_or_else(|| BuildError::auth_invalid_jwt("JWKS cache is empty"))?
                     .verify_with_header(&header, jwt, now)
             }
             Source::Remote(_) => self.verify_remote(&header, jwt, now).await,
@@ -92,7 +92,7 @@ impl JwksCache {
         header: &Header,
         jwt: &str,
         now: DateTime<Utc>,
-    ) -> BpResult<OrderJwtClaims> {
+    ) -> BuildResult<OrderJwtClaims> {
         loop {
             let mut refreshed = self.refresh.subscribe();
             match self.action(header) {
@@ -100,7 +100,7 @@ impl JwksCache {
                     return verifier.verify_with_header(header, jwt, now);
                 }
                 Action::Unavailable => {
-                    return Err(BpError::external(io::Error::other(
+                    return Err(BuildError::external(io::Error::other(
                         "JWKS refresh is backing off after an earlier failure",
                     )));
                 }

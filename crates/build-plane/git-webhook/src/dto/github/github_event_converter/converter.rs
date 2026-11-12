@@ -3,7 +3,7 @@ use crate::{
     event_response::EventResponse,
 };
 use platform_aws::SsmSecrets;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_github::host_allow_list::HostAllowlist;
 use platform_metrics::event::EventMetrics;
 
@@ -17,10 +17,10 @@ pub struct GitHubEventConverter {
 }
 
 impl GitHubEventConverter {
-    pub fn new(secrets: &SsmSecrets, allowed_hosts: HostAllowlist) -> BpResult<Self> {
+    pub fn new(secrets: &SsmSecrets, allowed_hosts: HostAllowlist) -> BuildResult<Self> {
         let secret = secrets.get(GITHUB_WEBHOOK_SECRET)?;
         if secret.is_empty() {
-            Err(BpError::config_empty(GITHUB_WEBHOOK_SECRET))?;
+            Err(BuildError::config_empty(GITHUB_WEBHOOK_SECRET))?;
         }
         Ok(Self {
             secret,
@@ -30,7 +30,7 @@ impl GitHubEventConverter {
 }
 
 impl EventConverter for GitHubEventConverter {
-    fn event_response(&self, request: &lambda_http::Request) -> BpResult<EventResponse> {
+    fn event_response(&self, request: &lambda_http::Request) -> BuildResult<EventResponse> {
         let Some(event_type_str) = request
             .headers()
             .get("x-github-event")

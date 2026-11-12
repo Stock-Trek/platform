@@ -2,9 +2,8 @@ use crate::{
     JwtSigningKey, TokenCacheConfig, TokenUsageQueueConfig, ValkeyReplayStoreConfig,
     VaultTokenStoreConfig,
 };
-use platform_config::EnvVars;
-use platform_config::RUST_LOG;
-use platform_errors::BpResult;
+use platform_config::{EnvVars, RUST_LOG};
+use platform_errors::BuildResult;
 use platform_sigv4::SigV4Config;
 use platform_types::url_scheme::UrlScheme;
 use secrecy::SecretString;
@@ -47,11 +46,11 @@ pub struct JwtServerConfig {
 }
 
 impl JwtServerConfig {
-    pub fn from_env() -> BpResult<Self> {
+    pub fn from_env() -> BuildResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         let vault = VaultTokenStoreConfig::new(
             vars.required_url(AUTH_SERVICE_VAULT_ADDRESS, &UrlScheme::HTTP)?,
             SecretString::from(vars.required(AUTH_SERVICE_VAULT_TOKEN)?),
@@ -137,7 +136,7 @@ impl JwtServerConfig {
         &self.token_cache
     }
 
-    pub fn jwt_signing_key(&self) -> BpResult<JwtSigningKey> {
+    pub fn jwt_signing_key(&self) -> BuildResult<JwtSigningKey> {
         use secrecy::ExposeSecret;
         JwtSigningKey::from_pkcs8_pem(&self.jwt_key_id, self.jwt_private_key_pem.expose_secret())
     }

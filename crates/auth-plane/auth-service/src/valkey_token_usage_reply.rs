@@ -1,5 +1,5 @@
 use crate::TokenUsageReservation;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use redis::{ErrorKind, RedisError, Value};
 
 const PAYLOAD_FIELD: &str = "payload";
@@ -9,7 +9,7 @@ const TARGET: &str = "token-usage-queue";
 pub(crate) struct ValkeyTokenUsageReply;
 
 impl ValkeyTokenUsageReply {
-    pub(crate) fn parse(reply: Value) -> BpResult<Vec<TokenUsageReservation>> {
+    pub(crate) fn parse(reply: Value) -> BuildResult<Vec<TokenUsageReservation>> {
         let Value::Array(streams) = reply else {
             return Ok(Vec::new());
         };
@@ -38,7 +38,7 @@ impl ValkeyTokenUsageReply {
         Ok(reservations)
     }
 
-    pub(crate) fn error(operation: &'static str, error: RedisError) -> BpError {
+    pub(crate) fn error(operation: &'static str, error: RedisError) -> BuildError {
         let retryable = error.is_io_error()
             || error.is_timeout()
             || error.is_connection_dropped()
@@ -51,18 +51,18 @@ impl ValkeyTokenUsageReply {
                     | ErrorKind::MasterDown
                     | ErrorKind::ReadOnly
             );
-        BpError::auth_store(operation, TARGET, retryable, error)
+        BuildError::auth_store(operation, TARGET, retryable, error)
     }
 
-    pub(crate) fn malformed(detail: &'static str) -> BpError {
-        BpError::auth_store("reserve", TARGET, false, detail.to_string())
+    pub(crate) fn malformed(detail: &'static str) -> BuildError {
+        BuildError::auth_store("reserve", TARGET, false, detail.to_string())
     }
 
-    pub(crate) fn decode_error(detail: String) -> BpError {
-        BpError::auth_store("reserve", TARGET, false, detail)
+    pub(crate) fn decode_error(detail: String) -> BuildError {
+        BuildError::auth_store("reserve", TARGET, false, detail)
     }
 
-    fn payload(fields: Option<&Value>) -> BpResult<String> {
+    fn payload(fields: Option<&Value>) -> BuildResult<String> {
         let Some(Value::Array(fields)) = fields else {
             return Err(Self::malformed("stream record is missing fields"));
         };

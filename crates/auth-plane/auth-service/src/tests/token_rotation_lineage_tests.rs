@@ -1,6 +1,6 @@
 use super::support_tests::TestFixture;
 use chrono::Utc;
-use platform_errors::{AuthError, BpError};
+use platform_errors::{AuthError, BuildError};
 
 #[tokio::test]
 async fn rejects_rotation_back_to_the_predecessor_id() {
@@ -19,7 +19,7 @@ async fn rejects_rotation_back_to_the_predecessor_id() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::InvalidField {
+        Err(BuildError::Auth(AuthError::InvalidField {
             field: "replacement_id",
             ..
         }))
@@ -35,7 +35,7 @@ async fn rejects_rotation_back_to_the_predecessor_id() {
     );
     assert!(matches!(
         service.token(original.id()).await,
-        Err(BpError::Auth(AuthError::UnknownToken { .. }))
+        Err(BuildError::Auth(AuthError::UnknownToken { .. }))
     ));
 }
 
@@ -58,7 +58,7 @@ async fn rejects_rotation_that_would_close_a_cross_token_cycle() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::InvalidField {
+        Err(BuildError::Auth(AuthError::InvalidField {
             field: "replacement_id",
             ..
         }))

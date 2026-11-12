@@ -13,7 +13,7 @@ use crate::{
     signer::Signer,
     urls::Urls,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_types::new_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, time::Duration};
 
@@ -71,21 +71,21 @@ impl ETExchange for BinanceExchange {
 }
 
 impl BinanceExchange {
-    pub fn signer_hmac_sha256(credentials: ApiKeyCredentials) -> BpResult<Signer> {
+    pub fn signer_hmac_sha256(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
         Signer::try_new(
             credentials,
             EncryptionAlgorithm::HmacSha256,
             ByteEncoder::HexLower,
         )
     }
-    pub fn signer_rsa_sha256(credentials: ApiKeyCredentials) -> BpResult<Signer> {
+    pub fn signer_rsa_sha256(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
         Signer::try_new(
             credentials,
             EncryptionAlgorithm::RsaSha256,
             ByteEncoder::Base64,
         )
     }
-    pub fn signer_ed25519(credentials: ApiKeyCredentials) -> BpResult<Signer> {
+    pub fn signer_ed25519(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
         Signer::try_new(
             credentials,
             EncryptionAlgorithm::Ed25519,

@@ -1,4 +1,4 @@
-use super::BpError;
+use super::BuildError;
 #[cfg(feature = "lambda")]
 use crate::ErrorType;
 #[cfg(feature = "http")]
@@ -16,8 +16,8 @@ use platform_types::{new_types::ArithmeticError, protocol::ProtocolError};
 use std::time::Duration;
 
 #[cfg(feature = "lambda")]
-impl From<BpError> for Diagnostic {
-    fn from(value: BpError) -> Self {
+impl From<BuildError> for Diagnostic {
+    fn from(value: BuildError) -> Self {
         Diagnostic {
             error_type: value.error_type().into(),
             error_message: value.to_string(),
@@ -25,99 +25,99 @@ impl From<BpError> for Diagnostic {
     }
 }
 
-impl From<ArithmeticError> for BpError {
+impl From<ArithmeticError> for BuildError {
     fn from(error: ArithmeticError) -> Self {
         Self::System(SystemError::Arithmetic(error))
     }
 }
 
-impl From<std::io::Error> for BpError {
+impl From<std::io::Error> for BuildError {
     fn from(error: std::io::Error) -> Self {
         Self::Io(IoError::from(error))
     }
 }
 
 #[cfg(feature = "archive")]
-impl From<zip::result::ZipError> for BpError {
+impl From<zip::result::ZipError> for BuildError {
     fn from(error: zip::result::ZipError) -> Self {
         Self::Io(IoError::from(error))
     }
 }
 
 #[cfg(feature = "archive")]
-impl From<arrow_schema::ArrowError> for BpError {
+impl From<arrow_schema::ArrowError> for BuildError {
     fn from(error: arrow_schema::ArrowError) -> Self {
         Self::Io(IoError::from(error))
     }
 }
 
 #[cfg(feature = "archive")]
-impl From<parquet::errors::ParquetError> for BpError {
+impl From<parquet::errors::ParquetError> for BuildError {
     fn from(error: parquet::errors::ParquetError) -> Self {
         Self::Io(IoError::from(error))
     }
 }
 
-impl From<tokio::task::JoinError> for BpError {
+impl From<tokio::task::JoinError> for BuildError {
     fn from(error: tokio::task::JoinError) -> Self {
         Self::System(SystemError::from(error))
     }
 }
 
 #[cfg(feature = "http")]
-impl From<serde_json::Error> for BpError {
+impl From<serde_json::Error> for BuildError {
     fn from(error: serde_json::Error) -> Self {
         Self::Http(HttpError::from(error))
     }
 }
 
 #[cfg(not(feature = "http"))]
-impl From<serde_json::Error> for BpError {
+impl From<serde_json::Error> for BuildError {
     fn from(error: serde_json::Error) -> Self {
         Self::System(SystemError::External(Box::new(error)))
     }
 }
 
 #[cfg(feature = "http")]
-impl From<http::Error> for BpError {
+impl From<http::Error> for BuildError {
     fn from(error: http::Error) -> Self {
         Self::Http(HttpError::from(error))
     }
 }
 
 #[cfg(feature = "http")]
-impl From<reqwest::Error> for BpError {
+impl From<reqwest::Error> for BuildError {
     fn from(error: reqwest::Error) -> Self {
         Self::Http(HttpError::from(error))
     }
 }
 
-impl From<tracing::subscriber::SetGlobalDefaultError> for BpError {
+impl From<tracing::subscriber::SetGlobalDefaultError> for BuildError {
     fn from(error: tracing::subscriber::SetGlobalDefaultError) -> Self {
         Self::System(SystemError::from(error))
     }
 }
 
-impl From<Box<dyn std::error::Error + Send + Sync>> for BpError {
+impl From<Box<dyn std::error::Error + Send + Sync>> for BuildError {
     fn from(error: Box<dyn std::error::Error + Send + Sync>) -> Self {
         Self::System(SystemError::External(error))
     }
 }
 
 #[cfg(feature = "lambda")]
-impl From<aws_sdk_lambda::operation::invoke::InvokeError> for BpError {
+impl From<aws_sdk_lambda::operation::invoke::InvokeError> for BuildError {
     fn from(error: aws_sdk_lambda::operation::invoke::InvokeError) -> Self {
         Self::Lambda(LambdaError::from(error))
     }
 }
 
-impl From<Duration> for BpError {
+impl From<Duration> for BuildError {
     fn from(duration: Duration) -> Self {
         Self::Timeout(TimeoutError::BuildTimeout(duration))
     }
 }
 
-impl From<ProtocolError> for BpError {
+impl From<ProtocolError> for BuildError {
     fn from(error: ProtocolError) -> Self {
         match error {
             ProtocolError::InvalidUrl {
@@ -142,7 +142,7 @@ impl From<ProtocolError> for BpError {
     }
 }
 
-impl From<SqsMessageError> for BpError {
+impl From<SqsMessageError> for BuildError {
     fn from(error: SqsMessageError) -> Self {
         match error {
             SqsMessageError::MessageTooLarge { size, limit } => {

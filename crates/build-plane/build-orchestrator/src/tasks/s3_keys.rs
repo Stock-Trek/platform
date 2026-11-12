@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult, ValidationError};
+use platform_errors::{BuildError, BuildResult, ValidationError};
 use platform_git::git_host::GitHost;
 use platform_messages::sqs_message::SqsRefType;
 use std::fmt::Display;
@@ -17,7 +17,7 @@ impl S3Keys {
         ref_name: &str,
         ref_type: SqsRefType,
         commit_hash: &str,
-    ) -> BpResult<Self>
+    ) -> BuildResult<Self>
     where
         RepoId: Display,
         Remote: GitHost<RepoId>,
@@ -66,11 +66,11 @@ impl S3Keys {
         format!("{}compile-output.txt", self.artifact_prefix())
     }
 
-    fn sanitize_path(value: &str) -> BpResult<String> {
+    fn sanitize_path(value: &str) -> BuildResult<String> {
         if Self::is_valid_ref_name(value) {
             Ok(value.to_string())
         } else {
-            Err(BpError::Validation(ValidationError::InvalidPath {
+            Err(BuildError::Validation(ValidationError::InvalidPath {
                 value: value.to_string(),
             }))?
         }

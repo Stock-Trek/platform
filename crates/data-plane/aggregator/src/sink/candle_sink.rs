@@ -1,7 +1,7 @@
 use crate::config::AggregatorConfig;
 use async_trait::async_trait;
 use futures::{StreamExt, TryStreamExt, stream};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_market_data::{
     candle::{Candle, CandleKey, ClosedCandle},
     envelope::EnvelopeCodec,
@@ -22,11 +22,11 @@ const MAX_CONCURRENT_SINK_OPERATIONS: usize = 16;
 /// shard checkpoints, not this bucket.
 #[async_trait]
 pub trait OpenCandleStore: Send + Sync {
-    async fn update_open(&self, candles: &[Candle]) -> BpResult<()>;
+    async fn update_open(&self, candles: &[Candle]) -> BuildResult<()>;
 
     /// Removes open-candle entries whose windows have closed and that no longer
     /// have a newer open window for the same candle key.
-    async fn delete_open(&self, keys: &[CandleKey]) -> BpResult<()> {
+    async fn delete_open(&self, keys: &[CandleKey]) -> BuildResult<()> {
         let _ = keys;
         Ok(())
     }
@@ -35,7 +35,7 @@ pub trait OpenCandleStore: Send + Sync {
 /// Publishes candles after they close.
 #[async_trait]
 pub trait ClosedCandlePublisher: Send + Sync {
-    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BpResult<()>;
+    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BuildResult<()>;
 }
 
 /// Stores open candles in a NATS KV bucket and publishes closed candles to
@@ -59,7 +59,7 @@ pub struct NatsCandleSink {
 }
 
 impl NatsCandleSink {
-    pub async fn connect(config: &AggregatorConfig) -> BpResult<Self> {
+    pub async fn connect(config: &AggregatorConfig) -> BuildResult<Self> {
         let publisher =
             NatsPublisher::connect(&config.nats_url, "platform-aggregator-candles").await?;
         publisher
@@ -89,11 +89,11 @@ impl<T> OpenCandleStore for Arc<T>
 where
     T: OpenCandleStore + ?Sized,
 {
-    async fn update_open(&self, candles: &[Candle]) -> BpResult<()> {
+    async fn update_open(&self, candles: &[Candle]) -> BuildResult<()> {
         (**self).update_open(candles).await
     }
 
-    async fn delete_open(&self, keys: &[CandleKey]) -> BpResult<()> {
+    async fn delete_open(&self, keys: &[CandleKey]) -> BuildResult<()> {
         (**self).delete_open(keys).await
     }
 }
@@ -103,14 +103,14 @@ impl<T> ClosedCandlePublisher for Arc<T>
 where
     T: ClosedCandlePublisher + ?Sized,
 {
-    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BpResult<()> {
+    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BuildResult<()> {
         (**self).publish_closed(candles).await
     }
 }
 
 #[async_trait]
 impl OpenCandleStore for NatsCandleSink {
-    async fn update_open(&self, candles: &[Candle]) -> BpResult<()> {
+    async fn update_open(&self, candles: &[Candle]) -> BuildResult<()> {
         stream::iter(candles.iter().cloned())
             .map(|candle| async move {
                 let key = candle.key.subject_suffix();
@@ -123,7 +123,7 @@ impl OpenCandleStore for NatsCandleSink {
         Ok(())
     }
 
-    async fn delete_open(&self, keys: &[CandleKey]) -> BpResult<()> {
+    async fn delete_open(&self, keys: &[CandleKey]) -> BuildResult<()> {
         stream::iter(keys.iter().cloned())
             .map(|key| async move { self.open_candles.delete(&key.subject_suffix()).await })
             .buffer_unordered(MAX_CONCURRENT_SINK_OPERATIONS)
@@ -135,7 +135,7 @@ impl OpenCandleStore for NatsCandleSink {
 
 #[async_trait]
 impl ClosedCandlePublisher for NatsCandleSink {
-    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BpResult<()> {
+    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BuildResult<()> {
         // Group by candle key so revisions for the same key are published in
         // input order, while independent keys can be published concurrently.
         let mut groups: HashMap<CandleKey, Vec<ClosedCandle>> = HashMap::new();
@@ -156,7 +156,7 @@ impl ClosedCandlePublisher for NatsCandleSink {
                         .publish_with_message_id(&subject, &message_id, &payload)
                         .await?;
                 }
-                Ok::<(), BpError>(())
+                Ok::<(), BuildError>(())
             })
             .buffer_unordered(MAX_CONCURRENT_SINK_OPERATIONS)
             .try_collect::<Vec<_>>()

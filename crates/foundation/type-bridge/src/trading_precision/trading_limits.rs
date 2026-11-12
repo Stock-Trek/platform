@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult, ValidationError};
+use platform_errors::{BuildError, BuildResult, ValidationError};
 use rust_decimal::{Decimal, RoundingStrategy, prelude::FromPrimitive};
 
 #[derive(Debug, Clone, Copy)]
@@ -27,43 +27,43 @@ impl TradingPrecision {
         self,
         base: f64,
         strategy: RoundingStrategy,
-    ) -> BpResult<Decimal> {
+    ) -> BuildResult<Decimal> {
         Self::to_valid_decimal(base, self.base_limit, strategy)
     }
     pub(crate) fn to_valid_base_market(
         self,
         base: f64,
         strategy: RoundingStrategy,
-    ) -> BpResult<Decimal> {
+    ) -> BuildResult<Decimal> {
         Self::to_valid_decimal(base, self.base_market, strategy)
     }
     pub(crate) fn to_valid_quote(
         self,
         quote: f64,
         strategy: RoundingStrategy,
-    ) -> BpResult<Decimal> {
+    ) -> BuildResult<Decimal> {
         Self::to_valid_decimal(quote, self.quote, strategy)
     }
     fn to_valid_decimal(
         value: f64,
         min_max_step: MinMaxStep,
         strategy: RoundingStrategy,
-    ) -> BpResult<Decimal> {
+    ) -> BuildResult<Decimal> {
         let MinMaxStep { min, max, step } = min_max_step;
         if min > max {
-            return Err(BpError::Validation(ValidationError::InvalidValue {
+            return Err(BuildError::Validation(ValidationError::InvalidValue {
                 name: "Trading precision bounds".into(),
                 value: format!("min {min} is greater than max {max}"),
             }));
         }
         let value_as_decimal = Decimal::from_f64(value).ok_or_else(|| {
-            BpError::Validation(ValidationError::InvalidValue {
+            BuildError::Validation(ValidationError::InvalidValue {
                 name: "Trading value".into(),
                 value: value.to_string(),
             })
         })?;
         if value_as_decimal < min || value_as_decimal > max {
-            return Err(BpError::Validation(ValidationError::InvalidValue {
+            return Err(BuildError::Validation(ValidationError::InvalidValue {
                 name: "Trading value".into(),
                 value: value.to_string(),
             }));
@@ -75,7 +75,7 @@ impl TradingPrecision {
             step_count.round_dp_with_strategy(0, strategy) * step
         };
         if rounded_value < min || rounded_value > max {
-            return Err(BpError::Validation(ValidationError::InvalidValue {
+            return Err(BuildError::Validation(ValidationError::InvalidValue {
                 name: "Trading value".into(),
                 value: value.to_string(),
             }));

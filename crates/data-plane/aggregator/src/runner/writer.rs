@@ -5,7 +5,7 @@ use crate::{
     lease::{LeaseStore, WriterLease},
     shard::ShardId,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_metrics::AggregatorMetrics;
 use platform_runtime::Runtime;
 use std::sync::Arc;
@@ -27,7 +27,7 @@ impl Writer {
         requested_id: Option<String>,
         initial_lease: Option<WriterLease>,
         config: &AggregatorConfig,
-    ) -> BpResult<Option<Self>> {
+    ) -> BuildResult<Option<Self>> {
         let writer_id = requested_id
             .or_else(|| initial_lease.as_ref().map(|lease| lease.owner_id.clone()))
             .unwrap_or_else(WriterLease::new_writer_id);
@@ -80,9 +80,9 @@ impl Writer {
         leases: &Arc<dyn LeaseStore>,
         shard: ShardId,
         ttl: Duration,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let Some(renewed) = leases.renew(&self.lease, ttl).await? else {
-            return Err(BpError::bad_value(
+            return Err(BuildError::bad_value(
                 "aggregator lease",
                 shard.to_string(),
                 format!("writer {} lost its fencing lease", self.id),
@@ -92,7 +92,7 @@ impl Writer {
         Ok(())
     }
 
-    pub(super) async fn release(self, leases: &Arc<dyn LeaseStore>) -> BpResult<()> {
+    pub(super) async fn release(self, leases: &Arc<dyn LeaseStore>) -> BuildResult<()> {
         leases.release(&self.lease).await
     }
 }

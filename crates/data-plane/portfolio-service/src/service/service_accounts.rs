@@ -1,9 +1,9 @@
 use super::PortfolioService;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_portfolio_ownership::AccountKey;
 
 impl PortfolioService {
-    pub async fn track_account(&self, account: AccountKey) -> BpResult<bool> {
+    pub async fn track_account(&self, account: AccountKey) -> BuildResult<bool> {
         if self.state.read().is_global(&account) {
             return Ok(false);
         }
@@ -20,7 +20,7 @@ impl PortfolioService {
         Ok(true)
     }
 
-    pub async fn untrack_account(&self, account: AccountKey) -> BpResult<bool> {
+    pub async fn untrack_account(&self, account: AccountKey) -> BuildResult<bool> {
         if !self.state.read().is_tracked(&account) {
             return Ok(false);
         }
@@ -40,7 +40,7 @@ impl PortfolioService {
         &self,
         owner: impl Into<String>,
         account: AccountKey,
-    ) -> BpResult<bool> {
+    ) -> BuildResult<bool> {
         let owner = owner.into();
         if self.state.read().is_tracked_for_owner(&owner, &account) {
             return Ok(false);
@@ -58,7 +58,11 @@ impl PortfolioService {
         Ok(true)
     }
 
-    pub async fn untrack_user_account(&self, owner: &str, account: AccountKey) -> BpResult<bool> {
+    pub async fn untrack_user_account(
+        &self,
+        owner: &str,
+        account: AccountKey,
+    ) -> BuildResult<bool> {
         if !self.state.read().is_tracked_for_owner(owner, &account) {
             return Ok(false);
         }
@@ -75,11 +79,11 @@ impl PortfolioService {
         Ok(true)
     }
 
-    pub async fn add_account(&self, account: AccountKey) -> BpResult<bool> {
+    pub async fn add_account(&self, account: AccountKey) -> BuildResult<bool> {
         self.track_account(account).await
     }
 
-    pub async fn remove_account(&self, account: AccountKey) -> BpResult<bool> {
+    pub async fn remove_account(&self, account: AccountKey) -> BuildResult<bool> {
         self.untrack_account(account).await
     }
 
@@ -87,11 +91,11 @@ impl PortfolioService {
         &self,
         owner: impl Into<String>,
         account: AccountKey,
-    ) -> BpResult<bool> {
+    ) -> BuildResult<bool> {
         self.track_user_account(owner, account).await
     }
 
-    pub async fn remove_user_account(&self, owner: &str, account: AccountKey) -> BpResult<bool> {
+    pub async fn remove_user_account(&self, owner: &str, account: AccountKey) -> BuildResult<bool> {
         self.untrack_user_account(owner, account).await
     }
 }

@@ -8,7 +8,7 @@ use aws_sdk_dynamodb::operation::query::QueryError;
 use aws_sdk_dynamodb::operation::update_item::UpdateItemError;
 use aws_sdk_dynamodb::types::AttributeValue;
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 
 /// Name of the global secondary index that makes runs searchable by status.
 pub const RUN_STATUS_INDEX: &str = "status-index";
@@ -28,7 +28,7 @@ impl RunStore {
     }
 
     /// Stores a new pending run, refusing to overwrite an existing one.
-    pub async fn schedule(&self, record: &RunRecord) -> BpResult<()> {
+    pub async fn schedule(&self, record: &RunRecord) -> BuildResult<()> {
         let request = self
             .client
             .put_item()
@@ -43,22 +43,22 @@ impl RunStore {
                     .as_service_error()
                     .is_some_and(PutItemError::is_conditional_check_failed_exception);
                 if conflict {
-                    Err(BpError::external(format!(
+                    Err(BuildError::external(format!(
                         "run of algorithm {} at {} is already scheduled",
                         record.algorithm_id,
                         RunRecord::format_timestamp(record.scheduled_at),
                     )))
                 } else {
-                    Err(BpError::external(error))
+                    Err(BuildError::external(error))
                 }
             }
         }
     }
 
     /// Returns pending runs scheduled at or before `now`, oldest first.
-    pub async fn due_runs(&self, now: DateTime<Utc>, limit: usize) -> BpResult<Vec<RunRecord>> {
+    pub async fn due_runs(&self, now: DateTime<Utc>, limit: usize) -> BuildResult<Vec<RunRecord>> {
         let limit = i32::try_from(limit)
-            .map_err(|_| BpError::config_invalid("limit", "must fit in an i32"))?;
+            .map_err(|_| BuildError::config_invalid("limit", "must fit in an i32"))?;
         let output = self
             .client
             .query()
@@ -78,13 +78,13 @@ impl RunStore {
             .limit(limit)
             .send()
             .await
-            .map_err(|error: SdkError<QueryError>| BpError::external(error))?;
+            .map_err(|error: SdkError<QueryError>| BuildError::external(error))?;
         output.items().iter().map(RunRecord::from_item).collect()
     }
 
     /// Marks a pending run as running, returning `false` when another
     /// invocation claimed it first.
-    pub async fn claim(&self, record: &RunRecord) -> BpResult<bool> {
+    pub async fn claim(&self, record: &RunRecord) -> BuildResult<bool> {
         let request = self
             .client
             .update_item()
@@ -114,14 +114,18 @@ impl RunStore {
                 if claimed {
                     Ok(false)
                 } else {
-                    Err(BpError::external(error))
+                    Err(BuildError::external(error))
                 }
             }
         }
     }
 
     /// Marks a claimed run as completed.
-    pub async fn complete(&self, record: &RunRecord, completed_at: DateTime<Utc>) -> BpResult<()> {
+    pub async fn complete(
+        &self,
+        record: &RunRecord,
+        completed_at: DateTime<Utc>,
+    ) -> BuildResult<()> {
         self.finish(record, RunStatus::Completed, None, completed_at)
             .await
     }
@@ -132,7 +136,7 @@ impl RunStore {
         record: &RunRecord,
         error: &str,
         completed_at: DateTime<Utc>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         self.finish(record, RunStatus::Failed, Some(error), completed_at)
             .await
     }
@@ -143,7 +147,7 @@ impl RunStore {
         status: RunStatus,
         error: Option<&str>,
         completed_at: DateTime<Utc>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let update_expression = match error {
             Some(_) => "SET #status = :status, #completed_at = :at, #error = :error",
             None => "SET #status = :status, #completed_at = :at REMOVE #error",
@@ -170,7 +174,7 @@ impl RunStore {
             request =
                 request.expression_attribute_values(":error", AttributeValue::S(error.to_string()));
         }
-        request.send().await.map_err(BpError::external)?;
+        request.send().await.map_err(BuildError::external)?;
         Ok(())
     }
 }

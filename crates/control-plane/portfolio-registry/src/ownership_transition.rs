@@ -1,5 +1,5 @@
 use crate::{OwnershipCommand, OwnershipRecord};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_portfolio_ownership::OwnershipEvent;
 
 pub(crate) enum OwnershipTransition {
@@ -11,16 +11,16 @@ impl OwnershipTransition {
     pub(crate) fn apply(
         existing: Option<OwnershipRecord>,
         command: &OwnershipCommand,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         match existing {
             None => Self::initial(command),
             Some(record) => Self::next(record, command),
         }
     }
 
-    fn initial(command: &OwnershipCommand) -> BpResult<Self> {
+    fn initial(command: &OwnershipCommand) -> BuildResult<Self> {
         if !command.action.is_add() {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "account",
                 "cannot remove a mapping that does not exist",
             ));
@@ -36,13 +36,13 @@ impl OwnershipTransition {
         )))
     }
 
-    fn next(record: OwnershipRecord, command: &OwnershipCommand) -> BpResult<Self> {
+    fn next(record: OwnershipRecord, command: &OwnershipCommand) -> BuildResult<Self> {
         if command.action.is_add() {
             if !record.active {
                 return Ok(Self::Applied(Self::advance(record, true, command)));
             }
             if record.owner != command.owner {
-                return Err(BpError::auth_invalid_field(
+                return Err(BuildError::auth_invalid_field(
                     "owner",
                     "account belongs to a different owner",
                 ));
@@ -53,7 +53,7 @@ impl OwnershipTransition {
             return Ok(Self::Unchanged(record));
         }
         if record.owner != command.owner {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "owner",
                 "account belongs to a different owner",
             ));
