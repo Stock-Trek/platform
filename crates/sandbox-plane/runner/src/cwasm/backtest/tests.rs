@@ -185,7 +185,7 @@ fn cancel_orders_event_is_recorded() {
 fn asset_totals_serialize_cex_accounts_and_assets() {
     let totals = Portfolio::asset_totals(&balances());
     assert_eq!(
-        totals["binance"]["main"]["tether_u_s_d"],
+        totals["binance"]["main"]["tether_usd"],
         serde_json::json!(1000.0)
     );
 }

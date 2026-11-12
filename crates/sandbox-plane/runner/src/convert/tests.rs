@@ -139,8 +139,8 @@ impl Fixtures {
             order_request_dto: Some(OrderRequestDto {
                 order_request: Some(order_request_dto::OrderRequest::MarketBuy(
                     MarketBuyOrderRequestDto {
-                        base_dto: Some(Self::asset_id_dto("Bitcoin")),
-                        quote_dto: Some(Self::asset_id_dto("TetherUSD")),
+                        base_dto: Some(Self::asset_id_dto(&AssetId::Bitcoin.to_string())),
+                        quote_dto: Some(Self::asset_id_dto(&AssetId::TetherUSD.to_string())),
                         activation_dto: Some(Self::immediate_activation_dto()),
                         quote_quantity_dto: Some(Self::decimal_dto(Decimal::new(500, 0))),
                         tag: "main".to_string(),
@@ -153,13 +153,15 @@ impl Fixtures {
 
         PortfolioDto {
             cex_accounts_dto: HashMap::from([(
-                "Binance".to_string(),
+                AssetId::Bitcoin.to_string(),
                 CexAccountsDto {
                     account_portfolios_dto: HashMap::from([(
                         "primary".to_string(),
                         CexAccountPortfolioDto {
                             asset_counts_dto: vec![AssetCountDto {
-                                asset_id_dto: Some(Self::asset_id_dto("Bitcoin")),
+                                asset_id_dto: Some(Self::asset_id_dto(
+                                    &AssetId::Bitcoin.to_string(),
+                                )),
                                 count_dto: Some(Self::decimal_dto(Decimal::new(3, 0))),
                             }],
                             pending_orders_dto: HashMap::from([(
@@ -245,7 +247,7 @@ fn from_string_errors_on_unknown_variant() {
 #[test]
 fn asset_id_dto_converts() {
     assert_eq!(
-        AssetId::try_from(Fixtures::asset_id_dto("Bitcoin")).unwrap(),
+        AssetId::try_from(Fixtures::asset_id_dto(&AssetId::Bitcoin.to_string())).unwrap(),
         AssetId::Bitcoin
     );
 }
@@ -444,8 +446,8 @@ fn limit_order_request_converts() {
     let dto = OrderRequestDto {
         order_request: Some(order_request_dto::OrderRequest::Limit(
             LimitOrderRequestDto {
-                base_dto: Some(Fixtures::asset_id_dto("Bitcoin")),
-                quote_dto: Some(Fixtures::asset_id_dto("TetherUSD")),
+                base_dto: Some(Fixtures::asset_id_dto(&AssetId::Bitcoin.to_string())),
+                quote_dto: Some(Fixtures::asset_id_dto(&AssetId::TetherUSD.to_string())),
                 side: "Buy".to_string(),
                 activation_dto: Some(Fixtures::price_triggered_activation_dto()),
                 limit_price_dto: Some(Fixtures::decimal_dto(Decimal::new(100, 0))),
@@ -539,8 +541,8 @@ fn market_sell_order_request_converts() {
     let dto = OrderRequestDto {
         order_request: Some(order_request_dto::OrderRequest::MarketSell(
             MarketSellOrderRequestDto {
-                base_dto: Some(Fixtures::asset_id_dto("Solana")),
-                quote_dto: Some(Fixtures::asset_id_dto("TetherUSD")),
+                base_dto: Some(Fixtures::asset_id_dto(&AssetId::Solana.to_string())),
+                quote_dto: Some(Fixtures::asset_id_dto(&AssetId::TetherUSD.to_string())),
                 activation_dto: Some(Fixtures::immediate_activation_dto()),
                 base_quantity_dto: Some(Fixtures::decimal_dto(Decimal::new(2, 0))),
                 tag: "exit".to_string(),
@@ -658,9 +660,11 @@ fn strategy_context_dto_converts() {
             "Binance".to_string(),
             AssetMarketsDto {
                 markets_by_base_dto: vec![MarketByBaseDto {
-                    base_asset_id_dto: Some(Fixtures::asset_id_dto("Bitcoin")),
+                    base_asset_id_dto: Some(Fixtures::asset_id_dto(&AssetId::Bitcoin.to_string())),
                     markets_by_quote_dto: vec![MarketByQuoteDto {
-                        quote_asset_id_dto: Some(Fixtures::asset_id_dto("TetherUSD")),
+                        quote_asset_id_dto: Some(Fixtures::asset_id_dto(
+                            &AssetId::TetherUSD.to_string(),
+                        )),
                         market_dto: Some(Fixtures::market_dto()),
                     }],
                 }],

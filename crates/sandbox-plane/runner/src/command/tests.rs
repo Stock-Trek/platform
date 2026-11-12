@@ -258,7 +258,7 @@ fn deserialises_back_test_simulation_parameters() {
                 "simulationCount": 1,
                 "maxConcurrentSimulations": 2,
                 "randomSeed": 42,
-                "tradingPairs": [{"base": "Bitcoin", "quote": "TetherUSD"}],
+                "tradingPairs": [{"base": "bitcoin", "quote": "tether_usd"}],
                 "windows": [5],
                 "historicalCandleCount": 300,
                 "openCandleProgressMillis": 30000,

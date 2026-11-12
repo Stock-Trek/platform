@@ -1,11 +1,10 @@
+use super::Balances;
 use platform_runner::generated::dto::{
     AssetCountDto, AssetIdDto, CexAccountPortfolioDto, CexAccountsDto, DecimalDto, PortfolioDto,
 };
 use rust_decimal::Decimal;
 use serde_json::Value;
 use std::collections::HashMap;
-
-use super::Balances;
 
 pub(super) struct Portfolio;
 
