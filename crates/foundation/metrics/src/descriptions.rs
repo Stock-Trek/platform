@@ -100,6 +100,18 @@ pub const AUTH_USAGE_QUEUE_CAPACITY_REJECTIONS_TOTAL: &str =
 pub const AUTH_USAGE_QUEUE_DELIVERED_TOTAL: &str = "auth_usage_queue_delivered_total";
 pub const AUTH_USAGE_QUEUE_FAILURES_TOTAL: &str = "auth_usage_queue_failures_total";
 pub const AUTH_USAGE_QUEUE_DRAIN_DURATION_SECONDS: &str = "auth_usage_queue_drain_duration_seconds";
+pub const AUTH_TOKEN_CACHE_HITS_TOTAL: &str = "auth_token_cache_hits_total";
+pub const AUTH_TOKEN_CACHE_MISSES_TOTAL: &str = "auth_token_cache_misses_total";
+pub const AUTH_TOKEN_CACHE_STALE_SERVES_TOTAL: &str = "auth_token_cache_stale_serves_total";
+pub const AUTH_TOKEN_CACHE_ENTRIES: &str = "auth_token_cache_entries";
+pub const AUTH_TOKEN_CACHE_NEGATIVE_ENTRIES: &str = "auth_token_cache_negative_entries";
+pub const AUTH_TOKEN_CACHE_BREAKER_STATE: &str = "auth_token_cache_breaker_state";
+pub const AUTH_TOKEN_CACHE_BREAKER_TRANSITIONS_TOTAL: &str =
+    "auth_token_cache_breaker_transitions_total";
+pub const AUTH_TOKEN_CACHE_ERRORS_TOTAL: &str = "auth_token_cache_errors_total";
+pub const AUTH_TOKEN_CACHE_VAULT_READS_TOTAL: &str = "auth_token_cache_vault_reads_total";
+pub const AUTH_TOKEN_CACHE_VAULT_READ_DURATION_SECONDS: &str =
+    "auth_token_cache_vault_read_duration_seconds";
 
 pub const STATUS_SUCCESS: &str = "success";
 pub const STATUS_ERROR: &str = "error";
@@ -453,6 +465,46 @@ impl DescriptionsMetrics {
         describe_histogram!(
             AUTH_USAGE_QUEUE_DRAIN_DURATION_SECONDS,
             "Duration of token usage queue drain attempts in seconds"
+        );
+        describe_counter!(
+            AUTH_TOKEN_CACHE_HITS_TOTAL,
+            "Total number of token cache hits, labelled by result"
+        );
+        describe_counter!(
+            AUTH_TOKEN_CACHE_MISSES_TOTAL,
+            "Total number of token cache misses"
+        );
+        describe_counter!(
+            AUTH_TOKEN_CACHE_STALE_SERVES_TOTAL,
+            "Total number of token cache entries served beyond their freshness window"
+        );
+        describe_gauge!(
+            AUTH_TOKEN_CACHE_ENTRIES,
+            "Number of token entries retained by the token cache"
+        );
+        describe_gauge!(
+            AUTH_TOKEN_CACHE_NEGATIVE_ENTRIES,
+            "Number of missing-token entries retained by the token cache"
+        );
+        describe_gauge!(
+            AUTH_TOKEN_CACHE_BREAKER_STATE,
+            "Token store circuit breaker state: 0 closed, 1 open, 2 half-open"
+        );
+        describe_counter!(
+            AUTH_TOKEN_CACHE_BREAKER_TRANSITIONS_TOTAL,
+            "Total number of token store circuit breaker transitions, labelled by target state"
+        );
+        describe_counter!(
+            AUTH_TOKEN_CACHE_ERRORS_TOTAL,
+            "Total number of token cache load errors, labelled by operation and error type"
+        );
+        describe_counter!(
+            AUTH_TOKEN_CACHE_VAULT_READS_TOTAL,
+            "Total number of token store reads made by the token cache"
+        );
+        describe_histogram!(
+            AUTH_TOKEN_CACHE_VAULT_READ_DURATION_SECONDS,
+            "Duration of token store reads made by the token cache in seconds"
         );
     }
 }

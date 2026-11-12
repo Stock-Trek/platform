@@ -64,6 +64,49 @@ impl AuthAuditRelayMetrics {
     }
 }
 
+pub struct AuthTokenCacheMetrics;
+
+impl AuthTokenCacheMetrics {
+    pub fn record_hit(result: &'static str) {
+        counter!(AUTH_TOKEN_CACHE_HITS_TOTAL, "result" => result).increment(1);
+    }
+
+    pub fn record_miss() {
+        counter!(AUTH_TOKEN_CACHE_MISSES_TOTAL).increment(1);
+    }
+
+    pub fn record_stale_serve() {
+        counter!(AUTH_TOKEN_CACHE_STALE_SERVES_TOTAL).increment(1);
+    }
+
+    pub fn record_size(entries: usize, negative_entries: usize) {
+        gauge!(AUTH_TOKEN_CACHE_ENTRIES).set(entries as f64);
+        gauge!(AUTH_TOKEN_CACHE_NEGATIVE_ENTRIES).set(negative_entries as f64);
+    }
+
+    pub fn record_breaker_state(state: u8) {
+        gauge!(AUTH_TOKEN_CACHE_BREAKER_STATE).set(state as f64);
+    }
+
+    pub fn record_breaker_transition(state: &'static str) {
+        counter!(AUTH_TOKEN_CACHE_BREAKER_TRANSITIONS_TOTAL, "state" => state).increment(1);
+    }
+
+    pub fn record_error(operation: &'static str, error_type: &'static str) {
+        counter!(
+            AUTH_TOKEN_CACHE_ERRORS_TOTAL,
+            "operation" => operation,
+            "error_type" => error_type,
+        )
+        .increment(1);
+    }
+
+    pub fn record_vault_read(duration: Duration) {
+        counter!(AUTH_TOKEN_CACHE_VAULT_READS_TOTAL).increment(1);
+        histogram!(AUTH_TOKEN_CACHE_VAULT_READ_DURATION_SECONDS).record(duration.as_secs_f64());
+    }
+}
+
 pub struct AuthUsageQueueMetrics;
 
 impl AuthUsageQueueMetrics {

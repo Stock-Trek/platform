@@ -1,6 +1,6 @@
 use crate::{
-    AuthService, AuthServiceConfig, JwtServer, JwtServerConfig, ValkeyReplayStore,
-    ValkeyTokenUsageQueue, VaultTokenStore,
+    AuthService, AuthServiceConfig, CachedTokenStore, JwtServer, JwtServerConfig,
+    ValkeyReplayStore, ValkeyTokenUsageQueue, VaultTokenStore,
 };
 use chrono::Duration;
 use platform_errors::BpResult;
@@ -15,7 +15,8 @@ impl AuthServiceRunner {
     pub async fn run(config: JwtServerConfig) -> BpResult<()> {
         SERVICE.init_logging(config.log_filter())?;
         let _metrics = SERVICE.init_metrics("platform/auth-service")?;
-        let store = Arc::new(VaultTokenStore::new(config.vault().clone())?);
+        let vault = Arc::new(VaultTokenStore::new(config.vault().clone())?);
+        let store = Arc::new(CachedTokenStore::new(vault, config.token_cache().clone()));
         let replay = Arc::new(ValkeyReplayStore::connect(config.valkey().clone()).await?);
         let usage = Arc::new(ValkeyTokenUsageQueue::connect(config.usage_queue().clone()).await?);
         let service = AuthService::with_jwt_signing_key(

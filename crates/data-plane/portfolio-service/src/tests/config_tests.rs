@@ -18,6 +18,12 @@ const USAGE_QUEUE_PREFIX: &str = "PORTFOLIO_USAGE_QUEUE_PREFIX";
 const USAGE_QUEUE_TIMEOUT_SECS: &str = "PORTFOLIO_USAGE_QUEUE_TIMEOUT_SECS";
 const USAGE_QUEUE_CAPACITY: &str = "PORTFOLIO_USAGE_QUEUE_CAPACITY";
 const USAGE_QUEUE_BATCH_SIZE: &str = "PORTFOLIO_USAGE_QUEUE_BATCH_SIZE";
+const TOKEN_CACHE_MAX_ENTRIES: &str = "PORTFOLIO_TOKEN_CACHE_MAX_ENTRIES";
+const TOKEN_CACHE_NEGATIVE_ENTRIES: &str = "PORTFOLIO_TOKEN_CACHE_NEGATIVE_ENTRIES";
+const TOKEN_CACHE_FRESHNESS_SECS: &str = "PORTFOLIO_TOKEN_CACHE_FRESHNESS_SECS";
+const TOKEN_CACHE_MAX_STALE_SECS: &str = "PORTFOLIO_TOKEN_CACHE_MAX_STALE_SECS";
+const TOKEN_CACHE_FAILURE_THRESHOLD: &str = "PORTFOLIO_TOKEN_CACHE_FAILURE_THRESHOLD";
+const TOKEN_CACHE_OPEN_SECS: &str = "PORTFOLIO_TOKEN_CACHE_OPEN_SECS";
 const OWNERSHIP_NATS_URL: &str = "PORTFOLIO_OWNERSHIP_NATS_URL";
 const OWNERSHIP_CLIENT_NAME: &str = "PORTFOLIO_OWNERSHIP_CLIENT_NAME";
 const OWNERSHIP_DURABLE: &str = "PORTFOLIO_OWNERSHIP_DURABLE";
@@ -258,4 +264,39 @@ fn rejects_invalid_service_configuration() {
             "{name}={value}"
         );
     }
+}
+
+#[test]
+fn configures_the_token_cache_from_the_environment() {
+    let mut vars = ALL_VARS.to_vec();
+    vars.extend([
+        (TOKEN_CACHE_MAX_ENTRIES, "42"),
+        (TOKEN_CACHE_NEGATIVE_ENTRIES, "7"),
+        (TOKEN_CACHE_FRESHNESS_SECS, "9"),
+        (TOKEN_CACHE_MAX_STALE_SECS, "19"),
+        (TOKEN_CACHE_FAILURE_THRESHOLD, "3"),
+        (TOKEN_CACHE_OPEN_SECS, "27"),
+    ]);
+    let config = Fixture::config(&vars).unwrap();
+    let cache = config.auth().token_cache();
+
+    assert_eq!(cache.max_entries(), 42);
+    assert_eq!(cache.negative_entries(), 7);
+    assert_eq!(cache.freshness(), Duration::from_secs(9));
+    assert_eq!(cache.max_stale_age(), Duration::from_secs(19));
+    assert_eq!(cache.failure_threshold(), 3);
+    assert_eq!(cache.open_duration(), Duration::from_secs(27));
+}
+
+#[test]
+fn token_cache_defaults_to_bounded_fresh_and_stale_windows() {
+    let config = Fixture::config(&ALL_VARS).unwrap();
+    let cache = config.auth().token_cache();
+
+    assert_eq!(cache.max_entries(), 10_000);
+    assert_eq!(cache.negative_entries(), 1_000);
+    assert_eq!(cache.freshness(), Duration::from_secs(30));
+    assert_eq!(cache.max_stale_age(), Duration::from_secs(60));
+    assert_eq!(cache.failure_threshold(), 5);
+    assert_eq!(cache.open_duration(), Duration::from_secs(10));
 }

@@ -4602,6 +4602,7 @@ dependencies = [
  "hyper 1.12.0",
  "hyper-util",
  "jsonwebtoken",
+ "lru",
  "parking_lot",
  "platform-config",
  "platform-errors",

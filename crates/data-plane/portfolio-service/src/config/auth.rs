@@ -1,5 +1,5 @@
 use platform_auth_service::{
-    TokenUsageQueueConfig, ValkeyReplayStoreConfig, VaultTokenStoreConfig,
+    TokenCacheConfig, TokenUsageQueueConfig, ValkeyReplayStoreConfig, VaultTokenStoreConfig,
 };
 use platform_config::env_vars::EnvVars;
 use platform_errors::{BpError, BpResult};
@@ -21,6 +21,12 @@ const USAGE_QUEUE_PREFIX: &str = "PORTFOLIO_USAGE_QUEUE_PREFIX";
 const USAGE_QUEUE_TIMEOUT_SECS: &str = "PORTFOLIO_USAGE_QUEUE_TIMEOUT_SECS";
 const USAGE_QUEUE_CAPACITY: &str = "PORTFOLIO_USAGE_QUEUE_CAPACITY";
 const USAGE_QUEUE_BATCH_SIZE: &str = "PORTFOLIO_USAGE_QUEUE_BATCH_SIZE";
+const TOKEN_CACHE_MAX_ENTRIES: &str = "PORTFOLIO_TOKEN_CACHE_MAX_ENTRIES";
+const TOKEN_CACHE_NEGATIVE_ENTRIES: &str = "PORTFOLIO_TOKEN_CACHE_NEGATIVE_ENTRIES";
+const TOKEN_CACHE_FRESHNESS_SECS: &str = "PORTFOLIO_TOKEN_CACHE_FRESHNESS_SECS";
+const TOKEN_CACHE_MAX_STALE_SECS: &str = "PORTFOLIO_TOKEN_CACHE_MAX_STALE_SECS";
+const TOKEN_CACHE_FAILURE_THRESHOLD: &str = "PORTFOLIO_TOKEN_CACHE_FAILURE_THRESHOLD";
+const TOKEN_CACHE_OPEN_SECS: &str = "PORTFOLIO_TOKEN_CACHE_OPEN_SECS";
 
 #[derive(Clone)]
 pub struct AuthConfig {
@@ -28,6 +34,7 @@ pub struct AuthConfig {
     valkey: ValkeyReplayStoreConfig,
     usage_queue: TokenUsageQueueConfig,
     jwks_url: String,
+    token_cache: TokenCacheConfig,
 }
 
 impl AuthConfig {
@@ -58,6 +65,17 @@ impl AuthConfig {
             vars.required_parsed(USAGE_QUEUE_CAPACITY)?,
             vars.required_parsed(USAGE_QUEUE_BATCH_SIZE)?,
         )?;
+        let token_cache = TokenCacheConfig::from_vars(
+            vars,
+            [
+                TOKEN_CACHE_MAX_ENTRIES,
+                TOKEN_CACHE_NEGATIVE_ENTRIES,
+                TOKEN_CACHE_FRESHNESS_SECS,
+                TOKEN_CACHE_MAX_STALE_SECS,
+                TOKEN_CACHE_FAILURE_THRESHOLD,
+                TOKEN_CACHE_OPEN_SECS,
+            ],
+        )?;
         let jwks_url = vars.required(JWKS_URL)?;
         let parsed = reqwest::Url::parse(&jwks_url)
             .map_err(|error| BpError::config_invalid_source(JWKS_URL, error))?;
@@ -69,6 +87,7 @@ impl AuthConfig {
             valkey,
             usage_queue,
             jwks_url,
+            token_cache,
         })
     }
 
@@ -87,6 +106,10 @@ impl AuthConfig {
     pub fn jwks_url(&self) -> &str {
         &self.jwks_url
     }
+
+    pub fn token_cache(&self) -> &TokenCacheConfig {
+        &self.token_cache
+    }
 }
 
 impl fmt::Debug for AuthConfig {
@@ -99,6 +122,7 @@ impl fmt::Debug for AuthConfig {
             .field("valkey_timeout", &self.valkey.timeout())
             .field("usage_queue", &self.usage_queue)
             .field("jwks_url", &self.jwks_url)
+            .field("token_cache", &self.token_cache)
             .finish()
     }
 }
