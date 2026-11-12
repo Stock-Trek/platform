@@ -1,10 +1,7 @@
 use crate::{
     config::RebuildConfig,
     iceberg_event_reader::IcebergEventReader,
-    rebuild::{
-        RebuildOptions, RebuildStats, SpillUsage, candle_spill::CandleSpill,
-        replay_spill::ReplaySpill,
-    },
+    rebuild::{CandleRecords, CandleSpill, RebuildOptions, RebuildStats, ReplaySpill, SpillUsage},
     sink::{CandleRecordSource, CandleSink, S3CandleSink},
 };
 use platform_aggregator::ProcessorConfig;
@@ -17,12 +14,12 @@ use tracing::info;
 /// Streams closed candles from the rebuild spill to the sink in object order,
 /// counting how many unique revisions reach the sink.
 struct RebuildCandles {
-    records: crate::rebuild::candle_spill::CandleRecords,
+    records: CandleRecords,
     emitted: usize,
 }
 
 impl RebuildCandles {
-    fn new(records: crate::rebuild::candle_spill::CandleRecords) -> Self {
+    fn new(records: CandleRecords) -> Self {
         Self {
             records,
             emitted: 0,

@@ -1,6 +1,6 @@
-pub mod candle_spill;
+mod candle_spill;
 mod rebuild_options;
-pub mod replay_spill;
+mod replay_spill;
 mod spill;
 mod spill_codec;
 mod spill_merge;
@@ -9,6 +9,7 @@ mod spill_sorter;
 #[cfg(test)]
 mod tests;
 
-pub use rebuild_options::*;
-
-pub use spill::SpillUsage;
+pub(crate) use candle_spill::{CandleRecords, CandleSpill};
+pub(crate) use rebuild_options::{RebuildOptions, RebuildStats};
+pub(crate) use replay_spill::ReplaySpill;
+pub(crate) use spill::SpillUsage;
