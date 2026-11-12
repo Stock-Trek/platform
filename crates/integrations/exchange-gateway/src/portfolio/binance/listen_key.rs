@@ -1,4 +1,5 @@
-use crate::{
+use platform_errors::{BpError, BpResult};
+use platform_exchange_types::{
     binance::{exchange::BinanceExchange, response::BinanceResponse},
     encode::ByteEncoder,
     http::{HttpMethod, HttpRequest},
@@ -6,7 +7,6 @@ use crate::{
     request::{ETHttpRequest, ETRequest},
     signer::Signer,
 };
-use platform_errors::{BpError, BpResult};
 use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use serde::{Deserialize, Serialize};
 
@@ -51,16 +51,6 @@ impl BinanceListenKeyRequest {
             action: BinanceListenKeyAction::Close,
             listen_key: Some(listen_key.into()),
         }
-    }
-
-    pub fn action(&self) -> BinanceListenKeyAction {
-        self.action
-    }
-}
-
-impl BinanceListenKeyResponse {
-    pub fn listen_key(&self) -> Option<&str> {
-        self.listen_key.as_deref()
     }
 }
 

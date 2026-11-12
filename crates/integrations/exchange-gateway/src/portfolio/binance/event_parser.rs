@@ -1,10 +1,10 @@
 use super::{
     balances::BalanceParser,
     transport::{AccountPositionEvent, BinanceAccountEvent},
+    user_data::BinanceUserDataEvent,
 };
 use chrono::{TimeZone, Utc};
 use platform_errors::{BpError, BpResult, ExchangeError};
-use platform_exchange_types::binance::user_data::BinanceUserDataEvent;
 use platform_type_bridge::TickerMapping;
 
 pub(super) struct EventParser;

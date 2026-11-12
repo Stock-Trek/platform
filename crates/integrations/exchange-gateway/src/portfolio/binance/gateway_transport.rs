@@ -2,6 +2,7 @@ use super::{
     balances::BalanceParser,
     config::BinancePortfolioConfig,
     event_parser::EventParser,
+    listen_key::BinanceListenKeyRequest,
     transport::{AccountSnapshot, BinanceAccountEvent, BinanceEventStream, BinanceTransport},
 };
 use crate::{
@@ -16,7 +17,6 @@ use platform_exchange_types::{
     binance::{
         account_status::BinanceAccountStatusRequest,
         exchange::BinanceExchange,
-        listen_key::BinanceListenKeyRequest,
         response::{BinanceResponse, BinanceResponsePayload},
     },
     encode::ByteEncoder,

@@ -6,16 +6,11 @@ use crate::{
 };
 use platform_errors::BpResult;
 use platform_exchange_gateway::portfolio::{
-    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT, ExchangePortfolioFeed,
-    NoopPortfolioFeed, PortfolioFeed,
-    binance::{BinancePortfolioConfig, BinancePortfolioConnector, StaticBinanceCredentials},
+    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT,
 };
-use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use platform_nats::{EventPublisher, NatsPublisher};
 use platform_runtime::{Runtime, Service};
-use secrecy::{ExposeSecret, SecretString};
 use std::sync::Arc;
-use stock_trek_types::cex::account_id::AccountId;
 
 const SERVICE: Service = Service::new("platform-portfolio-service");
 
@@ -26,40 +21,12 @@ impl PortfolioRunner {
         SERVICE.init_logging(config.log_filter())?;
         let auth_service = PortfolioAuthService::connect(config.auth().clone()).await?;
         let publisher: Arc<dyn EventPublisher> = Arc::new(Self::publisher(&config).await?);
-        let feed: Arc<dyn PortfolioFeed> = if config.binance().enabled() {
-            let credentials = config
-                .binance()
-                .credentials()
-                .iter()
-                .map(|credential| {
-                    (
-                        AccountId::new(credential.account()),
-                        ApiKeyCredentials {
-                            api_key: credential.api_key().to_string(),
-                            secret: SecretString::from(
-                                credential.secret().expose_secret().to_string(),
-                            ),
-                        },
-                    )
-                })
-                .collect::<Vec<_>>();
-            let connector = Arc::new(BinancePortfolioConnector::new(
-                BinancePortfolioConfig::new(
-                    config.binance().rest_url(),
-                    config.binance().websocket_url(),
-                    config.binance().listen_key_refresh(),
-                    config.binance().reconnect_backoff(),
-                )?,
-                Arc::new(StaticBinanceCredentials::new(credentials)),
-                Arc::new(NatsConnectorHealthSink::new(
-                    Arc::clone(&publisher),
-                    CONNECTOR_HEALTH_SUBJECT,
-                )),
-            ));
-            Arc::new(ExchangePortfolioFeed::new(connector))
-        } else {
-            Arc::new(NoopPortfolioFeed::new())
-        };
+        let feed = config
+            .connector()
+            .feed(Arc::new(NatsConnectorHealthSink::new(
+                Arc::clone(&publisher),
+                CONNECTOR_HEALTH_SUBJECT,
+            )));
         let portfolio = Arc::new(PortfolioService::with_freshness_policy(
             Arc::clone(&feed),
             config.freshness().policy(),

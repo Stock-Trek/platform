@@ -26,11 +26,12 @@ impl PortfolioUpdateConsumer {
         let mut processed = 0;
         while let Some(message) = self.source.next().await? {
             let update = message.update().clone();
+            let exchange = update.exchange_label();
             let lag = chrono::Utc::now().signed_duration_since(update.occurred_at());
             PortfolioMetrics::record_consumer_lag(lag.to_std().unwrap_or_default());
             match self.service.apply_portfolio_update(update.clone()) {
                 PortfolioUpdateOutcome::Applied => {
-                    PortfolioMetrics::record_update_outcome("binance", "applied");
+                    PortfolioMetrics::record_update_outcome(exchange.clone(), "applied");
                     tracing::debug!(
                         account = %update.account().storage_key(),
                         version = update.version(),
@@ -38,7 +39,7 @@ impl PortfolioUpdateConsumer {
                     );
                 }
                 PortfolioUpdateOutcome::IgnoredUntracked => {
-                    PortfolioMetrics::record_update_outcome("binance", "untracked");
+                    PortfolioMetrics::record_update_outcome(exchange.clone(), "untracked");
                     tracing::debug!(
                         account = %update.account().storage_key(),
                         version = update.version(),
@@ -46,7 +47,7 @@ impl PortfolioUpdateConsumer {
                     );
                 }
                 PortfolioUpdateOutcome::IgnoredStale => {
-                    PortfolioMetrics::record_update_outcome("binance", "stale");
+                    PortfolioMetrics::record_update_outcome(exchange, "stale");
                     tracing::debug!(
                         account = %update.account().storage_key(),
                         version = update.version(),

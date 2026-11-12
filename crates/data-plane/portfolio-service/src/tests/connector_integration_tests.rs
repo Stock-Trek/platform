@@ -6,12 +6,10 @@ use chrono::Utc;
 use parking_lot::Mutex;
 use platform_errors::BpResult;
 use platform_exchange_gateway::portfolio::{
-    ExchangePortfolioFeed, NoopConnectorHealthSink, PortfolioConnector, PortfolioFeed,
-    PortfolioUpdate as GatewayPortfolioUpdate, PortfolioUpdateApply, PortfolioUpdateSink,
-    binance::{
-        AccountPositionEvent, AccountSnapshot, BinanceAccountEvent, BinanceCredentialSource,
-        BinanceEventStream, BinancePortfolioConfig, BinancePortfolioConnector, BinanceTransport,
-    },
+    ExchangePortfolioConnector, NoopConnectorHealthSink, PortfolioCredentialSource, PortfolioEvent,
+    PortfolioExchangeTransport, PortfolioFeed, PortfolioPosition, PortfolioSession,
+    PortfolioSnapshot, PortfolioUpdate as GatewayPortfolioUpdate, PortfolioUpdateApply,
+    PortfolioUpdateSink,
 };
 use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
@@ -24,13 +22,17 @@ use std::{
     },
     time::Duration,
 };
-use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId};
+use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 
 struct Credentials;
 
 #[async_trait]
-impl BinanceCredentialSource for Credentials {
-    async fn credentials(&self, _account_id: &AccountId) -> BpResult<ApiKeyCredentials> {
+impl PortfolioCredentialSource for Credentials {
+    async fn credentials(
+        &self,
+        _cex_id: CexId,
+        _account_id: &AccountId,
+    ) -> BpResult<ApiKeyCredentials> {
         Ok(ApiKeyCredentials {
             api_key: "api-key".to_string(),
             secret: SecretString::from("secret"),
@@ -38,13 +40,28 @@ impl BinanceCredentialSource for Credentials {
     }
 }
 
-struct Stream {
-    events: VecDeque<BinanceAccountEvent>,
+struct Session {
+    snapshot: PortfolioSnapshot,
+    events: VecDeque<PortfolioEvent>,
+    closes: Arc<AtomicUsize>,
 }
 
 #[async_trait]
-impl BinanceEventStream for Stream {
-    async fn next(&mut self) -> BpResult<Option<BinanceAccountEvent>> {
+impl PortfolioSession for Session {
+    async fn snapshot(&self) -> BpResult<PortfolioSnapshot> {
+        Ok(self.snapshot.clone())
+    }
+
+    async fn refresh(&self) -> BpResult<()> {
+        Ok(())
+    }
+
+    async fn close(&mut self) -> BpResult<()> {
+        self.closes.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+
+    async fn next(&mut self) -> BpResult<Option<PortfolioEvent>> {
         if let Some(event) = self.events.pop_front() {
             return Ok(Some(event));
         }
@@ -53,49 +70,36 @@ impl BinanceEventStream for Stream {
 }
 
 struct Transport {
-    closes: AtomicUsize,
+    closes: Arc<AtomicUsize>,
 }
 
 #[async_trait]
-impl BinanceTransport for Transport {
-    async fn create_listen_key(&self, _credentials: &ApiKeyCredentials) -> BpResult<String> {
-        Ok("listen-key".to_string())
+impl PortfolioExchangeTransport for Transport {
+    fn cex_id(&self) -> CexId {
+        CexId::Binance
     }
 
-    async fn keepalive_listen_key(
+    fn refresh_interval(&self) -> Duration {
+        Duration::from_secs(3600)
+    }
+
+    fn reconnect_backoff(&self) -> Duration {
+        Duration::from_millis(10)
+    }
+
+    async fn open_session(
         &self,
+        _account: &AccountId,
         _credentials: &ApiKeyCredentials,
-        _listen_key: &str,
-    ) -> BpResult<()> {
-        Ok(())
-    }
-
-    async fn close_listen_key(
-        &self,
-        _credentials: &ApiKeyCredentials,
-        _listen_key: &str,
-    ) -> BpResult<()> {
-        self.closes.fetch_add(1, Ordering::SeqCst);
-        Ok(())
-    }
-
-    async fn account_snapshot(
-        &self,
-        _credentials: &ApiKeyCredentials,
-    ) -> BpResult<AccountSnapshot> {
-        Ok(AccountSnapshot::new(
-            BTreeMap::from([(AssetId::Bitcoin, 1.0)]),
-            Utc::now(),
-        ))
-    }
-
-    async fn open_stream(&self, _listen_key: &str) -> BpResult<Box<dyn BinanceEventStream>> {
-        Ok(Box::new(Stream {
-            events: VecDeque::from([BinanceAccountEvent::Position(AccountPositionEvent::new(
+    ) -> BpResult<Box<dyn PortfolioSession>> {
+        Ok(Box::new(Session {
+            snapshot: PortfolioSnapshot::new(BTreeMap::from([(AssetId::Bitcoin, 1.0)]), Utc::now()),
+            events: VecDeque::from([PortfolioEvent::Position(PortfolioPosition::new(
                 42,
                 BTreeMap::from([(AssetId::TetherUSD, 500.0)]),
                 Utc::now() + chrono::Duration::seconds(1),
             ))]),
+            closes: Arc::clone(&self.closes),
         }))
     }
 }
@@ -121,56 +125,51 @@ impl PortfolioUpdateSink for ServiceSink {
     }
 }
 
-fn ownership_event() -> OwnershipEvent {
-    OwnershipEvent::new(
-        "audit-1",
-        OWNER,
-        PortfolioFixture::account("account-1"),
-        OwnershipAction::Add,
-        1,
-        Utc::now(),
-    )
-}
+struct Fixture;
 
-async fn wait_for_update(service: &PortfolioService) {
-    tokio::time::timeout(Duration::from_secs(2), async {
-        loop {
-            if service
-                .account_portfolio(&PortfolioFixture::account("account-1"))
-                .is_some_and(|portfolio| portfolio.asset_total(AssetId::TetherUSD) == 500.0)
-            {
-                return;
+impl Fixture {
+    fn ownership_event() -> OwnershipEvent {
+        OwnershipEvent::new(
+            "audit-1",
+            OWNER,
+            PortfolioFixture::account("account-1"),
+            OwnershipAction::Add,
+            1,
+            Utc::now(),
+        )
+    }
+
+    async fn wait_for_update(service: &PortfolioService) {
+        tokio::time::timeout(Duration::from_secs(2), async {
+            loop {
+                if service
+                    .account_portfolio(&PortfolioFixture::account("account-1"))
+                    .is_some_and(|portfolio| portfolio.asset_total(AssetId::TetherUSD) == 500.0)
+                {
+                    return;
+                }
+                tokio::time::sleep(Duration::from_millis(5)).await;
             }
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-    })
-    .await
-    .expect("portfolio update timeout");
+        })
+        .await
+        .expect("portfolio update timeout");
+    }
+
+    fn feed(closes: Arc<AtomicUsize>) -> Arc<dyn PortfolioFeed> {
+        ExchangePortfolioConnector::new(
+            [Arc::new(Transport { closes }) as Arc<dyn PortfolioExchangeTransport>],
+            Arc::new(Credentials),
+            Arc::new(NoopConnectorHealthSink::new()),
+        )
+        .feed()
+    }
 }
 
 #[tokio::test]
 async fn connector_updates_authorize_orders_before_and_after_recovery() {
-    let transport = Arc::new(Transport {
-        closes: AtomicUsize::new(0),
-    });
-    let connector = Arc::new(
-        BinancePortfolioConnector::new(
-            BinancePortfolioConfig::new(
-                "https://api.binance.com/api/v3",
-                "wss://stream.binance.com:9443/ws",
-                Duration::from_secs(3600),
-                Duration::from_millis(10),
-            )
-            .expect("config"),
-            Arc::new(Credentials),
-            Arc::new(NoopConnectorHealthSink::new()),
-        )
-        .with_transport(transport.clone()),
-    );
-    let feed = Arc::new(ExchangePortfolioFeed::new(
-        connector as Arc<dyn PortfolioConnector>,
-    ));
-    let service = Arc::new(PortfolioService::new(feed.clone()));
+    let closes = Arc::new(AtomicUsize::new(0));
+    let feed = Fixture::feed(Arc::clone(&closes));
+    let service = Arc::new(PortfolioService::new(Arc::clone(&feed)));
     let sink = Arc::new(ServiceSink {
         service: Arc::clone(&service),
         updates: Mutex::new(Vec::new()),
@@ -178,10 +177,10 @@ async fn connector_updates_authorize_orders_before_and_after_recovery() {
     feed.set_update_sink(sink.clone());
 
     service
-        .apply_ownership_event(&ownership_event())
+        .apply_ownership_event(&Fixture::ownership_event())
         .await
         .expect("ownership");
-    wait_for_update(&service).await;
+    Fixture::wait_for_update(&service).await;
 
     let (_, auth_service, _) = OrderFixture::service().await;
     let order_service =
@@ -198,7 +197,7 @@ async fn connector_updates_authorize_orders_before_and_after_recovery() {
         platform_exchange_gateway::portfolio::NoopPortfolioFeed::new(),
     )));
     restarted
-        .apply_ownership_event(&ownership_event())
+        .apply_ownership_event(&Fixture::ownership_event())
         .await
         .expect("ownership replay");
     for update in sink.updates.lock().clone() {
@@ -212,5 +211,5 @@ async fn connector_updates_authorize_orders_before_and_after_recovery() {
     OrderFixture::sign(&recovered, &auth_service, &OrderFixture::unsigned(OWNER))
         .await
         .expect("order after recovery");
-    assert_eq!(transport.closes.load(Ordering::SeqCst), 0);
+    assert_eq!(closes.load(Ordering::SeqCst), 0);
 }

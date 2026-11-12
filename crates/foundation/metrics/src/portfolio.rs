@@ -5,7 +5,8 @@ use std::time::Duration;
 pub struct PortfolioMetrics;
 
 impl PortfolioMetrics {
-    pub fn record_connection_state(cex: &'static str, connected: bool) {
+    pub fn record_connection_state(cex: impl Into<String>, connected: bool) {
+        let cex = cex.into();
         gauge!(
             PORTFOLIO_CONNECTOR_CONNECTED,
             "cex" => cex,
@@ -13,7 +14,8 @@ impl PortfolioMetrics {
         .set(if connected { 1.0 } else { 0.0 });
     }
 
-    pub fn record_subscriptions(cex: &'static str, subscriptions: usize) {
+    pub fn record_subscriptions(cex: impl Into<String>, subscriptions: usize) {
+        let cex = cex.into();
         gauge!(
             PORTFOLIO_CONNECTOR_SUBSCRIPTIONS,
             "cex" => cex,
@@ -21,7 +23,8 @@ impl PortfolioMetrics {
         .set(subscriptions as f64);
     }
 
-    pub fn record_reconnect(cex: &'static str) {
+    pub fn record_reconnect(cex: impl Into<String>) {
+        let cex = cex.into();
         counter!(
             PORTFOLIO_CONNECTOR_RECONNECTS_TOTAL,
             "cex" => cex,
@@ -29,7 +32,8 @@ impl PortfolioMetrics {
         .increment(1);
     }
 
-    pub fn record_connector_update_age(cex: &'static str, age: Duration) {
+    pub fn record_connector_update_age(cex: impl Into<String>, age: Duration) {
+        let cex = cex.into();
         gauge!(
             PORTFOLIO_CONNECTOR_LAST_UPDATE_AGE_SECONDS,
             "cex" => cex,
@@ -37,7 +41,8 @@ impl PortfolioMetrics {
         .set(age.as_secs_f64());
     }
 
-    pub fn record_update_outcome(cex: &'static str, outcome: &'static str) {
+    pub fn record_update_outcome(cex: impl Into<String>, outcome: &'static str) {
+        let cex = cex.into();
         counter!(
             PORTFOLIO_UPDATES_TOTAL,
             "cex" => cex,

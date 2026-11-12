@@ -23,8 +23,7 @@ mod update_source;
 
 pub use auth_service::PortfolioAuthService;
 pub use config::{
-    AuthConfig, BinanceConfig, BinanceCredentialConfig, FreshnessConfig, OrderRequestConfig,
-    OwnershipConfig, PortfolioConfig, UpdateConfig,
+    AuthConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig, PortfolioConfig, UpdateConfig,
 };
 pub use connector_health_publisher::NatsConnectorHealthSink;
 pub use freshness::{FreshnessPolicy, PortfolioFreshness, StaleOrderPolicy};

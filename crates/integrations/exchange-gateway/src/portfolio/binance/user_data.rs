@@ -50,10 +50,6 @@ impl BinanceUserDataEvent {
         })
     }
 
-    pub fn event_type(&self) -> &str {
-        &self.event_type
-    }
-
     pub fn event_time(&self) -> i64 {
         self.event_time
     }

@@ -97,6 +97,10 @@ impl PortfolioUpdate {
         self.version
     }
 
+    pub fn exchange_label(&self) -> String {
+        self.account.cex_id().to_string().to_lowercase()
+    }
+
     pub fn occurred_at(&self) -> DateTime<Utc> {
         self.occurred_at
     }

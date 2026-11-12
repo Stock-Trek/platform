@@ -1,150 +1,90 @@
-use super::{
-    config::BinancePortfolioConfig,
-    credentials::BinanceCredentialSource,
-    health_reporter::HealthReporter,
-    session_state::SessionState,
-    transport::{BinanceAccountEvent, BinanceTransport},
-};
-use crate::portfolio::{ConnectorState, PortfolioUpdateSink};
-use chrono::Utc;
-use platform_errors::{BpError, BpResult};
-use platform_metrics::PortfolioMetrics;
-use std::{sync::Arc, time::Instant};
+use super::transport::{BinanceAccountEvent, BinanceEventStream, BinanceTransport};
+use crate::portfolio::{PortfolioEvent, PortfolioPosition, PortfolioSession, PortfolioSnapshot};
+use async_trait::async_trait;
+use platform_errors::BpResult;
+use platform_exchange_types::api_key_credential::ApiKeyCredentials;
+use std::sync::Arc;
 use stock_trek_types::cex::account_id::AccountId;
-use tokio::{
-    sync::watch,
-    time::{Instant as TokioInstant, interval_at, sleep},
-};
+use tokio::sync::Mutex;
 
-const CEX: &str = "binance";
-const HEALTH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
-
-pub(super) struct WatcherConfig {
-    pub(super) account: AccountId,
-    pub(super) config: Arc<BinancePortfolioConfig>,
-    pub(super) transport: Arc<dyn BinanceTransport>,
-    pub(super) credentials: Arc<dyn BinanceCredentialSource>,
-    pub(super) sink: Arc<dyn PortfolioUpdateSink>,
-    pub(super) health: HealthReporter,
-    pub(super) shutdown: watch::Receiver<bool>,
+pub struct BinanceSession {
+    account: AccountId,
+    credentials: ApiKeyCredentials,
+    listen_key: String,
+    stream: Mutex<Box<dyn BinanceEventStream>>,
+    transport: Arc<dyn BinanceTransport>,
 }
 
-impl WatcherConfig {
-    pub async fn run(self) {
-        let mut state = SessionState::new();
-        let mut shutdown = self.shutdown.clone();
-        loop {
-            if *shutdown.borrow() {
-                return;
+impl BinanceSession {
+    pub async fn open(
+        transport: Arc<dyn BinanceTransport>,
+        account: &AccountId,
+        credentials: &ApiKeyCredentials,
+    ) -> BpResult<Self> {
+        let listen_key = transport.create_listen_key(credentials).await?;
+        let stream = match transport.open_stream(&listen_key).await {
+            Ok(stream) => stream,
+            Err(error) => {
+                let _ = transport.close_listen_key(credentials, &listen_key).await;
+                return Err(error);
             }
-            match self.run_session(&mut shutdown, &mut state).await {
-                Ok(()) => return,
-                Err(error) => {
-                    PortfolioMetrics::record_connection_state(CEX, false);
-                    PortfolioMetrics::record_reconnect(CEX);
-                    tracing::warn!(
-                        account = %self.account.0,
-                        %error,
-                        "portfolio feed session failed"
-                    );
-                    self.publish_health(ConnectorState::Disconnected, state.last_update)
-                        .await;
-                    tokio::select! {
-                        _ = sleep(self.config.reconnect_backoff()) => {}
-                        changed = shutdown.changed() => {
-                            if changed.is_err() || *shutdown.borrow() {
-                                return;
-                            }
-                        }
-                    }
-                }
+        };
+        Ok(Self {
+            account: account.clone(),
+            credentials: credentials.clone(),
+            listen_key,
+            stream: Mutex::new(stream),
+            transport,
+        })
+    }
+
+    fn event(event: BinanceAccountEvent) -> PortfolioEvent {
+        match event {
+            BinanceAccountEvent::Position(event) => {
+                PortfolioEvent::Position(PortfolioPosition::new(
+                    event.version(),
+                    event.balances().clone(),
+                    event.occurred_at(),
+                ))
             }
+            BinanceAccountEvent::ListenKeyExpired => PortfolioEvent::SessionExpired,
         }
     }
+}
 
-    async fn run_session(
-        &self,
-        shutdown: &mut watch::Receiver<bool>,
-        state: &mut SessionState,
-    ) -> BpResult<()> {
-        let credentials = self.credentials.credentials(&self.account).await?;
-        let listen_key = self.transport.create_listen_key(&credentials).await?;
-        let result = self
-            .session(&credentials, &listen_key, shutdown, state)
-            .await;
-        let _ = self
-            .transport
-            .close_listen_key(&credentials, &listen_key)
-            .await;
-        result
-    }
-
-    async fn session(
-        &self,
-        credentials: &platform_exchange_types::api_key_credential::ApiKeyCredentials,
-        listen_key: &str,
-        shutdown: &mut watch::Receiver<bool>,
-        state: &mut SessionState,
-    ) -> BpResult<()> {
-        let mut stream = self.transport.open_stream(listen_key).await?;
-        let snapshot = self.transport.account_snapshot(credentials).await?;
-        state.replace_snapshot(snapshot.balances().clone(), snapshot.occurred_at());
-        state.version = Self::next_version(state.version, 0);
-        self.publish_portfolio(
-            state.version,
-            &state.balances,
+#[async_trait]
+impl PortfolioSession for BinanceSession {
+    async fn snapshot(&self) -> BpResult<PortfolioSnapshot> {
+        let snapshot = self.transport.account_snapshot(&self.credentials).await?;
+        Ok(PortfolioSnapshot::new(
+            snapshot.balances().clone(),
             snapshot.occurred_at(),
-            None,
-            &mut state.last_update,
-        )
-        .await?;
-        PortfolioMetrics::record_connection_state(CEX, true);
-        self.publish_health(ConnectorState::Connected, state.last_update)
-            .await;
-        let mut keepalive = interval_at(
-            TokioInstant::now() + self.config.listen_key_refresh(),
-            self.config.listen_key_refresh(),
-        );
-        let mut heartbeat = interval_at(TokioInstant::now() + HEALTH_INTERVAL, HEALTH_INTERVAL);
-        loop {
-            tokio::select! {
-                changed = shutdown.changed() => {
-                    if changed.is_err() || *shutdown.borrow() {
-                        return Ok(());
-                    }
-                }
-                _ = keepalive.tick() => {
-                    self.transport.keepalive_listen_key(credentials, listen_key).await?;
-                }
-                _ = heartbeat.tick() => {
-                    self.publish_health(ConnectorState::Connected, state.last_update).await;
-                }
-                event = stream.next() => {
-                    match event? {
-                        None => return Err(BpError::external(std::io::Error::other("Binance stream closed"))),
-                        Some(BinanceAccountEvent::ListenKeyExpired) => {
-                            return Err(BpError::external(std::io::Error::other("Binance listen key expired")));
-                        }
-                        Some(BinanceAccountEvent::Position(event)) => {
-                            if event.occurred_at() < state.last_exchange_time {
-                                continue;
-                            }
-                            state.last_exchange_time = event.occurred_at();
-                            Self::merge_balances(&mut state.balances, event.balances());
-                            state.version = Self::next_version(state.version, event.version());
-                            state.last_update = Some(Instant::now());
-                            self.publish_portfolio(
-                                state.version,
-                                &state.balances,
-                                Utc::now(),
-                                Some(event.occurred_at()),
-                                &mut state.last_update,
-                            ).await?;
-                            self.publish_health(ConnectorState::Connected, state.last_update).await;
-                        }
-                    }
-                }
-            }
-        }
+        ))
+    }
+
+    async fn refresh(&self) -> BpResult<()> {
+        self.transport
+            .keepalive_listen_key(&self.credentials, &self.listen_key)
+            .await
+    }
+
+    async fn close(&mut self) -> BpResult<()> {
+        self.transport
+            .close_listen_key(&self.credentials, &self.listen_key)
+            .await
+    }
+
+    async fn next(&mut self) -> BpResult<Option<PortfolioEvent>> {
+        Ok(self.stream.lock().await.next().await?.map(Self::event))
+    }
+}
+
+impl std::fmt::Debug for BinanceSession {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("BinanceSession")
+            .field("account", &self.account)
+            .field("listen_key", &"[redacted]")
+            .finish()
     }
 }

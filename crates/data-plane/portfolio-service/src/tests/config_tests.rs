@@ -60,10 +60,6 @@ const ALL_VARS: [(&str, &str); 25] = [
 pub(super) struct Fixture;
 
 impl Fixture {
-    pub fn all() -> Vec<(&'static str, &'static str)> {
-        ALL_VARS.to_vec()
-    }
-
     pub(super) fn config(vars: &[(&str, &str)]) -> BpResult<PortfolioConfig> {
         PortfolioConfig::from_vars(&EnvVars::from_map(
             vars.iter()
@@ -142,7 +138,6 @@ fn reads_every_value_from_the_environment() {
         config.freshness().policy().max_age(),
         chrono::Duration::seconds(60)
     );
-    assert!(!config.binance().enabled());
 }
 
 #[test]
