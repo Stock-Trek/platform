@@ -1,4 +1,7 @@
-use crate::panic_guard::PanicUtils;
+use crate::{
+    panic_guard::PanicUtils,
+    websocket_listener::event_stream::{EventSubscribers, WebsocketEventStream},
+};
 use parking_lot::Mutex;
 use platform_errors::{BpError, BpResult, ConnectorError};
 use std::{
@@ -12,15 +15,18 @@ type Handlers = Arc<Mutex<Vec<ResponseHandler>>>;
 #[derive(Clone)]
 pub struct WebsocketListener {
     pub(crate) handlers: Handlers,
+    pub(crate) events: EventSubscribers,
 }
 
 impl WebsocketListener {
     pub fn new() -> Self {
         Self {
             handlers: Arc::new(Mutex::new(Vec::new())),
+            events: EventSubscribers::new(),
         }
     }
     pub async fn on_message(&self, message: serde_json::Value) -> BpResult<()> {
+        self.events.publish(&message);
         let handlers = self.handlers.lock().clone();
         for handler in handlers {
             if handler.handle(&message)? {
@@ -31,6 +37,9 @@ impl WebsocketListener {
             }
         }
         Ok(())
+    }
+    pub fn subscribe(&self) -> WebsocketEventStream {
+        self.events.subscribe()
     }
     pub fn waiter_for_filtered_response(
         &self,
@@ -60,6 +69,7 @@ impl std::fmt::Debug for WebsocketListener {
         let handlers = self.handlers.lock().len();
         f.debug_struct("WebsocketListener")
             .field("handlers", &handlers)
+            .field("subscribers", &self.events.subscriber_count())
             .finish()
     }
 }

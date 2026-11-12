@@ -26,7 +26,7 @@ mod update_source;
 pub use auth_service::PortfolioAuthService;
 pub use binance_connector::{
     AccountPositionEvent, AccountSnapshot, BinanceAccountEvent, BinanceCredentialSource,
-    BinanceEventStream, BinancePortfolioConnector, BinanceTransport, ReqwestBinanceTransport,
+    BinanceEventStream, BinancePortfolioConnector, BinanceTransport, GatewayBinanceTransport,
     StaticBinanceCredentials,
 };
 pub use config::{

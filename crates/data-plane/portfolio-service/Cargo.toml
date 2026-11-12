@@ -6,7 +6,6 @@ edition.workspace = true
 [dependencies]
 async-trait = { workspace = true }
 chrono = { workspace = true }
-futures = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
@@ -14,6 +13,7 @@ parking_lot = { workspace = true }
 platform-auth-service = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http"] }
+platform-exchange-gateway = { workspace = true }
 platform-exchange-types = { workspace = true }
 platform-metrics = { workspace = true }
 platform-messages = { workspace = true }
@@ -23,7 +23,6 @@ platform-runtime = { workspace = true }
 platform-type-bridge = { workspace = true }
 platform-types = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json", "rustls"] }
-rust_decimal = { workspace = true }
 secrecy = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true }
@@ -31,4 +30,3 @@ stock-trek = { workspace = true }
 stock-trek-types = { workspace = true }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { workspace = true }
-tokio-websockets = { workspace = true, features = ["client", "rustls-webpki-roots", "sha1_smol", "rand"] }

@@ -1,10 +1,10 @@
 use crate::{
     BinancePortfolioConnector, CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT,
-    GroupingPortfolioFeed, NatsOwnershipSource, NatsUpdateSource, NoopPortfolioFeed,
-    OrderRequestDelivery, OrderRequestServer, OrderRequestService, OwnershipConsumer,
-    PORTFOLIO_UPDATE_STREAM_PREFIX, PortfolioAuthService, PortfolioConfig, PortfolioFeed,
-    PortfolioService, PortfolioUpdateConsumer, PublishingPortfolioUpdateSink,
-    ReqwestBinanceTransport, StaticBinanceCredentials,
+    GatewayBinanceTransport, GroupingPortfolioFeed, NatsOwnershipSource, NatsUpdateSource,
+    NoopPortfolioFeed, OrderRequestDelivery, OrderRequestServer, OrderRequestService,
+    OwnershipConsumer, PORTFOLIO_UPDATE_STREAM_PREFIX, PortfolioAuthService, PortfolioConfig,
+    PortfolioFeed, PortfolioService, PortfolioUpdateConsumer, PublishingPortfolioUpdateSink,
+    StaticBinanceCredentials,
 };
 use platform_errors::BpResult;
 use platform_exchange_types::api_key_credential::ApiKeyCredentials;
@@ -39,7 +39,7 @@ impl PortfolioRunner {
                     )
                 })
                 .collect::<Vec<_>>();
-            let transport = Arc::new(ReqwestBinanceTransport::new(
+            let transport = Arc::new(GatewayBinanceTransport::new(
                 config.binance().rest_url(),
                 config.binance().websocket_url(),
             )?);
