@@ -1,4 +1,4 @@
-use crate::handler::Handler;
+use crate::Handler;
 use lambda_runtime::LambdaEvent;
 use platform_errors::{BuildError, BuildResult, ErrorType};
 use platform_messages::{BuildOutcome, BuildRequest};

@@ -1,7 +1,4 @@
-use crate::{
-    handler::{BuildAgent, Handler},
-    source_archive::SourceLimits,
-};
+use crate::{BuildAgent, Handler, source_archive::SourceLimits};
 use platform_errors::{BuildError, ConfigError, ErrorType, TimeoutError};
 use platform_messages::{BuildRequest, BuildRequestSignedPost, SqsRefType};
 use std::collections::BTreeMap;

@@ -1,5 +1,6 @@
 use crate::{
-    config::AgentConfig, handler::BuildAgent, handler::Handler, source_archive::SourceLimits,
+    build_agent::BuildAgent, build_handler::Handler, config::AgentConfig,
+    source_archive::SourceLimits,
 };
 use lambda_runtime::service_fn;
 use metrics_cloudwatch_embedded::lambda::service::run;
@@ -7,16 +8,17 @@ use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Service;
 
 mod artifacts;
+mod artifacts_compile;
+mod artifacts_publish;
+#[cfg(test)]
+mod artifacts_tests;
+mod build_agent;
+mod build_handler;
 mod config;
-mod handler;
 mod signed_post;
-
 #[cfg(test)]
 mod signed_post_tests;
-
-pub use signed_post::*;
 mod source_archive;
-
 #[cfg(test)]
 mod source_archive_tests;
 
