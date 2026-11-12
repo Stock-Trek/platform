@@ -36,6 +36,9 @@ jobs:
           echo "${{ env.SHIPYARD_KNOWN_HOST }}" >> ~/.ssh/known_hosts
           ssh -T git@ssh.shipyard.rs
 
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
 

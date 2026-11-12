@@ -784,6 +784,9 @@ jobs:
           env-slug: "dev"
           secret-name: "SHIPYARD_KNOWN_HOST"
 
+      - name: Cache Rust build
+        uses: Swatinem/rust-cache@v2
+
       - name: Prefetch cargo dependencies
         timeout-minutes: 20
         if: steps.save-response-type.outputs.response-type == 'CAN_ADDRESS_FULLY'
