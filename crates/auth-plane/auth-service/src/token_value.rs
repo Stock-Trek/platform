@@ -1,6 +1,6 @@
 use crate::{ApiToken, TokenMetadata};
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::{Map, Value};
 
@@ -39,10 +39,10 @@ impl ApiToken {
         left == right
     }
 
-    pub fn from_value(id: &str, value: &Value) -> BpResult<Self> {
+    pub fn from_value(id: &str, value: &Value) -> BuildResult<Self> {
         let stored_id = Self::string_field(value, ID)?;
         if stored_id != id {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 ID,
                 "does not match the requested token id",
             ));
@@ -52,20 +52,20 @@ impl ApiToken {
         let created_at = Self::string_field(value, CREATED_AT)?;
         let created_at = DateTime::parse_from_rfc3339(&created_at)
             .map_err(|e| {
-                BpError::auth_invalid_field(CREATED_AT, format!("not an RFC 3339 timestamp: {e}"))
+                BuildError::auth_invalid_field(CREATED_AT, format!("not an RFC 3339 timestamp: {e}"))
             })?
             .with_timezone(&Utc);
         let metadata = TokenMetadata::from_value(value)?;
         Self::from_parts(id, owner, SecretString::from(secret), created_at, metadata)
     }
 
-    fn string_field(value: &Value, field: &'static str) -> BpResult<String> {
+    fn string_field(value: &Value, field: &'static str) -> BuildResult<String> {
         value
             .get(field)
             .and_then(Value::as_str)
             .map(str::to_string)
             .ok_or_else(|| {
-                BpError::auth_invalid_field(field, "missing from the stored token value")
+                BuildError::auth_invalid_field(field, "missing from the stored token value")
             })
     }
 }

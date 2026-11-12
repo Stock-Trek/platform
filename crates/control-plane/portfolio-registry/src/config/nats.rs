@@ -1,6 +1,6 @@
 use super::stream::NatsStreamConfig;
 use platform_config::env_vars::EnvVars;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_runtime::Config;
 use std::time::Duration;
 
@@ -18,7 +18,7 @@ pub struct RegistryNatsConfig {
 }
 
 impl RegistryNatsConfig {
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         Ok(Self {
             url: Config::required_nats_url(vars, URL)?,
             client_name: vars.required(CLIENT_NAME)?,

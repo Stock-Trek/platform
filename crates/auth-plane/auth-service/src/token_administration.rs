@@ -3,7 +3,7 @@ use crate::{
     TokenView,
 };
 use chrono::{DateTime, Utc};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 
 /// Read-only access to token metadata.
 ///
@@ -18,11 +18,11 @@ impl<'a> TokenReader<'a> {
         Self { service }
     }
 
-    pub async fn token(&self, id: &str) -> BpResult<TokenView> {
+    pub async fn token(&self, id: &str) -> BuildResult<TokenView> {
         Ok(TokenView::from_token(&self.service.token(id).await?))
     }
 
-    pub async fn tokens_for_owner(&self, owner: &str) -> BpResult<Vec<TokenView>> {
+    pub async fn tokens_for_owner(&self, owner: &str) -> BuildResult<Vec<TokenView>> {
         Ok(self
             .service
             .tokens_for_owner(owner)
@@ -36,7 +36,7 @@ impl<'a> TokenReader<'a> {
         &self,
         owner: &str,
         now: DateTime<Utc>,
-    ) -> BpResult<Vec<TokenView>> {
+    ) -> BuildResult<Vec<TokenView>> {
         Ok(self
             .service
             .active_tokens_for_owner(owner, now)
@@ -46,7 +46,7 @@ impl<'a> TokenReader<'a> {
             .collect())
     }
 
-    pub async fn token_for_owner(&self, owner: &str, now: DateTime<Utc>) -> BpResult<TokenView> {
+    pub async fn token_for_owner(&self, owner: &str, now: DateTime<Utc>) -> BuildResult<TokenView> {
         Ok(TokenView::from_token(
             &self.service.token_for_owner(owner, now).await?,
         ))
@@ -57,7 +57,7 @@ impl<'a> TokenReader<'a> {
         owner: &str,
         scope: TokenScope,
         now: DateTime<Utc>,
-    ) -> BpResult<TokenView> {
+    ) -> BuildResult<TokenView> {
         Ok(TokenView::from_token(
             &self
                 .service
@@ -88,13 +88,13 @@ impl<'a> TokenAdministrator<'a> {
         created_at: DateTime<Utc>,
         options: TokenOptions,
         now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
+    ) -> BuildResult<ApiToken> {
         self.service
             .add_token(id, owner, created_at, options, now)
             .await
     }
 
-    pub async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<()> {
+    pub async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> BuildResult<()> {
         self.service.delete_token(id, now).await
     }
 
@@ -104,7 +104,7 @@ impl<'a> TokenAdministrator<'a> {
         reason: RevocationReason,
         revoked_by: RevokedBy,
         now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
+    ) -> BuildResult<ApiToken> {
         self.service.revoke_token(id, reason, revoked_by, now).await
     }
 
@@ -116,13 +116,13 @@ impl<'a> TokenAdministrator<'a> {
         reason: RevocationReason,
         revoked_by: RevokedBy,
         now: DateTime<Utc>,
-    ) -> BpResult<Vec<ApiToken>> {
+    ) -> BuildResult<Vec<ApiToken>> {
         self.service
             .revoke_tokens_for_owner(owner, reason, revoked_by, now)
             .await
     }
 
-    pub async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
+    pub async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BuildResult<ApiToken> {
         self.service.rotate_token(id, now).await
     }
 
@@ -131,15 +131,15 @@ impl<'a> TokenAdministrator<'a> {
         id: &str,
         replacement_id: impl Into<String>,
         now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
+    ) -> BuildResult<ApiToken> {
         self.service.rotate_token_to(id, replacement_id, now).await
     }
 
-    pub async fn purge_expired_tokens(&self, now: DateTime<Utc>) -> BpResult<usize> {
+    pub async fn purge_expired_tokens(&self, now: DateTime<Utc>) -> BuildResult<usize> {
         self.service.purge_expired_tokens(now).await
     }
 
-    pub async fn reconcile_owner_indexes(&self) -> BpResult<usize> {
+    pub async fn reconcile_owner_indexes(&self) -> BuildResult<usize> {
         self.service.reconcile_owner_indexes().await
     }
 }
@@ -152,7 +152,7 @@ impl AuthService {
         token_id: &str,
         secret: impl SecretInput,
         now: DateTime<Utc>,
-    ) -> BpResult<TokenReader<'_>> {
+    ) -> BuildResult<TokenReader<'_>> {
         self.authenticate(token_id, secret, Some(TokenScope::TokensRead), now)
             .await?;
         Ok(TokenReader::new(self))
@@ -166,7 +166,7 @@ impl AuthService {
         token_id: &str,
         secret: impl SecretInput,
         now: DateTime<Utc>,
-    ) -> BpResult<TokenAdministrator<'_>> {
+    ) -> BuildResult<TokenAdministrator<'_>> {
         self.authenticate(token_id, secret, Some(TokenScope::TokensWrite), now)
             .await?;
         Ok(TokenAdministrator::new(self))

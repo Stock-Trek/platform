@@ -1,13 +1,13 @@
 use super::BinanceUserDataEvent;
 use crate::portfolio::{AccountEvent, AccountPositionEvent, BalanceParser};
 use chrono::{TimeZone, Utc};
-use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_errors::{BuildError, BuildResult, ExchangeError};
 use stock_trek_types::cex::asset_id::AssetId;
 
 pub struct EventParser;
 
 impl EventParser {
-    pub fn parse<F>(value: &serde_json::Value, mapping: &F) -> BpResult<Option<AccountEvent>>
+    pub fn parse<F>(value: &serde_json::Value, mapping: &F) -> BuildResult<Option<AccountEvent>>
     where
         F: Fn(&str) -> Option<AssetId> + ?Sized,
     {
@@ -41,7 +41,7 @@ impl EventParser {
             .timestamp_millis_opt(event.event_time())
             .single()
             .ok_or_else(|| {
-                BpError::Exchange(ExchangeError::BadResponse(
+                BuildError::Exchange(ExchangeError::BadResponse(
                     "invalid event timestamp".to_string(),
                 ))
             })?;

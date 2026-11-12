@@ -32,12 +32,12 @@ impl PortfolioFeed for RecordingFeed {
         &self,
         cex_id: CexId,
         accounts: std::collections::BTreeSet<AccountId>,
-    ) -> platform_errors::BpResult<()> {
+    ) -> platform_errors::BuildResult<()> {
         if self
             .fail_next
             .swap(false, std::sync::atomic::Ordering::SeqCst)
         {
-            return Err(platform_errors::BpError::external(std::io::Error::other(
+            return Err(platform_errors::BuildError::external(std::io::Error::other(
                 "feed failed",
             )));
         }

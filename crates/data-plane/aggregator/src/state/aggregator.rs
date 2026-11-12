@@ -7,7 +7,7 @@
 
 use super::gaps::{IncompleteWindow, KnownGap};
 use super::streams::StreamProgress;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::{Candle, CandleKey};
 use platform_types::new_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
@@ -91,15 +91,15 @@ impl AggregatorState {
         self.schema_version == expected_version
     }
 
-    pub fn ensure_schema_compatible(&self) -> BpResult<()> {
+    pub fn ensure_schema_compatible(&self) -> BuildResult<()> {
         self.ensure_schema_compatible_with(STATE_SCHEMA_VERSION)
     }
 
-    pub fn ensure_schema_compatible_with(&self, expected_version: u32) -> BpResult<()> {
+    pub fn ensure_schema_compatible_with(&self, expected_version: u32) -> BuildResult<()> {
         if self.is_schema_compatible_with(expected_version) {
             return Ok(());
         }
-        Err(BpError::bad_value(
+        Err(BuildError::bad_value(
             "aggregator state",
             self.schema_version.to_string(),
             format!("expected schema version {expected_version}"),

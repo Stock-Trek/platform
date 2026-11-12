@@ -3,7 +3,7 @@ use crate::{
     floats_to_decimals::FloatsToDecimals, semantic_checker::SemanticChecker,
     ticker_mapping::TickerMapping, trading_precision::TradingPrecision,
 };
-use platform_errors::{BpError, BpResult, ValidationError};
+use platform_errors::{BuildError, BuildResult, ValidationError};
 use platform_exchange_types::{
     exchange::ETExchange,
     request::{ETHttpRequest, ETWebsocketRequest},
@@ -46,27 +46,27 @@ pub trait Converter {
         &self,
         trading_pair: &TradingPair,
         cex_preferences: &CexPreferences,
-    ) -> BpResult<Self::AssetLimitsRequest>;
-    fn exchange_info_request(&self) -> BpResult<Self::ExchangeInfoRequest>;
+    ) -> BuildResult<Self::AssetLimitsRequest>;
+    fn exchange_info_request(&self) -> BuildResult<Self::ExchangeInfoRequest>;
     fn order_request(
         &self,
         order_request: OrderRequest<AssetId, f64>,
         trading_precision: TradingPrecision,
         cex_preferences: &CexPreferences,
-    ) -> BpResult<Self::OrderRequest>;
+    ) -> BuildResult<Self::OrderRequest>;
     fn asset_limits_response(&self, response: Self::AssetLimitsResponse)
-    -> BpResult<TBAssetLimits>;
+    -> BuildResult<TBAssetLimits>;
     fn exchange_info_response(
         &self,
         response: Self::ExchangeInfoResponse,
-    ) -> BpResult<TBExchangeInfo>;
-    fn order_response(&self, response: Self::OrderResponse) -> BpResult<OrderResponse>;
+    ) -> BuildResult<TBExchangeInfo>;
+    fn order_response(&self, response: Self::OrderResponse) -> BuildResult<OrderResponse>;
     fn try_convert_precise(
         &self,
         order_request: OrderRequest<AssetId, f64>,
         cex_preferences: &CexPreferences,
         trading_precision: TradingPrecision,
-    ) -> BpResult<OrderRequest<Ticker, Decimal>> {
+    ) -> BuildResult<OrderRequest<Ticker, Decimal>> {
         let order_request_with_precision =
             FloatsToDecimals::new(trading_precision, cex_preferences.rounding)
                 .floats_to_decimals(order_request)?;
@@ -105,11 +105,11 @@ impl<C> TradingConverter<C>
 where
     C: Converter,
 {
-    pub fn trading_precision(&self, trading_pair: &TradingPair) -> BpResult<TradingPrecision> {
+    pub fn trading_precision(&self, trading_pair: &TradingPair) -> BuildResult<TradingPrecision> {
         self.exchange_info
             .trading_precision(trading_pair)
             .ok_or_else(|| {
-                BpError::Validation(ValidationError::MissingValue(format!(
+                BuildError::Validation(ValidationError::MissingValue(format!(
                     "Trading precision for trading pair {trading_pair:?}"
                 )))
             })
@@ -118,7 +118,7 @@ where
         &self,
         order_request: OrderRequest<AssetId, f64>,
         cex_preferences: &CexPreferences,
-    ) -> BpResult<C::OrderRequest> {
+    ) -> BuildResult<C::OrderRequest> {
         let trading_pair = match &order_request {
             OrderRequest::Limit { base, quote, .. }
             | OrderRequest::MarketBuy { base, quote, .. }

@@ -1,6 +1,6 @@
 use super::{ConnectorHealth, ConnectorHealthSink};
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 
 #[derive(Debug, Default)]
 pub struct NoopConnectorHealthSink;
@@ -13,7 +13,7 @@ impl NoopConnectorHealthSink {
 
 #[async_trait]
 impl ConnectorHealthSink for NoopConnectorHealthSink {
-    async fn publish(&self, _health: ConnectorHealth) -> BpResult<()> {
+    async fn publish(&self, _health: ConnectorHealth) -> BuildResult<()> {
         Ok(())
     }
 }

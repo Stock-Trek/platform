@@ -2,7 +2,7 @@ use crate::{context::RsOrchestratorContext, tasks::task::Task};
 use aws_lambda_events::event::sqs::{SqsBatchResponse, SqsEvent, SqsMessage};
 use futures::{StreamExt, stream};
 use lambda_runtime::LambdaEvent;
-use platform_errors::{BpError, BpResult, ErrorType, SqsError};
+use platform_errors::{BuildError, BuildResult, ErrorType, SqsError};
 use platform_messages::sqs_message::SqsMessage as PlatformSqsMessage;
 use platform_metrics::{route::RouteMetrics, sqs::SqsMetrics};
 use platform_time::{deadline::Deadline, request_context::RequestContext};
@@ -14,7 +14,7 @@ impl SqsHandler {
         &self,
         context: &RsOrchestratorContext,
         event: LambdaEvent<SqsEvent>,
-    ) -> BpResult<SqsBatchResponse> {
+    ) -> BuildResult<SqsBatchResponse> {
         let request_context = RequestContext {
             context,
             deadline: Deadline::new(event.context.deadline(), context.deadline_buffer),
@@ -44,7 +44,7 @@ impl SqsHandler {
                 }
                 let message_id = record
                     .message_id
-                    .ok_or_else(|| BpError::Sqs(SqsError::MissingMessageId))?;
+                    .ok_or_else(|| BuildError::Sqs(SqsError::MissingMessageId))?;
                 tracing::error!(
                     message_id = %message_id,
                     %error,
@@ -62,11 +62,11 @@ impl SqsHandler {
         &self,
         request_context: RequestContext<&RsOrchestratorContext>,
         record: &SqsMessage,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let body = record
             .body
             .as_deref()
-            .ok_or_else(|| BpError::Sqs(SqsError::MissingMessageBody))?;
+            .ok_or_else(|| BuildError::Sqs(SqsError::MissingMessageBody))?;
         let message: PlatformSqsMessage = serde_json::from_str(body)?;
         let dedup = request_context.context.dedup.clone();
         let Some(dedup_guard) = dedup.claim(&message) else {

@@ -1,6 +1,6 @@
 use crate::config::BackfillerConfig;
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::event::GapMarker;
 use platform_nats::{JetStream, KeyValue, NatsSubject};
 use platform_types::new_types::TimestampMilliseconds;
@@ -99,11 +99,11 @@ impl PendingGap {
 
 #[async_trait]
 pub trait GapRetryStore: Send + Sync {
-    async fn load(&self) -> BpResult<Vec<PendingGap>>;
+    async fn load(&self) -> BuildResult<Vec<PendingGap>>;
 
-    async fn save(&self, pending: &PendingGap) -> BpResult<()>;
+    async fn save(&self, pending: &PendingGap) -> BuildResult<()>;
 
-    async fn remove(&self, key: &str) -> BpResult<()>;
+    async fn remove(&self, key: &str) -> BuildResult<()>;
 }
 
 #[derive(Debug, Default)]
@@ -113,11 +113,11 @@ pub struct InMemoryGapRetryStore {
 
 #[async_trait]
 impl GapRetryStore for InMemoryGapRetryStore {
-    async fn load(&self) -> BpResult<Vec<PendingGap>> {
+    async fn load(&self) -> BuildResult<Vec<PendingGap>> {
         Ok(self.pending.lock().await.values().cloned().collect())
     }
 
-    async fn save(&self, pending: &PendingGap) -> BpResult<()> {
+    async fn save(&self, pending: &PendingGap) -> BuildResult<()> {
         self.pending
             .lock()
             .await
@@ -125,7 +125,7 @@ impl GapRetryStore for InMemoryGapRetryStore {
         Ok(())
     }
 
-    async fn remove(&self, key: &str) -> BpResult<()> {
+    async fn remove(&self, key: &str) -> BuildResult<()> {
         self.pending.lock().await.remove(key);
         Ok(())
     }
@@ -136,7 +136,7 @@ pub struct NatsGapRetryStore {
 }
 
 impl NatsGapRetryStore {
-    pub async fn connect(config: &BackfillerConfig) -> BpResult<Self> {
+    pub async fn connect(config: &BackfillerConfig) -> BuildResult<Self> {
         let bucket =
             JetStream::kv_bucket_name(&format!("{}.backfill-retries", config.gap_subject_prefix));
         let key_value =
@@ -147,7 +147,7 @@ impl NatsGapRetryStore {
 
 #[async_trait]
 impl GapRetryStore for NatsGapRetryStore {
-    async fn load(&self) -> BpResult<Vec<PendingGap>> {
+    async fn load(&self) -> BuildResult<Vec<PendingGap>> {
         let mut pending = Vec::new();
         for key in self.key_value.keys().await? {
             let Some(value) = self.key_value.get_last(&key).await? else {
@@ -161,13 +161,13 @@ impl GapRetryStore for NatsGapRetryStore {
         Ok(pending)
     }
 
-    async fn save(&self, pending: &PendingGap) -> BpResult<()> {
+    async fn save(&self, pending: &PendingGap) -> BuildResult<()> {
         let value = serde_json::to_vec(pending)?;
         self.key_value.put(&pending.key(), &value).await?;
         Ok(())
     }
 
-    async fn remove(&self, key: &str) -> BpResult<()> {
+    async fn remove(&self, key: &str) -> BuildResult<()> {
         self.key_value.delete(key).await
     }
 }

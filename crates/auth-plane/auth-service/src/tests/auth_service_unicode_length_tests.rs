@@ -4,7 +4,7 @@ use crate::{
     api_token::{MAX_OWNER_LENGTH, MAX_SECRET_LENGTH},
 };
 use chrono::Utc;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use secrecy::SecretString;
 
 const UNICODE_CHARACTER: &str = "é";
@@ -12,11 +12,11 @@ const UNICODE_CHARACTER: &str = "é";
 struct UnicodeLengthFixture;
 
 impl UnicodeLengthFixture {
-    fn token_with_owner(owner: &str) -> BpResult<ApiToken> {
+    fn token_with_owner(owner: &str) -> BuildResult<ApiToken> {
         ApiToken::generate("token-a", owner, Utc::now(), TestFixture::metadata())
     }
 
-    fn token_with_secret(secret: &str) -> BpResult<ApiToken> {
+    fn token_with_secret(secret: &str) -> BuildResult<ApiToken> {
         ApiToken::from_parts(
             "token-a",
             "demo-owner",

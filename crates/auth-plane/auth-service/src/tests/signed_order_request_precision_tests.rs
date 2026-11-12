@@ -1,7 +1,7 @@
 use super::support_tests::TEST_SIGNATURE;
 use crate::{OrderRequestContext, SignedOrderRequest};
 use chrono::{DateTime, Duration, Timelike};
-use platform_errors::{AuthError, BpError};
+use platform_errors::{AuthError, BuildError};
 
 struct PrecisionFixture;
 
@@ -52,7 +52,7 @@ fn rejects_sub_second_signature_validity() {
 
     assert!(matches!(
         error,
-        Err(BpError::Auth(AuthError::InvalidField {
+        Err(BuildError::Auth(AuthError::InvalidField {
             field: "expires_at",
             ..
         }))

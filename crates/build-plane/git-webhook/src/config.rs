@@ -4,7 +4,7 @@ use platform_config::env_names::{
     DEADLINE_BUFFER_SECS, GITHUB_ENTERPRISE_ALLOWED_HOSTS, RUST_LOG, SQS_QUEUE_URL,
 };
 use platform_config::env_vars::EnvVars;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_github::host_allow_list::HostAllowlist;
 use platform_time::timeouts::Timeouts;
 use std::{num::NonZeroUsize, time::Duration};
@@ -33,11 +33,11 @@ pub struct WebhookConfig {
 }
 
 impl WebhookConfig {
-    pub fn from_env() -> BpResult<Self> {
+    pub fn from_env() -> BuildResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         Ok(Self {
             log_filter: vars.required_log_filter(RUST_LOG)?,
             lambda_function_name: vars.required(AWS_LAMBDA_FUNCTION_NAME)?,

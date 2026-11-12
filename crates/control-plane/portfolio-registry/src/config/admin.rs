@@ -1,5 +1,5 @@
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use secrecy::{ExposeSecret, SecretString};
 use std::{fmt, net::SocketAddr};
 
@@ -13,10 +13,10 @@ pub struct AdminConfig {
 }
 
 impl AdminConfig {
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         let token = vars.required(TOKEN)?;
         if token.len() < 32 {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 TOKEN,
                 "must be at least 32 characters",
             ));

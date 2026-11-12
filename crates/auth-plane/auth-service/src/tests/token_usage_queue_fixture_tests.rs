@@ -3,7 +3,7 @@ use crate::{
     TokenUsageWorker,
 };
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -24,7 +24,7 @@ impl ImmediateTokenUsageQueue {
         }
     }
 
-    async fn drain(&self) -> BpResult<()> {
+    async fn drain(&self) -> BuildResult<()> {
         TokenUsageWorker::new(self.store.clone(), self.inner.clone(), 100)
             .drain()
             .await?;
@@ -34,20 +34,20 @@ impl ImmediateTokenUsageQueue {
 
 #[async_trait]
 impl TokenUsageQueue for ImmediateTokenUsageQueue {
-    async fn enqueue(&self, usage: TokenUsage) -> BpResult<()> {
+    async fn enqueue(&self, usage: TokenUsage) -> BuildResult<()> {
         self.inner.enqueue(usage).await?;
         self.drain().await
     }
 
-    async fn reserve(&self, limit: usize) -> BpResult<Vec<TokenUsageReservation>> {
+    async fn reserve(&self, limit: usize) -> BuildResult<Vec<TokenUsageReservation>> {
         self.inner.reserve(limit).await
     }
 
-    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BpResult<()> {
+    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
         self.inner.acknowledge(reservation).await
     }
 
-    async fn release(&self, reservation: &TokenUsageReservation) -> BpResult<()> {
+    async fn release(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
         self.inner.release(reservation).await
     }
 }
@@ -76,9 +76,9 @@ impl ToggleTokenUsageQueue {
 
 #[async_trait]
 impl TokenUsageQueue for ToggleTokenUsageQueue {
-    async fn enqueue(&self, usage: TokenUsage) -> BpResult<()> {
+    async fn enqueue(&self, usage: TokenUsage) -> BuildResult<()> {
         if self.failing.load(Ordering::SeqCst) {
-            return Err(BpError::auth_store(
+            return Err(BuildError::auth_store(
                 "usage",
                 "test-queue",
                 true,
@@ -88,15 +88,15 @@ impl TokenUsageQueue for ToggleTokenUsageQueue {
         self.inner.enqueue(usage).await
     }
 
-    async fn reserve(&self, limit: usize) -> BpResult<Vec<TokenUsageReservation>> {
+    async fn reserve(&self, limit: usize) -> BuildResult<Vec<TokenUsageReservation>> {
         self.inner.reserve(limit).await
     }
 
-    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BpResult<()> {
+    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
         self.inner.acknowledge(reservation).await
     }
 
-    async fn release(&self, reservation: &TokenUsageReservation) -> BpResult<()> {
+    async fn release(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
         self.inner.release(reservation).await
     }
 }

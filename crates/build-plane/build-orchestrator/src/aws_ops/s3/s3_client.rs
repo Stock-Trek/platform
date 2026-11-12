@@ -6,7 +6,7 @@ use aws_credential_types::{
 use aws_sdk_s3::{Client as S3Client, presigning::PresigningConfig, primitives::ByteStream};
 use platform_aws::SdkConfig;
 use platform_config::env_names::S3_SIGNED_URL_EXPIRY_SECS;
-use platform_errors::{BpError, BpResult, StorageError, TimeoutError};
+use platform_errors::{BuildError, BuildResult, StorageError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 use std::{num::NonZeroU64, time::Duration};
 
@@ -52,10 +52,10 @@ impl S3 {
         sdk_config: &SdkConfig,
         timeouts: Timeouts,
         config: S3Config,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let credentials_provider = sdk_config
             .credentials_provider()
-            .ok_or(BpError::Storage(StorageError::MissingCredentials))?;
+            .ok_or(BuildError::Storage(StorageError::MissingCredentials))?;
         let region = sdk_config
             .region()
             .map(|region| region.as_ref().to_string())
@@ -89,7 +89,7 @@ impl S3 {
         &self,
         key_prefix: &str,
         deadline: Deadline,
-    ) -> BpResult<PresignedPost> {
+    ) -> BuildResult<PresignedPost> {
         let credentials = self.credentials(deadline).await?;
         self.signer.sign(
             &credentials,
@@ -104,10 +104,10 @@ impl S3 {
         key: &str,
         contents: Vec<u8>,
         deadline: Deadline,
-    ) -> BpResult<UploadedObject> {
+    ) -> BuildResult<UploadedObject> {
         let max_source_archive_size_bytes = self.config.max_source_archive_size_bytes.get();
         if contents.len() as u64 > max_source_archive_size_bytes {
-            return Err(BpError::Storage(StorageError::ObjectTooLarge {
+            return Err(BuildError::Storage(StorageError::ObjectTooLarge {
                 key: key.to_owned(),
                 size: contents.len(),
                 max_bytes: max_source_archive_size_bytes,
@@ -127,19 +127,19 @@ impl S3 {
         )
         .await
         .map_err(|_| {
-            BpError::Timeout(TimeoutError::Operation {
+            BuildError::Timeout(TimeoutError::Operation {
                 operation: "S3 upload object",
             })
         })?
-        .map_err(|error| BpError::s3("upload object", target, error))?;
+        .map_err(|error| BuildError::s3("upload object", target, error))?;
         let signed_get_url = self.signed_get_url(key, deadline).await?;
         Ok(UploadedObject { signed_get_url })
     }
 
-    pub(crate) async fn signed_get_url(&self, key: &str, deadline: Deadline) -> BpResult<String> {
+    pub(crate) async fn signed_get_url(&self, key: &str, deadline: Deadline) -> BuildResult<String> {
         let target = format!("s3://{}/{key}", self.config.user_artifacts_bucket);
         let presigning_config = PresigningConfig::expires_in(self.config.signed_url_expiry)
-            .map_err(|error| BpError::config_invalid_source(S3_SIGNED_URL_EXPIRY_SECS, error))?;
+            .map_err(|error| BuildError::config_invalid_source(S3_SIGNED_URL_EXPIRY_SECS, error))?;
         let timeout = self.timeouts.operation_timeout(deadline)?;
         let request = tokio::time::timeout(
             timeout,
@@ -151,23 +151,23 @@ impl S3 {
         )
         .await
         .map_err(|_| {
-            BpError::Timeout(TimeoutError::Operation {
+            BuildError::Timeout(TimeoutError::Operation {
                 operation: "S3 presign object download",
             })
         })?
-        .map_err(|error| BpError::s3("presign object download", target, error))?;
+        .map_err(|error| BuildError::s3("presign object download", target, error))?;
         Ok(request.uri().to_string())
     }
 
-    async fn credentials(&self, deadline: Deadline) -> BpResult<Credentials> {
+    async fn credentials(&self, deadline: Deadline) -> BuildResult<Credentials> {
         let timeout = self.timeouts.operation_timeout(deadline)?;
         tokio::time::timeout(timeout, self.credentials_provider.provide_credentials())
             .await
             .map_err(|_| {
-                BpError::Timeout(TimeoutError::Operation {
+                BuildError::Timeout(TimeoutError::Operation {
                     operation: "S3 provide_credentials",
                 })
             })?
-            .map_err(|error| BpError::Storage(StorageError::Credentials(error)))
+            .map_err(|error| BuildError::Storage(StorageError::Credentials(error)))
     }
 }

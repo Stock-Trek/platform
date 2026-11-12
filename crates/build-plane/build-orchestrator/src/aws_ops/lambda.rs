@@ -1,6 +1,6 @@
 use crate::aws_ops::build_request::BuildRequest;
 use aws_sdk_lambda::{Client as LambdaClient, primitives::Blob, types::InvocationType};
-use platform_errors::{BpError, BpResult, TimeoutError};
+use platform_errors::{BuildError, BuildResult, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 
 pub struct LambdaConfig {
@@ -28,7 +28,7 @@ impl Lambda {
         }
     }
 
-    pub async fn run_build(&self, request: BuildRequest, deadline: Deadline) -> BpResult<()> {
+    pub async fn run_build(&self, request: BuildRequest, deadline: Deadline) -> BuildResult<()> {
         let payload = request.payload()?;
         tracing::info!(
             function = %self.config.function_name,
@@ -46,7 +46,7 @@ impl Lambda {
         )
         .await
         .map_err(|_| {
-            BpError::Timeout(TimeoutError::Operation {
+            BuildError::Timeout(TimeoutError::Operation {
                 operation: "Lambda invoke",
             })
         })?

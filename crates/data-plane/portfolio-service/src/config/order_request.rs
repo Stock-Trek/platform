@@ -1,5 +1,5 @@
 use platform_config::env_vars::EnvVars;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_types::url_scheme::UrlScheme;
 use std::net::SocketAddr;
 
@@ -13,7 +13,7 @@ pub struct OrderRequestConfig {
 }
 
 impl OrderRequestConfig {
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         let bind_address = vars.required_parsed(BIND_ADDRESS)?;
         let delivery_url = vars.required_url(DELIVERY_URL, &UrlScheme::HTTP)?;
         Ok(Self {

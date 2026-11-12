@@ -1,5 +1,5 @@
 use async_nats::{Client, ConnectOptions};
-use platform_errors::{BpError, BpResult, NatsError};
+use platform_errors::{BuildError, BuildResult, NatsError};
 use platform_types::url_scheme::UrlScheme;
 use url::Url;
 
@@ -17,25 +17,25 @@ pub struct NatsAddress {
 impl NatsAddress {
     /// Validates a NATS address, reporting errors against `name` so callers can
     /// use the environment variable that actually held the value.
-    pub fn validate_named(name: &str, value: &str) -> BpResult<()> {
+    pub fn validate_named(name: &str, value: &str) -> BuildResult<()> {
         Self::parse_named(name, value).map(|_| ())
     }
 
-    pub(crate) fn parse(value: &str) -> BpResult<Self> {
+    pub(crate) fn parse(value: &str) -> BuildResult<Self> {
         Self::parse_named("NATS_URL", value)
     }
 
-    fn parse_named(name: &str, value: &str) -> BpResult<Self> {
-        let url = Url::parse(value).map_err(|error| BpError::config_invalid_source(name, error))?;
+    fn parse_named(name: &str, value: &str) -> BuildResult<Self> {
+        let url = Url::parse(value).map_err(|error| BuildError::config_invalid_source(name, error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_nats) {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 name,
                 format!("must use the nats scheme, got {}", url.scheme()),
             ));
         }
         let host = url
             .host_str()
-            .ok_or_else(|| BpError::config_invalid(name, "missing host"))?;
+            .ok_or_else(|| BuildError::config_invalid(name, "missing host"))?;
         Ok(Self {
             host: host.to_string(),
             port: url.port().unwrap_or(DEFAULT_NATS_PORT),
@@ -44,7 +44,7 @@ impl NatsAddress {
         })
     }
 
-    pub(crate) async fn connect(&self, name: &str) -> BpResult<Client> {
+    pub(crate) async fn connect(&self, name: &str) -> BuildResult<Client> {
         let mut options = ConnectOptions::new()
             .name(name)
             .connection_timeout(CONNECT_TIMEOUT)
@@ -55,7 +55,7 @@ impl NatsAddress {
                 .user_and_password(username.clone(), self.password.clone().unwrap_or_default());
         }
         options.connect(self.server_url()).await.map_err(|error| {
-            BpError::Nats(NatsError::protocol(format!(
+            BuildError::Nats(NatsError::protocol(format!(
                 "failed to connect to NATS at {}: {error}",
                 self.server_url()
             )))

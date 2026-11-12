@@ -1,6 +1,6 @@
 use crate::OwnershipRecord;
 use aws_sdk_dynamodb::types::AttributeValue;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::collections::HashMap;
 
 pub(crate) const ACCOUNT_KEY: &str = "accountKey";
@@ -13,7 +13,7 @@ pub(crate) const PENDING_EVENTS: &str = "pendingEvents";
 pub(crate) struct OwnershipItem;
 
 impl OwnershipItem {
-    pub(crate) fn parse(item: &HashMap<String, AttributeValue>) -> BpResult<OwnershipRecord> {
+    pub(crate) fn parse(item: &HashMap<String, AttributeValue>) -> BuildResult<OwnershipRecord> {
         let payload = Self::string(item, RECORD)?;
         let mut record: OwnershipRecord = serde_json::from_str(payload)?;
         record.pending_events = match item.get(PENDING_EVENTS) {
@@ -25,7 +25,7 @@ impl OwnershipItem {
 
     pub(crate) fn attributes(
         record: &OwnershipRecord,
-    ) -> BpResult<HashMap<String, AttributeValue>> {
+    ) -> BuildResult<HashMap<String, AttributeValue>> {
         let mut item = HashMap::from([
             (
                 ACCOUNT_KEY.to_string(),
@@ -54,10 +54,10 @@ impl OwnershipItem {
     fn string<'a>(
         item: &'a HashMap<String, AttributeValue>,
         name: &'static str,
-    ) -> BpResult<&'a str> {
+    ) -> BuildResult<&'a str> {
         match item.get(name) {
             Some(AttributeValue::S(value)) => Ok(value),
-            _ => Err(BpError::bad_value(
+            _ => Err(BuildError::bad_value(
                 "ownership item",
                 name,
                 "missing string attribute",

@@ -1,5 +1,5 @@
 use aws_sdk_sqs::error::ProvideErrorMetadata;
-use platform_errors::{BpResult, SqsBatchFailure};
+use platform_errors::{BuildResult, SqsBatchFailure};
 use platform_messages::sqs_message::SqsMessage;
 use platform_time::deadline::Deadline;
 use std::time::Duration;
@@ -17,7 +17,7 @@ impl Sqs {
         &self,
         messages: &[SqsMessage],
         deadline: Deadline,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let bodies = Self::serialize(messages)?;
         self.send_individually_bodies(&bodies, Some(messages), deadline)
             .await
@@ -28,7 +28,7 @@ impl Sqs {
         bodies: &[String],
         sources: Option<&[SqsMessage]>,
         deadline: Deadline,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let mut failures = Vec::new();
         for (index, body) in bodies.iter().enumerate() {
             let timeout = match self.timeouts.operation_timeout(deadline) {

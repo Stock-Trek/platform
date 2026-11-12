@@ -3,7 +3,7 @@ use crate::{
     valkey_token_usage_reply::ValkeyTokenUsageReply,
 };
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_metrics::auth::AuthUsageQueueMetrics;
 use redis::{
     Client, RedisError, Script, Value,
@@ -46,10 +46,10 @@ pub struct ValkeyTokenUsageQueue {
 }
 
 impl ValkeyTokenUsageQueue {
-    pub fn new(config: TokenUsageQueueConfig) -> BpResult<Self> {
+    pub fn new(config: TokenUsageQueueConfig) -> BuildResult<Self> {
         config.validate()?;
         let client = Client::open(config.url())
-            .map_err(|error| BpError::config_invalid_source("usage_queue_url", error))?;
+            .map_err(|error| BuildError::config_invalid_source("usage_queue_url", error))?;
         let manager_config = ConnectionManagerConfig::new()
             .set_connection_timeout(config.timeout())
             .set_response_timeout(config.timeout())
@@ -66,7 +66,7 @@ impl ValkeyTokenUsageQueue {
         })
     }
 
-    pub async fn connect(config: TokenUsageQueueConfig) -> BpResult<Self> {
+    pub async fn connect(config: TokenUsageQueueConfig) -> BuildResult<Self> {
         let queue = Self::new(config)?;
         queue.ensure_group().await?;
         Ok(queue)
@@ -76,7 +76,7 @@ impl ValkeyTokenUsageQueue {
         format!("{}:pending", self.config.key_prefix())
     }
 
-    async fn connection(&self) -> BpResult<ConnectionManager> {
+    async fn connection(&self) -> BuildResult<ConnectionManager> {
         self.connection
             .get_or_try_init(|| async {
                 ConnectionManager::new_with_config(self.client.clone(), self.manager_config.clone())
@@ -87,7 +87,7 @@ impl ValkeyTokenUsageQueue {
             .cloned()
     }
 
-    async fn ensure_group(&self) -> BpResult<()> {
+    async fn ensure_group(&self) -> BuildResult<()> {
         self.group_ready
             .get_or_try_init(|| async {
                 let mut connection = self.connection().await?;
@@ -114,7 +114,7 @@ impl ValkeyTokenUsageQueue {
         connection: &mut ConnectionManager,
         id: &str,
         limit: usize,
-    ) -> BpResult<Vec<TokenUsageReservation>> {
+    ) -> BuildResult<Vec<TokenUsageReservation>> {
         let reply: Value = redis::cmd("XREADGROUP")
             .arg("GROUP")
             .arg(GROUP)
@@ -130,8 +130,8 @@ impl ValkeyTokenUsageQueue {
         ValkeyTokenUsageReply::parse(reply)
     }
 
-    fn capacity_error(&self) -> BpError {
-        BpError::auth_store(
+    fn capacity_error(&self) -> BuildError {
+        BuildError::auth_store(
             "enqueue",
             "token-usage-queue",
             true,
@@ -145,7 +145,7 @@ impl ValkeyTokenUsageQueue {
 
 #[async_trait]
 impl TokenUsageQueue for ValkeyTokenUsageQueue {
-    async fn enqueue(&self, mut usage: TokenUsage) -> BpResult<()> {
+    async fn enqueue(&self, mut usage: TokenUsage) -> BuildResult<()> {
         usage.ensure_event_ids();
         let payload = serde_json::to_string(&usage)
             .map_err(|error| ValkeyTokenUsageReply::decode_error(error.to_string()))?;
@@ -166,7 +166,7 @@ impl TokenUsageQueue for ValkeyTokenUsageQueue {
         Ok(())
     }
 
-    async fn reserve(&self, limit: usize) -> BpResult<Vec<TokenUsageReservation>> {
+    async fn reserve(&self, limit: usize) -> BuildResult<Vec<TokenUsageReservation>> {
         if limit == 0 {
             return Ok(Vec::new());
         }
@@ -179,7 +179,7 @@ impl TokenUsageQueue for ValkeyTokenUsageQueue {
         self.read_group(&mut connection, ">", limit).await
     }
 
-    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BpResult<()> {
+    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
         let mut connection = self.connection().await?;
         let _: i64 = self
             .ack_script
@@ -192,7 +192,7 @@ impl TokenUsageQueue for ValkeyTokenUsageQueue {
         Ok(())
     }
 
-    async fn release(&self, reservation: &TokenUsageReservation) -> BpResult<()> {
+    async fn release(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
         let payload = serde_json::to_string(reservation.usage())
             .map_err(|error| ValkeyTokenUsageReply::decode_error(error.to_string()))?;
         let mut connection = self.connection().await?;

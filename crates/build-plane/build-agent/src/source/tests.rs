@@ -1,6 +1,6 @@
 use super::*;
 use platform_errors::ErrorType;
-use platform_errors::{BpError, StorageError};
+use platform_errors::{BuildError, StorageError};
 use std::io::{Cursor, Write};
 use std::num::NonZeroU64;
 use std::time::Duration;
@@ -50,7 +50,7 @@ fn rejects_archives_whose_declared_extracted_size_exceeds_the_limit() {
 
     assert!(matches!(
         error,
-        BpError::Storage(StorageError::ExtractedSourceTooLarge { .. })
+        BuildError::Storage(StorageError::ExtractedSourceTooLarge { .. })
     ));
     assert_eq!(error.error_type(), "extracted_source_too_large");
     assert!(!error.retryability().is_retryable());
@@ -92,7 +92,7 @@ async fn rejects_downloads_larger_than_the_limit() {
     server.await.unwrap();
     assert!(matches!(
         error,
-        BpError::Storage(StorageError::SourceArchiveTooLarge { .. })
+        BuildError::Storage(StorageError::SourceArchiveTooLarge { .. })
     ));
     assert_eq!(error.error_type(), "source_archive_too_large");
     assert!(!error.retryability().is_retryable());

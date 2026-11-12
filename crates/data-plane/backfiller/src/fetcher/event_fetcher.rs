@@ -1,6 +1,6 @@
 use crate::event_page_source::EventPageSource;
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_market_data::event::GapMarker;
 use platform_types::new_types::TimestampMilliseconds;
 use serde_json::Value;
@@ -25,7 +25,7 @@ pub trait MissingEventFetcher: Send + Sync {
         true
     }
 
-    async fn fetch(&self, gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>>;
+    async fn fetch(&self, gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>>;
 
     /// Fetches a gap with knowledge of how many durable retries have already
     /// failed. Implementations may use this to widen their REST window.
@@ -33,7 +33,7 @@ pub trait MissingEventFetcher: Send + Sync {
         &self,
         gap: &GapMarker,
         _attempt: u32,
-    ) -> BpResult<Vec<BackfilledEvent>> {
+    ) -> BuildResult<Vec<BackfilledEvent>> {
         self.fetch(gap).await
     }
 }
@@ -47,7 +47,7 @@ where
         (**self).supports(exchange)
     }
 
-    async fn fetch(&self, gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>> {
+    async fn fetch(&self, gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
         (**self).fetch(gap).await
     }
 
@@ -55,7 +55,7 @@ where
         &self,
         gap: &GapMarker,
         attempt: u32,
-    ) -> BpResult<Vec<BackfilledEvent>> {
+    ) -> BuildResult<Vec<BackfilledEvent>> {
         (**self).fetch_with_attempt(gap, attempt).await
     }
 }
@@ -77,8 +77,8 @@ impl FetcherRegistry {
         self.fetchers.get(&exchange).map(|fetcher| fetcher.as_ref())
     }
 
-    fn unsupported_exchange(exchange: CexId) -> BpError {
-        BpError::Exchange(ExchangeError::UnsupportedExchange {
+    fn unsupported_exchange(exchange: CexId) -> BuildError {
+        BuildError::Exchange(ExchangeError::UnsupportedExchange {
             exchange: exchange.to_string(),
         })
     }
@@ -90,7 +90,7 @@ impl MissingEventFetcher for FetcherRegistry {
         self.fetchers.contains_key(&exchange)
     }
 
-    async fn fetch(&self, gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>> {
+    async fn fetch(&self, gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
         self.fetcher(gap.exchange)
             .ok_or_else(|| Self::unsupported_exchange(gap.exchange))?
             .fetch(gap)
@@ -101,7 +101,7 @@ impl MissingEventFetcher for FetcherRegistry {
         &self,
         gap: &GapMarker,
         attempt: u32,
-    ) -> BpResult<Vec<BackfilledEvent>> {
+    ) -> BuildResult<Vec<BackfilledEvent>> {
         self.fetcher(gap.exchange)
             .ok_or_else(|| Self::unsupported_exchange(gap.exchange))?
             .fetch_with_attempt(gap, attempt)
@@ -127,9 +127,9 @@ where
         symbol: &str,
         missing_from: u64,
         missing_to: u64,
-    ) -> BpResult<Vec<BackfilledEvent>> {
+    ) -> BuildResult<Vec<BackfilledEvent>> {
         if missing_from > missing_to {
-            return Err(BpError::Exchange(ExchangeError::BadResponse(format!(
+            return Err(BuildError::Exchange(ExchangeError::BadResponse(format!(
                 "gap on {symbol} has missing_from after missing_to"
             ))));
         }
@@ -152,7 +152,7 @@ where
                 }
             }
             if highest_sequence < next_sequence {
-                return Err(BpError::Exchange(ExchangeError::BadResponse(format!(
+                return Err(BuildError::Exchange(ExchangeError::BadResponse(format!(
                     "{symbol} returned events before the requested id {next_sequence}"
                 ))));
             }

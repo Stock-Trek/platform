@@ -1,5 +1,5 @@
 use crate::{ApiToken, vault_client::VaultClient, vault_error::VaultWriteOutcome};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use reqwest::Method;
 use serde_json::{Value, json};
 
@@ -17,16 +17,16 @@ impl WriteCondition {
         }
     }
 
-    fn conflict(self, token_id: &str) -> BpError {
+    fn conflict(self, token_id: &str) -> BuildError {
         match self {
-            Self::Create => BpError::token_exists(token_id),
-            Self::Update(_) => BpError::token_conflict(token_id),
+            Self::Create => BuildError::token_exists(token_id),
+            Self::Update(_) => BuildError::token_conflict(token_id),
         }
     }
 }
 
 impl VaultClient {
-    pub(crate) async fn put(&self, token: &ApiToken, condition: WriteCondition) -> BpResult<()> {
+    pub(crate) async fn put(&self, token: &ApiToken, condition: WriteCondition) -> BuildResult<()> {
         token.validate()?;
         self.put_entry(token.id(), token.to_value(), condition)
             .await
@@ -37,7 +37,7 @@ impl VaultClient {
         path: &str,
         data: Value,
         condition: WriteCondition,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let body = json!({
             "data": data,
             "options": { "cas": condition.cas() },

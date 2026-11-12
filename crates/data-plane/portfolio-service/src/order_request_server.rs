@@ -1,7 +1,7 @@
 use crate::{
     OrderRequestDelivery, OrderRequestService, order_request_connection::OrderRequestConnection,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Runtime;
 use std::{future::Future, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{
@@ -26,10 +26,10 @@ impl OrderRequestServer {
         address: SocketAddr,
         service: Arc<OrderRequestService>,
         delivery: Arc<OrderRequestDelivery>,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let listener = TcpListener::bind(address)
             .await
-            .map_err(BpError::external)?;
+            .map_err(BuildError::external)?;
         Ok(Self {
             listener,
             service,
@@ -38,13 +38,13 @@ impl OrderRequestServer {
         })
     }
 
-    pub async fn serve(self) -> BpResult<()> {
+    pub async fn serve(self) -> BuildResult<()> {
         self.serve_with_shutdown(Runtime::shutdown_signal()).await
     }
 
-    pub async fn serve_with_shutdown<F>(self, shutdown: F) -> BpResult<()>
+    pub async fn serve_with_shutdown<F>(self, shutdown: F) -> BuildResult<()>
     where
-        F: Future<Output = BpResult<()>> + Send,
+        F: Future<Output = BuildResult<()>> + Send,
     {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let mut connections = JoinSet::new();
@@ -56,7 +56,7 @@ impl OrderRequestServer {
                 accepted = self.listener.accept() => {
                     let (stream, peer) = match accepted {
                         Ok(accepted) => accepted,
-                        Err(error) => break Err(BpError::external(error)),
+                        Err(error) => break Err(BuildError::external(error)),
                     };
                     let permit = match self.slots.clone().try_acquire_owned() {
                         Ok(permit) => permit,
@@ -88,8 +88,8 @@ impl OrderRequestServer {
         result
     }
 
-    pub fn local_addr(&self) -> BpResult<SocketAddr> {
-        self.listener.local_addr().map_err(BpError::external)
+    pub fn local_addr(&self) -> BuildResult<SocketAddr> {
+        self.listener.local_addr().map_err(BuildError::external)
     }
 
     async fn drain(connections: &mut JoinSet<()>) {

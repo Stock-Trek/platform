@@ -9,7 +9,7 @@ use platform_archive::{
     RoutingBucket,
     spill::{SpillRunReader, SpillRunWriter},
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::ClosedCandle;
 use std::path::PathBuf;
 
@@ -85,11 +85,11 @@ impl SpillCodec for CandleCodec {
         true
     }
 
-    fn open(&self, path: &std::path::Path, batch: usize) -> BpResult<Self::Reader> {
+    fn open(&self, path: &std::path::Path, batch: usize) -> BuildResult<Self::Reader> {
         SpillRunReader::open_with_batch_size(ArchiveKind::Candles, path, batch)
     }
 
-    fn create(&self, path: &std::path::Path, batch: usize) -> BpResult<Self::Writer> {
+    fn create(&self, path: &std::path::Path, batch: usize) -> BuildResult<Self::Writer> {
         SpillRunWriter::create_with_batch_size(path, ArchiveKind::Candles, batch)
     }
 }
@@ -97,7 +97,7 @@ impl SpillCodec for CandleCodec {
 impl SpillReader for SpillRunReader {
     type Record = ArchiveRecord;
 
-    fn read(&mut self) -> BpResult<Option<Self::Record>> {
+    fn read(&mut self) -> BuildResult<Option<Self::Record>> {
         SpillRunReader::next_record(self)
     }
 }
@@ -105,11 +105,11 @@ impl SpillReader for SpillRunReader {
 impl SpillWriter for SpillRunWriter {
     type Record = ArchiveRecord;
 
-    fn write(&mut self, record: Self::Record) -> BpResult<()> {
+    fn write(&mut self, record: Self::Record) -> BuildResult<()> {
         SpillRunWriter::push(self, record)
     }
 
-    fn finish(self) -> BpResult<()> {
+    fn finish(self) -> BuildResult<()> {
         SpillRunWriter::close(self)
     }
 }
@@ -124,7 +124,7 @@ impl CandleSpill {
         bucket_millis: i64,
         layer: ArchiveTableLayer,
         limit: usize,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         Ok(Self {
             sorter: SpillSorter::with_codec(
                 directory,
@@ -137,7 +137,7 @@ impl CandleSpill {
         })
     }
 
-    pub fn push(&mut self, candle: ClosedCandle) -> BpResult<()> {
+    pub fn push(&mut self, candle: ClosedCandle) -> BuildResult<()> {
         self.sorter.push_record(ArchiveRecord::ClosedCandle(candle))
     }
 
@@ -149,7 +149,7 @@ impl CandleSpill {
         self.sorter.usage()
     }
 
-    pub fn finish(&mut self) -> BpResult<CandleRecords> {
+    pub fn finish(&mut self) -> BuildResult<CandleRecords> {
         Ok(CandleRecords {
             records: self.sorter.finish()?,
         })
@@ -161,13 +161,13 @@ pub struct CandleRecords {
 }
 
 impl CandleRecords {
-    pub fn next_candle(&mut self) -> BpResult<Option<ClosedCandle>> {
+    pub fn next_candle(&mut self) -> BuildResult<Option<ClosedCandle>> {
         let Some(record) = self.records.next_record()? else {
             return Ok(None);
         };
         match record {
             ArchiveRecord::ClosedCandle(candle) => Ok(Some(candle)),
-            ArchiveRecord::MarketEvent(_) => Err(BpError::io(
+            ArchiveRecord::MarketEvent(_) => Err(BuildError::io(
                 "read rebuilt candles",
                 "rebuild spill merge",
                 std::io::Error::new(

@@ -1,6 +1,6 @@
 use crate::{ArchiveBatch, ArchiveKind};
 use iceberg::spec::{NestedField, PrimitiveType, Schema, Type};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::sync::Arc;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -76,7 +76,7 @@ impl ArchiveIcebergTable {
         ]
     }
 
-    pub(crate) fn schema(kind: ArchiveKind) -> BpResult<Schema> {
+    pub(crate) fn schema(kind: ArchiveKind) -> BuildResult<Schema> {
         let arrow_schema = ArchiveBatch::schema(kind);
         let fields = arrow_schema
             .fields()
@@ -84,7 +84,7 @@ impl ArchiveIcebergTable {
             .enumerate()
             .map(|(index, field)| {
                 let id = i32::try_from(index + 1).map_err(|error| {
-                    BpError::external(std::io::Error::other(format!(
+                    BuildError::external(std::io::Error::other(format!(
                         "archive schema has too many fields: {error}"
                     )))
                 })?;
@@ -95,16 +95,16 @@ impl ArchiveIcebergTable {
                     !field.is_nullable(),
                 )))
             })
-            .collect::<BpResult<Vec<_>>>()?;
+            .collect::<BuildResult<Vec<_>>>()?;
 
         Schema::builder()
             .with_schema_id(0)
             .with_fields(fields)
             .build()
-            .map_err(BpError::external)
+            .map_err(BuildError::external)
     }
 
-    fn iceberg_type(name: &str, data_type: &arrow_schema::DataType) -> BpResult<Type> {
+    fn iceberg_type(name: &str, data_type: &arrow_schema::DataType) -> BuildResult<Type> {
         use arrow_schema::DataType;
 
         match data_type {
@@ -112,7 +112,7 @@ impl ArchiveIcebergTable {
             DataType::Int64 | DataType::UInt64 => Ok(Type::Primitive(PrimitiveType::Long)),
             DataType::Boolean => Ok(Type::Primitive(PrimitiveType::Boolean)),
             DataType::Float64 => Ok(Type::Primitive(PrimitiveType::Double)),
-            other => Err(BpError::external(std::io::Error::new(
+            other => Err(BuildError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("archive column {name} has unsupported Iceberg type {other:?}"),
             ))),

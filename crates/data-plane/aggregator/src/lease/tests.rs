@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_types::new_types::TimestampMilliseconds;
 use std::collections::HashMap;
 use std::time::Duration;
@@ -28,7 +28,7 @@ impl LeaseStore for InMemoryLeaseStore {
         shard: ShardId,
         owner_id: &str,
         ttl: Duration,
-    ) -> BpResult<Option<WriterLease>> {
+    ) -> BuildResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
         let mut leases = self.leases.lock();
         let lease = match leases.get(&shard) {
@@ -55,7 +55,7 @@ impl LeaseStore for InMemoryLeaseStore {
         Ok(Some(lease))
     }
 
-    async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BpResult<Option<WriterLease>> {
+    async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BuildResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
         let mut leases = self.leases.lock();
         let Some(current) = leases.get_mut(&lease.shard) else {
@@ -68,7 +68,7 @@ impl LeaseStore for InMemoryLeaseStore {
         Ok(Some(current.clone()))
     }
 
-    async fn release(&self, lease: &WriterLease) -> BpResult<()> {
+    async fn release(&self, lease: &WriterLease) -> BuildResult<()> {
         let mut leases = self.leases.lock();
         if let Some(current) = leases.get_mut(&lease.shard)
             && current.is_held_by(&lease.owner_id, lease.fencing_token)
@@ -80,7 +80,7 @@ impl LeaseStore for InMemoryLeaseStore {
         Ok(())
     }
 
-    async fn current(&self, shard: ShardId) -> BpResult<Option<WriterLease>> {
+    async fn current(&self, shard: ShardId) -> BuildResult<Option<WriterLease>> {
         Ok(self.leases.lock().get(&shard).cloned())
     }
 }

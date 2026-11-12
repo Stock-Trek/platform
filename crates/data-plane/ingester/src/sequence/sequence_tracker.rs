@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_nats::{JetStream, KeyValue};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
@@ -26,9 +26,9 @@ pub struct SequenceTracker {
 /// Durable storage for per-stream sequence progress.
 #[async_trait]
 pub trait SequenceStore: Send + Sync {
-    async fn load(&self, key: &str) -> BpResult<Option<SequenceTracker>>;
+    async fn load(&self, key: &str) -> BuildResult<Option<SequenceTracker>>;
 
-    async fn save(&self, key: &str, tracker: &SequenceTracker) -> BpResult<()>;
+    async fn save(&self, key: &str, tracker: &SequenceTracker) -> BuildResult<()>;
 }
 
 /// Sequence state persisted in a NATS KV bucket.
@@ -37,7 +37,7 @@ pub struct NatsSequenceStore {
 }
 
 impl NatsSequenceStore {
-    pub async fn connect(nats_url: &str, subject_prefix: &str) -> BpResult<Self> {
+    pub async fn connect(nats_url: &str, subject_prefix: &str) -> BuildResult<Self> {
         let bucket = Self::bucket_name(subject_prefix);
         let values = KeyValue::connect(nats_url, "platform-ingester-sequences", &bucket).await?;
         Ok(Self { values })
@@ -50,14 +50,14 @@ impl NatsSequenceStore {
 
 #[async_trait]
 impl SequenceStore for NatsSequenceStore {
-    async fn load(&self, key: &str) -> BpResult<Option<SequenceTracker>> {
+    async fn load(&self, key: &str) -> BuildResult<Option<SequenceTracker>> {
         let Some(value) = self.values.get_last(key).await? else {
             return Ok(None);
         };
         Ok(Some(serde_json::from_slice(&value)?))
     }
 
-    async fn save(&self, key: &str, tracker: &SequenceTracker) -> BpResult<()> {
+    async fn save(&self, key: &str, tracker: &SequenceTracker) -> BuildResult<()> {
         let value = serde_json::to_vec(tracker)?;
         self.values.put(key, &value).await?;
         Ok(())

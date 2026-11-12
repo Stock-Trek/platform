@@ -1,5 +1,5 @@
 use super::*;
-use platform_errors::{BpError, ConnectorError};
+use platform_errors::{BuildError, ConnectorError};
 use platform_types::new_types::TimestampMilliseconds;
 use std::time::Duration;
 
@@ -9,7 +9,7 @@ fn server_time_estimate_errors_before_sync() {
     assert!(!clock.is_synced().unwrap());
     assert!(matches!(
         clock.server_time_estimate(),
-        Err(BpError::Connector(ConnectorError::ClockNotSynced))
+        Err(BuildError::Connector(ConnectorError::ClockNotSynced))
     ));
 }
 

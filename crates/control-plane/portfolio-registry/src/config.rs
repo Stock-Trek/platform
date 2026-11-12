@@ -1,5 +1,5 @@
 use platform_config::env_vars::EnvVars;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_runtime::Config;
 
 mod admin;
@@ -23,11 +23,11 @@ pub struct PortfolioRegistryConfig {
 }
 
 impl PortfolioRegistryConfig {
-    pub fn from_env() -> BpResult<Self> {
+    pub fn from_env() -> BuildResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         Ok(Self {
             log_filter: Config::log_filter(vars)?,
             store: RegistryStoreConfig::from_vars(vars)?,

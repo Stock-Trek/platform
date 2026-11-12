@@ -1,6 +1,6 @@
 use crate::config::BackfillerConfig;
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::{
     envelope::EnvelopeCodec, event::GapMarker, subject::MarketEventSubject,
 };
@@ -17,10 +17,10 @@ pub trait GapMarkerSource: Send {
     /// Returns `None` when the source has reached its end. Sources that wait
     /// indefinitely for new gaps must keep waiting through idle periods instead
     /// of reporting `None`.
-    async fn next_gap(&mut self) -> BpResult<Option<GapMarker>>;
+    async fn next_gap(&mut self) -> BuildResult<Option<GapMarker>>;
 
     /// Acknowledges the gap returned by the previous call to [`Self::next_gap`].
-    async fn ack(&mut self, _gap: &GapMarker) -> BpResult<()> {
+    async fn ack(&mut self, _gap: &GapMarker) -> BuildResult<()> {
         Ok(())
     }
 }
@@ -35,7 +35,7 @@ pub struct NatsGapMarkerSource {
 }
 
 impl NatsGapMarkerSource {
-    pub async fn connect(config: &BackfillerConfig) -> BpResult<Self> {
+    pub async fn connect(config: &BackfillerConfig) -> BuildResult<Self> {
         let subject =
             MarketEventSubject::new(&config.gap_subject_prefix, config.exchange).gap_wildcard();
         let durable = format!("{DURABLE_NAME}-{}", config.exchange).to_lowercase();
@@ -56,7 +56,7 @@ impl NatsGapMarkerSource {
 
 #[async_trait]
 impl GapMarkerSource for NatsGapMarkerSource {
-    async fn next_gap(&mut self) -> BpResult<Option<GapMarker>> {
+    async fn next_gap(&mut self) -> BuildResult<Option<GapMarker>> {
         loop {
             // An expired fetch window means the gap marker stream is idle, not
             // that it has ended. Keep polling until a marker arrives or the
@@ -81,7 +81,7 @@ impl GapMarkerSource for NatsGapMarkerSource {
         }
     }
 
-    async fn ack(&mut self, _gap: &GapMarker) -> BpResult<()> {
+    async fn ack(&mut self, _gap: &GapMarker) -> BuildResult<()> {
         let Some(message) = self.in_flight.take() else {
             return Ok(());
         };

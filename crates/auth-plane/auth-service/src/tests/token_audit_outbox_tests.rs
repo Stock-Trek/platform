@@ -2,7 +2,7 @@ use super::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{SecretInput, TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenMutation};
 use async_trait::async_trait;
 use chrono::Utc;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::sync::{
     Arc, Mutex,
     atomic::{AtomicBool, Ordering},
@@ -36,9 +36,9 @@ impl ControllableAuditLog {
 
 #[async_trait]
 impl TokenAuditLog for ControllableAuditLog {
-    async fn record(&self, event: TokenAuditEvent) -> BpResult<()> {
+    async fn record(&self, event: TokenAuditEvent) -> BuildResult<()> {
         if self.failing.load(Ordering::SeqCst) {
-            return Err(platform_errors::BpError::auth_store(
+            return Err(platform_errors::BuildError::auth_store(
                 "audit",
                 "outbox-test",
                 true,

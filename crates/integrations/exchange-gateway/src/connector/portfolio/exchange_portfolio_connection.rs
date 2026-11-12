@@ -4,7 +4,7 @@ use super::{
     account_watcher::AccountWatcher, health_reporter::HealthReporter, watcher::Watcher,
 };
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_metrics::PortfolioMetrics;
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -66,7 +66,7 @@ impl ExchangePortfolioConnection {
 
 #[async_trait]
 impl PortfolioConnection for ExchangePortfolioConnection {
-    async fn update_accounts(&self, accounts: BTreeSet<AccountId>) -> BpResult<()> {
+    async fn update_accounts(&self, accounts: BTreeSet<AccountId>) -> BuildResult<()> {
         let mut watchers = self.watchers.lock().await;
         let removed: Vec<AccountId> = watchers
             .keys()
@@ -94,7 +94,7 @@ impl PortfolioConnection for ExchangePortfolioConnection {
         Ok(())
     }
 
-    async fn disconnect(&self) -> BpResult<()> {
+    async fn disconnect(&self) -> BuildResult<()> {
         let watchers = {
             let mut watchers = self.watchers.lock().await;
             std::mem::take(&mut *watchers)

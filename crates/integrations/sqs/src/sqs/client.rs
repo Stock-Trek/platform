@@ -1,5 +1,5 @@
 use aws_sdk_sqs::Client as SqsClient;
-use platform_errors::{BpError, BpResult, SqsError};
+use platform_errors::{BuildError, BuildResult, SqsError};
 use platform_messages::sqs_message::SQS_MAX_BATCH_BYTES;
 use platform_time::timeouts::Timeouts;
 
@@ -25,14 +25,14 @@ impl Sqs {
 
     /// Splits the serialized message bodies into batches that respect both the
     /// entry count and the total payload size limits.
-    pub(super) fn batch_indices(bodies: &[String]) -> BpResult<Vec<Vec<usize>>> {
+    pub(super) fn batch_indices(bodies: &[String]) -> BuildResult<Vec<Vec<usize>>> {
         let mut batches = Vec::new();
         let mut current = Vec::new();
         let mut current_bytes = 0;
         for (index, body) in bodies.iter().enumerate() {
             let size = body.len();
             if size > SQS_MAX_BATCH_BYTES {
-                return Err(BpError::Sqs(SqsError::MessageTooLarge {
+                return Err(BuildError::Sqs(SqsError::MessageTooLarge {
                     size,
                     limit: SQS_MAX_BATCH_BYTES,
                 }));

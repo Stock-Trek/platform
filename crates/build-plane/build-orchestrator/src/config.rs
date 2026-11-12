@@ -6,7 +6,7 @@ use platform_config::env_names::{
     S3_SIGNED_URL_EXPIRY_SECS, SQS_QUEUE_URL,
 };
 use platform_config::{env_vars::EnvVars, git::DirectoryLimits};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_github::{app_config::GitHubAppConfig, host_allow_list::HostAllowlist};
 use platform_time::timeouts::Timeouts;
 use platform_types::url_scheme::UrlScheme;
@@ -58,11 +58,11 @@ pub struct OrchestratorConfig {
 }
 
 impl OrchestratorConfig {
-    pub fn from_env() -> BpResult<Self> {
+    pub fn from_env() -> BuildResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         let aws_timeouts = Timeouts::from_durations(
             vars.required_duration_secs(AWS_CONNECT_TIMEOUT_SECS)?,
             vars.required_duration_secs(AWS_OPERATION_TIMEOUT_SECS)?,
@@ -91,7 +91,7 @@ impl OrchestratorConfig {
                 expiry.checked_add(Duration::from_secs(SIGNED_POST_UPLOAD_MARGIN_SECS))
             })
             .ok_or_else(|| {
-                BpError::config_invalid(
+                BuildError::config_invalid(
                     S3_SIGNED_URL_EXPIRY_SECS,
                     "minimum signed POST lifetime overflows the duration",
                 )
@@ -101,7 +101,7 @@ impl OrchestratorConfig {
             || signed_url_expiry > MAX_SIGNED_URL_EXPIRY
             || signed_url_expiry < minimum_signed_post_expiry
         {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 S3_SIGNED_URL_EXPIRY_SECS,
                 format!(
                     "must be at least {} seconds (build agent timeout plus source download timeout plus upload margin) and at most {} seconds (7 days)",

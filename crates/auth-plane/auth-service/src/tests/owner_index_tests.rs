@@ -9,7 +9,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::Utc;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use secrecy::SecretString;
 use std::{
     sync::{
@@ -43,52 +43,52 @@ impl CountingStore {
 
 #[async_trait]
 impl TokenStore for CountingStore {
-    async fn put(&self, token: &ApiToken) -> BpResult<()> {
+    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         self.inner.get(id).await
     }
 
-    async fn delete(&self, id: &str) -> BpResult<()> {
+    async fn delete(&self, id: &str) -> BuildResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn delete_if(&self, expected: &ApiToken) -> BpResult<bool> {
+    async fn delete_if(&self, expected: &ApiToken) -> BuildResult<bool> {
         self.inner.delete_if(expected).await
     }
 
-    async fn ids(&self) -> BpResult<Vec<String>> {
+    async fn ids(&self) -> BuildResult<Vec<String>> {
         self.ids_calls.fetch_add(1, Ordering::SeqCst);
         self.inner.ids().await
     }
 
-    async fn owner_index(&self, owner: &str) -> BpResult<Option<OwnerIndex>> {
+    async fn owner_index(&self, owner: &str) -> BuildResult<Option<OwnerIndex>> {
         self.inner.owner_index(owner).await
     }
 
-    async fn put_owner_index(&self, index: &OwnerIndex) -> BpResult<()> {
+    async fn put_owner_index(&self, index: &OwnerIndex) -> BuildResult<()> {
         self.inner.put_owner_index(index).await
     }
 
-    async fn owner_indexes(&self) -> BpResult<Vec<OwnerIndex>> {
+    async fn owner_indexes(&self) -> BuildResult<Vec<OwnerIndex>> {
         self.inner.owner_indexes().await
     }
 
-    async fn index_owner_token(&self, token: &ApiToken) -> BpResult<()> {
+    async fn index_owner_token(&self, token: &ApiToken) -> BuildResult<()> {
         self.inner.index_owner_token(token).await
     }
 
-    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BpResult<()> {
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BuildResult<()> {
         self.inner.remove_owner_index_token(owner, id).await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
         self.inner.update(expected, token).await
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
         self.inner.commit(mutation, event).await
     }
 
@@ -96,31 +96,31 @@ impl TokenStore for CountingStore {
         &self,
         mutation: TokenMutation,
         events: Vec<TokenAuditEvent>,
-    ) -> BpResult<bool> {
+    ) -> BuildResult<bool> {
         self.inner.commit_events(mutation, events).await
     }
 
-    async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+    async fn append_audit(&self, event: TokenAuditEvent) -> BuildResult<()> {
         self.inner.append_audit(event).await
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 
-    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
         self.inner.pending_audits().await
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
         self.inner.acknowledge_audit(event_id).await
     }
 
-    async fn pending_rotations(&self) -> BpResult<Vec<TokenRotationTransaction>> {
+    async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
         self.inner.pending_rotations().await
     }
 
-    async fn acknowledge_rotation(&self, transaction_id: &str) -> BpResult<()> {
+    async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
         self.inner.acknowledge_rotation(transaction_id).await
     }
 }
@@ -219,7 +219,7 @@ async fn revoked_owner_selection_does_not_scan_every_token() {
         .await
         .unwrap_err();
 
-    assert!(matches!(error, platform_errors::BpError::Auth(_)));
+    assert!(matches!(error, platform_errors::BuildError::Auth(_)));
     assert_eq!(store.ids_calls(), 0);
 }
 

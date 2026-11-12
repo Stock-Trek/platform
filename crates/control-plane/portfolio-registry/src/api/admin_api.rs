@@ -7,7 +7,7 @@ use hyper::{
     Method, Request, Response, StatusCode,
     body::{Bytes, Incoming},
 };
-use platform_errors::BpError;
+use platform_errors::BuildError;
 use serde::Deserialize;
 use std::sync::Arc;
 use subtle::ConstantTimeEq;
@@ -91,7 +91,7 @@ impl AdminApi {
         }
     }
 
-    fn service_error(error: BpError) -> ApiError {
+    fn service_error(error: BuildError) -> ApiError {
         ApiError::bad_request(error.to_string())
     }
 }

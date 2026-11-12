@@ -1,5 +1,5 @@
 use aws_sdk_sqs::{error::ProvideErrorMetadata, types::SendMessageBatchRequestEntry};
-use platform_errors::{BpResult, SqsBatchFailure};
+use platform_errors::{BuildResult, SqsBatchFailure};
 use platform_messages::sqs_message::SqsMessage;
 use platform_metrics::sqs::SqsMetrics;
 use platform_time::deadline::Deadline;
@@ -17,14 +17,14 @@ impl Sqs {
     /// further batches are attempted and the messages in them are reported as
     /// unsent. If any message could not be sent, the returned error names each
     /// message and the reason it failed.
-    pub async fn send_batch(&self, messages: &[SqsMessage], deadline: Deadline) -> BpResult<()> {
+    pub async fn send_batch(&self, messages: &[SqsMessage], deadline: Deadline) -> BuildResult<()> {
         let bodies = Self::serialize(messages)?;
         self.send_bodies(&bodies, Some(messages), deadline).await
     }
 
     /// Serializes and sends arbitrary JSON messages with the same batching,
     /// retry, timeout, and failure reporting as [`Self::send_batch`].
-    pub async fn send_json<T>(&self, messages: &[T], deadline: Deadline) -> BpResult<()>
+    pub async fn send_json<T>(&self, messages: &[T], deadline: Deadline) -> BuildResult<()>
     where
         T: Serialize + Sync,
     {
@@ -37,7 +37,7 @@ impl Sqs {
         bodies: &[String],
         sources: Option<&[SqsMessage]>,
         deadline: Deadline,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let batches = Self::batch_indices(bodies)
             .inspect_err(|_| SqsMetrics::record_messages_failed(bodies.len()))?;
         let mut failures = Vec::new();

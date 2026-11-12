@@ -4,7 +4,7 @@ use jsonwebtoken::{
     DecodingKey, Header, TokenData, Validation, decode, decode_header,
     jwk::{Jwk, JwkSet, KeyAlgorithm},
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -27,9 +27,9 @@ impl JwtVerifier {
         &self.keys
     }
 
-    pub fn verify(&self, jwt: &str, now: DateTime<Utc>) -> BpResult<OrderJwtClaims> {
+    pub fn verify(&self, jwt: &str, now: DateTime<Utc>) -> BuildResult<OrderJwtClaims> {
         let header =
-            decode_header(jwt).map_err(|error| BpError::auth_invalid_jwt(error.to_string()))?;
+            decode_header(jwt).map_err(|error| BuildError::auth_invalid_jwt(error.to_string()))?;
         self.verify_with_header(&header, jwt, now)
     }
 
@@ -42,30 +42,30 @@ impl JwtVerifier {
         header: &Header,
         jwt: &str,
         now: DateTime<Utc>,
-    ) -> BpResult<OrderJwtClaims> {
+    ) -> BuildResult<OrderJwtClaims> {
         if header.alg != JWT_SIGNING_ALGORITHM {
-            return Err(BpError::auth_invalid_jwt(
+            return Err(BuildError::auth_invalid_jwt(
                 "must use the EdDSA signing algorithm",
             ));
         }
         let jwk = self
             .resolve_key(header)
-            .ok_or_else(|| BpError::auth_invalid_jwt("references an unknown signing key"))?;
+            .ok_or_else(|| BuildError::auth_invalid_jwt("references an unknown signing key"))?;
         if let Some(algorithm) = jwk.common.key_algorithm
             && algorithm != KeyAlgorithm::EdDSA
         {
-            return Err(BpError::auth_invalid_jwt(
+            return Err(BuildError::auth_invalid_jwt(
                 "signing key does not support EdDSA",
             ));
         }
         let key = DecodingKey::from_jwk(jwk)
-            .map_err(|error| BpError::auth_invalid_jwt(error.to_string()))?;
+            .map_err(|error| BuildError::auth_invalid_jwt(error.to_string()))?;
         let mut validation = Validation::new(JWT_SIGNING_ALGORITHM);
         validation.validate_exp = false;
         validation.validate_aud = false;
         validation.leeway = 0;
         let mut verified: TokenData<OrderJwtClaims> = decode(jwt, &key, &validation)
-            .map_err(|error| BpError::auth_invalid_jwt(error.to_string()))?;
+            .map_err(|error| BuildError::auth_invalid_jwt(error.to_string()))?;
         ApiToken::validate_id(verified.claims.token_id())?;
         verified.claims.normalize_owner()?;
         verified.claims.validate_at(now)?;

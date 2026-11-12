@@ -11,7 +11,7 @@ use crate::{
     source::MarketSource,
     state::AggregatorState,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_metrics::AggregatorMetrics;
 use platform_runtime::Runtime;
 use platform_types::new_types::TimestampMilliseconds;
@@ -103,7 +103,7 @@ where
         }
     }
 
-    pub async fn run(self) -> BpResult<()> {
+    pub async fn run(self) -> BuildResult<()> {
         let Self {
             config,
             mut source,

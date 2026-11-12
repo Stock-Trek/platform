@@ -1,6 +1,6 @@
 use platform_archive::IcebergConfig;
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_nats::ACK_WAIT;
 use platform_runtime::Config;
 use std::time::Duration;
@@ -31,11 +31,11 @@ pub struct ArchiverConfig {
 }
 
 impl ArchiverConfig {
-    pub fn from_env() -> BpResult<Self> {
+    pub fn from_env() -> BuildResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let nats_url = Config::required_nats_url(vars, ARCHIVER_NATS_URL)?;
         let event_subject_prefix =
@@ -48,7 +48,7 @@ impl ArchiverConfig {
             Config::required_positive_duration_secs(vars, ARCHIVER_FLUSH_INTERVAL_SECS)?;
         let bucket = Config::required_positive_duration_secs(vars, ARCHIVER_BUCKET_SECS)?;
         let bucket_millis = i64::try_from(bucket.as_millis()).map_err(|_| {
-            BpError::config_invalid(ARCHIVER_BUCKET_SECS, "is too large to represent")
+            BuildError::config_invalid(ARCHIVER_BUCKET_SECS, "is too large to represent")
         })?;
 
         let max_records = Config::required_positive_usize(vars, ARCHIVER_MAX_RECORDS)?;

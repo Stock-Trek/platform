@@ -1,6 +1,6 @@
 use crate::PortfolioConfig;
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult, ConfigError};
+use platform_errors::{BuildError, BuildResult, ConfigError};
 use std::{net::SocketAddr, time::Duration};
 
 const LOG_FILTER: &str = "RUST_LOG";
@@ -66,7 +66,7 @@ const ALL_VARS: [(&str, &str); 25] = [
 pub(super) struct Fixture;
 
 impl Fixture {
-    pub(super) fn config(vars: &[(&str, &str)]) -> BpResult<PortfolioConfig> {
+    pub(super) fn config(vars: &[(&str, &str)]) -> BuildResult<PortfolioConfig> {
         PortfolioConfig::from_vars(&EnvVars::from_map(
             vars.iter()
                 .map(|(name, value)| ((*name).to_string(), (*value).to_string())),
@@ -213,7 +213,7 @@ fn requires_every_variable() {
     for (name, _) in ALL_VARS {
         assert!(matches!(
             Fixture::config(&Fixture::without(name)).unwrap_err(),
-            BpError::Config(ConfigError::Missing { name: missing }) if missing == name
+            BuildError::Config(ConfigError::Missing { name: missing }) if missing == name
         ));
     }
 }
@@ -223,7 +223,7 @@ fn rejects_empty_values() {
     for (name, _) in ALL_VARS {
         assert!(matches!(
             Fixture::config(&Fixture::with(name, "")).unwrap_err(),
-            BpError::Config(ConfigError::Empty { name: empty }) if empty == name
+            BuildError::Config(ConfigError::Empty { name: empty }) if empty == name
         ));
     }
 }

@@ -1,6 +1,6 @@
 use crate::{ApiToken, RevocationReason, RevokedBy, TokenMetadata, TokenScope};
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::{AuthError, BpError, BpResult};
+use platform_errors::{AuthError, BuildError, BuildResult};
 use secrecy::SecretString;
 
 struct TemporalFixture;
@@ -10,7 +10,7 @@ impl TemporalFixture {
         TokenMetadata::new(expires_at, TokenScope::DEFAULT).unwrap()
     }
 
-    fn token(created_at: DateTime<Utc>, metadata: TokenMetadata) -> BpResult<ApiToken> {
+    fn token(created_at: DateTime<Utc>, metadata: TokenMetadata) -> BuildResult<ApiToken> {
         ApiToken::from_parts(
             "token-a",
             "owner-a",
@@ -20,12 +20,12 @@ impl TemporalFixture {
         )
     }
 
-    fn assert_invalid(result: BpResult<ApiToken>, expected: &'static str) {
+    fn assert_invalid(result: BuildResult<ApiToken>, expected: &'static str) {
         let error = result.expect_err("token should be rejected");
 
         assert!(matches!(
             error,
-            BpError::Auth(AuthError::InvalidField { field, .. }) if field == expected
+            BuildError::Auth(AuthError::InvalidField { field, .. }) if field == expected
         ));
     }
 }

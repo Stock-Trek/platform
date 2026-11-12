@@ -3,11 +3,11 @@ use crate::{
     api_token::MAX_TOKEN_ID_LENGTH,
 };
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use rand::{Rng, distributions::Alphanumeric};
 
 impl AuthService {
-    pub(crate) async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BpResult<ApiToken> {
+    pub(crate) async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BuildResult<ApiToken> {
         ApiToken::validate_id(id)?;
         let replacement_id = Self::rotated_token_id(id, now);
         self.rotate_token_to(id, replacement_id, now).await
@@ -18,7 +18,7 @@ impl AuthService {
         id: &str,
         replacement_id: impl Into<String>,
         now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
+    ) -> BuildResult<ApiToken> {
         let replacement_id = replacement_id.into();
         Self::validate_rotation_ids(id, &replacement_id)?;
         let original = self.token(id).await?;
@@ -61,12 +61,12 @@ impl AuthService {
         Ok(replacement)
     }
 
-    fn validate_rotation_ids(id: &str, replacement_id: &str) -> BpResult<()> {
+    fn validate_rotation_ids(id: &str, replacement_id: &str) -> BuildResult<()> {
         ApiToken::validate_id(replacement_id).map_err(|_| {
-            BpError::auth_invalid_field("replacement_id", "must be a valid token id")
+            BuildError::auth_invalid_field("replacement_id", "must be a valid token id")
         })?;
         if replacement_id == id {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "replacement_id",
                 "must refer to a different token",
             ));
@@ -90,7 +90,7 @@ impl AuthService {
         &self,
         token: &ApiToken,
         now: DateTime<Utc>,
-        error: &BpError,
+        error: &BuildError,
     ) {
         let event = TokenAuditEvent::new(TokenAuditAction::Rotated, now)
             .with_token(token.id(), Some(token.owner()))

@@ -1,7 +1,7 @@
 use crate::api_key_credential::ApiKeyCredentials;
 use hmac::{Hmac, KeyInit, Mac};
 use p256::ecdsa::signature::Signer as SignerTrait;
-use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_errors::{BuildError, BuildResult, ExchangeError};
 use rsa::{
     RsaPrivateKey, pkcs1::DecodeRsaPrivateKey, pkcs1v15::SigningKey as RsaPkcs1v15SigningKey,
     pkcs8::DecodePrivateKey, sha2::Sha256,
@@ -49,14 +49,14 @@ impl std::fmt::Debug for Encryptor {
 }
 
 impl EncryptionAlgorithm {
-    pub fn encryptor(&self, api_key_credentials: ApiKeyCredentials) -> BpResult<Encryptor> {
+    pub fn encryptor(&self, api_key_credentials: ApiKeyCredentials) -> BuildResult<Encryptor> {
         let secret_key_bytes = api_key_credentials.secret.expose_secret().as_bytes();
         match self {
             Self::Null => Ok(Encryptor::Null),
             Self::EcdsaP256 => {
                 let signing_key =
                     p256::ecdsa::SigningKey::from_slice(secret_key_bytes).map_err(|e| {
-                        BpError::Exchange(ExchangeError::CryptoKey(format!(
+                        BuildError::Exchange(ExchangeError::CryptoKey(format!(
                             "ECDSA P-256 key error: {e}"
                         )))
                     })?;
@@ -65,7 +65,7 @@ impl EncryptionAlgorithm {
             Self::EcdsaP384 => {
                 let signing_key =
                     p384::ecdsa::SigningKey::from_slice(secret_key_bytes).map_err(|e| {
-                        BpError::Exchange(ExchangeError::CryptoKey(format!(
+                        BuildError::Exchange(ExchangeError::CryptoKey(format!(
                             "ECDSA P-384 key error: {e}"
                         )))
                     })?;
@@ -73,12 +73,12 @@ impl EncryptionAlgorithm {
             }
             Self::Ed25519 => {
                 let seed = ed25519_compact::Seed::from_slice(secret_key_bytes).map_err(|_| {
-                    BpError::Exchange(ExchangeError::CryptoKey(
+                    BuildError::Exchange(ExchangeError::CryptoKey(
                         "Ed25519 key must be exactly 32 bytes".to_string(),
                     ))
                 })?;
                 if seed.iter().all(|byte| *byte == 0) {
-                    return Err(BpError::Exchange(ExchangeError::CryptoKey(
+                    return Err(BuildError::Exchange(ExchangeError::CryptoKey(
                         "Ed25519 key must not be all zeros".to_string(),
                     )));
                 }
@@ -96,7 +96,7 @@ impl EncryptionAlgorithm {
             Self::RsaSha256 => {
                 let signing_key = Self::rsa_signing_key(api_key_credentials.secret.expose_secret())
                     .map_err(|e| {
-                        BpError::Exchange(ExchangeError::CryptoKey(format!("RSA key error: {e}")))
+                        BuildError::Exchange(ExchangeError::CryptoKey(format!("RSA key error: {e}")))
                     })?;
                 Ok(Encryptor::RsaSha256(Box::new(signing_key)))
             }
@@ -124,7 +124,7 @@ impl EncryptionAlgorithm {
 }
 
 impl Encryptor {
-    pub fn encrypt(&self, bytes: &[u8]) -> BpResult<Vec<u8>> {
+    pub fn encrypt(&self, bytes: &[u8]) -> BuildResult<Vec<u8>> {
         match self {
             Self::Null => Ok(bytes.to_vec()),
             Self::EcdsaP256(signing_key) => {
@@ -142,7 +142,7 @@ impl Encryptor {
             Self::HmacSha256(signing_slice) => {
                 let mut mac = Hmac::<sha2::Sha256>::new_from_slice(signing_slice.expose_secret())
                     .map_err(|e| {
-                    BpError::Exchange(ExchangeError::CryptoKey(format!(
+                    BuildError::Exchange(ExchangeError::CryptoKey(format!(
                         "HMAC-SHA256 key error: {e}"
                     )))
                 })?;
@@ -152,7 +152,7 @@ impl Encryptor {
             Self::HmacSha512(signing_slice) => {
                 let mut mac = Hmac::<Sha512>::new_from_slice(signing_slice.expose_secret())
                     .map_err(|e| {
-                        BpError::Exchange(ExchangeError::CryptoKey(format!(
+                        BuildError::Exchange(ExchangeError::CryptoKey(format!(
                             "HMAC-SHA512 key error: {e}"
                         )))
                     })?;

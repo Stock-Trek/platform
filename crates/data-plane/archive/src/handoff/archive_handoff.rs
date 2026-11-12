@@ -1,5 +1,5 @@
 use crate::{ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, IcebergDataFile};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 
 /// The compacted archive and the raw objects that are not compacted yet.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -16,7 +16,7 @@ impl ArchiveHandoff {
     /// Compacted files and their processed source-object set are read from the
     /// same Iceberg snapshot, so a concurrent compaction commit cannot make a
     /// raw object look processed before its compacted output is visible.
-    pub async fn discover(catalog: &dyn ArchiveCatalog, kind: ArchiveKind) -> BpResult<Self> {
+    pub async fn discover(catalog: &dyn ArchiveCatalog, kind: ArchiveKind) -> BuildResult<Self> {
         let (compacted, processed) = catalog
             .compacted_snapshot(ArchiveIcebergTable::compacted(kind))
             .await?;

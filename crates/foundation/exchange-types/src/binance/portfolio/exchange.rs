@@ -10,7 +10,7 @@ use crate::{
     signer::Signer,
 };
 use chrono::{TimeZone, Utc};
-use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_errors::{BuildError, BuildResult, ExchangeError};
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 
 impl PortfolioExchange for BinanceExchange {
@@ -21,7 +21,7 @@ impl PortfolioExchange for BinanceExchange {
         CexId::Binance
     }
 
-    fn signer(credentials: &ApiKeyCredentials) -> BpResult<Signer> {
+    fn signer(credentials: &ApiKeyCredentials) -> BuildResult<Signer> {
         Self::signer_hmac_sha256(credentials.clone())
     }
 
@@ -37,11 +37,11 @@ impl PortfolioExchange for BinanceExchange {
         BinanceListenKeyRequest::close(listen_key)
     }
 
-    fn listen_key(response: BinanceResponse<BinanceListenKeyResponse>) -> BpResult<String> {
+    fn listen_key(response: BinanceResponse<BinanceListenKeyResponse>) -> BuildResult<String> {
         Self::success(response)?.require_listen_key()
     }
 
-    fn listen_key_ack(response: BinanceResponse<BinanceListenKeyResponse>) -> BpResult<()> {
+    fn listen_key_ack(response: BinanceResponse<BinanceListenKeyResponse>) -> BuildResult<()> {
         Self::success(response).map(|_| ())
     }
 
@@ -52,13 +52,13 @@ impl PortfolioExchange for BinanceExchange {
     fn account_snapshot(
         response: BinanceResponse<BinanceAccountStatusResponse>,
         mapping: &dyn Fn(&str) -> Option<AssetId>,
-    ) -> BpResult<AccountSnapshot> {
+    ) -> BuildResult<AccountSnapshot> {
         let account = Self::success(response)?;
         let occurred_at = Utc
             .timestamp_millis_opt(account.updateTime)
             .single()
             .ok_or_else(|| {
-                BpError::Exchange(ExchangeError::BadResponse(
+                BuildError::Exchange(ExchangeError::BadResponse(
                     "invalid account timestamp".to_string(),
                 ))
             })?;
@@ -78,16 +78,16 @@ impl PortfolioExchange for BinanceExchange {
     fn account_event(
         value: &serde_json::Value,
         mapping: &dyn Fn(&str) -> Option<AssetId>,
-    ) -> BpResult<Option<AccountEvent>> {
+    ) -> BuildResult<Option<AccountEvent>> {
         EventParser::parse(value, mapping)
     }
 }
 
 impl BinanceExchange {
-    fn success<R>(response: BinanceResponse<R>) -> BpResult<R> {
+    fn success<R>(response: BinanceResponse<R>) -> BuildResult<R> {
         match response.payload {
             BinanceResponsePayload::Success(payload) => Ok(payload),
-            BinanceResponsePayload::Failure(error) => Err(BpError::Exchange(
+            BinanceResponsePayload::Failure(error) => Err(BuildError::Exchange(
                 ExchangeError::BadResponse(error.to_string()),
             )),
         }

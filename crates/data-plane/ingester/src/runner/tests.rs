@@ -5,7 +5,7 @@ use crate::{
     source::{MarketMessageSource, StreamFormat},
 };
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::event::ParsedMessage;
 use platform_nats::EventPublisher;
 use std::sync::Arc;
@@ -18,9 +18,9 @@ struct FakeSource {
 
 #[async_trait]
 impl MarketMessageSource for FakeSource {
-    async fn run(&self, _sender: mpsc::Sender<ParsedMessage>) -> BpResult<()> {
+    async fn run(&self, _sender: mpsc::Sender<ParsedMessage>) -> BuildResult<()> {
         if self.fail {
-            Err(platform_errors::BpError::external("source failed"))
+            Err(platform_errors::BuildError::external("source failed"))
         } else {
             Ok(())
         }
@@ -32,7 +32,7 @@ struct FakePublisher;
 
 #[async_trait]
 impl EventPublisher for FakePublisher {
-    async fn publish(&self, _subject: &str, _payload: &[u8]) -> BpResult<()> {
+    async fn publish(&self, _subject: &str, _payload: &[u8]) -> BuildResult<()> {
         Ok(())
     }
 }

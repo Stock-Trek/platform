@@ -2,7 +2,7 @@ use crate::{
     ApiToken, CachedTokenStore, circuit_breaker::BreakerDecision, flight_gates::FlightOutcome,
     token_cache::CacheLookup,
 };
-use platform_errors::{AuthError, BpError, BpResult, ErrorType};
+use platform_errors::{AuthError, BuildError, BuildResult, ErrorType};
 use platform_metrics::auth::AuthTokenCacheMetrics;
 use std::{
     sync::Arc,
@@ -10,7 +10,7 @@ use std::{
 };
 
 impl CachedTokenStore {
-    pub(crate) async fn cached_get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+    pub(crate) async fn cached_get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         match self.cache.lookup(id, Instant::now()) {
             CacheLookup::Fresh(Some(token)) => {
                 AuthTokenCacheMetrics::record_hit("token");
@@ -54,7 +54,7 @@ impl CachedTokenStore {
         result
     }
 
-    fn flight_result(&self, id: &str, outcome: FlightOutcome) -> BpResult<Option<ApiToken>> {
+    fn flight_result(&self, id: &str, outcome: FlightOutcome) -> BuildResult<Option<ApiToken>> {
         match outcome {
             FlightOutcome::Found(token) => Ok(token.map(Arc::unwrap_or_clone)),
             FlightOutcome::Failed => {
@@ -63,7 +63,7 @@ impl CachedTokenStore {
         }
     }
 
-    async fn load(&self, id: &str) -> BpResult<Option<ApiToken>> {
+    async fn load(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         let generation = self.cache.generation(id);
         let epoch = self.cache.epoch();
         let observed_at = Instant::now();
@@ -108,7 +108,7 @@ impl CachedTokenStore {
         }
     }
 
-    fn stale_or_error(&self, id: &str, error: BpError) -> BpResult<Option<ApiToken>> {
+    fn stale_or_error(&self, id: &str, error: BuildError) -> BuildResult<Option<ApiToken>> {
         match self.cache.lookup(id, Instant::now()) {
             CacheLookup::Fresh(Some(token)) => {
                 AuthTokenCacheMetrics::record_hit("token");
@@ -126,15 +126,15 @@ impl CachedTokenStore {
         }
     }
 
-    fn breaker_failure(error: &BpError) -> bool {
+    fn breaker_failure(error: &BuildError) -> bool {
         match error {
-            BpError::Auth(AuthError::Unavailable { .. }) => true,
-            BpError::Auth(AuthError::Store { retryable, .. }) => *retryable,
+            BuildError::Auth(AuthError::Unavailable { .. }) => true,
+            BuildError::Auth(AuthError::Store { retryable, .. }) => *retryable,
             _ => false,
         }
     }
 
-    fn unavailable(retry_after: Duration) -> BpError {
-        BpError::Auth(AuthError::Unavailable { retry_after })
+    fn unavailable(retry_after: Duration) -> BuildError {
+        BuildError::Auth(AuthError::Unavailable { retry_after })
     }
 }

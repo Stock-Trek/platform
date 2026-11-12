@@ -1,12 +1,12 @@
 use crate::VaultTokenStoreConfig;
-use platform_errors::{BpError, BpResult, ConfigError};
+use platform_errors::{BuildError, BuildResult, ConfigError};
 use secrecy::{ExposeSecret, SecretString};
 use std::time::Duration;
 
 struct VaultConfigFixture;
 
 impl VaultConfigFixture {
-    fn config(address: &str, mount: &str) -> BpResult<VaultTokenStoreConfig> {
+    fn config(address: &str, mount: &str) -> BuildResult<VaultTokenStoreConfig> {
         VaultTokenStoreConfig::new(
             address,
             SecretString::from("vault-token"),
@@ -15,10 +15,10 @@ impl VaultConfigFixture {
         )
     }
 
-    fn assert_invalid(error: BpError, expected: &str) {
+    fn assert_invalid(error: BuildError, expected: &str) {
         match error {
-            BpError::Config(ConfigError::Empty { name })
-            | BpError::Config(ConfigError::Invalid { name, .. }) => {
+            BuildError::Config(ConfigError::Empty { name })
+            | BuildError::Config(ConfigError::Invalid { name, .. }) => {
                 assert_eq!(name, expected)
             }
             other => panic!("expected {expected} validation error, got {other:?}"),

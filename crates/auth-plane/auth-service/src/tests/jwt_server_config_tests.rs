@@ -1,6 +1,6 @@
 use crate::JwtServerConfig;
 use platform_config::env_vars::EnvVars;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::{collections::HashMap, time::Duration};
 
 const BIND_ADDRESS: &str = "AUTH_SERVICE_BIND_ADDR";
@@ -72,7 +72,7 @@ impl Fixture {
         ])
     }
 
-    fn config(extra: &[(&str, &str)]) -> BpResult<JwtServerConfig> {
+    fn config(extra: &[(&str, &str)]) -> BuildResult<JwtServerConfig> {
         let mut vars = Self::vars();
         for (name, value) in extra {
             vars.insert((*name).to_string(), (*value).to_string());

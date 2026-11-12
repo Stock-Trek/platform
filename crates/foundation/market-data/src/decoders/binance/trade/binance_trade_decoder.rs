@@ -7,7 +7,7 @@ use crate::{
     event::MarketEvent,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use platform_errors::{BpError, BpResult, IngesterError};
+use platform_errors::{BuildError, BuildResult, IngesterError};
 use platform_metrics::descriptions::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
 use platform_metrics::market_data::MarketDataMetrics;
 use platform_type_bridge::BinanceConverter;
@@ -21,7 +21,7 @@ use stock_trek_types::cex::trading_pair::TradingPair;
 pub struct BinanceTradeDecoder;
 
 impl TradeDecoder for BinanceTradeDecoder {
-    fn decode(&self, event: &MarketEvent) -> BpResult<Vec<Trade>> {
+    fn decode(&self, event: &MarketEvent) -> BuildResult<Vec<Trade>> {
         let stream = event.stream.to_ascii_lowercase();
         if !stream.ends_with("@trade") && !stream.ends_with("@aggtrade") {
             return Ok(Vec::new());
@@ -56,7 +56,7 @@ impl TradeDecoder for BinanceTradeDecoder {
             .or_else(|| stream.split_once('@').map(|(symbol, _)| symbol))
             .ok_or(IngesterError::MissingField("s"))?;
         let trading_pair = self.trading_pair(symbol).ok_or_else(|| {
-            BpError::bad_value("symbol", symbol, "could not resolve base and quote assets")
+            BuildError::bad_value("symbol", symbol, "could not resolve base and quote assets")
         })?;
         let price = self.decimal_field(&data, "p")?;
         let quantity = self.decimal_field(&data, "q")?;
@@ -82,28 +82,28 @@ impl TradeDecoder for BinanceTradeDecoder {
         }])
     }
 
-    fn trading_pair_for_stream(&self, stream: &str) -> BpResult<TradingPair> {
+    fn trading_pair_for_stream(&self, stream: &str) -> BuildResult<TradingPair> {
         let symbol = stream
             .split_once('@')
             .map_or(stream, |(symbol, _)| symbol)
             .trim();
         if symbol.is_empty() {
-            return Err(BpError::bad_value("stream", stream, "symbol is empty"));
+            return Err(BuildError::bad_value("stream", stream, "symbol is empty"));
         }
         self.trading_pair(symbol).ok_or_else(|| {
-            BpError::bad_value("stream", stream, "could not resolve base and quote assets")
+            BuildError::bad_value("stream", stream, "could not resolve base and quote assets")
         })
     }
 }
 
 impl BinanceTradeDecoder {
-    fn decode_sbe_trades(&self, event: &MarketEvent, frame: &[u8]) -> BpResult<Vec<Trade>> {
+    fn decode_sbe_trades(&self, event: &MarketEvent, frame: &[u8]) -> BuildResult<Vec<Trade>> {
         let sbe_trades = BinanceSbeCodec.decode_trades(frame)?;
         let Some(first) = sbe_trades.first() else {
             return Ok(Vec::new());
         };
         let trading_pair = self.trading_pair(&first.symbol).ok_or_else(|| {
-            BpError::bad_value(
+            BuildError::bad_value(
                 "symbol",
                 first.symbol.clone(),
                 "could not resolve base and quote assets",
@@ -143,12 +143,12 @@ impl BinanceTradeDecoder {
         BinanceConverter::ticker_mapping_static().trading_pair_from_symbol(symbol)
     }
 
-    fn decimal_field(&self, data: &Map<String, Value>, field: &'static str) -> BpResult<Decimal> {
+    fn decimal_field(&self, data: &Map<String, Value>, field: &'static str) -> BuildResult<Decimal> {
         let value = data
             .get(field)
             .and_then(Value::as_str)
             .ok_or(IngesterError::MissingField(field))?;
         Decimal::from_str_exact(value)
-            .map_err(|error| BpError::bad_value(field, value, error.to_string()))
+            .map_err(|error| BuildError::bad_value(field, value, error.to_string()))
     }
 }

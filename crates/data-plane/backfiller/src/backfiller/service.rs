@@ -4,7 +4,7 @@ use crate::{
     retry::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_market_data::{
     envelope::EnvelopeCodec,
     event::{GapMarker, MarketEvent},
@@ -137,12 +137,12 @@ where
         self
     }
 
-    pub async fn run(self) -> BpResult<()> {
+    pub async fn run(self) -> BuildResult<()> {
         let pending = self.load_pending().await?;
         Runtime::run_until_shutdown(self.process_gaps(pending)).await
     }
 
-    async fn process_gaps(mut self, mut pending: BTreeMap<String, PendingGap>) -> BpResult<()> {
+    async fn process_gaps(mut self, mut pending: BTreeMap<String, PendingGap>) -> BuildResult<()> {
         let mut source_ended = false;
 
         loop {
@@ -169,7 +169,7 @@ where
                         }
                     }
                 }
-                return Err(BpError::external(
+                return Err(BuildError::external(
                     "gap marker source ended before shutdown was requested",
                 ));
             }
@@ -192,7 +192,7 @@ where
 
     fn requeue_failed_retry(
         &self,
-        error: &BpError,
+        error: &BuildError,
         gap: PendingGap,
         pending: &mut BTreeMap<String, PendingGap>,
     ) {
@@ -201,7 +201,7 @@ where
         pending.entry(gap.key()).or_insert(gap);
     }
 
-    pub(super) async fn load_pending(&self) -> BpResult<BTreeMap<String, PendingGap>> {
+    pub(super) async fn load_pending(&self) -> BuildResult<BTreeMap<String, PendingGap>> {
         let mut pending = BTreeMap::new();
         for gap in self.retries.load().await? {
             pending.insert(gap.key(), gap);
@@ -240,7 +240,7 @@ where
         &self,
         pending: PendingGap,
         all_pending: &mut BTreeMap<String, PendingGap>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let now = TimestampMilliseconds::now();
         let requested = pending.gap_marker(now);
         let fetch_gap = PendingGap::widened_gap(&requested, pending.attempts);
@@ -317,7 +317,7 @@ where
         &self,
         gap: &GapMarker,
         events: Vec<BackfilledEvent>,
-    ) -> BpResult<Vec<BackfilledEvent>> {
+    ) -> BuildResult<Vec<BackfilledEvent>> {
         let mut seen = HashSet::new();
         let mut events: Vec<_> = events
             .into_iter()
@@ -343,7 +343,7 @@ where
         &self,
         pending: &PendingGap,
         all_pending: &mut BTreeMap<String, PendingGap>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let key = pending.key();
         self.retries.remove(&key).await?;
         all_pending.remove(&key);
@@ -357,7 +357,7 @@ where
         all_pending: &mut BTreeMap<String, PendingGap>,
         ranges: Vec<(u64, u64)>,
         last_error: Option<String>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let now = TimestampMilliseconds::now();
         let attempts = pending.attempts.saturating_add(1);
         let next_attempt_at = PendingGap::retry_at(now, attempts);
@@ -385,7 +385,7 @@ where
         Ok(())
     }
 
-    async fn publish(&self, gap: &GapMarker, event: BackfilledEvent) -> BpResult<()> {
+    async fn publish(&self, gap: &GapMarker, event: BackfilledEvent) -> BuildResult<()> {
         let frame = json!({
             "stream": gap.stream,
             "data": event.data,

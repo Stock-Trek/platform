@@ -1,6 +1,6 @@
 use super::jwt_fetcher::{FetchedJwt, JwtFetcher};
 use parking_lot::Mutex;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_sigv4::SigV4Config;
 use std::{
     io,
@@ -59,7 +59,7 @@ pub struct JwtCache {
 }
 
 impl JwtCache {
-    pub fn with_sigv4(url: &str, owner: impl Into<String>, sigv4: &SigV4Config) -> BpResult<Self> {
+    pub fn with_sigv4(url: &str, owner: impl Into<String>, sigv4: &SigV4Config) -> BuildResult<Self> {
         Ok(Self::from_fetcher(JwtFetcher::with_sigv4(
             url, owner, sigv4,
         )?))
@@ -74,13 +74,13 @@ impl JwtCache {
         }
     }
 
-    pub async fn token(&self) -> BpResult<String> {
+    pub async fn token(&self) -> BuildResult<String> {
         loop {
             let mut refreshed = self.refresh.subscribe();
             match self.action() {
                 Action::Return(token) => return Ok(token),
                 Action::Unavailable => {
-                    return Err(BpError::external(io::Error::other(
+                    return Err(BuildError::external(io::Error::other(
                         "JWT refresh is backing off after an earlier failure",
                     )));
                 }

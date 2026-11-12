@@ -1,6 +1,6 @@
 use super::{handlers::Handlers, waiter_state::WaiterState};
 use parking_lot::Mutex;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::{
     future::Future,
     pin::Pin,
@@ -14,7 +14,7 @@ pub struct WaiterForResponse {
 }
 
 impl Future for WaiterForResponse {
-    type Output = BpResult<serde_json::Value>;
+    type Output = BuildResult<serde_json::Value>;
 
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let mut state = self.state.lock();

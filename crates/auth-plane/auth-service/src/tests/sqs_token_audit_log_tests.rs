@@ -7,7 +7,7 @@ use crate::{
     TokenAuditRelay, TokenMetadata, TokenScope,
 };
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::BpError;
+use platform_errors::BuildError;
 use std::{sync::Arc, time::Duration as StdDuration};
 
 struct SqsAuditFixture;
@@ -64,7 +64,7 @@ async fn record_propagates_queue_delivery_failures() {
         .await
         .unwrap_err();
 
-    assert!(matches!(error, BpError::Sqs(_)));
+    assert!(matches!(error, BuildError::Sqs(_)));
 }
 
 #[tokio::test]

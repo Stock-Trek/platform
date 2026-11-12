@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use platform_errors::{BpError, BpResult, ConnectorError, SystemError};
+use platform_errors::{BuildError, BuildResult, ConnectorError, SystemError};
 use platform_types::new_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::{
     sync::atomic::{AtomicI64, Ordering},
@@ -26,13 +26,13 @@ impl Clock {
         }
     }
 
-    pub fn duration_since_last_sync(&self) -> BpResult<Option<Duration>> {
+    pub fn duration_since_last_sync(&self) -> BuildResult<Option<Duration>> {
         let mutex = self.last_sync.lock();
         let last_sync = *mutex;
         Ok(last_sync.map(|i| i.elapsed()))
     }
 
-    pub fn is_synced(&self) -> BpResult<bool> {
+    pub fn is_synced(&self) -> BuildResult<bool> {
         let last_sync = self.last_sync.lock();
         Ok(last_sync.is_some())
     }
@@ -40,7 +40,7 @@ impl Clock {
         &self,
         server_time: TimestampMilliseconds,
         round_trip_duration: Duration,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let system_time = Self::system_time()?;
         let round_trip_time = DurationMilliseconds(round_trip_duration.as_millis() as i64);
         let half_round_trip = round_trip_time.checked_div(2_i64)?;
@@ -52,20 +52,20 @@ impl Clock {
         *last_sync = Some(Instant::now());
         Ok(())
     }
-    pub fn server_time_estimate(&self) -> BpResult<TimestampMilliseconds> {
+    pub fn server_time_estimate(&self) -> BuildResult<TimestampMilliseconds> {
         if !self.is_synced()? {
-            return Err(BpError::Connector(ConnectorError::ClockNotSynced));
+            return Err(BuildError::Connector(ConnectorError::ClockNotSynced));
         }
         self.server_time_estimate_unchecked()
     }
-    pub fn server_time_estimate_unchecked(&self) -> BpResult<TimestampMilliseconds> {
+    pub fn server_time_estimate_unchecked(&self) -> BuildResult<TimestampMilliseconds> {
         Ok(Self::system_time()? - self.server_offset())
     }
 
-    fn system_time() -> BpResult<TimestampMilliseconds> {
+    fn system_time() -> BuildResult<TimestampMilliseconds> {
         let system_time = SystemTime::now()
             .duration_since(UNIX_EPOCH)
-            .map_err(|_| BpError::System(SystemError::SystemTimeBeforeEpoch))?;
+            .map_err(|_| BuildError::System(SystemError::SystemTimeBeforeEpoch))?;
         Ok(TimestampMilliseconds(system_time.as_millis() as i64))
     }
     fn server_offset(&self) -> DurationMilliseconds {

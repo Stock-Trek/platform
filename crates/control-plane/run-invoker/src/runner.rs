@@ -1,5 +1,5 @@
 use aws_sdk_lambda::{Client as LambdaClient, primitives::Blob, types::InvocationType};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 
 pub struct Runner {
     client: LambdaClient,
@@ -14,7 +14,7 @@ impl Runner {
         }
     }
 
-    pub async fn invoke(&self, request: &str) -> BpResult<()> {
+    pub async fn invoke(&self, request: &str) -> BuildResult<()> {
         self.client
             .invoke()
             .function_name(&self.function_name)

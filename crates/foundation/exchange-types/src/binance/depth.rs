@@ -9,7 +9,7 @@ use crate::{
     request::{ETHttpRequest, ETRequest},
     signer::Signer,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use serde::{Deserialize, Serialize};
@@ -40,12 +40,12 @@ pub struct BinanceDepthResponse {
 }
 
 impl BinanceResponse<BinanceDepthResponse> {
-    pub fn depth(self) -> BpResult<BinanceDepthResponse> {
+    pub fn depth(self) -> BuildResult<BinanceDepthResponse> {
         match self.payload {
             BinanceResponsePayload::Success(payload) => Ok(payload),
             BinanceResponsePayload::Failure(error) => {
                 let retry_after = self.metadata.retry_after.or_else(|| error.retry_after());
-                Err(BpError::Exchange(
+                Err(BuildError::Exchange(
                     error.exchange_error(self.metadata.status, retry_after),
                 ))
             }
@@ -85,7 +85,7 @@ impl ETHttpRequest for BinanceDepthRequest {
     fn http_method(&self) -> HttpMethod {
         HttpMethod::GET
     }
-    fn try_into_http(self, signer: &Signer) -> BpResult<HttpRequest> {
+    fn try_into_http(self, signer: &Signer) -> BuildResult<HttpRequest> {
         BinanceRequestFactory::try_into_http(self, signer)
     }
 }

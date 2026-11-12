@@ -7,7 +7,7 @@ use crate::{
     request::{ETHttpRequest, ETRequest},
     signer::Signer,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use serde::Serialize;
 
@@ -92,7 +92,7 @@ impl ETHttpRequest for BinanceListenKeyRequest {
         }
     }
 
-    fn try_into_http(self, signer: &Signer) -> BpResult<HttpRequest> {
+    fn try_into_http(self, signer: &Signer) -> BuildResult<HttpRequest> {
         let query = self.query_params(true);
         Ok(HttpRequest {
             method: self.http_method(),

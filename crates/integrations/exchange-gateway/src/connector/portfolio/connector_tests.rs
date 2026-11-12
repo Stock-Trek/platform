@@ -5,7 +5,7 @@ use super::{
 };
 use async_trait::async_trait;
 use chrono::Utc;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     portfolio::{AccountEvent, AccountPositionEvent, AccountSnapshot},
@@ -41,7 +41,7 @@ impl PortfolioTransport for Transport {
         Duration::from_millis(10)
     }
 
-    async fn create_listen_key(&self, _credentials: &ApiKeyCredentials) -> BpResult<String> {
+    async fn create_listen_key(&self, _credentials: &ApiKeyCredentials) -> BuildResult<String> {
         Ok("listen-key".to_string())
     }
 
@@ -49,7 +49,7 @@ impl PortfolioTransport for Transport {
         &self,
         _credentials: &ApiKeyCredentials,
         _listen_key: &str,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         Ok(())
     }
 
@@ -57,7 +57,7 @@ impl PortfolioTransport for Transport {
         &self,
         _credentials: &ApiKeyCredentials,
         _listen_key: &str,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         self.closes.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
@@ -65,14 +65,14 @@ impl PortfolioTransport for Transport {
     async fn account_snapshot(
         &self,
         _credentials: &ApiKeyCredentials,
-    ) -> BpResult<AccountSnapshot> {
+    ) -> BuildResult<AccountSnapshot> {
         Ok(AccountSnapshot::new(
             BTreeMap::from([(AssetId::Bitcoin, 1.0)]),
             Utc::now(),
         ))
     }
 
-    async fn open_stream(&self, _listen_key: &str) -> BpResult<Box<dyn AccountEventStream>> {
+    async fn open_stream(&self, _listen_key: &str) -> BuildResult<Box<dyn AccountEventStream>> {
         self.opens.fetch_add(1, Ordering::SeqCst);
         Ok(Box::new(Stream {
             events: VecDeque::from([
@@ -93,7 +93,7 @@ struct Stream {
 
 #[async_trait]
 impl AccountEventStream for Stream {
-    async fn next(&mut self) -> BpResult<Option<AccountEvent>> {
+    async fn next(&mut self) -> BuildResult<Option<AccountEvent>> {
         if let Some(event) = self.events.pop_front() {
             return Ok(Some(event));
         }
@@ -110,7 +110,7 @@ impl PortfolioUpdateSink for Sink {
     async fn apply_update(
         &self,
         update: ConnectorPortfolioUpdate,
-    ) -> BpResult<PortfolioUpdateApply> {
+    ) -> BuildResult<PortfolioUpdateApply> {
         self.updates.send(update).expect("receiver");
         Ok(PortfolioUpdateApply::Applied)
     }

@@ -1,7 +1,7 @@
 use crate::{MemoryOwnershipStore, OwnershipOutboxRelay, OwnershipStore, RegistryService};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_nats::EventPublisher;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use std::{
@@ -27,11 +27,11 @@ impl RecordingPublisher {
 
 #[async_trait]
 impl EventPublisher for RecordingPublisher {
-    async fn publish(&self, _subject: &str, payload: &[u8]) -> BpResult<()> {
+    async fn publish(&self, _subject: &str, payload: &[u8]) -> BuildResult<()> {
         let mut fail_next = self.fail_next.lock().expect("fail_next");
         if *fail_next {
             *fail_next = false;
-            return Err(BpError::external(std::io::Error::other("publish failed")));
+            return Err(BuildError::external(std::io::Error::other("publish failed")));
         }
         self.published
             .lock()

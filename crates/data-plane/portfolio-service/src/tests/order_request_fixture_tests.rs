@@ -4,7 +4,7 @@ use platform_auth_service::{
     ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenStore,
     MemoryTokenUsageQueue, TokenMetadata, TokenScope, TokenStore,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_messages::order_request::UnsignedOrderRequest;
 use std::sync::Arc;
 use stock_trek_types::cex::{
@@ -53,7 +53,7 @@ impl Fixture {
         service: &OrderRequestService,
         auth_service: &AuthService,
         request: &UnsignedOrderRequest,
-    ) -> BpResult<SignedOrderSubmission> {
+    ) -> BuildResult<SignedOrderSubmission> {
         let now = Utc::now();
         let jwt = auth_service
             .issue_jwt_for_owner(request.owner(), now)

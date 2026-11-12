@@ -14,7 +14,7 @@ use crate::{
     source::{MarketInput, MarketSource},
     state::DeduplicationKey,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::{
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
     event::{GapMarker, MarketEvent},
@@ -47,7 +47,7 @@ where
         mut quiesce: Option<QuiesceReceiver>,
         state: &mut CommitState,
         outputs: &CandleOutputWriter,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let mut decoders: HashMap<CexId, SharedTradeDecoder> = HashMap::new();
         let mut checkpoint_ticker = time::interval(config.checkpoint_interval);
         checkpoint_ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);

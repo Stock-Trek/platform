@@ -4,7 +4,7 @@ use crate::{
     TokenStore, jwt_server_error::JwtServerError,
 };
 use async_trait::async_trait;
-use platform_errors::{AuthError, BpError, BpResult};
+use platform_errors::{AuthError, BuildError, BuildResult};
 use platform_sigv4::{SigV4Config, SigV4Registry};
 use reqwest::StatusCode;
 use serde_json::json;
@@ -27,42 +27,42 @@ impl FailingStore {
         Self { retryable }
     }
 
-    fn error(&self) -> BpError {
-        BpError::auth_store("read", "owner-index", self.retryable, STORE_ERROR)
+    fn error(&self) -> BuildError {
+        BuildError::auth_store("read", "owner-index", self.retryable, STORE_ERROR)
     }
 }
 
 #[async_trait]
 impl TokenStore for FailingStore {
-    async fn put(&self, _token: &ApiToken) -> BpResult<()> {
+    async fn put(&self, _token: &ApiToken) -> BuildResult<()> {
         Err(self.error())
     }
 
-    async fn get(&self, _id: &str) -> BpResult<Option<ApiToken>> {
+    async fn get(&self, _id: &str) -> BuildResult<Option<ApiToken>> {
         Err(self.error())
     }
 
-    async fn delete(&self, _id: &str) -> BpResult<()> {
+    async fn delete(&self, _id: &str) -> BuildResult<()> {
         Err(self.error())
     }
 
-    async fn ids(&self) -> BpResult<Vec<String>> {
+    async fn ids(&self) -> BuildResult<Vec<String>> {
         Err(self.error())
     }
 
-    async fn owner_index(&self, _owner: &str) -> BpResult<Option<OwnerIndex>> {
+    async fn owner_index(&self, _owner: &str) -> BuildResult<Option<OwnerIndex>> {
         Err(self.error())
     }
 
-    async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> BuildResult<()> {
         Err(self.error())
     }
 
-    async fn commit(&self, _mutation: TokenMutation, _event: TokenAuditEvent) -> BpResult<bool> {
+    async fn commit(&self, _mutation: TokenMutation, _event: TokenAuditEvent) -> BuildResult<bool> {
         Err(self.error())
     }
 
-    async fn commit_rotation(&self, _transaction: &TokenRotationTransaction) -> BpResult<()> {
+    async fn commit_rotation(&self, _transaction: &TokenRotationTransaction) -> BuildResult<()> {
         Err(self.error())
     }
 }
@@ -75,7 +75,7 @@ impl Fixture {
         SigV4Config::new(registry, "eu-west-1", "execute-api").unwrap()
     }
 
-    async fn server(retryable: bool) -> (String, JoinHandle<BpResult<()>>) {
+    async fn server(retryable: bool) -> (String, JoinHandle<BuildResult<()>>) {
         let service = AuthServiceBuilder::new()
             .store(Arc::new(FailingStore::new(retryable)))
             .build();
@@ -131,7 +131,7 @@ async fn permanent_issuance_failures_return_bad_request() {
 
 #[test]
 fn unavailable_issuance_errors_include_retry_after() {
-    let error = JwtServerError::issuance(BpError::Auth(AuthError::Unavailable {
+    let error = JwtServerError::issuance(BuildError::Auth(AuthError::Unavailable {
         retry_after: Duration::from_secs(7),
     }));
 

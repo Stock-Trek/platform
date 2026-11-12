@@ -2,7 +2,7 @@ use crate::{
     AuthService, InvalidOrderRequest, OrderRequestSigner, OrderRequestVerification, TokenScope,
 };
 use chrono::{DateTime, Utc};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 
 pub(crate) const CLOCK_SKEW_SECONDS: i64 = 60;
 
@@ -13,7 +13,7 @@ impl AuthService {
         order_request: &[u8],
         signature: &str,
         now: DateTime<Utc>,
-    ) -> BpResult<OrderRequestVerification> {
+    ) -> BuildResult<OrderRequestVerification> {
         let token = match self.signature_token(token_id, now).await {
             Ok(Some(token)) => token,
             Ok(None) => {

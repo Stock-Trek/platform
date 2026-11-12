@@ -5,7 +5,7 @@ use crate::{
     response::{ETHttpResponse, ETResponse, ETWebsocketResponse},
     websocket_id::ETWebsocketId,
 };
-use platform_errors::{BinanceError, BpError, BpResult, ExchangeError};
+use platform_errors::{BinanceError, BuildError, BuildResult, ExchangeError};
 use platform_types::new_types::{DurationNanoseconds, DurationSeconds, UsageCount};
 use serde::{Deserialize, de::DeserializeOwned};
 use std::{collections::HashMap, fmt::Debug};
@@ -164,7 +164,7 @@ impl<R> ETHttpResponse for BinanceResponse<R>
 where
     R: Clone + Debug + DeserializeOwned,
 {
-    fn try_from_http(response: HttpResponse) -> BpResult<Self> {
+    fn try_from_http(response: HttpResponse) -> BuildResult<Self> {
         let mut retry_after: Option<DurationSeconds> = match response
             .headers
             .iter()
@@ -173,7 +173,7 @@ where
             None => None,
             Some(tuple) => match tuple.1.parse::<u64>() {
                 Err(_) => {
-                    return Err(BpError::Exchange(ExchangeError::ParseError(
+                    return Err(BuildError::Exchange(ExchangeError::ParseError(
                         "Retry-After".into(),
                     )));
                 }
@@ -226,9 +226,9 @@ impl<R> ETWebsocketResponse for BinanceResponse<R>
 where
     R: Clone + Debug + DeserializeOwned,
 {
-    fn try_from_websocket(response: serde_json::Value) -> BpResult<Self> {
+    fn try_from_websocket(response: serde_json::Value) -> BuildResult<Self> {
         let websocket_response: BinanceWebsocketResponse = serde_json::from_value(response)
-            .map_err(|error| BpError::Exchange(ExchangeError::DeserializeResponse(error)))?;
+            .map_err(|error| BuildError::Exchange(ExchangeError::DeserializeResponse(error)))?;
         let usage = Self::parse_usage(&websocket_response.rateLimits);
         let retry_after = websocket_response
             .error

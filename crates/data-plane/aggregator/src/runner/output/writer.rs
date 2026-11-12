@@ -14,7 +14,7 @@ use crate::{
     sink::{ClosedCandlePublisher, OpenCandleStore},
     state::AggregatorState,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_market_data::candle::{Candle, CandleKey, ClosedCandle};
 use std::collections::HashMap;
 use std::time::{Duration, Instant};
@@ -44,16 +44,16 @@ enum OutputCommand {
     /// Publishes the closed candles queued before this command, then
     /// acknowledges the barrier. Open projections may still be pending.
     Barrier {
-        reply: oneshot::Sender<BpResult<()>>,
+        reply: oneshot::Sender<BuildResult<()>>,
     },
     /// Publishes everything queued before this command, then acknowledges the
     /// barrier. This is used before quiescing or releasing the lease.
     Flush {
-        reply: oneshot::Sender<BpResult<()>>,
+        reply: oneshot::Sender<BuildResult<()>>,
     },
     /// Flushes and stops the writer task.
     Shutdown {
-        reply: oneshot::Sender<BpResult<()>>,
+        reply: oneshot::Sender<BuildResult<()>>,
     },
 }
 
@@ -98,7 +98,7 @@ impl CandleOutputWriter {
         &self,
         update: ProcessorUpdate,
         state: &AggregatorState,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let deletes = Self::closed_open_keys(&update, state);
         let mut open = Vec::with_capacity(update.open.len() + deletes.len());
         for candle in update.open {
@@ -128,7 +128,7 @@ impl CandleOutputWriter {
     ///
     /// Pending open projections do not delay the barrier: they are derived
     /// data and may continue coalescing after the source checkpoint advances.
-    pub(crate) async fn barrier(&self) -> BpResult<()> {
+    pub(crate) async fn barrier(&self) -> BuildResult<()> {
         let (reply, receiver) = oneshot::channel();
         self.send(OutputCommand::Barrier { reply }).await?;
         receiver.await.map_err(|_| Self::writer_stopped())?
@@ -138,7 +138,7 @@ impl CandleOutputWriter {
     ///
     /// This drains both closed candles and the open projection and is used
     /// before quiescing or releasing the shard lease.
-    pub(crate) async fn flush(&self) -> BpResult<()> {
+    pub(crate) async fn flush(&self) -> BuildResult<()> {
         let (reply, receiver) = oneshot::channel();
         self.send(OutputCommand::Flush { reply }).await?;
         receiver.await.map_err(|_| Self::writer_stopped())?
@@ -147,7 +147,7 @@ impl CandleOutputWriter {
     /// Flushes the remaining outputs and waits for the writer task to stop.
     ///
     /// This must complete before the shard lease is released.
-    pub(crate) async fn shutdown(self) -> BpResult<()> {
+    pub(crate) async fn shutdown(self) -> BuildResult<()> {
         let (reply, receiver) = oneshot::channel();
         let result = match self.sender.send(OutputCommand::Shutdown { reply }).await {
             Ok(()) => receiver.await.map_err(|_| Self::writer_stopped())?,
@@ -156,7 +156,7 @@ impl CandleOutputWriter {
 
         match self.task.await {
             Ok(()) => result,
-            Err(error) => Err(BpError::bad_value(
+            Err(error) => Err(BuildError::bad_value(
                 "aggregator output writer",
                 "task",
                 error.to_string(),
@@ -164,7 +164,7 @@ impl CandleOutputWriter {
         }
     }
 
-    async fn send(&self, command: OutputCommand) -> BpResult<()> {
+    async fn send(&self, command: OutputCommand) -> BuildResult<()> {
         self.sender
             .send(command)
             .await
@@ -173,8 +173,8 @@ impl CandleOutputWriter {
 }
 
 impl CandleOutputWriter {
-    fn writer_stopped() -> BpError {
-        BpError::bad_value(
+    fn writer_stopped() -> BuildError {
+        BuildError::bad_value(
             "aggregator output writer",
             "channel",
             "projection writer stopped before acknowledging the output",
@@ -284,7 +284,7 @@ impl PendingWrites {
     ///
     /// Closed candles are the durable, revision-bearing output and must be
     /// acknowledged before a checkpoint can advance past their inputs.
-    async fn flush<K>(&mut self, sink: &K) -> BpResult<()>
+    async fn flush<K>(&mut self, sink: &K) -> BuildResult<()>
     where
         K: OpenCandleStore + ClosedCandlePublisher + ?Sized,
     {
@@ -303,7 +303,7 @@ impl PendingWrites {
     ///
     /// If publication fails, the batch is retained so a retry republishes the
     /// same deterministic closed-candle message ids.
-    async fn publish_closed<K>(&mut self, sink: &K) -> BpResult<()>
+    async fn publish_closed<K>(&mut self, sink: &K) -> BuildResult<()>
     where
         K: ClosedCandlePublisher + ?Sized,
     {
@@ -321,7 +321,7 @@ impl PendingWrites {
         }
     }
 
-    async fn flush_open<K>(&mut self, sink: &K) -> BpResult<()>
+    async fn flush_open<K>(&mut self, sink: &K) -> BuildResult<()>
     where
         K: OpenCandleStore + ?Sized,
     {

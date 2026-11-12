@@ -3,7 +3,7 @@ use aws_sdk_ssm::{
     error::ProvideErrorMetadata,
     operation::get_parameters_by_path::{GetParametersByPathError, GetParametersByPathOutput},
 };
-use platform_errors::{BpError, BpResult, Retryability, SecretsError, TimeoutError};
+use platform_errors::{BuildError, BuildResult, Retryability, SecretsError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 use std::collections::HashMap;
 
@@ -24,7 +24,7 @@ impl Secrets {
         timeouts: Timeouts,
         deadline: Deadline,
         config: &SsmConfig,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let client = Aws::ssm_client(sdk_config);
         Self::within_deadline(
             timeouts,
@@ -39,14 +39,14 @@ impl Secrets {
     pub async fn load_with_client(
         client: &aws_sdk_ssm::Client,
         config: &SsmConfig,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         Self::fetch(client, config).await.map(Self)
     }
 
     async fn fetch(
         client: &aws_sdk_ssm::Client,
         config: &SsmConfig,
-    ) -> BpResult<HashMap<String, String>> {
+    ) -> BuildResult<HashMap<String, String>> {
         let mut secrets = HashMap::new();
         let mut paginator = client
             .get_parameters_by_path()
@@ -60,7 +60,7 @@ impl Secrets {
             Self::insert_page(&mut secrets, &page);
         }
         if secrets.is_empty() {
-            return Err(BpError::Secrets(SecretsError::Empty {
+            return Err(BuildError::Secrets(SecretsError::Empty {
                 path: config.path.clone(),
             }));
         }
@@ -89,12 +89,12 @@ impl Secrets {
     fn load_error<R>(
         path: &str,
         error: aws_sdk_ssm::error::SdkError<GetParametersByPathError, R>,
-    ) -> BpError
+    ) -> BuildError
     where
         R: std::fmt::Debug + Send + Sync + 'static,
     {
         let retryable = Self::retryability(&error).is_retryable();
-        BpError::Secrets(SecretsError::Load {
+        BuildError::Secrets(SecretsError::Load {
             operation: SSM_OPERATION,
             path: path.to_string(),
             retryable,
@@ -122,19 +122,19 @@ impl Secrets {
         timeouts: Timeouts,
         deadline: Deadline,
         operation: &'static str,
-        future: impl std::future::Future<Output = BpResult<T>>,
-    ) -> BpResult<T> {
+        future: impl std::future::Future<Output = BuildResult<T>>,
+    ) -> BuildResult<T> {
         let timeout = timeouts.operation_timeout(deadline)?;
         tokio::time::timeout(timeout, future)
             .await
-            .map_err(|_| BpError::Timeout(TimeoutError::Operation { operation }))?
+            .map_err(|_| BuildError::Timeout(TimeoutError::Operation { operation }))?
     }
 
     /// Returns the named secret, or a configuration error when it is absent.
-    pub fn get(&self, name: &str) -> BpResult<String> {
+    pub fn get(&self, name: &str) -> BuildResult<String> {
         self.0
             .get(name)
             .cloned()
-            .ok_or_else(|| BpError::config_missing(name))
+            .ok_or_else(|| BuildError::config_missing(name))
     }
 }

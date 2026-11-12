@@ -10,7 +10,7 @@ use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use platform_archive::{
     ArchiveKind, ArchiveParquetStream, ArchivedMarketEvent, ParquetReader, RoutingBucket,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_market_data::{
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
     event::MarketEvent,
@@ -25,7 +25,7 @@ use tracing::info;
 /// A stream of raw market events from the archive.
 #[async_trait]
 pub trait ArchivedEventSource: Send {
-    async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>>;
+    async fn next_event(&mut self) -> BuildResult<Option<ArchivedMarketEvent>>;
 }
 
 /// Replays archive event objects from S3 for one shard.
@@ -54,7 +54,7 @@ impl S3ArchivedEventSource {
     pub(crate) fn decoder_for(
         decoders: &mut HashMap<CexId, SharedTradeDecoder>,
         exchange: CexId,
-    ) -> BpResult<SharedTradeDecoder> {
+    ) -> BuildResult<SharedTradeDecoder> {
         if let Some(decoder) = decoders.get(&exchange) {
             return Ok(decoder.clone());
         }
@@ -86,20 +86,20 @@ impl S3ArchivedEventSource {
         config: &ArchiveRecoveryConfig,
         shard: ShardId,
         shard_count: usize,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         S3ArchiveRecovery::new(config.clone())
             .connect(shard, shard_count)
             .await
     }
 
-    async fn load_next_batch(&mut self) -> BpResult<bool> {
+    async fn load_next_batch(&mut self) -> BuildResult<bool> {
         loop {
             if self.reader.is_none() {
                 let Some(object) = self.objects.pop_front() else {
                     return Ok(false);
                 };
                 let file_size = u64::try_from(object.size).map_err(|error| {
-                    BpError::external(std::io::Error::new(
+                    BuildError::external(std::io::Error::new(
                         std::io::ErrorKind::InvalidData,
                         format!(
                             "archive object {} has invalid size {}: {error}",
@@ -113,7 +113,7 @@ impl S3ArchivedEventSource {
                         .acquire_owned()
                         .await
                         .map_err(|error| {
-                            BpError::external(std::io::Error::other(format!(
+                            BuildError::external(std::io::Error::other(format!(
                                 "archive recovery limiter closed: {error}"
                             )))
                         })?;
@@ -170,7 +170,7 @@ impl S3ArchivedEventSource {
 
 #[async_trait]
 impl ArchivedEventSource for S3ArchivedEventSource {
-    async fn next_event(&mut self) -> BpResult<Option<ArchivedMarketEvent>> {
+    async fn next_event(&mut self) -> BuildResult<Option<ArchivedMarketEvent>> {
         loop {
             if let Some(event) = self.events.pop_front() {
                 if RoutingBucket::from_key(event.routing_key())

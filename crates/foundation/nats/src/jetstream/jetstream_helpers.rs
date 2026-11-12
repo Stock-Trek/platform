@@ -1,5 +1,5 @@
 use async_nats::jetstream::stream;
-use platform_errors::{BpError, NatsError};
+use platform_errors::{BuildError, NatsError};
 use std::fmt::Display;
 use std::time::Duration;
 
@@ -82,7 +82,7 @@ impl JetStream {
         hex::encode(hasher.finalize())
     }
 
-    pub(crate) fn protocol_error(context: &str, error: impl Display) -> BpError {
-        BpError::Nats(NatsError::protocol(format!("{context}: {error}")))
+    pub(crate) fn protocol_error(context: &str, error: impl Display) -> BuildError {
+        BuildError::Nats(NatsError::protocol(format!("{context}: {error}")))
     }
 }

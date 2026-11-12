@@ -4,7 +4,7 @@ use platform_aggregator::{
     ProcessorRunner, RestoreOptions, S3ArchiveRecovery, ShardId, StateStore, WriterLease,
 };
 use platform_archive::ICEBERG_CATALOG_URI;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_nats::JetStream;
 use platform_runtime::Runtime;
 use std::sync::Arc;
@@ -39,7 +39,7 @@ impl ShardWriter {
         }
     }
 
-    pub async fn run(self) -> BpResult<()> {
+    pub async fn run(self) -> BuildResult<()> {
         let source_stream = JetStream::stream_name(&self.config.shard_subject_prefix);
         Supervisor::supervise("shard", move || {
             let writer = self.clone();
@@ -49,7 +49,7 @@ impl ShardWriter {
         .await
     }
 
-    async fn run_once(&self, source_stream: String) -> BpResult<()> {
+    async fn run_once(&self, source_stream: String) -> BuildResult<()> {
         let writer_id = WriterLease::new_writer_id();
         let Some(mut lease) = self.acquire_lease(&writer_id).await? else {
             return Ok(());
@@ -67,14 +67,14 @@ impl ShardWriter {
                                     .await?,
                             )
                                 as Box<dyn ArchivedEventSource>),
-                            None => Err(BpError::config_missing(ICEBERG_CATALOG_URI)),
+                            None => Err(BuildError::config_missing(ICEBERG_CATALOG_URI)),
                         }
                     })
                     .await?;
                 let replay_watermark = restored.replay_watermark();
                 let source =
                     NatsShardSource::connect(&self.config, self.shard, restored.start).await?;
-                Ok::<_, BpError>((restored.state, replay_watermark, source))
+                Ok::<_, BuildError>((restored.state, replay_watermark, source))
             };
             tokio::pin!(restore);
 
@@ -89,7 +89,7 @@ impl ShardWriter {
                         let Some(renewed) =
                             self.leases.renew(&lease, self.config.lease_ttl).await?
                         else {
-                            return Err(BpError::bad_value(
+                            return Err(BuildError::bad_value(
                                 "aggregator lease",
                                 self.shard.to_string(),
                                 format!("writer {writer_id} lost the shard lease while preparing"),
@@ -122,7 +122,7 @@ impl ShardWriter {
         Ok(())
     }
 
-    async fn acquire_lease(&self, writer_id: &str) -> BpResult<Option<WriterLease>> {
+    async fn acquire_lease(&self, writer_id: &str) -> BuildResult<Option<WriterLease>> {
         tokio::select! {
             result = WriterLease::wait_for_lease(
                 self.leases.as_ref(),

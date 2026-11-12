@@ -11,14 +11,14 @@ use crate::{
     binance::fetcher::BinanceGapFetcher, config::BackfillerConfig, fetcher::FetcherRegistry,
     gap_marker_source::NatsGapMarkerSource, retry::NatsGapRetryStore, runner::BackfillerRunner,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_nats::NatsPublisher;
 use platform_runtime::Service;
 
 const SERVICE: Service = Service::new("platform-backfiller");
 const NATS_CLIENT_NAME: &str = "platform-backfiller-events";
 #[tokio::main]
-async fn main() -> BpResult<()> {
+async fn main() -> BuildResult<()> {
     let config = BackfillerConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let _metrics = SERVICE.init_metrics("platform/backfiller")?;

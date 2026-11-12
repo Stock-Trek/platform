@@ -23,7 +23,7 @@ impl Fixture {
         SigV4Config::new(registry, "eu-west-1", "execute-api").unwrap()
     }
 
-    async fn server() -> (String, JoinHandle<platform_errors::BpResult<()>>) {
+    async fn server() -> (String, JoinHandle<platform_errors::BuildResult<()>>) {
         let service = TestFixture::service();
         TestFixture::add_token(&service, "token-a", OWNER).await;
         let server =

@@ -4,7 +4,7 @@ use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchivePath, Bucket, ObjectKey, S3,
     SourceBatch,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_types::new_types::TimestampMilliseconds;
 use std::{
     collections::{HashMap, HashSet},
@@ -15,7 +15,7 @@ use tracing::warn;
 /// Finds raw archive files that are ready to be compacted.
 #[async_trait]
 pub trait ArchiveBatchSource: Send + Sync {
-    async fn pending_batches(&self) -> BpResult<Vec<SourceBatch>>;
+    async fn pending_batches(&self) -> BuildResult<Vec<SourceBatch>>;
 }
 
 /// Lists raw archive Parquet files from S3 and groups them by source folder.
@@ -36,7 +36,7 @@ impl S3ArchiveSource {
     pub async fn connect(
         config: &CompactorConfig,
         catalog: Arc<dyn ArchiveCatalog>,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let (client, _) = S3::clients().await;
         let settle_millis = i64::try_from(config.settle.as_millis()).unwrap_or(i64::MAX);
         Ok(Self {
@@ -49,7 +49,7 @@ impl S3ArchiveSource {
         })
     }
 
-    async fn registered_raw_files(&self) -> BpResult<HashMap<ArchiveKind, HashSet<String>>> {
+    async fn registered_raw_files(&self) -> BuildResult<HashMap<ArchiveKind, HashSet<String>>> {
         let mut files = HashMap::new();
         for kind in [ArchiveKind::Events, ArchiveKind::Candles] {
             files.insert(
@@ -62,7 +62,7 @@ impl S3ArchiveSource {
         Ok(files)
     }
 
-    async fn processed_source_files(&self) -> BpResult<HashMap<ArchiveKind, HashSet<String>>> {
+    async fn processed_source_files(&self) -> BuildResult<HashMap<ArchiveKind, HashSet<String>>> {
         let mut files = HashMap::new();
         for kind in [ArchiveKind::Events, ArchiveKind::Candles] {
             files.insert(
@@ -78,7 +78,7 @@ impl S3ArchiveSource {
 
 #[async_trait]
 impl ArchiveBatchSource for S3ArchiveSource {
-    async fn pending_batches(&self) -> BpResult<Vec<SourceBatch>> {
+    async fn pending_batches(&self) -> BuildResult<Vec<SourceBatch>> {
         let list_prefix = if self.prefix.is_empty() {
             String::new()
         } else {

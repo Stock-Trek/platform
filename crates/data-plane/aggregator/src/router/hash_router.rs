@@ -4,7 +4,7 @@ use crate::{
     source::{MarketInput, MarketSource, SourceRecord},
 };
 use parking_lot::Mutex;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::{
     decoders::trade::{SharedTradeDecoder, TradeDecoderFactory},
     event::{GapMarker, MarketEvent},
@@ -31,14 +31,14 @@ impl HashRouter {
     /// updates, are routed by the trading pair encoded in their exchange
     /// stream. Gap markers are routed by the trading pair encoded in their
     /// exchange stream.
-    pub fn shards(&self, input: &MarketInput, shard_count: usize) -> BpResult<Vec<ShardId>> {
+    pub fn shards(&self, input: &MarketInput, shard_count: usize) -> BuildResult<Vec<ShardId>> {
         match input {
             MarketInput::Gap(gap) => self.gap_shards(gap, shard_count),
             MarketInput::Event(event) => self.event_shards(event, shard_count),
         }
     }
 
-    fn event_shards(&self, event: &MarketEvent, shard_count: usize) -> BpResult<Vec<ShardId>> {
+    fn event_shards(&self, event: &MarketEvent, shard_count: usize) -> BuildResult<Vec<ShardId>> {
         let decoder = self.decoder(event.exchange)?;
         let trades = decoder.decode(event)?;
         let mut shards = BTreeSet::new();
@@ -60,7 +60,7 @@ impl HashRouter {
         Ok(shards.into_iter().collect())
     }
 
-    fn decoder(&self, exchange: CexId) -> BpResult<SharedTradeDecoder> {
+    fn decoder(&self, exchange: CexId) -> BuildResult<SharedTradeDecoder> {
         let mut decoders = self.decoders.lock();
         if let Some(decoder) = decoders.get(&exchange) {
             return Ok(decoder.clone());
@@ -70,7 +70,7 @@ impl HashRouter {
         Ok(decoder)
     }
 
-    fn gap_shards(&self, gap: &GapMarker, shard_count: usize) -> BpResult<Vec<ShardId>> {
+    fn gap_shards(&self, gap: &GapMarker, shard_count: usize) -> BuildResult<Vec<ShardId>> {
         let decoder = self.decoder(gap.exchange)?;
         let trading_pair = decoder.trading_pair_for_stream(&gap.stream)?;
         Ok(vec![ShardId::for_trading_pair(
@@ -103,7 +103,7 @@ where
         }
     }
 
-    pub async fn run(self) -> BpResult<()> {
+    pub async fn run(self) -> BuildResult<()> {
         let Self {
             config,
             mut source,
@@ -131,7 +131,7 @@ where
         source: &mut S,
         publisher: &P,
         router: &HashRouter,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         while let Some(record) = source.next_input().await? {
             Self::route_input(config, source, publisher, router, record).await?;
         }
@@ -145,7 +145,7 @@ where
         publisher: &P,
         router: &HashRouter,
         record: SourceRecord,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let shards = match router.shards(&record.input, config.shard_count) {
             Ok(shards) => shards,
             Err(error) => {

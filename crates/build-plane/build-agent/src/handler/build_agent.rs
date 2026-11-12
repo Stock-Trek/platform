@@ -1,6 +1,6 @@
 use crate::handler::Handler;
 use lambda_runtime::LambdaEvent;
-use platform_errors::{BpError, BpResult, ErrorType};
+use platform_errors::{BuildError, BuildResult, ErrorType};
 use platform_messages::build_request::{BuildOutcome, BuildRequest};
 use platform_metrics::build_metrics::BuildMetrics;
 use std::time::{Instant, SystemTime};
@@ -11,7 +11,7 @@ impl BuildAgent {
     pub async fn handle(
         handler: Handler,
         event: LambdaEvent<BuildRequest>,
-    ) -> BpResult<BuildOutcome> {
+    ) -> BuildResult<BuildOutcome> {
         let started_at = Instant::now();
         let deadline = Instant::now()
             + event
@@ -28,7 +28,7 @@ impl BuildAgent {
         }
     }
 
-    pub(crate) fn handle_error(error: BpError, started_at: Instant) -> BpResult<BuildOutcome> {
+    pub(crate) fn handle_error(error: BuildError, started_at: Instant) -> BuildResult<BuildOutcome> {
         let duration = started_at.elapsed();
         if error.retryability().is_retryable() {
             BuildMetrics::record_retryable_failure(error.error_type(), duration);

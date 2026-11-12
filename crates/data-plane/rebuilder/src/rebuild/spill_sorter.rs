@@ -4,7 +4,7 @@ use super::{
     spill_codec::{SpillCodec, SpillWriter},
     spill_merge::{SpillMerge, SpillRecords},
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::path::{Path, PathBuf};
 
 pub(crate) struct SpillSorter<C: SpillCodec> {
@@ -23,10 +23,10 @@ impl<C: SpillCodec> SpillSorter<C> {
         directory: impl Into<PathBuf>,
         limit: usize,
         codec: C,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let directory = directory.into();
         std::fs::create_dir_all(&directory).map_err(|error| {
-            BpError::io(
+            BuildError::io(
                 "create rebuild spill directory",
                 directory.display().to_string(),
                 error,
@@ -44,7 +44,7 @@ impl<C: SpillCodec> SpillSorter<C> {
         })
     }
 
-    pub(crate) fn push_record(&mut self, record: C::Record) -> BpResult<()> {
+    pub(crate) fn push_record(&mut self, record: C::Record) -> BuildResult<()> {
         let key = self.codec.key(&record);
         self.entries.push((key, record));
         if self.entries.len() >= self.limit {
@@ -61,7 +61,7 @@ impl<C: SpillCodec> SpillSorter<C> {
         self.usage
     }
 
-    pub(crate) fn finish(&mut self) -> BpResult<SpillRecords<C>> {
+    pub(crate) fn finish(&mut self) -> BuildResult<SpillRecords<C>> {
         if self.runs.is_empty() {
             self.entries
                 .sort_by(|(left, _), (right, _)| left.cmp(right));
@@ -76,14 +76,14 @@ impl<C: SpillCodec> SpillSorter<C> {
             .runs
             .iter()
             .map(|path| self.codec.open(path, batch))
-            .collect::<BpResult<Vec<_>>>()?;
+            .collect::<BuildResult<Vec<_>>>()?;
         Ok(SpillRecords::Runs(SpillMerge::new(
             readers,
             self.codec.clone(),
         )?))
     }
 
-    fn spill(&mut self) -> BpResult<()> {
+    fn spill(&mut self) -> BuildResult<()> {
         if self.entries.is_empty() {
             return Ok(());
         }
@@ -105,7 +105,7 @@ impl<C: SpillCodec> SpillSorter<C> {
         Ok(())
     }
 
-    fn reduce_runs(&mut self, fan_in: usize) -> BpResult<()> {
+    fn reduce_runs(&mut self, fan_in: usize) -> BuildResult<()> {
         while self.runs.len() > fan_in {
             let sources = std::mem::take(&mut self.runs);
             let mut merged = Vec::new();
@@ -118,7 +118,7 @@ impl<C: SpillCodec> SpillSorter<C> {
                 self.merge_runs(chunk, &path)?;
                 for source in chunk {
                     std::fs::remove_file(source).map_err(|error| {
-                        BpError::io(
+                        BuildError::io(
                             "remove merged rebuild spill run",
                             source.display().to_string(),
                             error,
@@ -143,12 +143,12 @@ impl<C: SpillCodec> SpillSorter<C> {
         path
     }
 
-    fn merge_runs(&mut self, runs: &[PathBuf], path: &Path) -> BpResult<()> {
+    fn merge_runs(&mut self, runs: &[PathBuf], path: &Path) -> BuildResult<()> {
         let batch = SpillMergeLimits::batch_records(self.limit);
         let readers = runs
             .iter()
             .map(|run| self.codec.open(run, batch))
-            .collect::<BpResult<Vec<_>>>()?;
+            .collect::<BuildResult<Vec<_>>>()?;
         let mut merge = SpillMerge::new(readers, self.codec.clone())?;
         let mut writer = self.codec.create(path, batch)?;
         while let Some(record) = merge.next_record()? {

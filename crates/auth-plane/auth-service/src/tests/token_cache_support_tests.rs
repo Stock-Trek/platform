@@ -1,6 +1,6 @@
 use crate::{ApiToken, CachedTokenStore, MemoryTokenStore, TokenCacheConfig, TokenStore};
 use async_trait::async_trait;
-use platform_errors::{AuthError, BpError, BpResult};
+use platform_errors::{AuthError, BuildError, BuildResult};
 use std::{
     sync::{
         Arc,
@@ -51,15 +51,15 @@ impl TestStore {
 
 #[async_trait]
 impl TokenStore for TestStore {
-    async fn put(&self, token: &ApiToken) -> BpResult<()> {
+    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         self.get_calls.fetch_add(1, Ordering::SeqCst);
         let delay = self.delay_millis.load(Ordering::SeqCst);
         if self.permanent_fail.load(Ordering::SeqCst) {
-            return Err(BpError::auth_store(
+            return Err(BuildError::auth_store(
                 "read",
                 id,
                 false,
@@ -70,7 +70,7 @@ impl TokenStore for TestStore {
             if delay > 0 {
                 tokio::time::sleep(Duration::from_millis(delay)).await;
             }
-            return Err(BpError::Auth(AuthError::Unavailable {
+            return Err(BuildError::Auth(AuthError::Unavailable {
                 retry_after: Duration::from_secs(1),
             }));
         }
@@ -81,15 +81,15 @@ impl TokenStore for TestStore {
         result
     }
 
-    async fn delete(&self, id: &str) -> BpResult<()> {
+    async fn delete(&self, id: &str) -> BuildResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn ids(&self) -> BpResult<Vec<String>> {
+    async fn ids(&self) -> BuildResult<Vec<String>> {
         self.inner.ids().await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
         self.inner.update(expected, token).await
     }
 
@@ -97,11 +97,11 @@ impl TokenStore for TestStore {
         &self,
         mutation: crate::TokenMutation,
         event: crate::TokenAuditEvent,
-    ) -> BpResult<bool> {
+    ) -> BuildResult<bool> {
         self.inner.commit(mutation, event).await
     }
 
-    async fn commit_rotation(&self, transaction: &crate::TokenRotationTransaction) -> BpResult<()> {
+    async fn commit_rotation(&self, transaction: &crate::TokenRotationTransaction) -> BuildResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 }

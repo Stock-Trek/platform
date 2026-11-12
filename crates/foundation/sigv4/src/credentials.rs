@@ -14,7 +14,7 @@ impl SigV4Credentials {
         access_key_id: impl Into<String>,
         secret_access_key: impl Into<String>,
         session_token: Option<String>,
-    ) -> platform_errors::BpResult<Self> {
+    ) -> platform_errors::BuildResult<Self> {
         let access_key_id = access_key_id.into();
         let secret_access_key = secret_access_key.into();
         Self::validate_value("accessKeyId", &access_key_id)?;
@@ -54,15 +54,15 @@ impl SigV4Credentials {
         Identity::new(credentials, None)
     }
 
-    fn validate_value(field: &'static str, value: &str) -> platform_errors::BpResult<()> {
+    fn validate_value(field: &'static str, value: &str) -> platform_errors::BuildResult<()> {
         if value.trim().is_empty() {
-            return Err(platform_errors::BpError::auth_invalid_field(
+            return Err(platform_errors::BuildError::auth_invalid_field(
                 field,
                 "must not be empty",
             ));
         }
         if value != value.trim() || value.chars().any(char::is_control) {
-            return Err(platform_errors::BpError::auth_invalid_field(
+            return Err(platform_errors::BuildError::auth_invalid_field(
                 field,
                 "must not contain surrounding whitespace or control characters",
             ));

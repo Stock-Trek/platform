@@ -5,7 +5,7 @@ use crate::{
     retry::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
 };
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::event::{GapMarker, MarketEvent};
 use platform_nats::EventPublisher;
 use platform_types::new_types::TimestampMilliseconds;
@@ -22,11 +22,11 @@ struct OneGapSource {
 
 #[async_trait]
 impl GapMarkerSource for OneGapSource {
-    async fn next_gap(&mut self) -> BpResult<Option<GapMarker>> {
+    async fn next_gap(&mut self) -> BuildResult<Option<GapMarker>> {
         Ok(self.gap.take())
     }
 
-    async fn ack(&mut self, gap: &GapMarker) -> BpResult<()> {
+    async fn ack(&mut self, gap: &GapMarker) -> BuildResult<()> {
         self.acked.lock().expect("acked lock").push(gap.clone());
         Ok(())
     }
@@ -38,7 +38,7 @@ struct OnceFetcher {
 
 #[async_trait]
 impl MissingEventFetcher for OnceFetcher {
-    async fn fetch(&self, _gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>> {
+    async fn fetch(&self, _gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
         Ok(std::mem::take(
             &mut *self.events.lock().expect("events lock"),
         ))
@@ -52,7 +52,7 @@ struct RecordingPublisher {
 
 #[async_trait]
 impl EventPublisher for RecordingPublisher {
-    async fn publish(&self, _subject: &str, payload: &[u8]) -> BpResult<()> {
+    async fn publish(&self, _subject: &str, payload: &[u8]) -> BuildResult<()> {
         let event: MarketEvent = serde_json::from_slice(payload)?;
         self.sequences
             .lock()
@@ -249,15 +249,15 @@ struct SharedStore(Arc<InMemoryGapRetryStore>);
 
 #[async_trait]
 impl GapRetryStore for SharedStore {
-    async fn load(&self) -> BpResult<Vec<PendingGap>> {
+    async fn load(&self) -> BuildResult<Vec<PendingGap>> {
         self.0.load().await
     }
 
-    async fn save(&self, pending: &PendingGap) -> BpResult<()> {
+    async fn save(&self, pending: &PendingGap) -> BuildResult<()> {
         self.0.save(pending).await
     }
 
-    async fn remove(&self, key: &str) -> BpResult<()> {
+    async fn remove(&self, key: &str) -> BuildResult<()> {
         self.0.remove(key).await
     }
 }

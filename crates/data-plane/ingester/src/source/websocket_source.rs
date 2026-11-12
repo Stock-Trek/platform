@@ -4,7 +4,7 @@ use iris::{
     Client as IrisClient, Config as IrisConfig, ConnectionError as IrisConnectionError,
     Listener as IrisListener, ServerCloseBehavior,
 };
-use platform_errors::{BpError, BpResult, ExchangeError, IngesterError};
+use platform_errors::{BuildError, BuildResult, ExchangeError, IngesterError};
 use platform_market_data::{
     decoders::{
         codec::{CodecFactory, CodecHandle, SharedCodec},
@@ -67,7 +67,7 @@ impl fmt::Debug for StreamFormat {
 /// Source of parsed exchange websocket messages.
 #[async_trait]
 pub trait MarketMessageSource: Send + Sync {
-    async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BpResult<()>;
+    async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BuildResult<()>;
 }
 
 /// Websocket transport shared by all exchange codecs.
@@ -102,7 +102,7 @@ impl WebsocketSource {
         )
     }
 
-    pub async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BpResult<()> {
+    pub async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BuildResult<()> {
         IngesterConfig::validate_trade_streams(self.exchange, &self.url)?;
         let codec = match &self.stream_format {
             StreamFormat::Json(codec) | StreamFormat::Binary(codec) => codec.clone(),
@@ -114,11 +114,11 @@ impl WebsocketSource {
             &self.url,
             CodecHandle::new(codec),
         );
-        client.connect().await.map_err(BpError::external)?;
+        client.connect().await.map_err(BuildError::external)?;
         self.wait_for_shutdown().await
     }
 
-    async fn wait_for_shutdown(&self) -> BpResult<()> {
+    async fn wait_for_shutdown(&self) -> BuildResult<()> {
         info!(
             exchange = %self.exchange,
             format = ?self.stream_format,
@@ -131,22 +131,22 @@ impl WebsocketSource {
         Ok(())
     }
 
-    fn iris_config(&self) -> BpResult<IrisConfig> {
+    fn iris_config(&self) -> BuildResult<IrisConfig> {
         let mut config =
             IrisConfig::new().with_server_close_behavior(ServerCloseBehavior::Reconnect);
         if let Some(api_key) = &self.api_key {
             let header = Self::api_key_header(self.exchange)?;
             config = config
                 .with_header_str(header, api_key)
-                .map_err(BpError::external)?;
+                .map_err(BuildError::external)?;
         }
         Ok(config)
     }
 
-    pub(super) fn api_key_header(exchange: CexId) -> BpResult<&'static str> {
+    pub(super) fn api_key_header(exchange: CexId) -> BuildResult<&'static str> {
         match exchange {
             CexId::Binance => Ok(BINANCE_API_KEY_HEADER),
-            exchange => Err(BpError::Exchange(ExchangeError::UnsupportedExchange {
+            exchange => Err(BuildError::Exchange(ExchangeError::UnsupportedExchange {
                 exchange: exchange.to_string(),
             })),
         }
@@ -155,7 +155,7 @@ impl WebsocketSource {
 
 #[async_trait]
 impl MarketMessageSource for WebsocketSource {
-    async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BpResult<()> {
+    async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BuildResult<()> {
         WebsocketSource::run(self, sender).await
     }
 }

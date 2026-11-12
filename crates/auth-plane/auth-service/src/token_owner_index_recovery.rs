@@ -1,6 +1,6 @@
 use crate::{ApiToken, AuthService, OwnerIndex, OwnerIndexEntry, TokenScope};
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 
 impl AuthService {
     pub(crate) async fn select_token_from_scan(
@@ -8,7 +8,7 @@ impl AuthService {
         owner: &str,
         scope: Option<TokenScope>,
         now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
+    ) -> BuildResult<ApiToken> {
         let tokens = self.scan_tokens_for_owner(owner).await?;
         self.repair_owner_index(owner, &tokens).await;
         tokens
@@ -25,14 +25,14 @@ impl AuthService {
             .ok_or_else(|| Self::no_active_token(scope))
     }
 
-    pub(crate) async fn tokens_from_owner_scan(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
+    pub(crate) async fn tokens_from_owner_scan(&self, owner: &str) -> BuildResult<Vec<ApiToken>> {
         let mut tokens = self.scan_tokens_for_owner(owner).await?;
         tokens.sort_by(|left, right| left.id().cmp(right.id()));
         self.repair_owner_index(owner, &tokens).await;
         Ok(tokens)
     }
 
-    async fn scan_tokens_for_owner(&self, owner: &str) -> BpResult<Vec<ApiToken>> {
+    async fn scan_tokens_for_owner(&self, owner: &str) -> BuildResult<Vec<ApiToken>> {
         let mut ids = self.store.ids().await?;
         ids.sort();
         ids.dedup();
@@ -54,17 +54,17 @@ impl AuthService {
         }
     }
 
-    pub(crate) fn no_active_token(scope: Option<TokenScope>) -> BpError {
+    pub(crate) fn no_active_token(scope: Option<TokenScope>) -> BuildError {
         match scope {
-            Some(scope) => BpError::auth_invalid_field(
+            Some(scope) => BuildError::auth_invalid_field(
                 "scope",
                 format!("owner has no active API token with required scope {scope:?}"),
             ),
-            None => BpError::auth_invalid_field("owner", "has no active API token"),
+            None => BuildError::auth_invalid_field("owner", "has no active API token"),
         }
     }
 
-    pub(crate) fn owner_index_error(detail: String) -> BpError {
-        BpError::auth_store("read", "owner-index", false, detail)
+    pub(crate) fn owner_index_error(detail: String) -> BuildError {
+        BuildError::auth_store("read", "owner-index", false, detail)
     }
 }

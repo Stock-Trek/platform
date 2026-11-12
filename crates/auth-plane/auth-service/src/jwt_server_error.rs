@@ -1,6 +1,6 @@
 use http_body_util::Full;
 use hyper::{Response, StatusCode, body::Bytes, header::RETRY_AFTER};
-use platform_errors::{AuthError, BpError};
+use platform_errors::{AuthError, BuildError};
 use std::time::Duration;
 
 pub(super) type JwtServerResult<T> = Result<T, JwtServerError>;
@@ -20,9 +20,9 @@ impl JwtServerError {
         }
     }
 
-    pub(super) fn issuance(error: BpError) -> Self {
+    pub(super) fn issuance(error: BuildError) -> Self {
         let retry_after = match &error {
-            BpError::Auth(AuthError::Unavailable { retry_after }) => Some(*retry_after),
+            BuildError::Auth(AuthError::Unavailable { retry_after }) => Some(*retry_after),
             _ => None,
         };
         let status = if error.retryability().is_retryable() {

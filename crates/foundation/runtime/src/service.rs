@@ -6,7 +6,7 @@
 use crate::{lambda::LambdaMetrics, process_metrics::ProcessMetrics};
 use metrics_cloudwatch_embedded::Collector;
 use platform_config::tracing_setup::TracingSetup;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use tracing::info;
 
 /// The identity and shared bootstrap of a running service.
@@ -27,13 +27,13 @@ impl Service {
     }
 
     /// Installs the global tracing subscriber for this service.
-    pub fn init_logging(&self, log_filter: &str) -> BpResult<()> {
+    pub fn init_logging(&self, log_filter: &str) -> BuildResult<()> {
         TracingSetup::setup(log_filter)?;
         info!(service = self.name, "service initialised");
         Ok(())
     }
 
-    pub fn init_metrics(&self, namespace: &str) -> BpResult<ProcessMetrics> {
+    pub fn init_metrics(&self, namespace: &str) -> BuildResult<ProcessMetrics> {
         ProcessMetrics::init(namespace, self.name)
     }
 
@@ -42,7 +42,7 @@ impl Service {
         &self,
         namespace: &str,
         function_name: impl Into<String>,
-    ) -> BpResult<&'static Collector> {
+    ) -> BuildResult<&'static Collector> {
         LambdaMetrics::init(namespace, function_name)
     }
 }

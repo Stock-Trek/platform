@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use serde::Serialize;
 use std::fmt;
 
@@ -10,11 +10,11 @@ impl BinanceKlinesLimit {
     pub const MINIMUM: u32 = 1;
     pub const MAXIMUM: u32 = 1000;
 
-    pub fn try_new(klines_limit: u32) -> BpResult<Self> {
+    pub fn try_new(klines_limit: u32) -> BuildResult<Self> {
         if Self::is_valid(klines_limit) {
             Ok(Self(klines_limit))
         } else {
-            Err(BpError::bad_value(
+            Err(BuildError::bad_value(
                 "klines_limit",
                 klines_limit.to_string(),
                 format!("Out of bounds >={} <={}", Self::MINIMUM, Self::MAXIMUM),

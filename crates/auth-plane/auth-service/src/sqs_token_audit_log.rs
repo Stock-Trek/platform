@@ -1,6 +1,6 @@
 use crate::{TokenAuditEvent, TokenAuditLog};
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_sqs::sqs::Sqs;
 use platform_time::deadline::Deadline;
 use std::{
@@ -10,12 +10,12 @@ use std::{
 
 #[async_trait]
 pub(crate) trait AuditQueue: Send + Sync {
-    async fn deliver(&self, events: &[TokenAuditEvent], deadline: Deadline) -> BpResult<()>;
+    async fn deliver(&self, events: &[TokenAuditEvent], deadline: Deadline) -> BuildResult<()>;
 }
 
 #[async_trait]
 impl AuditQueue for Sqs {
-    async fn deliver(&self, events: &[TokenAuditEvent], deadline: Deadline) -> BpResult<()> {
+    async fn deliver(&self, events: &[TokenAuditEvent], deadline: Deadline) -> BuildResult<()> {
         self.send_json(events, deadline).await
     }
 }
@@ -51,7 +51,7 @@ impl SqsTokenAuditLog {
 
 #[async_trait]
 impl TokenAuditLog for SqsTokenAuditLog {
-    async fn record(&self, event: TokenAuditEvent) -> BpResult<()> {
+    async fn record(&self, event: TokenAuditEvent) -> BuildResult<()> {
         self.queue
             .deliver(std::slice::from_ref(&event), self.deadline())
             .await

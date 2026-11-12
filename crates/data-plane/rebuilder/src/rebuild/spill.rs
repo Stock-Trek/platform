@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::path::Path;
 
 const MERGE_BATCH_RECORDS: usize = 8_192;
@@ -16,10 +16,10 @@ impl SpillUsage {
         self.largest_run_bytes = self.largest_run_bytes.max(other.largest_run_bytes);
     }
 
-    pub(crate) fn record(&mut self, path: &Path) -> BpResult<()> {
+    pub(crate) fn record(&mut self, path: &Path) -> BuildResult<()> {
         let bytes = std::fs::metadata(path)
             .map_err(|error| {
-                BpError::io(
+                BuildError::io(
                     "measure rebuild spill run",
                     path.display().to_string(),
                     error,

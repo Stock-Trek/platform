@@ -3,7 +3,7 @@ use crate::{
     ValkeyReplayStore, ValkeyTokenUsageQueue, VaultTokenStore,
 };
 use chrono::Duration;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_runtime::Service;
 use std::sync::Arc;
 
@@ -12,7 +12,7 @@ const SERVICE: Service = Service::new("platform-auth-service");
 pub struct AuthServiceRunner;
 
 impl AuthServiceRunner {
-    pub async fn run(config: JwtServerConfig) -> BpResult<()> {
+    pub async fn run(config: JwtServerConfig) -> BuildResult<()> {
         SERVICE.init_logging(config.log_filter())?;
         let _metrics = SERVICE.init_metrics("platform/auth-service")?;
         let vault = Arc::new(VaultTokenStore::new(config.vault().clone())?);

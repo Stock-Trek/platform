@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -8,11 +8,11 @@ pub struct BinanceListenKeyResponse {
 }
 
 impl BinanceListenKeyResponse {
-    pub fn require_listen_key(self) -> BpResult<String> {
+    pub fn require_listen_key(self) -> BuildResult<String> {
         let listen_key = self
             .listen_key
             .filter(|listen_key| !listen_key.is_empty())
-            .ok_or_else(|| BpError::bad_value("listen key", "", "is missing"))?;
+            .ok_or_else(|| BuildError::bad_value("listen key", "", "is missing"))?;
         Ok(listen_key)
     }
 }

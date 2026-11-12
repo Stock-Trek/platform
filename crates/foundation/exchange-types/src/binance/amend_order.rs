@@ -17,7 +17,7 @@ use crate::{
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use rust_decimal::Decimal;
@@ -134,7 +134,7 @@ impl ETHttpRequest for BinanceAmendOrderRequest {
     fn http_method(&self) -> HttpMethod {
         HttpMethod::PUT
     }
-    fn try_into_http(self, signer: &Signer) -> BpResult<HttpRequest> {
+    fn try_into_http(self, signer: &Signer) -> BuildResult<HttpRequest> {
         BinanceRequestFactory::try_into_http(self, signer)
     }
     fn verification_request_http(&self) -> Option<Self::VerificationRequest> {
@@ -156,7 +156,7 @@ impl ETWebsocketRequest for BinanceAmendOrderRequest {
         self,
         signer: &Signer,
         id: ETWebsocketId,
-    ) -> BpResult<(String, WebsocketResponseMatcher)> {
+    ) -> BuildResult<(String, WebsocketResponseMatcher)> {
         BinanceRequestFactory::try_into_websocket(self, signer, id)
     }
     fn verification_request_websocket(&self) -> Option<Self::VerificationRequest> {

@@ -1,5 +1,5 @@
 use crate::deadline::Deadline;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_types::new_types::NonZeroDuration;
 use std::time::Duration;
 
@@ -48,7 +48,7 @@ impl Timeouts {
         )
     }
 
-    pub fn operation_timeout(self, deadline: Deadline) -> BpResult<Duration> {
+    pub fn operation_timeout(self, deadline: Deadline) -> BuildResult<Duration> {
         let remaining = deadline.checked_remaining()?;
         Ok(match self.operation {
             Timeout::Disabled => remaining,

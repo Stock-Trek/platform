@@ -1,7 +1,7 @@
 use crate::TokenAuditEvent;
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use serde::{Deserialize, Serialize};
 
 /// Usage work that can be applied after the authentication hot path returns.
@@ -100,17 +100,17 @@ impl TokenUsageReservation {
 /// logical record available to another worker.
 #[async_trait]
 pub trait TokenUsageQueue: Send + Sync {
-    async fn enqueue(&self, usage: TokenUsage) -> BpResult<()>;
+    async fn enqueue(&self, usage: TokenUsage) -> BuildResult<()>;
 
-    async fn reserve(&self, limit: usize) -> BpResult<Vec<TokenUsageReservation>>;
+    async fn reserve(&self, limit: usize) -> BuildResult<Vec<TokenUsageReservation>>;
 
-    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BpResult<()>;
+    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BuildResult<()>;
 
-    async fn release(&self, reservation: &TokenUsageReservation) -> BpResult<()>;
+    async fn release(&self, reservation: &TokenUsageReservation) -> BuildResult<()>;
 }
 
 impl crate::auth_service::AuthService {
-    pub(crate) async fn enqueue_usage(&self, mut usage: TokenUsage) -> BpResult<()> {
+    pub(crate) async fn enqueue_usage(&self, mut usage: TokenUsage) -> BuildResult<()> {
         usage.ensure_event_ids();
         self.usage.enqueue(usage).await
     }

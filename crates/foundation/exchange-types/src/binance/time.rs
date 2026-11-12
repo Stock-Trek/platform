@@ -11,7 +11,7 @@ use crate::{
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_types::new_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use serde::{Deserialize, Serialize};
@@ -36,11 +36,11 @@ impl ServerTimeHttpRequest<BinanceResponse<BinanceTimeResponse>> for BinanceTime
 impl ServerTimeWebsocketRequest<BinanceResponse<BinanceTimeResponse>> for BinanceTimeRequest {}
 
 impl ServerTimeResponse for BinanceResponse<BinanceTimeResponse> {
-    fn server_time(&self) -> BpResult<TimestampMilliseconds> {
+    fn server_time(&self) -> BuildResult<TimestampMilliseconds> {
         match &self.payload {
             BinanceResponsePayload::Failure(error) => {
                 let retry_after = self.metadata.retry_after.or_else(|| error.retry_after());
-                Err(BpError::Exchange(
+                Err(BuildError::Exchange(
                     error.exchange_error(self.metadata.status, retry_after),
                 ))
             }
@@ -83,7 +83,7 @@ impl ETHttpRequest for BinanceTimeRequest {
     fn http_method(&self) -> HttpMethod {
         HttpMethod::GET
     }
-    fn try_into_http(self, signer: &Signer) -> BpResult<HttpRequest> {
+    fn try_into_http(self, signer: &Signer) -> BuildResult<HttpRequest> {
         BinanceRequestFactory::try_into_http(self, signer)
     }
 }
@@ -99,7 +99,7 @@ impl ETWebsocketRequest for BinanceTimeRequest {
         self,
         signer: &Signer,
         id: ETWebsocketId,
-    ) -> BpResult<(String, WebsocketResponseMatcher)> {
+    ) -> BuildResult<(String, WebsocketResponseMatcher)> {
         BinanceRequestFactory::try_into_websocket(self, signer, id)
     }
 }

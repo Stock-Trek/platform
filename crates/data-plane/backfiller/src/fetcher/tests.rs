@@ -1,6 +1,6 @@
 use super::*;
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::event::GapMarker;
 use platform_types::new_types::TimestampMilliseconds;
 use std::sync::{Arc, Mutex};
@@ -13,7 +13,7 @@ struct StubFetcher {
 
 #[async_trait]
 impl MissingEventFetcher for StubFetcher {
-    async fn fetch(&self, _gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>> {
+    async fn fetch(&self, _gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
         Ok(vec![self.event.clone()])
     }
 
@@ -21,7 +21,7 @@ impl MissingEventFetcher for StubFetcher {
         &self,
         _gap: &GapMarker,
         attempt: u32,
-    ) -> BpResult<Vec<BackfilledEvent>> {
+    ) -> BuildResult<Vec<BackfilledEvent>> {
         self.attempts.lock().expect("attempts lock").push(attempt);
         Ok(vec![self.event.clone()])
     }

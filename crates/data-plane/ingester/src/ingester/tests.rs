@@ -1,7 +1,7 @@
 use super::*;
 use crate::sequence::tests::InMemorySequenceStore;
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::event::ParsedMessage;
 use platform_nats::EventPublisher;
 use platform_types::new_types::TimestampMilliseconds;
@@ -30,7 +30,7 @@ impl RecordingPublisher {
 
 #[async_trait]
 impl EventPublisher for RecordingPublisher {
-    async fn publish(&self, subject: &str, payload: &[u8]) -> BpResult<()> {
+    async fn publish(&self, subject: &str, payload: &[u8]) -> BuildResult<()> {
         let value: Value = serde_json::from_slice(payload)?;
         let should_fail = value
             .get("sequence")
@@ -45,7 +45,7 @@ impl EventPublisher for RecordingPublisher {
                 }
             });
         if should_fail {
-            return Err(platform_errors::BpError::bad_value(
+            return Err(platform_errors::BuildError::bad_value(
                 "publish",
                 subject,
                 "injected publish failure",

@@ -4,7 +4,7 @@ use platform_aggregator::{
     AggregatorConfig, LeaseStore, NatsCandleSink, NatsLeaseStore, NatsMarketSource, NatsRouter,
     NatsStateStore, S3ArchiveRecovery, StateStore,
 };
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_nats::NatsPublisher;
 use std::sync::Arc;
 use tokio::task::JoinSet;
@@ -16,7 +16,7 @@ impl Tasks {
     pub async fn run(
         config: AggregatorConfig,
         archive_recovery: Option<Arc<S3ArchiveRecovery>>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         let shards = config.shards();
         info!(
             shard_subject_prefix = %config.shard_subject_prefix,
@@ -81,7 +81,7 @@ impl Tasks {
                 Err(error) => {
                     error!(%error, "aggregator task panicked");
                     if first_error.is_none() {
-                        first_error = Some(BpError::external(error));
+                        first_error = Some(BuildError::external(error));
                         tasks.shutdown().await;
                     }
                 }
@@ -94,7 +94,7 @@ impl Tasks {
         }
     }
 
-    async fn run_router(config: AggregatorConfig, publisher: Arc<NatsPublisher>) -> BpResult<()> {
+    async fn run_router(config: AggregatorConfig, publisher: Arc<NatsPublisher>) -> BuildResult<()> {
         let source = NatsMarketSource::connect(&config).await?;
         NatsRouter::new(config, source, publisher).run().await
     }

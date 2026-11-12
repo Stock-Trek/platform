@@ -7,7 +7,7 @@ use crate::{
     fetcher::{BackfilledEvent, MissingEventFetcher, PaginatedFetcher},
 };
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_exchange_gateway::clients::reqwest::ReqwestHttpClient;
 use platform_exchange_gateway::connector::Connector;
 use platform_exchange_types::{
@@ -28,14 +28,14 @@ pub struct BinanceGapFetcher {
 }
 
 impl BinanceGapFetcher {
-    pub fn try_new(config: &BackfillerConfig, credentials: ApiKeyCredentials) -> BpResult<Self> {
+    pub fn try_new(config: &BackfillerConfig, credentials: ApiKeyCredentials) -> BuildResult<Self> {
         if config.exchange != CexId::Binance {
-            return Err(BpError::Exchange(ExchangeError::UnsupportedExchange {
+            return Err(BuildError::Exchange(ExchangeError::UnsupportedExchange {
                 exchange: config.exchange.to_string(),
             }));
         }
         if config.signing_algorithm != EncryptionAlgorithm::Ed25519 {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "BACKFILLER_EXCHANGE_SIGNING_ALGORITHM",
                 "only ed25519 is supported",
             ));
@@ -49,7 +49,7 @@ impl BinanceGapFetcher {
             REQUEST_TIMEOUT,
             MAX_RETRIES,
         )
-        .map_err(|error| BpError::exchange("create Binance backfill connector", error))?;
+        .map_err(|error| BuildError::exchange("create Binance backfill connector", error))?;
         Ok(Self {
             connector: Arc::new(connector),
             api_key,
@@ -63,7 +63,7 @@ impl BinanceGapFetcher {
 
 #[async_trait]
 impl MissingEventFetcher for BinanceGapFetcher {
-    async fn fetch(&self, gap: &GapMarker) -> BpResult<Vec<BackfilledEvent>> {
+    async fn fetch(&self, gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
         let stream = MarketStream::parse(&gap.stream)?;
         let source = self.source();
         match stream.kind {
@@ -82,7 +82,7 @@ impl MissingEventFetcher for BinanceGapFetcher {
                     .fetch_book_ticker(&stream.symbol, gap.observed_sequence)
                     .await
             }
-            MarketStreamKind::Kline(interval) => Err(BpError::bad_value(
+            MarketStreamKind::Kline(interval) => Err(BuildError::bad_value(
                 "stream",
                 gap.stream.as_str(),
                 format!(

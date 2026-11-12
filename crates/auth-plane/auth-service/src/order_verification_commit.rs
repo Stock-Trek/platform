@@ -3,7 +3,7 @@ use crate::{
     ReplayReservation, ReplayStoreError, TokenAuditAction, TokenAuditEvent, TokenUsage,
 };
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_metrics::auth::AuthReplayMetrics;
 
 impl AuthService {
@@ -11,7 +11,7 @@ impl AuthService {
         &self,
         context: &OrderRequestContext,
         now: DateTime<Utc>,
-    ) -> BpResult<Option<ReplayReservation>> {
+    ) -> BuildResult<Option<ReplayReservation>> {
         let replay_key = ReplayKey::new(context.token_id(), context.nonce());
         match self
             .replay
@@ -29,7 +29,7 @@ impl AuthService {
         token: ApiToken,
         now: DateTime<Utc>,
         reservation: &ReplayReservation,
-    ) -> BpResult<OrderRequestVerification> {
+    ) -> BuildResult<OrderRequestVerification> {
         let event = TokenAuditEvent::new(TokenAuditAction::SignatureVerified, now)
             .with_token(token.id(), Some(token.owner()));
         let usage = TokenUsage::for_token(token.id(), now, vec![event]);
@@ -41,13 +41,13 @@ impl AuthService {
         Ok(OrderRequestVerification::Valid)
     }
 
-    fn replay_store_error(operation: &'static str, error: ReplayStoreError) -> BpError {
+    fn replay_store_error(operation: &'static str, error: ReplayStoreError) -> BuildError {
         AuthReplayMetrics::record_store_failure(operation);
         let retryable = error.is_retryable();
-        BpError::auth_store(operation, "replay-store", retryable, error)
+        BuildError::auth_store(operation, "replay-store", retryable, error)
     }
 
-    async fn release_replay(&self, reservation: &ReplayReservation) -> BpResult<()> {
+    async fn release_replay(&self, reservation: &ReplayReservation) -> BuildResult<()> {
         self.replay
             .release(reservation)
             .await

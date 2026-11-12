@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::Utc;
-use platform_errors::{AuthError, BpError, BpResult};
+use platform_errors::{AuthError, BuildError, BuildResult};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -36,9 +36,9 @@ impl RaceStore {
         self.race_next_update.store(true, Ordering::SeqCst);
     }
 
-    async fn apply_race(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
+    async fn apply_race(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
         let Some(mut current) = self.inner.get(token.id()).await? else {
-            return Err(BpError::unknown_token(token.id()));
+            return Err(BuildError::unknown_token(token.id()));
         };
         match self.mode {
             RaceMode::Revoke => current.metadata.revoke(
@@ -54,42 +54,42 @@ impl RaceStore {
 
 #[async_trait]
 impl TokenStore for RaceStore {
-    async fn put(&self, token: &ApiToken) -> BpResult<()> {
+    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         self.inner.get(id).await
     }
 
-    async fn delete(&self, id: &str) -> BpResult<()> {
+    async fn delete(&self, id: &str) -> BuildResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn ids(&self) -> BpResult<Vec<String>> {
+    async fn ids(&self) -> BuildResult<Vec<String>> {
         self.inner.ids().await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
         if self.race_next_update.swap(false, Ordering::SeqCst) {
             self.apply_race(expected, token).await?;
         }
         self.inner.update(expected, token).await
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 
-    async fn pending_rotations(&self) -> BpResult<Vec<TokenRotationTransaction>> {
+    async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
         self.inner.pending_rotations().await
     }
 
-    async fn acknowledge_rotation(&self, transaction_id: &str) -> BpResult<()> {
+    async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
         self.inner.acknowledge_rotation(transaction_id).await
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
         match mutation {
             TokenMutation::Create(token) => {
                 self.inner.commit(TokenMutation::Create(token), event).await
@@ -110,15 +110,15 @@ impl TokenStore for RaceStore {
         }
     }
 
-    async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+    async fn append_audit(&self, event: TokenAuditEvent) -> BuildResult<()> {
         self.inner.append_audit(event).await
     }
 
-    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
         self.inner.pending_audits().await
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
         self.inner.acknowledge_audit(event_id).await
     }
 }
@@ -132,10 +132,10 @@ impl CasFixture {
         (service, store)
     }
 
-    fn assert_conflict<T>(result: BpResult<T>) {
+    fn assert_conflict<T>(result: BuildResult<T>) {
         assert!(matches!(
             result,
-            Err(BpError::Auth(AuthError::Conflict { .. }))
+            Err(BuildError::Auth(AuthError::Conflict { .. }))
         ));
     }
 }

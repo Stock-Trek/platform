@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use serde::{Deserialize, Serialize};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
@@ -20,9 +20,9 @@ impl AccountKey {
         Self { cex_id, account_id }
     }
 
-    pub fn parse(cex_id: &str, account_id: &str) -> BpResult<Self> {
+    pub fn parse(cex_id: &str, account_id: &str) -> BuildResult<Self> {
         if account_id.trim().is_empty() {
-            return Err(BpError::bad_value(
+            return Err(BuildError::bad_value(
                 "account id",
                 account_id,
                 "must not be empty",
@@ -30,7 +30,7 @@ impl AccountKey {
         }
         let cex_id = cex_id
             .parse::<CexId>()
-            .map_err(|_| BpError::bad_value("cex id", cex_id, "must be a supported exchange"))?;
+            .map_err(|_| BuildError::bad_value("cex id", cex_id, "must be a supported exchange"))?;
         Ok(Self::new(cex_id, account_id))
     }
 

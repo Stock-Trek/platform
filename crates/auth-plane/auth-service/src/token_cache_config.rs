@@ -1,5 +1,5 @@
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::time::Duration;
 
 const DEFAULT_MAX_ENTRIES: usize = 10_000;
@@ -20,7 +20,7 @@ pub struct TokenCacheConfig {
 }
 
 impl TokenCacheConfig {
-    pub fn from_vars(vars: &EnvVars, names: [&str; 6]) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars, names: [&str; 6]) -> BuildResult<Self> {
         let defaults = Self::default();
         Self::new(
             vars.optional_parsed(names[0])?
@@ -51,39 +51,39 @@ impl TokenCacheConfig {
         max_stale_age: Duration,
         failure_threshold: usize,
         open_duration: Duration,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         if max_entries == 0 {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "token_cache_max_entries",
                 "must be greater than zero",
             ));
         }
         if negative_entries == 0 {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "token_cache_negative_entries",
                 "must be greater than zero",
             ));
         }
         if freshness.is_zero() {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "token_cache_freshness",
                 "must be greater than zero",
             ));
         }
         if max_stale_age < freshness {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "token_cache_max_stale_age",
                 "must not be shorter than the freshness window",
             ));
         }
         if failure_threshold == 0 {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "token_cache_failure_threshold",
                 "must be greater than zero",
             ));
         }
         if open_duration.is_zero() {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "token_cache_open_duration",
                 "must be greater than zero",
             ));

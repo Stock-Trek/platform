@@ -9,7 +9,7 @@ use hyper::{
     service::service_fn,
 };
 use hyper_util::rt::{TokioIo, TokioTimer};
-use platform_errors::BpError;
+use platform_errors::BuildError;
 use platform_messages::order_request::UnsignedOrderRequest;
 use std::{convert::Infallible, sync::Arc, time::Duration};
 use tokio::{net::TcpStream, sync::watch, time::timeout};
@@ -122,7 +122,7 @@ impl OrderRequestConnection {
         Ok(submission)
     }
 
-    fn sign_error(error: BpError) -> (OrderRequestError, String) {
+    fn sign_error(error: BuildError) -> (OrderRequestError, String) {
         let public = OrderRequestError::from_signing_error(&error);
         (public, error.to_string())
     }

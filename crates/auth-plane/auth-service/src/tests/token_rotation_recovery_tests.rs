@@ -1,7 +1,7 @@
 use super::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{ApiToken, AuthService, RevocationReason, RevokedBy};
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::{AuthError, BpError};
+use platform_errors::{AuthError, BuildError};
 
 struct RotationRecoveryFixture;
 
@@ -33,10 +33,10 @@ impl RotationRecoveryFixture {
         replacement
     }
 
-    fn assert_replacement_id_error(error: BpError) {
+    fn assert_replacement_id_error(error: BuildError) {
         assert!(matches!(
             error,
-            BpError::Auth(AuthError::InvalidField {
+            BuildError::Auth(AuthError::InvalidField {
                 field: "replacement_id",
                 ..
             })
@@ -70,7 +70,7 @@ async fn retrying_a_completed_rotation_rejects_a_revoked_replacement() {
 
     assert!(matches!(
         error,
-        BpError::Auth(AuthError::Revoked { ref token_id }) if token_id == "token-b"
+        BuildError::Auth(AuthError::Revoked { ref token_id }) if token_id == "token-b"
     ));
 }
 
@@ -91,7 +91,7 @@ async fn retrying_a_completed_rotation_rejects_an_expired_replacement() {
 
     assert!(matches!(
         error,
-        BpError::Auth(AuthError::Expired { ref token_id }) if token_id == "token-b"
+        BuildError::Auth(AuthError::Expired { ref token_id }) if token_id == "token-b"
     ));
 }
 
@@ -140,7 +140,7 @@ async fn existing_dead_replacement_is_rejected_before_the_original_is_retired() 
 
     assert!(matches!(
         error,
-        BpError::Auth(AuthError::Revoked { ref token_id }) if token_id == "token-b"
+        BuildError::Auth(AuthError::Revoked { ref token_id }) if token_id == "token-b"
     ));
     assert!(
         service

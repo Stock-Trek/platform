@@ -3,7 +3,7 @@ use platform_aws::{
     secrets::{SSM_DECRYPT_ENV, SSM_PATH_ENV, Secrets, SsmConfig},
 };
 use platform_config::env_vars::EnvVars;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials, encrypt::EncryptionAlgorithm, urls::TradingMode,
 };
@@ -64,7 +64,7 @@ pub struct BackfillerConfig {
 impl BackfillerConfig {
     /// Loads the exchange API credentials for this backfiller's exchange and
     /// trading mode from SSM.
-    pub async fn exchange_credentials(&self) -> BpResult<ApiKeyCredentials> {
+    pub async fn exchange_credentials(&self) -> BuildResult<ApiKeyCredentials> {
         let timeouts = Timeouts::from_durations(AWS_CONNECT_TIMEOUT, AWS_OPERATION_TIMEOUT);
         let sdk_config = Aws::load_sdk_config(timeouts).await;
         let deadline = Deadline::new(
@@ -81,18 +81,18 @@ impl BackfillerConfig {
         })
     }
 
-    pub fn from_env() -> BpResult<Self> {
+    pub fn from_env() -> BuildResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let exchange = Config::required_exchange(vars, BACKFILLER_EXCHANGE)?;
         let trading_mode = vars.required_parsed::<TradingMode>(BACKFILLER_EXCHANGE_TRADING_MODE)?;
         let signing_algorithm =
             vars.required_parsed::<EncryptionAlgorithm>(BACKFILLER_EXCHANGE_SIGNING_ALGORITHM)?;
         if signing_algorithm != EncryptionAlgorithm::Ed25519 {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 BACKFILLER_EXCHANGE_SIGNING_ALGORITHM,
                 "only ed25519 is supported",
             ));

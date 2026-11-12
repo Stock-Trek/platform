@@ -4,7 +4,7 @@ use crate::{
     sequence::SequenceStore,
     source::MarketMessageSource,
 };
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_market_data::event::ParsedMessage;
 use platform_nats::EventPublisher;
 use platform_runtime::Runtime;
@@ -40,7 +40,7 @@ where
         }
     }
 
-    pub async fn run(self) -> BpResult<()> {
+    pub async fn run(self) -> BuildResult<()> {
         let Self {
             config,
             source,
@@ -72,7 +72,7 @@ where
             Err(error) if error.is_cancelled() => result,
             Err(error) => result.and_then(|()| Err(error.into())),
             Ok(Ok(())) => result.and_then(|()| {
-                Err(platform_errors::BpError::external(
+                Err(platform_errors::BuildError::external(
                     "exchange websocket source ended before shutdown was requested",
                 ))
             }),
@@ -83,12 +83,12 @@ where
         config: &IngesterConfig,
         receiver: &mut mpsc::Receiver<ParsedMessage>,
         ingester: &mut Ingester<P>,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         loop {
             tokio::select! {
                 message = receiver.recv() => {
                     let Some(message) = message else {
-                        return Err(platform_errors::BpError::external(format!(
+                        return Err(platform_errors::BuildError::external(format!(
                             "{} exchange websocket message channel closed before shutdown was requested",
                             config.exchange
                         )));

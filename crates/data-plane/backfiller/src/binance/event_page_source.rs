@@ -3,7 +3,7 @@ use crate::{
     fetcher::BackfilledEvent,
 };
 use async_trait::async_trait;
-use platform_errors::{BpError, BpResult, ExchangeError};
+use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_exchange_gateway::{
     clients::reqwest::ReqwestHttpClient, connector::Connector, submission::SubmissionOutcome,
 };
@@ -33,29 +33,29 @@ impl BinanceEventPageSource {
         Self { connector, api_key }
     }
 
-    async fn submit<Request>(&self, request: Request) -> BpResult<Request::Response>
+    async fn submit<Request>(&self, request: Request) -> BuildResult<Request::Response>
     where
         Request: ETHttpRequest<Exchange = BinanceExchange> + Send,
     {
         let submission = self
             .connector
             .submit_http(request)
-            .map_err(|error| BpError::exchange("submit Binance backfill request", error))?;
+            .map_err(|error| BuildError::exchange("submit Binance backfill request", error))?;
         match submission
             .wait()
             .await
-            .map_err(|error| BpError::exchange("await Binance backfill response", error))?
+            .map_err(|error| BuildError::exchange("await Binance backfill response", error))?
         {
             SubmissionOutcome::Submitted(response) => Ok(response),
             SubmissionOutcome::Unknown { .. } => {
-                Err(BpError::Exchange(ExchangeError::UnknownSubmissionOutcome {
+                Err(BuildError::Exchange(ExchangeError::UnknownSubmissionOutcome {
                     exchange: "Binance",
                 }))
             }
         }
     }
 
-    pub async fn fetch_depth(&self, symbol: &str) -> BpResult<Vec<BackfilledEvent>> {
+    pub async fn fetch_depth(&self, symbol: &str) -> BuildResult<Vec<BackfilledEvent>> {
         let request = BinanceDepthRequest::new(symbol.to_string(), Some(1_000));
         let response = self.submit(request).await?.depth()?;
         Ok(vec![BinanceEventParser::depth(
@@ -69,7 +69,7 @@ impl BinanceEventPageSource {
         &self,
         symbol: &str,
         observed_sequence: u64,
-    ) -> BpResult<Vec<BackfilledEvent>> {
+    ) -> BuildResult<Vec<BackfilledEvent>> {
         let request = BinanceBookTickerRequest::new(symbol.to_string());
         let response = self.submit(request).await?.book_ticker()?;
         Ok(vec![BinanceEventParser::book_ticker(
@@ -89,7 +89,7 @@ impl BinanceEventPageSource {
         from_sequence: u64,
         limit: u32,
         api_key: &str,
-    ) -> BpResult<Vec<BinanceTradeResponse>> {
+    ) -> BuildResult<Vec<BinanceTradeResponse>> {
         let request = BinanceHistoricalTradesRequest::new(
             symbol.to_string(),
             from_sequence,
@@ -107,7 +107,7 @@ impl EventPageSource for BinanceEventPageSource {
         symbol: &str,
         from_sequence: u64,
         limit: u32,
-    ) -> BpResult<Vec<BackfilledEvent>> {
+    ) -> BuildResult<Vec<BackfilledEvent>> {
         let trades = self
             .fetch_trade_page(symbol, from_sequence, limit, &self.api_key)
             .await?;

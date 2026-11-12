@@ -9,7 +9,7 @@ use async_nats::{
     },
 };
 use futures::TryStreamExt;
-use platform_errors::{BpError, BpResult, NatsError};
+use platform_errors::{BuildError, BuildResult, NatsError};
 
 /// A NATS KV bucket storing the latest value per key.
 ///
@@ -23,7 +23,7 @@ pub struct KeyValue {
 
 impl KeyValue {
     /// Connects and ensures the KV bucket's underlying stream exists.
-    pub async fn connect(url: &str, name: &str, bucket: &str) -> BpResult<Self> {
+    pub async fn connect(url: &str, name: &str, bucket: &str) -> BuildResult<Self> {
         Self::validate_bucket(bucket)?;
         let address = NatsAddress::parse(url)?;
         let client = address.connect(name).await?;
@@ -63,7 +63,7 @@ impl KeyValue {
 
     /// Stores `value` under `key` and returns the KV revision assigned by the
     /// server. Repeating an identical write is idempotent.
-    pub async fn put(&self, key: &str, value: &[u8]) -> BpResult<u64> {
+    pub async fn put(&self, key: &str, value: &[u8]) -> BuildResult<u64> {
         NatsSubject::validate_named("KV key", key)?;
         let subject = JetStream::kv_subject(&self.bucket, key);
         let mut headers = HeaderMap::new();
@@ -85,7 +85,7 @@ impl KeyValue {
 
     /// Returns the latest value stored under `key`, or `None` when the key has
     /// never been written.
-    pub async fn get_last(&self, key: &str) -> BpResult<Option<Vec<u8>>> {
+    pub async fn get_last(&self, key: &str) -> BuildResult<Option<Vec<u8>>> {
         Ok(self
             .get_with_revision(key)
             .await?
@@ -96,7 +96,7 @@ impl KeyValue {
     ///
     /// The revision can be passed to [`Self::update`] for an atomic
     /// compare-and-swap. Deleted or purged keys are reported as `None`.
-    pub async fn get_with_revision(&self, key: &str) -> BpResult<Option<(Vec<u8>, u64)>> {
+    pub async fn get_with_revision(&self, key: &str) -> BuildResult<Option<(Vec<u8>, u64)>> {
         NatsSubject::validate_named("KV key", key)?;
         let entry = self
             .store
@@ -115,7 +115,7 @@ impl KeyValue {
     ///
     /// Unlike [`Self::put`], this is not idempotent: an existing key returns an
     /// error, which makes it suitable for atomic checkpoint creation.
-    pub async fn create(&self, key: &str, value: &[u8]) -> BpResult<u64> {
+    pub async fn create(&self, key: &str, value: &[u8]) -> BuildResult<u64> {
         NatsSubject::validate_named("KV key", key)?;
         self.store
             .create(key, value.to_vec().into())
@@ -128,7 +128,7 @@ impl KeyValue {
     ///
     /// A concurrent writer causes a revision conflict instead of silently
     /// overwriting the newer value.
-    pub async fn update(&self, key: &str, value: &[u8], expected_revision: u64) -> BpResult<u64> {
+    pub async fn update(&self, key: &str, value: &[u8], expected_revision: u64) -> BuildResult<u64> {
         NatsSubject::validate_named("KV key", key)?;
         self.store
             .update(key, value.to_vec().into(), expected_revision)
@@ -138,7 +138,7 @@ impl KeyValue {
 
     /// Deletes the value stored under `key`, if any. The deletion is a
     /// non-destructive KV marker so consumers can observe the removal.
-    pub async fn delete(&self, key: &str) -> BpResult<()> {
+    pub async fn delete(&self, key: &str) -> BuildResult<()> {
         NatsSubject::validate_named("KV key", key)?;
         self.store
             .delete(key)
@@ -147,7 +147,7 @@ impl KeyValue {
     }
 
     /// Lists every key in the bucket.
-    pub async fn keys(&self) -> BpResult<Vec<String>> {
+    pub async fn keys(&self) -> BuildResult<Vec<String>> {
         self.store
             .keys()
             .await
@@ -157,7 +157,7 @@ impl KeyValue {
             .map_err(|error| JetStream::protocol_error("failed to read KV key", error))
     }
 
-    fn validate_bucket(bucket: &str) -> BpResult<()> {
+    fn validate_bucket(bucket: &str) -> BuildResult<()> {
         let valid = !bucket.is_empty()
             && bucket.chars().all(|character| {
                 character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
@@ -165,7 +165,7 @@ impl KeyValue {
         if valid {
             Ok(())
         } else {
-            Err(BpError::Nats(NatsError::invalid_bucket(bucket)))
+            Err(BuildError::Nats(NatsError::invalid_bucket(bucket)))
         }
     }
 }

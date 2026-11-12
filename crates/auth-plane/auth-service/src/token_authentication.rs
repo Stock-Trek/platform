@@ -2,7 +2,7 @@ use crate::{
     ApiToken, AuthService, SecretInput, TokenAuditAction, TokenAuditEvent, TokenScope, TokenUsage,
 };
 use chrono::{DateTime, Utc};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 
 impl AuthService {
     pub async fn authenticate(
@@ -11,7 +11,7 @@ impl AuthService {
         secret: impl SecretInput,
         scope: Option<TokenScope>,
         now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
+    ) -> BuildResult<ApiToken> {
         let candidate = secret.secret_input();
         let token = match self.token(token_id).await {
             Ok(token) => token,
@@ -30,10 +30,10 @@ impl AuthService {
         candidate: &str,
         scope: Option<TokenScope>,
         now: DateTime<Utc>,
-    ) -> BpResult<ApiToken> {
+    ) -> BuildResult<ApiToken> {
         let token_id = token.id().to_string();
         if !token.matches_secret(candidate) {
-            let error = BpError::auth_invalid_secret(token.id());
+            let error = BuildError::auth_invalid_secret(token.id());
             self.record_authentication_failure(&token_id, Some(&token), now, &error)
                 .await;
             return Err(error);
@@ -63,30 +63,30 @@ impl AuthService {
         }
     }
 
-    pub(crate) fn ensure_active(token: &ApiToken, now: DateTime<Utc>) -> BpResult<()> {
+    pub(crate) fn ensure_active(token: &ApiToken, now: DateTime<Utc>) -> BuildResult<()> {
         if token.metadata().is_revoked() {
-            return Err(BpError::auth_revoked(token.id()));
+            return Err(BuildError::auth_revoked(token.id()));
         }
         if token.created_at() > now {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "created_at",
                 "must not be in the future",
             ));
         }
         if token.metadata().is_expired(now) {
-            return Err(BpError::auth_expired(token.id()));
+            return Err(BuildError::auth_expired(token.id()));
         }
         if token.metadata().is_rotation_overlap_ended(now) {
-            return Err(BpError::auth_rotation_overlap_ended(token.id()));
+            return Err(BuildError::auth_rotation_overlap_ended(token.id()));
         }
         Ok(())
     }
 
-    pub(crate) fn ensure_scope(token: &ApiToken, required: TokenScope) -> BpResult<()> {
+    pub(crate) fn ensure_scope(token: &ApiToken, required: TokenScope) -> BuildResult<()> {
         if token.metadata().has_scope(required) {
             Ok(())
         } else {
-            Err(BpError::auth_missing_scope(
+            Err(BuildError::auth_missing_scope(
                 token.id(),
                 required.to_string(),
             ))
@@ -98,7 +98,7 @@ impl AuthService {
         token_id: &str,
         token: Option<&ApiToken>,
         now: DateTime<Utc>,
-        error: &BpError,
+        error: &BuildError,
     ) {
         let event = TokenAuditEvent::new(TokenAuditAction::AuthenticationFailed, now)
             .with_token(token_id, token.map(ApiToken::owner))

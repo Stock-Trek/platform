@@ -1,5 +1,5 @@
 use metrics_cloudwatch_embedded::{Builder, Collector};
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_metrics::descriptions::DescriptionsMetrics;
 use std::io;
 use std::ops::Deref;
@@ -9,7 +9,7 @@ pub struct ProcessMetrics {
 }
 
 impl ProcessMetrics {
-    pub fn init(namespace: &str, service: &'static str) -> BpResult<Self> {
+    pub fn init(namespace: &str, service: &'static str) -> BuildResult<Self> {
         let builder = Builder::new()
             .cloudwatch_namespace(namespace.to_owned())
             .with_dimension("service", service);

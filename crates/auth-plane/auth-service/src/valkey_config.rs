@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_types::url_scheme::UrlScheme;
 use reqwest::Url;
 use std::{fmt, time::Duration};
@@ -18,7 +18,7 @@ impl ValkeyReplayStoreConfig {
         url: impl Into<String>,
         key_prefix: impl Into<String>,
         timeout: Duration,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let config = Self {
             url: url.into().trim().to_string(),
             key_prefix: key_prefix.into().trim().to_string(),
@@ -28,7 +28,7 @@ impl ValkeyReplayStoreConfig {
         Ok(config)
     }
 
-    pub fn from_url(url: impl Into<String>, timeout: Duration) -> BpResult<Self> {
+    pub fn from_url(url: impl Into<String>, timeout: Duration) -> BuildResult<Self> {
         Self::new(url, DEFAULT_VALKEY_REPLAY_PREFIX, timeout)
     }
 
@@ -44,42 +44,42 @@ impl ValkeyReplayStoreConfig {
         self.timeout
     }
 
-    pub fn validate(&self) -> BpResult<()> {
+    pub fn validate(&self) -> BuildResult<()> {
         if self.url.is_empty() {
-            return Err(BpError::config_empty("valkey_url"));
+            return Err(BuildError::config_empty("valkey_url"));
         }
         let url = Url::parse(&self.url)
-            .map_err(|error| BpError::config_invalid_source("valkey_url", error))?;
+            .map_err(|error| BuildError::config_invalid_source("valkey_url", error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_valkey) || url.host_str().is_none()
         {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "valkey_url",
                 "must be an absolute redis, rediss, valkey, or valkeys URL",
             ));
         }
         if url.query().is_some() || url.fragment().is_some() {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "valkey_url",
                 "must not contain a query or fragment",
             ));
         }
         if self.key_prefix.is_empty() {
-            return Err(BpError::config_empty("valkey_key_prefix"));
+            return Err(BuildError::config_empty("valkey_key_prefix"));
         }
         if self.key_prefix.len() > MAX_KEY_PREFIX_LENGTH {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "valkey_key_prefix",
                 format!("must be at most {MAX_KEY_PREFIX_LENGTH} characters"),
             ));
         }
         if !self.key_prefix.split(':').all(Self::valid_prefix_segment) {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "valkey_key_prefix",
                 "must contain only colon-separated segments of ASCII letters, digits, '-' and '_'",
             ));
         }
         if self.timeout.is_zero() {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "valkey_timeout",
                 "must be greater than zero",
             ));

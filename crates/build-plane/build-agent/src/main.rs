@@ -1,7 +1,7 @@
 use crate::{config::AgentConfig, handler::BuildAgent, handler::Handler, source::SourceLimits};
 use lambda_runtime::service_fn;
 use metrics_cloudwatch_embedded::lambda::service::run;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Service;
 
 mod artifacts;
@@ -13,7 +13,7 @@ mod source;
 const SERVICE: Service = Service::new("platform-build-agent");
 
 #[tokio::main]
-async fn main() -> BpResult<()> {
+async fn main() -> BuildResult<()> {
     let config = AgentConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let recorder =
@@ -38,5 +38,5 @@ async fn main() -> BpResult<()> {
         }),
     )
     .await
-    .map_err(BpError::external)
+    .map_err(BuildError::external)
 }

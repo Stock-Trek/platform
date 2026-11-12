@@ -1,4 +1,4 @@
-use super::BpError;
+use super::BuildError;
 #[cfg(feature = "http")]
 use crate::http::HttpError;
 #[cfg(feature = "storage")]
@@ -9,7 +9,7 @@ use crate::{
 };
 use std::{path::PathBuf, process::ExitStatus};
 
-impl BpError {
+impl BuildError {
     pub fn unknown_token(token_id: impl Into<String>) -> Self {
         Self::Auth(AuthError::UnknownToken {
             token_id: token_id.into(),
@@ -177,7 +177,7 @@ impl BpError {
 
     pub fn exchange<E>(operation: &'static str, source: E) -> Self
     where
-        E: Into<BpError>,
+        E: Into<BuildError>,
     {
         Self::Exchange(ExchangeError::Exchange {
             operation,
@@ -259,7 +259,7 @@ impl BpError {
         Self::Connector(ConnectorError::send_unknown_external(source))
     }
 
-    pub fn multiple(failures: impl IntoIterator<Item = BpError>) -> Self {
+    pub fn multiple(failures: impl IntoIterator<Item = BuildError>) -> Self {
         Self::Data(DataError::multiple(failures))
     }
 }

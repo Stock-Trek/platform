@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::{BpResult, SqsError};
+use platform_errors::{BuildResult, SqsError};
 use platform_time::deadline::Deadline;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
@@ -36,7 +36,7 @@ impl MockAuditQueue {
 
 #[async_trait]
 impl AuditQueue for MockAuditQueue {
-    async fn deliver(&self, events: &[TokenAuditEvent], _deadline: Deadline) -> BpResult<()> {
+    async fn deliver(&self, events: &[TokenAuditEvent], _deadline: Deadline) -> BuildResult<()> {
         if self.fail.load(Ordering::SeqCst) {
             return Err(SqsError::MissingMessageBody.into());
         }
@@ -60,11 +60,11 @@ impl RecreateOnSecondGet {
         }
     }
 
-    pub(crate) async fn put(&self, token: &ApiToken) -> BpResult<()> {
+    pub(crate) async fn put(&self, token: &ApiToken) -> BuildResult<()> {
         self.inner.put(token).await
     }
 
-    async fn recreate_if_due(&self, id: &str) -> BpResult<()> {
+    async fn recreate_if_due(&self, id: &str) -> BuildResult<()> {
         if self.gets.fetch_add(1, Ordering::SeqCst) + 1 == 2 {
             self.inner.delete(id).await?;
             self.inner.put(&self.replacement).await?;
@@ -75,32 +75,32 @@ impl RecreateOnSecondGet {
 
 #[async_trait]
 impl TokenStore for RecreateOnSecondGet {
-    async fn put(&self, token: &ApiToken) -> BpResult<()> {
+    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BpResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         self.recreate_if_due(id).await?;
         self.inner.get(id).await
     }
 
-    async fn delete(&self, id: &str) -> BpResult<()> {
+    async fn delete(&self, id: &str) -> BuildResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn ids(&self) -> BpResult<Vec<String>> {
+    async fn ids(&self) -> BuildResult<Vec<String>> {
         self.inner.ids().await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BpResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
         self.inner.update(expected, token).await
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BpResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BpResult<bool> {
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
         match mutation {
             TokenMutation::Create(token) => {
                 self.inner.commit(TokenMutation::Create(token), event).await
@@ -121,15 +121,15 @@ impl TokenStore for RecreateOnSecondGet {
         }
     }
 
-    async fn append_audit(&self, event: TokenAuditEvent) -> BpResult<()> {
+    async fn append_audit(&self, event: TokenAuditEvent) -> BuildResult<()> {
         self.inner.append_audit(event).await
     }
 
-    async fn pending_audits(&self) -> BpResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
         self.inner.pending_audits().await
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BpResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
         self.inner.acknowledge_audit(event_id).await
     }
 }

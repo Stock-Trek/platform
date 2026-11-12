@@ -1,5 +1,5 @@
 use crate::supervisor::Supervisor;
-use platform_errors::BpError;
+use platform_errors::BuildError;
 use std::time::Duration;
 
 #[test]
@@ -27,7 +27,7 @@ fn jitter_keeps_the_delay_within_the_upper_half_of_the_base() {
 #[tokio::test]
 async fn permanent_task_errors_are_not_restarted() {
     let error = Supervisor::supervise("test", || async {
-        Err(BpError::config_missing("aggregator test setting"))
+        Err(BuildError::config_missing("aggregator test setting"))
     })
     .await
     .unwrap_err();

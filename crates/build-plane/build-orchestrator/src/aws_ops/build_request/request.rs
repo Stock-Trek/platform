@@ -1,5 +1,5 @@
 use crate::aws_ops::presigned_post::PresignedPost;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_messages::{
     build_request::{BuildRequest as BuildRequestPayload, BuildRequestSignedPost},
     sqs_message::{GitSource, SqsRefType},
@@ -16,7 +16,7 @@ pub struct BuildRequest {
 }
 
 impl BuildRequest {
-    pub fn payload(&self) -> BpResult<Vec<u8>> {
+    pub fn payload(&self) -> BuildResult<Vec<u8>> {
         let payload = BuildRequestPayload {
             git_host: self.source.host().to_string(),
             git_provider: self.source.name().to_string(),

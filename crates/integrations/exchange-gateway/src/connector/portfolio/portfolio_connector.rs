@@ -1,6 +1,6 @@
 use super::{PortfolioConnection, PortfolioUpdateSink};
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -10,5 +10,5 @@ pub trait PortfolioConnector: Send + Sync {
         &self,
         cex_id: CexId,
         sink: Arc<dyn PortfolioUpdateSink>,
-    ) -> BpResult<Arc<dyn PortfolioConnection>>;
+    ) -> BuildResult<Arc<dyn PortfolioConnection>>;
 }

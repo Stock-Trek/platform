@@ -5,7 +5,7 @@ use crate::{
 };
 use chrono::Duration;
 use jsonwebtoken::jwk::JwkSet;
-use platform_errors::{AuthError, BpError, BpResult};
+use platform_errors::{AuthError, BuildError, BuildResult};
 use std::sync::Arc;
 
 pub(crate) const MAX_UPDATE_ATTEMPTS: usize = 5;
@@ -33,7 +33,7 @@ impl AuthService {
         config: AuthServiceConfig,
         replay: Arc<dyn ReplayStore>,
         usage: Arc<dyn TokenUsageQueue>,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let signer = JwtSigningKey::generate(DEFAULT_JWT_KEY_ID)?;
         Self::with_jwt_signing_key(store, config, replay, Arc::new(signer), usage)
     }
@@ -44,7 +44,7 @@ impl AuthService {
         replay: Arc<dyn ReplayStore>,
         jwt_signer: Arc<JwtSigningKey>,
         usage: Arc<dyn TokenUsageQueue>,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         Self::validate_config(&config)?;
         Ok(Self {
             store,
@@ -65,27 +65,27 @@ impl AuthService {
         JwtVerifier::new(self.jwks().clone())
     }
 
-    fn validate_config(config: &AuthServiceConfig) -> BpResult<()> {
+    fn validate_config(config: &AuthServiceConfig) -> BuildResult<()> {
         if config.token_lifetime <= Duration::zero() {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "token_lifetime",
                 "must be greater than zero",
             ));
         }
         if config.rotation_overlap < Duration::zero() {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "rotation_overlap",
                 "must not be negative",
             ));
         }
         if config.rotation_overlap > config.token_lifetime {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "rotation_overlap",
                 "must not exceed token_lifetime",
             ));
         }
         if config.signature_validity < Duration::seconds(1) {
-            return Err(BpError::auth_invalid_field(
+            return Err(BuildError::auth_invalid_field(
                 "signature_validity",
                 "must be at least one second",
             ));
@@ -97,7 +97,7 @@ impl AuthService {
         &self,
         mutation: TokenMutation,
         event: TokenAuditEvent,
-    ) -> BpResult<bool> {
+    ) -> BuildResult<bool> {
         let index_mutation = mutation.clone();
         let applied = self.store.commit(mutation, event).await?;
         if applied {
@@ -109,7 +109,7 @@ impl AuthService {
     pub(crate) async fn commit_rotation(
         &self,
         transaction: &TokenRotationTransaction,
-    ) -> BpResult<()> {
+    ) -> BuildResult<()> {
         self.store.commit_rotation(transaction).await
     }
 
@@ -119,7 +119,7 @@ impl AuthService {
         }
     }
 
-    pub(crate) fn is_conflict(error: &BpError) -> bool {
-        matches!(error, BpError::Auth(AuthError::Conflict { .. }))
+    pub(crate) fn is_conflict(error: &BuildError) -> bool {
+        matches!(error, BuildError::Auth(AuthError::Conflict { .. }))
     }
 }

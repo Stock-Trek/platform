@@ -1,5 +1,5 @@
 use crate::ValkeyReplayStoreConfig;
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use std::{fmt, time::Duration};
 
 pub const DEFAULT_TOKEN_USAGE_QUEUE_PREFIX: &str = "auth-usage";
@@ -20,7 +20,7 @@ impl TokenUsageQueueConfig {
         timeout: Duration,
         capacity: usize,
         batch_size: usize,
-    ) -> BpResult<Self> {
+    ) -> BuildResult<Self> {
         let config = Self {
             valkey: ValkeyReplayStoreConfig::new(url, key_prefix, timeout)?,
             capacity,
@@ -30,7 +30,7 @@ impl TokenUsageQueueConfig {
         Ok(config)
     }
 
-    pub fn from_url(url: impl Into<String>, timeout: Duration) -> BpResult<Self> {
+    pub fn from_url(url: impl Into<String>, timeout: Duration) -> BuildResult<Self> {
         Self::new(
             url,
             DEFAULT_TOKEN_USAGE_QUEUE_PREFIX,
@@ -60,22 +60,22 @@ impl TokenUsageQueueConfig {
         self.batch_size
     }
 
-    pub fn validate(&self) -> BpResult<()> {
+    pub fn validate(&self) -> BuildResult<()> {
         self.valkey.validate()?;
         if self.capacity == 0 {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "token_usage_queue_capacity",
                 "must be greater than zero",
             ));
         }
         if self.batch_size == 0 {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "token_usage_queue_batch_size",
                 "must be greater than zero",
             ));
         }
         if self.batch_size > self.capacity {
-            return Err(BpError::config_invalid(
+            return Err(BuildError::config_invalid(
                 "token_usage_queue_batch_size",
                 "must not exceed the queue capacity",
             ));

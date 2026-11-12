@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use std::{collections::HashMap, sync::Mutex};
 
 /// Sequence state kept in process memory.
@@ -16,7 +16,7 @@ impl InMemorySequenceStore {
 
 #[async_trait]
 impl SequenceStore for InMemorySequenceStore {
-    async fn load(&self, key: &str) -> BpResult<Option<SequenceTracker>> {
+    async fn load(&self, key: &str) -> BuildResult<Option<SequenceTracker>> {
         Ok(self
             .trackers
             .lock()
@@ -25,7 +25,7 @@ impl SequenceStore for InMemorySequenceStore {
             .cloned())
     }
 
-    async fn save(&self, key: &str, tracker: &SequenceTracker) -> BpResult<()> {
+    async fn save(&self, key: &str, tracker: &SequenceTracker) -> BuildResult<()> {
         self.trackers
             .lock()
             .expect("sequence store lock")

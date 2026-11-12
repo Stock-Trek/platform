@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use aws_sdk_dynamodb::{Client, operation::put_item::PutItemError, types::AttributeValue};
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use platform_portfolio_ownership::{AccountKey, OwnershipEvent};
 
 const MAX_COMMIT_ATTEMPTS: usize = 8;
@@ -23,7 +23,7 @@ impl DynamoDbOwnershipStore {
         }
     }
 
-    async fn load(&self, account_key: &str) -> BpResult<Option<OwnershipRecord>> {
+    async fn load(&self, account_key: &str) -> BuildResult<Option<OwnershipRecord>> {
         let output = self
             .client
             .get_item()
@@ -32,14 +32,14 @@ impl DynamoDbOwnershipStore {
             .consistent_read(true)
             .send()
             .await
-            .map_err(BpError::external)?;
+            .map_err(BuildError::external)?;
         output.item().map(OwnershipItem::parse).transpose()
     }
 }
 
 #[async_trait]
 impl OwnershipStore for DynamoDbOwnershipStore {
-    async fn commit(&self, command: OwnershipCommand) -> BpResult<OwnershipCommit> {
+    async fn commit(&self, command: OwnershipCommand) -> BuildResult<OwnershipCommit> {
         let account_key = command.account.storage_key();
         for _ in 0..MAX_COMMIT_ATTEMPTS {
             let existing = self.load(&account_key).await?;
@@ -50,7 +50,7 @@ impl OwnershipStore for DynamoDbOwnershipStore {
                 }
                 OwnershipTransition::Applied(record) => {
                     let event = record.pending_events.last().cloned().ok_or_else(|| {
-                        BpError::external(std::io::Error::other("missing outbox event"))
+                        BuildError::external(std::io::Error::other("missing outbox event"))
                     })?;
                     (record, OwnershipCommit::Applied(event))
                 }
@@ -81,20 +81,20 @@ impl OwnershipStore for DynamoDbOwnershipStore {
                 {
                     continue;
                 }
-                Err(error) => return Err(BpError::external(error)),
+                Err(error) => return Err(BuildError::external(error)),
             }
         }
-        Err(BpError::auth_invalid_field(
+        Err(BuildError::auth_invalid_field(
             "ownership",
             "version changed too often; retry the request",
         ))
     }
 
-    async fn get(&self, account: &AccountKey) -> BpResult<Option<OwnershipRecord>> {
+    async fn get(&self, account: &AccountKey) -> BuildResult<Option<OwnershipRecord>> {
         self.load(&account.storage_key()).await
     }
 
-    async fn owner_accounts(&self, owner: &str) -> BpResult<Vec<AccountMapping>> {
+    async fn owner_accounts(&self, owner: &str) -> BuildResult<Vec<AccountMapping>> {
         let mut start_key = None;
         let mut mappings = Vec::new();
         loop {
@@ -112,14 +112,14 @@ impl OwnershipStore for DynamoDbOwnershipStore {
                 .set_exclusive_start_key(start_key)
                 .send()
                 .await
-                .map_err(BpError::external)?;
+                .map_err(BuildError::external)?;
             mappings.extend(
                 output
                     .items()
                     .iter()
                     .map(OwnershipItem::parse)
                     .map(|record| record.map(|record| record.mapping()))
-                    .collect::<BpResult<Vec<_>>>()?,
+                    .collect::<BuildResult<Vec<_>>>()?,
             );
             start_key = output.last_evaluated_key().cloned();
             if start_key.is_none() {
@@ -130,7 +130,7 @@ impl OwnershipStore for DynamoDbOwnershipStore {
         Ok(mappings)
     }
 
-    async fn pending_events(&self, limit: usize) -> BpResult<Vec<OwnershipEvent>> {
+    async fn pending_events(&self, limit: usize) -> BuildResult<Vec<OwnershipEvent>> {
         let mut events = Vec::new();
         let mut start_key = None;
         while events.len() < limit {
@@ -143,7 +143,7 @@ impl OwnershipStore for DynamoDbOwnershipStore {
                 .set_exclusive_start_key(start_key)
                 .send()
                 .await
-                .map_err(BpError::external)?;
+                .map_err(BuildError::external)?;
             for item in output.items() {
                 if let Some(AttributeValue::S(payload)) = item.get(PENDING_EVENTS) {
                     let pending: Vec<OwnershipEvent> = serde_json::from_str(payload)?;
@@ -162,7 +162,7 @@ impl OwnershipStore for DynamoDbOwnershipStore {
         Ok(events)
     }
 
-    async fn acknowledge(&self, event: &OwnershipEvent) -> BpResult<()> {
+    async fn acknowledge(&self, event: &OwnershipEvent) -> BuildResult<()> {
         let account_key = event.account().storage_key();
         for _ in 0..MAX_COMMIT_ATTEMPTS {
             let Some(mut record) = self.load(&account_key).await? else {
@@ -204,10 +204,10 @@ impl OwnershipStore for DynamoDbOwnershipStore {
                 {
                     continue;
                 }
-                Err(error) => return Err(BpError::external(error)),
+                Err(error) => return Err(BuildError::external(error)),
             }
         }
-        Err(BpError::auth_invalid_field(
+        Err(BuildError::auth_invalid_field(
             "outbox",
             "pending events changed too often; retry the acknowledgement",
         ))

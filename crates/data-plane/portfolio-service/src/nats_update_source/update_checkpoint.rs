@@ -1,4 +1,4 @@
-use platform_errors::{BpError, BpResult};
+use platform_errors::{BuildError, BuildResult};
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -15,11 +15,11 @@ impl UpdateCheckpoint {
         self.sequence
     }
 
-    pub(super) fn to_bytes(&self) -> BpResult<Vec<u8>> {
+    pub(super) fn to_bytes(&self) -> BuildResult<Vec<u8>> {
         Ok(serde_json::to_vec(self)?)
     }
 
-    pub(super) fn from_bytes(payload: &[u8]) -> BpResult<Self> {
-        serde_json::from_slice(payload).map_err(BpError::external)
+    pub(super) fn from_bytes(payload: &[u8]) -> BuildResult<Self> {
+        serde_json::from_slice(payload).map_err(BuildError::external)
     }
 }

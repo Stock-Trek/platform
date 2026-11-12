@@ -1,5 +1,5 @@
 use platform_config::env_vars::EnvVars;
-use platform_errors::BpResult;
+use platform_errors::BuildResult;
 use platform_nats::StreamSpec;
 use std::time::Duration;
 
@@ -38,7 +38,7 @@ pub struct NatsStreamConfig {
 }
 
 impl NatsStreamConfig {
-    pub fn from_vars(vars: &EnvVars, prefix: &str, defaults: StreamDefaults) -> BpResult<Self> {
+    pub fn from_vars(vars: &EnvVars, prefix: &str, defaults: StreamDefaults) -> BuildResult<Self> {
         let replicas = vars
             .optional_parsed::<usize>(&Self::name(prefix, REPLICAS_SUFFIX))?
             .unwrap_or(DEFAULT_REPLICAS);
