@@ -18,6 +18,12 @@ const USAGE_QUEUE_BATCH_SIZE: &str = "AUTH_SERVICE_USAGE_QUEUE_BATCH_SIZE";
 const VALKEY_URL: &str = "AUTH_SERVICE_VALKEY_URL";
 const VALKEY_KEY_PREFIX: &str = "AUTH_SERVICE_VALKEY_KEY_PREFIX";
 const VALKEY_TIMEOUT_SECS: &str = "AUTH_SERVICE_VALKEY_TIMEOUT_SECS";
+const TOKEN_CACHE_MAX_ENTRIES: &str = "AUTH_SERVICE_TOKEN_CACHE_MAX_ENTRIES";
+const TOKEN_CACHE_NEGATIVE_ENTRIES: &str = "AUTH_SERVICE_TOKEN_CACHE_NEGATIVE_ENTRIES";
+const TOKEN_CACHE_FRESHNESS_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS";
+const TOKEN_CACHE_MAX_STALE_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_MAX_STALE_SECS";
+const TOKEN_CACHE_FAILURE_THRESHOLD: &str = "AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD";
+const TOKEN_CACHE_OPEN_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS";
 const SIGV4_CREDENTIALS: &str = "SIGV4_CREDENTIALS";
 const SIGV4_REGION: &str = "SIGV4_REGION";
 const SIGV4_SERVICE: &str = "SIGV4_SERVICE";
@@ -102,4 +108,49 @@ fn rejects_a_malformed_private_key() {
     let config = Fixture::config(&[(JWT_PRIVATE_KEY_PEM, "not a pem key")]).unwrap();
 
     assert!(config.jwt_signing_key().is_err());
+}
+
+#[test]
+fn configures_the_token_cache_from_the_environment() {
+    let config = Fixture::config(&[
+        (TOKEN_CACHE_MAX_ENTRIES, "42"),
+        (TOKEN_CACHE_NEGATIVE_ENTRIES, "7"),
+        (TOKEN_CACHE_FRESHNESS_SECS, "9"),
+        (TOKEN_CACHE_MAX_STALE_SECS, "19"),
+        (TOKEN_CACHE_FAILURE_THRESHOLD, "3"),
+        (TOKEN_CACHE_OPEN_SECS, "27"),
+    ])
+    .unwrap();
+    let cache = config.token_cache();
+
+    assert_eq!(cache.max_entries(), 42);
+    assert_eq!(cache.negative_entries(), 7);
+    assert_eq!(cache.freshness(), Duration::from_secs(9));
+    assert_eq!(cache.max_stale_age(), Duration::from_secs(19));
+    assert_eq!(cache.failure_threshold(), 3);
+    assert_eq!(cache.open_duration(), Duration::from_secs(27));
+}
+
+#[test]
+fn token_cache_defaults_to_bounded_fresh_and_stale_windows() {
+    let config = Fixture::config(&[]).unwrap();
+    let cache = config.token_cache();
+
+    assert_eq!(cache.max_entries(), 10_000);
+    assert_eq!(cache.negative_entries(), 1_000);
+    assert_eq!(cache.freshness(), Duration::from_secs(30));
+    assert_eq!(cache.max_stale_age(), Duration::from_secs(60));
+    assert_eq!(cache.failure_threshold(), 5);
+    assert_eq!(cache.open_duration(), Duration::from_secs(10));
+}
+
+#[test]
+fn rejects_a_stale_window_shorter_than_the_freshness_window() {
+    assert!(
+        Fixture::config(&[
+            (TOKEN_CACHE_FRESHNESS_SECS, "30"),
+            (TOKEN_CACHE_MAX_STALE_SECS, "10"),
+        ])
+        .is_err()
+    );
 }

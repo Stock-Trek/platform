@@ -1,4 +1,7 @@
-use crate::{JwtSigningKey, TokenUsageQueueConfig, ValkeyReplayStoreConfig, VaultTokenStoreConfig};
+use crate::{
+    JwtSigningKey, TokenCacheConfig, TokenUsageQueueConfig, ValkeyReplayStoreConfig,
+    VaultTokenStoreConfig,
+};
 use platform_config::env_names::RUST_LOG;
 use platform_config::env_vars::EnvVars;
 use platform_errors::BpResult;
@@ -21,6 +24,13 @@ const AUTH_SERVICE_USAGE_QUEUE_BATCH_SIZE: &str = "AUTH_SERVICE_USAGE_QUEUE_BATC
 const AUTH_SERVICE_VALKEY_KEY_PREFIX: &str = "AUTH_SERVICE_VALKEY_KEY_PREFIX";
 const AUTH_SERVICE_VALKEY_TIMEOUT_SECS: &str = "AUTH_SERVICE_VALKEY_TIMEOUT_SECS";
 const AUTH_SERVICE_VALKEY_URL: &str = "AUTH_SERVICE_VALKEY_URL";
+const AUTH_SERVICE_TOKEN_CACHE_MAX_ENTRIES: &str = "AUTH_SERVICE_TOKEN_CACHE_MAX_ENTRIES";
+const AUTH_SERVICE_TOKEN_CACHE_NEGATIVE_ENTRIES: &str = "AUTH_SERVICE_TOKEN_CACHE_NEGATIVE_ENTRIES";
+const AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS";
+const AUTH_SERVICE_TOKEN_CACHE_MAX_STALE_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_MAX_STALE_SECS";
+const AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD: &str =
+    "AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD";
+const AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS";
 const VAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
@@ -33,6 +43,7 @@ pub struct JwtServerConfig {
     jwt_key_id: String,
     jwt_private_key_pem: SecretString,
     usage_queue: TokenUsageQueueConfig,
+    token_cache: TokenCacheConfig,
 }
 
 impl JwtServerConfig {
@@ -70,6 +81,17 @@ impl JwtServerConfig {
             vars.required_parsed(AUTH_SERVICE_USAGE_QUEUE_CAPACITY)?,
             vars.required_parsed(AUTH_SERVICE_USAGE_QUEUE_BATCH_SIZE)?,
         )?;
+        let token_cache = TokenCacheConfig::from_vars(
+            vars,
+            [
+                AUTH_SERVICE_TOKEN_CACHE_MAX_ENTRIES,
+                AUTH_SERVICE_TOKEN_CACHE_NEGATIVE_ENTRIES,
+                AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS,
+                AUTH_SERVICE_TOKEN_CACHE_MAX_STALE_SECS,
+                AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD,
+                AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS,
+            ],
+        )?;
         Ok(Self {
             log_filter: vars.required_log_filter(RUST_LOG)?,
             bind_address: vars.required_parsed(AUTH_SERVICE_BIND_ADDR)?,
@@ -79,6 +101,7 @@ impl JwtServerConfig {
             jwt_key_id,
             jwt_private_key_pem,
             usage_queue,
+            token_cache,
         })
     }
 
@@ -110,6 +133,10 @@ impl JwtServerConfig {
         &self.usage_queue
     }
 
+    pub fn token_cache(&self) -> &TokenCacheConfig {
+        &self.token_cache
+    }
+
     pub fn jwt_signing_key(&self) -> BpResult<JwtSigningKey> {
         use secrecy::ExposeSecret;
         JwtSigningKey::from_pkcs8_pem(&self.jwt_key_id, self.jwt_private_key_pem.expose_secret())
@@ -128,6 +155,7 @@ impl fmt::Debug for JwtServerConfig {
             .field("jwt_key_id", &self.jwt_key_id)
             .field("jwt_private_key_pem", &"<redacted>")
             .field("usage_queue", &self.usage_queue)
+            .field("token_cache", &self.token_cache)
             .finish()
     }
 }

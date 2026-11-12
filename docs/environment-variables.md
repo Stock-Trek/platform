@@ -113,6 +113,20 @@ required in some configurations, the condition is stated in its description.
 | `PORTFOLIO_BINANCE_RECONNECT_BACKOFF_SECS` | Delay before reconnecting a failed Binance user-data stream, in seconds. Defaults to `5`. |
 | `PORTFOLIO_MAX_UPDATE_AGE_SECS` | Maximum accepted portfolio-update age for the freshness gate, in seconds. Defaults to `60`. |
 | `PORTFOLIO_STALE_ORDER_POLICY` | Behaviour when portfolio data is stale: `allow`, `degrade`, or `reject`. Defaults to `degrade`. |
+| `PORTFOLIO_TOKEN_CACHE_MAX_ENTRIES` | Maximum number of token entries retained in memory. Defaults to `10000`. |
+| `PORTFOLIO_TOKEN_CACHE_NEGATIVE_ENTRIES` | Maximum number of missing-token entries retained in memory. Defaults to `1000`. |
+| `PORTFOLIO_TOKEN_CACHE_FRESHNESS_SECS` | Age after which an entry is refreshed from Vault. Defaults to `30`. |
+| `PORTFOLIO_TOKEN_CACHE_MAX_STALE_SECS` | Maximum age at which an entry may still be used while Vault is unavailable. Defaults to `60` and must be at least the freshness window. |
+| `PORTFOLIO_TOKEN_CACHE_FAILURE_THRESHOLD` | Consecutive Vault read failures that open the token store circuit breaker. Defaults to `5`. |
+| `PORTFOLIO_TOKEN_CACHE_OPEN_SECS` | Time the circuit breaker stays open before allowing a probe read. Defaults to `10`. |
+
+Signed order signing reads token records through the same bounded cache, request coalescing, and
+circuit breaker as the auth service. A cache hit performs no Vault read. Entries older than
+`PORTFOLIO_TOKEN_CACHE_FRESHNESS_SECS` are refreshed on the next lookup; while Vault is unavailable,
+the last entry may still be served until `PORTFOLIO_TOKEN_CACHE_MAX_STALE_SECS` after its last
+successful Vault read, after which signing fails closed. The breaker opens after
+`PORTFOLIO_TOKEN_CACHE_FAILURE_THRESHOLD` retryable read failures and allows one half-open probe
+after `PORTFOLIO_TOKEN_CACHE_OPEN_SECS`.
 
 Signed order verification appends usage records to the durable Valkey queue instead of writing
 `last_used_at` and audit outbox entries synchronously. The queue URL, prefix, and capacity must
@@ -370,6 +384,26 @@ owner bound to the caller's access key.
 Authentication and signing append usage records to a durable Valkey stream instead of writing
 `last_used_at` and audit outbox entries synchronously. Requests fail closed if the queue reaches
 capacity so audit records are not silently dropped.
+
+#### Optional token cache
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `AUTH_SERVICE_TOKEN_CACHE_MAX_ENTRIES` | `10000` | Maximum number of token entries retained in memory. |
+| `AUTH_SERVICE_TOKEN_CACHE_NEGATIVE_ENTRIES` | `1000` | Maximum number of missing-token entries retained in memory. |
+| `AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS` | `30` | Age after which an entry is refreshed from Vault. |
+| `AUTH_SERVICE_TOKEN_CACHE_MAX_STALE_SECS` | `60` | Maximum age at which an entry may still be served while Vault is unavailable. Must be at least the freshness window. |
+| `AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD` | `5` | Consecutive Vault read failures that open the token store circuit breaker. |
+| `AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS` | `10` | Time the circuit breaker stays open before allowing a probe read. |
+
+The auth service reads token records through a bounded in-memory cache with request coalescing
+and a circuit breaker. A cache hit performs no Vault read. Entries older than
+`AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS` are refreshed on the next lookup; while Vault is
+unavailable, the last entry may still be served until `AUTH_SERVICE_TOKEN_CACHE_MAX_STALE_SECS`
+after its last successful Vault read, after which requests fail closed. The breaker opens after
+`AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD` retryable read failures and allows one half-open probe
+after `AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS`. Token mutations made through the auth service refresh or
+invalidate the corresponding entry.
 
 ### Auth relay
 
