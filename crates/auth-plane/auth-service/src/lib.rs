@@ -7,6 +7,7 @@ mod jwks_cache;
 mod jwt_server;
 mod jwt_server_config;
 mod jwt_server_connection;
+mod jwt_server_error;
 mod jwt_server_request;
 mod jwt_signing_key;
 mod jwt_verifier;

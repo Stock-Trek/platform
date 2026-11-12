@@ -59,9 +59,9 @@ impl JwtServerConnection {
     ) -> Result<Response<Full<Bytes>>, Infallible> {
         let response = match JwtServerRequest::dispatch(&service, &sigv4, request).await {
             Ok(response) => response,
-            Err((status, message)) => {
-                tracing::warn!("rejected JWT request: {message}");
-                JwtServerRequest::error(status)
+            Err(error) => {
+                tracing::warn!("rejected JWT request: {}", error.message());
+                error.response()
             }
         };
         Ok(response)
