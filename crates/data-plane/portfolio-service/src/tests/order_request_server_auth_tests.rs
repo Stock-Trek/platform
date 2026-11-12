@@ -42,7 +42,9 @@ async fn signs_for_the_owner_authenticated_by_the_jwt() {
 async fn rejects_an_account_not_owned_by_the_authenticated_owner() {
     let (delivery_url, _) = Fixture::downstream().await;
     let (auth_service, _) = Fixture::auth_service().await;
-    let portfolio = Arc::new(PortfolioService::in_memory());
+    let portfolio = Arc::new(PortfolioService::new(Arc::new(
+        platform_exchange_gateway::connector::NoopPortfolioFeed::new(),
+    )));
     let account = AccountKey::from((CexId::Binance, AccountId("account-2".to_string())));
     portfolio.track_user_account(OWNER, account).await.unwrap();
     let service =

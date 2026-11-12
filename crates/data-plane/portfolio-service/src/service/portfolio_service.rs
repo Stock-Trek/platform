@@ -28,13 +28,6 @@ impl PortfolioService {
         }
     }
 
-    #[cfg(test)]
-    pub fn in_memory() -> Self {
-        Self::new(Arc::new(
-            platform_exchange_gateway::connector::NoopPortfolioFeed::new(),
-        ))
-    }
-
     pub(super) async fn sync(
         &self,
         cex_id: CexId,

@@ -11,6 +11,9 @@ pub mod shard;
 pub mod sink;
 pub mod source;
 pub mod state;
+pub mod supervisor;
+#[cfg(test)]
+mod supervisor_tests;
 
 pub use checkpoint::{CheckpointRecord, NatsStateStore, StateStore};
 pub use config::{AggregatorConfig, ReplayStartPolicy};

@@ -8,9 +8,6 @@ mod read;
 mod store;
 mod stream;
 
-#[cfg(test)]
-mod tests;
-
 pub use admin::AdminConfig;
 pub use nats::RegistryNatsConfig;
 pub use read::ReadConfig;

@@ -1,4 +1,4 @@
-use crate::{Aws, SdkConfig};
+use crate::{Aws, SdkConfig, secrets::ssm_config::SsmConfig};
 use aws_sdk_ssm::{
     error::ProvideErrorMetadata,
     operation::get_parameters_by_path::{GetParametersByPathError, GetParametersByPathOutput},
@@ -6,9 +6,6 @@ use aws_sdk_ssm::{
 use platform_errors::{BpError, BpResult, Retryability, SecretsError, TimeoutError};
 use platform_time::{deadline::Deadline, timeouts::Timeouts};
 use std::collections::HashMap;
-
-/// Environment variable containing the SSM parameter path to load secrets from.
-pub const SSM_PATH_ENV: &str = "SECRETS_SSM_PATH";
 
 /// Environment variable controlling whether SSM parameters are decrypted.
 pub const SSM_DECRYPT_ENV: &str = "SECRETS_SSM_DECRYPT";
@@ -139,31 +136,5 @@ impl Secrets {
             .get(name)
             .cloned()
             .ok_or_else(|| BpError::config_missing(name))
-    }
-}
-
-/// The SSM parameter path and decryption mode used to load secrets.
-#[derive(Debug, Clone)]
-pub struct SsmConfig {
-    pub path: String,
-    pub decrypt: bool,
-}
-
-impl SsmConfig {
-    pub fn new(mut path: String, decrypt: bool) -> BpResult<Self> {
-        path = path.trim().to_string();
-        if path.is_empty() {
-            return Err(BpError::config_empty(SSM_PATH_ENV));
-        }
-        if !path.starts_with('/') {
-            path.insert(0, '/');
-        }
-        if path.ends_with('/') {
-            return Err(BpError::config_invalid(
-                SSM_PATH_ENV,
-                "must not end with '/'",
-            ));
-        }
-        Ok(Self { path, decrypt })
     }
 }

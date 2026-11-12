@@ -4,15 +4,12 @@ use std::future::Future;
 use std::time::{Duration, Instant};
 use tracing::{error, warn};
 
-#[cfg(test)]
-mod tests;
-
 pub struct Supervisor;
 
 impl Supervisor {
-    const INITIAL_RESTART_DELAY: Duration = Duration::from_secs(1);
-    const MAX_RESTART_DELAY: Duration = Duration::from_secs(30);
-    const HEALTHY_RUN_THRESHOLD: Duration = Duration::from_secs(60);
+    pub(crate) const INITIAL_RESTART_DELAY: Duration = Duration::from_secs(1);
+    pub(crate) const MAX_RESTART_DELAY: Duration = Duration::from_secs(30);
+    pub(crate) const HEALTHY_RUN_THRESHOLD: Duration = Duration::from_secs(60);
 
     pub async fn supervise<F, Fut>(name: &'static str, mut run: F) -> BpResult<()>
     where
@@ -60,11 +57,11 @@ impl Supervisor {
         }
     }
 
-    fn next_restart_delay(current: Duration) -> Duration {
+    pub(crate) fn next_restart_delay(current: Duration) -> Duration {
         (current * 2).min(Self::MAX_RESTART_DELAY)
     }
 
-    fn jittered_delay(base: Duration) -> Duration {
+    pub(crate) fn jittered_delay(base: Duration) -> Duration {
         // Jitter the upper half of the delay so replicas that failed together do
         // not all reconnect in lockstep when a shared dependency recovers.
         let jitter = 0.5 + rand::random::<f64>() * 0.5;

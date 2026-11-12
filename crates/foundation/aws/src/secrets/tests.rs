@@ -1,6 +1,5 @@
-use super::*;
-use aws_sdk_ssm::operation::get_parameters_by_path::GetParametersByPathOutput;
-use aws_sdk_ssm::types::Parameter;
+use crate::{Secrets, secrets::ssm_config::SsmConfig};
+use aws_sdk_ssm::{operation::get_parameters_by_path::GetParametersByPathOutput, types::Parameter};
 use platform_errors::BpError;
 use std::collections::HashMap;
 

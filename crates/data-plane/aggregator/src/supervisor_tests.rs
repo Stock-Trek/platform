@@ -1,4 +1,4 @@
-use super::*;
+use crate::supervisor::Supervisor;
 use platform_errors::BpError;
 use std::time::Duration;
 

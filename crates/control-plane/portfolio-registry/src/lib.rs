@@ -12,6 +12,8 @@ mod ownership_store;
 mod ownership_transition;
 mod registry_service;
 mod runner;
+#[cfg(test)]
+mod tests;
 
 pub use config::{
     AdminConfig, PortfolioRegistryConfig, ReadConfig, RegistryNatsConfig, RegistryStoreConfig,
@@ -32,6 +34,3 @@ pub(crate) use ownership_item::{
 pub(crate) use ownership_record::OwnershipRecord;
 pub(crate) use ownership_store::{OwnershipCommit, OwnershipStore};
 pub(crate) use ownership_transition::OwnershipTransition;
-
-#[cfg(test)]
-mod tests;

@@ -128,10 +128,16 @@ async fn signs_for_the_authenticated_owner_not_the_body_owner() {
     );
 }
 
+fn in_memory_portfolio_feed() -> PortfolioService {
+    PortfolioService::new(Arc::new(
+        platform_exchange_gateway::connector::NoopPortfolioFeed::new(),
+    ))
+}
+
 #[tokio::test]
 async fn rejects_an_account_that_the_owner_does_not_track() {
     let (service, auth_service, _) = Fixture::service().await;
-    let portfolio = Arc::new(PortfolioService::in_memory());
+    let portfolio = Arc::new(in_memory_portfolio_feed());
     let account = AccountKey::from((CexId::Binance, AccountId("account-1".to_string())));
     portfolio
         .track_user_account("other-owner", account)
@@ -147,7 +153,7 @@ async fn rejects_an_account_that_the_owner_does_not_track() {
 #[tokio::test]
 async fn accepts_an_account_tracked_by_the_owner() {
     let (service, auth_service, _) = Fixture::service().await;
-    let portfolio = Arc::new(PortfolioService::in_memory());
+    let portfolio = Arc::new(in_memory_portfolio_feed());
     let account = AccountKey::from((CexId::Binance, AccountId("account-1".to_string())));
     portfolio.track_user_account(OWNER, account).await.unwrap();
     let service = service.with_portfolio_service(portfolio);

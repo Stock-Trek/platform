@@ -203,6 +203,3 @@ impl PresignedPostSigner {
         )
     }
 }
-
-#[cfg(test)]
-mod tests;
