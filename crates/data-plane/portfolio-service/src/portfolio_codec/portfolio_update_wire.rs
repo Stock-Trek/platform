@@ -1,6 +1,6 @@
 use super::{asset_balance_wire::AssetBalanceWire, pending_order_wire::PendingOrderWire};
 use crate::{
-    AccountKey, AccountPortfolio, PORTFOLIO_UPDATE_SCHEMA_VERSION, PendingOrder, PortfolioUpdate,
+    AccountKey, CexAccountPortfolio, PORTFOLIO_UPDATE_SCHEMA_VERSION, PendingOrder, PortfolioUpdate,
 };
 use chrono::{DateTime, Utc};
 use std::collections::BTreeMap;
@@ -74,7 +74,7 @@ impl TryFrom<PortfolioUpdateWire> for PortfolioUpdate {
             orders.entry(tag).or_default().push(order);
         }
         let portfolio =
-            AccountPortfolio::new(balances, orders).map_err(|error| error.to_string())?;
+            CexAccountPortfolio::new(balances, orders).map_err(|error| error.to_string())?;
         Ok(PortfolioUpdate::versioned(
             wire.account,
             wire.owner,

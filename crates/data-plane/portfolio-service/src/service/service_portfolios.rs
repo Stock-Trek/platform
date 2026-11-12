@@ -1,9 +1,9 @@
 use super::PortfolioService;
-use crate::portfolio::{AccountPortfolio, AccountPortfolios};
+use crate::portfolio::{AccountPortfolios, CexAccountPortfolio};
 use platform_portfolio_ownership::AccountKey;
 
 impl PortfolioService {
-    pub fn account_portfolio(&self, account: &AccountKey) -> Option<AccountPortfolio> {
+    pub fn account_portfolio(&self, account: &AccountKey) -> Option<CexAccountPortfolio> {
         self.state.read().portfolio(account).cloned()
     }
 
@@ -11,7 +11,7 @@ impl PortfolioService {
         &self,
         owner: &str,
         account: &AccountKey,
-    ) -> Option<AccountPortfolio> {
+    ) -> Option<CexAccountPortfolio> {
         let state = self.state.read();
         state
             .is_tracked_for_owner(owner, account)

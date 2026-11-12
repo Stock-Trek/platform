@@ -1,5 +1,5 @@
 use super::{PortfolioState, PortfolioUpdateMetadata, PortfolioUpdateOutcome};
-use crate::portfolio::{AccountPortfolio, PortfolioUpdate};
+use crate::portfolio::{CexAccountPortfolio, PortfolioUpdate};
 use chrono::{DateTime, Utc};
 use platform_portfolio_ownership::AccountKey;
 
@@ -35,11 +35,11 @@ impl PortfolioState {
         PortfolioUpdateOutcome::Applied
     }
 
-    pub fn set_portfolio(&mut self, account: AccountKey, portfolio: AccountPortfolio) -> bool {
+    pub fn set_portfolio(&mut self, account: AccountKey, portfolio: CexAccountPortfolio) -> bool {
         self.apply_update(PortfolioUpdate::new(account, portfolio))
     }
 
-    pub fn portfolio(&self, account: &AccountKey) -> Option<&AccountPortfolio> {
+    pub fn portfolio(&self, account: &AccountKey) -> Option<&CexAccountPortfolio> {
         self.portfolios
             .get(&account.cex_id())
             .and_then(|accounts| accounts.get(account.account_id()))

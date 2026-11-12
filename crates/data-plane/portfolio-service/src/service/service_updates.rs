@@ -1,6 +1,6 @@
 use super::PortfolioService;
 #[cfg(test)]
-use crate::portfolio::AccountPortfolio;
+use crate::portfolio::CexAccountPortfolio;
 use crate::{
     freshness::PortfolioFreshness,
     portfolio::PortfolioUpdate,
@@ -60,7 +60,7 @@ impl PortfolioService {
     }
 
     #[cfg(test)]
-    pub fn apply_portfolio(&self, account: AccountKey, portfolio: AccountPortfolio) -> bool {
+    pub fn apply_portfolio(&self, account: AccountKey, portfolio: CexAccountPortfolio) -> bool {
         self.state.write().set_portfolio(account, portfolio)
     }
 }

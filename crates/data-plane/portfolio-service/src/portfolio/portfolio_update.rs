@@ -1,4 +1,4 @@
-use super::AccountPortfolio;
+use super::CexAccountPortfolio;
 use crate::{AccountKey, portfolio_codec::PortfolioUpdateWire};
 use chrono::{DateTime, Utc};
 use platform_errors::{BpError, BpResult};
@@ -9,14 +9,14 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as DeErr
 pub struct PortfolioUpdate {
     account: AccountKey,
     owner: Option<String>,
-    portfolio: AccountPortfolio,
+    portfolio: CexAccountPortfolio,
     version: u64,
     occurred_at: DateTime<Utc>,
     exchange_time: Option<DateTime<Utc>>,
 }
 
 impl PortfolioUpdate {
-    pub fn new(account: AccountKey, portfolio: AccountPortfolio) -> Self {
+    pub fn new(account: AccountKey, portfolio: CexAccountPortfolio) -> Self {
         Self {
             account,
             owner: None,
@@ -30,7 +30,7 @@ impl PortfolioUpdate {
     pub fn versioned(
         account: AccountKey,
         owner: Option<String>,
-        portfolio: AccountPortfolio,
+        portfolio: CexAccountPortfolio,
         version: u64,
         occurred_at: DateTime<Utc>,
     ) -> Self {
@@ -57,7 +57,7 @@ impl PortfolioUpdate {
         self.owner.as_deref()
     }
 
-    pub fn portfolio(&self) -> &AccountPortfolio {
+    pub fn portfolio(&self) -> &CexAccountPortfolio {
         &self.portfolio
     }
 
@@ -77,7 +77,7 @@ impl PortfolioUpdate {
         self.exchange_time
     }
 
-    pub fn into_parts(self) -> (AccountKey, AccountPortfolio) {
+    pub fn into_parts(self) -> (AccountKey, CexAccountPortfolio) {
         (self.account, self.portfolio)
     }
 
@@ -123,7 +123,7 @@ impl TryFrom<ConnectorPortfolioUpdate> for PortfolioUpdate {
     type Error = BpError;
 
     fn try_from(update: ConnectorPortfolioUpdate) -> BpResult<Self> {
-        let portfolio = AccountPortfolio::new(
+        let portfolio = CexAccountPortfolio::new(
             update
                 .balances()
                 .iter()

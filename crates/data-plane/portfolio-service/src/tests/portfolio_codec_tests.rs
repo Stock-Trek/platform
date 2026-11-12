@@ -1,10 +1,10 @@
-use crate::{AccountKey, AccountPortfolio, PORTFOLIO_UPDATE_SCHEMA_VERSION, PortfolioUpdate};
+use crate::{AccountKey, CexAccountPortfolio, PORTFOLIO_UPDATE_SCHEMA_VERSION, PortfolioUpdate};
 use chrono::{TimeZone, Utc};
 use std::collections::BTreeMap;
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 
 fn update(version: u64) -> PortfolioUpdate {
-    let portfolio = AccountPortfolio::new(
+    let portfolio = CexAccountPortfolio::new(
         BTreeMap::from([(AssetId::Bitcoin, 1.25), (AssetId::TetherUSD, 100.0)]),
         Vec::new(),
     )

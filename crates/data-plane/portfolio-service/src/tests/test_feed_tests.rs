@@ -1,4 +1,4 @@
-use crate::{AccountKey, AccountPortfolio, PortfolioService, PortfolioUpdate};
+use crate::{AccountKey, CexAccountPortfolio, PortfolioService, PortfolioUpdate};
 use platform_exchange_gateway::connector::PortfolioFeed;
 use std::sync::Arc;
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
@@ -53,8 +53,8 @@ impl Fixture {
         AccountKey::new(CexId::Binance, account_id)
     }
 
-    pub fn portfolio(asset_id: AssetId, total: f64) -> AccountPortfolio {
-        AccountPortfolio::new([(asset_id, total)], Vec::new()).expect("valid portfolio")
+    pub fn portfolio(asset_id: AssetId, total: f64) -> CexAccountPortfolio {
+        CexAccountPortfolio::new([(asset_id, total)], Vec::new()).expect("valid portfolio")
     }
 
     pub fn update(account_id: &str, total: f64) -> PortfolioUpdate {

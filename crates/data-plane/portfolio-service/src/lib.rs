@@ -38,7 +38,7 @@ pub use ownership_registry::{OwnershipApply, OwnershipRegistry};
 pub use ownership_source::{OwnershipEventSource, OwnershipMessage};
 pub use platform_portfolio_ownership::AccountKey;
 pub use portfolio::{
-    AccountPortfolio, AccountPortfolios, PORTFOLIO_UPDATE_SCHEMA_VERSION,
+    AccountPortfolios, CexAccountPortfolio, PORTFOLIO_UPDATE_SCHEMA_VERSION,
     PORTFOLIO_UPDATE_STREAM_PREFIX, PORTFOLIO_UPDATE_SUBJECT, PendingOrder, PortfolioUpdate,
 };
 pub use publishing_sink::PublishingPortfolioUpdateSink;
