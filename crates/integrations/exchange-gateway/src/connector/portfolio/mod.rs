@@ -22,7 +22,6 @@ mod portfolio_session;
 mod portfolio_stream;
 mod portfolio_update_apply;
 mod portfolio_update_sink;
-mod reconnect_backoff;
 mod session_state;
 mod watcher;
 
@@ -58,7 +57,5 @@ mod feed_tests;
 mod health_tests;
 #[cfg(test)]
 mod portfolio_test_fakes_tests;
-#[cfg(test)]
-mod reconnect_backoff_tests;
 #[cfg(test)]
 mod session_tests;

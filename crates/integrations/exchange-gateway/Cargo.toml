@@ -10,13 +10,13 @@ platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-exchange-types = { workspace = true }
 platform-metrics = { workspace = true }
+platform-time = { workspace = true }
 platform-type-bridge = { workspace = true }
 platform-types = { workspace = true }
 futures-timer = { workspace = true }
 httpdate = { workspace = true }
 iris = { workspace = true }
 parking_lot = { workspace = true }
-rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["rustls"] }
 secrecy = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

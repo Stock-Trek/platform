@@ -16,7 +16,6 @@ mod portfolio;
 mod portfolio_codec;
 mod publishing_sink;
 mod read_model;
-mod retry_backoff;
 mod runner;
 mod service;
 mod state;

@@ -1,13 +1,13 @@
 use crate::connector::portfolio::{
     ConnectorPortfolioUpdate, ConnectorState, PortfolioUpdateApply, PortfolioUpdateSink,
-    health_reporter::HealthReporter, reconnect_backoff::ReconnectBackoff,
-    session_state::SessionState,
+    health_reporter::HealthReporter, session_state::SessionState,
 };
 use crate::connector::portfolio::{PortfolioExchange, PortfolioSession};
 use chrono::Utc;
 use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::portfolio::{AccountEvent, AccountPositionEvent, Credential};
 use platform_metrics::PortfolioMetrics;
+use platform_time::RetryBackoff;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -35,6 +35,7 @@ impl Watcher {
         let mut state = SessionState::new();
         let mut shutdown = self.shutdown.clone();
         let mut credential = None;
+        let mut reconnect = RetryBackoff::constant(self.exchange.reconnect_backoff());
         loop {
             if *shutdown.borrow() {
                 return;
@@ -56,7 +57,7 @@ impl Watcher {
                     self.publish_health(ConnectorState::Disconnected, state.last_update)
                         .await;
                     tokio::select! {
-                        _ = sleep(ReconnectBackoff::new(self.exchange.reconnect_backoff()).delay()) => {}
+                        _ = sleep(reconnect.next_delay()) => {}
                         changed = shutdown.changed() => {
                             if changed.is_err() || *shutdown.borrow() {
                                 return;

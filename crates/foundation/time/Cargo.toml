@@ -6,3 +6,4 @@ edition.workspace = true
 [dependencies]
 platform-errors = { workspace = true }
 platform-types = { workspace = true }
+rand = { workspace = true }

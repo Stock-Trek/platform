@@ -3,6 +3,7 @@ use async_trait::async_trait;
 use platform_errors::BuildResult;
 use platform_market_data::GapMarker;
 use platform_nats::{JetStream, KeyValue, NatsSubject};
+use platform_time::RetryPolicy;
 use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use std::{collections::HashMap, time::Duration};
@@ -12,6 +13,8 @@ use tracing::warn;
 
 pub(crate) const RETRY_DELAY: Duration = Duration::from_secs(5);
 pub(crate) const MAX_RETRY_DELAY: Duration = Duration::from_secs(5 * 60);
+const RETRY_POLICY: RetryPolicy =
+    RetryPolicy::exponential(usize::MAX, RETRY_DELAY, MAX_RETRY_DELAY).without_jitter();
 
 /// A gap range that still needs data, together with its retry schedule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -84,10 +87,7 @@ impl PendingGap {
     }
 
     pub fn retry_delay(attempts: u32) -> Duration {
-        let exponent = attempts.min(16);
-        RETRY_DELAY
-            .saturating_mul(1_u32 << exponent)
-            .min(MAX_RETRY_DELAY)
+        RETRY_POLICY.delay(usize::try_from(attempts).unwrap_or(usize::MAX))
     }
 
     pub fn retry_at(now: TimestampMilliseconds, attempts: u32) -> TimestampMilliseconds {

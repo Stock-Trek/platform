@@ -1,5 +1,6 @@
 use platform_errors::BuildResult;
 use platform_runtime::Runtime;
+use platform_time::RetryBackoff;
 use std::{
     future::Future,
     time::{Duration, Instant},
@@ -18,7 +19,8 @@ impl Supervisor {
         F: FnMut() -> Fut,
         Fut: Future<Output = BuildResult<()>>,
     {
-        let mut restart_delay = Self::INITIAL_RESTART_DELAY;
+        let mut restart =
+            RetryBackoff::exponential(Self::INITIAL_RESTART_DELAY, Self::MAX_RESTART_DELAY);
         let shutdown = Runtime::shutdown_signal();
         tokio::pin!(shutdown);
 
@@ -45,9 +47,9 @@ impl Supervisor {
             }
 
             if started_at.elapsed() >= Self::HEALTHY_RUN_THRESHOLD {
-                restart_delay = Self::INITIAL_RESTART_DELAY;
+                restart.reset();
             }
-            let delay = Self::jittered_delay(restart_delay);
+            let delay = restart.next_delay();
             tokio::select! {
                 _ = tokio::time::sleep(delay) => {}
                 result = &mut shutdown => {
@@ -55,18 +57,6 @@ impl Supervisor {
                     return Ok(());
                 }
             }
-            restart_delay = Self::next_restart_delay(restart_delay);
         }
-    }
-
-    pub(crate) fn next_restart_delay(current: Duration) -> Duration {
-        (current * 2).min(Self::MAX_RESTART_DELAY)
-    }
-
-    pub(crate) fn jittered_delay(base: Duration) -> Duration {
-        // Jitter the upper half of the delay so replicas that failed together do
-        // not all reconnect in lockstep when a shared dependency recovers.
-        let jitter = 0.5 + rand::random::<f64>() * 0.5;
-        base.mul_f64(jitter).min(Self::MAX_RESTART_DELAY)
     }
 }

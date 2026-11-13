@@ -1,11 +1,8 @@
 mod catalog_metadata;
 mod commit;
-mod retry;
 
 #[cfg(test)]
 mod catalog_metadata_tests;
-#[cfg(test)]
-mod retry_tests;
 mod scan;
 
 use crate::iceberg::catalog::{ArchiveCatalog, IcebergDataFile};
