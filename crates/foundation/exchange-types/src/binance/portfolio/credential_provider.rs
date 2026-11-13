@@ -81,7 +81,9 @@ impl BinanceCredentialProvider {
 #[async_trait]
 impl CredentialProvider for BinanceCredentialProvider {
     async fn acquire(&self) -> Result<Option<Credential>, AuthError> {
-        self.create().await.map(|value| Some(self.credential(value)))
+        self.create()
+            .await
+            .map(|value| Some(self.credential(value)))
     }
 
     async fn renew(&self, credential: &Credential) -> Result<Credential, AuthError> {

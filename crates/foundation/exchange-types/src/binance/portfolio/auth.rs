@@ -17,7 +17,8 @@ impl BinanceExchange {
         context: PortfolioAuthContext,
     ) -> BuildResult<PortfolioAuth> {
         let signer = Self::signer(context.credentials())?;
-        let provider = BinanceCredentialProvider::new(context.http(), context.credentials().clone());
+        let provider =
+            BinanceCredentialProvider::new(context.http(), context.credentials().clone());
         let binder = BinanceAuthBinder::new();
         let lifecycle = Self::portfolio_session_lifecycle(context.refresh_interval());
         Ok(PortfolioAuth::new(provider, binder, lifecycle, signer))
