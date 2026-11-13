@@ -15,6 +15,7 @@ mod order_request_tests;
 mod ownership_tests;
 mod portfolio_codec_tests;
 mod read_model_tests;
+mod retry_backoff_tests;
 mod service_tests;
 mod state_tests;
 mod test_feed_tests;

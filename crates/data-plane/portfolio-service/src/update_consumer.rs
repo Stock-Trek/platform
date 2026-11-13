@@ -1,6 +1,6 @@
 use crate::{
     AccountKey, PortfolioService, PortfolioUpdateOutcome, PortfolioUpdateSource,
-    read_model::PortfolioReadModelStore,
+    read_model::PortfolioReadModelStore, retry_backoff::RetryBackoff,
 };
 use platform_errors::BuildResult;
 use platform_metrics::PortfolioMetrics;
@@ -105,6 +105,7 @@ impl PortfolioUpdateConsumer {
         F: Future<Output = BuildResult<()>> + Send,
     {
         tokio::pin!(shutdown);
+        let mut backoff = RetryBackoff::new(self.retry_backoff);
         loop {
             tokio::select! {
                 signal = &mut shutdown => return signal,
@@ -113,8 +114,10 @@ impl PortfolioUpdateConsumer {
                         tracing::warn!(%error, "portfolio update consumer failed; retrying");
                         tokio::select! {
                             signal = &mut shutdown => return signal,
-                            _ = tokio::time::sleep(self.retry_backoff) => {}
+                            _ = tokio::time::sleep(backoff.delay()) => {}
                         }
+                    } else {
+                        backoff.reset();
                     }
                 }
             }
