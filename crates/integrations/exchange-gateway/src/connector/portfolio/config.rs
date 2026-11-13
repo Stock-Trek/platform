@@ -1,12 +1,11 @@
 use crate::connector::portfolio::{
-    ConnectorHealthSink, ExchangePortfolioConnector, GatewayPortfolioTransport, NoopPortfolioFeed,
+    BinancePortfolioTransport, ConnectorHealthSink, ExchangePortfolioConnector, NoopPortfolioFeed,
     PortfolioCredentialSource, PortfolioFeed, PortfolioTransport, StaticPortfolioCredentials,
 };
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::{
-    api_key_credential::ApiKeyCredentials,
-    binance::{exchange::BinanceExchange, portfolio::config::BinancePortfolioConfig},
+    api_key_credential::ApiKeyCredentials, binance::portfolio::config::BinancePortfolioConfig,
 };
 use platform_type_bridge::BinanceConverter;
 use secrecy::{ExposeSecret, SecretString};
@@ -43,8 +42,7 @@ impl PortfolioConnectorConfig {
                     },
                 );
             }
-            transports.push(Arc::new(GatewayPortfolioTransport::new(
-                BinanceExchange,
+            transports.push(Arc::new(BinancePortfolioTransport::new(
                 binance.rest_url(),
                 binance.websocket_url(),
                 binance.listen_key_refresh(),

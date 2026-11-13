@@ -1,18 +1,20 @@
-use crate::connector::portfolio::{AccountEventStream, PortfolioTransport};
+use crate::connector::portfolio::{PortfolioEventStream, PortfolioTransport};
 use platform_errors::BuildResult;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
-    portfolio::{AccountEvent, AccountSnapshot},
+    portfolio::{
+        AccountEvent, AccountSnapshot, Credential, ExchangeAdapter, RenewalSchedule, WsConnection,
+    },
 };
-use std::sync::Arc;
+use std::{sync::Arc, time::Instant};
 use stock_trek_types::cex::account_id::AccountId;
-use tokio::sync::Mutex;
 
 pub struct PortfolioSession {
     account: AccountId,
     credentials: ApiKeyCredentials,
-    listen_key: String,
-    stream: Mutex<Box<dyn AccountEventStream>>,
+    credential: Option<Credential>,
+    adapter: ExchangeAdapter,
+    stream: Box<dyn PortfolioEventStream>,
     transport: Arc<dyn PortfolioTransport>,
 }
 
@@ -22,19 +24,61 @@ impl PortfolioSession {
         account: &AccountId,
         credentials: &ApiKeyCredentials,
     ) -> BuildResult<Self> {
-        let listen_key = transport.create_listen_key(credentials).await?;
-        let stream = match transport.open_stream(&listen_key).await {
+        Self::open_with_credential(transport, account, credentials, None).await
+    }
+
+    pub async fn open_with_credential(
+        transport: Arc<dyn PortfolioTransport>,
+        account: &AccountId,
+        credentials: &ApiKeyCredentials,
+        previous: Option<Credential>,
+    ) -> BuildResult<Self> {
+        let adapter = transport.adapter(credentials).await?;
+        let credential = match previous {
+            Some(credential)
+                if adapter.lifecycle.reconnect_reuses_credential()
+                    && !credential.is_expired(Instant::now()) =>
+            {
+                Some(credential)
+            }
+            _ => adapter.credential_provider.acquire().await?,
+        };
+        let mut request = transport.connect_request()?;
+        adapter.auth_binder.prepare_connect(
+            &mut request,
+            credential.as_ref(),
+            adapter.signer.as_ref(),
+        )?;
+        let stream = match transport.open_stream(request).await {
             Ok(stream) => stream,
             Err(error) => {
-                let _ = transport.close_listen_key(credentials, &listen_key).await;
+                if let Some(credential) = credential.as_ref()
+                    && adapter.lifecycle.revoke_on_close()
+                {
+                    let _ = adapter.credential_provider.revoke(credential).await;
+                }
                 return Err(error);
             }
         };
+        let connection: &dyn WsConnection = stream.as_ref();
+        if let Err(error) = adapter
+            .auth_binder
+            .bind(connection, credential.as_ref(), adapter.signer.as_ref())
+            .await
+        {
+            if let Some(credential) = credential.as_ref()
+                && adapter.lifecycle.revoke_on_close()
+            {
+                let _ = adapter.credential_provider.revoke(credential).await;
+            }
+            return Err(error.into());
+        }
         Ok(Self {
             account: account.clone(),
             credentials: credentials.clone(),
-            listen_key,
-            stream: Mutex::new(stream),
+            credential,
+            adapter,
+            stream,
             transport,
         })
     }
@@ -43,20 +87,45 @@ impl PortfolioSession {
         self.transport.account_snapshot(&self.credentials).await
     }
 
-    pub async fn refresh(&self) -> BuildResult<()> {
-        self.transport
-            .keepalive_listen_key(&self.credentials, &self.listen_key)
-            .await
+    pub async fn refresh(&mut self) -> BuildResult<()> {
+        let Some(credential) = self.credential.as_ref() else {
+            return Ok(());
+        };
+        if !credential.renewable {
+            return Ok(());
+        }
+        self.credential = Some(self.adapter.credential_provider.renew(credential).await?);
+        Ok(())
     }
 
     pub async fn close(&mut self) -> BuildResult<()> {
-        self.transport
-            .close_listen_key(&self.credentials, &self.listen_key)
-            .await
+        let Some(credential) = self.credential.take() else {
+            return Ok(());
+        };
+        if self.adapter.lifecycle.revoke_on_close() {
+            self.adapter.credential_provider.revoke(&credential).await?;
+        }
+        Ok(())
     }
 
     pub async fn next(&mut self) -> BuildResult<Option<AccountEvent>> {
-        self.stream.lock().await.next().await
+        self.stream.next().await
+    }
+
+    pub fn credential(&self) -> Option<&Credential> {
+        self.credential.as_ref()
+    }
+
+    pub fn renewal_schedule(&self) -> Option<RenewalSchedule> {
+        self.adapter.lifecycle.scheduled_renewal()
+    }
+
+    pub fn max_session_lifetime(&self) -> Option<std::time::Duration> {
+        self.adapter.lifecycle.max_session_lifetime()
+    }
+
+    pub fn reconnect_reuses_credential(&self) -> bool {
+        self.adapter.lifecycle.reconnect_reuses_credential()
     }
 }
 
@@ -65,7 +134,10 @@ impl std::fmt::Debug for PortfolioSession {
         formatter
             .debug_struct("PortfolioSession")
             .field("account", &self.account)
-            .field("listen_key", &"[redacted]")
+            .field(
+                "credential",
+                &self.credential.as_ref().map(|_| "[redacted]"),
+            )
             .finish()
     }
 }

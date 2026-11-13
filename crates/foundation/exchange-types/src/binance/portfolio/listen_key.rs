@@ -104,7 +104,7 @@ impl ETHttpRequest for BinanceListenKeyRequest {
             method: self.http_method(),
             path: self.http_endpoint().to_string(),
             query: (!query.is_empty()).then_some(query),
-            headers: vec![("X-MBX-APIKEY".to_string(), signer.api_key())],
+            headers: vec![("X-MBX-APIKEY".to_string(), signer.api_key().to_string())],
             body: None,
         })
     }
@@ -114,6 +114,16 @@ impl ETHttpRequest for BinanceListenKeyRequest {
 pub struct BinanceListenKeyResponse {
     #[serde(rename = "listenKey", default)]
     listen_key: Option<String>,
+}
+
+impl BinanceExchange {
+    pub fn listen_key(response: BinanceResponse<BinanceListenKeyResponse>) -> BuildResult<String> {
+        Self::success(response)?.require_listen_key()
+    }
+
+    pub fn listen_key_ack(response: BinanceResponse<BinanceListenKeyResponse>) -> BuildResult<()> {
+        Self::success(response).map(|_| ())
+    }
 }
 
 impl BinanceListenKeyResponse {

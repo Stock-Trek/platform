@@ -1,10 +1,17 @@
 use crate::binance::portfolio::listen_key::{BinanceListenKeyRequest, BinanceListenKeyResponse};
 use crate::{
-    api_key_credential::ApiKeyCredentials, binance::exchange::BinanceExchange, http::HttpMethod,
-    request::ETHttpRequest, signer::Signer,
+    api_key_credential::ApiKeyCredentials,
+    binance::{
+        exchange::BinanceExchange,
+        response::{BinanceMetadata, BinanceResponse, BinanceResponsePayload},
+    },
+    http::HttpMethod,
+    request::ETHttpRequest,
+    signer::Signer,
 };
 use secrecy::SecretString;
 use serde_json::json;
+use std::collections::HashMap;
 
 struct Fixture;
 
@@ -63,4 +70,18 @@ fn requires_a_non_empty_listen_key() {
     let response =
         serde_json::from_value::<BinanceListenKeyResponse>(json!({"listenKey": ""})).unwrap();
     assert!(response.require_listen_key().is_err());
+}
+
+#[test]
+fn acknowledges_an_empty_listen_key_response() {
+    let response = BinanceResponse {
+        metadata: BinanceMetadata {
+            retry_after: None,
+            status: 200,
+            usage: HashMap::new(),
+            websocket_id: None,
+        },
+        payload: BinanceResponsePayload::Success(BinanceListenKeyResponse::default()),
+    };
+    assert!(BinanceExchange::listen_key_ack(response).is_ok());
 }

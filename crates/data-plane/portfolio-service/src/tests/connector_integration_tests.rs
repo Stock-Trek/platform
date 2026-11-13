@@ -7,12 +7,16 @@ use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use platform_exchange_gateway::{
     AccountEventStream, ConnectorPortfolioUpdate, ExchangePortfolioConnector,
-    NoopConnectorHealthSink, NoopPortfolioFeed, PortfolioCredentialSource, PortfolioFeed,
-    PortfolioTransport, PortfolioUpdateApply, PortfolioUpdateSink,
+    NoopConnectorHealthSink, NoopPortfolioFeed, PortfolioCredentialSource, PortfolioEventStream,
+    PortfolioFeed, PortfolioTransport, PortfolioUpdateApply, PortfolioUpdateSink,
 };
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
-    portfolio::{AccountEvent, AccountPositionEvent, AccountSnapshot},
+    portfolio::{
+        AccountEvent, AccountPositionEvent, AccountSnapshot, AuthBinder, AuthError, ConnectRequest,
+        Credential, CredentialProvider, ExchangeAdapter, RenewalSchedule, SessionLifecyclePolicy,
+        Signer, WsConnection,
+    },
 };
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use secrecy::SecretString;
@@ -22,7 +26,7 @@ use std::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 
@@ -46,39 +50,97 @@ struct Transport {
     closes: Arc<AtomicUsize>,
 }
 
+struct TestSigner;
+
+impl Signer for TestSigner {
+    fn api_key(&self) -> &str {
+        "api-key"
+    }
+
+    fn sign(&self, payload: &[u8]) -> Result<Vec<u8>, AuthError> {
+        Ok(payload.to_vec())
+    }
+}
+
+struct TestCredentialProvider {
+    closes: Arc<AtomicUsize>,
+}
+
+#[async_trait]
+impl CredentialProvider for TestCredentialProvider {
+    async fn acquire(&self) -> Result<Option<Credential>, AuthError> {
+        let issued_at = Instant::now();
+        Ok(Some(Credential {
+            value: "listen-key".to_string(),
+            issued_at,
+            expires_at: Some(issued_at + Duration::from_hours(1)),
+            renewable: true,
+        }))
+    }
+
+    async fn renew(&self, credential: &Credential) -> Result<Credential, AuthError> {
+        Ok(credential.clone())
+    }
+
+    async fn revoke(&self, _credential: &Credential) -> Result<(), AuthError> {
+        self.closes.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+struct TestBinder;
+
+#[async_trait]
+impl AuthBinder for TestBinder {}
+
+struct TestLifecycle;
+
+impl SessionLifecyclePolicy for TestLifecycle {
+    fn max_session_lifetime(&self) -> Option<Duration> {
+        None
+    }
+
+    fn scheduled_renewal(&self) -> Option<RenewalSchedule> {
+        Some(RenewalSchedule::new(
+            Duration::from_secs(3600),
+            Duration::ZERO,
+        ))
+    }
+
+    fn reconnect_reuses_credential(&self) -> bool {
+        true
+    }
+
+    fn revoke_on_close(&self) -> bool {
+        true
+    }
+}
+
 #[async_trait]
 impl PortfolioTransport for Transport {
     fn cex_id(&self) -> CexId {
         CexId::Binance
     }
 
-    fn refresh_interval(&self) -> Duration {
-        Duration::from_secs(3600)
-    }
-
     fn reconnect_backoff(&self) -> Duration {
         Duration::from_millis(10)
     }
 
-    async fn create_listen_key(&self, _credentials: &ApiKeyCredentials) -> BuildResult<String> {
-        Ok("listen-key".to_string())
+    fn connect_request(&self) -> BuildResult<ConnectRequest> {
+        Ok(ConnectRequest::new(
+            "ws://localhost/ws".parse().expect("url"),
+        ))
     }
 
-    async fn keepalive_listen_key(
-        &self,
-        _credentials: &ApiKeyCredentials,
-        _listen_key: &str,
-    ) -> BuildResult<()> {
-        Ok(())
-    }
-
-    async fn close_listen_key(
-        &self,
-        _credentials: &ApiKeyCredentials,
-        _listen_key: &str,
-    ) -> BuildResult<()> {
-        self.closes.fetch_add(1, Ordering::SeqCst);
-        Ok(())
+    async fn adapter(&self, _credentials: &ApiKeyCredentials) -> BuildResult<ExchangeAdapter> {
+        Ok(ExchangeAdapter::new(
+            Box::new(TestCredentialProvider {
+                closes: Arc::clone(&self.closes),
+            }),
+            Box::new(TestBinder),
+            Box::new(TestLifecycle),
+            Box::new(TestSigner),
+        ))
     }
 
     async fn account_snapshot(
@@ -91,7 +153,10 @@ impl PortfolioTransport for Transport {
         ))
     }
 
-    async fn open_stream(&self, _listen_key: &str) -> BuildResult<Box<dyn AccountEventStream>> {
+    async fn open_stream(
+        &self,
+        _request: ConnectRequest,
+    ) -> BuildResult<Box<dyn PortfolioEventStream>> {
         Ok(Box::new(Stream {
             events: VecDeque::from([AccountEvent::Position(AccountPositionEvent::new(
                 42,
@@ -113,6 +178,17 @@ impl AccountEventStream for Stream {
             return Ok(Some(event));
         }
         std::future::pending().await
+    }
+}
+
+#[async_trait]
+impl WsConnection for Stream {
+    async fn send_text(&self, _payload: &str) -> Result<(), AuthError> {
+        Ok(())
+    }
+
+    async fn send_binary(&self, _payload: &[u8]) -> Result<(), AuthError> {
+        Ok(())
     }
 }
 

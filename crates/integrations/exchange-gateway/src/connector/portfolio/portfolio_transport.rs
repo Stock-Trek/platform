@@ -1,36 +1,34 @@
 use crate::connector::portfolio::AccountEventStream;
 use async_trait::async_trait;
 use platform_errors::BuildResult;
-use platform_exchange_types::{api_key_credential::ApiKeyCredentials, portfolio::AccountSnapshot};
+use platform_exchange_types::{
+    api_key_credential::ApiKeyCredentials,
+    portfolio::{AccountSnapshot, ConnectRequest, ExchangeAdapter, WsConnection},
+};
 use std::time::Duration;
 use stock_trek_types::cex::cex_id::CexId;
+
+pub trait PortfolioEventStream: AccountEventStream + WsConnection {}
+
+impl<T> PortfolioEventStream for T where T: AccountEventStream + WsConnection + Send {}
 
 #[async_trait]
 pub trait PortfolioTransport: Send + Sync {
     fn cex_id(&self) -> CexId;
 
-    fn refresh_interval(&self) -> Duration;
-
     fn reconnect_backoff(&self) -> Duration;
 
-    async fn create_listen_key(&self, credentials: &ApiKeyCredentials) -> BuildResult<String>;
+    fn connect_request(&self) -> BuildResult<ConnectRequest>;
 
-    async fn keepalive_listen_key(
-        &self,
-        credentials: &ApiKeyCredentials,
-        listen_key: &str,
-    ) -> BuildResult<()>;
-
-    async fn close_listen_key(
-        &self,
-        credentials: &ApiKeyCredentials,
-        listen_key: &str,
-    ) -> BuildResult<()>;
+    async fn adapter(&self, credentials: &ApiKeyCredentials) -> BuildResult<ExchangeAdapter>;
 
     async fn account_snapshot(
         &self,
         credentials: &ApiKeyCredentials,
     ) -> BuildResult<AccountSnapshot>;
 
-    async fn open_stream(&self, listen_key: &str) -> BuildResult<Box<dyn AccountEventStream>>;
+    async fn open_stream(
+        &self,
+        request: ConnectRequest,
+    ) -> BuildResult<Box<dyn PortfolioEventStream>>;
 }

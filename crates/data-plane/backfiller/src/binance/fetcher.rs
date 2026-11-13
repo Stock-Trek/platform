@@ -40,7 +40,7 @@ impl BinanceGapFetcher {
             ));
         }
         let signer = Signer::try_new(credentials, config.signing_algorithm, ByteEncoder::Base64)?;
-        let api_key = signer.api_key();
+        let api_key = signer.api_key().to_string();
         let connector = Connector::try_new_http_reqwest(
             config.exchange_http_url.clone(),
             BinanceExchange,

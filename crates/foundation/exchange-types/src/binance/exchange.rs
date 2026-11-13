@@ -3,10 +3,7 @@ use crate::{
     binance::{
         account_status::{BinanceAccountStatusRequest, BinanceAccountStatusResponse},
         klines::{BinanceKlinesRequest, BinanceKlinesResponse},
-        portfolio::{
-            event_parser::EventParser,
-            listen_key::{BinanceListenKeyRequest, BinanceListenKeyResponse},
-        },
+        portfolio::event_parser::EventParser,
         response::{BinanceResponse, BinanceResponsePayload},
         time::{BinanceTimeRequest, BinanceTimeResponse},
         urls::BinanceUrls,
@@ -98,7 +95,7 @@ impl BinanceExchange {
         )
     }
 
-    fn success<R>(response: BinanceResponse<R>) -> BuildResult<R> {
+    pub(crate) fn success<R>(response: BinanceResponse<R>) -> BuildResult<R> {
         match response.payload {
             BinanceResponsePayload::Success(payload) => Ok(payload),
             BinanceResponsePayload::Failure(error) => Err(BuildError::Exchange(
@@ -137,28 +134,7 @@ impl ETExchangeKlinesWebsocket for BinanceExchange {
 }
 
 impl ETExchangePortfolio for BinanceExchange {
-    type ListenKeyRequest = BinanceListenKeyRequest;
     type SnapshotRequest = BinanceAccountStatusRequest;
-
-    fn listen_key_request() -> Self::ListenKeyRequest {
-        BinanceListenKeyRequest::create()
-    }
-
-    fn keepalive_listen_key_request(listen_key: &str) -> Self::ListenKeyRequest {
-        BinanceListenKeyRequest::keepalive(listen_key)
-    }
-
-    fn close_listen_key_request(listen_key: &str) -> Self::ListenKeyRequest {
-        BinanceListenKeyRequest::close(listen_key)
-    }
-
-    fn listen_key(response: BinanceResponse<BinanceListenKeyResponse>) -> BuildResult<String> {
-        Self::success(response)?.require_listen_key()
-    }
-
-    fn listen_key_ack(response: BinanceResponse<BinanceListenKeyResponse>) -> BuildResult<()> {
-        Self::success(response).map(|_| ())
-    }
 
     fn account_snapshot_request() -> Self::SnapshotRequest {
         BinanceAccountStatusRequest::new()
