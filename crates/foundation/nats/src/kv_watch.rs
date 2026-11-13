@@ -1,6 +1,7 @@
 use async_nats::jetstream::kv::{Operation, Store, Watch};
 use futures::StreamExt;
 use platform_errors::BuildResult;
+use platform_time::RetryBackoff;
 use std::pin::Pin;
 use std::time::Duration;
 use tokio::time::sleep;
@@ -32,6 +33,7 @@ impl KeyValueWatch {
     }
 
     pub async fn next(&mut self) -> BuildResult<KeyValueChange> {
+        let mut backoff = RetryBackoff::constant(WATCH_RETRY_BACKOFF).without_jitter();
         loop {
             if self.watch.is_none() {
                 self.connect().await;
@@ -50,18 +52,19 @@ impl KeyValueWatch {
                 Some(Err(error)) => {
                     warn!(%error, key = %self.key, "KV watch failed; reconnecting");
                     self.watch = None;
-                    sleep(WATCH_RETRY_BACKOFF).await;
+                    sleep(backoff.next_delay()).await;
                 }
                 None => {
                     warn!(key = %self.key, "KV watch ended; reconnecting");
                     self.watch = None;
-                    sleep(WATCH_RETRY_BACKOFF).await;
+                    sleep(backoff.next_delay()).await;
                 }
             }
         }
     }
 
     async fn connect(&mut self) {
+        let mut backoff = RetryBackoff::constant(WATCH_RETRY_BACKOFF).without_jitter();
         loop {
             let opened = match self.last_revision {
                 Some(revision) => {
@@ -79,7 +82,7 @@ impl KeyValueWatch {
                 Err(error) => {
                     warn!(%error, key = %self.key, "failed to open KV watch; retrying");
                     self.last_revision = None;
-                    sleep(WATCH_RETRY_BACKOFF).await;
+                    sleep(backoff.next_delay()).await;
                 }
             }
         }

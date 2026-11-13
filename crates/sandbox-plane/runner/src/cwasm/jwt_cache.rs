@@ -2,10 +2,12 @@ use crate::cwasm::jwt_fetcher::{FetchedJwt, JwtFetcher};
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
 use platform_sigv4::SigV4Config;
+use platform_time::RetryPolicy;
 use std::{io, sync::Arc, time::Duration};
 use tokio::{sync::watch, time::Instant};
 
 const FAILURE_BACKOFF: Duration = Duration::from_secs(1);
+const FAILURE_RETRY: RetryPolicy = RetryPolicy::constant(1, FAILURE_BACKOFF).without_jitter();
 
 struct CachedJwt {
     token: String,
@@ -167,7 +169,7 @@ impl JwtCache {
         let generation = {
             let mut state = self.state.lock();
             state.refreshing = false;
-            state.retry_after = Some(Instant::now() + FAILURE_BACKOFF);
+            state.retry_after = Some(Instant::now() + FAILURE_RETRY.delay(0));
             state.generation = state.generation.wrapping_add(1);
             state.generation
         };

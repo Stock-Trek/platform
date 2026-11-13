@@ -14,6 +14,7 @@ use async_nats::{
 };
 use futures::StreamExt;
 use platform_errors::BuildResult;
+use platform_time::RetryBackoff;
 use std::time::Duration;
 
 const DEFAULT_EXPIRES: Duration = Duration::from_secs(1);
@@ -292,12 +293,13 @@ impl JetStreamConsumer {
         expires: Duration,
         retry_backoff: Duration,
     ) -> Vec<Message> {
+        let mut backoff = RetryBackoff::constant(retry_backoff).without_jitter();
         loop {
             match self.fetch(batch, expires).await {
                 Ok(messages) => return messages,
                 Err(error) => {
                     tracing::warn!(%error, "JetStream fetch failed; retrying");
-                    tokio::time::sleep(retry_backoff).await;
+                    tokio::time::sleep(backoff.next_delay()).await;
                 }
             }
         }

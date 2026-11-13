@@ -1,4 +1,4 @@
-use crate::iceberg::catalog::iceberg_catalog::{IcebergCatalog, retry::RetryPolicy};
+use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use crate::iceberg::{ArchiveIcebergTable, catalog::IcebergDataFile};
 use iceberg::{
     spec::{DataContentType, DataFile, DataFileBuilder, DataFileFormat, Struct},
@@ -6,11 +6,13 @@ use iceberg::{
     transaction::{ApplyTransactionAction, Transaction},
 };
 use platform_errors::{BuildError, BuildResult};
+use platform_time::RetryPolicy;
 use std::time::Duration;
 use tracing::{info, warn};
 
 const MAX_COMMIT_ATTEMPTS: usize = 4;
 const COMMIT_BACKOFF: Duration = Duration::from_millis(250);
+const COMMIT_MAX_BACKOFF: Duration = Duration::from_secs(1);
 
 enum CommitOutcome {
     Applied,
@@ -28,7 +30,7 @@ impl IcebergCatalog {
             return Ok(());
         }
 
-        let retry = RetryPolicy::new(MAX_COMMIT_ATTEMPTS, COMMIT_BACKOFF);
+        let retry = RetryPolicy::linear(MAX_COMMIT_ATTEMPTS, COMMIT_BACKOFF, COMMIT_MAX_BACKOFF);
         let mut last_error = None;
         for attempt in 1..=retry.max_attempts() {
             match self
@@ -39,7 +41,7 @@ impl IcebergCatalog {
                 CommitOutcome::Retry(error) => last_error = Some(error),
             }
             if retry.should_retry(attempt) {
-                retry.sleep(attempt).await;
+                tokio::time::sleep(retry.delay(attempt - 1)).await;
             }
         }
 

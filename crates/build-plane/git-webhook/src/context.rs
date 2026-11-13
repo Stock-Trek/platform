@@ -9,7 +9,7 @@ use platform_errors::{BuildError, BuildResult, ErrorType, SecretsError};
 use platform_github::HostAllowlist;
 use platform_metrics::SecretMetrics;
 use platform_sqs::{Sqs, SqsConfig};
-use platform_time::{Deadline, Jitter, Timeouts};
+use platform_time::{Deadline, RetryPolicy, Timeouts};
 use std::{
     sync::Arc,
     time::{Duration, Instant, SystemTime},
@@ -154,7 +154,7 @@ impl RsWebhookContext {
                 if !error.retryability().is_retryable() {
                     return Err(error);
                 }
-                let retry_after = Jitter::delay(self.failure_backoff);
+                let retry_after = RetryPolicy::constant(1, self.failure_backoff).delay(0);
                 *self.backoff_until.lock().await = Some(Instant::now() + retry_after);
                 Err(BuildError::Secrets(SecretsError::Unavailable {
                     retry_after,

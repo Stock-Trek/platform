@@ -9,12 +9,14 @@ use platform_archive::{
 use platform_errors::BuildResult;
 use platform_metrics::MarketDataMetrics;
 use platform_metrics::S3_OPERATION_ARCHIVE_UPLOAD;
+use platform_time::RetryPolicy;
 use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
 use tracing::{info, warn};
 
-const UPLOAD_MAX_ATTEMPTS: u32 = 3;
+const UPLOAD_MAX_ATTEMPTS: usize = 3;
 const UPLOAD_RETRY_BACKOFF: Duration = Duration::from_millis(500);
+const UPLOAD_MAX_BACKOFF: Duration = Duration::from_millis(500 * UPLOAD_MAX_ATTEMPTS as u64);
 
 /// Writes a batch of de-duplicated records to long-term storage.
 #[async_trait]
@@ -68,17 +70,23 @@ impl S3ParquetSink {
     }
 
     async fn upload_with_retry(&self, key: &ObjectKey, bytes: Bytes) -> BuildResult<()> {
-        let mut attempt = 1_u32;
+        let retry = RetryPolicy::linear(
+            UPLOAD_MAX_ATTEMPTS,
+            UPLOAD_RETRY_BACKOFF,
+            UPLOAD_MAX_BACKOFF,
+        )
+        .without_jitter();
+        let mut attempt = 1_usize;
         loop {
             match S3::upload_bytes(&self.transfer_client, &self.bucket, key, bytes.clone()).await {
                 Ok(()) => return Ok(()),
                 Err(error) => {
-                    if attempt >= UPLOAD_MAX_ATTEMPTS {
+                    if !retry.should_retry(attempt) {
                         return Err(error);
                     }
                     MarketDataMetrics::record_s3_retry(S3_OPERATION_ARCHIVE_UPLOAD);
                     warn!(%error, attempt, "S3 upload failed, retrying");
-                    sleep(UPLOAD_RETRY_BACKOFF * attempt).await;
+                    sleep(retry.delay(attempt - 1)).await;
                     attempt += 1;
                 }
             }

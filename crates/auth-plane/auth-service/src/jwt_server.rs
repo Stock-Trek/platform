@@ -2,6 +2,7 @@ use crate::{AuthService, jwt_server_connection::JwtServerConnection};
 use platform_errors::{BuildError, BuildResult};
 use platform_runtime::Runtime;
 use platform_sigv4::SigV4Config;
+use platform_time::RetryBackoff;
 use std::{future::Future, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{
     net::TcpListener,
@@ -14,32 +15,6 @@ const MAX_CONNECTIONS: usize = 256;
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 const ACCEPT_BACKOFF_INITIAL: Duration = Duration::from_millis(100);
 const ACCEPT_BACKOFF_MAXIMUM: Duration = Duration::from_secs(5);
-
-pub(super) struct JwtServerBackoff {
-    initial: Duration,
-    maximum: Duration,
-    next: Duration,
-}
-
-impl JwtServerBackoff {
-    pub(super) fn new(initial: Duration, maximum: Duration) -> Self {
-        Self {
-            initial,
-            maximum,
-            next: initial.min(maximum),
-        }
-    }
-
-    pub(super) fn next_delay(&mut self) -> Duration {
-        let delay = self.next;
-        self.next = self.next.saturating_mul(2).min(self.maximum);
-        delay
-    }
-
-    pub(super) fn reset(&mut self) {
-        self.next = self.initial.min(self.maximum);
-    }
-}
 
 pub struct JwtServer {
     listener: TcpListener,
@@ -79,7 +54,8 @@ impl JwtServer {
     {
         let (shutdown_tx, shutdown_rx) = watch::channel(false);
         let mut connections = JoinSet::new();
-        let mut backoff = JwtServerBackoff::new(ACCEPT_BACKOFF_INITIAL, ACCEPT_BACKOFF_MAXIMUM);
+        let mut backoff = RetryBackoff::exponential(ACCEPT_BACKOFF_INITIAL, ACCEPT_BACKOFF_MAXIMUM)
+            .without_jitter();
         tokio::pin!(shutdown);
 
         let result = loop {

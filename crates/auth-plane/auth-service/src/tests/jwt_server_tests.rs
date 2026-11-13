@@ -1,6 +1,7 @@
+use crate::JwtServer;
 use crate::tests::support_tests::{OWNER, TestFixture};
-use crate::{JwtServer, jwt_server::JwtServerBackoff};
 use platform_sigv4::{SigV4Config, SigV4Registry};
+use platform_time::RetryBackoff;
 use reqwest::StatusCode;
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, time::Duration, time::SystemTime};
@@ -35,8 +36,9 @@ impl Fixture {
         (format!("http://{address}/jwt"), handle)
     }
 
-    fn backoff() -> JwtServerBackoff {
-        JwtServerBackoff::new(Duration::from_millis(100), Duration::from_secs(1))
+    fn backoff() -> RetryBackoff {
+        RetryBackoff::exponential(Duration::from_millis(100), Duration::from_secs(1))
+            .without_jitter()
     }
 
     fn body(owner: &str) -> Vec<u8> {
@@ -189,7 +191,8 @@ fn accept_backoff_resets_after_a_successful_accept() {
 
 #[test]
 fn accept_backoff_uses_the_cap_when_initial_exceeds_it() {
-    let mut backoff = JwtServerBackoff::new(Duration::from_secs(5), Duration::from_millis(100));
+    let mut backoff = RetryBackoff::exponential(Duration::from_secs(5), Duration::from_millis(100))
+        .without_jitter();
 
     assert_eq!(backoff.next_delay(), Duration::from_millis(100));
     assert_eq!(backoff.next_delay(), Duration::from_millis(100));

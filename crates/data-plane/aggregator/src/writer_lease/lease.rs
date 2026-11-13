@@ -4,6 +4,7 @@ use crate::{
 };
 use platform_errors::BuildResult;
 use platform_metrics::AggregatorMetrics;
+use platform_time::RetryBackoff;
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -42,6 +43,7 @@ impl WriterLease {
     ) -> BuildResult<WriterLease> {
         let mut waiting = false;
         let mut watch: Option<LeaseWatch> = None;
+        let mut watch_backoff = RetryBackoff::constant(LEASE_WATCH_ERROR_BACKOFF).without_jitter();
         loop {
             if let Some(lease) = leases.acquire(shard, owner_id, ttl).await? {
                 return Ok(lease);
@@ -72,7 +74,7 @@ impl WriterLease {
                 change = watch.next() => {
                     if let Err(error) = change {
                         warn!(%error, shard = %shard, "lease watch failed; retrying");
-                        tokio::time::sleep(LEASE_WATCH_ERROR_BACKOFF).await;
+                        tokio::time::sleep(watch_backoff.next_delay()).await;
                     }
                 }
                 _ = tokio::time::sleep(delay) => {}

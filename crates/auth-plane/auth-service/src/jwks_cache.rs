@@ -6,11 +6,13 @@ use chrono::{DateTime, Utc};
 use jsonwebtoken::{Header, decode_header, jwk::JwkSet};
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
+use platform_time::RetryPolicy;
 use std::{io, time::Duration};
 use tokio::{sync::watch, time::Instant};
 
 const DEFAULT_JWKS_TTL: Duration = Duration::from_secs(300);
 const FAILURE_BACKOFF: Duration = Duration::from_secs(1);
+const FAILURE_RETRY: RetryPolicy = RetryPolicy::constant(1, FAILURE_BACKOFF).without_jitter();
 
 #[derive(Default)]
 struct CacheState {
@@ -187,7 +189,7 @@ impl JwksCache {
         let generation = {
             let mut state = self.state.lock();
             state.refreshing = false;
-            state.retry_after = Some(Instant::now() + FAILURE_BACKOFF);
+            state.retry_after = Some(Instant::now() + FAILURE_RETRY.delay(0));
             state.generation = state.generation.wrapping_add(1);
             state.generation
         };
