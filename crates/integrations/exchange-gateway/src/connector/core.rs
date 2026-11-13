@@ -12,7 +12,7 @@ use iris::{Config as IrisConfig, DisconnectedBehavior, ServerCloseBehavior};
 use platform_errors::{BuildError, BuildResult, SendFailure};
 use platform_exchange_types::{
     exchange::ETExchange,
-    exchange_server_time::ETExchangeServerTime,
+    exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
     rate_limited::{RateLimit, RateLimitRestriction},
     request::ETRequest,
     response::ETResponse,
@@ -43,7 +43,7 @@ impl Connector<(), ()> {
         max_retries: u8,
     ) -> BuildResult<Connector<Exchange, Client>>
     where
-        Exchange: ETExchange + ETExchangeServerTime,
+        Exchange: ETExchange + ETExchangeServerTimeHttp,
         Client: HttpClient + Send + Sync,
     {
         Protocol::Http
@@ -70,7 +70,7 @@ impl Connector<(), ()> {
         max_retries: u8,
     ) -> BuildResult<Connector<Exchange, ReqwestHttpClient>>
     where
-        Exchange: ETExchange + ETExchangeServerTime,
+        Exchange: ETExchange + ETExchangeServerTimeHttp,
     {
         let client_creator = Box::new(move |url: String| ReqwestHttpClient::try_new(&url));
         Self::try_new_http(
@@ -92,7 +92,7 @@ impl Connector<(), ()> {
         max_retries: u8,
     ) -> BuildResult<Connector<Exchange, Client>>
     where
-        Exchange: ETExchange,
+        Exchange: ETExchange + ETExchangeServerTimeWebsocket,
         Client: WebsocketClient,
     {
         Protocol::Websocket
@@ -122,7 +122,7 @@ impl Connector<(), ()> {
         max_retries: u8,
     ) -> BuildResult<Connector<Exchange, IrisWebsocketClient>>
     where
-        Exchange: ETExchange,
+        Exchange: ETExchange + ETExchangeServerTimeWebsocket,
     {
         iris_config = iris_config
             .with_disconnected_behavior(DisconnectedBehavior::DropAllQueued)

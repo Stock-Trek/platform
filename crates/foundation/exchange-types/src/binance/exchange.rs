@@ -16,7 +16,7 @@ use crate::{
     exchange::ETExchange,
     exchange_klines::ETExchangeKlines,
     exchange_portfolio::ETExchangePortfolio,
-    exchange_server_time::ETExchangeServerTime,
+    exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
     portfolio::{AccountEvent, AccountSnapshot, BalanceParser},
     rate_limited::{RateLimit, RateLimitRestriction},
     signer::Signer,
@@ -108,15 +108,18 @@ impl BinanceExchange {
     }
 }
 
-impl ETExchangeServerTime for BinanceExchange {
+impl ETExchangeServerTimeHttp for BinanceExchange {
     type ServerTimeRequestHttp = BinanceTimeRequest;
     type ServerTimeResponseHttp = BinanceResponse<BinanceTimeResponse>;
-    type ServerTimeRequestWebsocket = BinanceTimeRequest;
-    type ServerTimeResponseWebsocket = BinanceResponse<BinanceTimeResponse>;
 
     fn server_time_request_http(&self) -> Self::ServerTimeRequestHttp {
         BinanceTimeRequest {}
     }
+}
+
+impl ETExchangeServerTimeWebsocket for BinanceExchange {
+    type ServerTimeRequestWebsocket = BinanceTimeRequest;
+    type ServerTimeResponseWebsocket = BinanceResponse<BinanceTimeResponse>;
 
     fn server_time_request_websocket(&self) -> Self::ServerTimeRequestWebsocket {
         BinanceTimeRequest {}

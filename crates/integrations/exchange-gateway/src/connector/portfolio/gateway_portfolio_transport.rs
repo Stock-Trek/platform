@@ -1,16 +1,24 @@
-use crate::connector::portfolio::{
-    AccountEventStream, PortfolioTransport, gateway_account_event_stream::GatewayAccountEventStream,
-};
 use crate::{
-    clients::reqwest::ReqwestHttpClient, connector::Connector, iris, submission::SubmissionOutcome,
+    clients::reqwest::ReqwestHttpClient,
+    connector::{
+        Connector,
+        portfolio::{
+            AccountEventStream, PortfolioTransport,
+            gateway_account_event_stream::GatewayAccountEventStream,
+        },
+    },
+    iris,
+    submission::SubmissionOutcome,
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult, ExchangeError};
-use platform_exchange_types::exchange_portfolio::ETExchangePortfolio;
-use platform_exchange_types::exchange_server_time::ETExchangeServerTime;
+use platform_exchange_types::exchange_server_time::{
+    ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket,
+};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials, encode::ByteEncoder, exchange::ETExchange,
-    portfolio::AccountSnapshot, request::ETHttpRequest, signer::Signer, ticker::Ticker,
+    exchange_portfolio::ETExchangePortfolio, portfolio::AccountSnapshot, request::ETHttpRequest,
+    signer::Signer, ticker::Ticker,
 };
 use platform_type_bridge::TickerMapping;
 use std::time::Duration;
@@ -54,7 +62,7 @@ impl<Exchange> GatewayPortfolioTransport<Exchange> {
 
 impl<Exchange> GatewayPortfolioTransport<Exchange>
 where
-    Exchange: ETExchange + ETExchangeServerTime + Clone + Send + Sync + 'static,
+    Exchange: ETExchange + ETExchangeServerTimeHttp + Clone + Send + Sync + 'static,
 {
     fn http_connector(
         &self,
@@ -88,8 +96,14 @@ where
 #[async_trait]
 impl<Exchange> PortfolioTransport for GatewayPortfolioTransport<Exchange>
 where
-    Exchange:
-        ETExchange + ETExchangeServerTime + ETExchangePortfolio + Clone + Send + Sync + 'static,
+    Exchange: ETExchange
+        + ETExchangeServerTimeHttp
+        + ETExchangeServerTimeWebsocket
+        + ETExchangePortfolio
+        + Clone
+        + Send
+        + Sync
+        + 'static,
 {
     fn cex_id(&self) -> CexId {
         self.exchange.cex_id()
