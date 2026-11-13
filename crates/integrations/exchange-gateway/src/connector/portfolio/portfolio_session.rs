@@ -3,7 +3,8 @@ use platform_errors::BuildResult;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     portfolio::{
-        AccountEvent, AccountSnapshot, Credential, ExchangeAdapter, RenewalSchedule, WsConnection,
+        AccountEvent, AccountSnapshot, Credential, ExchangeAdapter, RenewalSchedule,
+        SessionLifecycle, WsConnection,
     },
 };
 use std::{sync::Arc, time::Instant};
@@ -13,7 +14,7 @@ pub struct PortfolioSession {
     account: AccountId,
     credentials: ApiKeyCredentials,
     credential: Option<Credential>,
-    adapter: ExchangeAdapter,
+    adapter: Box<dyn ExchangeAdapter>,
     stream: Box<dyn PortfolioEventStream>,
     transport: Arc<dyn PortfolioTransport>,
 }
@@ -34,42 +35,43 @@ impl PortfolioSession {
         previous: Option<Credential>,
     ) -> BuildResult<Self> {
         let adapter = transport.adapter(credentials).await?;
+        let lifecycle = adapter.lifecycle();
         let credential = match previous {
             Some(credential)
-                if adapter.lifecycle.reconnect_reuses_credential()
+                if lifecycle.reconnect_reuses_credential()
                     && !credential.is_expired(Instant::now()) =>
             {
                 Some(credential)
             }
-            _ => adapter.credential_provider.acquire().await?,
+            _ => adapter.credential_provider().acquire().await?,
         };
         let mut request = transport.connect_request()?;
-        adapter.auth_binder.prepare_connect(
+        adapter.auth_binder().prepare_connect(
             &mut request,
             credential.as_ref(),
-            adapter.signer.as_ref(),
+            adapter.signer(),
         )?;
         let stream = match transport.open_stream(request).await {
             Ok(stream) => stream,
             Err(error) => {
                 if let Some(credential) = credential.as_ref()
-                    && adapter.lifecycle.revoke_on_close()
+                    && lifecycle.revoke_on_close()
                 {
-                    let _ = adapter.credential_provider.revoke(credential).await;
+                    let _ = adapter.credential_provider().revoke(credential).await;
                 }
                 return Err(error);
             }
         };
         let connection: &dyn WsConnection = stream.as_ref();
         if let Err(error) = adapter
-            .auth_binder
-            .bind(connection, credential.as_ref(), adapter.signer.as_ref())
+            .auth_binder()
+            .bind(connection, credential.as_ref(), adapter.signer())
             .await
         {
             if let Some(credential) = credential.as_ref()
-                && adapter.lifecycle.revoke_on_close()
+                && lifecycle.revoke_on_close()
             {
-                let _ = adapter.credential_provider.revoke(credential).await;
+                let _ = adapter.credential_provider().revoke(credential).await;
             }
             return Err(error.into());
         }
@@ -94,7 +96,7 @@ impl PortfolioSession {
         if !credential.renewable {
             return Ok(());
         }
-        self.credential = Some(self.adapter.credential_provider.renew(credential).await?);
+        self.credential = Some(self.adapter.credential_provider().renew(credential).await?);
         Ok(())
     }
 
@@ -102,8 +104,11 @@ impl PortfolioSession {
         let Some(credential) = self.credential.take() else {
             return Ok(());
         };
-        if self.adapter.lifecycle.revoke_on_close() {
-            self.adapter.credential_provider.revoke(&credential).await?;
+        if self.adapter.lifecycle().revoke_on_close() {
+            self.adapter
+                .credential_provider()
+                .revoke(&credential)
+                .await?;
         }
         Ok(())
     }
@@ -117,15 +122,19 @@ impl PortfolioSession {
     }
 
     pub fn renewal_schedule(&self) -> Option<RenewalSchedule> {
-        self.adapter.lifecycle.scheduled_renewal()
+        self.adapter.lifecycle().scheduled_renewal()
     }
 
     pub fn max_session_lifetime(&self) -> Option<std::time::Duration> {
-        self.adapter.lifecycle.max_session_lifetime()
+        self.adapter.lifecycle().max_session_lifetime()
     }
 
     pub fn reconnect_reuses_credential(&self) -> bool {
-        self.adapter.lifecycle.reconnect_reuses_credential()
+        self.adapter.lifecycle().reconnect_reuses_credential()
+    }
+
+    pub fn lifecycle(&self) -> SessionLifecycle {
+        self.adapter.lifecycle()
     }
 }
 

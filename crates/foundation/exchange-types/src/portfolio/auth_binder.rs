@@ -1,5 +1,6 @@
-use crate::portfolio::{
-    AuthError, ConnectRequest, Credential, IncomingFrame, Signer, WsConnection,
+use crate::{
+    portfolio::{AuthError, ConnectRequest, Credential, IncomingFrame, WsConnection},
+    signer::Signer,
 };
 use async_trait::async_trait;
 
@@ -11,7 +12,7 @@ pub trait AuthBinder: Send + Sync {
         &self,
         _request: &mut ConnectRequest,
         _credential: Option<&Credential>,
-        _signer: &dyn Signer,
+        _signer: &Signer,
     ) -> Result<(), AuthError> {
         Ok(())
     }
@@ -20,7 +21,7 @@ pub trait AuthBinder: Send + Sync {
         &self,
         _connection: &dyn WsConnection,
         _credential: Option<&Credential>,
-        _signer: &dyn Signer,
+        _signer: &Signer,
     ) -> Result<(), AuthError> {
         Ok(())
     }

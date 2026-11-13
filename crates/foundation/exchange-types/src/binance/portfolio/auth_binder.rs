@@ -1,4 +1,7 @@
-use crate::portfolio::{AuthBinder, AuthError, ConnectRequest, Credential, Signer};
+use crate::{
+    portfolio::{AuthBinder, AuthError, ConnectRequest, Credential},
+    signer::Signer,
+};
 use async_trait::async_trait;
 
 #[derive(Debug, Default, Clone, Copy)]
@@ -16,7 +19,7 @@ impl AuthBinder for BinanceAuthBinder {
         &self,
         request: &mut ConnectRequest,
         credential: Option<&Credential>,
-        _signer: &dyn Signer,
+        _signer: &Signer,
     ) -> Result<(), AuthError> {
         let credential = credential.ok_or_else(|| {
             AuthError::Bind("binance listen key credential is missing".to_string())

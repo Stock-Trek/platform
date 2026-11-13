@@ -1,14 +1,10 @@
 use crate::connector::portfolio::{
-    BinancePortfolioTransport, ConnectorHealthSink, ExchangePortfolioConnector, NoopPortfolioFeed,
-    PortfolioCredentialSource, PortfolioFeed, PortfolioTransport, StaticPortfolioCredentials,
+    ConnectorHealthSink, ExchangePortfolioConnector, NoopPortfolioFeed, PortfolioCredentialSource,
+    PortfolioFeed, PortfolioTransport, StaticPortfolioCredentials,
 };
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
-use platform_exchange_types::{
-    api_key_credential::ApiKeyCredentials, binance::portfolio::config::BinancePortfolioConfig,
-};
-use platform_type_bridge::BinanceConverter;
-use secrecy::{ExposeSecret, SecretString};
+use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fmt,
@@ -18,6 +14,27 @@ use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
 const CONNECTOR_CEXES: &str = "PORTFOLIO_CONNECTOR_CEXES";
 
+pub struct PortfolioExchangeConfig {
+    transport: Arc<dyn PortfolioTransport>,
+    credentials: BTreeMap<AccountId, ApiKeyCredentials>,
+}
+
+impl PortfolioExchangeConfig {
+    pub fn new(
+        transport: Arc<dyn PortfolioTransport>,
+        credentials: impl IntoIterator<Item = (AccountId, ApiKeyCredentials)>,
+    ) -> Self {
+        Self {
+            transport,
+            credentials: credentials.into_iter().collect(),
+        }
+    }
+
+    pub fn transport(&self) -> Arc<dyn PortfolioTransport> {
+        Arc::clone(&self.transport)
+    }
+}
+
 #[derive(Clone)]
 pub struct PortfolioConnectorConfig {
     transports: Vec<Arc<dyn PortfolioTransport>>,
@@ -25,30 +42,25 @@ pub struct PortfolioConnectorConfig {
 }
 
 impl PortfolioConnectorConfig {
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(
+        vars: &EnvVars,
+        exchanges: impl IntoIterator<Item = PortfolioExchangeConfig>,
+    ) -> BuildResult<Self> {
         let mut transports: Vec<Arc<dyn PortfolioTransport>> = Vec::new();
         let mut credentials = BTreeMap::new();
         let selected = Self::selected_cexes(vars)?;
-        let binance_enabled = selected
-            .as_ref()
-            .is_none_or(|selected| selected.contains(&CexId::Binance));
-        if binance_enabled && let Some(binance) = BinancePortfolioConfig::from_vars(vars)? {
-            for credential in binance.credentials() {
-                credentials.insert(
-                    (CexId::Binance, AccountId::new(credential.account())),
-                    ApiKeyCredentials {
-                        api_key: credential.api_key().to_string(),
-                        secret: SecretString::from(credential.secret().expose_secret().to_string()),
-                    },
-                );
+        for exchange in exchanges {
+            let cex_id = exchange.transport.cex_id();
+            if selected
+                .as_ref()
+                .is_some_and(|selected| !selected.contains(&cex_id))
+            {
+                continue;
             }
-            transports.push(Arc::new(BinancePortfolioTransport::new(
-                binance.rest_url(),
-                binance.websocket_url(),
-                binance.listen_key_refresh(),
-                binance.reconnect_backoff(),
-                BinanceConverter::ticker_mapping_static(),
-            )));
+            for (account, credential) in exchange.credentials {
+                credentials.insert((cex_id, account), credential);
+            }
+            transports.push(exchange.transport);
         }
         Ok(Self {
             transports,
@@ -75,7 +87,7 @@ impl PortfolioConnectorConfig {
             .collect()
     }
 
-    fn selected_cexes(vars: &EnvVars) -> BuildResult<Option<BTreeSet<CexId>>> {
+    pub fn selected_cexes(vars: &EnvVars) -> BuildResult<Option<BTreeSet<CexId>>> {
         let Some(value) = vars.optional(CONNECTOR_CEXES)? else {
             return Ok(None);
         };

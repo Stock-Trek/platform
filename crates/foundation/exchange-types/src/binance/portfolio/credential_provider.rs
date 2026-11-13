@@ -1,22 +1,19 @@
 use crate::{
-    api_key_credential::ApiKeyCredentials,
     binance::portfolio::credential_client::BinanceListenKeyClient,
     portfolio::{AuthError, Credential, CredentialProvider},
 };
 use async_trait::async_trait;
 use std::time::{Duration, Instant};
 
-pub struct BinanceCredentialProvider<C> {
-    client: C,
-    credentials: ApiKeyCredentials,
+pub struct BinanceCredentialProvider {
+    client: BinanceListenKeyClient,
     ttl: Duration,
 }
 
-impl<C> BinanceCredentialProvider<C> {
-    pub fn new(client: C, credentials: ApiKeyCredentials) -> Self {
+impl BinanceCredentialProvider {
+    pub fn new(client: BinanceListenKeyClient) -> Self {
         Self {
             client,
-            credentials,
             ttl: Duration::from_mins(60),
         }
     }
@@ -28,41 +25,25 @@ impl<C> BinanceCredentialProvider<C> {
 
     fn credential(&self, value: String) -> Credential {
         let issued_at = Instant::now();
-        Credential {
-            value,
-            issued_at,
-            expires_at: Some(issued_at + self.ttl),
-            renewable: true,
-        }
+        Credential::new(value, issued_at, Some(issued_at + self.ttl))
     }
 }
 
 #[async_trait]
-impl<C> CredentialProvider for BinanceCredentialProvider<C>
-where
-    C: BinanceListenKeyClient,
-{
+impl CredentialProvider for BinanceCredentialProvider {
     async fn acquire(&self) -> Result<Option<Credential>, AuthError> {
-        let listen_key = self
-            .client
-            .create_listen_key(&self.credentials)
+        self.client
+            .create()
             .await
-            .map_err(|error| AuthError::Acquire(error.to_string()))?;
-        Ok(Some(self.credential(listen_key)))
+            .map(|value| Some(self.credential(value)))
     }
 
     async fn renew(&self, credential: &Credential) -> Result<Credential, AuthError> {
-        self.client
-            .keepalive_listen_key(&self.credentials, &credential.value)
-            .await
-            .map_err(|error| AuthError::Renew(error.to_string()))?;
+        self.client.keepalive(&credential.value).await?;
         Ok(self.credential(credential.value.clone()))
     }
 
     async fn revoke(&self, credential: &Credential) -> Result<(), AuthError> {
-        self.client
-            .close_listen_key(&self.credentials, &credential.value)
-            .await
-            .map_err(|error| AuthError::Revoke(error.to_string()))
+        self.client.close(&credential.value).await
     }
 }

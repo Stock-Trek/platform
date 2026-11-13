@@ -1,39 +1,34 @@
 use crate::{
+    clients::reqwest::ReqwestHttpClient,
     connector::{
         Connector,
-        portfolio::{
-            GatewayAccountEventStream, PortfolioEventStream, PortfolioTransport,
-            binance_portfolio_client::BinancePortfolioClient,
-        },
+        portfolio::{GatewayAccountEventStream, PortfolioEventStream, PortfolioTransport},
     },
     iris,
+    submission::SubmissionOutcome,
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
-    binance::{
-        exchange::BinanceExchange,
-        portfolio::{
-            auth_binder::BinanceAuthBinder, credential_provider::BinanceCredentialProvider,
-            session_lifecycle::BinanceSessionLifecyclePolicy,
-        },
-    },
     encode::ByteEncoder,
     exchange::ETExchange,
-    exchange_portfolio::ETExchangePortfolio,
+    exchange_portfolio::{ETExchangePortfolio, PortfolioAuthContext},
+    exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
     portfolio::{AccountSnapshot, ConnectRequest, ExchangeAdapter},
+    request::ETHttpRequest,
     signer::Signer,
 };
 use platform_type_bridge::TickerMapping;
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 use stock_trek_types::cex::cex_id::CexId;
 use url::Url;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_RETRIES: u8 = 3;
 
-pub struct BinancePortfolioTransport {
+pub struct ExchangePortfolioTransport<Exchange> {
+    exchange: Exchange,
     rest_url: String,
     websocket_url: String,
     refresh_interval: Duration,
@@ -41,8 +36,9 @@ pub struct BinancePortfolioTransport {
     mapping: &'static TickerMapping,
 }
 
-impl BinancePortfolioTransport {
+impl<Exchange> ExchangePortfolioTransport<Exchange> {
     pub fn new(
+        exchange: Exchange,
         rest_url: impl Into<String>,
         websocket_url: impl Into<String>,
         refresh_interval: Duration,
@@ -50,6 +46,7 @@ impl BinancePortfolioTransport {
         mapping: &'static TickerMapping,
     ) -> Self {
         Self {
+            exchange,
             rest_url: rest_url.into(),
             websocket_url: websocket_url.into().trim_end_matches('/').to_string(),
             refresh_interval,
@@ -57,25 +54,55 @@ impl BinancePortfolioTransport {
             mapping,
         }
     }
+}
 
+impl<Exchange> ExchangePortfolioTransport<Exchange>
+where
+    Exchange: ETExchange + ETExchangeServerTimeHttp + Clone + Send + Sync + 'static,
+{
     fn http_connector(
         &self,
         credentials: &ApiKeyCredentials,
-    ) -> BuildResult<Connector<BinanceExchange, crate::clients::reqwest::ReqwestHttpClient>> {
+    ) -> BuildResult<Connector<Exchange, ReqwestHttpClient>> {
         Connector::try_new_http_reqwest(
             self.rest_url.clone(),
-            BinanceExchange,
-            BinanceExchange::signer(credentials)?,
+            self.exchange.clone(),
+            Exchange::signer(credentials)?,
             REQUEST_TIMEOUT,
             MAX_RETRIES,
         )
     }
+
+    async fn submit<Request>(
+        connector: &Connector<Exchange, ReqwestHttpClient>,
+        request: Request,
+    ) -> BuildResult<Request::Response>
+    where
+        Request: ETHttpRequest<Exchange = Exchange> + Send,
+    {
+        match connector.submit_http(request)?.wait().await? {
+            SubmissionOutcome::Submitted(response) => Ok(response),
+            SubmissionOutcome::Unknown { .. } => Err(BuildError::Exchange(
+                ExchangeError::BadResponse("portfolio request outcome is unknown".to_string()),
+            )),
+        }
+    }
 }
 
 #[async_trait]
-impl PortfolioTransport for BinancePortfolioTransport {
+impl<Exchange> PortfolioTransport for ExchangePortfolioTransport<Exchange>
+where
+    Exchange: ETExchange
+        + ETExchangeServerTimeHttp
+        + ETExchangeServerTimeWebsocket
+        + ETExchangePortfolio
+        + Clone
+        + Send
+        + Sync
+        + 'static,
+{
     fn cex_id(&self) -> CexId {
-        CexId::Binance
+        self.exchange.cex_id()
     }
 
     fn reconnect_backoff(&self) -> Duration {
@@ -85,24 +112,24 @@ impl PortfolioTransport for BinancePortfolioTransport {
     fn connect_request(&self) -> BuildResult<ConnectRequest> {
         let url = Url::parse(&self.websocket_url).map_err(|error| {
             BuildError::Exchange(ExchangeError::BadResponse(format!(
-                "invalid binance websocket url: {error}"
+                "invalid websocket url: {error}"
             )))
         })?;
         Ok(ConnectRequest::new(url))
     }
 
-    async fn adapter(&self, credentials: &ApiKeyCredentials) -> BuildResult<ExchangeAdapter> {
-        let client =
-            BinancePortfolioClient::new(self.rest_url.clone(), REQUEST_TIMEOUT, MAX_RETRIES);
-        let provider = BinanceCredentialProvider::new(client, credentials.clone());
-        let binder = BinanceAuthBinder::new();
-        let lifecycle = BinanceSessionLifecyclePolicy::for_refresh_interval(self.refresh_interval);
-        Ok(ExchangeAdapter::new(
-            Box::new(provider),
-            Box::new(binder),
-            Box::new(lifecycle),
-            Box::new(BinanceExchange::signer(credentials)?),
-        ))
+    async fn adapter(
+        &self,
+        credentials: &ApiKeyCredentials,
+    ) -> BuildResult<Box<dyn ExchangeAdapter>> {
+        let http = Arc::new(ReqwestHttpClient::try_new(&self.rest_url)?);
+        let context = PortfolioAuthContext::new(
+            credentials.clone(),
+            http,
+            self.rest_url.clone(),
+            self.refresh_interval,
+        );
+        Ok(Box::new(self.exchange.adapter(context)?))
     }
 
     async fn account_snapshot(
@@ -110,12 +137,10 @@ impl PortfolioTransport for BinancePortfolioTransport {
         credentials: &ApiKeyCredentials,
     ) -> BuildResult<AccountSnapshot> {
         let connector = self.http_connector(credentials)?;
-        let response =
-            BinancePortfolioClient::submit(&connector, BinanceExchange::account_snapshot_request())
-                .await?;
+        let response = Self::submit(&connector, Exchange::account_snapshot_request()).await?;
         let mapping = self.mapping;
-        BinanceExchange::account_snapshot(response, &|asset| {
-            GatewayAccountEventStream::<BinanceExchange>::asset_id(mapping, asset)
+        Exchange::account_snapshot(response, &|asset| {
+            GatewayAccountEventStream::<Exchange>::asset_id(mapping, asset)
         })
     }
 
@@ -125,7 +150,7 @@ impl PortfolioTransport for BinancePortfolioTransport {
     ) -> BuildResult<Box<dyn PortfolioEventStream>> {
         let connector = Connector::try_new_websocket_iris(
             request.url.to_string(),
-            BinanceExchange,
+            self.exchange.clone(),
             Signer::new_unencrypted(ByteEncoder::HexLower),
             iris::Config::new(),
             REQUEST_TIMEOUT,

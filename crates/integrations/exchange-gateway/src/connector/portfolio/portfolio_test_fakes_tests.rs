@@ -4,11 +4,12 @@ use chrono::Utc;
 use platform_errors::BuildResult;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
+    encode::ByteEncoder,
     portfolio::{
         AccountEvent, AccountSnapshot, AuthBinder, AuthError, ConnectRequest, Credential,
-        CredentialProvider, ExchangeAdapter, RenewalSchedule, SessionLifecyclePolicy, Signer,
-        WsConnection,
+        CredentialProvider, PortfolioAuth, RenewalSchedule, SessionLifecycle, WsConnection,
     },
+    signer::Signer,
 };
 use std::{
     collections::{BTreeMap, VecDeque},
@@ -20,18 +21,6 @@ use std::{
 };
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 use url::Url;
-
-pub struct TestSigner;
-
-impl Signer for TestSigner {
-    fn api_key(&self) -> &str {
-        "api-key"
-    }
-
-    fn sign(&self, payload: &[u8]) -> Result<Vec<u8>, AuthError> {
-        Ok(payload.to_vec())
-    }
-}
 
 pub struct TestCredentialProvider {
     pub acquired: Arc<AtomicUsize>,
@@ -79,7 +68,7 @@ impl AuthBinder for TestAuthBinder {
         &self,
         _request: &mut ConnectRequest,
         _credential: Option<&Credential>,
-        _signer: &dyn Signer,
+        _signer: &Signer,
     ) -> Result<(), AuthError> {
         Ok(())
     }
@@ -88,7 +77,7 @@ impl AuthBinder for TestAuthBinder {
         &self,
         _connection: &dyn WsConnection,
         _credential: Option<&Credential>,
-        _signer: &dyn Signer,
+        _signer: &Signer,
     ) -> Result<(), AuthError> {
         Ok(())
     }
@@ -97,31 +86,6 @@ impl AuthBinder for TestAuthBinder {
         &self,
     ) -> Option<platform_exchange_types::portfolio::ConfirmationPredicate> {
         None
-    }
-}
-
-pub struct TestLifecycle {
-    pub renewal: Option<RenewalSchedule>,
-    pub max_lifetime: Option<Duration>,
-    pub reuses: bool,
-    pub revoke: bool,
-}
-
-impl SessionLifecyclePolicy for TestLifecycle {
-    fn max_session_lifetime(&self) -> Option<Duration> {
-        self.max_lifetime
-    }
-
-    fn scheduled_renewal(&self) -> Option<RenewalSchedule> {
-        self.renewal
-    }
-
-    fn reconnect_reuses_credential(&self) -> bool {
-        self.reuses
-    }
-
-    fn revoke_on_close(&self) -> bool {
-        self.revoke
     }
 }
 
@@ -219,23 +183,26 @@ impl PortfolioTransport for TestTransport {
         ))
     }
 
-    async fn adapter(&self, _credentials: &ApiKeyCredentials) -> BuildResult<ExchangeAdapter> {
-        Ok(ExchangeAdapter::new(
-            Box::new(TestCredentialProvider {
+    async fn adapter(
+        &self,
+        _credentials: &ApiKeyCredentials,
+    ) -> BuildResult<Box<dyn platform_exchange_types::portfolio::ExchangeAdapter>> {
+        Ok(Box::new(PortfolioAuth::new(
+            TestCredentialProvider {
                 acquired: Arc::clone(&self.acquired),
                 renewed: Arc::clone(&self.renewed),
                 revoked: Arc::clone(&self.revoked),
                 ttl: Duration::from_hours(1),
-            }),
-            Box::new(TestAuthBinder),
-            Box::new(TestLifecycle {
-                renewal: Some(RenewalSchedule::new(self.refresh_interval, Duration::ZERO)),
-                max_lifetime: None,
-                reuses: self.reconnect_reuses_credential,
-                revoke: true,
-            }),
-            Box::new(TestSigner),
-        ))
+            },
+            TestAuthBinder,
+            SessionLifecycle::new(
+                None,
+                Some(RenewalSchedule::new(self.refresh_interval, Duration::ZERO)),
+                self.reconnect_reuses_credential,
+                true,
+            ),
+            Signer::new_unencrypted(ByteEncoder::HexLower),
+        )))
     }
 
     async fn account_snapshot(

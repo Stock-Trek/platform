@@ -20,7 +20,10 @@ pub trait PortfolioTransport: Send + Sync {
 
     fn connect_request(&self) -> BuildResult<ConnectRequest>;
 
-    async fn adapter(&self, credentials: &ApiKeyCredentials) -> BuildResult<ExchangeAdapter>;
+    async fn adapter(
+        &self,
+        credentials: &ApiKeyCredentials,
+    ) -> BuildResult<Box<dyn ExchangeAdapter>>;
 
     async fn account_snapshot(
         &self,

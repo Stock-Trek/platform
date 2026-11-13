@@ -1,18 +1,14 @@
-# New ETExchangePortfolio design
+# Exchange portfolio design
+
+The portfolio integration separates three orthogonal concerns:
+
+1. `CredentialProvider` obtains, renews, and revokes the right to listen.
+2. `AuthBinder` attaches that right to a WebSocket session.
+3. `SessionLifecycle` describes when to renew, reconnect, or re-authenticate.
+
+An exchange composes one implementation of each concern into a `PortfolioAuth`, which is exposed through the `ExchangeAdapter` trait. The gateway only depends on that trait, so exchange-specific auth code stays in the exchange crate.
 
 ```rust
-//! Generic abstraction over private WebSocket stream authentication.
-//!
-//! Three orthogonal concerns:
-//!   1. `CredentialProvider`   — how to obtain / renew / revoke a right-to-listen
-//!   2. `AuthBinder`           — how that right is attached to a WS session
-//!   3. `SessionLifecyclePolicy` — when to renew, reconnect, or re-auth (declarative)
-
-use async_trait::async_trait;
-use std::time::{Duration, Instant};
-use url::Url;
-
-# [derive(Debug)]
 pub enum AuthError {
     Acquire(String),
     Renew(String),
@@ -23,9 +19,6 @@ pub enum AuthError {
     Expired,
 }
 
-/// Opaque credential. Different exchanges stuff different things in `value`
-/// (a listenKey, a JWT, an opaque token). The engine treats it as bytes.
-# [derive(Clone, Debug)]
 pub struct Credential {
     pub value: String,
     pub issued_at: Instant,
@@ -33,129 +26,83 @@ pub struct Credential {
     pub renewable: bool,
 }
 
-impl Credential {
-    pub fn is_expired(&self, now: Instant) -> bool {
-        self.expires_at.map_or(false, |e| now >= e)
-    }
-
-    pub fn expires_within(&self, now: Instant, window: Duration) -> bool {
-        self.expires_at
-            .map_or(false, |e| e.saturating_duration_since(now) <= window)
-    }
-}
-
-/// Carries both identity and signing ability, so binders never touch secrets.
-pub trait Signer: Send + Sync {
-    fn api_key(&self) -> &str;
-    fn sign(&self, payload: &[u8]) -> Result<Vec<u8>, AuthError>;
-}
-
-/// Connection primitives a post-connect binder operates on.
-pub struct ConnectRequest {
-    pub url: Url,
-    pub headers: Vec<(String, String)>,
-}
-
-# [async_trait]
-pub trait WsConnection: Send + Sync {
-    async fn send_text(&self, payload: &str) -> Result<(), AuthError>;
-    async fn send_binary(&self, payload: &[u8]) -> Result<(), AuthError>;
-}
-
-pub struct IncomingFrame {
-    pub text: Option<String>,
-    pub binary: Option<Vec<u8>>,
-}
-
-/// ---------------------------------------------------------------------------
-/// Trait 1 — How do I obtain the right to listen?
-/// ---------------------------------------------------------------------------
-///
-/// `acquire` returns `Ok(None)` when no credential is required
-/// (Bybit, OKX, Bitget, Gate — authentication happens entirely over the socket).
-# [async_trait]
+#[async_trait]
 pub trait CredentialProvider: Send + Sync {
-    /// Idempotent per account: Binance returns the same listenKey if one exists.
     async fn acquire(&self) -> Result<Option<Credential>, AuthError>;
-
-    /// Extend or rotate an existing credential.
-    /// Only called when `credential.renewable == true` and the lifecycle policy
-    /// schedules renewal. MUST NOT touch the socket.
     async fn renew(&self, credential: &Credential) -> Result<Credential, AuthError>;
-
-    /// Best-effort invalidation on graceful close.
     async fn revoke(&self, credential: &Credential) -> Result<(), AuthError>;
 }
 
-/// ---------------------------------------------------------------------------
-/// Trait 2 — How is the right attached to the WS session?
-/// ---------------------------------------------------------------------------
-///
-/// Both hooks have no-op defaults, so:
-///   - pre-connect binders (Binance URL, Kraken query) implement only `prepare_connect`
-///   - post-connect binders (Bybit/OKX/Bitget/Gate login frame) implement only `bind`
 pub type ConfirmationPredicate = Box<dyn Fn(&IncomingFrame) -> bool + Send + Sync>;
 
-# [async_trait]
+#[async_trait]
 pub trait AuthBinder: Send + Sync {
-    /// URL / query / header binding.
     fn prepare_connect(
         &self,
-        _req: &mut ConnectRequest,
-        _cred: Option<&Credential>,
-        _signer: &dyn Signer,
+        request: &mut ConnectRequest,
+        credential: Option<&Credential>,
+        signer: &Signer,
     ) -> Result<(), AuthError> {
         Ok(())
     }
 
-    /// Frame-based binding after the socket is open.
     async fn bind(
         &self,
-        _conn: &dyn WsConnection,
-        _cred: Option<&Credential>,
-        _signer: &dyn Signer,
+        connection: &dyn WsConnection,
+        credential: Option<&Credential>,
+        signer: &Signer,
     ) -> Result<(), AuthError> {
         Ok(())
     }
 
-    /// If the exchange emits an explicit ack, the engine waits for this.
-    /// Return `None` if the stream just begins flowing (Binance Futures).
     fn confirmation_predicate(&self) -> Option<ConfirmationPredicate> {
         None
     }
 }
 
-/// ---------------------------------------------------------------------------
-/// Trait 3 — When to renew, reconnect, or re-auth? (pure descriptor, no behavior)
-/// ---------------------------------------------------------------------------
 pub struct RenewalSchedule {
-    pub interval: Duration,  // e.g. 60 min
-    pub lead_time: Duration, // fire at expiry − lead_time, e.g. 10 min
+    pub interval: Duration,
+    pub lead_time: Duration,
 }
 
-pub trait SessionLifecyclePolicy: Send + Sync {
-    /// Hard cap on the WS connection itself (24h on Binance/Bybit; `None` = unbounded).
-    fn max_session_lifetime(&self) -> Option<Duration>;
-
-    /// Non-disruptive renewal of the *credential* (Binance Futures keepalive).
-    /// `None` means the credential outlives the session, or doesn't exist.
-    fn scheduled_renewal(&self) -> Option<RenewalSchedule>;
-
-    /// On socket drop, can the current credential be re-used?
-    /// `false` for single-use tokens (Kraken); `true` for Binance/Coinbase.
-    fn reconnect_reuses_credential(&self) -> bool;
-
-    /// Should the engine call `revoke()` on graceful close?
-    fn revoke_on_close(&self) -> bool;
+pub struct SessionLifecycle {
+    max_session_lifetime: Option<Duration>,
+    scheduled_renewal: Option<RenewalSchedule>,
+    reconnect_reuses_credential: bool,
+    revoke_on_close: bool,
 }
 
-/// ---------------------------------------------------------------------------
-/// Adapter bundle — one of each, plus a signer.
-/// ---------------------------------------------------------------------------
-pub struct ExchangeAdapter {
-    pub credential_provider: Box<dyn CredentialProvider>,
-    pub auth_binder: Box<dyn AuthBinder>,
-    pub lifecycle: Box<dyn SessionLifecyclePolicy>,
-    pub signer: Box<dyn Signer>,
+pub trait ExchangeAdapter: Send + Sync {
+    fn credential_provider(&self) -> &dyn CredentialProvider;
+    fn auth_binder(&self) -> &dyn AuthBinder;
+    fn lifecycle(&self) -> SessionLifecycle;
+    fn signer(&self) -> &Signer;
+}
+
+pub struct PortfolioAuth<P, B> {
+    credential_provider: P,
+    auth_binder: B,
+    lifecycle: SessionLifecycle,
+    signer: Signer,
+}
+```
+
+`ETExchangePortfolio` also supplies the exchange-specific REST snapshot request, snapshot parser, and account-event parser. It builds its adapter from a `PortfolioAuthContext` containing the account credentials, HTTP client, REST URL, and renewal interval.
+
+```rust
+pub trait ETExchangePortfolio: ETExchange {
+    type SnapshotRequest: ETHttpRequest<Exchange = Self> + Send;
+    type Adapter: ExchangeAdapter;
+
+    fn account_snapshot_request() -> Self::SnapshotRequest;
+    fn account_snapshot(
+        response: <Self::SnapshotRequest as ETHttpRequest>::Response,
+        mapping: &dyn Fn(&str) -> Option<AssetId>,
+    ) -> BuildResult<AccountSnapshot>;
+    fn account_event(
+        value: &serde_json::Value,
+        mapping: &dyn Fn(&str) -> Option<AssetId>,
+    ) -> BuildResult<Option<AccountEvent>>;
+    fn adapter(&self, context: PortfolioAuthContext) -> BuildResult<Self::Adapter>;
 }
 ```

@@ -12,7 +12,7 @@ use crate::{
     encrypt::EncryptionAlgorithm,
     exchange::ETExchange,
     exchange_klines::{ETExchangeKlinesHttp, ETExchangeKlinesWebsocket},
-    exchange_portfolio::ETExchangePortfolio,
+    exchange_portfolio::{ETExchangePortfolio, PortfolioAuthContext},
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
     portfolio::{AccountEvent, AccountSnapshot, BalanceParser},
     rate_limited::{RateLimit, RateLimitRestriction},
@@ -135,6 +135,7 @@ impl ETExchangeKlinesWebsocket for BinanceExchange {
 
 impl ETExchangePortfolio for BinanceExchange {
     type SnapshotRequest = BinanceAccountStatusRequest;
+    type Adapter = crate::binance::portfolio::BinancePortfolioAdapter;
 
     fn account_snapshot_request() -> Self::SnapshotRequest {
         BinanceAccountStatusRequest::new()
@@ -171,5 +172,9 @@ impl ETExchangePortfolio for BinanceExchange {
         mapping: &dyn Fn(&str) -> Option<AssetId>,
     ) -> BuildResult<Option<AccountEvent>> {
         EventParser::parse(value, mapping)
+    }
+
+    fn adapter(&self, context: PortfolioAuthContext) -> BuildResult<Self::Adapter> {
+        self.portfolio_adapter(context)
     }
 }

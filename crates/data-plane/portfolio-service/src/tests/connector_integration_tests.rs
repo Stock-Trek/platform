@@ -12,11 +12,13 @@ use platform_exchange_gateway::{
 };
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
+    encode::ByteEncoder,
     portfolio::{
         AccountEvent, AccountPositionEvent, AccountSnapshot, AuthBinder, AuthError, ConnectRequest,
-        Credential, CredentialProvider, ExchangeAdapter, RenewalSchedule, SessionLifecyclePolicy,
-        Signer, WsConnection,
+        Credential, CredentialProvider, ExchangeAdapter, PortfolioAuth, RenewalSchedule,
+        SessionLifecycle, WsConnection,
     },
+    signer::Signer,
 };
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use secrecy::SecretString;
@@ -50,18 +52,6 @@ struct Transport {
     closes: Arc<AtomicUsize>,
 }
 
-struct TestSigner;
-
-impl Signer for TestSigner {
-    fn api_key(&self) -> &str {
-        "api-key"
-    }
-
-    fn sign(&self, payload: &[u8]) -> Result<Vec<u8>, AuthError> {
-        Ok(payload.to_vec())
-    }
-}
-
 struct TestCredentialProvider {
     closes: Arc<AtomicUsize>,
 }
@@ -93,29 +83,6 @@ struct TestBinder;
 #[async_trait]
 impl AuthBinder for TestBinder {}
 
-struct TestLifecycle;
-
-impl SessionLifecyclePolicy for TestLifecycle {
-    fn max_session_lifetime(&self) -> Option<Duration> {
-        None
-    }
-
-    fn scheduled_renewal(&self) -> Option<RenewalSchedule> {
-        Some(RenewalSchedule::new(
-            Duration::from_secs(3600),
-            Duration::ZERO,
-        ))
-    }
-
-    fn reconnect_reuses_credential(&self) -> bool {
-        true
-    }
-
-    fn revoke_on_close(&self) -> bool {
-        true
-    }
-}
-
 #[async_trait]
 impl PortfolioTransport for Transport {
     fn cex_id(&self) -> CexId {
@@ -132,15 +99,26 @@ impl PortfolioTransport for Transport {
         ))
     }
 
-    async fn adapter(&self, _credentials: &ApiKeyCredentials) -> BuildResult<ExchangeAdapter> {
-        Ok(ExchangeAdapter::new(
-            Box::new(TestCredentialProvider {
+    async fn adapter(
+        &self,
+        _credentials: &ApiKeyCredentials,
+    ) -> BuildResult<Box<dyn ExchangeAdapter>> {
+        Ok(Box::new(PortfolioAuth::new(
+            TestCredentialProvider {
                 closes: Arc::clone(&self.closes),
-            }),
-            Box::new(TestBinder),
-            Box::new(TestLifecycle),
-            Box::new(TestSigner),
-        ))
+            },
+            TestBinder,
+            SessionLifecycle::new(
+                None,
+                Some(RenewalSchedule::new(
+                    Duration::from_secs(3600),
+                    Duration::ZERO,
+                )),
+                true,
+                true,
+            ),
+            Signer::new_unencrypted(ByteEncoder::HexLower),
+        )))
     }
 
     async fn account_snapshot(

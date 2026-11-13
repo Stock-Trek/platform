@@ -1,18 +1,60 @@
 pub use crate::portfolio::{
     AuthBinder, AuthError, ConfirmationPredicate, ConnectRequest, Credential, CredentialProvider,
-    ExchangeAdapter, IncomingFrame, PortfolioSigner, RenewalSchedule, SessionLifecyclePolicy,
-    Signer, WsConnection,
+    ExchangeAdapter, IncomingFrame, RenewalSchedule, SessionLifecycle, WsConnection,
 };
 use crate::{
+    api_key_credential::ApiKeyCredentials,
     exchange::ETExchange,
+    http::HttpClient,
     portfolio::{AccountEvent, AccountSnapshot},
     request::ETHttpRequest,
 };
 use platform_errors::BuildResult;
+use std::{sync::Arc, time::Duration};
 use stock_trek_types::cex::asset_id::AssetId;
+
+pub struct PortfolioAuthContext {
+    credentials: ApiKeyCredentials,
+    http: Arc<dyn HttpClient>,
+    rest_url: String,
+    refresh_interval: Duration,
+}
+
+impl PortfolioAuthContext {
+    pub fn new(
+        credentials: ApiKeyCredentials,
+        http: Arc<dyn HttpClient>,
+        rest_url: impl Into<String>,
+        refresh_interval: Duration,
+    ) -> Self {
+        Self {
+            credentials,
+            http,
+            rest_url: rest_url.into(),
+            refresh_interval,
+        }
+    }
+
+    pub fn credentials(&self) -> &ApiKeyCredentials {
+        &self.credentials
+    }
+
+    pub fn http(&self) -> Arc<dyn HttpClient> {
+        Arc::clone(&self.http)
+    }
+
+    pub fn rest_url(&self) -> &str {
+        &self.rest_url
+    }
+
+    pub fn refresh_interval(&self) -> Duration {
+        self.refresh_interval
+    }
+}
 
 pub trait ETExchangePortfolio: ETExchange {
     type SnapshotRequest: ETHttpRequest<Exchange = Self> + Send;
+    type Adapter: ExchangeAdapter;
 
     fn account_snapshot_request() -> Self::SnapshotRequest;
     fn account_snapshot(
@@ -23,4 +65,5 @@ pub trait ETExchangePortfolio: ETExchange {
         value: &serde_json::Value,
         mapping: &dyn Fn(&str) -> Option<AssetId>,
     ) -> BuildResult<Option<AccountEvent>>;
+    fn adapter(&self, context: PortfolioAuthContext) -> BuildResult<Self::Adapter>;
 }

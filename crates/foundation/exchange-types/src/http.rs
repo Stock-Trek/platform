@@ -22,3 +22,12 @@ pub enum HttpMethod {
     POST,
     PUT,
 }
+
+#[async_trait::async_trait]
+pub trait HttpClient: Send + Sync {
+    async fn send(
+        &self,
+        request: HttpRequest,
+        timeout: std::time::Duration,
+    ) -> platform_errors::BuildResult<HttpResponse>;
+}
