@@ -25,19 +25,25 @@ where
     Client: WebsocketClient,
 {
     pub async fn connect(&self) -> BuildResult<()> {
-        debug!(exchange = self.exchange.name(), "connecting websocket");
+        debug!(
+            exchange = self.exchange.cex_id().to_string(),
+            "connecting websocket"
+        );
         self.client.connect().await
     }
     pub fn is_connected(&self) -> BuildResult<bool> {
         Ok(self.client.is_connected())
     }
     pub async fn disconnect(&self) -> BuildResult<()> {
-        debug!(exchange = self.exchange.name(), "disconnecting websocket");
+        debug!(
+            exchange = self.exchange.cex_id().to_string(),
+            "disconnecting websocket"
+        );
         self.client.disconnect().await
     }
     pub async fn sync_clock_websocket(&self) -> BuildResult<()> {
         debug!(
-            exchange = self.exchange.name(),
+            exchange = self.exchange.cex_id().to_string(),
             "syncing clock over websocket"
         );
         let server_time_request = self.exchange.server_time_request_websocket();
@@ -63,7 +69,7 @@ where
             .map_err(|_| BuildError::Connector(ConnectorError::MissingServerTime))?;
         self.clock.sync(server_time, round_trip_time)?;
         debug!(
-            exchange = self.exchange.name(),
+            exchange = self.exchange.cex_id().to_string(),
             round_trip_ms = round_trip_time.as_millis() as u64,
             "clock synced over websocket"
         );
@@ -95,7 +101,7 @@ where
         Exchange: Sync,
     {
         debug!(
-            exchange = self.exchange.name(),
+            exchange = self.exchange.cex_id().to_string(),
             "submitting websocket request"
         );
         let is_idempotent = request.is_idempotent();
@@ -146,7 +152,7 @@ where
             }
             retries_remaining -= 1;
             warn!(
-                exchange = self.exchange.name(),
+                exchange = self.exchange.cex_id().to_string(),
                 retries_remaining,
                 error = %error,
                 "websocket request failed, retrying"
@@ -180,7 +186,7 @@ where
                 return Err(BuildError::send_not_sent(error));
             }
         };
-        let exchange = self.exchange.name();
+        let exchange = self.exchange.cex_id().to_string();
         let start = Instant::now();
         debug!(exchange, "sending websocket request");
         self.client.send(message, self.request_timeout).await?;
@@ -220,7 +226,7 @@ where
     {
         if error.send_failure().is_some_and(SendFailure::is_unknown) {
             warn!(
-                exchange = self.exchange.name(),
+                exchange = self.exchange.cex_id().to_string(),
                 error = %error,
                 "request outcome unknown, verification required"
             );

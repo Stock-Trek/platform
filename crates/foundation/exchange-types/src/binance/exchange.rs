@@ -41,8 +41,8 @@ impl ETExchange for BinanceExchange {
     type ServerTimeRequestWebsocket = BinanceTimeRequest;
     type ServerTimeResponseWebsocket = BinanceResponse<BinanceTimeResponse>;
 
-    fn name(&self) -> &'static str {
-        "Binance"
+    fn cex_id(&self) -> CexId {
+        CexId::Binance
     }
 
     fn default_capacity(&self) -> HashMap<RateLimit, UsageCount> {
@@ -81,10 +81,6 @@ impl ETExchange for BinanceExchange {
 
     fn urls(&self) -> &impl Urls {
         &BinanceUrls
-    }
-
-    fn cex_id(&self) -> CexId {
-        CexId::Binance
     }
 
     fn signer(credentials: &ApiKeyCredentials) -> BuildResult<Signer> {

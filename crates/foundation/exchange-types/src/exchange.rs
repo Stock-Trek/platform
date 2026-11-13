@@ -27,12 +27,11 @@ pub trait ETExchange {
     type ServerTimeRequestWebsocket: ServerTimeWebsocketRequest<Self::ServerTimeResponseWebsocket>;
     type ServerTimeResponseWebsocket: ETWebsocketResponse + ServerTimeResponse;
 
-    fn name(&self) -> &'static str;
+    fn cex_id(&self) -> CexId;
     fn default_capacity(&self) -> HashMap<RateLimit, UsageCount>;
     fn server_time_request_http(&self) -> Self::ServerTimeRequestHttp;
     fn server_time_request_websocket(&self) -> Self::ServerTimeRequestWebsocket;
     fn urls(&self) -> &impl Urls;
-    fn cex_id(&self) -> CexId;
     fn signer(credentials: &ApiKeyCredentials) -> BuildResult<Signer>;
     fn create_listen_key_request() -> Self::ListenKeyRequest;
     fn keepalive_listen_key_request(listen_key: &str) -> Self::ListenKeyRequest;

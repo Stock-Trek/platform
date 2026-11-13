@@ -20,7 +20,10 @@ where
     Client: HttpClient,
 {
     pub async fn sync_clock_http(&self) -> BuildResult<()> {
-        debug!(exchange = self.exchange.name(), "syncing clock over HTTP");
+        debug!(
+            exchange = self.exchange.cex_id().to_string(),
+            "syncing clock over HTTP"
+        );
         let server_time_request = self.exchange.server_time_request_http();
         let costs = self.validate_rate_limits(&server_time_request)?;
         let http_request = match server_time_request.try_into_http(&self.signer) {
@@ -43,7 +46,7 @@ where
             .map_err(|_| BuildError::Connector(ConnectorError::MissingServerTime))?;
         self.clock.sync(server_time, round_trip_time)?;
         debug!(
-            exchange = self.exchange.name(),
+            exchange = self.exchange.cex_id().to_string(),
             round_trip_ms = round_trip_time.as_millis() as u64,
             "clock synced over HTTP"
         );
@@ -76,7 +79,10 @@ where
         Exchange: Sync,
         Client: Sync,
     {
-        debug!(exchange = self.exchange.name(), "submitting HTTP request");
+        debug!(
+            exchange = self.exchange.cex_id().to_string(),
+            "submitting HTTP request"
+        );
         let is_idempotent = request.is_idempotent();
         let is_signed = request.is_signed();
         let mut retries_remaining = if is_idempotent { self.max_retries } else { 0 };
@@ -124,7 +130,7 @@ where
             }
             retries_remaining -= 1;
             warn!(
-                exchange = self.exchange.name(),
+                exchange = self.exchange.cex_id().to_string(),
                 retries_remaining,
                 error = %error,
                 "HTTP request failed, retrying"
@@ -153,7 +159,7 @@ where
                     .map_err(BuildError::send_failed)?;
             }
             warn!(
-                exchange = self.exchange.name(),
+                exchange = self.exchange.cex_id().to_string(),
                 status, "exchange rate limited the request"
             );
             return Err(BuildError::send_failed(BuildError::RateLimit(
@@ -162,7 +168,7 @@ where
         }
         if !(200..300).contains(&status) {
             warn!(
-                exchange = self.exchange.name(),
+                exchange = self.exchange.cex_id().to_string(),
                 status, "HTTP request failed"
             );
             if let Some(retry_after) = retry_after {
@@ -207,7 +213,7 @@ where
     {
         if error.send_failure().is_some_and(SendFailure::is_unknown) {
             warn!(
-                exchange = self.exchange.name(),
+                exchange = self.exchange.cex_id().to_string(),
                 error = %error,
                 "request outcome unknown, verification required"
             );
