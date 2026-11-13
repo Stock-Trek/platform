@@ -1,5 +1,6 @@
 mod clients;
 mod connector;
+mod decoders;
 mod panic_guard;
 mod rate_limit;
 mod resync_connector;
@@ -22,6 +23,7 @@ pub use clients::{
     reqwest::ReqwestHttpClient,
 };
 pub use connector::*;
+pub use decoders::*;
 pub use iris;
 pub use resync_connector::*;
 pub use server_clock::*;

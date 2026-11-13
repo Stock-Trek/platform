@@ -10,9 +10,7 @@ test-utils = []
 base64 = { workspace = true }
 iris = { workspace = true }
 platform-errors = { workspace = true }
-platform-metrics = { workspace = true }
 platform-nats = { workspace = true }
-platform-type-bridge = { workspace = true }
 platform-types = { workspace = true }
 rust_decimal = { workspace = true, features = ["serde"] }
 serde = { workspace = true, features = ["derive"] }
@@ -22,7 +20,3 @@ stock-trek-types = { workspace = true, features = ["serde"] }
 strum = { workspace = true }
 thiserror = { workspace = true }
 tokio-websockets = { workspace = true, default-features = false }
-
-[dev-dependencies]
-metrics = { workspace = true }
-platform-metrics = { workspace = true, features = ["test-utils"] }

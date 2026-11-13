@@ -5,9 +5,10 @@ use iris::{
     Listener as IrisListener, ServerCloseBehavior,
 };
 use platform_errors::{BuildError, BuildResult, ExchangeError, IngesterError};
+use platform_exchange_gateway::CodecFactory;
 use platform_market_data::{
     ParsedMessage,
-    codec::{CodecFactory, CodecHandle, SharedCodec},
+    codec::{CodecHandle, SharedCodec},
     frame::DecodedFrame,
 };
 use platform_metrics::MarketDataMetrics;

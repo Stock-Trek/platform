@@ -5,10 +5,8 @@
 //! expired. Event-time watermarks decide which case applies.
 
 use crate::processor::{CandleProcessor, ProcessorUpdate};
-use platform_market_data::{
-    AlignedWindow, Candle, CandleKey, ClosedCandle,
-    trade::{Trade, TradeDecoderFactory},
-};
+use platform_exchange_gateway::TradeDecoderFactory;
+use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, trade::Trade};
 use platform_metrics::MarketDataMetrics;
 use platform_metrics::{DROP_REASON_INVALID_TRADE, STAGE_AGGREGATOR};
 use platform_types::TimestampMilliseconds;

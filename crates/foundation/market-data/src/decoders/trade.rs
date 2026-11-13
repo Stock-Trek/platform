@@ -1,5 +1,5 @@
-use crate::{decoders::binance::binance_trade_decoder::BinanceTradeDecoder, event::MarketEvent};
-use platform_errors::{BuildError, BuildResult, ExchangeError};
+use crate::event::MarketEvent;
+use platform_errors::{BuildError, BuildResult};
 use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -32,22 +32,3 @@ pub trait TradeDecoder: Send + Sync {
 
 /// Type-erased trade decoder for an exchange.
 pub type SharedTradeDecoder = Arc<dyn TradeDecoder>;
-
-/// Builds the trade decoder for an exchange.
-pub struct TradeDecoderFactory;
-
-impl TradeDecoderFactory {
-    pub fn for_exchange(exchange: CexId) -> BuildResult<SharedTradeDecoder> {
-        match exchange {
-            CexId::Binance => Ok(Arc::new(BinanceTradeDecoder)),
-            exchange => Err(BuildError::Exchange(ExchangeError::UnsupportedExchange {
-                exchange: exchange.to_string(),
-            })),
-        }
-    }
-
-    /// Resolves an exchange stream name without retaining a decoder cache.
-    pub fn trading_pair_for_stream(exchange: CexId, stream: &str) -> BuildResult<TradingPair> {
-        Self::for_exchange(exchange)?.trading_pair_for_stream(stream)
-    }
-}

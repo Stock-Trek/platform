@@ -12,6 +12,7 @@ platform-aggregator = { workspace = true }
 platform-archive = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
+platform-exchange-gateway = { workspace = true }
 platform-market-data = { workspace = true }
 platform-runtime = { workspace = true }
 platform-types = { workspace = true }

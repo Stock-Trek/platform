@@ -8,6 +8,7 @@ async-trait = { workspace = true }
 iris = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
+platform-exchange-gateway = { workspace = true }
 platform-market-data = { workspace = true }
 platform-metrics = { workspace = true }
 platform-nats = { workspace = true }

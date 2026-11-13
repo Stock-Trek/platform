@@ -4,10 +4,8 @@
 use crate::processor::{ProcessorConfig, ProcessorUpdate};
 use crate::state::{AggregatorState, SequenceRange, StreamProgress};
 use platform_errors::BuildResult;
-use platform_market_data::{
-    AlignedWindow, ClosedCandle, GapMarker, MarketEvent,
-    trade::{Trade, TradeDecoderFactory},
-};
+use platform_exchange_gateway::TradeDecoderFactory;
+use platform_market_data::{AlignedWindow, ClosedCandle, GapMarker, MarketEvent, trade::Trade};
 use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 

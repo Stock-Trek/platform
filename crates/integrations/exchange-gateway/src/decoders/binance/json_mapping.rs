@@ -1,8 +1,8 @@
-use crate::{
-    decoders::json_mapping::{JsonFrame, JsonMapping, MappedJsonCodec},
-    event::ParsedMessage,
-};
 use platform_errors::IngesterError;
+use platform_market_data::{
+    ParsedMessage,
+    json_mapping::{JsonFrame, JsonMapping, MappedJsonCodec},
+};
 use platform_types::TimestampMilliseconds;
 use serde_json::{Map, Value};
 

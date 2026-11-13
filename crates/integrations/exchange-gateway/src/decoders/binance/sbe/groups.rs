@@ -1,5 +1,5 @@
-use crate::decoders::binary_cursor::BinaryCursor;
 use platform_errors::IngesterError;
+use platform_market_data::binary_cursor::BinaryCursor;
 
 /// SBE group header and the location of its entries within the frame.
 #[derive(Debug, Clone, Copy)]

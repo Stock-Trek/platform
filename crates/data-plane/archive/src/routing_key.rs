@@ -5,7 +5,8 @@
 //! key, so changing the active shard count only changes which buckets a
 //! shard owns. It never changes the contents of an archive bucket.
 
-use platform_market_data::{MarketEvent, trade::TradeDecoderFactory};
+use platform_exchange_gateway::TradeDecoderFactory;
+use platform_market_data::MarketEvent;
 use std::fmt;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 

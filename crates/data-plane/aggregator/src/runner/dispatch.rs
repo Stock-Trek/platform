@@ -15,10 +15,8 @@ use crate::{
     writer_lease::LeaseStore,
 };
 use platform_errors::BuildResult;
-use platform_market_data::{
-    GapMarker, MarketEvent,
-    trade::{SharedTradeDecoder, TradeDecoderFactory},
-};
+use platform_exchange_gateway::TradeDecoderFactory;
+use platform_market_data::{GapMarker, MarketEvent, trade::SharedTradeDecoder};
 use platform_metrics::AggregatorMetrics;
 use platform_metrics::MarketDataMetrics;
 use platform_metrics::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};

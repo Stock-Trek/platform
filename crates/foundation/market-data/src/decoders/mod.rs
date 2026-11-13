@@ -1,4 +1,3 @@
-pub mod binance;
 pub mod binary_cursor;
 pub mod codec;
 pub mod frame;

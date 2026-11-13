@@ -19,6 +19,7 @@ parquet = { workspace = true, features = ["async"] }
 platform-aws = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http", "storage"] }
+platform-exchange-gateway = { workspace = true }
 platform-market-data = { workspace = true }
 platform-types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }

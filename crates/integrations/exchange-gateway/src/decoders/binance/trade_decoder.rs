@@ -1,13 +1,11 @@
-use crate::{
-    decoders::{
-        binance::sbe::BinanceSbeCodec,
-        json_mapping::JsonFrame,
-        trade::{Trade, TradeDecoder},
-    },
-    event::MarketEvent,
-};
+use crate::decoders::binance::sbe::BinanceSbeCodec;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_errors::{BuildError, BuildResult, IngesterError};
+use platform_market_data::{
+    MarketEvent,
+    json_mapping::JsonFrame,
+    trade::{Trade, TradeDecoder},
+};
 use platform_metrics::{DROP_REASON_INVALID_TRADE, MarketDataMetrics, STAGE_AGGREGATOR};
 use platform_type_bridge::BinanceConverter;
 use platform_types::TimestampMilliseconds;

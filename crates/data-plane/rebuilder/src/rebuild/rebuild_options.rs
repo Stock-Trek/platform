@@ -4,9 +4,10 @@ use crate::rebuild::{
 };
 use platform_aggregator::{CandleProcessor, ProcessorConfig};
 use platform_errors::BuildResult;
+use platform_exchange_gateway::TradeDecoderFactory;
 use platform_market_data::{
     MarketEvent,
-    trade::{SharedTradeDecoder, Trade, TradeDecoderFactory},
+    trade::{SharedTradeDecoder, Trade},
 };
 use platform_types::TimestampMilliseconds;
 use std::collections::{BTreeMap, HashMap, HashSet};

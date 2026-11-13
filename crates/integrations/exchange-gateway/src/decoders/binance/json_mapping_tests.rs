@@ -1,20 +1,21 @@
-use crate::{
-    decoders::binance::binance_json_mapping::{BinanceJsonCodec, BinanceJsonMapping},
-    event::ParsedMessage,
-};
+use crate::decoders::binance::{BinanceJsonCodec, BinanceJsonMapping};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use iris::Codec;
 use platform_errors::IngesterError;
+use platform_market_data::ParsedMessage;
 use platform_types::TimestampMilliseconds;
 use serde_json::json;
 use tokio_websockets::Message;
 
-fn codec() -> BinanceJsonCodec {
-    BinanceJsonCodec::new(BinanceJsonMapping)
-}
+struct Decoder;
 
-fn decode(frame: Vec<u8>) -> Result<ParsedMessage, IngesterError> {
-    codec().decode(Message::binary(frame)).unwrap().result
+impl Decoder {
+    fn decode(frame: Vec<u8>) -> Result<ParsedMessage, IngesterError> {
+        BinanceJsonCodec::new(BinanceJsonMapping)
+            .decode(Message::binary(frame))
+            .unwrap()
+            .result
+    }
 }
 
 #[test]
@@ -32,7 +33,7 @@ fn parses_combined_json_streams() {
     }))
     .unwrap();
 
-    let parsed = decode(frame.clone()).unwrap();
+    let parsed = Decoder::decode(frame.clone()).unwrap();
 
     assert_eq!(parsed.stream, "btcusdt@trade");
     assert_eq!(parsed.sequence, Some(42));
@@ -55,7 +56,7 @@ fn derives_a_stream_name_and_range_for_raw_depth_messages() {
     }))
     .unwrap();
 
-    let parsed = decode(frame).unwrap();
+    let parsed = Decoder::decode(frame).unwrap();
 
     assert_eq!(parsed.stream, "btcusdt@depthUpdate");
     assert_eq!(parsed.sequence, Some(99));
@@ -74,7 +75,7 @@ fn depth_messages_without_previous_update_id_are_accepted() {
     }))
     .unwrap();
 
-    let parsed = decode(frame).unwrap();
+    let parsed = Decoder::decode(frame).unwrap();
 
     assert_eq!(parsed.sequence, Some(99));
     assert_eq!(parsed.first_sequence, Some(90));
@@ -90,7 +91,7 @@ fn depth_messages_require_both_ends_of_the_update_range() {
     }))
     .unwrap();
 
-    let error = decode(frame).unwrap_err();
+    let error = Decoder::decode(frame).unwrap_err();
 
     assert!(matches!(
         error,
@@ -108,7 +109,7 @@ fn depth_messages_reject_invalid_update_ranges() {
     }))
     .unwrap();
 
-    let error = decode(frame).unwrap_err();
+    let error = Decoder::decode(frame).unwrap_err();
 
     assert!(matches!(
         error,
@@ -127,7 +128,7 @@ fn depth_messages_reject_a_previous_update_id_inside_the_range() {
     }))
     .unwrap();
 
-    let error = decode(frame).unwrap_err();
+    let error = Decoder::decode(frame).unwrap_err();
 
     assert!(matches!(
         error,
@@ -147,7 +148,7 @@ fn json_events_without_a_sequence_are_accepted() {
     }))
     .unwrap();
 
-    let parsed = decode(frame).unwrap();
+    let parsed = Decoder::decode(frame).unwrap();
 
     assert_eq!(parsed.sequence, None);
 }
@@ -163,7 +164,7 @@ fn sequenced_json_events_must_include_their_sequence() {
     }))
     .unwrap();
 
-    let error = decode(frame).unwrap_err();
+    let error = Decoder::decode(frame).unwrap_err();
 
     assert!(matches!(
         error,
