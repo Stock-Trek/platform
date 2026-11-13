@@ -1,6 +1,3 @@
-use crate::binance::portfolio::{
-    BinanceListenKeyResponse, binance_listen_key_action::BinanceListenKeyAction,
-};
 use crate::{
     binance::{exchange::BinanceExchange, response::BinanceResponse},
     encode::ByteEncoder,
@@ -9,9 +6,16 @@ use crate::{
     request::{ETHttpRequest, ETRequest},
     signer::Signer,
 };
-use platform_errors::BuildResult;
+use platform_errors::{BuildError, BuildResult};
 use platform_types::{TimestampMilliseconds, UsageCount};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+pub enum BinanceListenKeyAction {
+    Create,
+    Keepalive,
+    Close,
+}
 
 #[derive(Debug, Clone, Serialize)]
 pub struct BinanceListenKeyRequest {
@@ -103,5 +107,21 @@ impl ETHttpRequest for BinanceListenKeyRequest {
             headers: vec![("X-MBX-APIKEY".to_string(), signer.api_key())],
             body: None,
         })
+    }
+}
+
+#[derive(Debug, Clone, Default, Deserialize)]
+pub struct BinanceListenKeyResponse {
+    #[serde(rename = "listenKey", default)]
+    listen_key: Option<String>,
+}
+
+impl BinanceListenKeyResponse {
+    pub fn require_listen_key(self) -> BuildResult<String> {
+        let listen_key = self
+            .listen_key
+            .filter(|listen_key| !listen_key.is_empty())
+            .ok_or_else(|| BuildError::bad_value("listen key", "", "is missing"))?;
+        Ok(listen_key)
     }
 }

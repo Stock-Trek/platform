@@ -1,10 +1,17 @@
-use crate::binance::portfolio::credential_entry::CredentialEntry;
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use secrecy::SecretString;
+use serde::Deserialize;
 use std::{collections::BTreeSet, fmt};
 
 pub const CREDENTIALS: &str = "PORTFOLIO_BINANCE_CREDENTIALS";
+
+#[derive(Deserialize)]
+struct CredentialEntry {
+    account: String,
+    api_key: String,
+    secret: String,
+}
 
 #[derive(Clone)]
 pub struct BinanceCredentialConfig {

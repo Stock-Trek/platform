@@ -1,5 +1,34 @@
-use crate::binance::portfolio::{BinanceAccountBalanceEvent, wire_event::WireEvent};
 use platform_errors::{BuildError, BuildResult};
+use serde::Deserialize;
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BinanceAccountBalanceEvent {
+    asset: String,
+    free: String,
+    locked: String,
+}
+
+impl BinanceAccountBalanceEvent {
+    pub(super) fn new(asset: String, free: String, locked: String) -> Self {
+        Self {
+            asset,
+            free,
+            locked,
+        }
+    }
+
+    pub fn asset(&self) -> &str {
+        &self.asset
+    }
+
+    pub fn free(&self) -> &str {
+        &self.free
+    }
+
+    pub fn locked(&self) -> &str {
+        &self.locked
+    }
+}
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct BinanceUserDataEvent {
@@ -47,4 +76,28 @@ impl BinanceUserDataEvent {
     pub fn is_account_position(&self) -> bool {
         self.event_type == "outboundAccountPosition"
     }
+}
+
+#[allow(non_snake_case)]
+#[derive(Deserialize)]
+struct WireEvent {
+    #[serde(rename = "e")]
+    event_type: String,
+    #[serde(rename = "E")]
+    event_time: i64,
+    #[serde(rename = "u")]
+    version: Option<u64>,
+    #[serde(rename = "B")]
+    balances: Option<Vec<WireBalance>>,
+}
+
+#[allow(non_snake_case)]
+#[derive(Deserialize)]
+struct WireBalance {
+    #[serde(rename = "a")]
+    asset: String,
+    #[serde(rename = "f")]
+    free: String,
+    #[serde(rename = "l")]
+    locked: String,
 }
