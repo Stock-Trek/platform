@@ -16,6 +16,7 @@ futures-timer = { workspace = true }
 httpdate = { workspace = true }
 iris = { workspace = true }
 parking_lot = { workspace = true }
+rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["rustls"] }
 secrecy = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
