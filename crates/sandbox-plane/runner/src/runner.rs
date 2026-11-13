@@ -6,10 +6,9 @@ use crate::{
 use platform_exit_codes::ExitCode;
 use prost::Message;
 use std::collections::BTreeSet;
-use stock_trek::{Algorithm, ResolvedContext, StrategyContext, signals::SignalContext, traitreg};
-
-#[traitreg::registry(Algorithm)]
-static ALGORITHM_REGISTRY: () = ();
+use stock_trek::{
+    Algorithm, RegisteredImpl, ResolvedContext, StrategyContext, signals::SignalContext,
+};
 
 pub struct Runner;
 
@@ -41,36 +40,25 @@ impl Runner {
     }
 
     fn select_algorithm(strategy_name: &str) -> Result<Box<dyn Algorithm>, ExitCode> {
+        let algorithms = RegisteredImpl::algorithms();
         let mut names = BTreeSet::new();
-        if ALGORITHM_REGISTRY
+        if algorithms
             .iter()
             .any(|registration| !names.insert(registration.name()))
         {
             return Err(ExitCode::StrategyNameNotUnique);
         }
 
-        let mut registrations = ALGORITHM_REGISTRY.iter().filter(|registration| {
+        let mut registrations = algorithms.into_iter().filter(|registration| {
             registration.name() == strategy_name || registration.path() == strategy_name
         });
         let Some(registration) = registrations.next() else {
-            if ALGORITHM_REGISTRY.iter().next().is_some()
-                && ALGORITHM_REGISTRY
-                    .iter()
-                    .all(|registration| !registration.has_constructor())
-            {
-                return Err(ExitCode::StrategyHasNoConstructor);
-            }
             return Err(ExitCode::StrategyNotFound);
         };
         if registrations.next().is_some() {
             return Err(ExitCode::StrategyNameNotUnique);
         }
-        if !registration.has_constructor() {
-            return Err(ExitCode::StrategyHasNoConstructor);
-        }
-        registration
-            .instanciate()
-            .ok_or(ExitCode::StrategyCouldNotInstantiate)
+        Ok(registration.instantiate())
     }
 
     fn cmd_algorithm(algorithm: &dyn Algorithm) -> Result<(), ExitCode> {

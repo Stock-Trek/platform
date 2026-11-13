@@ -5163,7 +5163,6 @@ dependencies = [
  "tokio",
  "tokio-websockets",
  "tracing",
- "traitreg",
  "wasmtime",
  "wasmtime-wasi",
 ]
@@ -6748,16 +6747,16 @@ checksum = "6ce2be8dc25455e1f91df71bfa12ad37d7af1092ae736f3a6cd0e37bc7810596"
 
 [[package]]
 name = "stock-trek"
-version = "0.18.0"
+version = "0.19.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a83dd2b17abf4e134c11c6d742710bfbedc1019a0131ee4c3fab6ef06c68c9be"
+checksum = "96688c1ba1ceec4629ce4568be6e3e48172bfd7d44a82a0e5eabadc983ec9d31"
 dependencies = [
  "chrono",
  "rust_decimal",
  "serde",
+ "stock-trek-macros",
  "stock-trek-types",
  "strum 0.28.0",
- "traitreg",
 ]
 
 [[package]]
@@ -6771,6 +6770,17 @@ dependencies = [
  "proc-macro2",
  "quote",
  "strum 0.28.0",
+ "syn 2.0.119",
+]
+
+[[package]]
+name = "stock-trek-macros"
+version = "0.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e0e01c75fe251e298bbd2afb9379e90f4fd02aec99386c894015572391ce486"
+dependencies = [
+ "proc-macro2",
+ "quote",
  "syn 2.0.119",
 ]
 
@@ -7295,23 +7305,6 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
-]
-
-[[package]]
-name = "traitreg"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0ee5f6a15ac8ad481710cf3c1b1de4451f38f4f6a1f8dbc0249d9a02508db93b"
-dependencies = [
- "traitreg-macros",
-]
-
-[[package]]
-name = "traitreg-macros"
-version = "0.4.0"
-dependencies = [
- "quote",
- "syn 2.0.119",
 ]
 
 [[package]]
