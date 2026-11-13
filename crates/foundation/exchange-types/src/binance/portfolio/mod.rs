@@ -1,7 +1,6 @@
 pub mod config;
 pub mod credentials;
 pub mod event_parser;
-pub mod exchange;
 pub mod listen_key;
 pub mod user_data_event;
 
