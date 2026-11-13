@@ -8,9 +8,6 @@ pub mod listen_key;
 pub mod session_lifecycle;
 pub mod user_data_event;
 
-pub use auth_binder::BinanceAuthBinder;
-pub use credential_provider::BinanceCredentialProvider;
-
 #[cfg(test)]
 mod auth_tests;
 #[cfg(test)]
@@ -21,3 +18,6 @@ mod event_parser_tests;
 mod listen_key_tests;
 #[cfg(test)]
 mod user_data_tests;
+
+pub use auth_binder::BinanceAuthBinder;
+pub use credential_provider::BinanceCredentialProvider;

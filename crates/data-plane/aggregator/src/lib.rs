@@ -10,8 +10,6 @@ mod restore;
 mod runner;
 mod shard_id;
 mod state;
-#[cfg(test)]
-mod supervisor;
 mod writer_lease;
 
 #[cfg(test)]
@@ -24,6 +22,8 @@ mod hash_router_tests;
 mod market_source_tests;
 #[cfg(test)]
 mod shard_id_tests;
+#[cfg(test)]
+mod supervisor;
 #[cfg(test)]
 mod supervisor_tests;
 #[cfg(test)]

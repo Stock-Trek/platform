@@ -1,10 +1,11 @@
 mod ranges;
+mod schedule;
+mod service;
+
 #[cfg(test)]
 mod retry_tests;
-mod schedule;
 #[cfg(test)]
 mod schedule_tests;
-mod service;
 #[cfg(test)]
 mod service_tests;
 #[cfg(test)]

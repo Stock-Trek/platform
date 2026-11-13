@@ -5,11 +5,10 @@
 //! Both are required for algorithms registered by user code to be visible when
 //! the runner executes as a WebAssembly guest.
 
-use quote::quote;
+mod parse;
 
 use parse::{RegisterAttribute, RegisterItem, RegistryAttribute, RegistryItem};
-
-mod parse;
+use quote::quote;
 
 /// Register an implementation of a trait on a concrete type.
 ///

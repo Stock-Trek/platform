@@ -20,6 +20,5 @@ pub use portfolio::PortfolioMetrics;
 pub use route::RouteMetrics;
 pub use secret::SecretMetrics;
 pub use sqs::SqsMetrics;
-
 #[cfg(any(test, feature = "test-utils"))]
 pub use test_utils::TestRecorder;

@@ -1,14 +1,15 @@
 mod config;
 mod ingester_runner;
+mod message_ingester;
+mod sequence_tracker;
+mod websocket_source;
+
 #[cfg(test)]
 mod ingester_runner_tests;
-mod message_ingester;
 #[cfg(test)]
 mod message_ingester_tests;
-mod sequence_tracker;
 #[cfg(test)]
 mod sequence_tracker_tests;
-mod websocket_source;
 #[cfg(test)]
 mod websocket_source_tests;
 

@@ -1,6 +1,4 @@
 mod auth;
-#[cfg(test)]
-mod auth_tests;
 mod binance;
 mod build;
 mod build_classification;
@@ -8,11 +6,7 @@ mod build_constructors;
 mod build_conversions;
 mod config;
 mod connector;
-#[cfg(test)]
-mod connector_tests;
 mod data;
-#[cfg(test)]
-mod data_tests;
 mod decimal;
 mod error_type;
 mod exchange;
@@ -22,28 +16,35 @@ mod github;
 mod http;
 mod ingester;
 mod io;
-#[cfg(test)]
-mod io_tests;
 #[cfg(feature = "lambda")]
 mod lambda;
 mod nats;
 mod rate_limit;
 mod retryability;
-#[cfg(test)]
-mod retryability_tests;
 mod secrets;
-#[cfg(test)]
-mod secrets_tests;
 mod sqs;
 #[cfg(feature = "storage")]
 mod storage;
-#[cfg(test)]
-mod storage_tests;
 mod system;
-#[cfg(test)]
-mod system_tests;
 mod timeout;
 mod validation;
+
+#[cfg(test)]
+mod auth_tests;
+#[cfg(test)]
+mod connector_tests;
+#[cfg(test)]
+mod data_tests;
+#[cfg(test)]
+mod io_tests;
+#[cfg(test)]
+mod retryability_tests;
+#[cfg(test)]
+mod secrets_tests;
+#[cfg(test)]
+mod storage_tests;
+#[cfg(test)]
+mod system_tests;
 
 pub use auth::AuthError;
 pub use binance::{BinanceError, BinanceErrorData};

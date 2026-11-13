@@ -1,11 +1,10 @@
 mod archiver_runner;
 mod config;
+mod sink;
+mod source;
 
 #[cfg(test)]
 mod archiver_runner_tests;
-
-mod sink;
-mod source;
 
 use crate::{
     archiver_runner::ArchiverRunner, config::ArchiverConfig, sink::S3ParquetSink,

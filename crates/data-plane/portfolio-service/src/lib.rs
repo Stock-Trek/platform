@@ -22,6 +22,9 @@ mod state;
 mod update_consumer;
 mod update_source;
 
+#[cfg(test)]
+mod tests;
+
 pub use auth_service::PortfolioAuthService;
 pub use config::{
     AuthConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig, PortfolioConfig, UpdateConfig,
@@ -48,6 +51,3 @@ pub use service::PortfolioService;
 pub use state::{PortfolioState, PortfolioUpdateMetadata, PortfolioUpdateOutcome};
 pub use update_consumer::PortfolioUpdateConsumer;
 pub use update_source::{PortfolioUpdateMessage, PortfolioUpdateSource};
-
-#[cfg(test)]
-mod tests;

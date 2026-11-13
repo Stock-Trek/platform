@@ -1,26 +1,20 @@
 mod backfiller;
+mod backfiller_runner;
 mod binance;
 mod config;
 mod event_fetcher;
 mod event_page_source;
-
-#[cfg(test)]
-mod event_fetcher_tests;
-
+mod gap_retry_store;
 mod nats_gap_marker_source;
 
 #[cfg(test)]
-mod nats_gap_marker_source_tests;
-
-mod gap_retry_store;
-
+mod backfiller_runner_tests;
+#[cfg(test)]
+mod event_fetcher_tests;
 #[cfg(test)]
 mod gap_retry_store_tests;
-
-mod backfiller_runner;
-
 #[cfg(test)]
-mod backfiller_runner_tests;
+mod nats_gap_marker_source_tests;
 
 use crate::{
     backfiller_runner::BackfillerRunner, binance::fetcher::BinanceGapFetcher,

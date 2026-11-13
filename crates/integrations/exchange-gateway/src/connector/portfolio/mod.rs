@@ -25,6 +25,19 @@ mod portfolio_update_sink;
 mod session_state;
 mod watcher;
 
+#[cfg(test)]
+mod config_tests;
+#[cfg(test)]
+mod connector_tests;
+#[cfg(test)]
+mod feed_tests;
+#[cfg(test)]
+mod health_tests;
+#[cfg(test)]
+mod portfolio_test_fakes_tests;
+#[cfg(test)]
+mod session_tests;
+
 pub use config::{PortfolioConnectorConfig, PortfolioExchangeConfig};
 pub use connector_health::ConnectorHealth;
 pub use connector_health_contract::{CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT};
@@ -46,16 +59,3 @@ pub use portfolio_session::PortfolioSession;
 pub use portfolio_stream::{PortfolioEvent, PortfolioStream};
 pub use portfolio_update_apply::PortfolioUpdateApply;
 pub use portfolio_update_sink::PortfolioUpdateSink;
-
-#[cfg(test)]
-mod config_tests;
-#[cfg(test)]
-mod connector_tests;
-#[cfg(test)]
-mod feed_tests;
-#[cfg(test)]
-mod health_tests;
-#[cfg(test)]
-mod portfolio_test_fakes_tests;
-#[cfg(test)]
-mod session_tests;
