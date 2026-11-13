@@ -44,15 +44,16 @@ async fn restores_state_and_skips_inputs_already_in_the_archive() {
     assert_eq!(checkpoint.state.open_candles_len(), 0);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn idle_flush_after_restore_does_not_fail_without_a_source_record() {
     let shard = ShardId::new(0);
     let signal = crate::runner::QuiesceSignal::new();
     let trigger = signal.clone();
+    let polls = Arc::new(AtomicUsize::new(0));
     let source = SignalingSource {
         records: Vec::new(),
         signal: signal.clone(),
-        polls: Arc::new(AtomicUsize::new(0)),
+        polls: polls.clone(),
         acked: Arc::new(Mutex::new(0)),
     };
     let mut config = Fixtures::config();
@@ -66,7 +67,9 @@ async fn idle_flush_after_restore_does_not_fail_without_a_source_record() {
         .with_quiesce_signal(signal);
 
     let handle = tokio::spawn(async move { runner.run().await });
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    Fixtures::wait_for_polls(&polls, 1).await;
+    tokio::time::advance(std::time::Duration::from_millis(10)).await;
+    Fixtures::wait_for_polls(&polls, 2).await;
     trigger.quiesce();
     tokio::time::timeout(std::time::Duration::from_secs(1), handle)
         .await
@@ -77,15 +80,16 @@ async fn idle_flush_after_restore_does_not_fail_without_a_source_record() {
     assert!(checkpoints.get(shard).is_none());
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
     let shard = ShardId::new(0);
     let signal = crate::runner::QuiesceSignal::new();
     let trigger = signal.clone();
+    let polls = Arc::new(AtomicUsize::new(0));
     let source = SignalingSource {
         records: Vec::new(),
         signal: signal.clone(),
-        polls: Arc::new(AtomicUsize::new(0)),
+        polls: polls.clone(),
         acked: Arc::new(Mutex::new(0)),
     };
     let mut restored_state = AggregatorState::new();
@@ -102,7 +106,9 @@ async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
         .with_quiesce_signal(signal);
 
     let handle = tokio::spawn(async move { runner.run().await });
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    Fixtures::wait_for_polls(&polls, 1).await;
+    tokio::time::advance(std::time::Duration::from_millis(10)).await;
+    Fixtures::wait_for_polls(&polls, 2).await;
     trigger.quiesce();
     tokio::time::timeout(std::time::Duration::from_secs(1), handle)
         .await
@@ -116,15 +122,16 @@ async fn idle_flush_after_checkpoint_restore_preserves_the_source_position() {
     assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(61_000)));
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn idle_flush_after_archive_restore_does_not_reuse_a_stale_checkpoint_position() {
     let shard = ShardId::new(0);
     let signal = crate::runner::QuiesceSignal::new();
     let trigger = signal.clone();
+    let polls = Arc::new(AtomicUsize::new(0));
     let source = SignalingSource {
         records: Vec::new(),
         signal: signal.clone(),
-        polls: Arc::new(AtomicUsize::new(0)),
+        polls: polls.clone(),
         acked: Arc::new(Mutex::new(0)),
     };
     let mut restored_state = AggregatorState::new();
@@ -142,7 +149,9 @@ async fn idle_flush_after_archive_restore_does_not_reuse_a_stale_checkpoint_posi
         .with_quiesce_signal(signal);
 
     let handle = tokio::spawn(async move { runner.run().await });
-    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    Fixtures::wait_for_polls(&polls, 1).await;
+    tokio::time::advance(std::time::Duration::from_millis(10)).await;
+    Fixtures::wait_for_polls(&polls, 2).await;
     trigger.quiesce();
     tokio::time::timeout(std::time::Duration::from_secs(1), handle)
         .await

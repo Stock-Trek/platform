@@ -6,6 +6,7 @@ use std::{
     collections::BTreeMap,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+use tokio::time::Instant;
 
 const REFRESH_MARGIN_SECS: u64 = 30;
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
@@ -14,8 +15,8 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
 pub(super) struct FetchedJwt {
     pub token: String,
-    pub refresh_at: SystemTime,
-    pub expires_at: SystemTime,
+    pub refresh_at: Instant,
+    pub expires_at: Instant,
 }
 
 #[derive(Clone)]
@@ -118,10 +119,11 @@ impl JwtFetcher {
         } else {
             (lifetime as u64).max(1) / 2
         };
+        let fetched_at = Instant::now();
         Ok(FetchedJwt {
             token: response.token().to_string(),
-            refresh_at: SystemTime::now() + Duration::from_secs(refresh_after),
-            expires_at: UNIX_EPOCH + Duration::from_secs(response.expires_at_unix() as u64),
+            refresh_at: fetched_at + Duration::from_secs(refresh_after),
+            expires_at: fetched_at + Duration::from_secs(lifetime as u64),
         })
     }
 }

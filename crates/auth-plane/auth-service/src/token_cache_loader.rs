@@ -4,10 +4,8 @@ use crate::{
 };
 use platform_errors::{AuthError, BuildError, BuildResult, ErrorType};
 use platform_metrics::AuthTokenCacheMetrics;
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
+use tokio::time::Instant;
 
 impl CachedTokenStore {
     pub(crate) async fn cached_get(&self, id: &str) -> BuildResult<Option<ApiToken>> {

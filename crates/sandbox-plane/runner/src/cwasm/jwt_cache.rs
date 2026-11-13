@@ -2,27 +2,23 @@ use crate::cwasm::jwt_fetcher::{FetchedJwt, JwtFetcher};
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
 use platform_sigv4::SigV4Config;
-use std::{
-    io,
-    sync::Arc,
-    time::{Duration, SystemTime},
-};
-use tokio::sync::watch;
+use std::{io, sync::Arc, time::Duration};
+use tokio::{sync::watch, time::Instant};
 
 const FAILURE_BACKOFF: Duration = Duration::from_secs(1);
 
 struct CachedJwt {
     token: String,
-    refresh_at: SystemTime,
-    expires_at: SystemTime,
+    refresh_at: Instant,
+    expires_at: Instant,
 }
 
 impl CachedJwt {
-    fn is_fresh(&self, now: SystemTime) -> bool {
+    fn is_fresh(&self, now: Instant) -> bool {
         now < self.refresh_at
     }
 
-    fn is_usable(&self, now: SystemTime) -> bool {
+    fn is_usable(&self, now: Instant) -> bool {
         now < self.expires_at
     }
 }
@@ -41,7 +37,7 @@ impl From<FetchedJwt> for CachedJwt {
 struct CacheState {
     cached: Option<CachedJwt>,
     refreshing: bool,
-    retry_after: Option<SystemTime>,
+    retry_after: Option<Instant>,
     generation: u64,
 }
 
@@ -114,7 +110,7 @@ impl JwtCache {
 
     fn action(&self) -> Action {
         let mut state = self.state.lock();
-        let now = SystemTime::now();
+        let now = Instant::now();
         if state.refreshing {
             return match &state.cached {
                 Some(cached) if cached.is_usable(now) => Action::Return(cached.token.clone()),
@@ -146,7 +142,7 @@ impl JwtCache {
     }
 
     fn usable_token(&self) -> Option<String> {
-        let now = SystemTime::now();
+        let now = Instant::now();
         self.state
             .lock()
             .cached
@@ -171,7 +167,7 @@ impl JwtCache {
         let generation = {
             let mut state = self.state.lock();
             state.refreshing = false;
-            state.retry_after = Some(SystemTime::now() + FAILURE_BACKOFF);
+            state.retry_after = Some(Instant::now() + FAILURE_BACKOFF);
             state.generation = state.generation.wrapping_add(1);
             state.generation
         };

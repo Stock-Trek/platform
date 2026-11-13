@@ -3,7 +3,13 @@ use crate::tests::{
     token_cache_support_tests::{Fixture, TestStore},
 };
 use crate::{TokenCacheConfig, TokenStore};
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 use tokio::task::JoinSet;
 
 #[tokio::test]
@@ -26,15 +32,18 @@ async fn caches_positive_and_negative_lookups() {
 async fn coalesces_concurrent_misses() {
     let store = Arc::new(TestStore::new());
     store.insert(&TestFixture::token("token-d")).await;
-    store.set_delay_millis(30);
+    store.hold_reads();
     let cache = Arc::new(Fixture::cached(
         store.clone(),
         Fixture::config(10_000, 20_000, 3, 10_000),
     ));
+    let started = Arc::new(AtomicUsize::new(0));
     let mut tasks = JoinSet::new();
     for _ in 0..8 {
         let cache = cache.clone();
+        let started = started.clone();
         tasks.spawn(async move {
+            started.fetch_add(1, Ordering::SeqCst);
             cache
                 .get("token-d")
                 .await
@@ -44,6 +53,9 @@ async fn coalesces_concurrent_misses() {
                 .to_string()
         });
     }
+    Fixture::wait_for_started(&started, 8).await;
+    store.wait_until_read_starts().await;
+    store.release_reads();
     while let Some(result) = tasks.join_next().await {
         assert_eq!(result.unwrap(), "token-d");
     }

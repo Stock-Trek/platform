@@ -30,6 +30,7 @@ use std::{
     time::{Duration, Instant},
 };
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
+use tokio::sync::Notify;
 
 struct Credentials;
 
@@ -164,6 +165,7 @@ impl PortfolioExchange for Transport {
 struct ServiceSink {
     service: Arc<PortfolioService>,
     updates: Mutex<Vec<PortfolioUpdate>>,
+    applied: Arc<Notify>,
 }
 
 #[async_trait]
@@ -175,6 +177,7 @@ impl PortfolioUpdateSink for ServiceSink {
         let update = PortfolioUpdate::try_from(update)?;
         let outcome = self.service.apply_portfolio_update(update.clone());
         self.updates.lock().push(update);
+        self.applied.notify_one();
         Ok(match outcome {
             crate::PortfolioUpdateOutcome::Applied => PortfolioUpdateApply::Applied,
             crate::PortfolioUpdateOutcome::IgnoredUntracked => {
@@ -199,7 +202,7 @@ impl Fixture {
         )
     }
 
-    async fn wait_for_update(service: &PortfolioService) {
+    async fn wait_for_update(service: &PortfolioService, applied: &Notify) {
         tokio::time::timeout(Duration::from_secs(2), async {
             loop {
                 if service
@@ -208,7 +211,7 @@ impl Fixture {
                 {
                     return;
                 }
-                tokio::time::sleep(Duration::from_millis(5)).await;
+                applied.notified().await;
             }
         })
         .await
@@ -233,6 +236,7 @@ async fn connector_updates_authorize_orders_before_and_after_recovery() {
     let sink = Arc::new(ServiceSink {
         service: Arc::clone(&service),
         updates: Mutex::new(Vec::new()),
+        applied: Arc::new(Notify::new()),
     });
     feed.set_update_sink(sink.clone());
 
@@ -240,7 +244,7 @@ async fn connector_updates_authorize_orders_before_and_after_recovery() {
         .apply_ownership_event(&Fixture::ownership_event())
         .await
         .expect("ownership");
-    Fixture::wait_for_update(&service).await;
+    Fixture::wait_for_update(&service, &sink.applied).await;
 
     let (_, auth_service, _) = OrderFixture::service().await;
     let order_service =

@@ -1,5 +1,5 @@
 use crate::{ApiToken, CachedTokenStore, TokenMutation};
-use std::time::Instant;
+use tokio::time::Instant;
 
 impl CachedTokenStore {
     pub(crate) fn record_token(&self, token: &ApiToken) {

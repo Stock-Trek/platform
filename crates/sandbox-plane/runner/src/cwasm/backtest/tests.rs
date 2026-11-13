@@ -4,9 +4,10 @@ use rand::{SeedableRng, rngs::StdRng};
 use serde_json::Value;
 use std::{
     collections::BTreeMap,
-    sync::atomic::{AtomicUsize, Ordering},
-    thread,
-    time::Duration,
+    sync::{
+        Barrier,
+        atomic::{AtomicUsize, Ordering},
+    },
 };
 use stock_trek::{
     actions::ResolvedAction,
@@ -195,11 +196,12 @@ fn simulations_respect_the_concurrency_limit() {
     let active = AtomicUsize::new(0);
     let peak = AtomicUsize::new(0);
     let seen = Mutex::new(Vec::new());
+    let barrier = Barrier::new(3);
     let results = BackTest::run_simulations(12, 3, |index| {
         let running = active.fetch_add(1, Ordering::SeqCst) + 1;
         peak.fetch_max(running, Ordering::SeqCst);
         seen.lock().push(index);
-        thread::sleep(Duration::from_millis(2));
+        barrier.wait();
         active.fetch_sub(1, Ordering::SeqCst);
         Ok(())
     });

@@ -80,13 +80,9 @@ async fn connector_streams_snapshot_and_position_updates_to_the_sink() {
     feed.set_accounts(CexId::Binance, BTreeSet::new())
         .await
         .expect("unsubscribe");
-    tokio::time::timeout(Duration::from_secs(2), async {
-        while transport.revoked() == 0 {
-            tokio::time::sleep(Duration::from_millis(5)).await;
-        }
-    })
-    .await
-    .expect("revoke timeout");
+    tokio::time::timeout(Duration::from_secs(2), transport.wait_for_revoke())
+        .await
+        .expect("revoke timeout");
 }
 
 #[tokio::test]

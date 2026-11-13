@@ -213,4 +213,14 @@ impl Fixtures {
     ) -> Vec<CandleKey> {
         crate::runner::output_writer::CandleOutputWriter::closed_open_keys(update, state)
     }
+
+    pub(super) async fn wait_for_polls(polls: &Arc<AtomicUsize>, count: usize) {
+        tokio::time::timeout(std::time::Duration::from_secs(1), async {
+            while polls.load(Ordering::SeqCst) < count {
+                tokio::task::yield_now().await;
+            }
+        })
+        .await
+        .expect("source poll timeout");
+    }
 }

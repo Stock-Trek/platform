@@ -6,11 +6,8 @@ use chrono::{DateTime, Utc};
 use jsonwebtoken::{Header, decode_header, jwk::JwkSet};
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
-use std::{
-    io,
-    time::{Duration, Instant},
-};
-use tokio::sync::watch;
+use std::{io, time::Duration};
+use tokio::{sync::watch, time::Instant};
 
 const DEFAULT_JWKS_TTL: Duration = Duration::from_secs(300);
 const FAILURE_BACKOFF: Duration = Duration::from_secs(1);

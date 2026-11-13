@@ -12,6 +12,7 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
+    sync::Notify,
     task::JoinHandle,
 };
 
@@ -33,22 +34,31 @@ struct JwksServer {
     address: SocketAddr,
     body: Arc<RwLock<String>>,
     requests: Arc<AtomicUsize>,
+    started: Arc<Notify>,
+    gate: Option<Arc<Notify>>,
     task: JoinHandle<()>,
 }
 
 impl JwksServer {
     async fn start(jwks: &JwkSet) -> Self {
-        Self::start_with_delay(jwks, StdDuration::ZERO).await
+        Self::start_with_gate(jwks, None).await
     }
 
-    async fn start_with_delay(jwks: &JwkSet, delay: StdDuration) -> Self {
+    async fn start_gated(jwks: &JwkSet) -> Self {
+        Self::start_with_gate(jwks, Some(Arc::new(Notify::new()))).await
+    }
+
+    async fn start_with_gate(jwks: &JwkSet, gate: Option<Arc<Notify>>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let body = Arc::new(RwLock::new(serde_json::to_string(jwks).unwrap()));
         let requests = Arc::new(AtomicUsize::new(0));
+        let started = Arc::new(Notify::new());
+        let task_gate = gate.clone();
         let task = {
             let body = body.clone();
             let requests = requests.clone();
+            let started = started.clone();
             tokio::spawn(async move {
                 loop {
                     let Ok((mut stream, _)) = listener.accept().await else {
@@ -56,11 +66,16 @@ impl JwksServer {
                     };
                     let body = body.clone();
                     let requests = requests.clone();
+                    let started = started.clone();
+                    let gate = task_gate.clone();
                     tokio::spawn(async move {
                         let mut request = [0_u8; 2048];
                         let _ = stream.read(&mut request).await;
                         requests.fetch_add(1, Ordering::SeqCst);
-                        tokio::time::sleep(delay).await;
+                        if let Some(gate) = gate {
+                            started.notify_one();
+                            gate.notified().await;
+                        }
                         let body = body.read().unwrap().clone();
                         let response = format!(
                             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
@@ -76,6 +91,8 @@ impl JwksServer {
             address,
             body,
             requests,
+            started,
+            gate,
             task,
         }
     }
@@ -90,6 +107,16 @@ impl JwksServer {
 
     fn requests(&self) -> usize {
         self.requests.load(Ordering::SeqCst)
+    }
+
+    async fn wait_for_request(&self) {
+        self.started.notified().await;
+    }
+
+    fn release(&self) {
+        if let Some(gate) = &self.gate {
+            gate.notify_waiters();
+        }
     }
 }
 
@@ -133,7 +160,7 @@ async fn refreshes_jwks_when_a_token_references_a_new_key() {
 #[tokio::test]
 async fn concurrent_verifications_share_a_single_refresh() {
     let signer = Fixture::signer("issuer-a");
-    let server = JwksServer::start_with_delay(signer.jwks(), StdDuration::from_millis(100)).await;
+    let server = JwksServer::start_gated(signer.jwks()).await;
     let cache = Arc::new(JwksCache::with_ttl(server.url(), StdDuration::from_secs(60)).unwrap());
     let token = signer
         .sign(&Fixture::claims(Utc::now()))
@@ -149,6 +176,9 @@ async fn concurrent_verifications_share_a_single_refresh() {
         }));
     }
 
+    server.wait_for_request().await;
+    assert_eq!(server.requests(), 1);
+    server.release();
     for task in tasks {
         assert!(task.await.unwrap().is_ok());
     }
@@ -164,7 +194,8 @@ async fn uses_a_stale_cache_when_the_jwks_endpoint_is_unavailable() {
     let issued = signer.sign(&Fixture::claims(now)).unwrap();
     cache.verify(issued.token(), now).await.unwrap();
     drop(server);
-    tokio::time::sleep(StdDuration::from_millis(10)).await;
+    tokio::time::pause();
+    tokio::time::advance(StdDuration::from_millis(10)).await;
 
     cache.verify(issued.token(), now).await.unwrap();
 }
