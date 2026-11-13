@@ -14,7 +14,7 @@ use crate::{
     encode::ByteEncoder,
     encrypt::EncryptionAlgorithm,
     exchange::ETExchange,
-    exchange_klines::ETExchangeKlines,
+    exchange_klines::{ETExchangeKlinesHttp, ETExchangeKlinesWebsocket},
     exchange_portfolio::ETExchangePortfolio,
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
     portfolio::{AccountEvent, AccountSnapshot, BalanceParser},
@@ -126,9 +126,12 @@ impl ETExchangeServerTimeWebsocket for BinanceExchange {
     }
 }
 
-impl ETExchangeKlines for BinanceExchange {
+impl ETExchangeKlinesHttp for BinanceExchange {
     type KlinesRequestHttp = BinanceKlinesRequest;
     type KlinesResponseHttp = BinanceResponse<BinanceKlinesResponse>;
+}
+
+impl ETExchangeKlinesWebsocket for BinanceExchange {
     type KlinesRequestWebsocket = BinanceKlinesRequest;
     type KlinesResponseWebsocket = BinanceResponse<BinanceKlinesResponse>;
 }
