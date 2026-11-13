@@ -1,12 +1,13 @@
 mod config;
 mod context;
 mod delivery_dedup;
-#[cfg(test)]
-mod delivery_dedup_tests;
 mod dto;
 mod event_response;
 mod responses;
 mod webhook_handler;
+
+#[cfg(test)]
+mod delivery_dedup_tests;
 
 use crate::{config::WebhookConfig, context::RsWebhookContext, webhook_handler::WebhookHandler};
 use lambda_http::{Request, service_fn};

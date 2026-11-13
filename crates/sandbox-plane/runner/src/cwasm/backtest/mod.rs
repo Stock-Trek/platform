@@ -13,5 +13,4 @@ mod spec;
 mod tests;
 
 use run::{Balances, PriceMap};
-
 pub use run::BackTest;
