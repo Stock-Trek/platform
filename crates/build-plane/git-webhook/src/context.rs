@@ -9,18 +9,12 @@ use platform_errors::{BuildError, BuildResult, ErrorType, SecretsError};
 use platform_github::HostAllowlist;
 use platform_metrics::SecretMetrics;
 use platform_sqs::{Sqs, SqsConfig};
-use platform_time::{Deadline, Timeouts};
+use platform_time::{Deadline, Jitter, Timeouts};
 use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
+    sync::Arc,
     time::{Duration, Instant, SystemTime},
 };
 use tokio::sync::{Mutex, MutexGuard, RwLock};
-
-const MAX_JITTER_RATIO: f64 = 0.5;
-static JITTER_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 pub type Converters = Arc<Vec<Box<dyn EventConverter>>>;
 
@@ -160,7 +154,7 @@ impl RsWebhookContext {
                 if !error.retryability().is_retryable() {
                     return Err(error);
                 }
-                let retry_after = self.jittered_backoff();
+                let retry_after = Jitter::delay(self.failure_backoff);
                 *self.backoff_until.lock().await = Some(Instant::now() + retry_after);
                 Err(BuildError::Secrets(SecretsError::Unavailable {
                     retry_after,
@@ -199,17 +193,5 @@ impl RsWebhookContext {
         let until = (*self.backoff_until.lock().await)?;
         let now = Instant::now();
         (now < until).then(|| until - now)
-    }
-
-    fn jittered_backoff(&self) -> Duration {
-        let sequence = JITTER_SEQUENCE.fetch_add(1, Ordering::Relaxed);
-        let entropy = sequence.wrapping_mul(6364136223846793005).wrapping_add(
-            SystemTime::now()
-                .duration_since(SystemTime::UNIX_EPOCH)
-                .map_or(0, |elapsed| elapsed.as_nanos() as u64),
-        );
-        let fraction = (entropy >> 40) as f64 / f64::from(1u32 << 24);
-        self.failure_backoff
-            .mul_f64(1.0 + fraction * MAX_JITTER_RATIO)
     }
 }

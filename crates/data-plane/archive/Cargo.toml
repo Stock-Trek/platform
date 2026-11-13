@@ -20,8 +20,8 @@ platform-aws = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http", "storage"] }
 platform-market-data = { workspace = true }
+platform-time = { workspace = true }
 platform-types = { workspace = true }
-rand = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["fs", "macros", "rt", "rt-multi-thread", "sync", "time"] }
