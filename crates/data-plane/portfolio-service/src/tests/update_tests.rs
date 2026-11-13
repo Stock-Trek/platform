@@ -4,12 +4,9 @@ use crate::{
     PortfolioUpdateSource,
 };
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::BuildResult;
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 #[derive(Default)]
 struct FakeUpdateSource {
@@ -27,27 +24,27 @@ impl FakeUpdateSource {
     }
 
     fn checkpoints(&self) -> Vec<u64> {
-        self.checkpoints.lock().expect("checkpoints").clone()
+        self.checkpoints.lock().clone()
     }
 
     fn acknowledged(&self) -> usize {
-        *self.acknowledged.lock().expect("acknowledged")
+        *self.acknowledged.lock()
     }
 }
 
 #[async_trait]
 impl PortfolioUpdateSource for FakeUpdateSource {
     async fn next(&self) -> BuildResult<Option<PortfolioUpdateMessage>> {
-        Ok(self.messages.lock().expect("messages").pop_front())
+        Ok(self.messages.lock().pop_front())
     }
 
     async fn checkpoint(&self, sequence: u64) -> BuildResult<()> {
-        self.checkpoints.lock().expect("checkpoints").push(sequence);
+        self.checkpoints.lock().push(sequence);
         Ok(())
     }
 
     async fn acknowledge(&self, _message: &PortfolioUpdateMessage) -> BuildResult<()> {
-        *self.acknowledged.lock().expect("acknowledged") += 1;
+        *self.acknowledged.lock() += 1;
         Ok(())
     }
 }

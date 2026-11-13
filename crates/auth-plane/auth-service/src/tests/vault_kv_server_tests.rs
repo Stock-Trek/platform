@@ -2,11 +2,12 @@ use crate::tests::{
     vault_http_tests::VaultHttp,
     vault_kv_state_tests::{CapturedRequest, VaultKvState},
 };
+use parking_lot::Mutex;
 use serde_json::json;
 use std::{
     net::{SocketAddr, TcpListener, TcpStream},
     sync::{
-        Arc, Mutex,
+        Arc,
         atomic::{AtomicBool, Ordering},
     },
     thread::{self, JoinHandle},
@@ -58,15 +59,15 @@ impl MockVault {
     }
 
     pub(crate) fn requests(&self) -> Vec<CapturedRequest> {
-        self.requests.lock().unwrap().clone()
+        self.requests.lock().clone()
     }
 
     pub(crate) fn seed(&self, key: &str) {
-        self.state.lock().unwrap().seed(key);
+        self.state.lock().seed(key);
     }
 
     pub(crate) fn current(&self, id: &str) -> Option<(serde_json::Value, u64)> {
-        self.state.lock().unwrap().read(id)
+        self.state.lock().read(id)
     }
 
     fn handle(
@@ -82,7 +83,7 @@ impl MockVault {
             Some((path, query)) => (path, Some(query.to_string())),
             None => (request.target.as_str(), None),
         };
-        requests.lock().unwrap().push(CapturedRequest {
+        requests.lock().push(CapturedRequest {
             method: request.method.clone(),
             path: path.to_string(),
             query: query.clone(),
@@ -93,7 +94,7 @@ impl MockVault {
         let route = path.strip_prefix(&prefix).unwrap_or_default();
         let route = route.trim_start_matches('/');
         let (area, key) = route.split_once('/').unwrap_or((route, ""));
-        let mut state = state.lock().unwrap();
+        let mut state = state.lock();
         let (status, body) = match (request.method.as_str(), area, key, query.as_deref()) {
             ("PUT", "data", id, _) if !id.is_empty() => state.put_response(id, &request.body),
             ("GET", "data", id, _) if !id.is_empty() => state.get_response(id),

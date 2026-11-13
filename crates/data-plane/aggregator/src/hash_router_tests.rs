@@ -4,11 +4,12 @@ use crate::{
     shard_id::ShardId,
 };
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use platform_market_data::{AlignedWindow, CandleKey, GapMarker, MarketEvent};
 use platform_nats::EventPublisher;
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
-use std::sync::{Arc, Mutex as StdMutex};
+use std::sync::Arc;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 
 fn trade_event() -> MarketEvent {
@@ -113,7 +114,7 @@ fn every_interval_for_a_pair_uses_the_same_shard() {
 #[derive(Default)]
 struct FakeSource {
     records: Vec<SourceRecord>,
-    acked: Arc<StdMutex<usize>>,
+    acked: Arc<Mutex<usize>>,
 }
 
 #[async_trait]
@@ -127,12 +128,12 @@ impl MarketSource for FakeSource {
     }
 
     async fn ack(&mut self, _record: &SourceRecord) -> BuildResult<()> {
-        *self.acked.lock().unwrap() += 1;
+        *self.acked.lock() += 1;
         Ok(())
     }
 }
 
-type PublishedMessages = Arc<StdMutex<Vec<(String, Vec<u8>)>>>;
+type PublishedMessages = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
 
 #[derive(Default, Clone)]
 struct FakePublisher {
@@ -144,7 +145,6 @@ impl EventPublisher for FakePublisher {
     async fn publish(&self, subject: &str, payload: &[u8]) -> BuildResult<()> {
         self.published
             .lock()
-            .unwrap()
             .push((subject.to_string(), payload.to_vec()));
         Ok(())
     }
@@ -152,7 +152,7 @@ impl EventPublisher for FakePublisher {
 
 #[tokio::test]
 async fn router_publishes_to_shard_subject_then_acknowledges() {
-    let acked = Arc::new(StdMutex::new(0));
+    let acked = Arc::new(Mutex::new(0));
     let source = FakeSource {
         records: vec![SourceRecord::new(
             MarketInput::Event(trade_event()),
@@ -195,12 +195,12 @@ async fn router_publishes_to_shard_subject_then_acknowledges() {
         .await
         .unwrap();
 
-    let published = observed.published.lock().unwrap();
+    let published = observed.published.lock();
     assert_eq!(published.len(), 1);
     assert!(published[0].0.starts_with("aggregator.shards."));
     assert_eq!(
         MarketInput::decode(&published[0].1).unwrap(),
         MarketInput::Event(trade_event())
     );
-    assert_eq!(*acked.lock().unwrap(), 1);
+    assert_eq!(*acked.lock(), 1);
 }

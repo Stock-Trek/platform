@@ -19,4 +19,5 @@ tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "
 tracing = { workspace = true }
 
 [dev-dependencies]
+parking_lot = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }

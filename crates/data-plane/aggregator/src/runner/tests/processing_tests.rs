@@ -3,9 +3,10 @@ use crate::market_source::MarketInput;
 use crate::runner::ProcessorRunner;
 use crate::runner::tests::fixtures_tests::{FakeSink, FakeSource, Fixtures};
 use crate::shard_id::ShardId;
+use parking_lot::Mutex;
 use platform_market_data::GapMarker;
 use platform_types::TimestampMilliseconds;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
 #[tokio::test]
@@ -39,7 +40,7 @@ async fn gap_markers_close_expired_candle_windows() {
     assert_eq!(observed.open_updates(), 0);
     assert_eq!(observed.closed_updates(), 1);
     assert_eq!(observed.deleted_open_updates(), 1);
-    assert_eq!(*acked.lock().unwrap(), 2);
+    assert_eq!(*acked.lock(), 2);
 }
 
 #[tokio::test]
@@ -70,7 +71,7 @@ async fn live_processing_ignores_trades_owned_by_another_shard() {
         .unwrap();
 
     assert_eq!(observed.open_updates(), 0);
-    assert_eq!(*acked.lock().unwrap(), 1);
+    assert_eq!(*acked.lock(), 1);
     let checkpoint = checkpoints.get(other).unwrap();
     assert_eq!(checkpoint.watermark, None);
     assert_eq!(checkpoint.state.open_candles_len(), 0);
@@ -96,7 +97,7 @@ async fn duplicate_events_are_applied_once_but_both_are_acknowledged() {
         .unwrap();
 
     assert_eq!(observed.open_updates(), 1);
-    assert_eq!(*acked.lock().unwrap(), 2);
+    assert_eq!(*acked.lock(), 2);
 }
 
 #[tokio::test]
@@ -121,7 +122,7 @@ async fn repeated_open_writes_for_the_same_key_are_coalesced() {
         .unwrap();
 
     assert_eq!(observed.open_updates(), 1);
-    assert_eq!(*acked.lock().unwrap(), 2);
+    assert_eq!(*acked.lock(), 2);
 }
 
 #[tokio::test]

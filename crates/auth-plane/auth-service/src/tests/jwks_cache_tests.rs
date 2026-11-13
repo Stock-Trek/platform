@@ -1,10 +1,11 @@
 use crate::{JwksCache, JwtSigningKey, OrderJwtClaims};
 use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::jwk::JwkSet;
+use parking_lot::RwLock;
 use std::{
     net::SocketAddr,
     sync::{
-        Arc, RwLock,
+        Arc,
         atomic::{AtomicUsize, Ordering},
     },
     time::Duration as StdDuration,
@@ -76,7 +77,7 @@ impl JwksServer {
                             started.notify_one();
                             gate.notified().await;
                         }
-                        let body = body.read().unwrap().clone();
+                        let body = body.read().clone();
                         let response = format!(
                             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
                             body.len()
@@ -102,7 +103,7 @@ impl JwksServer {
     }
 
     fn set_jwks(&self, jwks: &JwkSet) {
-        *self.body.write().unwrap() = serde_json::to_string(jwks).unwrap();
+        *self.body.write() = serde_json::to_string(jwks).unwrap();
     }
 
     fn requests(&self) -> usize {

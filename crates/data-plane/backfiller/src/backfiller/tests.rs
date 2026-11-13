@@ -5,15 +5,13 @@ use crate::{
     nats_gap_marker_source::GapMarkerSource,
 };
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use platform_market_data::{GapMarker, MarketEvent};
 use platform_nats::EventPublisher;
 use platform_types::TimestampMilliseconds;
 use serde_json::json;
-use std::{
-    collections::BTreeMap,
-    sync::{Arc, Mutex},
-};
+use std::{collections::BTreeMap, sync::Arc};
 
 struct OneGapSource {
     gap: Option<GapMarker>,
@@ -27,7 +25,7 @@ impl GapMarkerSource for OneGapSource {
     }
 
     async fn ack(&mut self, gap: &GapMarker) -> BuildResult<()> {
-        self.acked.lock().expect("acked lock").push(gap.clone());
+        self.acked.lock().push(gap.clone());
         Ok(())
     }
 }
@@ -39,9 +37,7 @@ struct OnceFetcher {
 #[async_trait]
 impl MissingEventFetcher for OnceFetcher {
     async fn fetch(&self, _gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
-        Ok(std::mem::take(
-            &mut *self.events.lock().expect("events lock"),
-        ))
+        Ok(std::mem::take(&mut *self.events.lock()))
     }
 }
 
@@ -56,7 +52,6 @@ impl EventPublisher for RecordingPublisher {
         let event: MarketEvent = serde_json::from_slice(payload)?;
         self.sequences
             .lock()
-            .expect("sequences lock")
             .push(event.sequence.unwrap_or_default());
         Ok(())
     }
@@ -94,7 +89,7 @@ async fn acknowledges_after_processing_a_covered_gap() {
     let error = service.run().await.unwrap_err();
     assert!(error.to_string().contains("before shutdown"));
 
-    assert_eq!(acked.lock().unwrap().len(), 1);
+    assert_eq!(acked.lock().len(), 1);
 }
 
 #[tokio::test]
@@ -122,8 +117,8 @@ async fn closes_a_depth_gap_with_a_snapshot_after_the_missing_range() {
     let error = service.run().await.unwrap_err();
     assert!(error.to_string().contains("before shutdown"));
 
-    assert_eq!(*publisher.sequences.lock().unwrap(), vec![100]);
-    assert_eq!(acked.lock().unwrap().len(), 1);
+    assert_eq!(*publisher.sequences.lock(), vec![100]);
+    assert_eq!(acked.lock().len(), 1);
     assert!(store.snapshot().await.is_empty());
 }
 
@@ -152,8 +147,8 @@ async fn closes_a_book_ticker_gap_with_the_observed_snapshot_sequence() {
     let error = service.run().await.unwrap_err();
     assert!(error.to_string().contains("before shutdown"));
 
-    assert_eq!(*publisher.sequences.lock().unwrap(), vec![6]);
-    assert_eq!(acked.lock().unwrap().len(), 1);
+    assert_eq!(*publisher.sequences.lock(), vec![6]);
+    assert_eq!(acked.lock().len(), 1);
     assert!(store.snapshot().await.is_empty());
 }
 

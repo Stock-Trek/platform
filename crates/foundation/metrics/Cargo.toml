@@ -7,4 +7,5 @@ edition.workspace = true
 test-utils = []
 
 [dependencies]
+parking_lot = { workspace = true }
 metrics = { workspace = true }

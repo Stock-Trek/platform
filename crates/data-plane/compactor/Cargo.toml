@@ -17,5 +17,6 @@ tokio = { workspace = true, features = ["fs", "io-util", "macros", "rt-multi-thr
 tracing = { workspace = true }
 
 [dev-dependencies]
+parking_lot = { workspace = true }
 platform-market-data = { workspace = true }
 stock-trek-types = { workspace = true }

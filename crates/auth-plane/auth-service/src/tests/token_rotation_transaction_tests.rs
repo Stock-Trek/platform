@@ -5,9 +5,10 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
+use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -33,7 +34,7 @@ impl ToggleAudit {
     }
 
     fn events(&self) -> Vec<TokenAuditEvent> {
-        self.events.lock().expect("audit lock").clone()
+        self.events.lock().clone()
     }
 }
 
@@ -48,7 +49,7 @@ impl TokenAuditLog for ToggleAudit {
                 "sink unavailable".to_string(),
             ));
         }
-        self.events.lock().expect("audit lock").push(event);
+        self.events.lock().push(event);
         Ok(())
     }
 }

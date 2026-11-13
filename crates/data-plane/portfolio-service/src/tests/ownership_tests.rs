@@ -5,10 +5,11 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::Utc;
+use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use platform_exchange_gateway::PortfolioFeed;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
-use std::{collections::VecDeque, sync::Mutex, time::Duration};
+use std::{collections::VecDeque, time::Duration};
 use stock_trek::types::CexId;
 
 #[derive(Default)]
@@ -27,27 +28,27 @@ impl FakeSource {
     }
 
     fn checkpoints(&self) -> Vec<u64> {
-        self.checkpoints.lock().expect("checkpoints").clone()
+        self.checkpoints.lock().clone()
     }
 
     fn acknowledged(&self) -> usize {
-        *self.acknowledged.lock().expect("acknowledged")
+        *self.acknowledged.lock()
     }
 }
 
 #[async_trait]
 impl OwnershipEventSource for FakeSource {
     async fn next(&self) -> BuildResult<Option<OwnershipMessage>> {
-        Ok(self.messages.lock().expect("messages").pop_front())
+        Ok(self.messages.lock().pop_front())
     }
 
     async fn checkpoint(&self, sequence: u64) -> BuildResult<()> {
-        self.checkpoints.lock().expect("checkpoints").push(sequence);
+        self.checkpoints.lock().push(sequence);
         Ok(())
     }
 
     async fn acknowledge(&self, _message: &OwnershipMessage) -> BuildResult<()> {
-        *self.acknowledged.lock().expect("acknowledged") += 1;
+        *self.acknowledged.lock() += 1;
         Ok(())
     }
 }
@@ -270,13 +271,7 @@ impl PortfolioFeed for SnapshotFeed {
         if accounts.is_empty() {
             return Ok(());
         }
-        let service = self
-            .service
-            .lock()
-            .expect("service")
-            .as_ref()
-            .cloned()
-            .expect("service");
+        let service = self.service.lock().as_ref().cloned().expect("service");
         let account = accounts.iter().next().expect("account");
         let applied = service.apply_portfolio_update(crate::PortfolioUpdate::versioned(
             Fixture::account(&account.0),
@@ -295,7 +290,7 @@ impl PortfolioFeed for SnapshotFeed {
 async fn connector_snapshot_during_sync_is_applied_for_the_new_owner() {
     let feed = std::sync::Arc::new(SnapshotFeed::default());
     let service = std::sync::Arc::new(PortfolioService::new(feed.clone()));
-    *feed.service.lock().expect("service") = Some(service.clone());
+    *feed.service.lock() = Some(service.clone());
 
     service
         .apply_ownership_event(&event("alice", "first", OwnershipAction::Add, 1))

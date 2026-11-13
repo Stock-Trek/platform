@@ -1,9 +1,9 @@
+use parking_lot::Once;
 use std::{
     any::Any,
     cell::RefCell,
     future::{Future, poll_fn},
     panic::{AssertUnwindSafe, PanicHookInfo, catch_unwind},
-    sync::Once,
     task::Poll,
 };
 

@@ -4,10 +4,11 @@ use crate::{
     source::ArchiveBatchSource,
 };
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_archive::{ArchiveKind, SourceBatch};
 use platform_errors::BuildResult;
 use platform_types::TimestampMilliseconds;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 struct FakeSource {
     batches: Vec<SourceBatch>,
@@ -28,7 +29,7 @@ struct FakeCompactor {
 #[async_trait]
 impl BatchCompactor for FakeCompactor {
     async fn compact(&self, _batch: &SourceBatch) -> BuildResult<CompactionStats> {
-        *self.batches.lock().expect("compacted batches lock") += 1;
+        *self.batches.lock() += 1;
         Ok(CompactionStats::default())
     }
 }
@@ -50,5 +51,5 @@ async fn runs_a_cycle_with_injected_source_and_compactor() {
         .await
         .unwrap();
 
-    assert_eq!(*observed.batches.lock().unwrap(), 1);
+    assert_eq!(*observed.batches.lock(), 1);
 }

@@ -19,3 +19,6 @@ stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
 tracing = { workspace = true }
 url = { workspace = true }
+
+[dev-dependencies]
+parking_lot = { workspace = true }

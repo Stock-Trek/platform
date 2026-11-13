@@ -3,12 +3,13 @@ use crate::{
     sequence_tracker_tests::InMemorySequenceStore,
 };
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use platform_market_data::ParsedMessage;
 use platform_nats::EventPublisher;
 use platform_types::TimestampMilliseconds;
 use serde_json::Value;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Default)]
@@ -19,14 +20,11 @@ struct RecordingPublisher {
 
 impl RecordingPublisher {
     fn messages(&self) -> Vec<(String, Value)> {
-        self.messages.lock().expect("messages lock").clone()
+        self.messages.lock().clone()
     }
 
     fn fail_sequence(&self, sequence: u64) {
-        self.fail_sequences
-            .lock()
-            .expect("fail sequences lock")
-            .push(sequence);
+        self.fail_sequences.lock().push(sequence);
     }
 }
 
@@ -38,7 +36,7 @@ impl EventPublisher for RecordingPublisher {
             .get("sequence")
             .and_then(Value::as_u64)
             .is_some_and(|sequence| {
-                let mut failures = self.fail_sequences.lock().expect("fail sequences lock");
+                let mut failures = self.fail_sequences.lock();
                 if let Some(index) = failures.iter().position(|failed| *failed == sequence) {
                     failures.remove(index);
                     true
@@ -53,10 +51,7 @@ impl EventPublisher for RecordingPublisher {
                 "injected publish failure",
             ));
         }
-        self.messages
-            .lock()
-            .expect("messages lock")
-            .push((subject.to_string(), value));
+        self.messages.lock().push((subject.to_string(), value));
         Ok(())
     }
 }

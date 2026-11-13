@@ -1,6 +1,7 @@
+use parking_lot::{Condvar, Mutex};
 use std::{
     sync::{
-        Arc, Condvar, Mutex,
+        Arc,
         atomic::{AtomicBool, Ordering},
     },
     thread,
@@ -22,10 +23,8 @@ impl Watchdog {
         let thread_timed_out = Arc::clone(&timed_out);
         let handle = thread::spawn(move || {
             let (lock, wake) = &*thread_finished;
-            let finished = lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner());
-            let (finished, _) = wake
-                .wait_timeout_while(finished, timeout, |finished| !*finished)
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
+            let mut finished = lock.lock();
+            wake.wait_while_for(&mut finished, |finished| !*finished, timeout);
             if !*finished {
                 thread_timed_out.store(true, Ordering::SeqCst);
                 engine.increment_epoch();
@@ -46,7 +45,7 @@ impl Watchdog {
 impl Drop for Watchdog {
     fn drop(&mut self) {
         let (lock, wake) = &*self.finished;
-        *lock.lock().unwrap_or_else(|poisoned| poisoned.into_inner()) = true;
+        *lock.lock() = true;
         wake.notify_one();
         if let Some(handle) = self.handle.take() {
             let _ = handle.join();

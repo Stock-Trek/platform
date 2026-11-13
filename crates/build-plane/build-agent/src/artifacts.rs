@@ -1,10 +1,7 @@
 use crate::{signed_post::SignedPost, source_archive::SourceLimits};
+use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
-use std::{
-    io::Write,
-    path::PathBuf,
-    sync::{Arc, Mutex},
-};
+use std::{io::Write, path::PathBuf, sync::Arc};
 use tempfile::TempDir;
 
 pub const WASM_MANIFEST: &str = "crates/sandbox-plane/runner/Cargo.toml";
@@ -91,15 +88,10 @@ impl Artifacts {
     }
 
     pub fn set_compile_output(&self, output: Vec<u8>) {
-        if let Ok(mut current) = self.compile_output.lock() {
-            *current = Some(output);
-        }
+        *self.compile_output.lock() = Some(output);
     }
 
     pub fn take_compile_output(&self) -> Option<Vec<u8>> {
-        self.compile_output
-            .lock()
-            .ok()
-            .and_then(|mut output| output.take())
+        self.compile_output.lock().take()
     }
 }

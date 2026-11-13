@@ -1,7 +1,8 @@
 use crate::rate_limit::limiter_state::RateLimiterState;
+use parking_lot::Mutex;
 use platform_types::{DurationNanoseconds, UsageCount};
 use std::{
-    sync::{Arc, Mutex},
+    sync::Arc,
     time::{Duration, Instant},
 };
 
@@ -57,14 +58,14 @@ fn throttle_deadline_discards_partial_interval_progress() {
     let now = Arc::new(Mutex::new(base));
     let clock = {
         let now = now.clone();
-        Arc::new(move || *now.lock().expect("clock lock")) as Arc<dyn Fn() -> Instant + Send + Sync>
+        Arc::new(move || *now.lock()) as Arc<dyn Fn() -> Instant + Send + Sync>
     };
     let mut state =
         RateLimiterState::with_clock(DurationNanoseconds(60_000_000_000), UsageCount(10), clock)
             .expect("valid rate limiter state");
 
     // Bank 30s of progress towards the next interval.
-    *now.lock().expect("clock lock") = base + Duration::from_secs(90);
+    *now.lock() = base + Duration::from_secs(90);
     assert_eq!(
         state.remaining_capacity().expect("remaining capacity"),
         UsageCount(10)
@@ -80,7 +81,7 @@ fn throttle_deadline_discards_partial_interval_progress() {
     // 30s after the throttle deadline only half an interval has elapsed since
     // the bucket was drained, so the progress banked before the throttle must
     // not be reused to refill the bucket early.
-    *now.lock().expect("clock lock") = base + Duration::from_secs(150);
+    *now.lock() = base + Duration::from_secs(150);
     assert!(!state.is_throttled());
     assert_eq!(
         state.remaining_capacity().expect("remaining capacity"),
@@ -88,7 +89,7 @@ fn throttle_deadline_discards_partial_interval_progress() {
     );
 
     // A full interval after the deadline the bucket refills completely.
-    *now.lock().expect("clock lock") = base + Duration::from_secs(180);
+    *now.lock() = base + Duration::from_secs(180);
     assert_eq!(
         state.remaining_capacity().expect("remaining capacity"),
         UsageCount(10)
