@@ -8,16 +8,22 @@ use platform_errors::BuildResult;
 use platform_types::TimestampMilliseconds;
 use std::collections::HashMap;
 use std::time::Duration;
+use tokio::sync::Notify;
 
 /// In-memory lease store used by tests.
 #[derive(Debug, Default)]
 pub struct InMemoryLeaseStore {
     leases: Mutex<HashMap<ShardId, WriterLease>>,
+    acquire_attempts: Notify,
 }
 
 impl InMemoryLeaseStore {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    pub async fn wait_for_acquire_attempt(&self) {
+        self.acquire_attempts.notified().await;
     }
 }
 
@@ -29,6 +35,7 @@ impl LeaseStore for InMemoryLeaseStore {
         owner_id: &str,
         ttl: Duration,
     ) -> BuildResult<Option<WriterLease>> {
+        self.acquire_attempts.notify_one();
         let now = TimestampMilliseconds::now();
         let mut leases = self.leases.lock();
         let lease = match leases.get(&shard) {

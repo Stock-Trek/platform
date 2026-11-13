@@ -43,4 +43,4 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 platform-metrics = { workspace = true, features = ["test-utils"] }
-tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "time"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "test-util", "time"] }

@@ -36,3 +36,4 @@ wasmtime-wasi = { workspace = true, features = ["p1"] }
 
 [dev-dependencies]
 wasmtime = { workspace = true, features = ["cranelift", "wat"] }
+tokio = { workspace = true, features = ["test-util"] }

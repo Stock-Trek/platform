@@ -6,10 +6,16 @@ use crate::{
     BreakerState, TokenStore,
     circuit_breaker::{BreakerDecision, CircuitBreaker},
 };
-use std::{sync::Arc, time::Duration};
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
+};
 use tokio::task::JoinSet;
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn serves_stale_when_a_read_fails_and_opens_the_breaker() {
     let store = Arc::new(TestStore::new());
     store.insert(&TestFixture::token("token-a")).await;
@@ -18,7 +24,7 @@ async fn serves_stale_when_a_read_fails_and_opens_the_breaker() {
     assert!(cache.get("token-a").await.unwrap().is_some());
     assert_eq!(cache.breaker_state(), BreakerState::Closed);
     store.set_fail(true);
-    tokio::time::sleep(Duration::from_millis(15)).await;
+    tokio::time::advance(Duration::from_millis(15)).await;
 
     assert_eq!(cache.get("token-a").await.unwrap().unwrap().id(), "token-a");
     assert_eq!(cache.breaker_state(), BreakerState::Open);
@@ -40,7 +46,7 @@ async fn fails_closed_without_a_fresh_or_stale_entry() {
     assert_eq!(store.get_calls(), 1);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn does_not_serve_stale_entries_past_the_maximum_age() {
     let store = Arc::new(TestStore::new());
     store.insert(&TestFixture::token("token-a")).await;
@@ -48,13 +54,13 @@ async fn does_not_serve_stale_entries_past_the_maximum_age() {
 
     assert!(cache.get("token-a").await.unwrap().is_some());
     store.set_fail(true);
-    tokio::time::sleep(Duration::from_millis(50)).await;
+    tokio::time::advance(Duration::from_millis(50)).await;
 
     assert!(cache.get("token-a").await.is_err());
     assert_eq!(store.get_calls(), 2);
 }
 
-#[tokio::test]
+#[tokio::test(start_paused = true)]
 async fn half_open_probe_closes_the_breaker_after_recovery() {
     let store = Arc::new(TestStore::new());
     store.insert(&TestFixture::token("token-a")).await;
@@ -62,12 +68,12 @@ async fn half_open_probe_closes_the_breaker_after_recovery() {
 
     assert!(cache.get("token-a").await.unwrap().is_some());
     store.set_fail(true);
-    tokio::time::sleep(Duration::from_millis(15)).await;
+    tokio::time::advance(Duration::from_millis(15)).await;
     assert!(cache.get("token-a").await.unwrap().is_some());
     assert_eq!(cache.breaker_state(), BreakerState::Open);
 
     store.set_fail(false);
-    tokio::time::sleep(Duration::from_millis(40)).await;
+    tokio::time::advance(Duration::from_millis(40)).await;
     assert!(cache.get("token-a").await.unwrap().is_some());
     assert_eq!(cache.breaker_state(), BreakerState::Closed);
     assert_eq!(store.get_calls(), 3);
@@ -116,16 +122,24 @@ async fn late_successes_do_not_close_an_open_breaker() {
 async fn coalesces_concurrent_failures() {
     let store = Arc::new(TestStore::new());
     store.set_fail(true);
-    store.set_delay_millis(30);
+    store.hold_reads();
     let cache = Arc::new(Fixture::cached(
         store.clone(),
         Fixture::config(10_000, 20_000, 10, 10_000),
     ));
+    let started = Arc::new(AtomicUsize::new(0));
     let mut tasks = JoinSet::new();
     for _ in 0..8 {
         let cache = cache.clone();
-        tasks.spawn(async move { cache.get("token-a").await.is_err() });
+        let started = started.clone();
+        tasks.spawn(async move {
+            started.fetch_add(1, Ordering::SeqCst);
+            cache.get("token-a").await.is_err()
+        });
     }
+    Fixture::wait_for_started(&started, 8).await;
+    store.wait_until_read_starts().await;
+    store.release_reads();
     while let Some(result) = tasks.join_next().await {
         assert!(result.unwrap());
     }

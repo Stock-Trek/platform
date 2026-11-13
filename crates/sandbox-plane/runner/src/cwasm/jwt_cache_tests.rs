@@ -11,6 +11,7 @@ use std::{
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::TcpListener,
+    sync::Notify,
     task::JoinHandle,
 };
 
@@ -42,22 +43,31 @@ struct AuthServer {
     address: SocketAddr,
     body: Arc<RwLock<String>>,
     requests: Arc<AtomicUsize>,
+    started: Arc<Notify>,
+    gate: Option<Arc<Notify>>,
     task: JoinHandle<()>,
 }
 
 impl AuthServer {
     async fn start(body: String) -> Self {
-        Self::start_with_delay(body, Duration::ZERO).await
+        Self::start_with_gate(body, None).await
     }
 
-    async fn start_with_delay(body: String, delay: Duration) -> Self {
+    async fn start_gated(body: String) -> Self {
+        Self::start_with_gate(body, Some(Arc::new(Notify::new()))).await
+    }
+
+    async fn start_with_gate(body: String, gate: Option<Arc<Notify>>) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         let body = Arc::new(RwLock::new(body));
         let requests = Arc::new(AtomicUsize::new(0));
+        let started = Arc::new(Notify::new());
+        let task_gate = gate.clone();
         let task = {
             let body = body.clone();
             let requests = requests.clone();
+            let started = started.clone();
             tokio::spawn(async move {
                 loop {
                     let Ok((mut stream, _)) = listener.accept().await else {
@@ -65,11 +75,16 @@ impl AuthServer {
                     };
                     let body = body.clone();
                     let requests = requests.clone();
+                    let started = started.clone();
+                    let gate = task_gate.clone();
                     tokio::spawn(async move {
                         let mut request = [0_u8; 2048];
                         let _ = stream.read(&mut request).await;
                         requests.fetch_add(1, Ordering::SeqCst);
-                        tokio::time::sleep(delay).await;
+                        if let Some(gate) = gate {
+                            started.notify_one();
+                            gate.notified().await;
+                        }
                         let body = body.read().unwrap().clone();
                         let response = format!(
                             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
@@ -85,6 +100,8 @@ impl AuthServer {
             address,
             body,
             requests,
+            started,
+            gate,
             task,
         }
     }
@@ -99,6 +116,16 @@ impl AuthServer {
 
     fn requests(&self) -> usize {
         self.requests.load(Ordering::SeqCst)
+    }
+
+    async fn wait_for_request(&self) {
+        self.started.notified().await;
+    }
+
+    fn release(&self) {
+        if let Some(gate) = &self.gate {
+            gate.notify_waiters();
+        }
     }
 }
 
@@ -125,7 +152,8 @@ async fn refreshes_a_stale_token() {
 
     assert_eq!(cache.token().await.unwrap(), "token-a");
     server.set_body(Fixture::jwt_response("token-b", 3600));
-    tokio::time::sleep(Duration::from_millis(5100)).await;
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_millis(5100)).await;
     assert_eq!(cache.token().await.unwrap(), "token-b");
     assert_eq!(server.requests(), 2);
 }
@@ -137,18 +165,15 @@ async fn falls_back_to_a_stale_token_when_refresh_fails() {
 
     assert_eq!(cache.token().await.unwrap(), "token-a");
     drop(server);
-    tokio::time::sleep(Duration::from_millis(5100)).await;
+    tokio::time::pause();
+    tokio::time::advance(Duration::from_millis(5100)).await;
 
     assert_eq!(cache.token().await.unwrap(), "token-a");
 }
 
 #[tokio::test]
 async fn concurrent_callers_share_a_single_refresh() {
-    let server = AuthServer::start_with_delay(
-        Fixture::jwt_response("token-a", 3600),
-        Duration::from_millis(100),
-    )
-    .await;
+    let server = AuthServer::start_gated(Fixture::jwt_response("token-a", 3600)).await;
     let cache = Arc::new(Fixture::cache(&server.url()));
     let mut tasks = Vec::new();
     for _ in 0..8 {
@@ -156,6 +181,9 @@ async fn concurrent_callers_share_a_single_refresh() {
         tasks.push(tokio::spawn(async move { cache.token().await.unwrap() }));
     }
 
+    server.wait_for_request().await;
+    assert_eq!(server.requests(), 1);
+    server.release();
     for task in tasks {
         assert_eq!(task.await.unwrap(), "token-a");
     }

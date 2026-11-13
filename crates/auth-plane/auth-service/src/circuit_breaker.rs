@@ -1,6 +1,7 @@
 use parking_lot::Mutex;
 use platform_metrics::AuthTokenCacheMetrics;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use tokio::time::Instant;
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BreakerState {

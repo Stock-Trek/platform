@@ -69,11 +69,10 @@ fn treats_different_messages_as_distinct() {
 
 #[test]
 fn expires_entries_after_the_ttl() {
-    let dedup = SqsDedup::new(capacity(2), Duration::from_millis(10));
+    let dedup = SqsDedup::new(capacity(2), Duration::ZERO);
     let message = message("abc");
 
     assert!(!dedup.is_duplicate(&message));
-    std::thread::sleep(Duration::from_millis(20));
     assert!(!dedup.is_duplicate(&message));
 }
 

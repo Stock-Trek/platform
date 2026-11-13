@@ -58,6 +58,7 @@ impl ClosedCandlePublisher for RecordingSink {
 #[derive(Default, Clone)]
 struct BlockingSink {
     published: Arc<Mutex<usize>>,
+    started: Arc<Notify>,
     gate: Arc<Notify>,
 }
 
@@ -71,6 +72,7 @@ impl OpenCandleStore for BlockingSink {
 #[async_trait]
 impl ClosedCandlePublisher for BlockingSink {
     async fn publish_closed(&self, _candles: &[ClosedCandle]) -> BuildResult<()> {
+        self.started.notify_one();
         self.gate.notified().await;
         *self.published.lock().unwrap() += 1;
         Ok(())
@@ -228,7 +230,9 @@ async fn flush_waits_for_closed_candle_publication() {
         .unwrap();
 
     let barrier = tokio::spawn(async move { writer.flush().await });
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    tokio::time::timeout(Duration::from_secs(1), observed.started.notified())
+        .await
+        .expect("publication should start");
     assert!(!barrier.is_finished());
     assert_eq!(*observed.published.lock().unwrap(), 0);
 

@@ -5,8 +5,9 @@ use platform_metrics::AuthTokenCacheMetrics;
 use std::{
     num::NonZeroUsize,
     sync::atomic::{AtomicU64, Ordering},
-    time::{Duration, Instant},
+    time::Duration,
 };
+use tokio::time::Instant;
 
 #[derive(Debug)]
 struct PositiveEntry {

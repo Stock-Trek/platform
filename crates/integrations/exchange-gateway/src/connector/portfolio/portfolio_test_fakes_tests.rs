@@ -24,6 +24,7 @@ pub struct TestCredentialProvider {
     pub acquired: Arc<AtomicUsize>,
     pub renewed: Arc<AtomicUsize>,
     pub revoked: Arc<AtomicUsize>,
+    pub revoked_signal: Arc<tokio::sync::Notify>,
     pub ttl: Duration,
 }
 
@@ -41,6 +42,7 @@ impl CredentialProvider for TestCredentialProvider {
 
     async fn revoke(&self, _credential: &Credential) -> Result<(), AuthError> {
         self.revoked.fetch_add(1, Ordering::SeqCst);
+        self.revoked_signal.notify_one();
         Ok(())
     }
 }
@@ -86,6 +88,7 @@ pub struct TestTransport {
     pub acquired: Arc<AtomicUsize>,
     pub renewed: Arc<AtomicUsize>,
     pub revoked: Arc<AtomicUsize>,
+    pub revoked_signal: Arc<tokio::sync::Notify>,
     pub opened: Arc<AtomicUsize>,
     pub refresh_interval: Duration,
     pub reconnect_backoff: Duration,
@@ -100,6 +103,7 @@ impl TestTransport {
             acquired: Arc::new(AtomicUsize::new(0)),
             renewed: Arc::new(AtomicUsize::new(0)),
             revoked: Arc::new(AtomicUsize::new(0)),
+            revoked_signal: Arc::new(tokio::sync::Notify::new()),
             opened: Arc::new(AtomicUsize::new(0)),
             refresh_interval,
             reconnect_backoff,
@@ -134,6 +138,10 @@ impl TestTransport {
         self.opened.load(Ordering::SeqCst)
     }
 
+    pub async fn wait_for_revoke(&self) {
+        self.revoked_signal.notified().await;
+    }
+
     fn stream(events: &[AccountEvent]) -> PortfolioStream {
         let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
         for event in events {
@@ -166,6 +174,7 @@ impl PortfolioExchange for TestTransport {
                 acquired: Arc::clone(&self.acquired),
                 renewed: Arc::clone(&self.renewed),
                 revoked: Arc::clone(&self.revoked),
+                revoked_signal: Arc::clone(&self.revoked_signal),
                 ttl: Duration::from_hours(1),
             },
             TestAuthBinder,

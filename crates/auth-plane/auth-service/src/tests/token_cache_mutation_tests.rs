@@ -28,7 +28,7 @@ async fn local_updates_win_over_in_flight_reads() {
     let original = TestFixture::token("token-e");
     let replacement = TestFixture::token("token-e");
     store.insert(&original).await;
-    store.set_delay_millis(50);
+    store.hold_reads();
     let cache = Arc::new(Fixture::cached(
         store.clone(),
         Fixture::config(10_000, 20_000, 3, 10_000),
@@ -36,8 +36,9 @@ async fn local_updates_win_over_in_flight_reads() {
     let reader = cache.clone();
     let read = tokio::spawn(async move { reader.get("token-e").await });
 
-    tokio::time::sleep(Duration::from_millis(10)).await;
+    store.wait_until_read_starts().await;
     cache.update(&original, &replacement).await.unwrap();
+    store.release_reads();
     let loaded = read.await.unwrap().unwrap().unwrap();
     assert!(loaded.matches_secret(original.secret().expose_secret()));
 

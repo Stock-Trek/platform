@@ -23,7 +23,7 @@ async fn waits_for_an_active_writer_then_takes_over_the_shard() {
     .with_writer_id("this-writer");
 
     let handle = tokio::spawn(async move { runner.run().await });
-    tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    leases.wait_for_acquire_attempt().await;
     assert!(!handle.is_finished());
     leases.release(&held).await.unwrap();
 
