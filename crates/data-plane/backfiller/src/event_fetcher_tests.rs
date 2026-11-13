@@ -1,9 +1,10 @@
 use crate::event_fetcher::{BackfilledEvent, FetcherRegistry, MissingEventFetcher};
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use platform_market_data::GapMarker;
 use platform_types::TimestampMilliseconds;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
 
 struct StubFetcher {
@@ -22,7 +23,7 @@ impl MissingEventFetcher for StubFetcher {
         _gap: &GapMarker,
         attempt: u32,
     ) -> BuildResult<Vec<BackfilledEvent>> {
-        self.attempts.lock().expect("attempts lock").push(attempt);
+        self.attempts.lock().push(attempt);
         Ok(vec![self.event.clone()])
     }
 }
@@ -77,7 +78,7 @@ async fn forwards_retry_attempts_to_the_selected_fetcher() {
         .await
         .unwrap();
 
-    assert_eq!(*attempts.lock().unwrap(), vec![3]);
+    assert_eq!(*attempts.lock(), vec![3]);
 }
 
 #[tokio::test]

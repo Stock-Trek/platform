@@ -5,9 +5,10 @@ use crate::runner::ProcessorRunner;
 use crate::runner::tests::fixtures_tests::{FakeSink, FakeSource, Fixtures, SignalingSource};
 use crate::shard_id::ShardId;
 use crate::state::{AggregatorState, DeduplicationKey};
+use parking_lot::Mutex;
 use platform_types::TimestampMilliseconds;
+use std::sync::Arc;
 use std::sync::atomic::AtomicUsize;
-use std::sync::{Arc, Mutex};
 use stock_trek_types::cex::cex_id::CexId;
 
 #[tokio::test]
@@ -37,7 +38,7 @@ async fn restores_state_and_skips_inputs_already_in_the_archive() {
         .unwrap();
 
     assert_eq!(observed.open_updates(), 0);
-    assert_eq!(*acked.lock().unwrap(), 1);
+    assert_eq!(*acked.lock(), 1);
     let checkpoint = checkpoints.get(ShardId::new(0)).unwrap();
     assert_eq!(checkpoint.next_sequence, 2);
     assert_eq!(checkpoint.watermark, Some(TimestampMilliseconds(61_000)));
@@ -188,7 +189,7 @@ async fn restored_shards_apply_new_backfills_older_than_the_replay_watermark() {
         .unwrap();
 
     assert_eq!(observed.open_updates(), 1);
-    assert_eq!(*acked.lock().unwrap(), 1);
+    assert_eq!(*acked.lock(), 1);
 }
 
 #[tokio::test]
@@ -216,5 +217,5 @@ async fn restored_shards_apply_sequence_less_backfills_older_than_the_replay_wat
         .unwrap();
 
     assert_eq!(observed.open_updates(), 1);
-    assert_eq!(*acked.lock().unwrap(), 1);
+    assert_eq!(*acked.lock(), 1);
 }

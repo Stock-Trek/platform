@@ -1,6 +1,7 @@
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::BuildResult;
-use std::{collections::HashMap, sync::Mutex};
+use std::collections::HashMap;
 
 use crate::sequence_tracker::{
     NatsSequenceStore, SequenceObservation, SequenceStore, SequenceTracker,
@@ -21,18 +22,12 @@ impl InMemorySequenceStore {
 #[async_trait]
 impl SequenceStore for InMemorySequenceStore {
     async fn load(&self, key: &str) -> BuildResult<Option<SequenceTracker>> {
-        Ok(self
-            .trackers
-            .lock()
-            .expect("sequence store lock")
-            .get(key)
-            .cloned())
+        Ok(self.trackers.lock().get(key).cloned())
     }
 
     async fn save(&self, key: &str, tracker: &SequenceTracker) -> BuildResult<()> {
         self.trackers
             .lock()
-            .expect("sequence store lock")
             .insert(key.to_string(), tracker.clone());
         Ok(())
     }

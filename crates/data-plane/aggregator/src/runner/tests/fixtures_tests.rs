@@ -9,12 +9,12 @@ use crate::{
     state::AggregatorState,
 };
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
 use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, MarketEvent};
 use platform_nats::Message;
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::sync::Arc;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -39,7 +39,7 @@ impl MarketSource for FakeSource {
     }
 
     async fn ack(&mut self, _record: &SourceRecord) -> BuildResult<()> {
-        *self.acked.lock().expect("acked lock") += 1;
+        *self.acked.lock() += 1;
         Ok(())
     }
 }
@@ -54,18 +54,15 @@ pub(super) struct FakeSink {
 
 impl FakeSink {
     pub(super) fn open_updates(&self) -> usize {
-        *self.open_updates.lock().expect("open updates lock")
+        *self.open_updates.lock()
     }
 
     pub(super) fn closed_updates(&self) -> usize {
-        *self.closed_updates.lock().expect("closed updates lock")
+        *self.closed_updates.lock()
     }
 
     pub(super) fn deleted_open_updates(&self) -> usize {
-        *self
-            .deleted_open_updates
-            .lock()
-            .expect("deleted open updates lock")
+        *self.deleted_open_updates.lock()
     }
 }
 
@@ -75,7 +72,7 @@ impl OpenCandleStore for FakeSink {
         if self.fail {
             return Err(BuildError::bad_value("sink", "test", "write failed"));
         }
-        *self.open_updates.lock().expect("open updates lock") += candles.len();
+        *self.open_updates.lock() += candles.len();
         Ok(())
     }
 
@@ -83,10 +80,7 @@ impl OpenCandleStore for FakeSink {
         if self.fail {
             return Err(BuildError::bad_value("sink", "test", "write failed"));
         }
-        *self
-            .deleted_open_updates
-            .lock()
-            .expect("deleted open updates lock") += keys.len();
+        *self.deleted_open_updates.lock() += keys.len();
         Ok(())
     }
 }
@@ -97,7 +91,7 @@ impl ClosedCandlePublisher for FakeSink {
         if self.fail {
             return Err(BuildError::bad_value("sink", "test", "write failed"));
         }
-        *self.closed_updates.lock().expect("closed updates lock") += candles.len();
+        *self.closed_updates.lock() += candles.len();
         Ok(())
     }
 }
@@ -135,7 +129,7 @@ impl MarketSource for SignalingSource {
     }
 
     async fn ack(&mut self, _record: &SourceRecord) -> BuildResult<()> {
-        *self.acked.lock().expect("acked lock") += 1;
+        *self.acked.lock() += 1;
         Ok(())
     }
 }

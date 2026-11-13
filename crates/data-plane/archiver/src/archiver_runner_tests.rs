@@ -3,11 +3,12 @@ use crate::{
     source::ArchiveSource,
 };
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_archive::ArchiveRecord;
 use platform_errors::BuildResult;
 use platform_market_data::MarketEvent;
 use platform_types::TimestampMilliseconds;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Default)]
@@ -31,7 +32,7 @@ impl ArchiveSource for FakeSource {
     }
 
     async fn ack(&mut self, _record: &ArchiveRecord) -> BuildResult<()> {
-        *self.acked.lock().expect("acked lock") += 1;
+        *self.acked.lock() += 1;
         Ok(())
     }
 }
@@ -52,7 +53,7 @@ impl ArchiveSink for FakeSink {
                 "write failed",
             ));
         }
-        *self.writes.lock().expect("writes lock") += records.len();
+        *self.writes.lock() += records.len();
         Ok(())
     }
 }
@@ -110,8 +111,8 @@ async fn flushes_and_acknowledges_before_reporting_the_source_end() {
             .is_err()
     );
 
-    assert_eq!(*observed.writes.lock().unwrap(), 1);
-    assert_eq!(*acked.lock().unwrap(), 1);
+    assert_eq!(*observed.writes.lock(), 1);
+    assert_eq!(*acked.lock(), 1);
 }
 
 #[tokio::test]
@@ -133,7 +134,7 @@ async fn does_not_acknowledge_when_the_flush_fails() {
             .await
             .is_err()
     );
-    assert_eq!(*acked.lock().unwrap(), 0);
+    assert_eq!(*acked.lock(), 0);
 }
 
 #[tokio::test]
@@ -153,7 +154,7 @@ async fn acknowledges_duplicate_records_without_treating_the_end_as_success() {
             .is_err()
     );
 
-    assert_eq!(*acked.lock().unwrap(), 2);
+    assert_eq!(*acked.lock(), 2);
 }
 
 #[tokio::test]

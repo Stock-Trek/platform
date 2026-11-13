@@ -1,6 +1,7 @@
 use crate::{AuthRelay, AuthRelayConfig, AuthRelayRunner};
 use async_trait::async_trait;
 use chrono::Utc;
+use parking_lot::Mutex;
 use platform_auth_service::{
     MemoryTokenStore, MemoryTokenUsageQueue, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
     TokenStore, TokenUsageQueueConfig, VaultTokenStoreConfig,
@@ -8,7 +9,7 @@ use platform_auth_service::{
 use platform_errors::{BuildError, BuildResult};
 use platform_time::Timeouts;
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicBool, Ordering},
 };
 use std::time::Duration;
@@ -35,7 +36,7 @@ impl ToggleAudit {
     }
 
     fn events(&self) -> Vec<TokenAuditEvent> {
-        self.events.lock().expect("audit lock").clone()
+        self.events.lock().clone()
     }
 }
 
@@ -50,7 +51,7 @@ impl TokenAuditLog for ToggleAudit {
                 "sink unavailable".to_string(),
             ));
         }
-        self.events.lock().expect("audit lock").push(event);
+        self.events.lock().push(event);
         Ok(())
     }
 }

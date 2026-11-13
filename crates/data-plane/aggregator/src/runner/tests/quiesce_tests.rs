@@ -5,9 +5,10 @@ use crate::runner::{ProcessorRunner, QuiesceSignal};
 use crate::shard_id::ShardId;
 use crate::writer_lease::LeaseStore;
 use crate::writer_lease_tests::InMemoryLeaseStore;
+use parking_lot::Mutex;
 use platform_types::TimestampMilliseconds;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
 use tokio::sync::watch;
 
 #[tokio::test]
@@ -41,7 +42,7 @@ async fn quiesce_stops_new_inputs_and_drains_accepted_records() {
 
     assert_eq!(polls.load(Ordering::SeqCst), 1);
     assert_eq!(observed.open_updates(), 1);
-    assert_eq!(*acked.lock().unwrap(), 1);
+    assert_eq!(*acked.lock(), 1);
     let checkpoint = checkpoints.get(ShardId::new(0)).unwrap();
     assert_eq!(checkpoint.next_sequence, 2);
     assert_eq!(checkpoint.state.last_processed_sequence, Some(1));
@@ -73,7 +74,7 @@ async fn an_already_quiesced_worker_does_not_poll_its_source() {
         .unwrap();
 
     assert_eq!(polls.load(Ordering::SeqCst), 0);
-    assert_eq!(*acked.lock().unwrap(), 0);
+    assert_eq!(*acked.lock(), 0);
 }
 
 #[tokio::test]
@@ -100,7 +101,7 @@ async fn a_watch_receiver_can_trigger_quiescence() {
         .unwrap();
 
     assert_eq!(polls.load(Ordering::SeqCst), 0);
-    assert_eq!(*acked.lock().unwrap(), 0);
+    assert_eq!(*acked.lock(), 0);
 }
 
 #[tokio::test]

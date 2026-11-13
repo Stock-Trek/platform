@@ -6,10 +6,11 @@ use crate::runner::tests::fixtures_tests::{
 };
 use crate::shard_id::ShardId;
 use crate::state::DeduplicationKey;
+use parking_lot::Mutex;
 use platform_market_data::GapMarker;
 use platform_nats::Message;
 use platform_types::TimestampMilliseconds;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
 
 #[tokio::test]
@@ -44,7 +45,7 @@ async fn checkpoints_before_acknowledging_a_trade() {
     runner.run().await.unwrap();
 
     assert_eq!(observed.open_updates(), 1);
-    assert_eq!(*acked.lock().unwrap(), 1);
+    assert_eq!(*acked.lock(), 1);
     let checkpoint = checkpoints.get(ShardId::new(0)).unwrap();
     assert_eq!(checkpoint.next_sequence, 2);
     assert_eq!(checkpoint.resume_sequence(), 2);
@@ -84,7 +85,7 @@ async fn non_trade_events_advance_the_watermark_and_dedup_state() {
         2
     )));
     assert_eq!(checkpoint.state.open_candles_len(), 0);
-    assert_eq!(*acked.lock().unwrap(), 1);
+    assert_eq!(*acked.lock(), 1);
 }
 
 #[tokio::test]
@@ -109,7 +110,7 @@ async fn does_not_acknowledge_when_applying_a_trade_fails() {
             .await
             .is_err()
     );
-    assert_eq!(*acked.lock().unwrap(), 0);
+    assert_eq!(*acked.lock(), 0);
 }
 
 #[tokio::test]
@@ -127,7 +128,7 @@ async fn does_not_acknowledge_when_checkpointing_fails() {
         .with_checkpoint_store(Arc::new(FailingCheckpointStore), ShardId::new(0));
 
     assert!(runner.run().await.is_err());
-    assert_eq!(*acked.lock().unwrap(), 0);
+    assert_eq!(*acked.lock(), 0);
 }
 
 #[tokio::test]
@@ -159,7 +160,7 @@ async fn a_checkpoint_failure_after_closed_publication_does_not_acknowledge() {
     assert!(runner.run().await.is_err());
 
     assert_eq!(observed.closed_updates(), 1);
-    assert_eq!(*acked.lock().unwrap(), 0);
+    assert_eq!(*acked.lock(), 0);
 }
 
 #[tokio::test]
@@ -183,5 +184,5 @@ async fn does_not_acknowledge_a_record_without_checkpoint_metadata() {
             .await
             .is_err()
     );
-    assert_eq!(*acked.lock().unwrap(), 0);
+    assert_eq!(*acked.lock(), 0);
 }

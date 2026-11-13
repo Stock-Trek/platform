@@ -1,8 +1,9 @@
 //! Test helpers for recording and asserting on metrics.
 
 use metrics::{CounterFn, Key, KeyName, Metadata, Recorder, SharedString, Unit};
+use parking_lot::Mutex;
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicU64, Ordering},
 };
 
@@ -25,7 +26,6 @@ impl TestRecorder {
     pub fn counter(&self, name: &str, labels: &[(&str, &str)]) -> u64 {
         self.counters
             .lock()
-            .expect("counters lock")
             .iter()
             .find(|counter| {
                 counter.name == name
@@ -53,7 +53,7 @@ impl Recorder for TestRecorder {
             .labels()
             .map(|label| (label.key().to_string(), label.value().to_string()))
             .collect::<Vec<_>>();
-        let mut counters = self.counters.lock().expect("counters lock");
+        let mut counters = self.counters.lock();
         let value = counters
             .iter()
             .find(|counter| counter.name == name && counter.labels == labels)

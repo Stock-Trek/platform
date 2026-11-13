@@ -1,13 +1,11 @@
 use crate::{MemoryOwnershipStore, OwnershipOutboxRelay, OwnershipStore, RegistryService};
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
+use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
 use platform_nats::EventPublisher;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration as StdDuration,
-};
+use std::{sync::Arc, time::Duration as StdDuration};
 use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Default)]
@@ -18,28 +16,25 @@ struct RecordingPublisher {
 
 impl RecordingPublisher {
     fn published(&self) -> Vec<Vec<u8>> {
-        self.published.lock().expect("published").clone()
+        self.published.lock().clone()
     }
 
     fn fail_next(&self) {
-        *self.fail_next.lock().expect("fail_next") = true;
+        *self.fail_next.lock() = true;
     }
 }
 
 #[async_trait]
 impl EventPublisher for RecordingPublisher {
     async fn publish(&self, _subject: &str, payload: &[u8]) -> BuildResult<()> {
-        let mut fail_next = self.fail_next.lock().expect("fail_next");
+        let mut fail_next = self.fail_next.lock();
         if *fail_next {
             *fail_next = false;
             return Err(BuildError::external(std::io::Error::other(
                 "publish failed",
             )));
         }
-        self.published
-            .lock()
-            .expect("published")
-            .push(payload.to_vec());
+        self.published.lock().push(payload.to_vec());
         Ok(())
     }
 }

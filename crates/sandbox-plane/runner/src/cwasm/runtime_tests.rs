@@ -2,14 +2,11 @@ use crate::cwasm::{
     DEFAULT_MAX_GUEST_MEMORY_BYTES, Emit, ExecutionLimits, GuestWorkspace, PORTFOLIO_FILE_NAME,
     STRATEGY_CONTEXT_FILE_NAME, WasmRunner,
 };
+use parking_lot::Mutex;
 use platform_exit_codes::ExitCode;
 use platform_runner::Command;
 use serde_json::{Value, json};
-use std::{
-    path::Path,
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::{path::Path, sync::Arc, time::Duration};
 use tempfile::NamedTempFile;
 
 const QUEUE_ABI_WAT: &str = r#"
@@ -190,7 +187,7 @@ fn capture() -> (Emit, CapturedLines) {
     let lines: CapturedLines = Arc::new(Mutex::new(Vec::new()));
     let sink = Arc::clone(&lines);
     let emit: Emit = Arc::new(move |kind, payload| {
-        sink.lock().unwrap().push((kind.to_string(), payload));
+        sink.lock().push((kind.to_string(), payload));
     });
     (emit, lines)
 }
@@ -204,7 +201,7 @@ fn runs_the_guest_entry_with_host_written_arguments() {
     let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::Success.code());
-    let lines = lines.lock().unwrap();
+    let lines = lines.lock();
     assert_eq!(lines.len(), 1);
     assert_eq!(lines[0].0, "metadata");
     assert_eq!(
@@ -222,7 +219,7 @@ fn exposes_the_env_imports_used_by_the_runner() {
     let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::Success.code());
-    let lines = lines.lock().unwrap();
+    let lines = lines.lock();
     assert_eq!(
         *lines,
         [
@@ -250,7 +247,7 @@ fn passes_the_guest_exit_code_through() {
     let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, 42);
-    assert!(lines.lock().unwrap().is_empty());
+    assert!(lines.lock().is_empty());
 }
 
 #[test]
@@ -262,7 +259,7 @@ fn reports_a_trapped_guest_as_a_runner_panic() {
     let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::BotErrorPanic.code());
-    assert!(lines.lock().unwrap().is_empty());
+    assert!(lines.lock().is_empty());
 }
 
 #[test]
@@ -275,7 +272,7 @@ fn reports_an_invalid_artifact_as_not_loaded() {
     let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::ServerRunnerCwasmNotLoaded.code());
-    assert!(lines.lock().unwrap().is_empty());
+    assert!(lines.lock().is_empty());
 }
 
 #[test]
@@ -291,7 +288,7 @@ fn interrupts_a_guest_that_exceeds_its_deadline() {
     let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::BotErrorTimeout.code());
-    assert!(lines.lock().unwrap().is_empty());
+    assert!(lines.lock().is_empty());
 }
 
 #[test]
@@ -304,7 +301,7 @@ fn interrupts_a_guest_that_exceeds_its_memory_limit() {
     let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::BotErrorResourceLimitExceeded.code());
-    assert!(lines.lock().unwrap().is_empty());
+    assert!(lines.lock().is_empty());
 }
 
 #[test]
@@ -321,7 +318,7 @@ fn interrupts_a_guest_that_exceeds_its_table_limit() {
     let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::BotErrorResourceLimitExceeded.code());
-    assert!(lines.lock().unwrap().is_empty());
+    assert!(lines.lock().is_empty());
 }
 
 #[test]
@@ -333,7 +330,7 @@ fn does_not_expose_host_files_outside_the_guest_workspace() {
     let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::Success.code());
-    assert!(lines.lock().unwrap().is_empty());
+    assert!(lines.lock().is_empty());
 }
 
 #[test]
@@ -411,7 +408,7 @@ fn initializes_the_guest_before_running_it() {
     let code = execute(&runner, file.path(), &emit);
 
     assert_eq!(code, ExitCode::Success.code());
-    assert!(lines.lock().unwrap().is_empty());
+    assert!(lines.lock().is_empty());
 }
 
 #[test]

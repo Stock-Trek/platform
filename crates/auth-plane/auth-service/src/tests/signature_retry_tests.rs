@@ -3,9 +3,10 @@ use crate::tests::token_usage_queue_fixture_tests::ToggleTokenUsageQueue;
 use crate::{TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenAuditRelay};
 use async_trait::async_trait;
 use chrono::Utc;
+use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -23,7 +24,7 @@ impl FailingSignatureVerifiedAuditLog {
     }
 
     fn events(&self) -> Vec<TokenAuditEvent> {
-        self.events.lock().expect("audit events lock").clone()
+        self.events.lock().clone()
     }
 }
 
@@ -35,7 +36,7 @@ impl TokenAuditLog for FailingSignatureVerifiedAuditLog {
         {
             return Err(BuildError::auth_invalid_field("audit", "queue unavailable"));
         }
-        self.events.lock().expect("audit events lock").push(event);
+        self.events.lock().push(event);
         Ok(())
     }
 }

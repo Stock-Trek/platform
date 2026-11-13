@@ -1,12 +1,9 @@
+use parking_lot::Mutex;
 use platform_exit_codes::ExitCode;
 use prost::Message;
 use rand::{SeedableRng, rngs::StdRng};
 use serde_json::{Value, json};
-use std::{
-    fs,
-    path::Path,
-    sync::{Arc, Mutex},
-};
+use std::{fs, path::Path, sync::Arc};
 use stock_trek::actions::ResolvedAction;
 
 use crate::cwasm::{Emit, PORTFOLIO_FILE_NAME, STRATEGY_CONTEXT_FILE_NAME, WasmRunner};
@@ -100,11 +97,7 @@ impl Simulation {
             eprintln!("cwasm-invoker: guest step failed with exit code {code}");
             return Err(code);
         }
-        let lines = std::mem::take(
-            &mut *collected
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()),
-        );
+        let lines = std::mem::take(&mut *collected.lock());
         let mut events = Vec::new();
         for (kind, payload) in lines {
             if kind != "action" {
@@ -133,9 +126,7 @@ impl Simulation {
         let lines: Emitted = Arc::new(Mutex::new(Vec::new()));
         let sink = Arc::clone(&lines);
         let emit: Emit = Arc::new(move |kind, payload| {
-            sink.lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .push((kind.to_string(), payload));
+            sink.lock().push((kind.to_string(), payload));
         });
         (emit, lines)
     }

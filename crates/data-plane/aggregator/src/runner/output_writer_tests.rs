@@ -5,12 +5,13 @@ use crate::{
     state::AggregatorState,
 };
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
 use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, trade::Trade};
 use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use std::sync::{
-    Arc, Mutex,
+    Arc,
     atomic::{AtomicUsize, Ordering},
 };
 use std::time::Duration;
@@ -27,21 +28,21 @@ struct RecordingSink {
 
 impl RecordingSink {
     fn calls(&self) -> Vec<&'static str> {
-        self.calls.lock().unwrap().clone()
+        self.calls.lock().clone()
     }
 }
 
 #[async_trait]
 impl OpenCandleStore for RecordingSink {
     async fn update_open(&self, candles: &[Candle]) -> BuildResult<()> {
-        self.calls.lock().unwrap().push("open");
-        self.open.lock().unwrap().extend_from_slice(candles);
+        self.calls.lock().push("open");
+        self.open.lock().extend_from_slice(candles);
         Ok(())
     }
 
     async fn delete_open(&self, keys: &[CandleKey]) -> BuildResult<()> {
-        self.calls.lock().unwrap().push("delete");
-        self.deleted.lock().unwrap().extend_from_slice(keys);
+        self.calls.lock().push("delete");
+        self.deleted.lock().extend_from_slice(keys);
         Ok(())
     }
 }
@@ -49,8 +50,8 @@ impl OpenCandleStore for RecordingSink {
 #[async_trait]
 impl ClosedCandlePublisher for RecordingSink {
     async fn publish_closed(&self, candles: &[ClosedCandle]) -> BuildResult<()> {
-        self.calls.lock().unwrap().push("closed");
-        self.closed.lock().unwrap().extend_from_slice(candles);
+        self.calls.lock().push("closed");
+        self.closed.lock().extend_from_slice(candles);
         Ok(())
     }
 }
@@ -74,7 +75,7 @@ impl ClosedCandlePublisher for BlockingSink {
     async fn publish_closed(&self, _candles: &[ClosedCandle]) -> BuildResult<()> {
         self.started.notify_one();
         self.gate.notified().await;
-        *self.published.lock().unwrap() += 1;
+        *self.published.lock() += 1;
         Ok(())
     }
 }
@@ -89,7 +90,7 @@ struct BlockingOpenSink {
 impl OpenCandleStore for BlockingOpenSink {
     async fn update_open(&self, _candles: &[Candle]) -> BuildResult<()> {
         self.gate.notified().await;
-        *self.opens.lock().unwrap() += 1;
+        *self.opens.lock() += 1;
         Ok(())
     }
 }
@@ -120,7 +121,7 @@ impl ClosedCandlePublisher for RetrySink {
         if self.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
             return Err(BuildError::bad_value("sink", "test", "transient failure"));
         }
-        self.published.lock().unwrap().extend_from_slice(candles);
+        self.published.lock().extend_from_slice(candles);
         Ok(())
     }
 }
@@ -175,7 +176,7 @@ async fn open_mutations_are_coalesced_to_the_last_value_per_key() {
     writer.shutdown().await.unwrap();
 
     assert_eq!(observed.calls(), vec!["open"]);
-    let open = observed.open.lock().unwrap();
+    let open = observed.open.lock();
     assert_eq!(open.len(), 1);
     assert_eq!(open[0].ohlcv.close(), 105.0);
 }
@@ -197,8 +198,8 @@ async fn closed_candles_are_published_before_open_mutations() {
     writer.shutdown().await.unwrap();
 
     assert_eq!(observed.calls(), vec!["closed", "delete"]);
-    assert_eq!(observed.closed.lock().unwrap().len(), 1);
-    assert_eq!(*observed.deleted.lock().unwrap(), vec![key("1m")]);
+    assert_eq!(observed.closed.lock().len(), 1);
+    assert_eq!(*observed.deleted.lock(), vec![key("1m")]);
 
     let sink = RecordingSink::default();
     let observed = sink.clone();
@@ -234,7 +235,7 @@ async fn flush_waits_for_closed_candle_publication() {
         .await
         .expect("publication should start");
     assert!(!barrier.is_finished());
-    assert_eq!(*observed.published.lock().unwrap(), 0);
+    assert_eq!(*observed.published.lock(), 0);
 
     observed.gate.notify_one();
     tokio::time::timeout(Duration::from_secs(1), barrier)
@@ -242,7 +243,7 @@ async fn flush_waits_for_closed_candle_publication() {
         .expect("barrier should complete after publication")
         .expect("barrier task should not panic")
         .unwrap();
-    assert_eq!(*observed.published.lock().unwrap(), 1);
+    assert_eq!(*observed.published.lock(), 1);
 }
 
 #[tokio::test]
@@ -263,11 +264,11 @@ async fn barrier_does_not_wait_for_pending_open_writes() {
         .await
         .expect("closed-candle barrier must not wait for open projections")
         .unwrap();
-    assert_eq!(*observed.opens.lock().unwrap(), 0);
+    assert_eq!(*observed.opens.lock(), 0);
 
     observed.gate.notify_one();
     writer.shutdown().await.unwrap();
-    assert_eq!(*observed.opens.lock().unwrap(), 1);
+    assert_eq!(*observed.opens.lock(), 1);
 }
 
 #[tokio::test]
@@ -285,13 +286,13 @@ async fn a_failed_closed_publication_is_retried_by_the_next_barrier() {
         .unwrap();
 
     assert!(writer.barrier().await.is_err());
-    assert_eq!(observed.published.lock().unwrap().len(), 0);
+    assert_eq!(observed.published.lock().len(), 0);
 
     writer.barrier().await.unwrap();
     writer.shutdown().await.unwrap();
 
     assert_eq!(observed.attempts.load(Ordering::SeqCst), 2);
-    assert_eq!(observed.published.lock().unwrap().len(), 1);
+    assert_eq!(observed.published.lock().len(), 1);
 }
 
 #[tokio::test]
@@ -310,7 +311,7 @@ async fn shutdown_drains_pending_open_mutations() {
     writer.shutdown().await.unwrap();
 
     assert_eq!(observed.calls(), vec!["open"]);
-    assert_eq!(observed.open.lock().unwrap().len(), 1);
+    assert_eq!(observed.open.lock().len(), 1);
 }
 
 #[tokio::test]

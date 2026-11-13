@@ -4555,6 +4555,7 @@ dependencies = [
  "async-trait",
  "aws-sdk-s3-transfer-manager",
  "bytes",
+ "parking_lot",
  "platform-archive",
  "platform-config",
  "platform-errors",
@@ -4575,6 +4576,7 @@ dependencies = [
  "async-trait",
  "aws-sdk-sqs",
  "chrono",
+ "parking_lot",
  "platform-auth-service",
  "platform-aws",
  "platform-config",
@@ -4657,6 +4659,7 @@ version = "0.2.0"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
+ "parking_lot",
  "platform-aws",
  "platform-config",
  "platform-errors",
@@ -4683,6 +4686,7 @@ dependencies = [
  "base64 0.23.1",
  "lambda_runtime",
  "metrics_cloudwatch_embedded",
+ "parking_lot",
  "platform-config",
  "platform-errors",
  "platform-messages",
@@ -4733,6 +4737,7 @@ version = "0.2.0"
 dependencies = [
  "async-trait",
  "aws-sdk-s3",
+ "parking_lot",
  "platform-archive",
  "platform-config",
  "platform-errors",
@@ -4916,6 +4921,7 @@ version = "0.2.0"
 dependencies = [
  "async-trait",
  "iris",
+ "parking_lot",
  "platform-config",
  "platform-errors",
  "platform-market-data",
@@ -4970,6 +4976,7 @@ name = "platform-metrics"
 version = "0.2.0"
 dependencies = [
  "metrics",
+ "parking_lot",
 ]
 
 [[package]]
@@ -5010,6 +5017,7 @@ dependencies = [
  "http-body-util",
  "hyper 1.12.0",
  "hyper-util",
+ "parking_lot",
  "platform-auth-service",
  "platform-aws",
  "platform-config",

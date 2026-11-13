@@ -25,4 +25,5 @@ tokio = { workspace = true, features = ["io-util", "macros", "net", "rt-multi-th
 tracing = { workspace = true }
 
 [dev-dependencies]
+parking_lot = { workspace = true }
 platform-market-data = { workspace = true, features = ["test-utils"] }

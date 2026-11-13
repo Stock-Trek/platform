@@ -1,5 +1,6 @@
+use parking_lot::Mutex;
 use serde_json::Value;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use crate::cwasm::Emit;
 use crate::cwasm::guest_state::GuestState;
@@ -23,12 +24,7 @@ impl GuestActions {
     }
 
     pub fn take(&self) -> Vec<String> {
-        std::mem::take(
-            &mut *self
-                .actions
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner()),
-        )
+        std::mem::take(&mut *self.actions.lock())
     }
 
     fn capture(actions: &GuestActions, kind: &str, payload: &Value) {
@@ -36,11 +32,7 @@ impl GuestActions {
             return;
         }
         if let Some(action) = payload.get("action").and_then(Value::as_str) {
-            actions
-                .actions
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner())
-                .push(action.to_string());
+            actions.actions.lock().push(action.to_string());
         }
     }
 }

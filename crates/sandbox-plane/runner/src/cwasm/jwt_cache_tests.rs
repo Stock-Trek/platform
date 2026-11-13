@@ -1,9 +1,10 @@
 use crate::cwasm::JwtCache;
+use parking_lot::RwLock;
 use platform_sigv4::{SigV4Config, SigV4Registry};
 use std::{
     net::SocketAddr,
     sync::{
-        Arc, RwLock,
+        Arc,
         atomic::{AtomicUsize, Ordering},
     },
     time::{Duration, SystemTime, UNIX_EPOCH},
@@ -85,7 +86,7 @@ impl AuthServer {
                             started.notify_one();
                             gate.notified().await;
                         }
-                        let body = body.read().unwrap().clone();
+                        let body = body.read().clone();
                         let response = format!(
                             "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{body}",
                             body.len()
@@ -111,7 +112,7 @@ impl AuthServer {
     }
 
     fn set_body(&self, body: String) {
-        *self.body.write().unwrap() = body;
+        *self.body.write() = body;
     }
 
     fn requests(&self) -> usize {
