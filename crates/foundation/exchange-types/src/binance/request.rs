@@ -46,7 +46,7 @@ impl BinanceRequestFactory {
                     query_params,
                     ByteEncoder::Percent.encode(signature.as_bytes())
                 ),
-                vec![("X-MBX-APIKEY".into(), signer.api_key().clone())],
+                vec![("X-MBX-APIKEY".into(), signer.api_key().to_string())],
             )
         } else {
             (query_params, vec![])
@@ -72,7 +72,7 @@ impl BinanceRequestFactory {
         let method = request.websocket_method_name();
         let is_signed = request.is_signed();
         if is_signed {
-            request.set_api_key(Some(signer.api_key()));
+            request.set_api_key(Some(signer.api_key().to_string()));
         }
         let query_params = request.query_params(false);
         let params = if query_params.is_empty() {

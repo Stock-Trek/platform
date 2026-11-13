@@ -1,9 +1,24 @@
 mod account_event;
 mod account_position_event;
 mod account_snapshot;
+mod auth_binder;
+mod auth_error;
 mod balance_parser;
+mod credential;
+mod credential_provider;
+mod lifecycle;
+mod portfolio_auth;
 
 pub use account_event::AccountEvent;
 pub use account_position_event::AccountPositionEvent;
 pub use account_snapshot::AccountSnapshot;
+pub use auth_binder::{AuthBinder, PortfolioIrisClient};
+pub use auth_error::AuthError;
 pub use balance_parser::BalanceParser;
+pub use credential::Credential;
+pub use credential_provider::CredentialProvider;
+pub use lifecycle::{RenewalSchedule, SessionLifecycle};
+pub use portfolio_auth::PortfolioAuth;
+
+#[cfg(test)]
+mod tests;

@@ -39,8 +39,8 @@ impl Signer {
             encoder,
         })
     }
-    pub fn api_key(&self) -> String {
-        self.api_key.clone()
+    pub fn api_key(&self) -> &str {
+        &self.api_key
     }
     pub fn signature(&self, bytes: &[u8]) -> BuildResult<String> {
         let encrypted = self.encryptor.encrypt(bytes)?;

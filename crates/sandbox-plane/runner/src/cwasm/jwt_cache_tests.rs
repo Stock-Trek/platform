@@ -120,23 +120,24 @@ async fn reuses_a_fresh_token() {
 
 #[tokio::test]
 async fn refreshes_a_stale_token() {
-    let server = AuthServer::start(Fixture::jwt_response("token-a", 1)).await;
+    let server = AuthServer::start(Fixture::jwt_response("token-a", 10)).await;
     let cache = Fixture::cache(&server.url());
 
     assert_eq!(cache.token().await.unwrap(), "token-a");
     server.set_body(Fixture::jwt_response("token-b", 3600));
+    tokio::time::sleep(Duration::from_millis(5100)).await;
     assert_eq!(cache.token().await.unwrap(), "token-b");
     assert_eq!(server.requests(), 2);
 }
 
 #[tokio::test]
 async fn falls_back_to_a_stale_token_when_refresh_fails() {
-    let server = AuthServer::start(Fixture::jwt_response("token-a", 3)).await;
+    let server = AuthServer::start(Fixture::jwt_response("token-a", 10)).await;
     let cache = Fixture::cache(&server.url());
 
     assert_eq!(cache.token().await.unwrap(), "token-a");
     drop(server);
-    tokio::time::sleep(Duration::from_millis(1100)).await;
+    tokio::time::sleep(Duration::from_millis(5100)).await;
 
     assert_eq!(cache.token().await.unwrap(), "token-a");
 }

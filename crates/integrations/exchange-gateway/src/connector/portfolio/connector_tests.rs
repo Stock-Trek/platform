@@ -1,105 +1,15 @@
 use crate::connector::portfolio::{
-    AccountEventStream, ConnectorPortfolioUpdate, ExchangePortfolioConnector,
-    NoopConnectorHealthSink, PortfolioCredentialSource, PortfolioFeed, PortfolioTransport,
-    PortfolioUpdateApply, PortfolioUpdateSink, StaticPortfolioCredentials,
+    ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
+    PortfolioAccounts, PortfolioCredentialSource, PortfolioExchange, PortfolioFeed,
+    PortfolioUpdateApply, PortfolioUpdateSink,
+    portfolio_test_fakes_tests::{Fixture, TestTransport},
 };
 use async_trait::async_trait;
-use chrono::Utc;
 use platform_errors::BuildResult;
-use platform_exchange_types::{
-    api_key_credential::ApiKeyCredentials,
-    portfolio::{AccountEvent, AccountPositionEvent, AccountSnapshot},
-};
-use secrecy::SecretString;
-use std::{
-    collections::{BTreeMap, BTreeSet, VecDeque},
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-    time::Duration,
-};
+use platform_exchange_types::api_key_credential::ApiKeyCredentials;
+use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 use tokio::sync::mpsc;
-
-struct Transport {
-    opens: Arc<AtomicUsize>,
-    closes: Arc<AtomicUsize>,
-}
-
-#[async_trait]
-impl PortfolioTransport for Transport {
-    fn cex_id(&self) -> CexId {
-        CexId::Binance
-    }
-
-    fn refresh_interval(&self) -> Duration {
-        Duration::from_secs(3600)
-    }
-
-    fn reconnect_backoff(&self) -> Duration {
-        Duration::from_millis(10)
-    }
-
-    async fn create_listen_key(&self, _credentials: &ApiKeyCredentials) -> BuildResult<String> {
-        Ok("listen-key".to_string())
-    }
-
-    async fn keepalive_listen_key(
-        &self,
-        _credentials: &ApiKeyCredentials,
-        _listen_key: &str,
-    ) -> BuildResult<()> {
-        Ok(())
-    }
-
-    async fn close_listen_key(
-        &self,
-        _credentials: &ApiKeyCredentials,
-        _listen_key: &str,
-    ) -> BuildResult<()> {
-        self.closes.fetch_add(1, Ordering::SeqCst);
-        Ok(())
-    }
-
-    async fn account_snapshot(
-        &self,
-        _credentials: &ApiKeyCredentials,
-    ) -> BuildResult<AccountSnapshot> {
-        Ok(AccountSnapshot::new(
-            BTreeMap::from([(AssetId::Bitcoin, 1.0)]),
-            Utc::now(),
-        ))
-    }
-
-    async fn open_stream(&self, _listen_key: &str) -> BuildResult<Box<dyn AccountEventStream>> {
-        self.opens.fetch_add(1, Ordering::SeqCst);
-        Ok(Box::new(Stream {
-            events: VecDeque::from([
-                AccountEvent::Position(AccountPositionEvent::new(
-                    42,
-                    BTreeMap::from([(AssetId::TetherUSD, 500.0)]),
-                    Utc::now() + chrono::Duration::seconds(1),
-                )),
-                AccountEvent::SessionExpired,
-            ]),
-        }))
-    }
-}
-
-struct Stream {
-    events: VecDeque<AccountEvent>,
-}
-
-#[async_trait]
-impl AccountEventStream for Stream {
-    async fn next(&mut self) -> BuildResult<Option<AccountEvent>> {
-        if let Some(event) = self.events.pop_front() {
-            return Ok(Some(event));
-        }
-        std::future::pending().await
-    }
-}
 
 struct Sink {
     updates: mpsc::UnboundedSender<ConnectorPortfolioUpdate>,
@@ -116,22 +26,22 @@ impl PortfolioUpdateSink for Sink {
     }
 }
 
-struct Fixture;
+struct FeedFixture;
 
-impl Fixture {
+impl FeedFixture {
     fn credentials() -> Arc<dyn PortfolioCredentialSource> {
-        Arc::new(StaticPortfolioCredentials::new([(
-            (CexId::Binance, AccountId::new("primary")),
+        Arc::new(PortfolioAccounts::new([(
+            (CexId::Binance, Fixture::account()),
             ApiKeyCredentials {
                 api_key: "api-key".to_string(),
-                secret: SecretString::from("secret"),
+                secret: secrecy::SecretString::from("secret"),
             },
         )]))
     }
 
-    fn feed(transport: Arc<Transport>) -> Arc<dyn PortfolioFeed> {
+    fn feed(transport: Arc<TestTransport>) -> Arc<dyn PortfolioFeed> {
         ExchangePortfolioConnector::new(
-            [transport as Arc<dyn PortfolioTransport>],
+            [transport as Arc<dyn PortfolioExchange>],
             Self::credentials(),
             Arc::new(NoopConnectorHealthSink::new()),
         )
@@ -141,11 +51,10 @@ impl Fixture {
 
 #[tokio::test]
 async fn connector_streams_snapshot_and_position_updates_to_the_sink() {
-    let transport = Arc::new(Transport {
-        opens: Arc::new(AtomicUsize::new(0)),
-        closes: Arc::new(AtomicUsize::new(0)),
-    });
-    let feed = Fixture::feed(Arc::clone(&transport));
+    let mut persistent = TestTransport::new(Duration::from_secs(3600), Duration::from_millis(10));
+    persistent.events.truncate(1);
+    let transport = Arc::new(persistent);
+    let feed = FeedFixture::feed(Arc::clone(&transport));
     let (sender, mut receiver) = mpsc::unbounded_channel();
     feed.set_update_sink(Arc::new(Sink { updates: sender }));
     feed.set_accounts(CexId::Binance, BTreeSet::from([AccountId::new("primary")]))
@@ -172,27 +81,25 @@ async fn connector_streams_snapshot_and_position_updates_to_the_sink() {
         .await
         .expect("unsubscribe");
     tokio::time::timeout(Duration::from_secs(2), async {
-        while transport.closes.load(Ordering::SeqCst) == 0 {
+        while transport.revoked() == 0 {
             tokio::time::sleep(Duration::from_millis(5)).await;
         }
     })
     .await
-    .expect("close timeout");
+    .expect("revoke timeout");
 }
 
 #[tokio::test]
 async fn connector_rejects_an_unconfigured_exchange() {
-    let transport = Arc::new(Transport {
-        opens: Arc::new(AtomicUsize::new(0)),
-        closes: Arc::new(AtomicUsize::new(0)),
-    });
-    let feed = Fixture::feed(transport);
+    let feed = FeedFixture::feed(
+        TestTransport::new(Duration::from_secs(3600), Duration::from_millis(10)).into(),
+    );
     feed.set_update_sink(Arc::new(Sink {
         updates: mpsc::unbounded_channel().0,
     }));
     let error = ExchangePortfolioConnector::new(
         [],
-        Fixture::credentials(),
+        FeedFixture::credentials(),
         Arc::new(NoopConnectorHealthSink::new()),
     )
     .feed()
@@ -208,11 +115,11 @@ async fn connector_rejects_an_unconfigured_exchange() {
 
 #[tokio::test]
 async fn connector_reopens_a_session_after_expiration() {
-    let transport = Arc::new(Transport {
-        opens: Arc::new(AtomicUsize::new(0)),
-        closes: Arc::new(AtomicUsize::new(0)),
-    });
-    let feed = Fixture::feed(Arc::clone(&transport));
+    let transport = Arc::new(TestTransport::new(
+        Duration::from_secs(3600),
+        Duration::from_millis(10),
+    ));
+    let feed = FeedFixture::feed(Arc::clone(&transport));
     let (sender, mut receiver) = mpsc::unbounded_channel();
     feed.set_update_sink(Arc::new(Sink { updates: sender }));
     feed.set_accounts(CexId::Binance, BTreeSet::from([AccountId::new("primary")]))
@@ -220,7 +127,7 @@ async fn connector_reopens_a_session_after_expiration() {
         .expect("subscribe");
 
     tokio::time::timeout(Duration::from_secs(2), async {
-        while transport.opens.load(Ordering::SeqCst) < 2 {
+        while transport.opened() < 2 {
             assert!(receiver.recv().await.is_some());
         }
     })

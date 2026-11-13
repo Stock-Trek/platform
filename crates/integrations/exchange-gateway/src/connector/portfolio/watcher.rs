@@ -2,24 +2,27 @@ use crate::connector::portfolio::{
     ConnectorPortfolioUpdate, ConnectorState, PortfolioUpdateApply, PortfolioUpdateSink,
     health_reporter::HealthReporter, session_state::SessionState,
 };
-use crate::connector::portfolio::{PortfolioSession, PortfolioTransport};
+use crate::connector::portfolio::{PortfolioExchange, PortfolioSession};
 use chrono::Utc;
 use platform_errors::{BuildError, BuildResult};
-use platform_exchange_types::portfolio::{AccountEvent, AccountPositionEvent};
+use platform_exchange_types::portfolio::{AccountEvent, AccountPositionEvent, Credential};
 use platform_metrics::PortfolioMetrics;
-use std::{sync::Arc, time::Instant};
+use std::{
+    sync::Arc,
+    time::{Duration, Instant},
+};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 use tokio::{
     sync::watch,
     time::{Instant as TokioInstant, interval_at, sleep},
 };
 
-const HEALTH_INTERVAL: std::time::Duration = std::time::Duration::from_secs(30);
+const HEALTH_INTERVAL: Duration = Duration::from_secs(30);
 
 pub(super) struct Watcher {
     pub(super) cex_id: CexId,
     pub(super) account: AccountId,
-    pub(super) transport: Arc<dyn PortfolioTransport>,
+    pub(super) exchange: Arc<dyn PortfolioExchange>,
     pub(super) credentials: Arc<dyn crate::connector::portfolio::PortfolioCredentialSource>,
     pub(super) sink: Arc<dyn PortfolioUpdateSink>,
     pub(super) health: HealthReporter,
@@ -30,11 +33,15 @@ impl Watcher {
     pub(super) async fn run(self) {
         let mut state = SessionState::new();
         let mut shutdown = self.shutdown.clone();
+        let mut credential = None;
         loop {
             if *shutdown.borrow() {
                 return;
             }
-            match self.run_session(&mut shutdown, &mut state).await {
+            match self
+                .run_session(&mut shutdown, &mut state, &mut credential)
+                .await
+            {
                 Ok(()) => return,
                 Err(error) => {
                     PortfolioMetrics::record_connection_state(self.cex_id.to_string(), false);
@@ -48,7 +55,7 @@ impl Watcher {
                     self.publish_health(ConnectorState::Disconnected, state.last_update)
                         .await;
                     tokio::select! {
-                        _ = sleep(self.transport.reconnect_backoff()) => {}
+                        _ = sleep(self.exchange.reconnect_backoff()) => {}
                         changed = shutdown.changed() => {
                             if changed.is_err() || *shutdown.borrow() {
                                 return;
@@ -64,16 +71,32 @@ impl Watcher {
         &self,
         shutdown: &mut watch::Receiver<bool>,
         state: &mut SessionState,
+        previous: &mut Option<Credential>,
     ) -> BuildResult<()> {
         let credentials = self
             .credentials
             .credentials(self.cex_id, &self.account)
             .await?;
-        let mut session =
-            PortfolioSession::open(Arc::clone(&self.transport), &self.account, &credentials)
-                .await?;
+        let mut session = PortfolioSession::open_with_credential(
+            Arc::clone(&self.exchange),
+            &self.account,
+            &credentials,
+            previous.take(),
+        )
+        .await?;
         let result = self.session(&mut session, shutdown, state).await;
-        let _ = session.close().await;
+        if result.is_ok() {
+            let _ = session.close().await;
+            *previous = None;
+            return result;
+        }
+        let _ = session.disconnect().await;
+        if session.reconnect_reuses_credential() {
+            *previous = session
+                .credential()
+                .filter(|credential| !credential.is_expired(Instant::now()))
+                .cloned();
+        }
         result
     }
 
@@ -97,10 +120,17 @@ impl Watcher {
         PortfolioMetrics::record_connection_state(self.cex_id.to_string(), true);
         self.publish_health(ConnectorState::Connected, state.last_update)
             .await;
-        let mut refresh = interval_at(
-            TokioInstant::now() + self.transport.refresh_interval(),
-            self.transport.refresh_interval(),
-        );
+        let refresh_interval = session.renewal_schedule().map(|schedule| {
+            schedule
+                .interval
+                .saturating_sub(schedule.lead_time)
+                .max(Duration::from_millis(1))
+        });
+        let mut refresh =
+            refresh_interval.map(|interval| interval_at(TokioInstant::now() + interval, interval));
+        let lifetime_deadline = session
+            .max_session_lifetime()
+            .map(|lifetime| TokioInstant::now() + lifetime);
         let mut heartbeat = interval_at(TokioInstant::now() + HEALTH_INTERVAL, HEALTH_INTERVAL);
         loop {
             tokio::select! {
@@ -109,8 +139,21 @@ impl Watcher {
                         return Ok(());
                     }
                 }
-                _ = refresh.tick() => {
+                _ = async {
+                    match refresh.as_mut() {
+                        Some(refresh) => { refresh.tick().await; }
+                        None => std::future::pending::<()>().await,
+                    }
+                } => {
                     session.refresh().await?;
+                }
+                _ = async {
+                    match lifetime_deadline {
+                        Some(deadline) => tokio::time::sleep_until(deadline).await,
+                        None => std::future::pending::<()>().await,
+                    }
+                } => {
+                    return Err(BuildError::external(std::io::Error::other("portfolio session lifetime expired")));
                 }
                 _ = heartbeat.tick() => {
                     self.publish_health(ConnectorState::Connected, state.last_update).await;

@@ -14,6 +14,7 @@ platform-auth-service = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http"] }
 platform-exchange-gateway = { workspace = true }
+platform-exchange-types = { workspace = true }
 platform-metrics = { workspace = true }
 platform-messages = { workspace = true }
 platform-nats = { workspace = true }
@@ -32,4 +33,3 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 platform-auth-service = { workspace = true, features = ["test-utils"] }
-platform-exchange-types = { workspace = true }

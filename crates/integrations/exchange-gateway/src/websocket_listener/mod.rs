@@ -13,4 +13,3 @@ mod tests;
 
 pub use listener::WebsocketListener;
 pub use waiter_for_response::WaiterForResponse;
-pub use websocket_event_stream::WebsocketEventStream;

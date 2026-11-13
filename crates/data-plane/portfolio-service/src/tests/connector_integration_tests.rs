@@ -6,23 +6,28 @@ use chrono::Utc;
 use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use platform_exchange_gateway::{
-    AccountEventStream, ConnectorPortfolioUpdate, ExchangePortfolioConnector,
-    NoopConnectorHealthSink, NoopPortfolioFeed, PortfolioCredentialSource, PortfolioFeed,
-    PortfolioTransport, PortfolioUpdateApply, PortfolioUpdateSink,
+    ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
+    NoopPortfolioFeed, PortfolioCredentialSource, PortfolioEvent, PortfolioExchange, PortfolioFeed,
+    PortfolioStream, PortfolioUpdateApply, PortfolioUpdateSink, iris,
 };
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
-    portfolio::{AccountEvent, AccountPositionEvent, AccountSnapshot},
+    encode::ByteEncoder,
+    portfolio::{
+        AccountEvent, AccountPositionEvent, AccountSnapshot, AuthBinder, AuthError, Credential,
+        CredentialProvider, PortfolioAuth, RenewalSchedule, SessionLifecycle,
+    },
+    signer::Signer,
 };
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use secrecy::SecretString;
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::BTreeMap,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
     },
-    time::Duration,
+    time::{Duration, Instant},
 };
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 
@@ -46,39 +51,95 @@ struct Transport {
     closes: Arc<AtomicUsize>,
 }
 
+struct TestCredentialProvider {
+    closes: Arc<AtomicUsize>,
+}
+
 #[async_trait]
-impl PortfolioTransport for Transport {
-    fn cex_id(&self) -> CexId {
-        CexId::Binance
+impl CredentialProvider for TestCredentialProvider {
+    async fn acquire(&self) -> Result<Option<Credential>, AuthError> {
+        let issued_at = Instant::now();
+        Ok(Some(Credential {
+            value: "listen-key".to_string(),
+            issued_at,
+            expires_at: Some(issued_at + Duration::from_hours(1)),
+            renewable: true,
+        }))
     }
 
-    fn refresh_interval(&self) -> Duration {
-        Duration::from_secs(3600)
+    async fn renew(&self, credential: &Credential) -> Result<Credential, AuthError> {
+        Ok(credential.clone())
+    }
+
+    async fn revoke(&self, _credential: &Credential) -> Result<(), AuthError> {
+        self.closes.fetch_add(1, Ordering::SeqCst);
+        Ok(())
+    }
+}
+
+struct TestBinder;
+
+#[async_trait]
+impl AuthBinder for TestBinder {}
+
+impl Transport {
+    fn stream() -> PortfolioStream {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let _ = sender.send(PortfolioEvent::Account(AccountEvent::Position(
+            AccountPositionEvent::new(
+                42,
+                BTreeMap::from([(AssetId::TetherUSD, 500.0)]),
+                Utc::now() + chrono::Duration::seconds(1),
+            ),
+        )));
+        let client = iris::Client::new(
+            iris::Config::new(),
+            Arc::new(TestListener {
+                _events: sender.clone(),
+            }),
+            "ws://localhost/ws",
+        );
+        PortfolioStream::new(client, receiver)
+    }
+}
+
+#[derive(Debug)]
+struct TestListener {
+    _events: tokio::sync::mpsc::UnboundedSender<PortfolioEvent>,
+}
+
+#[async_trait]
+impl iris::Listener<serde_json::Value> for TestListener {
+    async fn on_message(&self, _message: serde_json::Value) {}
+}
+
+#[async_trait]
+impl PortfolioExchange for Transport {
+    fn cex_id(&self) -> CexId {
+        CexId::Binance
     }
 
     fn reconnect_backoff(&self) -> Duration {
         Duration::from_millis(10)
     }
 
-    async fn create_listen_key(&self, _credentials: &ApiKeyCredentials) -> BuildResult<String> {
-        Ok("listen-key".to_string())
-    }
-
-    async fn keepalive_listen_key(
-        &self,
-        _credentials: &ApiKeyCredentials,
-        _listen_key: &str,
-    ) -> BuildResult<()> {
-        Ok(())
-    }
-
-    async fn close_listen_key(
-        &self,
-        _credentials: &ApiKeyCredentials,
-        _listen_key: &str,
-    ) -> BuildResult<()> {
-        self.closes.fetch_add(1, Ordering::SeqCst);
-        Ok(())
+    async fn portfolio_auth(&self, _credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
+        Ok(PortfolioAuth::new(
+            TestCredentialProvider {
+                closes: Arc::clone(&self.closes),
+            },
+            TestBinder,
+            SessionLifecycle::new(
+                None,
+                Some(RenewalSchedule::new(
+                    Duration::from_secs(3600),
+                    Duration::ZERO,
+                )),
+                true,
+                true,
+            ),
+            Signer::new_unencrypted(ByteEncoder::HexLower),
+        ))
     }
 
     async fn account_snapshot(
@@ -91,28 +152,12 @@ impl PortfolioTransport for Transport {
         ))
     }
 
-    async fn open_stream(&self, _listen_key: &str) -> BuildResult<Box<dyn AccountEventStream>> {
-        Ok(Box::new(Stream {
-            events: VecDeque::from([AccountEvent::Position(AccountPositionEvent::new(
-                42,
-                BTreeMap::from([(AssetId::TetherUSD, 500.0)]),
-                Utc::now() + chrono::Duration::seconds(1),
-            ))]),
-        }))
-    }
-}
-
-struct Stream {
-    events: VecDeque<AccountEvent>,
-}
-
-#[async_trait]
-impl AccountEventStream for Stream {
-    async fn next(&mut self) -> BuildResult<Option<AccountEvent>> {
-        if let Some(event) = self.events.pop_front() {
-            return Ok(Some(event));
-        }
-        std::future::pending().await
+    async fn open_stream(
+        &self,
+        _auth: &PortfolioAuth,
+        _credential: Option<&Credential>,
+    ) -> BuildResult<PortfolioStream> {
+        Ok(Self::stream())
     }
 }
 
@@ -172,7 +217,7 @@ impl Fixture {
 
     fn feed(closes: Arc<AtomicUsize>) -> Arc<dyn PortfolioFeed> {
         ExchangePortfolioConnector::new(
-            [Arc::new(Transport { closes }) as Arc<dyn PortfolioTransport>],
+            [Arc::new(Transport { closes }) as Arc<dyn PortfolioExchange>],
             Arc::new(Credentials),
             Arc::new(NoopConnectorHealthSink::new()),
         )

@@ -4810,6 +4810,7 @@ dependencies = [
  "strum 0.28.0",
  "tokio",
  "tracing",
+ "url",
  "uuid",
 ]
 
@@ -4823,6 +4824,7 @@ dependencies = [
  "data-encoding",
  "ed25519-compact",
  "hmac 0.13.0",
+ "iris",
  "p256",
  "p384",
  "platform-config",

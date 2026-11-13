@@ -1,7 +1,7 @@
-use crate::connector::portfolio::PortfolioTransport;
 use crate::connector::portfolio::{
-    ConnectorState, PortfolioConnection, PortfolioCredentialSource, PortfolioUpdateSink,
-    account_watcher::AccountWatcher, health_reporter::HealthReporter, watcher::Watcher,
+    ConnectorState, PortfolioConnection, PortfolioCredentialSource, PortfolioExchange,
+    PortfolioUpdateSink, account_watcher::AccountWatcher, health_reporter::HealthReporter,
+    watcher::Watcher,
 };
 use async_trait::async_trait;
 use platform_errors::BuildResult;
@@ -15,7 +15,7 @@ use tokio::sync::{Mutex, watch};
 
 pub(super) struct ExchangePortfolioConnection {
     cex_id: CexId,
-    transport: Arc<dyn PortfolioTransport>,
+    exchange: Arc<dyn PortfolioExchange>,
     credentials: Arc<dyn PortfolioCredentialSource>,
     sink: Arc<dyn PortfolioUpdateSink>,
     health: HealthReporter,
@@ -25,14 +25,14 @@ pub(super) struct ExchangePortfolioConnection {
 impl ExchangePortfolioConnection {
     pub(super) fn new(
         cex_id: CexId,
-        transport: Arc<dyn PortfolioTransport>,
+        exchange: Arc<dyn PortfolioExchange>,
         credentials: Arc<dyn PortfolioCredentialSource>,
         sink: Arc<dyn PortfolioUpdateSink>,
         health: HealthReporter,
     ) -> Self {
         Self {
             cex_id,
-            transport,
+            exchange,
             credentials,
             sink,
             health,
@@ -52,7 +52,7 @@ impl ExchangePortfolioConnection {
             Watcher {
                 cex_id: self.cex_id,
                 account,
-                transport: Arc::clone(&self.transport),
+                exchange: Arc::clone(&self.exchange),
                 credentials: Arc::clone(&self.credentials),
                 sink: Arc::clone(&self.sink),
                 health: self.health.clone(),

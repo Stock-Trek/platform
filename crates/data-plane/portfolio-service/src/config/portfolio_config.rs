@@ -1,5 +1,6 @@
 use crate::config::{
-    AuthConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig, UpdateConfig,
+    AuthConfig, FreshnessConfig, OrderRequestConfig, OwnershipConfig, PortfolioExchanges,
+    UpdateConfig,
 };
 use platform_config::EnvVars;
 use platform_errors::BuildResult;
@@ -23,6 +24,8 @@ impl PortfolioConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+        let selected = PortfolioConnectorConfig::selected_cexes(vars)?;
+        let exchanges = PortfolioExchanges::from_vars(vars, selected.as_ref())?;
         Ok(Self {
             log_filter: Config::log_filter(vars)?,
             order_request: OrderRequestConfig::from_vars(vars)?,
@@ -30,7 +33,7 @@ impl PortfolioConfig {
             ownership: OwnershipConfig::from_vars(vars)?,
             update: UpdateConfig::from_vars(vars)?,
             freshness: FreshnessConfig::from_vars(vars)?,
-            connector: PortfolioConnectorConfig::from_vars(vars)?,
+            connector: PortfolioConnectorConfig::from_vars(vars, exchanges)?,
         })
     }
 
