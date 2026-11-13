@@ -1,20 +1,16 @@
 use crate::decoders::{
-    binance::{
-        binance_json_mapping::{BinanceJsonCodec, BinanceJsonMapping},
-        sbe::BinanceSbeCodec,
-    },
-    frame::DecodedFrame,
-    json_mapping::{EnvelopeJsonMapping, MappedJsonCodec},
+    frame::DecodedFrame, json_mapping::MappedJsonCodec, json_schema_mapping::SchemaJsonMapping,
+    sbe::SbeCodec,
 };
 use iris::{Codec, ConnectionError};
 use platform_errors::IngesterError;
+use platform_exchange_types::binance::market_data::{BinanceJsonSchema, BinanceSbeSchema};
 use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
 use tokio_websockets::Message;
 
 pub type SharedCodec = Arc<dyn Codec<(), DecodedFrame>>;
 
-/// Wraps a shared codec so iris, which takes codecs by value, can use it.
 #[derive(Clone)]
 pub struct CodecHandle {
     codec: SharedCodec,
@@ -47,14 +43,18 @@ pub struct CodecFactory;
 impl CodecFactory {
     pub fn json_codec(exchange: CexId) -> SharedCodec {
         match exchange {
-            CexId::Binance => Arc::new(BinanceJsonCodec::new(BinanceJsonMapping)),
-            _ => Arc::new(MappedJsonCodec::new(EnvelopeJsonMapping)),
+            CexId::Binance => Arc::new(MappedJsonCodec::new(
+                SchemaJsonMapping::<BinanceJsonSchema>::default(),
+            )),
+            _ => Arc::new(MappedJsonCodec::new(
+                crate::decoders::json_mapping::EnvelopeJsonMapping,
+            )),
         }
     }
 
     pub fn binary_codec(exchange: CexId) -> Result<SharedCodec, IngesterError> {
         match exchange {
-            CexId::Binance => Ok(Arc::new(BinanceSbeCodec)),
+            CexId::Binance => Ok(Arc::new(SbeCodec::<BinanceSbeSchema>::new())),
             _ => Err(IngesterError::UnsupportedStreamFormat {
                 format: format!("binary for exchange {}", exchange),
             }),

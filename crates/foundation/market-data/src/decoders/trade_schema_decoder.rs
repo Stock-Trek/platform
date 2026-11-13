@@ -1,35 +1,51 @@
 use crate::{
     decoders::{
-        binance::sbe::BinanceSbeCodec,
         json_mapping::JsonFrame,
+        sbe::SbeCodec,
         trade::{Trade, TradeDecoder},
     },
     event::MarketEvent,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_errors::{BuildError, BuildResult, IngesterError};
+use platform_exchange_types::market_data::{SbeTradeRecord, TradeSchemaDefinition};
 use platform_metrics::{DROP_REASON_INVALID_TRADE, MarketDataMetrics, STAGE_AGGREGATOR};
-use platform_type_bridge::BinanceConverter;
 use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use serde_json::{Map, Value};
+use std::marker::PhantomData;
 use stock_trek_types::cex::trading_pair::TradingPair;
 
-/// Decodes Binance JSON and SBE spot trade and aggregate-trade streams.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct BinanceTradeDecoder;
+pub struct SchemaTradeDecoder<S> {
+    symbol_mapping: fn(&str) -> Option<TradingPair>,
+    _schema: PhantomData<S>,
+}
 
-impl TradeDecoder for BinanceTradeDecoder {
+impl<S> SchemaTradeDecoder<S> {
+    pub const fn new(symbol_mapping: fn(&str) -> Option<TradingPair>) -> Self {
+        Self {
+            symbol_mapping,
+            _schema: PhantomData,
+        }
+    }
+}
+
+impl<S: TradeSchemaDefinition + Send + Sync + 'static> TradeDecoder for SchemaTradeDecoder<S> {
     fn decode(&self, event: &MarketEvent) -> BuildResult<Vec<Trade>> {
+        let schema = S::SCHEMA;
         let stream = event.stream.to_ascii_lowercase();
-        if !stream.ends_with("@trade") && !stream.ends_with("@aggtrade") {
+        if !schema
+            .stream_suffixes
+            .iter()
+            .any(|suffix| stream.ends_with(suffix))
+        {
             return Ok(Vec::new());
         }
 
         let frame = STANDARD
             .decode(&event.payload)
             .map_err(|error| IngesterError::malformed_binary(error.to_string()))?;
-        if BinanceSbeCodec::is_sbe_frame(&frame) {
+        if SbeCodec::<S::Sbe>::is_sbe_frame(&frame) {
             return self.decode_sbe_trades(event, &frame);
         }
 
@@ -37,37 +53,37 @@ impl TradeDecoder for BinanceTradeDecoder {
         let (_, data) = JsonFrame::split_envelope(value)?;
 
         if data
-            .get("e")
+            .get(schema.event_type_field)
             .and_then(Value::as_str)
             .is_some_and(|event_type| {
-                !matches!(
-                    event_type.to_ascii_lowercase().as_str(),
-                    "trade" | "aggtrade"
-                )
+                !schema
+                    .event_types
+                    .iter()
+                    .any(|candidate| candidate.eq_ignore_ascii_case(event_type))
             })
         {
             return Ok(Vec::new());
         }
 
         let symbol = data
-            .get("s")
+            .get(schema.symbol_field)
             .and_then(Value::as_str)
             .or_else(|| stream.split_once('@').map(|(symbol, _)| symbol))
-            .ok_or(IngesterError::MissingField("s"))?;
+            .ok_or(IngesterError::MissingField(schema.symbol_field))?;
         let trading_pair = self.trading_pair(symbol).ok_or_else(|| {
             BuildError::bad_value("symbol", symbol, "could not resolve base and quote assets")
         })?;
-        let price = self.decimal_field(&data, "p")?;
-        let quantity = self.decimal_field(&data, "q")?;
+        let price = self.decimal_field(&data, schema.price_field)?;
+        let quantity = self.decimal_field(&data, schema.quantity_field)?;
         if !Self::is_valid_trade(price, quantity) {
             Self::record_invalid_trade();
             return Ok(Vec::new());
         }
 
-        let timestamp = data
-            .get("T")
-            .or_else(|| data.get("E"))
-            .and_then(Value::as_i64)
+        let timestamp = schema
+            .timestamp_fields
+            .iter()
+            .find_map(|field| data.get(*field).and_then(Value::as_i64))
             .map(TimestampMilliseconds)
             .or(event.exchange_timestamp)
             .unwrap_or(event.received_at);
@@ -95,33 +111,33 @@ impl TradeDecoder for BinanceTradeDecoder {
     }
 }
 
-impl BinanceTradeDecoder {
+impl<S: TradeSchemaDefinition> SchemaTradeDecoder<S> {
     fn decode_sbe_trades(&self, event: &MarketEvent, frame: &[u8]) -> BuildResult<Vec<Trade>> {
-        let sbe_trades = BinanceSbeCodec.decode_trades(frame)?;
+        let sbe_trades = SbeCodec::<S::Sbe>::default().decode_trades(frame)?;
         let Some(first) = sbe_trades.first() else {
             return Ok(Vec::new());
         };
-        let trading_pair = self.trading_pair(&first.symbol).ok_or_else(|| {
+        let trading_pair = self.trading_pair(first.symbol()).ok_or_else(|| {
             BuildError::bad_value(
                 "symbol",
-                first.symbol.clone(),
+                first.symbol(),
                 "could not resolve base and quote assets",
             )
         })?;
 
         let mut trades = Vec::with_capacity(sbe_trades.len());
         for trade in sbe_trades {
-            if !Self::is_valid_trade(trade.price, trade.quantity) {
+            if !Self::is_valid_trade(trade.price(), trade.quantity()) {
                 Self::record_invalid_trade();
                 continue;
             }
             trades.push(Trade {
                 exchange: event.exchange,
                 trading_pair,
-                price: trade.price,
-                quantity: trade.quantity,
-                timestamp: if trade.event_time_us > 0 {
-                    TimestampMilliseconds(trade.event_time_us / 1_000)
+                price: trade.price(),
+                quantity: trade.quantity(),
+                timestamp: if trade.event_time_us() > 0 {
+                    TimestampMilliseconds(trade.event_time_us() / 1_000)
                 } else {
                     event.exchange_timestamp.unwrap_or(event.received_at)
                 },
@@ -139,7 +155,7 @@ impl BinanceTradeDecoder {
     }
 
     fn trading_pair(&self, symbol: &str) -> Option<TradingPair> {
-        BinanceConverter::ticker_mapping_static().trading_pair_from_symbol(symbol)
+        (self.symbol_mapping)(symbol)
     }
 
     fn decimal_field(

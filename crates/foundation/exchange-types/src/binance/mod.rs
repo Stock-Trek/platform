@@ -10,6 +10,7 @@ pub mod exchange_info;
 pub mod filters;
 pub mod klines;
 pub mod klines_limit;
+pub mod market_data;
 pub mod open_orders_status;
 pub mod order_status;
 pub mod portfolio;

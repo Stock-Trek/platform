@@ -1,8 +1,8 @@
-use crate::decoders::binance::sbe::BinanceSbeCodec;
+use crate::decoders::sbe::SbeCodec;
 use platform_errors::IngesterError;
 use rust_decimal::Decimal;
 
-impl BinanceSbeCodec {
+impl<S> SbeCodec<S> {
     pub(super) fn decimal_from_mantissa(
         mantissa: i64,
         exponent: i8,

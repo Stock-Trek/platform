@@ -1,12 +1,13 @@
-use crate::{decoders::binance::binance_trade_decoder::BinanceTradeDecoder, event::MarketEvent};
+use crate::{decoders::trade_schema_decoder::SchemaTradeDecoder, event::MarketEvent};
 use platform_errors::{BuildError, BuildResult, ExchangeError};
+use platform_exchange_types::binance::market_data::BinanceTradeSchema;
+use platform_type_bridge::BinanceConverter;
 use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 
-/// A single exchange trade used to build candles.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Trade {
     pub exchange: CexId,
@@ -16,11 +17,9 @@ pub struct Trade {
     pub timestamp: TimestampMilliseconds,
 }
 
-/// Decodes an exchange market event into trades.
 pub trait TradeDecoder: Send + Sync {
     fn decode(&self, event: &MarketEvent) -> BuildResult<Vec<Trade>>;
 
-    /// Resolves an exchange stream name to the trading pair it carries.
     fn trading_pair_for_stream(&self, stream: &str) -> BuildResult<TradingPair> {
         Err(BuildError::bad_value(
             "stream",
@@ -30,24 +29,27 @@ pub trait TradeDecoder: Send + Sync {
     }
 }
 
-/// Type-erased trade decoder for an exchange.
 pub type SharedTradeDecoder = Arc<dyn TradeDecoder>;
 
-/// Builds the trade decoder for an exchange.
 pub struct TradeDecoderFactory;
 
 impl TradeDecoderFactory {
     pub fn for_exchange(exchange: CexId) -> BuildResult<SharedTradeDecoder> {
         match exchange {
-            CexId::Binance => Ok(Arc::new(BinanceTradeDecoder)),
+            CexId::Binance => Ok(Arc::new(SchemaTradeDecoder::<BinanceTradeSchema>::new(
+                Self::binance_trading_pair,
+            ))),
             exchange => Err(BuildError::Exchange(ExchangeError::UnsupportedExchange {
                 exchange: exchange.to_string(),
             })),
         }
     }
 
-    /// Resolves an exchange stream name without retaining a decoder cache.
     pub fn trading_pair_for_stream(exchange: CexId, stream: &str) -> BuildResult<TradingPair> {
         Self::for_exchange(exchange)?.trading_pair_for_stream(stream)
+    }
+
+    fn binance_trading_pair(symbol: &str) -> Option<TradingPair> {
+        BinanceConverter::ticker_mapping_static().trading_pair_from_symbol(symbol)
     }
 }

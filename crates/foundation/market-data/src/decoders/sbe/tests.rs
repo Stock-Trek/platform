@@ -1,28 +1,31 @@
-use crate::decoders::binance::sbe::codec::{
-    BINANCE_BEST_BID_ASK_TEMPLATE_ID, BINANCE_DEPTH_DIFF_TEMPLATE_ID,
-    BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID, BINANCE_SBE_SCHEMA_ID, BINANCE_SBE_VERSION,
-    BINANCE_TRADES_TEMPLATE_ID, BinanceSbeCodec,
-};
+use crate::decoders::sbe::SbeCodec;
 use crate::event::ParsedMessage;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use iris::{Codec, ConnectionError};
 use platform_errors::IngesterError;
+use platform_exchange_types::{
+    binance::market_data::{BinanceSbeSchema, BinanceSbeTrade},
+    market_data::{SbeBestBidAskRecord, SbeSchemaDefinition, SbeTemplateKind, SbeTradeRecord},
+};
 use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use tokio_websockets::Message;
 
 fn sbe_header(template_id: u16) -> Vec<u8> {
     let block_length = match template_id {
-        BINANCE_BEST_BID_ASK_TEMPLATE_ID => 50,
-        BINANCE_DEPTH_DIFF_TEMPLATE_ID => 26,
-        BINANCE_TRADES_TEMPLATE_ID | BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID => 18,
-        _ => 18,
+        BinanceSbeSchema::BEST_BID_ASK_TEMPLATE_ID => BinanceSbeSchema::BEST_BID_ASK_BLOCK_LENGTH,
+        BinanceSbeSchema::DEPTH_DIFF_TEMPLATE_ID => BinanceSbeSchema::DEPTH_DIFF_BLOCK_LENGTH,
+        BinanceSbeSchema::TRADES_TEMPLATE_ID => BinanceSbeSchema::TRADES_BLOCK_LENGTH,
+        BinanceSbeSchema::DEPTH_SNAPSHOT_TEMPLATE_ID => {
+            BinanceSbeSchema::DEPTH_SNAPSHOT_BLOCK_LENGTH
+        }
+        _ => BinanceSbeSchema::TRADES_BLOCK_LENGTH,
     };
     sbe_header_with(
         template_id,
         block_length,
-        BINANCE_SBE_SCHEMA_ID,
-        BINANCE_SBE_VERSION,
+        BinanceSbeSchema::SCHEMA_ID,
+        BinanceSbeSchema::VERSION,
     )
 }
 
@@ -42,7 +45,7 @@ fn append_var_string(frame: &mut Vec<u8>, value: &str) {
 
 fn sbe_trades_frame() -> Vec<u8> {
     let event_time_us = 1_700_000_000_123_000_i64;
-    let mut frame = sbe_header(BINANCE_TRADES_TEMPLATE_ID);
+    let mut frame = sbe_header(BinanceSbeSchema::TRADES_TEMPLATE_ID);
     frame.extend_from_slice(&event_time_us.to_le_bytes());
     frame.extend_from_slice(&event_time_us.to_le_bytes());
     frame.push((-8_i8) as u8);
@@ -60,7 +63,7 @@ fn sbe_trades_frame() -> Vec<u8> {
 }
 
 fn sbe_best_bid_ask_frame() -> Vec<u8> {
-    let mut frame = sbe_header(BINANCE_BEST_BID_ASK_TEMPLATE_ID);
+    let mut frame = sbe_header(BinanceSbeSchema::BEST_BID_ASK_TEMPLATE_ID);
     frame.extend_from_slice(&1_700_000_000_123_000_i64.to_le_bytes());
     frame.extend_from_slice(&99_i64.to_le_bytes());
     frame.push((-2_i8) as u8);
@@ -74,7 +77,7 @@ fn sbe_best_bid_ask_frame() -> Vec<u8> {
 }
 
 fn sbe_depth_snapshot_frame() -> Vec<u8> {
-    let mut frame = sbe_header(BINANCE_DEPTH_SNAPSHOT_TEMPLATE_ID);
+    let mut frame = sbe_header(BinanceSbeSchema::DEPTH_SNAPSHOT_TEMPLATE_ID);
     frame.extend_from_slice(&1_700_000_000_123_000_i64.to_le_bytes());
     frame.extend_from_slice(&456_i64.to_le_bytes());
     frame.push(0);
@@ -89,7 +92,7 @@ fn sbe_depth_snapshot_frame() -> Vec<u8> {
 }
 
 fn sbe_depth_diff_frame() -> Vec<u8> {
-    let mut frame = sbe_header(BINANCE_DEPTH_DIFF_TEMPLATE_ID);
+    let mut frame = sbe_header(BinanceSbeSchema::DEPTH_DIFF_TEMPLATE_ID);
     frame.extend_from_slice(&1_700_000_000_123_000_i64.to_le_bytes());
     frame.extend_from_slice(&100_i64.to_le_bytes());
     frame.extend_from_slice(&123_i64.to_le_bytes());
@@ -105,7 +108,7 @@ fn sbe_depth_diff_frame() -> Vec<u8> {
 }
 
 fn decode(frame: Vec<u8>) -> Result<ParsedMessage, IngesterError> {
-    BinanceSbeCodec
+    SbeCodec::<BinanceSbeSchema>::default()
         .decode(Message::binary(frame))
         .unwrap()
         .result
@@ -128,27 +131,29 @@ fn decodes_binance_sbe_trades() {
 
 #[test]
 fn decodes_sbe_trade_entries() {
-    let trades = BinanceSbeCodec.decode_trades(&sbe_trades_frame()).unwrap();
+    let trades: Vec<BinanceSbeTrade> = SbeCodec::<BinanceSbeSchema>::default()
+        .decode_trades(&sbe_trades_frame())
+        .unwrap();
 
     assert_eq!(trades.len(), 2);
-    assert_eq!(trades[0].symbol, "btcusdt");
-    assert_eq!(trades[0].event_time_us, 1_700_000_000_123_000);
+    assert_eq!(trades[0].symbol(), "btcusdt");
+    assert_eq!(trades[0].event_time_us(), 1_700_000_000_123_000);
     assert_eq!(
-        trades[0].price,
+        trades[0].price(),
         Decimal::from_str_exact("0.000001").unwrap()
     );
     assert_eq!(
-        trades[0].quantity,
+        trades[0].quantity(),
         Decimal::from_str_exact("0.00000001").unwrap()
     );
-    assert_eq!(trades[1].price, trades[0].price);
-    assert_eq!(trades[1].quantity, trades[0].quantity);
+    assert_eq!(trades[1].price(), trades[0].price());
+    assert_eq!(trades[1].quantity(), trades[0].quantity());
 }
 
 #[test]
 fn non_trade_sbe_frames_have_no_trade_entries() {
     assert!(
-        BinanceSbeCodec
+        SbeCodec::<BinanceSbeSchema>::default()
             .decode_trades(&sbe_best_bid_ask_frame())
             .unwrap()
             .is_empty()
@@ -169,26 +174,26 @@ fn decodes_binance_sbe_best_bid_ask() {
 
 #[test]
 fn decodes_sbe_best_bid_ask_fields() {
-    let best_bid_ask = BinanceSbeCodec
+    let best_bid_ask = SbeCodec::<BinanceSbeSchema>::default()
         .decode_best_bid_ask(&sbe_best_bid_ask_frame())
         .unwrap();
 
-    assert_eq!(best_bid_ask.symbol, "btcusdt");
-    assert_eq!(best_bid_ask.event_time_us, 1_700_000_000_123_000);
+    assert_eq!(best_bid_ask.symbol(), "btcusdt");
+    assert_eq!(best_bid_ask.event_time_us(), 1_700_000_000_123_000);
     assert_eq!(
-        best_bid_ask.bid_price,
+        best_bid_ask.bid_price(),
         Decimal::from_str_exact("100.25").unwrap()
     );
     assert_eq!(
-        best_bid_ask.bid_quantity,
+        best_bid_ask.bid_quantity(),
         Decimal::from_str_exact("2.5").unwrap()
     );
     assert_eq!(
-        best_bid_ask.ask_price,
+        best_bid_ask.ask_price(),
         Decimal::from_str_exact("100.5").unwrap()
     );
     assert_eq!(
-        best_bid_ask.ask_quantity,
+        best_bid_ask.ask_quantity(),
         Decimal::from_str_exact("1").unwrap()
     );
 }
@@ -222,10 +227,10 @@ fn rejects_unknown_sbe_templates() {
 #[test]
 fn rejects_unknown_sbe_schema_ids() {
     let frame = sbe_header_with(
-        BINANCE_TRADES_TEMPLATE_ID,
-        18,
-        BINANCE_SBE_SCHEMA_ID + 1,
-        BINANCE_SBE_VERSION,
+        BinanceSbeSchema::TRADES_TEMPLATE_ID,
+        BinanceSbeSchema::TRADES_BLOCK_LENGTH,
+        BinanceSbeSchema::SCHEMA_ID + 1,
+        BinanceSbeSchema::VERSION,
     );
 
     let error = decode(frame).unwrap_err();
@@ -236,10 +241,10 @@ fn rejects_unknown_sbe_schema_ids() {
 #[test]
 fn rejects_unsupported_sbe_versions() {
     let frame = sbe_header_with(
-        BINANCE_TRADES_TEMPLATE_ID,
-        18,
-        BINANCE_SBE_SCHEMA_ID,
-        BINANCE_SBE_VERSION + 1,
+        BinanceSbeSchema::TRADES_TEMPLATE_ID,
+        BinanceSbeSchema::TRADES_BLOCK_LENGTH,
+        BinanceSbeSchema::SCHEMA_ID,
+        BinanceSbeSchema::VERSION + 1,
     );
 
     let error = decode(frame).unwrap_err();
@@ -250,10 +255,10 @@ fn rejects_unsupported_sbe_versions() {
 #[test]
 fn rejects_mismatched_sbe_block_lengths() {
     let frame = sbe_header_with(
-        BINANCE_BEST_BID_ASK_TEMPLATE_ID,
-        18,
-        BINANCE_SBE_SCHEMA_ID,
-        BINANCE_SBE_VERSION,
+        BinanceSbeSchema::BEST_BID_ASK_TEMPLATE_ID,
+        BinanceSbeSchema::TRADES_BLOCK_LENGTH,
+        BinanceSbeSchema::SCHEMA_ID,
+        BinanceSbeSchema::VERSION,
     );
 
     let error = decode(frame).unwrap_err();
@@ -270,28 +275,53 @@ fn rejects_truncated_sbe_headers() {
 
 #[test]
 fn identifies_only_matching_sbe_headers() {
-    assert!(BinanceSbeCodec::is_sbe_frame(&sbe_trades_frame()));
-    assert!(BinanceSbeCodec::is_sbe_frame(&sbe_best_bid_ask_frame()));
-    assert!(BinanceSbeCodec::is_sbe_frame(&sbe_depth_snapshot_frame()));
-    assert!(BinanceSbeCodec::is_sbe_frame(&sbe_depth_diff_frame()));
-    assert!(!BinanceSbeCodec::is_sbe_frame(b"{}"));
-    assert!(!BinanceSbeCodec::is_sbe_frame(&sbe_header(1)));
+    assert!(SbeCodec::<BinanceSbeSchema>::is_sbe_frame(
+        &sbe_trades_frame()
+    ));
+    assert!(SbeCodec::<BinanceSbeSchema>::is_sbe_frame(
+        &sbe_best_bid_ask_frame()
+    ));
+    assert!(SbeCodec::<BinanceSbeSchema>::is_sbe_frame(
+        &sbe_depth_snapshot_frame()
+    ));
+    assert!(SbeCodec::<BinanceSbeSchema>::is_sbe_frame(
+        &sbe_depth_diff_frame()
+    ));
+    assert!(!SbeCodec::<BinanceSbeSchema>::is_sbe_frame(b"{}"));
+    assert!(!SbeCodec::<BinanceSbeSchema>::is_sbe_frame(&sbe_header(1)));
 
-    let mut frame = sbe_header(BINANCE_TRADES_TEMPLATE_ID);
-    frame[4..6].copy_from_slice(&(BINANCE_SBE_SCHEMA_ID + 1).to_le_bytes());
-    assert!(!BinanceSbeCodec::is_sbe_frame(&frame));
+    let mut frame = sbe_header(BinanceSbeSchema::TRADES_TEMPLATE_ID);
+    frame[4..6].copy_from_slice(&(BinanceSbeSchema::SCHEMA_ID + 1).to_le_bytes());
+    assert!(!SbeCodec::<BinanceSbeSchema>::is_sbe_frame(&frame));
 }
 
 #[test]
 fn rejects_non_binary_frames() {
-    let result = BinanceSbeCodec.decode(Message::text("{}".to_string()));
+    let result = SbeCodec::<BinanceSbeSchema>::default().decode(Message::text("{}".to_string()));
 
     assert!(matches!(result, Err(ConnectionError::BadMessagePayload)));
 }
 
 #[test]
 fn encoding_requests_is_unsupported() {
-    let result = BinanceSbeCodec.encode(&());
+    let result = SbeCodec::<BinanceSbeSchema>::default().encode(&());
 
     assert!(matches!(result, Err(ConnectionError::Codec(_))));
+}
+
+#[test]
+fn schema_declares_binance_templates() {
+    assert_eq!(
+        BinanceSbeSchema::SCHEMA
+            .templates
+            .iter()
+            .map(|template| template.kind)
+            .collect::<Vec<_>>(),
+        vec![
+            SbeTemplateKind::Trades,
+            SbeTemplateKind::BestBidAsk,
+            SbeTemplateKind::DepthSnapshot,
+            SbeTemplateKind::DepthDiff,
+        ]
+    );
 }
