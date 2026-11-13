@@ -1,4 +1,4 @@
-use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
+use crate::iceberg::catalog::iceberg_catalog::{IcebergCatalog, retry::RetryPolicy};
 use crate::iceberg::{ArchiveIcebergTable, catalog::IcebergDataFile};
 use iceberg::{
     spec::{DataContentType, DataFile, DataFileBuilder, DataFileFormat, Struct},
@@ -7,11 +7,15 @@ use iceberg::{
 };
 use platform_errors::{BuildError, BuildResult};
 use std::time::Duration;
-use tokio::time::sleep;
 use tracing::{info, warn};
 
 const MAX_COMMIT_ATTEMPTS: usize = 4;
 const COMMIT_BACKOFF: Duration = Duration::from_millis(250);
+
+enum CommitOutcome {
+    Applied,
+    Retry(BuildError),
+}
 
 impl IcebergCatalog {
     pub(super) async fn commit_files(
@@ -24,80 +28,18 @@ impl IcebergCatalog {
             return Ok(());
         }
 
+        let retry = RetryPolicy::new(MAX_COMMIT_ATTEMPTS, COMMIT_BACKOFF);
         let mut last_error = None;
-        for attempt in 1..=MAX_COMMIT_ATTEMPTS {
-            let current = match self.ensure_table(table).await {
-                Ok(table) => table,
-                Err(error) => {
-                    last_error = Some(error);
-                    if attempt < MAX_COMMIT_ATTEMPTS {
-                        sleep(COMMIT_BACKOFF * attempt as u32).await;
-                    }
-                    continue;
-                }
-            };
-
-            match self.already_registered(&current, files, source_files).await {
-                Ok(true) => {
-                    info!(table = table.name(), "Iceberg commit was already applied");
-                    return Ok(());
-                }
-                Ok(false) => {}
-                Err(error) => {
-                    last_error = Some(error);
-                    if attempt < MAX_COMMIT_ATTEMPTS {
-                        sleep(COMMIT_BACKOFF * attempt as u32).await;
-                    }
-                    continue;
-                }
-            }
-
-            let data_files = files
-                .iter()
-                .map(|file| self.data_file(&current, file))
-                .collect::<BuildResult<Vec<_>>>()?;
-            let snapshot_properties = Self::snapshot_properties(files, source_files);
-
-            let transaction = Transaction::new(&current);
-            let action = transaction
-                .fast_append()
-                .add_data_files(data_files)
-                .set_snapshot_properties(snapshot_properties);
-            let transaction = action
-                .apply(transaction)
-                .map_err(|error| Self::catalog_error("prepare Iceberg commit", error))?;
-
-            match transaction.commit(&self.catalog).await {
-                Ok(_) => {
-                    info!(
-                        table = table.name(),
-                        files = files.len(),
-                        "registered archive files in Iceberg"
-                    );
-                    return Ok(());
-                }
-                Err(error) => {
-                    warn!(
-                        error = %error,
-                        table = table.name(),
-                        attempt,
-                        "Iceberg commit failed"
-                    );
-                    last_error = Some(Self::catalog_error("commit Iceberg table", error));
-                }
-            }
-
-            if let Ok(current) = self.ensure_table(table).await
-                && self
-                    .already_registered(&current, files, source_files)
-                    .await
-                    .unwrap_or(false)
+        for attempt in 1..=retry.max_attempts() {
+            match self
+                .commit_attempt(table, files, source_files, attempt)
+                .await?
             {
-                return Ok(());
+                CommitOutcome::Applied => return Ok(()),
+                CommitOutcome::Retry(error) => last_error = Some(error),
             }
-
-            if attempt < MAX_COMMIT_ATTEMPTS {
-                sleep(COMMIT_BACKOFF * attempt as u32).await;
+            if retry.should_retry(attempt) {
+                retry.sleep(attempt).await;
             }
         }
 
@@ -106,6 +48,72 @@ impl IcebergCatalog {
                 "Iceberg commit failed without a reported error",
             ))
         }))
+    }
+
+    async fn commit_attempt(
+        &self,
+        table: ArchiveIcebergTable,
+        files: &[IcebergDataFile],
+        source_files: Option<&[String]>,
+        attempt: usize,
+    ) -> BuildResult<CommitOutcome> {
+        let current = match self.ensure_table(table).await {
+            Ok(current) => current,
+            Err(error) => return Ok(CommitOutcome::Retry(error)),
+        };
+
+        match self.already_registered(&current, files, source_files).await {
+            Ok(true) => {
+                info!(table = table.name(), "Iceberg commit was already applied");
+                return Ok(CommitOutcome::Applied);
+            }
+            Ok(false) => {}
+            Err(error) => return Ok(CommitOutcome::Retry(error)),
+        }
+
+        let data_files = files
+            .iter()
+            .map(|file| self.data_file(&current, file))
+            .collect::<BuildResult<Vec<_>>>()?;
+        let snapshot_properties = Self::snapshot_properties(files, source_files);
+
+        let transaction = Transaction::new(&current);
+        let action = transaction
+            .fast_append()
+            .add_data_files(data_files)
+            .set_snapshot_properties(snapshot_properties);
+        let transaction = action
+            .apply(transaction)
+            .map_err(|error| Self::catalog_error("prepare Iceberg commit", error))?;
+
+        match transaction.commit(&self.catalog).await {
+            Ok(_) => {
+                info!(
+                    table = table.name(),
+                    files = files.len(),
+                    "registered archive files in Iceberg"
+                );
+                Ok(CommitOutcome::Applied)
+            }
+            Err(error) => {
+                warn!(
+                    error = %error,
+                    table = table.name(),
+                    attempt,
+                    "Iceberg commit failed"
+                );
+                let error = Self::catalog_error("commit Iceberg table", error);
+                if let Ok(current) = self.ensure_table(table).await
+                    && self
+                        .already_registered(&current, files, source_files)
+                        .await
+                        .unwrap_or(false)
+                {
+                    return Ok(CommitOutcome::Applied);
+                }
+                Ok(CommitOutcome::Retry(error))
+            }
+        }
     }
 
     async fn already_registered(
