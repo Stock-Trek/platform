@@ -83,5 +83,5 @@ fn acknowledges_an_empty_listen_key_response() {
         },
         payload: BinanceResponsePayload::Success(BinanceListenKeyResponse::default()),
     };
-    assert!(BinanceExchange::listen_key_ack(response).is_ok());
+    assert!(response.ensure_success().is_ok());
 }

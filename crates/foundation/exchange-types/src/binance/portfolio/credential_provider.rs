@@ -42,28 +42,26 @@ impl BinanceCredentialProvider {
     }
 
     async fn create(&self) -> Result<String, AuthError> {
-        let response = self
-            .send(BinanceListenKeyRequest::create())
+        self.send(BinanceListenKeyRequest::create())
             .await
-            .map_err(|error| AuthError::Acquire(error.to_string()))?;
-        BinanceExchange::listen_key(response).map_err(|error| AuthError::Acquire(error.to_string()))
+            .map_err(|error| AuthError::Acquire(error.to_string()))?
+            .into_listen_key()
+            .map_err(|error| AuthError::Acquire(error.to_string()))
     }
 
     async fn keepalive(&self, listen_key: &str) -> Result<(), AuthError> {
-        let response = self
-            .send(BinanceListenKeyRequest::keepalive(listen_key))
+        self.send(BinanceListenKeyRequest::keepalive(listen_key))
             .await
-            .map_err(|error| AuthError::Renew(error.to_string()))?;
-        BinanceExchange::listen_key_ack(response)
+            .map_err(|error| AuthError::Renew(error.to_string()))?
+            .ensure_success()
             .map_err(|error| AuthError::Renew(error.to_string()))
     }
 
     async fn close(&self, listen_key: &str) -> Result<(), AuthError> {
-        let response = self
-            .send(BinanceListenKeyRequest::close(listen_key))
+        self.send(BinanceListenKeyRequest::close(listen_key))
             .await
-            .map_err(|error| AuthError::Revoke(error.to_string()))?;
-        BinanceExchange::listen_key_ack(response)
+            .map_err(|error| AuthError::Revoke(error.to_string()))?
+            .ensure_success()
             .map_err(|error| AuthError::Revoke(error.to_string()))
     }
 

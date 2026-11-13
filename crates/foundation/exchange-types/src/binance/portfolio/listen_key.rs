@@ -1,12 +1,15 @@
 use crate::{
-    binance::{exchange::BinanceExchange, response::BinanceResponse},
+    binance::{
+        exchange::BinanceExchange,
+        response::{BinanceResponse, BinanceResponsePayload},
+    },
     encode::ByteEncoder,
     http::{HttpMethod, HttpRequest},
     rate_limited::RateLimitRestriction,
     request::{ETHttpRequest, ETRequest},
     signer::Signer,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_types::{TimestampMilliseconds, UsageCount};
 use serde::{Deserialize, Serialize};
 
@@ -116,13 +119,22 @@ pub struct BinanceListenKeyResponse {
     listen_key: Option<String>,
 }
 
-impl BinanceExchange {
-    pub fn listen_key(response: BinanceResponse<BinanceListenKeyResponse>) -> BuildResult<String> {
-        Self::success(response)?.require_listen_key()
+impl BinanceResponse<BinanceListenKeyResponse> {
+    pub fn into_listen_key(self) -> BuildResult<String> {
+        self.require_success()?.require_listen_key()
     }
 
-    pub fn listen_key_ack(response: BinanceResponse<BinanceListenKeyResponse>) -> BuildResult<()> {
-        Self::success(response).map(|_| ())
+    pub fn ensure_success(self) -> BuildResult<()> {
+        self.require_success().map(|_| ())
+    }
+
+    fn require_success(self) -> BuildResult<BinanceListenKeyResponse> {
+        match self.payload {
+            BinanceResponsePayload::Success(payload) => Ok(payload),
+            BinanceResponsePayload::Failure(error) => Err(BuildError::Exchange(
+                ExchangeError::BadResponse(error.to_string()),
+            )),
+        }
     }
 }
 
