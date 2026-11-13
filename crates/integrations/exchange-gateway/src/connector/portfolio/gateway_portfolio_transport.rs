@@ -7,12 +7,8 @@ use crate::{
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_exchange_types::{
-    api_key_credential::ApiKeyCredentials,
-    encode::ByteEncoder,
-    portfolio::{AccountSnapshot, PortfolioExchange},
-    request::ETHttpRequest,
-    signer::Signer,
-    ticker::Ticker,
+    api_key_credential::ApiKeyCredentials, encode::ByteEncoder, exchange::ETExchange,
+    portfolio::AccountSnapshot, request::ETHttpRequest, signer::Signer, ticker::Ticker,
 };
 use platform_type_bridge::TickerMapping;
 use std::time::Duration;
@@ -56,7 +52,7 @@ impl<Exchange> GatewayPortfolioTransport<Exchange> {
 
 impl<Exchange> GatewayPortfolioTransport<Exchange>
 where
-    Exchange: PortfolioExchange + Clone + Send + Sync + 'static,
+    Exchange: ETExchange + Clone + Send + Sync + 'static,
 {
     fn http_connector(
         &self,
@@ -90,7 +86,7 @@ where
 #[async_trait]
 impl<Exchange> PortfolioTransport for GatewayPortfolioTransport<Exchange>
 where
-    Exchange: PortfolioExchange + Clone + Send + Sync + 'static,
+    Exchange: ETExchange + Clone + Send + Sync + 'static,
 {
     fn cex_id(&self) -> CexId {
         self.exchange.cex_id()
