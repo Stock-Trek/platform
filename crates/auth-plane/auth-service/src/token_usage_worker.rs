@@ -4,11 +4,7 @@ use crate::{
 };
 use platform_errors::{BuildError, BuildResult, ErrorType};
 use platform_metrics::AuthUsageQueueMetrics;
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{collections::HashMap, sync::Arc, time::Instant};
 
 /// Applies queued usage records to the token store in bounded batches.
 ///
@@ -168,20 +164,5 @@ impl TokenUsageWorker {
             store.append_audit(event).await?;
         }
         Ok(())
-    }
-
-    pub async fn run(&self, interval: Duration) {
-        loop {
-            match self.drain().await {
-                Ok(applied) if applied > 0 => {
-                    tracing::info!(applied, "applied queued token usage");
-                }
-                Ok(_) => {}
-                Err(error) => {
-                    tracing::warn!(%error, "token usage queue drain failed");
-                }
-            }
-            tokio::time::sleep(interval).await;
-        }
     }
 }
