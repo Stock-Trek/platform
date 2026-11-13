@@ -1,3 +1,4 @@
+pub mod account_snapshot;
 pub mod auth;
 pub mod auth_binder;
 pub mod config;
@@ -8,6 +9,8 @@ pub mod listen_key;
 pub mod session_lifecycle;
 pub mod user_data_event;
 
+#[cfg(test)]
+mod account_snapshot_tests;
 #[cfg(test)]
 mod auth_tests;
 #[cfg(test)]

@@ -1,9 +1,7 @@
 use crate::{
     api_key_credential::ApiKeyCredentials,
     binance::{
-        account_status::{BinanceAccountStatusRequest, BinanceAccountStatusResponse},
         klines::{BinanceKlinesRequest, BinanceKlinesResponse},
-        portfolio::event_parser::EventParser,
         response::{BinanceResponse, BinanceResponsePayload},
         time::{BinanceTimeRequest, BinanceTimeResponse},
         urls::BinanceUrls,
@@ -14,16 +12,15 @@ use crate::{
     exchange_klines::{ETExchangeKlinesHttp, ETExchangeKlinesWebsocket},
     exchange_portfolio::{ETExchangePortfolio, PortfolioAuthContext},
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
-    portfolio::{AccountEvent, AccountSnapshot, BalanceParser, PortfolioAuth},
+    portfolio::PortfolioAuth,
     rate_limited::{RateLimit, RateLimitRestriction},
     signer::Signer,
     urls::Urls,
 };
-use chrono::{TimeZone, Utc};
 use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, time::Duration};
-use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
+use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Clone, Copy)]
 pub struct BinanceExchange;
@@ -134,45 +131,6 @@ impl ETExchangeKlinesWebsocket for BinanceExchange {
 }
 
 impl ETExchangePortfolio for BinanceExchange {
-    type SnapshotRequest = BinanceAccountStatusRequest;
-
-    fn account_snapshot_request() -> Self::SnapshotRequest {
-        BinanceAccountStatusRequest::new()
-    }
-
-    fn account_snapshot(
-        response: BinanceResponse<BinanceAccountStatusResponse>,
-        mapping: &dyn Fn(&str) -> Option<AssetId>,
-    ) -> BuildResult<AccountSnapshot> {
-        let account = Self::success(response)?;
-        let occurred_at = Utc
-            .timestamp_millis_opt(account.updateTime)
-            .single()
-            .ok_or_else(|| {
-                BuildError::Exchange(ExchangeError::BadResponse(
-                    "invalid account timestamp".to_string(),
-                ))
-            })?;
-        let balances = BalanceParser::parse(
-            account.balances.into_iter().map(|balance| {
-                (
-                    balance.asset,
-                    balance.free.to_string(),
-                    balance.locked.to_string(),
-                )
-            }),
-            mapping,
-        )?;
-        Ok(AccountSnapshot::new(balances, occurred_at))
-    }
-
-    fn account_event(
-        value: &serde_json::Value,
-        mapping: &dyn Fn(&str) -> Option<AssetId>,
-    ) -> BuildResult<Option<AccountEvent>> {
-        EventParser::parse(value, mapping)
-    }
-
     fn portfolio_auth(&self, context: PortfolioAuthContext) -> BuildResult<PortfolioAuth> {
         self.build_portfolio_auth(context)
     }

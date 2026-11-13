@@ -1,6 +1,9 @@
 use iris::{Client, Listener};
 use platform_errors::BuildResult;
-use platform_exchange_types::portfolio::AccountEvent;
+use platform_exchange_types::{
+    exchange_account_snapshot::{AccountSnapshotContext, ETExchangeAccountSnapshot},
+    portfolio::AccountEvent,
+};
 use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::mpsc;
 
@@ -31,10 +34,7 @@ impl PortfolioStream {
         mapping: &'static platform_type_bridge::TickerMapping,
     ) -> Arc<dyn Listener<serde_json::Value>>
     where
-        Exchange: platform_exchange_types::exchange_portfolio::ETExchangePortfolio
-            + Send
-            + Sync
-            + 'static,
+        Exchange: ETExchangeAccountSnapshot + Send + Sync + 'static,
     {
         Arc::new(PortfolioListener::<Exchange> {
             events,
@@ -78,16 +78,17 @@ impl<Exchange> std::fmt::Debug for PortfolioListener<Exchange> {
 #[async_trait::async_trait]
 impl<Exchange> Listener<serde_json::Value> for PortfolioListener<Exchange>
 where
-    Exchange:
-        platform_exchange_types::exchange_portfolio::ETExchangePortfolio + Send + Sync + 'static,
+    Exchange: ETExchangeAccountSnapshot + Send + Sync + 'static,
 {
     async fn on_message(&self, value: serde_json::Value) {
         let mapping = self.mapping;
-        match Exchange::account_event(&value, &|asset| {
+        let asset_id = |asset: &str| {
             mapping
                 .asset_id(&platform_exchange_types::ticker::Ticker(asset.to_string()))
                 .copied()
-        }) {
+        };
+        let context = AccountSnapshotContext::new(&asset_id);
+        match Exchange::account_event(&value, &context) {
             Ok(Some(event)) => {
                 let _ = self.events.send(PortfolioEvent::Account(event));
             }

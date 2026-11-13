@@ -3,6 +3,7 @@ pub mod binance;
 pub mod encode;
 pub mod encrypt;
 pub mod exchange;
+pub mod exchange_account_snapshot;
 pub mod exchange_klines;
 pub mod exchange_portfolio;
 pub mod exchange_server_time;
