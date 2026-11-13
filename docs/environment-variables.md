@@ -82,12 +82,12 @@ required in some configurations, the condition is stated in its description.
 | `PORTFOLIO_OWNERSHIP_CLIENT_NAME` | NATS client name used by the portfolio-service ownership consumer. |
 | `PORTFOLIO_OWNERSHIP_DURABLE` | Durable JetStream consumer name for ownership events. |
 | `PORTFOLIO_OWNERSHIP_NATS_URL` | NATS URL used to consume ownership events. |
-| `PORTFOLIO_OWNERSHIP_RETRY_BACKOFF_SECS` | Delay between ownership-consumer retries after an error, in seconds. |
+| `PORTFOLIO_OWNERSHIP_RETRY_BACKOFF_SECS` | Base delay between ownership-consumer retries after an error, in seconds. Retries use jittered exponential backoff. |
 | `PORTFOLIO_UPDATE_CHECKPOINT_BUCKET` | NATS JetStream key-value bucket that stores the last processed portfolio-update sequence. |
 | `PORTFOLIO_UPDATE_CLIENT_NAME` | NATS client name used by the portfolio-service update consumer and publisher. |
 | `PORTFOLIO_UPDATE_DURABLE` | Durable JetStream consumer name for portfolio updates. |
 | `PORTFOLIO_UPDATE_NATS_URL` | NATS URL used to publish and consume portfolio updates. |
-| `PORTFOLIO_UPDATE_RETRY_BACKOFF_SECS` | Delay between portfolio-update consumer retries after an error, in seconds. |
+| `PORTFOLIO_UPDATE_RETRY_BACKOFF_SECS` | Base delay between portfolio-update consumer retries after an error, in seconds. Retries use jittered exponential backoff. |
 | `PORTFOLIO_VALKEY_KEY_PREFIX` | Prefix for replay-protection keys in Valkey. |
 | `PORTFOLIO_VALKEY_TIMEOUT_SECS` | Connection and command timeout for Valkey, in seconds. |
 | `PORTFOLIO_VALKEY_URL` | `redis://`, `rediss://`, `valkey://`, or `valkeys://` URL of the shared Valkey replay backend. |

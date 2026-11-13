@@ -5060,6 +5060,7 @@ dependencies = [
  "platform-runtime",
  "platform-type-bridge",
  "platform-types",
+ "rand 0.8.8",
  "reqwest 0.13.5",
  "secrecy",
  "serde",

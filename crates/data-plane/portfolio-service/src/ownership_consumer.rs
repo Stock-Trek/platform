@@ -1,6 +1,6 @@
 use crate::{
     AccountKey, OwnershipApply, OwnershipEventSource, PortfolioService,
-    read_model::PortfolioReadModelStore,
+    read_model::PortfolioReadModelStore, retry_backoff::RetryBackoff,
 };
 use platform_errors::BuildResult;
 use platform_metrics::PortfolioMetrics;
@@ -113,6 +113,7 @@ impl OwnershipConsumer {
         F: Future<Output = BuildResult<()>> + Send,
     {
         tokio::pin!(shutdown);
+        let mut backoff = RetryBackoff::new(self.retry_backoff);
         loop {
             tokio::select! {
                 signal = &mut shutdown => return signal,
@@ -121,8 +122,10 @@ impl OwnershipConsumer {
                         tracing::warn!(%error, "ownership consumer failed; retrying");
                         tokio::select! {
                             signal = &mut shutdown => return signal,
-                            _ = tokio::time::sleep(self.retry_backoff) => {}
+                            _ = tokio::time::sleep(backoff.delay()) => {}
                         }
+                    } else {
+                        backoff.reset();
                     }
                 }
             }

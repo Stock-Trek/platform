@@ -22,6 +22,7 @@ platform-portfolio-ownership = { workspace = true }
 platform-runtime = { workspace = true }
 platform-types = { workspace = true }
 platform-type-bridge = { workspace = true }
+rand = { workspace = true }
 reqwest = { workspace = true, default-features = false, features = ["json", "rustls"] }
 secrecy = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
