@@ -4,6 +4,12 @@ use std::collections::BTreeMap;
 use tokio::time::{Duration, Instant, sleep_until};
 
 impl PendingGap {
+    pub(super) fn deferred(mut self, now: TimestampMilliseconds) -> Self {
+        self.attempts = self.attempts.saturating_add(1);
+        self.next_attempt_at = Self::retry_at(now, self.attempts);
+        self
+    }
+
     pub(super) fn next_due_key(
         pending: &BTreeMap<String, PendingGap>,
         now: TimestampMilliseconds,
