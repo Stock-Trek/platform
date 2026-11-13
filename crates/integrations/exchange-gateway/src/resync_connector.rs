@@ -8,6 +8,7 @@ use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult, ConnectorError};
 use platform_exchange_types::{
     exchange::ETExchange,
+    exchange_server_time::ETExchangeServerTime,
     rate_limited::RateLimit,
     request::{ETHttpRequest, ETWebsocketRequest},
 };
@@ -213,7 +214,7 @@ impl<Exchange, Client> Drop for AutoResyncConnector<Exchange, Client> {
 
 impl<Exchange, Client> AutoResyncConnector<Exchange, Client>
 where
-    Exchange: ETExchange,
+    Exchange: ETExchange + ETExchangeServerTime,
     Client: HttpClient,
 {
     pub async fn sync_clock_http(&self) -> BuildResult<()> {
@@ -248,7 +249,7 @@ where
 
 impl<Exchange, Client> AutoResyncConnector<Exchange, Client>
 where
-    Exchange: ETExchange,
+    Exchange: ETExchange + ETExchangeServerTime,
     Client: WebsocketClient,
 {
     pub async fn connect(&self) -> BuildResult<()> {

@@ -1,0 +1,31 @@
+use crate::{
+    portfolio::{AccountEvent, AccountSnapshot},
+    request::ETHttpRequest,
+};
+use platform_errors::BuildResult;
+use stock_trek_types::cex::asset_id::AssetId;
+
+pub trait ETExchangePortfolio {
+    type ListenKeyRequest: ETHttpRequest<Exchange = Self> + Send;
+    type SnapshotRequest: ETHttpRequest<Exchange = Self> + Send;
+
+    fn listen_key_request() -> Self::ListenKeyRequest;
+    fn keepalive_listen_key_request(listen_key: &str) -> Self::ListenKeyRequest;
+    fn close_listen_key_request(listen_key: &str) -> Self::ListenKeyRequest;
+    fn listen_key(
+        response: <Self::ListenKeyRequest as ETHttpRequest>::Response,
+    ) -> BuildResult<String>;
+    fn listen_key_ack(
+        response: <Self::ListenKeyRequest as ETHttpRequest>::Response,
+    ) -> BuildResult<()>;
+
+    fn account_snapshot_request() -> Self::SnapshotRequest;
+    fn account_snapshot(
+        response: <Self::SnapshotRequest as ETHttpRequest>::Response,
+        mapping: &dyn Fn(&str) -> Option<AssetId>,
+    ) -> BuildResult<AccountSnapshot>;
+    fn account_event(
+        value: &serde_json::Value,
+        mapping: &dyn Fn(&str) -> Option<AssetId>,
+    ) -> BuildResult<Option<AccountEvent>>;
+}

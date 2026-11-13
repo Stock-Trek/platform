@@ -6,6 +6,7 @@ use crate::{
 };
 use futures_timer::Delay;
 use platform_errors::{BuildError, BuildResult, ConnectorError, SendFailure, TimeoutError};
+use platform_exchange_types::exchange_server_time::ETExchangeServerTime;
 use platform_exchange_types::{
     exchange::ETExchange, rate_limited::RateLimitRestriction, request::ETWebsocketRequest,
     response::ETWebsocketResponse, server_time::ServerTimeResponse, websocket_id::ETWebsocketId,
@@ -21,7 +22,7 @@ use tracing::{debug, warn};
 
 impl<Exchange, Client> Connector<Exchange, Client>
 where
-    Exchange: ETExchange,
+    Exchange: ETExchange + ETExchangeServerTime,
     Client: WebsocketClient,
 {
     pub async fn connect(&self) -> BuildResult<()> {

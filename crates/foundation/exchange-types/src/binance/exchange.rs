@@ -14,6 +14,9 @@ use crate::{
     encode::ByteEncoder,
     encrypt::EncryptionAlgorithm,
     exchange::ETExchange,
+    exchange_klines::ETExchangeKlines,
+    exchange_portfolio::ETExchangePortfolio,
+    exchange_server_time::ETExchangeServerTime,
     portfolio::{AccountEvent, AccountSnapshot, BalanceParser},
     rate_limited::{RateLimit, RateLimitRestriction},
     signer::Signer,
@@ -30,16 +33,6 @@ pub struct BinanceExchange;
 
 impl ETExchange for BinanceExchange {
     type Credentials = ApiKeyCredentials;
-    type ListenKeyRequest = BinanceListenKeyRequest;
-    type SnapshotRequest = BinanceAccountStatusRequest;
-    type KlinesRequestHttp = BinanceKlinesRequest;
-    type KlinesResponseHttp = BinanceResponse<BinanceKlinesResponse>;
-    type KlinesRequestWebsocket = BinanceKlinesRequest;
-    type KlinesResponseWebsocket = BinanceResponse<BinanceKlinesResponse>;
-    type ServerTimeRequestHttp = BinanceTimeRequest;
-    type ServerTimeResponseHttp = BinanceResponse<BinanceTimeResponse>;
-    type ServerTimeRequestWebsocket = BinanceTimeRequest;
-    type ServerTimeResponseWebsocket = BinanceResponse<BinanceTimeResponse>;
 
     fn cex_id(&self) -> CexId {
         CexId::Binance
@@ -71,6 +64,56 @@ impl ETExchange for BinanceExchange {
         map
     }
 
+    fn signer(credentials: &ApiKeyCredentials) -> BuildResult<Signer> {
+        Self::signer_hmac_sha256(credentials.clone())
+    }
+
+    fn urls(&self) -> &impl Urls {
+        &BinanceUrls
+    }
+}
+
+impl BinanceExchange {
+    pub fn signer_hmac_sha256(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
+        Signer::try_new(
+            credentials,
+            EncryptionAlgorithm::HmacSha256,
+            ByteEncoder::HexLower,
+        )
+    }
+
+    pub fn signer_rsa_sha256(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
+        Signer::try_new(
+            credentials,
+            EncryptionAlgorithm::RsaSha256,
+            ByteEncoder::Base64,
+        )
+    }
+
+    pub fn signer_ed25519(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
+        Signer::try_new(
+            credentials,
+            EncryptionAlgorithm::Ed25519,
+            ByteEncoder::Base64,
+        )
+    }
+
+    fn success<R>(response: BinanceResponse<R>) -> BuildResult<R> {
+        match response.payload {
+            BinanceResponsePayload::Success(payload) => Ok(payload),
+            BinanceResponsePayload::Failure(error) => Err(BuildError::Exchange(
+                ExchangeError::BadResponse(error.to_string()),
+            )),
+        }
+    }
+}
+
+impl ETExchangeServerTime for BinanceExchange {
+    type ServerTimeRequestHttp = BinanceTimeRequest;
+    type ServerTimeResponseHttp = BinanceResponse<BinanceTimeResponse>;
+    type ServerTimeRequestWebsocket = BinanceTimeRequest;
+    type ServerTimeResponseWebsocket = BinanceResponse<BinanceTimeResponse>;
+
     fn server_time_request_http(&self) -> Self::ServerTimeRequestHttp {
         BinanceTimeRequest {}
     }
@@ -78,16 +121,20 @@ impl ETExchange for BinanceExchange {
     fn server_time_request_websocket(&self) -> Self::ServerTimeRequestWebsocket {
         BinanceTimeRequest {}
     }
+}
 
-    fn urls(&self) -> &impl Urls {
-        &BinanceUrls
-    }
+impl ETExchangeKlines for BinanceExchange {
+    type KlinesRequestHttp = BinanceKlinesRequest;
+    type KlinesResponseHttp = BinanceResponse<BinanceKlinesResponse>;
+    type KlinesRequestWebsocket = BinanceKlinesRequest;
+    type KlinesResponseWebsocket = BinanceResponse<BinanceKlinesResponse>;
+}
 
-    fn signer(credentials: &ApiKeyCredentials) -> BuildResult<Signer> {
-        Self::signer_hmac_sha256(credentials.clone())
-    }
+impl ETExchangePortfolio for BinanceExchange {
+    type ListenKeyRequest = BinanceListenKeyRequest;
+    type SnapshotRequest = BinanceAccountStatusRequest;
 
-    fn create_listen_key_request() -> Self::ListenKeyRequest {
+    fn listen_key_request() -> Self::ListenKeyRequest {
         BinanceListenKeyRequest::create()
     }
 
@@ -142,40 +189,5 @@ impl ETExchange for BinanceExchange {
         mapping: &dyn Fn(&str) -> Option<AssetId>,
     ) -> BuildResult<Option<AccountEvent>> {
         EventParser::parse(value, mapping)
-    }
-}
-
-impl BinanceExchange {
-    pub fn signer_hmac_sha256(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
-        Signer::try_new(
-            credentials,
-            EncryptionAlgorithm::HmacSha256,
-            ByteEncoder::HexLower,
-        )
-    }
-
-    pub fn signer_rsa_sha256(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
-        Signer::try_new(
-            credentials,
-            EncryptionAlgorithm::RsaSha256,
-            ByteEncoder::Base64,
-        )
-    }
-
-    pub fn signer_ed25519(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
-        Signer::try_new(
-            credentials,
-            EncryptionAlgorithm::Ed25519,
-            ByteEncoder::Base64,
-        )
-    }
-
-    fn success<R>(response: BinanceResponse<R>) -> BuildResult<R> {
-        match response.payload {
-            BinanceResponsePayload::Success(payload) => Ok(payload),
-            BinanceResponsePayload::Failure(error) => Err(BuildError::Exchange(
-                ExchangeError::BadResponse(error.to_string()),
-            )),
-        }
     }
 }

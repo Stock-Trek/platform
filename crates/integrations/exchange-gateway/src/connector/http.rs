@@ -6,6 +6,7 @@ use crate::{
     submission::{Submission, SubmissionOutcome},
 };
 use platform_errors::{BuildError, BuildResult, ConnectorError, RateLimitError, SendFailure};
+use platform_exchange_types::exchange_server_time::ETExchangeServerTime;
 use platform_exchange_types::{
     exchange::ETExchange, http::HttpResponse, rate_limited::RateLimitRestriction,
     request::ETHttpRequest, response::ETHttpResponse, server_time::ServerTimeResponse,
@@ -16,7 +17,7 @@ use tracing::{debug, warn};
 
 impl<Exchange, Client> Connector<Exchange, Client>
 where
-    Exchange: ETExchange,
+    Exchange: ETExchange + ETExchangeServerTime,
     Client: HttpClient,
 {
     pub async fn sync_clock_http(&self) -> BuildResult<()> {

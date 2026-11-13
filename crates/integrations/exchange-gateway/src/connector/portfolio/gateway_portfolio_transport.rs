@@ -6,6 +6,8 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult, ExchangeError};
+use platform_exchange_types::exchange_portfolio::ETExchangePortfolio;
+use platform_exchange_types::exchange_server_time::ETExchangeServerTime;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials, encode::ByteEncoder, exchange::ETExchange,
     portfolio::AccountSnapshot, request::ETHttpRequest, signer::Signer, ticker::Ticker,
@@ -52,7 +54,7 @@ impl<Exchange> GatewayPortfolioTransport<Exchange> {
 
 impl<Exchange> GatewayPortfolioTransport<Exchange>
 where
-    Exchange: ETExchange + Clone + Send + Sync + 'static,
+    Exchange: ETExchange + ETExchangeServerTime + Clone + Send + Sync + 'static,
 {
     fn http_connector(
         &self,
@@ -86,7 +88,8 @@ where
 #[async_trait]
 impl<Exchange> PortfolioTransport for GatewayPortfolioTransport<Exchange>
 where
-    Exchange: ETExchange + Clone + Send + Sync + 'static,
+    Exchange:
+        ETExchange + ETExchangeServerTime + ETExchangePortfolio + Clone + Send + Sync + 'static,
 {
     fn cex_id(&self) -> CexId {
         self.exchange.cex_id()
@@ -102,7 +105,7 @@ where
 
     async fn create_listen_key(&self, credentials: &ApiKeyCredentials) -> BuildResult<String> {
         let connector = self.http_connector(credentials)?;
-        let response = Self::submit(&connector, Exchange::create_listen_key_request()).await?;
+        let response = Self::submit(&connector, Exchange::listen_key_request()).await?;
         Exchange::listen_key(response)
     }
 

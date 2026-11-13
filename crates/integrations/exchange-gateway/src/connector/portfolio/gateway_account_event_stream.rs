@@ -6,6 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use platform_errors::BuildResult;
+use platform_exchange_types::exchange_portfolio::ETExchangePortfolio;
 use platform_exchange_types::{exchange::ETExchange, portfolio::AccountEvent};
 use platform_type_bridge::TickerMapping;
 
@@ -32,7 +33,7 @@ impl<Exchange> GatewayAccountEventStream<Exchange> {
 #[async_trait]
 impl<Exchange> AccountEventStream for GatewayAccountEventStream<Exchange>
 where
-    Exchange: ETExchange + Send + Sync + 'static,
+    Exchange: ETExchange + ETExchangePortfolio + Send + Sync + 'static,
 {
     async fn next(&mut self) -> BuildResult<Option<AccountEvent>> {
         loop {
