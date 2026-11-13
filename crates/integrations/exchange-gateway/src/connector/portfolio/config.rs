@@ -6,7 +6,7 @@ use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
-    binance::{exchange::BinanceExchange, portfolio::BinancePortfolioConfig},
+    binance::{exchange::BinanceExchange, portfolio::config::BinancePortfolioConfig},
 };
 use platform_type_bridge::BinanceConverter;
 use secrecy::{ExposeSecret, SecretString};

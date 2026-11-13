@@ -1,4 +1,4 @@
-use crate::binance::portfolio::{BinanceListenKeyRequest, BinanceListenKeyResponse};
+use crate::binance::portfolio::listen_key::{BinanceListenKeyRequest, BinanceListenKeyResponse};
 use crate::{
     api_key_credential::ApiKeyCredentials, binance::exchange::BinanceExchange, http::HttpMethod,
     request::ETHttpRequest, signer::Signer,
