@@ -1,5 +1,5 @@
-use crate::JwtServer;
 use crate::tests::support_tests::{OWNER, TestFixture};
+use crate::{JwtServer, jwt_server::JwtServerBackoff};
 use platform_sigv4::{SigV4Config, SigV4Registry};
 use reqwest::StatusCode;
 use serde_json::{Value, json};
@@ -33,6 +33,10 @@ impl Fixture {
         let address = server.local_addr().unwrap();
         let handle = tokio::spawn(server.serve());
         (format!("http://{address}/jwt"), handle)
+    }
+
+    fn backoff() -> JwtServerBackoff {
+        JwtServerBackoff::new(Duration::from_millis(100), Duration::from_secs(1))
     }
 
     fn body(owner: &str) -> Vec<u8> {
@@ -158,4 +162,35 @@ async fn rejects_an_oversized_declared_body_before_reading_it() {
 
     assert!(response.starts_with("HTTP/1.1 413"));
     server.abort();
+}
+
+#[test]
+fn accept_backoff_grows_exponentially_until_the_cap() {
+    let mut backoff = Fixture::backoff();
+
+    assert_eq!(backoff.next_delay(), Duration::from_millis(100));
+    assert_eq!(backoff.next_delay(), Duration::from_millis(200));
+    assert_eq!(backoff.next_delay(), Duration::from_millis(400));
+    assert_eq!(backoff.next_delay(), Duration::from_millis(800));
+    assert_eq!(backoff.next_delay(), Duration::from_secs(1));
+    assert_eq!(backoff.next_delay(), Duration::from_secs(1));
+}
+
+#[test]
+fn accept_backoff_resets_after_a_successful_accept() {
+    let mut backoff = Fixture::backoff();
+
+    backoff.next_delay();
+    backoff.next_delay();
+    backoff.reset();
+
+    assert_eq!(backoff.next_delay(), Duration::from_millis(100));
+}
+
+#[test]
+fn accept_backoff_uses_the_cap_when_initial_exceeds_it() {
+    let mut backoff = JwtServerBackoff::new(Duration::from_secs(5), Duration::from_millis(100));
+
+    assert_eq!(backoff.next_delay(), Duration::from_millis(100));
+    assert_eq!(backoff.next_delay(), Duration::from_millis(100));
 }
