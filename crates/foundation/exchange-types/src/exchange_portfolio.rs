@@ -1,11 +1,12 @@
 use crate::{
+    exchange::ETExchange,
     portfolio::{AccountEvent, AccountSnapshot},
     request::ETHttpRequest,
 };
 use platform_errors::BuildResult;
 use stock_trek_types::cex::asset_id::AssetId;
 
-pub trait ETExchangePortfolio {
+pub trait ETExchangePortfolio: ETExchange {
     type ListenKeyRequest: ETHttpRequest<Exchange = Self> + Send;
     type SnapshotRequest: ETHttpRequest<Exchange = Self> + Send;
 
