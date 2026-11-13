@@ -6,7 +6,10 @@ mod unsigned_order_request;
 #[cfg(test)]
 mod request_payload_tests;
 
-pub use jwt::*;
-pub use request_payload::*;
-pub use sqs::*;
-pub use unsigned_order_request::*;
+pub use jwt::{JwtRequest, JwtResponse};
+pub use request_payload::{
+    BuildFailure, BuildOutcome, BuildRequest, BuildRequestSignedPost, BuildStatus,
+    FILENAME_VARIABLE, KEY_FIELD,
+};
+pub use sqs::{GitSource, SQS_MAX_BATCH_BYTES, SqsDetail, SqsMessage, SqsMessageError, SqsRefType};
+pub use unsigned_order_request::UnsignedOrderRequest;

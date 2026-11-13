@@ -11,8 +11,8 @@ mod jitter_tests;
 #[cfg(test)]
 mod retry_tests;
 
-pub use deadline_budget::*;
-pub use jitter::*;
-pub use request_context::*;
-pub use retry::*;
-pub use timeouts::*;
+pub use deadline_budget::Deadline;
+pub use jitter::Jitter;
+pub use request_context::RequestContext;
+pub use retry::{BackoffStrategy, RetryBackoff, RetryPolicy};
+pub use timeouts::{Timeout, Timeouts};

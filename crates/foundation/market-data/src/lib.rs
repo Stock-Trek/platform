@@ -20,8 +20,12 @@ mod market_event_subject_tests;
 #[cfg(any(test, feature = "test-utils"))]
 mod test_utils;
 
-pub use candle::*;
-pub use decoders::*;
-pub use envelope_codec::*;
-pub use event::*;
-pub use market_event_subject::*;
+pub use candle::{AlignedWindow, Candle, CandleKey, CandleRevision, ClosedCandle, MarketOhlcv};
+pub use decoders::{
+    BinaryCursor, CodecFactory, CodecHandle, DecodedFrame, EnvelopeJsonMapping, JsonMapping,
+    MappedJsonCodec, SbeCodec, SchemaJsonCodec, SchemaJsonMapping, SchemaTradeDecoder, SharedCodec,
+    SharedTradeDecoder, Trade, TradeDecoder, TradeDecoderFactory,
+};
+pub use envelope_codec::EnvelopeCodec;
+pub use event::{GapMarker, MarketEvent, ParsedMessage};
+pub use market_event_subject::{EVENT_CATEGORY, GAP_CATEGORY, MarketEventSubject};

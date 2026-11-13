@@ -20,4 +20,4 @@ mod sink;
 mod iceberg_event_reader_tests;
 
 pub use config::{RebuildConfig, RebuildSourceLayer};
-pub use iceberg_event_reader::*;
+pub use iceberg_event_reader::IcebergEventReader;

@@ -26,7 +26,6 @@ pub use jetstream_consumer::{ConsumerStart, JetStreamConsumer};
 pub use kv::KeyValue;
 pub use kv_watch::{KeyValueChange, KeyValueWatch};
 pub use nats_address::NatsAddress;
-pub use nats_message::Message;
-pub use nats_message::*;
+pub use nats_message::{Headers, Message};
 pub use nats_subject::NatsSubject;
 pub use publisher::{EventPublisher, NatsPublisher, PublishAck};

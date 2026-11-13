@@ -7,6 +7,9 @@ mod tracing_setup;
 mod env_vars_tests;
 
 pub use env_names::*;
-pub use env_vars::*;
-pub use git::*;
-pub use tracing_setup::*;
+pub use env_vars::EnvVars;
+pub use git::{
+    DEFAULT_MAX_DIRECTORY_BYTES, DEFAULT_MAX_DIRECTORY_DEPTH, DEFAULT_MAX_DIRECTORY_FILES,
+    DirectoryLimits,
+};
+pub use tracing_setup::TracingSetup;

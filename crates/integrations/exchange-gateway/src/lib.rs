@@ -21,9 +21,16 @@ pub use clients::{
     iris::IrisWebsocketClient,
     reqwest::ReqwestHttpClient,
 };
-pub use connector::*;
+pub use connector::{
+    CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT, Connector, ConnectorHealth,
+    ConnectorHealthSink, ConnectorPortfolioUpdate, ConnectorState, ExchangePortfolio,
+    ExchangePortfolioConnector, ExchangePortfolioFeed, NoopConnectorHealthSink, NoopPortfolioFeed,
+    PortfolioAccounts, PortfolioConnection, PortfolioConnector, PortfolioConnectorConfig,
+    PortfolioCredentialSource, PortfolioEvent, PortfolioExchange, PortfolioExchangeConfig,
+    PortfolioFeed, PortfolioSession, PortfolioStream, PortfolioUpdateApply, PortfolioUpdateSink,
+};
 pub use iris;
-pub use resync_connector::*;
-pub use server_clock::*;
-pub use submission::*;
+pub use resync_connector::AutoResyncConnector;
+pub use server_clock::Clock;
+pub use submission::{Submission, SubmissionOutcome};
 pub use websocket_listener::{WaiterForResponse, WebsocketListener};

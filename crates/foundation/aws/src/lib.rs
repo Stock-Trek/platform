@@ -17,5 +17,5 @@ mod ssm_secrets_tests;
 pub use aws_client::Aws;
 pub use aws_config::{Region, SdkConfig};
 pub use presigned_post::{PresignedPost, PresignedPostSigner};
-pub use ssm_config::*;
-pub use ssm_secrets::*;
+pub use ssm_config::{SSM_PATH_ENV, SsmConfig};
+pub use ssm_secrets::{SSM_DECRYPT_ENV, SsmSecrets};

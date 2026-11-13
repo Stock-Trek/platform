@@ -44,7 +44,7 @@ pub use iceberg::{
 };
 pub use layout::{ArchiveBucket, ArchiveHour, ArchivePath};
 pub use parquet_reader::ParquetReader;
-pub use quantization::*;
+pub use quantization::{Quantization, QuantizedTime, TopOfHour, TopOfMinute, TopOfMonth};
 pub use routing_key::{ROUTING_BUCKET_COUNT, RoutingBucket, RoutingKey};
 pub use s3_object::{Bucket, ObjectKey, S3, S3Object};
 pub use source::SourceBatch;

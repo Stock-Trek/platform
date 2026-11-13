@@ -11,7 +11,9 @@ mod sqs;
 #[cfg(any(test, feature = "test-utils"))]
 mod test_utils;
 
-pub use auth::*;
+pub use auth::{
+    AuthAuditRelayMetrics, AuthReplayMetrics, AuthTokenCacheMetrics, AuthUsageQueueMetrics,
+};
 pub use build_metrics::BuildMetrics;
 pub use descriptions::*;
 pub use event::EventMetrics;
