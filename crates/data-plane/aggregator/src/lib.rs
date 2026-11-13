@@ -10,6 +10,7 @@ mod restore;
 mod runner;
 mod shard_id;
 mod state;
+#[cfg(test)]
 mod supervisor;
 mod writer_lease;
 

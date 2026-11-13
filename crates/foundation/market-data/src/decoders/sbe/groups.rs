@@ -1,7 +1,6 @@
 use crate::decoders::binary_cursor::BinaryCursor;
 use platform_errors::IngesterError;
 
-/// SBE group header and the location of its entries within the frame.
 #[derive(Debug, Clone, Copy)]
 pub(super) struct SbeGroup {
     pub(super) entries_start: usize,
@@ -31,7 +30,6 @@ impl SbeGroup {
     }
 }
 
-/// SBE-specific group traversal layered on top of the generic binary cursor.
 pub(super) trait SbeGroupExt {
     fn read_group32(&mut self) -> Result<SbeGroup, IngesterError>;
     fn read_group16(&mut self) -> Result<SbeGroup, IngesterError>;

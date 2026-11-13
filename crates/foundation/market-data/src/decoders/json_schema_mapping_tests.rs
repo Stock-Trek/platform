@@ -1,16 +1,20 @@
 use crate::{
-    decoders::binance::binance_json_mapping::{BinanceJsonCodec, BinanceJsonMapping},
+    decoders::{
+        json_mapping::MappedJsonCodec,
+        json_schema_mapping::{SchemaJsonCodec, SchemaJsonMapping},
+    },
     event::ParsedMessage,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use iris::Codec;
 use platform_errors::IngesterError;
+use platform_exchange_types::binance::market_data::BinanceJsonSchema;
 use platform_types::TimestampMilliseconds;
 use serde_json::json;
 use tokio_websockets::Message;
 
-fn codec() -> BinanceJsonCodec {
-    BinanceJsonCodec::new(BinanceJsonMapping)
+fn codec() -> SchemaJsonCodec<BinanceJsonSchema> {
+    MappedJsonCodec::new(SchemaJsonMapping::default())
 }
 
 fn decode(frame: Vec<u8>) -> Result<ParsedMessage, IngesterError> {

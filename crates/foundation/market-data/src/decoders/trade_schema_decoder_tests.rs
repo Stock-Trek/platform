@@ -1,15 +1,23 @@
 use crate::{
-    decoders::{binance::binance_trade_decoder::BinanceTradeDecoder, trade::TradeDecoder},
+    decoders::{trade::TradeDecoder, trade_schema_decoder::SchemaTradeDecoder},
     event::MarketEvent,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
+use platform_exchange_types::binance::market_data::BinanceTradeSchema;
 use platform_metrics::{
     DROP_REASON_INVALID_TRADE, MARKET_DATA_DROPPED_EVENTS_TOTAL, STAGE_AGGREGATOR, TestRecorder,
 };
+use platform_type_bridge::BinanceConverter;
 use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
 use serde_json::{Value, json};
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
+
+fn decoder() -> SchemaTradeDecoder<BinanceTradeSchema> {
+    SchemaTradeDecoder::new(|symbol| {
+        BinanceConverter::ticker_mapping_static().trading_pair_from_symbol(symbol)
+    })
+}
 
 fn event(stream: &str, payload: Value) -> MarketEvent {
     MarketEvent {
@@ -74,7 +82,7 @@ fn decodes_a_combined_trade_stream() {
         }),
     );
 
-    let trades = BinanceTradeDecoder.decode(&market_event).unwrap();
+    let trades = decoder().decode(&market_event).unwrap();
     assert_eq!(trades.len(), 1);
     assert_eq!(
         trades[0].trading_pair,
@@ -90,7 +98,7 @@ fn decodes_a_combined_trade_stream() {
 
 #[test]
 fn resolves_streams_to_trading_pairs() {
-    let decoder = BinanceTradeDecoder;
+    let decoder = decoder();
     let expected = TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD);
 
     assert_eq!(
@@ -112,12 +120,7 @@ fn resolves_streams_to_trading_pairs() {
 #[test]
 fn ignores_non_trade_streams() {
     let market_event = event("btcusdt@depth", json!({ "e": "depthUpdate" }));
-    assert!(
-        BinanceTradeDecoder
-            .decode(&market_event)
-            .unwrap()
-            .is_empty()
-    );
+    assert!(decoder().decode(&market_event).unwrap().is_empty());
 }
 
 #[test]
@@ -127,9 +130,8 @@ fn ignores_non_positive_trades() {
         "btcusdt@trade",
         json!({ "e": "trade", "s": "BTCUSDT", "p": "0", "q": "1" }),
     );
-    let trades = metrics::with_local_recorder(&recorder, || {
-        BinanceTradeDecoder.decode(&market_event).unwrap()
-    });
+    let trades =
+        metrics::with_local_recorder(&recorder, || decoder().decode(&market_event).unwrap());
     assert!(trades.is_empty());
     assert_eq!(
         recorder.counter(
@@ -145,7 +147,7 @@ fn ignores_non_positive_trades() {
 
 #[test]
 fn decodes_sbe_trades() {
-    let trades = BinanceTradeDecoder.decode(&sbe_trade_event()).unwrap();
+    let trades = decoder().decode(&sbe_trade_event()).unwrap();
 
     assert_eq!(trades.len(), 2);
     assert_eq!(
@@ -166,9 +168,8 @@ fn decodes_sbe_trades() {
 fn counts_invalid_sbe_trades_as_dropped() {
     let recorder = TestRecorder::default();
     let market_event = sbe_trade_event_with_trades(&[(1, 0, 2_500), (2, 10_050, 1_000)]);
-    let trades = metrics::with_local_recorder(&recorder, || {
-        BinanceTradeDecoder.decode(&market_event).unwrap()
-    });
+    let trades =
+        metrics::with_local_recorder(&recorder, || decoder().decode(&market_event).unwrap());
 
     assert_eq!(trades.len(), 1);
     assert_eq!(
@@ -193,5 +194,5 @@ fn rejects_malformed_base64() {
         received_at: TimestampMilliseconds(0),
         payload: "not base64".to_string(),
     };
-    assert!(BinanceTradeDecoder.decode(&market_event).is_err());
+    assert!(decoder().decode(&market_event).is_err());
 }

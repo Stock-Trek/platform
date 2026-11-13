@@ -4937,6 +4937,7 @@ dependencies = [
  "iris",
  "metrics",
  "platform-errors",
+ "platform-exchange-types",
  "platform-metrics",
  "platform-nats",
  "platform-type-bridge",
