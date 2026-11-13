@@ -3,8 +3,7 @@ use crate::{
     binance::{
         exchange::BinanceExchange,
         portfolio::{
-            auth_binder::BinanceAuthBinder, credential_client::BinanceListenKeyClient,
-            credential_provider::BinanceCredentialProvider,
+            auth_binder::BinanceAuthBinder, credential_provider::BinanceCredentialProvider,
         },
     },
     encode::ByteEncoder,
@@ -65,8 +64,8 @@ impl Fixture {
         }
     }
 
-    fn client() -> (
-        BinanceListenKeyClient,
+    fn provider() -> (
+        BinanceCredentialProvider,
         Arc<AtomicUsize>,
         Arc<AtomicUsize>,
         Arc<AtomicUsize>,
@@ -75,7 +74,7 @@ impl Fixture {
         let renewed = Arc::new(AtomicUsize::new(0));
         let revoked = Arc::new(AtomicUsize::new(0));
         (
-            BinanceListenKeyClient::new(
+            BinanceCredentialProvider::new(
                 Arc::new(TestHttpClient {
                     created: Arc::clone(&created),
                     renewed: Arc::clone(&renewed),
@@ -118,8 +117,8 @@ fn binance_binder_requires_a_credential() {
 
 #[tokio::test]
 async fn binance_provider_acquires_renews_and_revokes_a_listen_key() {
-    let (client, created, renewed, revoked) = Fixture::client();
-    let provider = BinanceCredentialProvider::new(client).with_ttl(Duration::from_mins(1));
+    let (provider, created, renewed, revoked) = Fixture::provider();
+    let provider = provider.with_ttl(Duration::from_mins(1));
     let credential = provider
         .acquire()
         .await

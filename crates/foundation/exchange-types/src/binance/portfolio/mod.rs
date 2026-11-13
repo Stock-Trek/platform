@@ -1,7 +1,6 @@
 pub mod auth;
 pub mod auth_binder;
 pub mod config;
-pub mod credential_client;
 pub mod credential_provider;
 pub mod credentials;
 pub mod event_parser;
@@ -10,7 +9,6 @@ pub mod session_lifecycle;
 pub mod user_data_event;
 
 pub use auth_binder::BinanceAuthBinder;
-pub use credential_client::BinanceListenKeyClient;
 pub use credential_provider::BinanceCredentialProvider;
 
 #[cfg(test)]
