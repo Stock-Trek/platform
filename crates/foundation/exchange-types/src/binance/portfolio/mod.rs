@@ -1,4 +1,4 @@
-pub mod adapter;
+pub mod auth;
 pub mod auth_binder;
 pub mod config;
 pub mod credential_client;
@@ -9,7 +9,6 @@ pub mod listen_key;
 pub mod session_lifecycle;
 pub mod user_data_event;
 
-pub use adapter::BinancePortfolioAdapter;
 pub use auth_binder::BinanceAuthBinder;
 pub use credential_client::BinanceListenKeyClient;
 pub use credential_provider::BinanceCredentialProvider;

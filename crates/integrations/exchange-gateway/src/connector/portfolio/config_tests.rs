@@ -6,7 +6,7 @@ use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
-    portfolio::{AccountSnapshot, ConnectRequest, ExchangeAdapter},
+    portfolio::{AccountSnapshot, ConnectRequest, PortfolioAuth},
 };
 use std::{collections::BTreeMap, sync::Arc, time::Duration};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
@@ -53,10 +53,7 @@ impl PortfolioTransport for TestTransport {
         Err(BuildError::config_invalid("test", "unavailable"))
     }
 
-    async fn adapter(
-        &self,
-        _credentials: &ApiKeyCredentials,
-    ) -> BuildResult<Box<dyn ExchangeAdapter>> {
+    async fn portfolio_auth(&self, _credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
         Err(BuildError::config_invalid("test", "unavailable"))
     }
 

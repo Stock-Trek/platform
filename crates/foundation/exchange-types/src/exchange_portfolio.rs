@@ -1,6 +1,6 @@
 pub use crate::portfolio::{
     AuthBinder, AuthError, ConfirmationPredicate, ConnectRequest, Credential, CredentialProvider,
-    ExchangeAdapter, IncomingFrame, RenewalSchedule, SessionLifecycle, WsConnection,
+    IncomingFrame, PortfolioAuth, RenewalSchedule, SessionLifecycle, WsConnection,
 };
 use crate::{
     api_key_credential::ApiKeyCredentials,
@@ -54,7 +54,6 @@ impl PortfolioAuthContext {
 
 pub trait ETExchangePortfolio: ETExchange {
     type SnapshotRequest: ETHttpRequest<Exchange = Self> + Send;
-    type Adapter: ExchangeAdapter;
 
     fn account_snapshot_request() -> Self::SnapshotRequest;
     fn account_snapshot(
@@ -65,5 +64,5 @@ pub trait ETExchangePortfolio: ETExchange {
         value: &serde_json::Value,
         mapping: &dyn Fn(&str) -> Option<AssetId>,
     ) -> BuildResult<Option<AccountEvent>>;
-    fn adapter(&self, context: PortfolioAuthContext) -> BuildResult<Self::Adapter>;
+    fn portfolio_auth(&self, context: PortfolioAuthContext) -> BuildResult<PortfolioAuth>;
 }

@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use platform_errors::BuildResult;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
-    portfolio::{AccountSnapshot, ConnectRequest, ExchangeAdapter, WsConnection},
+    portfolio::{AccountSnapshot, ConnectRequest, PortfolioAuth, WsConnection},
 };
 use std::time::Duration;
 use stock_trek_types::cex::cex_id::CexId;
@@ -20,10 +20,7 @@ pub trait PortfolioTransport: Send + Sync {
 
     fn connect_request(&self) -> BuildResult<ConnectRequest>;
 
-    async fn adapter(
-        &self,
-        credentials: &ApiKeyCredentials,
-    ) -> BuildResult<Box<dyn ExchangeAdapter>>;
+    async fn portfolio_auth(&self, credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth>;
 
     async fn account_snapshot(
         &self,

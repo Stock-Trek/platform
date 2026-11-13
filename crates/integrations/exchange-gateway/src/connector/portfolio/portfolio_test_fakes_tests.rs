@@ -183,11 +183,8 @@ impl PortfolioTransport for TestTransport {
         ))
     }
 
-    async fn adapter(
-        &self,
-        _credentials: &ApiKeyCredentials,
-    ) -> BuildResult<Box<dyn platform_exchange_types::portfolio::ExchangeAdapter>> {
-        Ok(Box::new(PortfolioAuth::new(
+    async fn portfolio_auth(&self, _credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
+        Ok(PortfolioAuth::new(
             TestCredentialProvider {
                 acquired: Arc::clone(&self.acquired),
                 renewed: Arc::clone(&self.renewed),
@@ -202,7 +199,7 @@ impl PortfolioTransport for TestTransport {
                 true,
             ),
             Signer::new_unencrypted(ByteEncoder::HexLower),
-        )))
+        ))
     }
 
     async fn account_snapshot(

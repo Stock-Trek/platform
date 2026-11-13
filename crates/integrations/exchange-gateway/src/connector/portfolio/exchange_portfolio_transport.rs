@@ -15,7 +15,7 @@ use platform_exchange_types::{
     exchange::ETExchange,
     exchange_portfolio::{ETExchangePortfolio, PortfolioAuthContext},
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
-    portfolio::{AccountSnapshot, ConnectRequest, ExchangeAdapter},
+    portfolio::{AccountSnapshot, ConnectRequest, PortfolioAuth},
     request::ETHttpRequest,
     signer::Signer,
 };
@@ -118,10 +118,7 @@ where
         Ok(ConnectRequest::new(url))
     }
 
-    async fn adapter(
-        &self,
-        credentials: &ApiKeyCredentials,
-    ) -> BuildResult<Box<dyn ExchangeAdapter>> {
+    async fn portfolio_auth(&self, credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
         let http = Arc::new(ReqwestHttpClient::try_new(&self.rest_url)?);
         let context = PortfolioAuthContext::new(
             credentials.clone(),
@@ -129,7 +126,7 @@ where
             self.rest_url.clone(),
             self.refresh_interval,
         );
-        Ok(Box::new(self.exchange.adapter(context)?))
+        self.exchange.portfolio_auth(context)
     }
 
     async fn account_snapshot(

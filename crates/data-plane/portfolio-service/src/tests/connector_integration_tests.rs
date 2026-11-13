@@ -15,8 +15,8 @@ use platform_exchange_types::{
     encode::ByteEncoder,
     portfolio::{
         AccountEvent, AccountPositionEvent, AccountSnapshot, AuthBinder, AuthError, ConnectRequest,
-        Credential, CredentialProvider, ExchangeAdapter, PortfolioAuth, RenewalSchedule,
-        SessionLifecycle, WsConnection,
+        Credential, CredentialProvider, PortfolioAuth, RenewalSchedule, SessionLifecycle,
+        WsConnection,
     },
     signer::Signer,
 };
@@ -99,11 +99,8 @@ impl PortfolioTransport for Transport {
         ))
     }
 
-    async fn adapter(
-        &self,
-        _credentials: &ApiKeyCredentials,
-    ) -> BuildResult<Box<dyn ExchangeAdapter>> {
-        Ok(Box::new(PortfolioAuth::new(
+    async fn portfolio_auth(&self, _credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
+        Ok(PortfolioAuth::new(
             TestCredentialProvider {
                 closes: Arc::clone(&self.closes),
             },
@@ -118,7 +115,7 @@ impl PortfolioTransport for Transport {
                 true,
             ),
             Signer::new_unencrypted(ByteEncoder::HexLower),
-        )))
+        ))
     }
 
     async fn account_snapshot(

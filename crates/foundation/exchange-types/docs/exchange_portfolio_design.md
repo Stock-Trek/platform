@@ -6,7 +6,7 @@ The portfolio integration separates three orthogonal concerns:
 2. `AuthBinder` attaches that right to a WebSocket session.
 3. `SessionLifecycle` describes when to renew, reconnect, or re-authenticate.
 
-An exchange composes one implementation of each concern into a `PortfolioAuth`, which is exposed through the `ExchangeAdapter` trait. The gateway only depends on that trait, so exchange-specific auth code stays in the exchange crate.
+An exchange composes one implementation of each concern into a `PortfolioAuth`. The gateway only depends on that struct, so exchange-specific auth code stays in the exchange crate.
 
 ```rust
 pub enum AuthError {
@@ -72,27 +72,33 @@ pub struct SessionLifecycle {
     revoke_on_close: bool,
 }
 
-pub trait ExchangeAdapter: Send + Sync {
-    fn credential_provider(&self) -> &dyn CredentialProvider;
-    fn auth_binder(&self) -> &dyn AuthBinder;
-    fn lifecycle(&self) -> SessionLifecycle;
-    fn signer(&self) -> &Signer;
-}
-
-pub struct PortfolioAuth<P, B> {
-    credential_provider: P,
-    auth_binder: B,
+pub struct PortfolioAuth {
+    credential_provider: Box<dyn CredentialProvider>,
+    auth_binder: Box<dyn AuthBinder>,
     lifecycle: SessionLifecycle,
     signer: Signer,
 }
+
+impl PortfolioAuth {
+    pub fn new(
+        credential_provider: impl CredentialProvider + 'static,
+        auth_binder: impl AuthBinder + 'static,
+        lifecycle: SessionLifecycle,
+        signer: Signer,
+    ) -> Self;
+
+    pub fn credential_provider(&self) -> &dyn CredentialProvider;
+    pub fn auth_binder(&self) -> &dyn AuthBinder;
+    pub fn lifecycle(&self) -> SessionLifecycle;
+    pub fn signer(&self) -> &Signer;
+}
 ```
 
-`ETExchangePortfolio` also supplies the exchange-specific REST snapshot request, snapshot parser, and account-event parser. It builds its adapter from a `PortfolioAuthContext` containing the account credentials, HTTP client, REST URL, and renewal interval.
+`ETExchangePortfolio` also supplies the exchange-specific REST snapshot request, snapshot parser, and account-event parser. It builds its `PortfolioAuth` from a `PortfolioAuthContext` containing the account credentials, HTTP client, REST URL, and renewal interval.
 
 ```rust
 pub trait ETExchangePortfolio: ETExchange {
     type SnapshotRequest: ETHttpRequest<Exchange = Self> + Send;
-    type Adapter: ExchangeAdapter;
 
     fn account_snapshot_request() -> Self::SnapshotRequest;
     fn account_snapshot(
@@ -103,6 +109,6 @@ pub trait ETExchangePortfolio: ETExchange {
         value: &serde_json::Value,
         mapping: &dyn Fn(&str) -> Option<AssetId>,
     ) -> BuildResult<Option<AccountEvent>>;
-    fn adapter(&self, context: PortfolioAuthContext) -> BuildResult<Self::Adapter>;
+    fn portfolio_auth(&self, context: PortfolioAuthContext) -> BuildResult<PortfolioAuth>;
 }
 ```

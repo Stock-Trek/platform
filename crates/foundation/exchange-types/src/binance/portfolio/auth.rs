@@ -12,13 +12,11 @@ use crate::{
 };
 use platform_errors::BuildResult;
 
-pub type BinancePortfolioAdapter = PortfolioAuth<BinanceCredentialProvider, BinanceAuthBinder>;
-
 impl BinanceExchange {
-    pub fn portfolio_adapter(
+    pub fn build_portfolio_auth(
         &self,
         context: PortfolioAuthContext,
-    ) -> BuildResult<BinancePortfolioAdapter> {
+    ) -> BuildResult<PortfolioAuth> {
         let signer = Self::signer(context.credentials())?;
         let client = BinanceListenKeyClient::new(context.http(), context.credentials().clone());
         let provider = BinanceCredentialProvider::new(client);
