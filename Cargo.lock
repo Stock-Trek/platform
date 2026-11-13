@@ -4542,6 +4542,7 @@ dependencies = [
  "platform-errors",
  "platform-market-data",
  "platform-types",
+ "rand 0.8.8",
  "serde",
  "stock-trek-types",
  "tokio",
