@@ -1,6 +1,7 @@
-use crate::candle::AlignedWindow;
-use crate::candle::key::CandleKey;
-use crate::decoders::trade::Trade;
+use crate::{
+    candle::{AlignedWindow, key::CandleKey},
+    decoders::Trade,
+};
 use platform_errors::{BuildError, BuildResult};
 use platform_types::TimestampMilliseconds;
 use rust_decimal::{Decimal, prelude::ToPrimitive};

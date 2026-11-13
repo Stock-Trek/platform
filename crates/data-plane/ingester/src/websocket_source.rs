@@ -5,11 +5,7 @@ use iris::{
     Listener as IrisListener, ServerCloseBehavior,
 };
 use platform_errors::{BuildError, BuildResult, ExchangeError, IngesterError};
-use platform_market_data::{
-    ParsedMessage,
-    codec::{CodecFactory, CodecHandle, SharedCodec},
-    frame::DecodedFrame,
-};
+use platform_market_data::{CodecFactory, CodecHandle, DecodedFrame, ParsedMessage, SharedCodec};
 use platform_metrics::MarketDataMetrics;
 use platform_metrics::{DECODE_KIND_FRAME, DROP_REASON_CHANNEL_CLOSED, STAGE_INGESTER};
 use std::{fmt, str::FromStr, sync::Arc};

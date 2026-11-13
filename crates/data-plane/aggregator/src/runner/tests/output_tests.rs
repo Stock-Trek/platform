@@ -3,7 +3,7 @@ use crate::runner::ProcessorRunner;
 use crate::runner::tests::fixtures_tests::{FakeSink, Fixtures};
 use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
-use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, trade::Trade};
+use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, Trade};
 use platform_metrics::{
     MARKET_DATA_AGGREGATOR_CLOSED_CANDLES_EVICTED_TOTAL,
     MARKET_DATA_AGGREGATOR_OUT_OF_CONTRACT_GAP_WINDOWS_TOTAL,

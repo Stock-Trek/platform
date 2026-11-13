@@ -1,30 +1,30 @@
 //! Source input dispatch, candle publishing and idle flushing.
 
-use crate::runner::{
-    ProcessorRunner, QuiesceReceiver, commit::CommitState, output_writer::CandleOutputWriter,
-    writer::Writer,
-};
 use crate::{
     candle_sink::{ClosedCandlePublisher, OpenCandleStore},
     checkpoint_record::StateStore,
     config::AggregatorConfig,
     market_source::{MarketInput, MarketSource},
     processor::{CandleProcessor, ProcessorUpdate},
+    runner::{
+        ProcessorRunner, QuiesceReceiver, commit::CommitState, output_writer::CandleOutputWriter,
+        writer::Writer,
+    },
     shard_id::ShardId,
     state::DeduplicationKey,
     writer_lease::LeaseStore,
 };
 use platform_errors::BuildResult;
-use platform_market_data::{
-    GapMarker, MarketEvent,
-    trade::{SharedTradeDecoder, TradeDecoderFactory},
+use platform_market_data::{GapMarker, MarketEvent, SharedTradeDecoder, TradeDecoderFactory};
+use platform_metrics::{
+    AggregatorMetrics, DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, MarketDataMetrics,
+    STAGE_AGGREGATOR,
 };
-use platform_metrics::AggregatorMetrics;
-use platform_metrics::MarketDataMetrics;
-use platform_metrics::{DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, STAGE_AGGREGATOR};
 use platform_types::TimestampMilliseconds;
-use std::collections::{HashMap, hash_map::Entry};
-use std::sync::Arc;
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    sync::Arc,
+};
 use stock_trek_types::cex::cex_id::CexId;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{error, info, warn};

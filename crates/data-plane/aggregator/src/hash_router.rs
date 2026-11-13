@@ -11,10 +11,7 @@ use crate::{
 };
 use parking_lot::Mutex;
 use platform_errors::BuildResult;
-use platform_market_data::{
-    GapMarker, MarketEvent,
-    trade::{SharedTradeDecoder, TradeDecoderFactory},
-};
+use platform_market_data::{GapMarker, MarketEvent, SharedTradeDecoder, TradeDecoderFactory};
 use platform_metrics::{
     DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, MarketDataMetrics, STAGE_AGGREGATOR,
 };

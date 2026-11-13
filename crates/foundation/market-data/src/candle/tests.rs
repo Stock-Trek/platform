@@ -1,6 +1,6 @@
 use crate::{
     candle::{Candle, CandleKey, ClosedCandle},
-    decoders::trade::Trade,
+    decoders::Trade,
 };
 use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;

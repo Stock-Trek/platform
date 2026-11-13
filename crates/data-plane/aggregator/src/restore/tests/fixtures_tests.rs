@@ -1,15 +1,17 @@
-use crate::checkpoint_record::{CheckpointRecord, StateStore};
-use crate::config::ReplayStartPolicy;
-use crate::restore::catalog::ArchiveObject;
-use crate::restore::replay::ArchivedEventSource;
-use crate::restore::restored_shard::RestoreOptions;
-use crate::shard_id::ShardId;
-use crate::state::STATE_SCHEMA_VERSION;
+use crate::{
+    checkpoint_record::{CheckpointRecord, StateStore},
+    config::ReplayStartPolicy,
+    restore::{
+        catalog::ArchiveObject, replay::ArchivedEventSource, restored_shard::RestoreOptions,
+    },
+    shard_id::ShardId,
+    state::STATE_SCHEMA_VERSION,
+};
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_archive::{ArchivedMarketEvent, Bucket, ObjectKey};
 use platform_errors::{BuildError, BuildResult, Retryability};
-use platform_market_data::{AlignedWindow, MarketEvent, trade::Trade};
+use platform_market_data::{AlignedWindow, MarketEvent, Trade};
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use rust_decimal::Decimal;
 use std::collections::{BTreeMap, VecDeque};

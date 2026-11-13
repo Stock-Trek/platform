@@ -7,14 +7,16 @@ use crate::{
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, trade::Trade};
+use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, Trade};
 use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
-use std::sync::{
-    Arc,
-    atomic::{AtomicUsize, Ordering},
+use std::{
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
+    time::Duration,
 };
-use std::time::Duration;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 use tokio::sync::Notify;
 

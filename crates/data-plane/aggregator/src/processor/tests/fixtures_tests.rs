@@ -1,5 +1,5 @@
 use crate::processor::ProcessorConfig;
-use platform_market_data::{AlignedWindow, GapMarker, MarketEvent, trade::Trade};
+use platform_market_data::{AlignedWindow, GapMarker, MarketEvent, Trade};
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use rust_decimal::Decimal;
 use std::collections::BTreeMap;

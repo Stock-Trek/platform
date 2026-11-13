@@ -4,10 +4,7 @@ use crate::rebuild::{
 };
 use platform_aggregator::{CandleProcessor, ProcessorConfig};
 use platform_errors::BuildResult;
-use platform_market_data::{
-    MarketEvent,
-    trade::{SharedTradeDecoder, Trade, TradeDecoderFactory},
-};
+use platform_market_data::{MarketEvent, SharedTradeDecoder, Trade, TradeDecoderFactory};
 use platform_types::TimestampMilliseconds;
 use std::collections::{BTreeMap, HashMap, HashSet};
 use stock_trek_types::cex::cex_id::CexId;

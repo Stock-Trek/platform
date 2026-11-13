@@ -1,9 +1,11 @@
-use crate::checkpoint_record::{CheckpointRecord, StateStore};
-use crate::checkpoint_record_tests::InMemoryStateStore;
-use crate::restore::tests::fixtures_tests::{Fixtures, VecArchive};
-use crate::shard_id::ShardId;
-use crate::state::{AggregatorState, DeduplicationKey, STATE_SCHEMA_VERSION};
-use platform_market_data::trade::TradeDecoderFactory;
+use crate::{
+    checkpoint_record::{CheckpointRecord, StateStore},
+    checkpoint_record_tests::InMemoryStateStore,
+    restore::tests::fixtures_tests::{Fixtures, VecArchive},
+    shard_id::ShardId,
+    state::{AggregatorState, DeduplicationKey, STATE_SCHEMA_VERSION},
+};
+use platform_market_data::TradeDecoderFactory;
 use platform_nats::ConsumerStart;
 use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;

@@ -5,7 +5,7 @@ use crate::rebuild::{
     spill_sorter::SpillSorter,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::{MarketEvent, trade::Trade};
+use platform_market_data::{MarketEvent, Trade};
 use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
 use std::{

@@ -11,10 +11,7 @@ use platform_archive::{
     ArchiveKind, ArchiveParquetStream, ArchivedMarketEvent, ParquetReader, RoutingBucket,
 };
 use platform_errors::{BuildError, BuildResult};
-use platform_market_data::{
-    MarketEvent,
-    trade::{SharedTradeDecoder, TradeDecoderFactory},
-};
+use platform_market_data::{MarketEvent, SharedTradeDecoder, TradeDecoderFactory};
 use platform_types::TimestampMilliseconds;
 use std::collections::{HashMap, VecDeque};
 use std::sync::Arc;

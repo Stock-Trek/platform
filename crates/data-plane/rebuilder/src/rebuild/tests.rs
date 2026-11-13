@@ -5,7 +5,7 @@ use crate::rebuild::{
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_aggregator::{CandleProcessor, ProcessorConfig};
 use platform_archive::ArchiveTableLayer;
-use platform_market_data::{AlignedWindow, ClosedCandle, MarketEvent, trade::TradeDecoderFactory};
+use platform_market_data::{AlignedWindow, ClosedCandle, MarketEvent, TradeDecoderFactory};
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use std::collections::{BTreeMap, HashMap};
 use stock_trek_types::cex::cex_id::CexId;
