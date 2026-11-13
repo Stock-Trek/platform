@@ -1,6 +1,7 @@
 use crate::connector::portfolio::{
     ConnectorPortfolioUpdate, ConnectorState, PortfolioUpdateApply, PortfolioUpdateSink,
-    health_reporter::HealthReporter, session_state::SessionState,
+    health_reporter::HealthReporter, reconnect_backoff::ReconnectBackoff,
+    session_state::SessionState,
 };
 use crate::connector::portfolio::{PortfolioExchange, PortfolioSession};
 use chrono::Utc;
@@ -55,7 +56,7 @@ impl Watcher {
                     self.publish_health(ConnectorState::Disconnected, state.last_update)
                         .await;
                     tokio::select! {
-                        _ = sleep(self.exchange.reconnect_backoff()) => {}
+                        _ = sleep(ReconnectBackoff::new(self.exchange.reconnect_backoff()).delay()) => {}
                         changed = shutdown.changed() => {
                             if changed.is_err() || *shutdown.borrow() {
                                 return;
