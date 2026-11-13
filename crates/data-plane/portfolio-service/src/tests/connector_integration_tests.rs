@@ -6,24 +6,23 @@ use chrono::Utc;
 use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use platform_exchange_gateway::{
-    AccountEventStream, ConnectorPortfolioUpdate, ExchangePortfolioConnector,
-    NoopConnectorHealthSink, NoopPortfolioFeed, PortfolioCredentialSource, PortfolioEventStream,
-    PortfolioFeed, PortfolioTransport, PortfolioUpdateApply, PortfolioUpdateSink,
+    ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
+    NoopPortfolioFeed, PortfolioCredentialSource, PortfolioEvent, PortfolioExchange, PortfolioFeed,
+    PortfolioStream, PortfolioUpdateApply, PortfolioUpdateSink, iris,
 };
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     encode::ByteEncoder,
     portfolio::{
-        AccountEvent, AccountPositionEvent, AccountSnapshot, AuthBinder, AuthError, ConnectRequest,
-        Credential, CredentialProvider, PortfolioAuth, RenewalSchedule, SessionLifecycle,
-        WsConnection,
+        AccountEvent, AccountPositionEvent, AccountSnapshot, AuthBinder, AuthError, Credential,
+        CredentialProvider, PortfolioAuth, RenewalSchedule, SessionLifecycle,
     },
     signer::Signer,
 };
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use secrecy::SecretString;
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::BTreeMap,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -83,20 +82,45 @@ struct TestBinder;
 #[async_trait]
 impl AuthBinder for TestBinder {}
 
+impl Transport {
+    fn stream() -> PortfolioStream {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        let _ = sender.send(PortfolioEvent::Account(AccountEvent::Position(
+            AccountPositionEvent::new(
+                42,
+                BTreeMap::from([(AssetId::TetherUSD, 500.0)]),
+                Utc::now() + chrono::Duration::seconds(1),
+            ),
+        )));
+        let client = iris::Client::new(
+            iris::Config::new(),
+            Arc::new(TestListener {
+                _events: sender.clone(),
+            }),
+            "ws://localhost/ws",
+        );
+        PortfolioStream::new(client, receiver)
+    }
+}
+
+#[derive(Debug)]
+struct TestListener {
+    _events: tokio::sync::mpsc::UnboundedSender<PortfolioEvent>,
+}
+
 #[async_trait]
-impl PortfolioTransport for Transport {
+impl iris::Listener<serde_json::Value> for TestListener {
+    async fn on_message(&self, _message: serde_json::Value) {}
+}
+
+#[async_trait]
+impl PortfolioExchange for Transport {
     fn cex_id(&self) -> CexId {
         CexId::Binance
     }
 
     fn reconnect_backoff(&self) -> Duration {
         Duration::from_millis(10)
-    }
-
-    fn connect_request(&self) -> BuildResult<ConnectRequest> {
-        Ok(ConnectRequest::new(
-            "ws://localhost/ws".parse().expect("url"),
-        ))
     }
 
     async fn portfolio_auth(&self, _credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
@@ -130,40 +154,10 @@ impl PortfolioTransport for Transport {
 
     async fn open_stream(
         &self,
-        _request: ConnectRequest,
-    ) -> BuildResult<Box<dyn PortfolioEventStream>> {
-        Ok(Box::new(Stream {
-            events: VecDeque::from([AccountEvent::Position(AccountPositionEvent::new(
-                42,
-                BTreeMap::from([(AssetId::TetherUSD, 500.0)]),
-                Utc::now() + chrono::Duration::seconds(1),
-            ))]),
-        }))
-    }
-}
-
-struct Stream {
-    events: VecDeque<AccountEvent>,
-}
-
-#[async_trait]
-impl AccountEventStream for Stream {
-    async fn next(&mut self) -> BuildResult<Option<AccountEvent>> {
-        if let Some(event) = self.events.pop_front() {
-            return Ok(Some(event));
-        }
-        std::future::pending().await
-    }
-}
-
-#[async_trait]
-impl WsConnection for Stream {
-    async fn send_text(&self, _payload: &str) -> Result<(), AuthError> {
-        Ok(())
-    }
-
-    async fn send_binary(&self, _payload: &[u8]) -> Result<(), AuthError> {
-        Ok(())
+        _auth: &PortfolioAuth,
+        _credential: Option<&Credential>,
+    ) -> BuildResult<PortfolioStream> {
+        Ok(Self::stream())
     }
 }
 
@@ -223,7 +217,7 @@ impl Fixture {
 
     fn feed(closes: Arc<AtomicUsize>) -> Arc<dyn PortfolioFeed> {
         ExchangePortfolioConnector::new(
-            [Arc::new(Transport { closes }) as Arc<dyn PortfolioTransport>],
+            [Arc::new(Transport { closes }) as Arc<dyn PortfolioExchange>],
             Arc::new(Credentials),
             Arc::new(NoopConnectorHealthSink::new()),
         )

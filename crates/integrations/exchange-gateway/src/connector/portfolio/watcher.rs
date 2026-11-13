@@ -2,7 +2,7 @@ use crate::connector::portfolio::{
     ConnectorPortfolioUpdate, ConnectorState, PortfolioUpdateApply, PortfolioUpdateSink,
     health_reporter::HealthReporter, session_state::SessionState,
 };
-use crate::connector::portfolio::{PortfolioSession, PortfolioTransport};
+use crate::connector::portfolio::{PortfolioExchange, PortfolioSession};
 use chrono::Utc;
 use platform_errors::{BuildError, BuildResult};
 use platform_exchange_types::portfolio::{AccountEvent, AccountPositionEvent, Credential};
@@ -22,7 +22,7 @@ const HEALTH_INTERVAL: Duration = Duration::from_secs(30);
 pub(super) struct Watcher {
     pub(super) cex_id: CexId,
     pub(super) account: AccountId,
-    pub(super) transport: Arc<dyn PortfolioTransport>,
+    pub(super) exchange: Arc<dyn PortfolioExchange>,
     pub(super) credentials: Arc<dyn crate::connector::portfolio::PortfolioCredentialSource>,
     pub(super) sink: Arc<dyn PortfolioUpdateSink>,
     pub(super) health: HealthReporter,
@@ -55,7 +55,7 @@ impl Watcher {
                     self.publish_health(ConnectorState::Disconnected, state.last_update)
                         .await;
                     tokio::select! {
-                        _ = sleep(self.transport.reconnect_backoff()) => {}
+                        _ = sleep(self.exchange.reconnect_backoff()) => {}
                         changed = shutdown.changed() => {
                             if changed.is_err() || *shutdown.borrow() {
                                 return;
@@ -78,7 +78,7 @@ impl Watcher {
             .credentials(self.cex_id, &self.account)
             .await?;
         let mut session = PortfolioSession::open_with_credential(
-            Arc::clone(&self.transport),
+            Arc::clone(&self.exchange),
             &self.account,
             &credentials,
             previous.take(),
@@ -90,6 +90,7 @@ impl Watcher {
             *previous = None;
             return result;
         }
+        let _ = session.disconnect().await;
         if session.reconnect_reuses_credential() {
             *previous = session
                 .credential()

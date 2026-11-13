@@ -33,30 +33,35 @@ pub trait CredentialProvider: Send + Sync {
     async fn revoke(&self, credential: &Credential) -> Result<(), AuthError>;
 }
 
-pub type ConfirmationPredicate = Box<dyn Fn(&IncomingFrame) -> bool + Send + Sync>;
+pub type PortfolioIrisClient = iris::Client<serde_json::Value, serde_json::Value>;
 
 #[async_trait]
 pub trait AuthBinder: Send + Sync {
-    fn prepare_connect(
+    fn websocket_url(
         &self,
-        request: &mut ConnectRequest,
+        url: &str,
         credential: Option<&Credential>,
         signer: &Signer,
-    ) -> Result<(), AuthError> {
-        Ok(())
+    ) -> Result<String, AuthError> {
+        Ok(url.to_string())
+    }
+
+    fn configure(
+        &self,
+        config: iris::Config,
+        credential: Option<&Credential>,
+        signer: &Signer,
+    ) -> Result<iris::Config, AuthError> {
+        Ok(config)
     }
 
     async fn bind(
         &self,
-        connection: &dyn WsConnection,
+        client: &PortfolioIrisClient,
         credential: Option<&Credential>,
         signer: &Signer,
     ) -> Result<(), AuthError> {
         Ok(())
-    }
-
-    fn confirmation_predicate(&self) -> Option<ConfirmationPredicate> {
-        None
     }
 }
 
@@ -95,6 +100,8 @@ impl PortfolioAuth {
 ```
 
 `ETExchangePortfolio` also supplies the exchange-specific REST snapshot request, snapshot parser, and account-event parser. It builds its `PortfolioAuth` from a `PortfolioAuthContext` containing the account credentials, HTTP client, REST URL, and renewal interval.
+
+Portfolio accounts and their credentials are held in a shared `PortfolioAccounts` store. A connector can start with no accounts, and accounts can be added, replaced, or removed while sessions are running. The gateway uses `iris` clients and listeners for the WebSocket connection itself; binders only supply the URL, `iris::Config`, and any post-connect messages.
 
 ```rust
 pub trait ETExchangePortfolio: ETExchange {

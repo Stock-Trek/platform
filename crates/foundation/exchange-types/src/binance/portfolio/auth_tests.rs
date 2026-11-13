@@ -8,9 +8,7 @@ use crate::{
     },
     encode::ByteEncoder,
     http::{HttpClient, HttpMethod, HttpRequest, HttpResponse},
-    portfolio::{
-        AuthBinder, AuthError, ConnectRequest, Credential, CredentialProvider, RenewalSchedule,
-    },
+    portfolio::{AuthBinder, AuthError, Credential, CredentialProvider, RenewalSchedule},
     signer::Signer,
 };
 use async_trait::async_trait;
@@ -23,7 +21,6 @@ use std::{
     },
     time::{Duration, Instant},
 };
-use url::Url;
 
 struct TestHttpClient {
     created: Arc<AtomicUsize>,
@@ -95,22 +92,20 @@ impl Fixture {
 
 #[test]
 fn binance_binder_appends_the_listen_key_to_the_websocket_path() {
-    let mut request = ConnectRequest::new(Url::parse("wss://example.test/ws").expect("url"));
-    BinanceAuthBinder::new()
-        .prepare_connect(
-            &mut request,
+    let url = BinanceAuthBinder::new()
+        .websocket_url(
+            "wss://example.test/ws",
             Some(&Credential::new("listen-key", Instant::now(), None)),
             &Fixture::signer(),
         )
         .expect("bind");
-    assert_eq!(request.url.as_str(), "wss://example.test/ws/listen-key");
+    assert_eq!(url, "wss://example.test/ws/listen-key");
 }
 
 #[test]
 fn binance_binder_requires_a_credential() {
-    let mut request = ConnectRequest::new(Url::parse("wss://example.test/ws").expect("url"));
     let error = BinanceAuthBinder::new()
-        .prepare_connect(&mut request, None, &Fixture::signer())
+        .websocket_url("wss://example.test/ws", None, &Fixture::signer())
         .expect_err("missing credential");
     assert!(matches!(error, AuthError::Bind(_)));
 }

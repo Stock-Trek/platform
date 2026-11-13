@@ -1,4 +1,4 @@
-use crate::binance::portfolio::credentials::{BinanceCredentialConfig, CREDENTIALS};
+use crate::binance::portfolio::credentials::BinanceCredentialConfig;
 use platform_config::EnvVars;
 use platform_errors::{BuildError, BuildResult};
 use platform_types::UrlScheme;
@@ -72,9 +72,6 @@ impl BinancePortfolioConfig {
             &UrlScheme::WEBSOCKET,
         )?;
         let credentials = BinanceCredentialConfig::from_vars(vars)?;
-        if credentials.is_empty() {
-            return Err(BuildError::config_missing(CREDENTIALS));
-        }
         Ok(Some(Self {
             rest_url,
             websocket_url: websocket_url.trim_end_matches('/').to_string(),

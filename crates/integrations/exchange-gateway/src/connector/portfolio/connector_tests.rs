@@ -1,7 +1,7 @@
 use crate::connector::portfolio::{
     ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
-    PortfolioCredentialSource, PortfolioFeed, PortfolioTransport, PortfolioUpdateApply,
-    PortfolioUpdateSink, StaticPortfolioCredentials,
+    PortfolioAccounts, PortfolioCredentialSource, PortfolioExchange, PortfolioFeed,
+    PortfolioUpdateApply, PortfolioUpdateSink,
     portfolio_test_fakes_tests::{Fixture, TestTransport},
 };
 use async_trait::async_trait;
@@ -30,7 +30,7 @@ struct FeedFixture;
 
 impl FeedFixture {
     fn credentials() -> Arc<dyn PortfolioCredentialSource> {
-        Arc::new(StaticPortfolioCredentials::new([(
+        Arc::new(PortfolioAccounts::new([(
             (CexId::Binance, Fixture::account()),
             ApiKeyCredentials {
                 api_key: "api-key".to_string(),
@@ -41,7 +41,7 @@ impl FeedFixture {
 
     fn feed(transport: Arc<TestTransport>) -> Arc<dyn PortfolioFeed> {
         ExchangePortfolioConnector::new(
-            [transport as Arc<dyn PortfolioTransport>],
+            [transport as Arc<dyn PortfolioExchange>],
             Self::credentials(),
             Arc::new(NoopConnectorHealthSink::new()),
         )

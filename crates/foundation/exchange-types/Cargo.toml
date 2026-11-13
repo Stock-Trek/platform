@@ -10,6 +10,7 @@ chrono = { workspace = true }
 data-encoding = { workspace = true }
 ed25519-compact = { workspace = true }
 hmac = { workspace = true }
+iris = { workspace = true }
 p256 = { workspace = true }
 p384 = { workspace = true }
 platform-config = { workspace = true }

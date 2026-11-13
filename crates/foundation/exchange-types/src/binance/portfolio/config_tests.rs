@@ -1,6 +1,5 @@
 use crate::binance::portfolio::{config::BinancePortfolioConfig, credentials::CREDENTIALS};
 use platform_config::EnvVars;
-use platform_errors::{BuildError, ConfigError};
 use secrecy::ExposeSecret;
 use std::time::Duration;
 
@@ -99,11 +98,11 @@ fn explicit_endpoints_override_testnet_defaults() {
 }
 
 #[test]
-fn enabling_the_connector_requires_credentials() {
-    assert!(matches!(
-        Fixture::config(&[(ENABLED, "true")]).unwrap_err(),
-        BuildError::Config(ConfigError::Missing { name }) if name == CREDENTIALS
-    ));
+fn connector_can_start_without_credentials() {
+    let config = Fixture::config(&[(ENABLED, "true")])
+        .expect("config")
+        .expect("enabled");
+    assert!(config.credentials().is_empty());
 }
 
 #[test]

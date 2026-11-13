@@ -1,32 +1,38 @@
 use crate::{
-    portfolio::{AuthError, ConnectRequest, Credential, IncomingFrame, WsConnection},
+    portfolio::{AuthError, Credential},
     signer::Signer,
 };
 use async_trait::async_trait;
+use iris::{Client, Config};
 
-pub type ConfirmationPredicate = Box<dyn Fn(&IncomingFrame) -> bool + Send + Sync>;
+pub type PortfolioIrisClient = Client<serde_json::Value, serde_json::Value>;
 
 #[async_trait]
 pub trait AuthBinder: Send + Sync {
-    fn prepare_connect(
+    fn websocket_url(
         &self,
-        _request: &mut ConnectRequest,
+        url: &str,
         _credential: Option<&Credential>,
         _signer: &Signer,
-    ) -> Result<(), AuthError> {
-        Ok(())
+    ) -> Result<String, AuthError> {
+        Ok(url.to_string())
+    }
+
+    fn configure(
+        &self,
+        config: Config,
+        _credential: Option<&Credential>,
+        _signer: &Signer,
+    ) -> Result<Config, AuthError> {
+        Ok(config)
     }
 
     async fn bind(
         &self,
-        _connection: &dyn WsConnection,
+        _client: &PortfolioIrisClient,
         _credential: Option<&Credential>,
         _signer: &Signer,
     ) -> Result<(), AuthError> {
         Ok(())
-    }
-
-    fn confirmation_predicate(&self) -> Option<ConfirmationPredicate> {
-        None
     }
 }

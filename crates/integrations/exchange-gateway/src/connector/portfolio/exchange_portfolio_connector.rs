@@ -1,8 +1,7 @@
-use crate::connector::portfolio::PortfolioTransport;
 use crate::connector::portfolio::{
     ConnectorHealthSink, ExchangePortfolioFeed, PortfolioConnector, PortfolioCredentialSource,
-    PortfolioFeed, PortfolioUpdateSink, exchange_portfolio_connection::ExchangePortfolioConnection,
-    health_reporter::HealthReporter,
+    PortfolioExchange, PortfolioFeed, PortfolioUpdateSink,
+    exchange_portfolio_connection::ExchangePortfolioConnection, health_reporter::HealthReporter,
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
@@ -10,23 +9,23 @@ use std::{collections::BTreeMap, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
 
 pub struct ExchangePortfolioConnector {
-    transports: BTreeMap<CexId, Arc<dyn PortfolioTransport>>,
+    exchanges: BTreeMap<CexId, Arc<dyn PortfolioExchange>>,
     credentials: Arc<dyn PortfolioCredentialSource>,
     health: Arc<dyn ConnectorHealthSink>,
 }
 
 impl ExchangePortfolioConnector {
     pub fn new(
-        transports: impl IntoIterator<Item = Arc<dyn PortfolioTransport>>,
+        exchanges: impl IntoIterator<Item = Arc<dyn PortfolioExchange>>,
         credentials: Arc<dyn PortfolioCredentialSource>,
         health: Arc<dyn ConnectorHealthSink>,
     ) -> Self {
-        let transports = transports
+        let exchanges = exchanges
             .into_iter()
-            .map(|transport| (transport.cex_id(), transport))
+            .map(|exchange| (exchange.cex_id(), exchange))
             .collect();
         Self {
-            transports,
+            exchanges,
             credentials,
             health,
         }
@@ -48,7 +47,7 @@ impl PortfolioConnector for ExchangePortfolioConnector {
         cex_id: CexId,
         sink: Arc<dyn PortfolioUpdateSink>,
     ) -> BuildResult<Arc<dyn crate::connector::portfolio::PortfolioConnection>> {
-        let Some(transport) = self.transports.get(&cex_id) else {
+        let Some(exchange) = self.exchanges.get(&cex_id) else {
             return Err(BuildError::bad_value(
                 "portfolio connector",
                 cex_id.to_string(),
@@ -57,7 +56,7 @@ impl PortfolioConnector for ExchangePortfolioConnector {
         };
         let connection = Arc::new(ExchangePortfolioConnection::new(
             cex_id,
-            Arc::clone(transport),
+            Arc::clone(exchange),
             Arc::clone(&self.credentials),
             sink,
             self.reporter(cex_id),

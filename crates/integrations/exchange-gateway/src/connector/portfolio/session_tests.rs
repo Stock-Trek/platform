@@ -1,5 +1,5 @@
 use crate::connector::portfolio::{
-    PortfolioSession, PortfolioTransport,
+    PortfolioExchange, PortfolioSession,
     portfolio_test_fakes_tests::{Fixture, TestTransport},
 };
 use std::{sync::Arc, time::Duration};
@@ -12,7 +12,7 @@ async fn session_opens_snapshots_refreshes_and_revokes_the_credential() {
         Duration::from_secs(1),
     ));
     let mut session = PortfolioSession::open(
-        Arc::clone(&transport) as Arc<dyn PortfolioTransport>,
+        Arc::clone(&transport) as Arc<dyn PortfolioExchange>,
         &Fixture::account(),
         &Fixture::credentials(),
     )
@@ -42,7 +42,7 @@ async fn session_reuses_a_valid_credential_after_reconnect() {
         Duration::from_secs(1),
     ));
     let session = PortfolioSession::open(
-        Arc::clone(&transport) as Arc<dyn PortfolioTransport>,
+        Arc::clone(&transport) as Arc<dyn PortfolioExchange>,
         &Fixture::account(),
         &Fixture::credentials(),
     )
@@ -50,7 +50,7 @@ async fn session_reuses_a_valid_credential_after_reconnect() {
     .expect("session");
     let credential = session.credential().cloned();
     let mut reopened = PortfolioSession::open_with_credential(
-        Arc::clone(&transport) as Arc<dyn PortfolioTransport>,
+        Arc::clone(&transport) as Arc<dyn PortfolioExchange>,
         &Fixture::account(),
         &Fixture::credentials(),
         credential,

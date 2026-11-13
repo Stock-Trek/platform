@@ -2,32 +2,28 @@ use crate::{
     clients::reqwest::ReqwestHttpClient,
     connector::{
         Connector,
-        portfolio::{GatewayAccountEventStream, PortfolioEventStream, PortfolioTransport},
+        portfolio::{PortfolioExchange, PortfolioStream},
     },
-    iris,
     submission::SubmissionOutcome,
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
-    encode::ByteEncoder,
     exchange::ETExchange,
     exchange_portfolio::{ETExchangePortfolio, PortfolioAuthContext},
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
-    portfolio::{AccountSnapshot, ConnectRequest, PortfolioAuth},
+    portfolio::{AccountSnapshot, Credential, PortfolioAuth},
     request::ETHttpRequest,
-    signer::Signer,
 };
 use platform_type_bridge::TickerMapping;
 use std::{sync::Arc, time::Duration};
 use stock_trek_types::cex::cex_id::CexId;
-use url::Url;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 const MAX_RETRIES: u8 = 3;
 
-pub struct ExchangePortfolioTransport<Exchange> {
+pub struct ExchangePortfolio<Exchange> {
     exchange: Exchange,
     rest_url: String,
     websocket_url: String,
@@ -36,7 +32,7 @@ pub struct ExchangePortfolioTransport<Exchange> {
     mapping: &'static TickerMapping,
 }
 
-impl<Exchange> ExchangePortfolioTransport<Exchange> {
+impl<Exchange> ExchangePortfolio<Exchange> {
     pub fn new(
         exchange: Exchange,
         rest_url: impl Into<String>,
@@ -56,7 +52,7 @@ impl<Exchange> ExchangePortfolioTransport<Exchange> {
     }
 }
 
-impl<Exchange> ExchangePortfolioTransport<Exchange>
+impl<Exchange> ExchangePortfolio<Exchange>
 where
     Exchange: ETExchange + ETExchangeServerTimeHttp + Clone + Send + Sync + 'static,
 {
@@ -90,7 +86,7 @@ where
 }
 
 #[async_trait]
-impl<Exchange> PortfolioTransport for ExchangePortfolioTransport<Exchange>
+impl<Exchange> PortfolioExchange for ExchangePortfolio<Exchange>
 where
     Exchange: ETExchange
         + ETExchangeServerTimeHttp
@@ -107,15 +103,6 @@ where
 
     fn reconnect_backoff(&self) -> Duration {
         self.reconnect_backoff
-    }
-
-    fn connect_request(&self) -> BuildResult<ConnectRequest> {
-        let url = Url::parse(&self.websocket_url).map_err(|error| {
-            BuildError::Exchange(ExchangeError::BadResponse(format!(
-                "invalid websocket url: {error}"
-            )))
-        })?;
-        Ok(ConnectRequest::new(url))
     }
 
     async fn portfolio_auth(&self, credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
@@ -137,37 +124,24 @@ where
         let response = Self::submit(&connector, Exchange::account_snapshot_request()).await?;
         let mapping = self.mapping;
         Exchange::account_snapshot(response, &|asset| {
-            GatewayAccountEventStream::<Exchange>::asset_id(mapping, asset)
+            mapping
+                .asset_id(&platform_exchange_types::ticker::Ticker(asset.to_string()))
+                .copied()
         })
     }
 
     async fn open_stream(
         &self,
-        request: ConnectRequest,
-    ) -> BuildResult<Box<dyn PortfolioEventStream>> {
-        let connector = Connector::try_new_websocket_iris(
-            request.url.to_string(),
-            self.exchange.clone(),
-            Signer::new_unencrypted(ByteEncoder::HexLower),
-            iris::Config::new(),
-            REQUEST_TIMEOUT,
-            0,
-        )?;
-        let listener = connector
-            .websocket_listener
-            .as_ref()
-            .ok_or_else(|| {
-                BuildError::Exchange(ExchangeError::BadResponse(
-                    "websocket listener is missing".to_string(),
-                ))
-            })?
-            .clone();
-        let events = listener.subscribe();
-        connector.connect().await?;
-        Ok(Box::new(GatewayAccountEventStream::new(
-            connector,
-            events,
-            self.mapping,
-        )))
+        auth: &PortfolioAuth,
+        credential: Option<&Credential>,
+    ) -> BuildResult<PortfolioStream> {
+        let binder = auth.auth_binder();
+        let url = binder.websocket_url(&self.websocket_url, credential, auth.signer())?;
+        let config = binder.configure(iris::Config::new(), credential, auth.signer())?;
+        let (sender, events) = tokio::sync::mpsc::unbounded_channel();
+        let listener = PortfolioStream::listener::<Exchange>(sender, self.mapping);
+        let client = iris::Client::new(config, listener, &url);
+        client.connect().await.map_err(BuildError::external)?;
+        Ok(PortfolioStream::new(client, events))
     }
 }

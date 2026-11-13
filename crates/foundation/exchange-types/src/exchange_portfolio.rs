@@ -1,6 +1,6 @@
 pub use crate::portfolio::{
-    AuthBinder, AuthError, ConfirmationPredicate, ConnectRequest, Credential, CredentialProvider,
-    IncomingFrame, PortfolioAuth, RenewalSchedule, SessionLifecycle, WsConnection,
+    AuthBinder, AuthError, Credential, CredentialProvider, PortfolioAuth, PortfolioIrisClient,
+    RenewalSchedule, SessionLifecycle,
 };
 use crate::{
     api_key_credential::ApiKeyCredentials,

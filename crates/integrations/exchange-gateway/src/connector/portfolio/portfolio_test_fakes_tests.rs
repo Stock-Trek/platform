@@ -1,18 +1,17 @@
-use crate::connector::portfolio::{AccountEventStream, PortfolioEventStream, PortfolioTransport};
-use async_trait::async_trait;
+use crate::connector::portfolio::{PortfolioEvent, PortfolioExchange, PortfolioStream};
 use chrono::Utc;
 use platform_errors::BuildResult;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     encode::ByteEncoder,
     portfolio::{
-        AccountEvent, AccountSnapshot, AuthBinder, AuthError, ConnectRequest, Credential,
-        CredentialProvider, PortfolioAuth, RenewalSchedule, SessionLifecycle, WsConnection,
+        AccountEvent, AccountSnapshot, AuthBinder, AuthError, Credential, CredentialProvider,
+        PortfolioAuth, RenewalSchedule, SessionLifecycle,
     },
     signer::Signer,
 };
 use std::{
-    collections::{BTreeMap, VecDeque},
+    collections::BTreeMap,
     sync::{
         Arc,
         atomic::{AtomicUsize, Ordering},
@@ -20,7 +19,6 @@ use std::{
     time::{Duration, Instant},
 };
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
-use url::Url;
 
 pub struct TestCredentialProvider {
     pub acquired: Arc<AtomicUsize>,
@@ -29,28 +27,16 @@ pub struct TestCredentialProvider {
     pub ttl: Duration,
 }
 
-#[async_trait]
+#[async_trait::async_trait]
 impl CredentialProvider for TestCredentialProvider {
     async fn acquire(&self) -> Result<Option<Credential>, AuthError> {
         self.acquired.fetch_add(1, Ordering::SeqCst);
-        let issued_at = Instant::now();
-        Ok(Some(Credential {
-            value: "credential".to_string(),
-            issued_at,
-            expires_at: Some(issued_at + self.ttl),
-            renewable: true,
-        }))
+        Ok(Some(Self::credential(self.ttl)))
     }
 
     async fn renew(&self, _credential: &Credential) -> Result<Credential, AuthError> {
         self.renewed.fetch_add(1, Ordering::SeqCst);
-        let issued_at = Instant::now();
-        Ok(Credential {
-            value: "credential".to_string(),
-            issued_at,
-            expires_at: Some(issued_at + self.ttl),
-            renewable: true,
-        })
+        Ok(Self::credential(self.ttl))
     }
 
     async fn revoke(&self, _credential: &Credential) -> Result<(), AuthError> {
@@ -59,59 +45,41 @@ impl CredentialProvider for TestCredentialProvider {
     }
 }
 
+impl TestCredentialProvider {
+    fn credential(ttl: Duration) -> Credential {
+        let issued_at = Instant::now();
+        Credential {
+            value: "credential".to_string(),
+            issued_at,
+            expires_at: Some(issued_at + ttl),
+            renewable: true,
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct TestAuthBinder;
 
-#[async_trait]
+#[async_trait::async_trait]
 impl AuthBinder for TestAuthBinder {
-    fn prepare_connect(
+    fn websocket_url(
         &self,
-        _request: &mut ConnectRequest,
+        url: &str,
         _credential: Option<&Credential>,
         _signer: &Signer,
-    ) -> Result<(), AuthError> {
-        Ok(())
-    }
-
-    async fn bind(
-        &self,
-        _connection: &dyn WsConnection,
-        _credential: Option<&Credential>,
-        _signer: &Signer,
-    ) -> Result<(), AuthError> {
-        Ok(())
-    }
-
-    fn confirmation_predicate(
-        &self,
-    ) -> Option<platform_exchange_types::portfolio::ConfirmationPredicate> {
-        None
+    ) -> Result<String, AuthError> {
+        Ok(url.to_string())
     }
 }
 
-pub struct TestStream {
-    pub events: VecDeque<AccountEvent>,
+#[derive(Debug)]
+struct TestListener {
+    _events: tokio::sync::mpsc::UnboundedSender<PortfolioEvent>,
 }
 
-#[async_trait]
-impl AccountEventStream for TestStream {
-    async fn next(&mut self) -> BuildResult<Option<AccountEvent>> {
-        if let Some(event) = self.events.pop_front() {
-            return Ok(Some(event));
-        }
-        std::future::pending().await
-    }
-}
-
-#[async_trait]
-impl WsConnection for TestStream {
-    async fn send_text(&self, _payload: &str) -> Result<(), AuthError> {
-        Ok(())
-    }
-
-    async fn send_binary(&self, _payload: &[u8]) -> Result<(), AuthError> {
-        Ok(())
-    }
+#[async_trait::async_trait]
+impl iris::Listener<serde_json::Value> for TestListener {
+    async fn on_message(&self, _message: serde_json::Value) {}
 }
 
 pub struct TestTransport {
@@ -165,22 +133,31 @@ impl TestTransport {
     pub fn opened(&self) -> usize {
         self.opened.load(Ordering::SeqCst)
     }
+
+    fn stream(events: &[AccountEvent]) -> PortfolioStream {
+        let (sender, receiver) = tokio::sync::mpsc::unbounded_channel();
+        for event in events {
+            let _ = sender.send(PortfolioEvent::Account(event.clone()));
+        }
+        let client = iris::Client::new(
+            iris::Config::new(),
+            Arc::new(TestListener {
+                _events: sender.clone(),
+            }),
+            "ws://localhost/ws",
+        );
+        PortfolioStream::new(client, receiver)
+    }
 }
 
-#[async_trait]
-impl PortfolioTransport for TestTransport {
+#[async_trait::async_trait]
+impl PortfolioExchange for TestTransport {
     fn cex_id(&self) -> CexId {
         CexId::Binance
     }
 
     fn reconnect_backoff(&self) -> Duration {
         self.reconnect_backoff
-    }
-
-    fn connect_request(&self) -> BuildResult<ConnectRequest> {
-        Ok(ConnectRequest::new(
-            Url::parse("ws://localhost/ws").expect("url"),
-        ))
     }
 
     async fn portfolio_auth(&self, _credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
@@ -211,12 +188,11 @@ impl PortfolioTransport for TestTransport {
 
     async fn open_stream(
         &self,
-        _request: ConnectRequest,
-    ) -> BuildResult<Box<dyn PortfolioEventStream>> {
+        _auth: &PortfolioAuth,
+        _credential: Option<&Credential>,
+    ) -> BuildResult<PortfolioStream> {
         self.opened.fetch_add(1, Ordering::SeqCst);
-        Ok(Box::new(TestStream {
-            events: self.events.clone().into(),
-        }))
+        Ok(Self::stream(&self.events))
     }
 }
 

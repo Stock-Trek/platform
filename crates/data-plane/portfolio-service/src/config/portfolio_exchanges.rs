@@ -1,6 +1,6 @@
 use platform_config::EnvVars;
 use platform_errors::BuildResult;
-use platform_exchange_gateway::{ExchangePortfolioTransport, PortfolioExchangeConfig};
+use platform_exchange_gateway::{ExchangePortfolio, PortfolioExchangeConfig};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     binance::{exchange::BinanceExchange, portfolio::config::BinancePortfolioConfig},
@@ -36,7 +36,7 @@ impl PortfolioExchanges {
                     )
                 })
                 .collect::<Vec<_>>();
-            let transport = ExchangePortfolioTransport::new(
+            let exchange = ExchangePortfolio::new(
                 BinanceExchange,
                 binance.rest_url(),
                 binance.websocket_url(),
@@ -44,8 +44,8 @@ impl PortfolioExchanges {
                 binance.reconnect_backoff(),
                 BinanceConverter::ticker_mapping_static(),
             );
-            exchanges.push(PortfolioExchangeConfig::new(
-                Arc::new(transport),
+            exchanges.push(PortfolioExchangeConfig::with_credentials(
+                Arc::new(exchange),
                 credentials,
             ));
         }
