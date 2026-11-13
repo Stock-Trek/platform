@@ -16,15 +16,6 @@ mod jwt_server_error;
 mod jwt_server_request;
 mod jwt_signing_key;
 mod jwt_verifier;
-#[cfg(any(test, feature = "test-utils"))]
-#[path = "memory_replay_store_tests.rs"]
-mod memory_replay_store;
-#[cfg(any(test, feature = "test-utils"))]
-#[path = "memory_token_store_tests.rs"]
-mod memory_token_store;
-#[cfg(any(test, feature = "test-utils"))]
-#[path = "memory_token_usage_queue_tests.rs"]
-mod memory_token_usage_queue;
 mod order_jwt_claims;
 mod order_jwt_issuance;
 mod order_jwt_verification;
@@ -89,6 +80,15 @@ mod vault_read;
 mod vault_token_store;
 mod vault_write;
 
+#[cfg(any(test, feature = "test-utils"))]
+#[path = "memory_replay_store_tests.rs"]
+mod memory_replay_store;
+#[cfg(any(test, feature = "test-utils"))]
+#[path = "memory_token_store_tests.rs"]
+mod memory_token_store;
+#[cfg(any(test, feature = "test-utils"))]
+#[path = "memory_token_usage_queue_tests.rs"]
+mod memory_token_usage_queue;
 #[cfg(test)]
 mod tests;
 

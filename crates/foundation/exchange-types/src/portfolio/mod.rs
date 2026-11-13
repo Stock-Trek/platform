@@ -9,6 +9,9 @@ mod credential_provider;
 mod lifecycle;
 mod portfolio_auth;
 
+#[cfg(test)]
+mod tests;
+
 pub use account_event::AccountEvent;
 pub use account_position_event::AccountPositionEvent;
 pub use account_snapshot::AccountSnapshot;
@@ -19,6 +22,3 @@ pub use credential::Credential;
 pub use credential_provider::CredentialProvider;
 pub use lifecycle::{RenewalSchedule, SessionLifecycle};
 pub use portfolio_auth::PortfolioAuth;
-
-#[cfg(test)]
-mod tests;

@@ -3,7 +3,6 @@ mod run_request;
 
 #[cfg(test)]
 mod command_name_tests;
-
 #[cfg(test)]
 mod tests;
 

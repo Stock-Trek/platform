@@ -12,5 +12,6 @@ mod spec;
 #[cfg(test)]
 mod tests;
 
-pub use run::BackTest;
 use run::{Balances, PriceMap};
+
+pub use run::BackTest;
