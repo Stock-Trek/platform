@@ -61,8 +61,8 @@ unsafe extern "C" {
 ///
 /// Rust's wasm linker only emits `__wasm_call_ctors` when a module needs it and
 /// does not export it automatically. The host must call this once before
-/// `alloc`/`entry` so that `traitreg`'s constructors run and populate the
-/// algorithm registry.
+/// `alloc`/`entry` so that stock-trek's registration constructors run and
+/// populate the algorithm registry.
 #[cfg(target_arch = "wasm32")]
 #[unsafe(no_mangle)]
 pub extern "C" fn initialize() {

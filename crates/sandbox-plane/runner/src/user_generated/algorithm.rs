@@ -8,7 +8,7 @@ impl Default for AlgorithmStub {
     }
 }
 
-#[register_algorithm(default)]
+#[register_algorithm]
 impl Algorithm for AlgorithmStub {
     fn name(&self) -> &str {
         "AlgorithmStub"
