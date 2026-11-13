@@ -15,6 +15,7 @@ mod jetstream_consumer_tests;
 
 mod jetstream;
 mod kv;
+mod kv_watch;
 mod nats_message;
 
 #[cfg(test)]
@@ -30,6 +31,7 @@ mod nats_subject_tests;
 pub use jetstream::{ACK_WAIT, JetStream, StreamSpec};
 pub use jetstream_consumer::{ConsumerStart, JetStreamConsumer};
 pub use kv::KeyValue;
+pub use kv_watch::{KeyValueChange, KeyValueWatch};
 pub use nats_address::NatsAddress;
 pub use nats_message::Message;
 pub use nats_subject::NatsSubject;

@@ -1,6 +1,6 @@
 //! NATS KV bucket access built on JetStream.
 
-use crate::{NatsAddress, NatsSubject, jetstream::JetStream};
+use crate::{NatsAddress, NatsSubject, jetstream::JetStream, kv_watch::KeyValueWatch};
 use async_nats::{
     HeaderMap,
     jetstream::{
@@ -149,6 +149,11 @@ impl KeyValue {
             .delete(key)
             .await
             .map_err(|error| JetStream::protocol_error("failed to delete KV value", error))
+    }
+
+    pub fn watch(&self, key: &str) -> BuildResult<KeyValueWatch> {
+        NatsSubject::validate_named("KV key", key)?;
+        Ok(KeyValueWatch::new(self.store.clone(), key))
     }
 
     /// Lists every key in the bucket.

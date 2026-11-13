@@ -47,4 +47,4 @@ pub use state::{
     AggregatorState, DeduplicationKey, IncompleteWindow, KnownGap, MAX_SEEN_SEQUENCE_RANGES,
     STATE_SCHEMA_VERSION, SequenceRange, StreamProgress,
 };
-pub use writer_lease::{LeaseStore, NatsLeaseStore, WriterLease};
+pub use writer_lease::{LeaseStore, LeaseWatch, NatsLeaseStore, WriterLease};
