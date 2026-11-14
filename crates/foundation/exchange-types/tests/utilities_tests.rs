@@ -32,21 +32,18 @@ fn recv_window_accepts_only_one_to_maximum_milliseconds() {
 }
 
 #[test]
-#[should_panic(expected = "arithmetic overflow")]
-fn new_type_addition_panics_on_overflow() {
-    let _ = UsageCount(u64::MAX) + UsageCount::ONE;
+fn new_type_addition_saturates_on_overflow() {
+    assert_eq!(UsageCount(u64::MAX) + UsageCount::ONE, UsageCount(u64::MAX));
 }
 
 #[test]
-#[should_panic(expected = "arithmetic overflow")]
-fn new_type_subtraction_panics_on_underflow() {
-    let _ = UsageCount::ZERO - UsageCount::ONE;
+fn new_type_subtraction_saturates_on_underflow() {
+    assert_eq!(UsageCount::ZERO - UsageCount::ONE, UsageCount::ZERO);
 }
 
 #[test]
-#[should_panic(expected = "arithmetic overflow")]
-fn new_type_scalar_multiplication_panics_on_overflow() {
-    let _ = UsageCount::TWO * u64::MAX;
+fn new_type_scalar_multiplication_saturates_on_overflow() {
+    assert_eq!(UsageCount::TWO * u64::MAX, UsageCount(u64::MAX));
 }
 
 #[test]

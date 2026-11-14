@@ -98,7 +98,7 @@ async fn http_submission_acquires_rate_limits_only_when_awaited() {
     ));
     assert_eq!(
         remaining_weight(&connector),
-        initial_weight - UsageCount::TWO
+        initial_weight.saturating_sub(UsageCount::TWO)
     );
 }
 
@@ -121,7 +121,7 @@ async fn dropping_in_flight_http_submission_refunds_rate_limits() {
 
     assert_eq!(
         remaining_weight(&connector),
-        initial_weight - UsageCount::TWO
+        initial_weight.saturating_sub(UsageCount::TWO)
     );
 
     drop(submission);
