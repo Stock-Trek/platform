@@ -5,7 +5,7 @@ use crate::tests::{
 use crate::{
     ApiToken, AuthService, MemoryTokenStore, TokenAuditEvent, TokenStore, VaultTokenStore,
     VaultTokenStoreConfig, owner_index::OwnerIndex, owner_index::OwnerIndexEntry,
-    revocation_reason::RevocationReason, revoked_by::RevokedBy,
+    token_lifecycle::RevocationReason, token_lifecycle::RevokedBy,
     token_rotation_transaction::TokenRotationTransaction, token_store::TokenMutation,
     vault_client::VaultClient,
 };

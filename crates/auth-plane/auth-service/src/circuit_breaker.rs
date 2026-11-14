@@ -1,10 +1,71 @@
-use crate::{
-    breaker_decision::BreakerDecision, breaker_permit::BreakerPermit, breaker_state::BreakerState,
-};
 use parking_lot::Mutex;
 use platform_metrics::AuthTokenCacheMetrics;
 use std::time::Duration;
 use tokio::time::Instant;
+
+pub enum BreakerDecision<'a> {
+    Allowed(BreakerPermit<'a>),
+    Rejected(Duration),
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum BreakerState {
+    Closed,
+    Open,
+    HalfOpen,
+}
+
+impl BreakerState {
+    pub fn gauge_value(self) -> u8 {
+        match self {
+            Self::Closed => 0,
+            Self::Open => 1,
+            Self::HalfOpen => 2,
+        }
+    }
+
+    pub fn metric_label(self) -> &'static str {
+        match self {
+            Self::Closed => "closed",
+            Self::Open => "open",
+            Self::HalfOpen => "half_open",
+        }
+    }
+}
+
+pub struct BreakerPermit<'a> {
+    breaker: &'a CircuitBreaker,
+    epoch: u64,
+    completed: bool,
+}
+
+impl<'a> BreakerPermit<'a> {
+    pub(super) fn new(breaker: &'a CircuitBreaker, epoch: u64) -> Self {
+        Self {
+            breaker,
+            epoch,
+            completed: false,
+        }
+    }
+
+    pub fn success(mut self) {
+        self.breaker.record_success(self.epoch);
+        self.completed = true;
+    }
+
+    pub fn failure(mut self) {
+        self.breaker.record_failure(self.epoch, Instant::now());
+        self.completed = true;
+    }
+}
+
+impl Drop for BreakerPermit<'_> {
+    fn drop(&mut self) {
+        if !self.completed {
+            self.breaker.record_failure(self.epoch, Instant::now());
+        }
+    }
+}
 
 #[derive(Debug)]
 struct BreakerData {

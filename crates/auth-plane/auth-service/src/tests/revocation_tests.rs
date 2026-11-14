@@ -1,7 +1,7 @@
 use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{
     AuthService, TokenAuditAction, memory_token_audit_log_tests::MemoryTokenAuditLog,
-    revocation_reason::RevocationReason, revoked_by::RevokedBy,
+    token_lifecycle::RevocationReason, token_lifecycle::RevokedBy,
 };
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, PlatformError};

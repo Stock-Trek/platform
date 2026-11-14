@@ -1,4 +1,4 @@
-use crate::{ApiToken, TokenScope, revocation_reason::RevocationReason, revoked_by::RevokedBy};
+use crate::{ApiToken, TokenScope, token_lifecycle::RevocationReason, token_lifecycle::RevokedBy};
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 use std::{borrow::Borrow, collections::HashSet};

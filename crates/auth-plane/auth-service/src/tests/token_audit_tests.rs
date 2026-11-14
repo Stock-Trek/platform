@@ -1,7 +1,7 @@
 use crate::tests::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{
     TokenAuditAction, TokenAuditEvent, memory_token_audit_log_tests::MemoryTokenAuditLog,
-    revocation_reason::RevocationReason, revoked_by::RevokedBy,
+    token_lifecycle::RevocationReason, token_lifecycle::RevokedBy,
 };
 use chrono::{Duration, Utc};
 use std::sync::Arc;

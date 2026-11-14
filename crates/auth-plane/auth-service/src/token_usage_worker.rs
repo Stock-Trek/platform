@@ -1,7 +1,6 @@
 use crate::{
     AuthService, TokenUsageQueue, auth_service::MAX_UPDATE_ATTEMPTS, token_store::TokenMutation,
-    token_store::TokenStore, token_usage::TokenUsage,
-    token_usage_reservation::TokenUsageReservation,
+    token_store::TokenStore, token_usage::TokenUsage, token_usage::TokenUsageReservation,
 };
 use platform_errors::{ErrorType, PlatformError, PlatformResult};
 use platform_metrics::AuthUsageQueueMetrics;
@@ -126,7 +125,7 @@ impl TokenUsageWorker {
     async fn apply_usage(store: &Arc<dyn TokenStore>, usage: &TokenUsage) -> PlatformResult<()> {
         let mut events = usage.events().to_vec();
         for event in &mut events {
-            crate::token_audit_outbox::TokenAuditOutbox::ensure_event_id(event);
+            crate::token_audit::TokenAuditOutbox::ensure_event_id(event);
         }
         let Some(token_id) = usage.token_id() else {
             return Self::append_events(store, events).await;

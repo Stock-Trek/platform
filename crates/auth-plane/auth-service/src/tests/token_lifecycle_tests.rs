@@ -1,6 +1,6 @@
 use crate::tests::support_tests::TestFixture;
 use crate::{
-    TokenScope, revocation_reason::RevocationReason, revoked_by::RevokedBy,
+    TokenScope, token_lifecycle::RevocationReason, token_lifecycle::RevokedBy,
     token_options::TokenExpiry, token_options::TokenOptions,
 };
 use chrono::{Duration, Utc};

@@ -1,4 +1,4 @@
-use crate::revoked_by::RevokedBy;
+use crate::token_lifecycle::RevokedBy;
 
 struct RevokedByFixture;
 

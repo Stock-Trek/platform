@@ -1,6 +1,6 @@
 use crate::{
     ApiToken,
-    token_audit_outbox::TokenAuditOutbox,
+    token_audit::TokenAuditOutbox,
     token_rotation_transaction::TokenRotationTransaction,
     vault_client::{TOMBSTONE_FIELD, VaultClient},
 };

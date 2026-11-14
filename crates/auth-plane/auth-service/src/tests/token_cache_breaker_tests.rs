@@ -3,7 +3,7 @@ use crate::tests::{
     token_cache_support_tests::{Fixture, TestStore},
 };
 use crate::{
-    TokenStore, breaker_decision::BreakerDecision, breaker_state::BreakerState,
+    TokenStore, circuit_breaker::BreakerDecision, circuit_breaker::BreakerState,
     circuit_breaker::CircuitBreaker,
 };
 use std::{

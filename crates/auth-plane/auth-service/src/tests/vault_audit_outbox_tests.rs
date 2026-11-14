@@ -4,7 +4,7 @@ use crate::tests::{
 };
 use crate::{
     TokenAuditAction, TokenAuditEvent, TokenStore, VaultTokenStore, VaultTokenStoreConfig,
-    token_audit_outbox::TokenAuditOutbox,
+    token_audit::TokenAuditOutbox,
     token_store::TokenMutation,
     vault_client::{VaultClient, WriteCondition},
 };

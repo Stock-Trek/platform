@@ -1,4 +1,4 @@
-use crate::TokenMetadata;
+use crate::{TokenMetadata, random_string::RandomString};
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 use secrecy::{ExposeSecret, SecretString};
@@ -7,6 +7,8 @@ use subtle::ConstantTimeEq;
 pub const MAX_TOKEN_ID_LENGTH: usize = 256;
 pub const MAX_OWNER_LENGTH: usize = 256;
 pub const MAX_SECRET_LENGTH: usize = 256;
+
+const SECRET_LENGTH: usize = 32;
 
 #[derive(Clone)]
 pub struct ApiToken {
@@ -18,6 +20,16 @@ pub struct ApiToken {
 }
 
 impl ApiToken {
+    pub fn generate(
+        id: impl Into<String>,
+        owner: impl Into<String>,
+        created_at: DateTime<Utc>,
+        metadata: TokenMetadata,
+    ) -> PlatformResult<Self> {
+        let secret = RandomString::generate(SECRET_LENGTH);
+        Self::from_parts(id, owner, SecretString::from(secret), created_at, metadata)
+    }
+
     pub fn from_parts(
         id: impl Into<String>,
         owner: impl Into<String>,
