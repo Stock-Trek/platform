@@ -15,9 +15,9 @@ pub struct RunRequest {
     pub command: Command,
 }
 
-/// A request to run the algorithm, together with the inputs that command
-/// needs. This is the single type that defines a build request: the JSON body
-/// received on stdin deserialises straight into it.
+/// A command to run the algorithm, together with the inputs that command
+/// needs. The JSON body received on stdin deserialises into a [`RunRequest`],
+/// which flattens this command into its fields.
 ///
 /// The strategy is identified by name and is always required. Portfolio and
 /// strategy context are referenced by file path; their contents are never
