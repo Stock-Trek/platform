@@ -3,6 +3,7 @@ name = "platform-archive"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+publish = false
 
 [dependencies]
 arrow-array = { workspace = true }

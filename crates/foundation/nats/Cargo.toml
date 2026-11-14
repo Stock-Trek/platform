@@ -3,6 +3,7 @@ name = "platform-nats"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+publish = false
 
 [dependencies]
 async-nats = { workspace = true }

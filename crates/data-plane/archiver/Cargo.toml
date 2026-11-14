@@ -3,6 +3,7 @@ name = "platform-archiver"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+publish = false
 
 [dependencies]
 async-trait = { workspace = true }

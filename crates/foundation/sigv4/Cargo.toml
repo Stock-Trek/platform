@@ -3,6 +3,7 @@ name = "platform-sigv4"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+publish = false
 
 [dependencies]
 aws-credential-types = { workspace = true }

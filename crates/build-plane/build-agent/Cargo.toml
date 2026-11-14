@@ -3,6 +3,7 @@ name = "platform-build-agent"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+publish = false
 
 [dependencies]
 parking_lot = { workspace = true }

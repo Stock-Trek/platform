@@ -3,6 +3,7 @@ name = "platform-portfolio-ownership"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+publish = false
 
 [dependencies]
 chrono = { workspace = true }
