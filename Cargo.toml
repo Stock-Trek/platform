@@ -139,4 +139,11 @@ zip = { version = "9", default-features = false }
 
 [profile.release]
 lto = "thin"
-codegen-units = 1
+codegen-units = 16
+
+[profile.dev]
+debug = "line-tables-only"
+
+[profile.dev.package."*"]
+debug = false
+opt-level = 3
