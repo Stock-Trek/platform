@@ -82,14 +82,11 @@ mod vault_token_store;
 mod vault_write;
 
 #[cfg(any(test, feature = "test-utils"))]
-#[path = "memory_replay_store_tests.rs"]
-mod memory_replay_store;
+mod memory_replay_store_tests;
 #[cfg(any(test, feature = "test-utils"))]
-#[path = "memory_token_store_tests.rs"]
-mod memory_token_store;
+mod memory_token_store_tests;
 #[cfg(any(test, feature = "test-utils"))]
-#[path = "memory_token_usage_queue_tests.rs"]
-mod memory_token_usage_queue;
+mod memory_token_usage_queue_tests;
 #[cfg(test)]
 mod tests;
 
@@ -106,11 +103,11 @@ pub use jwt_server_config::JwtServerConfig;
 pub use jwt_signing_key::{DEFAULT_JWT_KEY_ID, JWT_SIGNING_ALGORITHM, JwtSigningKey};
 pub use jwt_verifier::JwtVerifier;
 #[cfg(any(test, feature = "test-utils"))]
-pub use memory_replay_store::{DEFAULT_REPLAY_CAPACITY, MemoryReplayStore};
+pub use memory_replay_store_tests::{DEFAULT_REPLAY_CAPACITY, MemoryReplayStore};
 #[cfg(any(test, feature = "test-utils"))]
-pub use memory_token_store::MemoryTokenStore;
+pub use memory_token_store_tests::MemoryTokenStore;
 #[cfg(any(test, feature = "test-utils"))]
-pub use memory_token_usage_queue::MemoryTokenUsageQueue;
+pub use memory_token_usage_queue_tests::MemoryTokenUsageQueue;
 pub use order_jwt_claims::{IssuedJwt, OrderJwtClaims};
 pub use order_request_context::OrderRequestContext;
 pub use order_signature::OrderRequestSigner;

@@ -31,15 +31,14 @@
 //! The algorithm's own stdout and stderr are routed to stderr so guest output
 //! cannot spoof or corrupt the structured result stream.
 
-#[path = "../cwasm/mod.rs"]
-mod cwasm;
-
-use cwasm::{
-    Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher, WasmRunner,
-    backtest,
-};
 use platform_exit_codes::ExitCode;
-use platform_runner::{Command, RunRequest};
+use platform_runner::{
+    Command, RunRequest,
+    cwasm::{
+        Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher, WasmRunner,
+        backtest,
+    },
+};
 use std::io::{self, Read};
 
 const MAX_RUN_REQUEST_BYTES: u64 = 1024 * 1024;

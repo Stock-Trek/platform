@@ -1,5 +1,5 @@
+use crate::SimulationParameters;
 use platform_exit_codes::ExitCode;
-use platform_runner::SimulationParameters;
 use rand::{Rng, rngs::StdRng};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
