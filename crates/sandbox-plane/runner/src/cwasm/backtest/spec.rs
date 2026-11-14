@@ -8,7 +8,7 @@ use std::{collections::BTreeMap, fs, path::PathBuf};
 use stock_trek::{markets::AlignedWindow, types::AssetId};
 
 use crate::cwasm::backtest::{
-    BacktestError, BacktestResult, Balances, Input, market_data::Series, slots::MarketSlot,
+    BacktestError, Balances, Input, PlatformResult, market_data::Series, slots::MarketSlot,
 };
 
 pub struct Spec {
@@ -33,7 +33,7 @@ pub struct Spec {
 }
 
 impl Spec {
-    pub fn new(command: &Command) -> BacktestResult<Self> {
+    pub fn new(command: &Command) -> PlatformResult<Self> {
         let Command::BackTest {
             strategy_name,
             strategy_context_path,
@@ -54,17 +54,18 @@ impl Spec {
             simulation,
         } = command
         else {
-            return Err(BacktestError::UnsupportedCommand);
+            return Err(BacktestError::UnsupportedCommand.into());
         };
         if *simulation_count < 1 {
-            return Err(BacktestError::invalid_argument(
-                "simulation count must be at least one",
-            ));
+            return Err(
+                BacktestError::invalid_argument("simulation count must be at least one").into(),
+            );
         }
         if *max_concurrent_simulations < 1 {
             return Err(BacktestError::invalid_argument(
                 "max concurrent simulations must be at least one",
-            ));
+            )
+            .into());
         }
         for (name, chance) in [
             ("candle loss chance", simulation.candle_loss_chance),
@@ -74,13 +75,15 @@ impl Spec {
             if !(0.0..=1.0).contains(&chance) {
                 return Err(BacktestError::invalid_argument(format!(
                     "{name} must be between zero and one"
-                )));
+                ))
+                .into());
             }
         }
         if !(0.0..=1.0).contains(&simulation.slippage_proportion) {
             return Err(BacktestError::invalid_argument(
                 "slippage proportion must be between zero and one",
-            ));
+            )
+            .into());
         }
         let strategy_context: StrategyContextDto =
             Self::read_dto(strategy_context_path, Input::StrategyContext)?;
@@ -123,14 +126,12 @@ impl Spec {
         parsed_windows.sort();
         parsed_windows.dedup();
         if parsed_windows.is_empty() {
-            return Err(BacktestError::invalid_argument(
-                "at least one window is required",
-            ));
+            return Err(BacktestError::invalid_argument("at least one window is required").into());
         }
         if pairs.is_empty() {
-            return Err(BacktestError::invalid_argument(
-                "at least one trading pair is required",
-            ));
+            return Err(
+                BacktestError::invalid_argument("at least one trading pair is required").into(),
+            );
         }
         let window_numbers = parsed_windows
             .iter()
@@ -149,15 +150,16 @@ impl Spec {
             .min()
             .unwrap_or_default();
         if steps == 0 {
-            return Err(BacktestError::invalid_argument(
-                "market data has no simulation steps",
-            ));
+            return Err(
+                BacktestError::invalid_argument("market data has no simulation steps").into(),
+            );
         }
         let driving_millis = driving_window.millis().upper_bound();
         if *open_candle_progress_millis >= driving_millis {
             return Err(BacktestError::invalid_argument(
                 "open candle progress must be smaller than the shortest window",
-            ));
+            )
+            .into());
         }
         Ok(Self {
             strategy_name: strategy_name.clone(),
@@ -181,16 +183,18 @@ impl Spec {
         })
     }
 
-    fn read_dto<T: Message + Default>(path: &str, input: Input) -> BacktestResult<T> {
+    fn read_dto<T: Message + Default>(path: &str, input: Input) -> PlatformResult<T> {
         let bytes = fs::read(path).map_err(|source| BacktestError::ReadInput {
             input,
             path: PathBuf::from(path),
             source,
         })?;
-        T::decode(&bytes[..]).map_err(|source| BacktestError::DecodeInput {
-            input,
-            path: PathBuf::from(path),
-            source,
-        })
+        Ok(
+            T::decode(&bytes[..]).map_err(|source| BacktestError::DecodeInput {
+                input,
+                path: PathBuf::from(path),
+                source,
+            })?,
+        )
     }
 }

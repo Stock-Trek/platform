@@ -1,9 +1,8 @@
+use platform_errors::{PlatformError, SystemError};
 use platform_exit_codes::ExitCode;
 use std::{fmt, io, path::PathBuf};
 use stock_trek::{errors::StockTrekError, types::AssetId, types::CexId};
 use thiserror::Error;
-
-pub type BacktestResult<T> = Result<T, BacktestError>;
 
 #[derive(Debug, Clone, Copy)]
 pub enum Input {
@@ -86,8 +85,6 @@ pub enum BacktestError {
     Publish(String),
     #[error("simulation panicked")]
     Panic,
-    #[error("{0}")]
-    Exit(#[from] ExitCode),
 }
 
 impl BacktestError {
@@ -122,8 +119,24 @@ impl BacktestError {
             Self::RuntimeStart(_) => ExitCode::ServerRunnerRuntimeStartFailed.code(),
             Self::Publish(_) => ExitCode::ServerRunnerResultPublishFailed.code(),
             Self::Panic => ExitCode::BotErrorPanic.code(),
-            Self::Exit(code) => code.code(),
         }
+    }
+
+    pub fn from_platform(error: &PlatformError) -> Option<&Self> {
+        match error {
+            PlatformError::System(SystemError::External(source)) => source.downcast_ref(),
+            _ => None,
+        }
+    }
+
+    pub fn resolve_exit_code(error: &PlatformError) -> i32 {
+        Self::from_platform(error).map_or_else(|| ExitCode::BotErrorPanic.code(), Self::exit_code)
+    }
+}
+
+impl From<BacktestError> for PlatformError {
+    fn from(error: BacktestError) -> Self {
+        Self::System(SystemError::External(Box::new(error)))
     }
 }
 

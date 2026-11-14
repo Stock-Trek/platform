@@ -3,7 +3,7 @@ use std::collections::BTreeMap;
 use stock_trek::types::{AssetId, CexId};
 
 use crate::cwasm::backtest::{
-    BacktestError, BacktestResult,
+    BacktestError, PlatformResult,
     market_data::{MarketData, Series},
 };
 
@@ -21,7 +21,7 @@ impl MarketSlot {
         strategy_context: &StrategyContextDto,
         data: &MarketData,
         pairs: &[(AssetId, AssetId)],
-    ) -> BacktestResult<Vec<MarketSlot>> {
+    ) -> PlatformResult<Vec<MarketSlot>> {
         let mut cex_keys: BTreeMap<CexId, String> = BTreeMap::new();
         for key in strategy_context.exchange_asset_markets_dto.keys() {
             if let Ok(cex) = JsonString::deserialize::<CexId>(key) {
@@ -33,7 +33,8 @@ impl MarketSlot {
             let Some(cex_key) = cex_keys.get(cex) else {
                 return Err(BacktestError::invalid_argument(format!(
                     "strategy context has no {cex} markets"
-                )));
+                ))
+                .into());
             };
             for pair in pairs {
                 let (base_index, quote_index) = Self::find(strategy_context, cex_key, pair)?;
@@ -54,11 +55,12 @@ impl MarketSlot {
         strategy_context: &StrategyContextDto,
         cex_key: &str,
         pair: &(AssetId, AssetId),
-    ) -> BacktestResult<(usize, usize)> {
+    ) -> PlatformResult<(usize, usize)> {
         let Some(asset_markets) = strategy_context.exchange_asset_markets_dto.get(cex_key) else {
             return Err(BacktestError::invalid_argument(format!(
                 "strategy context has no {cex_key} markets"
-            )));
+            ))
+            .into());
         };
         let base_index = asset_markets
             .markets_by_base_dto

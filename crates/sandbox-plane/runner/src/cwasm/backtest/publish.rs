@@ -3,7 +3,7 @@ use serde_json::Value;
 use std::time::Duration;
 use tokio::time::timeout;
 
-use crate::cwasm::backtest::{BacktestError, BacktestResult, spec::Spec};
+use crate::cwasm::backtest::{BacktestError, PlatformResult, spec::Spec};
 
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const READ_TIMEOUT: Duration = Duration::from_secs(10);
@@ -12,20 +12,21 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 pub struct ResultPublisher;
 
 impl ResultPublisher {
-    pub async fn publish(spec: &Spec, result: &Value) -> BacktestResult<()> {
+    pub async fn publish(spec: &Spec, result: &Value) -> PlatformResult<()> {
         let stream = Self::stream_result(&spec.results_stream_url, result).await;
         let post = Self::post_result(&spec.results_post_url, result).await;
         match (stream, post) {
             (Ok(()), Ok(())) => Ok(()),
-            (Err(stream), Ok(())) => Err(BacktestError::Publish(format!(
-                "results stream failed: {stream}"
-            ))),
-            (Ok(()), Err(post)) => Err(BacktestError::Publish(format!(
-                "results post failed: {post}"
-            ))),
+            (Err(stream), Ok(())) => {
+                Err(BacktestError::Publish(format!("results stream failed: {stream}")).into())
+            }
+            (Ok(()), Err(post)) => {
+                Err(BacktestError::Publish(format!("results post failed: {post}")).into())
+            }
             (Err(stream), Err(post)) => Err(BacktestError::Publish(format!(
                 "results stream failed: {stream}; results post failed: {post}"
-            ))),
+            ))
+            .into()),
         }
     }
 

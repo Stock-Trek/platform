@@ -123,7 +123,7 @@ impl CwasmInvoker {
                 Ok(()) => ExitCode::Success.code(),
                 Err(error) => {
                     eprintln!("cwasm-invoker: {error}");
-                    error.into()
+                    backtest::BacktestError::resolve_exit_code(&error)
                 }
             };
         }
