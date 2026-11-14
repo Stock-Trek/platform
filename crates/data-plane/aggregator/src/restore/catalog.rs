@@ -6,7 +6,7 @@
 use crate::config::ReplayStartPolicy;
 use crate::restore::replay::S3ArchivedEventSource;
 use crate::shard_id::ShardId;
-use aws_sdk_s3_transfer_manager::Client as TransferClient;
+use aws_sdk_s3::Client as S3Client;
 use platform_archive::{
     ArchiveHandoff, ArchiveKind, ArchivePath, Bucket, IcebergCatalog, IcebergConfig, ObjectKey,
     RoutingBucket, S3,
@@ -78,7 +78,7 @@ pub struct S3ArchiveRecovery {
 }
 
 struct ArchiveSnapshot {
-    transfer_client: TransferClient,
+    s3_client: S3Client,
     compacted_objects: usize,
     raw_tail_objects: usize,
     objects: Vec<ArchiveObject>,
@@ -125,7 +125,7 @@ impl S3ArchiveRecovery {
         let snapshot = self
             .snapshot
             .get_or_try_init(|| async {
-                let transfer_client = S3::transfer_client().await;
+                let s3_client = S3::s3_client().await;
                 let catalog = IcebergCatalog::connect(&self.config.iceberg).await?;
                 let handoff = ArchiveHandoff::discover(&catalog, ArchiveKind::Events).await?;
                 let compacted_objects = handoff.compacted.len();
@@ -136,7 +136,7 @@ impl S3ArchiveRecovery {
                     .collect::<PlatformResult<Vec<_>>>()?;
 
                 Ok::<_, PlatformError>(ArchiveSnapshot {
-                    transfer_client,
+                    s3_client,
                     compacted_objects,
                     raw_tail_objects,
                     objects,
@@ -157,7 +157,7 @@ impl S3ArchiveRecovery {
         );
 
         Ok(S3ArchivedEventSource::from_objects(
-            snapshot.transfer_client.clone(),
+            snapshot.s3_client.clone(),
             shard,
             shard_count,
             objects.into(),

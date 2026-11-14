@@ -7,7 +7,7 @@ publish = false
 
 [dependencies]
 async-trait = { workspace = true }
-aws-sdk-s3-transfer-manager = { workspace = true }
+aws-sdk-s3 = { workspace = true }
 futures = { workspace = true }
 parking_lot = { workspace = true }
 platform-archive = { workspace = true }

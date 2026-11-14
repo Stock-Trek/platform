@@ -11,7 +11,6 @@ aws-credential-types = { workspace = true }
 aws-sdk-dynamodb = { workspace = true }
 aws-sdk-lambda = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-s3 = { workspace = true }
-aws-sdk-s3-transfer-manager = { workspace = true }
 aws-sdk-ssm = { workspace = true }
 base64 = { workspace = true }
 hex = { workspace = true }

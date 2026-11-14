@@ -1,5 +1,4 @@
-use aws_sdk_s3::Client as S3Client;
-use aws_sdk_s3_transfer_manager::{Client as TransferClient, io::InputStream};
+use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
 use bytes::Bytes;
 use platform_aws::Aws;
 use platform_errors::{PlatformError, PlatformResult};
@@ -97,20 +96,8 @@ impl S3Object {
 pub struct S3;
 
 impl S3 {
-    pub async fn clients() -> (S3Client, TransferClient) {
-        let sdk_config = Aws::load_default_sdk_config().await;
-        (
-            Aws::s3_client(&sdk_config),
-            Aws::transfer_client(&sdk_config),
-        )
-    }
-
     pub async fn s3_client() -> S3Client {
         Aws::s3_client(&Aws::load_default_sdk_config().await)
-    }
-
-    pub async fn transfer_client() -> TransferClient {
-        Aws::transfer_client(&Aws::load_default_sdk_config().await)
     }
 
     /// List objects together with the metadata needed to decide when a partition
@@ -146,22 +133,19 @@ impl S3 {
     }
 
     pub async fn upload_bytes(
-        transfer_client: &TransferClient,
+        s3_client: &S3Client,
         bucket: &Bucket,
         key: &ObjectKey,
         bytes: Bytes,
     ) -> PlatformResult<()> {
         let target = Self::object_target(bucket, key);
         info!("upload bytes for key {}", key);
-        let stream = InputStream::from(bytes);
-        transfer_client
-            .upload()
+        s3_client
+            .put_object()
             .bucket(bucket.as_str())
             .key(key.as_str())
-            .body(stream)
-            .initiate()
-            .map_err(|error| PlatformError::s3("start upload", target.clone(), error))?
-            .join()
+            .body(ByteStream::from(bytes))
+            .send()
             .await
             .map_err(|error| PlatformError::s3("upload object", target, error))?;
         Ok(())

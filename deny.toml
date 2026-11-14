@@ -6,29 +6,6 @@ yanked = "warn"
 unmaintained = "workspace"
 unsound = "workspace"
 unused-ignored-advisory = "deny"
-ignore = [
-    { id = "RUSTSEC-2026-0098", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0099", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0104", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0118", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0119", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0258", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0346", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0349", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0382", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0487", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0489", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0490", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0491", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0504", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0505", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0511", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0512", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0514", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0530", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0531", reason = "existing advisory" },
-    { id = "RUSTSEC-2026-0532", reason = "existing advisory" },
-]
 
 [licenses]
 allow = [

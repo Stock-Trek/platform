@@ -1,5 +1,5 @@
 use crate::s3_object::{Bucket, ObjectKey};
-use aws_sdk_s3_transfer_manager::Client as TransferClient;
+use aws_sdk_s3::Client as S3Client;
 use bytes::Bytes;
 use futures::{FutureExt, future::BoxFuture};
 use parquet::{
@@ -12,21 +12,16 @@ use std::{ops::Range, sync::Arc};
 
 #[derive(Clone)]
 pub struct ParquetReader {
-    transfer_client: TransferClient,
+    s3_client: S3Client,
     bucket: Bucket,
     key: ObjectKey,
     file_size: u64,
 }
 
 impl ParquetReader {
-    pub fn new(
-        transfer_client: &TransferClient,
-        bucket: &Bucket,
-        key: &ObjectKey,
-        file_size: u64,
-    ) -> Self {
+    pub fn new(s3_client: &S3Client, bucket: &Bucket, key: &ObjectKey, file_size: u64) -> Self {
         Self {
-            transfer_client: transfer_client.clone(),
+            s3_client: s3_client.clone(),
             bucket: bucket.clone(),
             key: key.clone(),
             file_size,
@@ -44,32 +39,33 @@ impl ParquetReader {
         }
         let range_header = format!("bytes={}-{}", range.start, range.end - 1);
         let target = format!("s3://{}/{}", self.bucket, self.key);
-        let mut handle = self
-            .transfer_client
-            .download()
+        let output = self
+            .s3_client
+            .get_object()
             .bucket(self.bucket.as_str())
             .key(self.key.as_str())
             .range(range_header)
-            .initiate()
+            .send()
+            .await
             .map_err(|error| {
                 ParquetError::External(Box::new(PlatformError::s3(
-                    "start ranged download",
+                    "get object range",
                     target.clone(),
                     error,
                 )))
             })?;
-        let mut data = Vec::with_capacity((range.end - range.start) as usize);
-        while let Some(chunk) = handle.body_mut().next().await {
-            let chunk = chunk.map_err(|error| {
+        output
+            .body
+            .collect()
+            .await
+            .map(|data| data.into_bytes())
+            .map_err(|error| {
                 ParquetError::External(Box::new(PlatformError::s3(
-                    "read ranged download",
-                    target.clone(),
+                    "read object range",
+                    target,
                     error,
                 )))
-            })?;
-            data.extend_from_slice(&chunk.data.into_contiguous());
-        }
-        Ok(Bytes::from(data))
+            })
     }
 }
 
