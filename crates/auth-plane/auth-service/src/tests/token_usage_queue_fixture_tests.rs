@@ -1,6 +1,6 @@
 use crate::{
     MemoryTokenUsageQueue, TokenStore, TokenUsageQueue, TokenUsageWorker, token_usage::TokenUsage,
-    token_usage_reservation::TokenUsageReservation,
+    token_usage::TokenUsageReservation,
 };
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};

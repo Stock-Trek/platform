@@ -1,7 +1,7 @@
 use crate::{
     ApiToken, TokenAuditEvent,
     auth_service::MAX_UPDATE_ATTEMPTS,
-    token_audit_outbox::TokenAuditOutbox,
+    token_audit::TokenAuditOutbox,
     token_rotation_transaction::TokenRotationTransaction,
     token_store::TokenMutation,
     vault_client::{VaultClient, WriteCondition},

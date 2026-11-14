@@ -1,4 +1,4 @@
-use crate::token_usage_reservation::TokenUsageReservation;
+use crate::token_usage::TokenUsageReservation;
 use platform_errors::{PlatformError, PlatformResult};
 use redis::{ErrorKind, RedisError, Value};
 

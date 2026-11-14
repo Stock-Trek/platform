@@ -1,9 +1,70 @@
 use crate::{
     ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, auth_service::MAX_UPDATE_ATTEMPTS,
-    revocation_reason::RevocationReason, revoked_by::RevokedBy, token_store::TokenMutation,
+    token_store::TokenMutation,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{AuthError, PlatformError, PlatformResult};
+use strum::{Display, EnumString};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum RevocationReason {
+    Compromised,
+    Expired,
+    NoLongerNeeded,
+    OwnerRequested,
+    Rotated,
+    Administrative,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum RevokedBy {
+    Owner,
+    Admin,
+    SecurityTeam,
+    System,
+}
+
+impl ApiToken {
+    pub fn validate_temporal(&self) -> PlatformResult<()> {
+        if self.created_at >= self.metadata.expires_at {
+            return Err(PlatformError::auth_invalid_field(
+                "expires_at",
+                "must be after created_at",
+            ));
+        }
+        Self::ensure_not_before_creation("revoked_at", self.metadata.revoked_at, self.created_at)?;
+        Self::ensure_not_before_creation(
+            "last_used_at",
+            self.metadata.last_used_at,
+            self.created_at,
+        )?;
+        Self::ensure_not_before_creation(
+            "rotation_overlap_until",
+            self.metadata.rotation_overlap_until,
+            self.created_at,
+        )
+    }
+
+    pub fn is_active(&self, now: DateTime<Utc>) -> bool {
+        self.created_at <= now && self.metadata.is_active(now)
+    }
+
+    fn ensure_not_before_creation(
+        field: &'static str,
+        timestamp: Option<DateTime<Utc>>,
+        created_at: DateTime<Utc>,
+    ) -> PlatformResult<()> {
+        if timestamp.is_some_and(|timestamp| timestamp < created_at) {
+            return Err(PlatformError::auth_invalid_field(
+                field,
+                "must not be before created_at",
+            ));
+        }
+        Ok(())
+    }
+}
 
 impl AuthService {
     pub async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> PlatformResult<()> {
@@ -59,17 +120,6 @@ impl AuthService {
         Err(error)
     }
 
-    /// Revokes every token owned by `owner` that is not already revoked.
-    ///
-    /// This operation is deliberately non-atomic: each token is revoked with
-    /// its own compare-and-swap update. If one token cannot be revoked, the
-    /// remaining tokens are still processed and the first failure is returned
-    /// afterwards. Tokens revoked before the failure stay revoked.
-    ///
-    /// The operation is retryable. Already-revoked tokens, including tokens
-    /// revoked concurrently by another caller, are skipped on subsequent
-    /// attempts, so a retry only needs to revoke the tokens that are still
-    /// active.
     pub async fn revoke_tokens_for_owner(
         &self,
         owner: &str,

@@ -1,4 +1,4 @@
-use crate::{token_audit_event::TokenAuditEvent, token_audit_log::TokenAuditLog};
+use crate::{token_audit::TokenAuditEvent, token_audit::TokenAuditLog};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::PlatformResult;

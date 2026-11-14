@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, TokenAuditEvent, TokenStore, owner_index::OwnerIndex, owner_index::OwnerIndexEntry,
-    token_audit_outbox::TokenAuditOutbox, token_rotation_transaction::TokenRotationTransaction,
+    token_audit::TokenAuditOutbox, token_rotation_transaction::TokenRotationTransaction,
     token_store::TokenMutation,
 };
 use async_trait::async_trait;

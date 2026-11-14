@@ -1,5 +1,5 @@
 use crate::{
-    ApiToken, TokenAuditEvent, TokenCacheConfig, TokenStore, breaker_state::BreakerState,
+    ApiToken, TokenAuditEvent, TokenCacheConfig, TokenStore, circuit_breaker::BreakerState,
     circuit_breaker::CircuitBreaker, flight_gates::FlightGates, owner_index::OwnerIndex,
     token_cache::TokenCache, token_rotation_transaction::TokenRotationTransaction,
     token_store::TokenMutation,

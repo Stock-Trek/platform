@@ -1,6 +1,6 @@
 use crate::{
     TokenAuditEvent,
-    token_audit_outbox::{AUDIT_EVENT_PREFIX, TokenAuditOutbox},
+    token_audit::{AUDIT_EVENT_PREFIX, TokenAuditOutbox},
     vault_client::VaultClient,
 };
 use platform_errors::{PlatformError, PlatformResult};

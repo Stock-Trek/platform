@@ -1,6 +1,6 @@
 use crate::{
-    ValkeyReplayStore, ValkeyReplayStoreConfig, consume_result::ConsumeResult,
-    replay_key::ReplayKey, replay_store::ReplayStore,
+    ValkeyReplayStore, ValkeyReplayStoreConfig, replay_store::ConsumeResult,
+    replay_store::ReplayKey, replay_store::ReplayStore,
 };
 use chrono::{DateTime, Duration, Utc};
 use tokio::net::TcpListener;
@@ -29,7 +29,7 @@ impl ValkeyReplayFixture {
         now + Duration::minutes(5)
     }
 
-    fn reservation(outcome: ConsumeResult) -> crate::replay_reservation::ReplayReservation {
+    fn reservation(outcome: ConsumeResult) -> crate::replay_store::ReplayReservation {
         match outcome {
             ConsumeResult::Consumed(reservation) => reservation,
             outcome => panic!("unexpected outcome: {outcome:?}"),

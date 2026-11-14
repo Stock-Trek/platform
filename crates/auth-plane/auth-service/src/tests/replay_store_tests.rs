@@ -1,6 +1,6 @@
 use crate::{
-    MemoryReplayStore, consume_result::ConsumeResult, replay_key::ReplayKey,
-    replay_store::ReplayStore, replay_store_error::ReplayStoreError,
+    MemoryReplayStore, replay_store::ConsumeResult, replay_store::ReplayKey,
+    replay_store::ReplayStore, replay_store::ReplayStoreError,
 };
 use chrono::{DateTime, Duration, Utc};
 use std::num::NonZeroUsize;

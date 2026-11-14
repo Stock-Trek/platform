@@ -1,5 +1,5 @@
 use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
-use crate::{ApiToken, AuthService, revocation_reason::RevocationReason, revoked_by::RevokedBy};
+use crate::{ApiToken, AuthService, token_lifecycle::RevocationReason, token_lifecycle::RevokedBy};
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, PlatformError};
 

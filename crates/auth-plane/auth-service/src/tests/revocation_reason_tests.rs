@@ -1,5 +1,5 @@
 use crate::tests::support_tests::TestFixture;
-use crate::{ApiToken, revocation_reason::RevocationReason, revoked_by::RevokedBy};
+use crate::{ApiToken, token_lifecycle::RevocationReason, token_lifecycle::RevokedBy};
 use chrono::Utc;
 use platform_errors::{AuthError, PlatformError};
 use serde_json::json;

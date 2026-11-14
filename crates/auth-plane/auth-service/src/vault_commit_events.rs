@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, TokenAuditEvent,
-    token_audit_outbox::TokenAuditOutbox,
+    token_audit::TokenAuditOutbox,
     token_store::TokenMutation,
     vault_client::{VaultClient, WriteCondition},
 };

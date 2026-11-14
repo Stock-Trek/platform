@@ -1,7 +1,6 @@
 use crate::{
     TokenUsageQueue, TokenUsageQueueConfig, token_usage::TokenUsage,
-    token_usage_reservation::TokenUsageReservation,
-    valkey_token_usage_reply::ValkeyTokenUsageReply,
+    token_usage::TokenUsageReservation, valkey_token_usage_reply::ValkeyTokenUsageReply,
 };
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};

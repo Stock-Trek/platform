@@ -44,7 +44,7 @@ impl TokenUsage {
 
     pub fn ensure_event_ids(&mut self) {
         for event in &mut self.events {
-            crate::token_audit_outbox::TokenAuditOutbox::ensure_event_id(event);
+            crate::token_audit::TokenAuditOutbox::ensure_event_id(event);
         }
     }
 
@@ -57,5 +57,32 @@ impl TokenUsage {
             (left, right) => left.or(right),
         };
         self.events.extend(other.events);
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct TokenUsageReservation {
+    id: String,
+    usage: TokenUsage,
+}
+
+impl TokenUsageReservation {
+    pub fn new(id: impl Into<String>, usage: TokenUsage) -> Self {
+        Self {
+            id: id.into(),
+            usage,
+        }
+    }
+
+    pub fn id(&self) -> &str {
+        &self.id
+    }
+
+    pub fn usage(&self) -> &TokenUsage {
+        &self.usage
+    }
+
+    pub fn into_usage(self) -> TokenUsage {
+        self.usage
     }
 }

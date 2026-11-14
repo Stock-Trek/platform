@@ -1,4 +1,4 @@
-use crate::{OrderJwtClaims, order_jwt_claims::IssuedJwt};
+use crate::{OrderJwtClaims, order_jwt::IssuedJwt};
 use ed25519_compact::KeyPair;
 use jsonwebtoken::{
     Algorithm, EncodingKey, Header, encode,
