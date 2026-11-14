@@ -7,6 +7,7 @@ mod orders;
 mod pipeline;
 mod portfolio;
 mod publish;
+mod results;
 mod run;
 mod simulation;
 mod slots;
@@ -18,6 +19,8 @@ mod worker_runtime;
 mod pipeline_tests;
 #[cfg(test)]
 mod publish_tests;
+#[cfg(test)]
+mod results_tests;
 #[cfg(test)]
 mod run_tests;
 #[cfg(test)]

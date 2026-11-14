@@ -1,88 +1,56 @@
-use parking_lot::Mutex;
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::sync::{
+    Barrier,
+    atomic::{AtomicUsize, Ordering},
+};
 
-use crate::cwasm::backtest::{WorkerRuntime, pipeline::PublisherPipeline};
+use crate::cwasm::backtest::{BacktestError, pipeline::SimulationPipeline};
 
-#[test]
-fn publishes_every_result_in_simulation_order() {
-    let published = Mutex::new(Vec::new());
-    let results = PublisherPipeline::run(
-        8,
-        3,
-        3,
-        |index| Ok(json!(index)),
-        |_, index, _| {
-            published.lock().push(index);
-            Ok(())
-        },
-    )
-    .unwrap();
-    assert_eq!(results.len(), 8);
-    assert!(results.iter().all(Result::is_ok));
-    let published = published.into_inner();
-    assert_eq!(published, (0..8).collect::<Vec<_>>());
+struct Fixture;
+
+impl Fixture {
+    fn value(index: u32) -> Result<Value, BacktestError> {
+        Ok(json!(index))
+    }
 }
 
 #[test]
-fn reuses_worker_runtimes_across_multiple_simulations() {
-    let runtime_ids = Mutex::new(Vec::new());
-    let results = PublisherPipeline::run(
-        12,
-        3,
-        3,
-        |index| Ok(Value::from(index)),
-        |runtime, _, _| {
-            runtime_ids.lock().push(runtime.id());
-            Ok(())
-        },
-    )
+fn runs_every_simulation_and_returns_results_in_order() {
+    let results = SimulationPipeline::run(8, 3, Fixture::value).unwrap();
+    assert_eq!(results.len(), 8);
+    assert_eq!(
+        results.into_iter().collect::<Result<Vec<_>, _>>().unwrap(),
+        (0..8).map(Value::from).collect::<Vec<_>>()
+    );
+}
+
+#[test]
+fn simulations_respect_the_configured_concurrency_limit() {
+    let active = AtomicUsize::new(0);
+    let peak = AtomicUsize::new(0);
+    let barrier = Barrier::new(3);
+    let results = SimulationPipeline::run(12, 3, |index| {
+        let running = active.fetch_add(1, Ordering::SeqCst) + 1;
+        peak.fetch_max(running, Ordering::SeqCst);
+        barrier.wait();
+        active.fetch_sub(1, Ordering::SeqCst);
+        Fixture::value(index)
+    })
     .unwrap();
     assert_eq!(results.len(), 12);
-    let runtime_ids = runtime_ids.into_inner();
-    assert_eq!(runtime_ids.len(), 12);
-    let mut uses = BTreeMap::new();
-    for id in runtime_ids {
-        *uses.entry(id).or_insert(0) += 1;
-    }
-    assert!(uses.len() <= 3);
-    assert!(uses.values().any(|uses| *uses > 1));
-}
-
-#[test]
-fn a_panicking_publisher_is_reported_without_losing_other_results() {
-    let results = PublisherPipeline::run(
-        4,
-        2,
-        2,
-        |index| Ok(Value::from(index)),
-        |_, index, _| {
-            if index == 1 {
-                panic!("publish failed");
-            }
-            Ok(())
-        },
-    )
-    .unwrap();
-    assert_eq!(results.len(), 4);
-    assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+    assert!(results.iter().all(Result::is_ok));
+    assert!(peak.load(Ordering::SeqCst) <= 3);
 }
 
 #[test]
 fn producer_failures_are_kept_in_their_simulation_slots() {
-    let results = PublisherPipeline::run(
-        3,
-        2,
-        2,
-        |index| {
-            if index == 1 {
-                Err(crate::cwasm::backtest::BacktestError::Panic)
-            } else {
-                Ok(Value::from(index))
-            }
-        },
-        |_, _, _| Ok(()),
-    )
+    let results = SimulationPipeline::run(3, 2, |index| {
+        if index == 1 {
+            Err(BacktestError::Panic)
+        } else {
+            Fixture::value(index)
+        }
+    })
     .unwrap();
     assert_eq!(results.len(), 3);
     assert!(results[0].is_ok());
@@ -91,7 +59,24 @@ fn producer_failures_are_kept_in_their_simulation_slots() {
 }
 
 #[test]
-fn worker_runtime_identity_is_stable_for_its_lifetime() {
-    let runtime = WorkerRuntime::new().unwrap();
-    assert_eq!(runtime.id(), runtime.id());
+fn a_panicking_producer_is_reported_without_losing_other_results() {
+    let results = SimulationPipeline::run(4, 2, |index| {
+        if index == 1 {
+            panic!("simulation failed");
+        }
+        Fixture::value(index)
+    })
+    .unwrap();
+    assert_eq!(results.len(), 4);
+    assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
+    assert_eq!(
+        results[1].as_ref().unwrap_err().to_string(),
+        BacktestError::Panic.to_string()
+    );
+}
+
+#[test]
+fn zero_simulations_are_rejected() {
+    let error = SimulationPipeline::run(0, 2, Fixture::value).unwrap_err();
+    assert!(error.to_string().contains("at least one"));
 }

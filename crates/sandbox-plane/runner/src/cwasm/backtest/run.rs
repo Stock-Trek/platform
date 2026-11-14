@@ -6,8 +6,9 @@ use crate::Command;
 use crate::cwasm::WasmRunner;
 
 use crate::cwasm::backtest::{
-    BacktestError, pipeline::PublisherPipeline, publish::ResultPublisher, simulation::Simulation,
-    spec::Spec, worker_limits::WorkerLimits,
+    BacktestError, pipeline::SimulationPipeline, publish::ResultPublisher,
+    results::BacktestResults, simulation::Simulation, spec::Spec, worker_limits::WorkerLimits,
+    worker_runtime::WorkerRuntime,
 };
 
 pub type Balances = BTreeMap<CexId, BTreeMap<AccountId, BTreeMap<AssetId, f64>>>;
@@ -25,17 +26,12 @@ impl Backtest {
         let limits = WorkerLimits::global();
         let worker_count =
             limits.worker_count(spec.simulation_count, spec.max_concurrent_simulations);
-        let results = PublisherPipeline::run(
-            spec.simulation_count,
-            worker_count,
-            worker_count,
-            |index| Simulation::run(runner, cwasm_path, &spec, index),
-            |runtime, _, result| runtime.block_on(ResultPublisher::publish(&spec, result)),
-        )?;
-        match results.into_iter().find_map(Result::err) {
-            Some(error) => Err(error),
-            None => Ok(()),
-        }
+        let outcomes = SimulationPipeline::run(spec.simulation_count, worker_count, |index| {
+            Simulation::run(runner, cwasm_path, &spec, index)
+        })?;
+        let simulations = outcomes.into_iter().collect::<Result<Vec<_>, _>>()?;
+        let result = BacktestResults::collate(simulations);
+        WorkerRuntime::new()?.block_on(ResultPublisher::publish(&spec, &result))
     }
 
     pub fn run_simulations<F>(
@@ -65,12 +61,12 @@ impl Backtest {
     {
         limits.validate(simulation_count, max_concurrent)?;
         let worker_count = limits.worker_count(simulation_count, max_concurrent);
-        PublisherPipeline::run(
-            simulation_count,
-            worker_count,
-            worker_count,
-            |index| simulate(index).map(|()| Value::Null),
-            |_, _, _| Ok(()),
-        )
+        let outcomes = SimulationPipeline::run(simulation_count, worker_count, |index| {
+            simulate(index).map(|()| Value::Null)
+        })?;
+        Ok(outcomes
+            .into_iter()
+            .map(|result| result.map(|_| ()))
+            .collect())
     }
 }
