@@ -8,7 +8,6 @@ rust-version.workspace = true
 async-trait = { workspace = true }
 aws-sdk-s3 = { workspace = true }
 aws-sdk-s3-transfer-manager = { workspace = true }
-bytes = { workspace = true }
 platform-aggregator = { workspace = true }
 platform-archive = { workspace = true }
 platform-config = { workspace = true }
