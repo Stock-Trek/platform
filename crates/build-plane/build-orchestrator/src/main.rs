@@ -1,5 +1,7 @@
 mod aws_ops;
 mod config;
+#[cfg(test)]
+mod config_tests;
 mod context;
 mod sqs_handler;
 mod tasks;

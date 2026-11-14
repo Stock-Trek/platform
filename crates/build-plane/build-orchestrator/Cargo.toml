@@ -26,6 +26,7 @@ base64 = { workspace = true }
 futures = { workspace = true }
 lambda_runtime = { workspace = true }
 metrics_cloudwatch_embedded = { workspace = true, features = ["lambda"] }
+secrecy = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "time"] }
 tracing = { workspace = true }

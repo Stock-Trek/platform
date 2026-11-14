@@ -4754,6 +4754,7 @@ dependencies = [
  "platform-sqs",
  "platform-time",
  "platform-types",
+ "secrecy",
  "serde_json",
  "tokio",
  "tracing",

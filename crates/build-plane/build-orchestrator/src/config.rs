@@ -9,7 +9,8 @@ use platform_errors::{PlatformError, PlatformResult};
 use platform_github::{GitHubAppConfig, HostAllowlist};
 use platform_time::Timeouts;
 use platform_types::UrlScheme;
-use std::{num::NonZeroUsize, time::Duration};
+use secrecy::{ExposeSecret, SecretString};
+use std::{fmt, num::NonZeroUsize, time::Duration};
 
 const AWS_ENDPOINT_URL_S3: &str = "AWS_ENDPOINT_URL_S3";
 const BUILD_AGENT_FUNCTION_NAME: &str = "BUILD_AGENT_FUNCTION_NAME";
@@ -30,14 +31,28 @@ const SQS_PROCESS_CONCURRENCY: &str = "SQS_PROCESS_CONCURRENCY";
 const MAX_SIGNED_URL_EXPIRY: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const SIGNED_POST_UPLOAD_MARGIN_SECS: u64 = 5 * 60;
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct GitHubConfig {
     pub app_id: u64,
-    pub private_key: String,
+    pub private_key: SecretString,
     pub timeouts: Timeouts,
     pub allowed_hosts: HostAllowlist,
     pub max_cached_installations: NonZeroUsize,
     pub directory_limits: DirectoryLimits,
+}
+
+impl fmt::Debug for GitHubConfig {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("GitHubConfig")
+            .field("app_id", &self.app_id)
+            .field("private_key", &"<redacted>")
+            .field("timeouts", &self.timeouts)
+            .field("allowed_hosts", &self.allowed_hosts)
+            .field("max_cached_installations", &self.max_cached_installations)
+            .field("directory_limits", &self.directory_limits)
+            .finish()
+    }
 }
 
 /// Configuration required by the orchestrator process.
@@ -116,7 +131,9 @@ impl OrchestratorConfig {
             aws_timeouts,
             github: GitHubConfig {
                 app_id: vars.required_parsed(GITHUB_APP_ID)?,
-                private_key: vars.required(GITHUB_APP_PRIVATE_KEY)?.replace("\\n", "\n"),
+                private_key: SecretString::from(
+                    vars.required(GITHUB_APP_PRIVATE_KEY)?.replace("\\n", "\n"),
+                ),
                 timeouts: github_timeouts,
                 allowed_hosts,
                 max_cached_installations,
@@ -139,6 +156,9 @@ impl OrchestratorConfig {
     }
 
     pub fn github_app_config(&self) -> GitHubAppConfig {
-        GitHubAppConfig::new(self.github.app_id, self.github.private_key.clone())
+        GitHubAppConfig::new(
+            self.github.app_id,
+            self.github.private_key.expose_secret().to_owned(),
+        )
     }
 }
