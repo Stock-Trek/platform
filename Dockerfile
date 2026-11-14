@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-FROM rustserverless/lambda-rust:latest AS base
+FROM rustserverless/lambda-rust@sha256:f0bbeb9b20b4d9bd172a7cae3171b4058bce33932f7ccb61f00995da40401901 AS base
 
 ARG TARGETARCH
 ARG CARGO_LAMBDA_VERSION="v1.0.3"
