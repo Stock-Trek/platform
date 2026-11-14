@@ -4,7 +4,7 @@ use std::future::Future;
 
 pub struct HealthRunner {
     state: HealthState,
-    server: Option<HealthServer>,
+    server: HealthServer,
 }
 
 impl HealthRunner {
@@ -33,11 +33,6 @@ impl HealthRunner {
         F: Future<Output = PlatformResult<()>>,
     {
         let Self { state, server } = self;
-        let Some(server) = server else {
-            let result = work.await;
-            state.mark_not_ready();
-            return result;
-        };
         let mut server = tokio::spawn(server.serve());
         tokio::pin!(work);
         let result = tokio::select! {

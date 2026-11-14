@@ -38,9 +38,7 @@ impl TestRequest {
 #[test]
 fn health_config_reads_the_shared_address() {
     let vars = EnvVars::from_map([("HEALTH_BIND_ADDR", "127.0.0.1:8081")]);
-    let config = HealthConfig::from_vars(&vars)
-        .expect("config")
-        .expect("set");
+    let config = HealthConfig::from_vars(&vars).expect("config");
     assert_eq!(
         config.address(),
         "127.0.0.1:8081".parse::<SocketAddr>().expect("address")
@@ -50,9 +48,7 @@ fn health_config_reads_the_shared_address() {
 #[test]
 fn health_config_accepts_the_address_alias() {
     let vars = EnvVars::from_map([("HEALTH_BIND_ADDRESS", "127.0.0.1:8081")]);
-    let config = HealthConfig::from_vars(&vars)
-        .expect("config")
-        .expect("set");
+    let config = HealthConfig::from_vars(&vars).expect("config");
     assert_eq!(
         config.address(),
         "127.0.0.1:8081".parse::<SocketAddr>().expect("address")
@@ -65,9 +61,7 @@ fn health_config_prefers_the_service_address() {
         ("HEALTH_BIND_ADDR", "127.0.0.1:8081"),
         ("AGGREGATOR_HEALTH_BIND_ADDR", "127.0.0.1:8082"),
     ]);
-    let config = HealthConfig::from_service_vars(&vars, "AGGREGATOR")
-        .expect("config")
-        .expect("set");
+    let config = HealthConfig::from_service_vars(&vars, "AGGREGATOR").expect("config");
     assert_eq!(
         config.address(),
         "127.0.0.1:8082".parse::<SocketAddr>().expect("address")
@@ -77,9 +71,7 @@ fn health_config_prefers_the_service_address() {
 #[test]
 fn health_config_uses_the_shared_address_as_a_fallback() {
     let vars = EnvVars::from_map([("HEALTH_BIND_ADDR", "127.0.0.1:8081")]);
-    let config = HealthConfig::from_service_vars(&vars, "AGGREGATOR")
-        .expect("config")
-        .expect("set");
+    let config = HealthConfig::from_service_vars(&vars, "AGGREGATOR").expect("config");
     assert_eq!(
         config.address(),
         "127.0.0.1:8081".parse::<SocketAddr>().expect("address")
@@ -93,9 +85,10 @@ fn health_config_rejects_an_invalid_address() {
 }
 
 #[test]
-fn health_config_is_disabled_when_unset() {
+fn health_config_rejects_a_missing_address() {
     let vars = EnvVars::from_map(Vec::<(String, String)>::new());
-    assert!(HealthConfig::from_vars(&vars).expect("config").is_none());
+    assert!(HealthConfig::from_vars(&vars).is_err());
+    assert!(HealthConfig::from_service_vars(&vars, "AGGREGATOR").is_err());
 }
 
 #[tokio::test]

@@ -19,36 +19,34 @@ impl HealthConfig {
         self.address
     }
 
-    pub fn from_env() -> PlatformResult<Option<Self>> {
+    pub fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Option<Self>> {
-        Self::first_optional(vars, &[HEALTH_BIND_ADDR, HEALTH_BIND_ADDRESS])
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+        Self::required(vars, &[HEALTH_BIND_ADDR, HEALTH_BIND_ADDRESS])
     }
 
-    pub fn from_service_env(service: &str) -> PlatformResult<Option<Self>> {
+    pub fn from_service_env(service: &str) -> PlatformResult<Self> {
         Self::from_service_vars(&EnvVars::from_env(), service)
     }
 
-    pub fn from_service_vars(vars: &EnvVars, service: &str) -> PlatformResult<Option<Self>> {
+    pub fn from_service_vars(vars: &EnvVars, service: &str) -> PlatformResult<Self> {
         let name = format!("{service}_HEALTH_BIND_ADDR");
         let alias = format!("{service}_HEALTH_BIND_ADDRESS");
-        match Self::first_optional(vars, &[name.as_str(), alias.as_str()])? {
-            Some(config) => Ok(Some(config)),
+        match Self::first(vars, &[name.as_str(), alias.as_str()])? {
+            Some(config) => Ok(config),
             None => Self::from_vars(vars),
         }
     }
 
-    pub fn required_from_env() -> PlatformResult<Self> {
-        Self::required_from_vars(&EnvVars::from_env())
+    fn required(vars: &EnvVars, names: &[&str]) -> PlatformResult<Self> {
+        Self::first(vars, names)?.ok_or_else(|| {
+            PlatformError::config_missing(names.first().copied().unwrap_or(HEALTH_BIND_ADDR))
+        })
     }
 
-    pub fn required_from_vars(vars: &EnvVars) -> PlatformResult<Self> {
-        Self::from_vars(vars)?.ok_or_else(|| PlatformError::config_missing(HEALTH_BIND_ADDR))
-    }
-
-    fn first_optional(vars: &EnvVars, names: &[&str]) -> PlatformResult<Option<Self>> {
+    fn first(vars: &EnvVars, names: &[&str]) -> PlatformResult<Option<Self>> {
         for name in names {
             if let Some(value) = vars.optional(name)? {
                 return Self::parse(name, &value).map(Some);
@@ -64,7 +62,7 @@ impl HealthConfig {
         Ok(Self::new(address))
     }
 
-    pub(crate) fn lookup(service: Option<&str>) -> PlatformResult<Option<Self>> {
+    pub(crate) fn lookup(service: Option<&str>) -> PlatformResult<Self> {
         match service {
             Some(service) => Self::from_service_env(service),
             None => Self::from_env(),

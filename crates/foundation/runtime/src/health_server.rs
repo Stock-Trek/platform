@@ -28,24 +28,15 @@ impl HealthServer {
         Ok(Self { listener, state })
     }
 
-    pub async fn from_config(
-        config: Option<HealthConfig>,
-        state: HealthState,
-    ) -> PlatformResult<Option<Self>> {
-        match config {
-            Some(config) => Self::bind(config.address(), state).await.map(Some),
-            None => Ok(None),
-        }
+    pub async fn from_config(config: HealthConfig, state: HealthState) -> PlatformResult<Self> {
+        Self::bind(config.address(), state).await
     }
 
-    pub async fn from_env(state: HealthState) -> PlatformResult<Option<Self>> {
+    pub async fn from_env(state: HealthState) -> PlatformResult<Self> {
         Self::from_config(HealthConfig::from_env()?, state).await
     }
 
-    pub async fn from_service_env(
-        service: &str,
-        state: HealthState,
-    ) -> PlatformResult<Option<Self>> {
+    pub async fn from_service_env(service: &str, state: HealthState) -> PlatformResult<Self> {
         Self::from_config(HealthConfig::from_service_env(service)?, state).await
     }
 
