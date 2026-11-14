@@ -5,9 +5,10 @@ reads and validates its configuration at startup, before doing any work.
 
 - Required variables must be present with a non-empty, valid value. A missing or invalid value
   fails startup.
-- Optional variables are treated as unset when they are absent or empty.
-- Values are read only from the process environment. No variable falls back to a built-in default
-  value.
+- Optional variables are treated as unset when they are absent or empty. Some optional variables
+  fall back to a built-in default; the default is shown in a `Default` column or stated in the
+  variable's description.
+- Values are read only from the process environment.
 
 Variables read by more than one process are listed once under [Shared variables](#shared-variables).
 The remaining sections list the additional variables read by each process. When a variable is only
@@ -111,6 +112,7 @@ required in some configurations, the condition is stated in its description.
 | `PORTFOLIO_BINANCE_CREDENTIALS` | JSON array of `{ "account", "api_key", "secret" }` objects. Required when the connector is enabled. |
 | `PORTFOLIO_BINANCE_LISTEN_KEY_REFRESH_SECS` | Listen-key keepalive interval, in seconds. Defaults to `1800`. |
 | `PORTFOLIO_BINANCE_RECONNECT_BACKOFF_SECS` | Delay before reconnecting a failed Binance user-data stream, in seconds. Defaults to `5`. |
+| `PORTFOLIO_CONNECTOR_CEXES` | Comma-separated exchange identifiers to enable for portfolio connectors. When unset or empty, every configured exchange is enabled. Unknown, duplicate, or empty entries fail startup. |
 | `PORTFOLIO_MAX_UPDATE_AGE_SECS` | Maximum accepted portfolio-update age for the freshness gate, in seconds. Defaults to `60`. |
 | `PORTFOLIO_STALE_ORDER_POLICY` | Behaviour when portfolio data is stale: `allow`, `degrade`, or `reject`. Defaults to `degrade`. |
 | `PORTFOLIO_TOKEN_CACHE_MAX_ENTRIES` | Maximum number of token entries retained in memory. Defaults to `10000`. |
@@ -139,6 +141,31 @@ each key's TTL, so Valkey removes stale nonces without a separate cleanup job.
 The ownership consumer replays the `portfolio.ownership.changed.v1.events` stream from its
 checkpoint on startup. When no checkpoint exists it starts at the earliest retained event and
 builds the local owner/account registry before accepting orders for those accounts.
+
+#### Optional stream settings
+
+The portfolio service and the portfolio registry both read the `PORTFOLIO_OWNERSHIP_STREAM_*`
+variables and must use the same values.
+
+The ownership stream is configured by:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORTFOLIO_OWNERSHIP_STREAM_REPLICAS` | `3` | Number of JetStream stream replicas. Must be between 1 and 5. |
+| `PORTFOLIO_OWNERSHIP_STREAM_MAX_AGE_SECS` | `2592000` (30 days) | Maximum age of a retained ownership message, in seconds. Must be greater than zero. |
+| `PORTFOLIO_OWNERSHIP_STREAM_MAX_BYTES` | `1073741824` (1 GiB) | Maximum total size of retained ownership messages, in bytes. Must be greater than zero. |
+| `PORTFOLIO_OWNERSHIP_STREAM_MAX_MESSAGES` | `10000000` | Maximum number of retained ownership messages. Must be greater than zero. |
+| `PORTFOLIO_OWNERSHIP_STREAM_DUPLICATE_WINDOW_SECS` | `120` | Duplicate-detection window for ownership messages, in seconds. Must be greater than zero and no greater than the max age. |
+
+The portfolio update stream is configured by:
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `PORTFOLIO_UPDATE_STREAM_REPLICAS` | `3` | Number of JetStream stream replicas. Must be between 1 and 5. |
+| `PORTFOLIO_UPDATE_STREAM_MAX_AGE_SECS` | `604800` (7 days) | Maximum age of a retained portfolio-update message, in seconds. Must be greater than zero. |
+| `PORTFOLIO_UPDATE_STREAM_MAX_BYTES` | `10737418240` (10 GiB) | Maximum total size of retained portfolio-update messages, in bytes. Must be greater than zero. |
+| `PORTFOLIO_UPDATE_STREAM_MAX_MESSAGES` | `100000000` | Maximum number of retained portfolio-update messages. Must be greater than zero. |
+| `PORTFOLIO_UPDATE_STREAM_DUPLICATE_WINDOW_SECS` | `120` | Duplicate-detection window for portfolio-update messages, in seconds. Must be greater than zero and no greater than the max age. |
 
 ### Backfiller
 
@@ -331,7 +358,9 @@ caller's accounts. Every mutation is audited and published through the ownership
 
 #### Optional
 
-No process-specific optional variables.
+The registry also reads the `PORTFOLIO_OWNERSHIP_STREAM_*` variables listed under
+[Portfolio service](#portfolio-service). Configure them identically for the registry and the
+portfolio service.
 
 ### Run invoker
 
@@ -453,6 +482,12 @@ service applies them and delivers audit events to SQS.
 | `CWASM_INVOKER_MAX_CWASM_BYTES` | Maximum accepted cwasm artifact size, in bytes. |
 | `CWASM_INVOKER_MAX_GUEST_MEMORY_BYTES` | Maximum linear memory available to the guest, in bytes. |
 | `CWASM_INVOKER_MAX_TABLE_ELEMENTS` | Maximum number of elements in each guest table. |
+
+#### Optional
+
+| Variable | Default | Description |
+| --- | --- | --- |
+| `CWASM_INVOKER_BACKTEST_MAX_WORKERS` | `4` | Maximum number of backtest simulation workers. Values are clamped to the range 1-32. An unparseable value uses the default. |
 
 The CWASM invoker also requires the shared `SIGV4_CREDENTIALS`, `SIGV4_REGION`, and `SIGV4_SERVICE`
 variables listed under [Shared variables](#shared-variables).
