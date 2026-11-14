@@ -150,3 +150,17 @@ fn unavailable_issuance_errors_include_retry_after() {
         Some("7")
     );
 }
+
+#[test]
+fn platform_error_conversion_preserves_the_response() {
+    let error = JwtServerError::from(PlatformError::from(JwtServerError::new(
+        StatusCode::FORBIDDEN,
+        "requested owner does not match the authenticated caller",
+    )));
+
+    assert_eq!(
+        error.message(),
+        "requested owner does not match the authenticated caller"
+    );
+    assert_eq!(error.response().status(), StatusCode::FORBIDDEN);
+}

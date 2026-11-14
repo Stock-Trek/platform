@@ -1,4 +1,4 @@
-use crate::{AuthService, jwt_server_request::JwtServerRequest};
+use crate::{AuthService, jwt_server_error::JwtServerError, jwt_server_request::JwtServerRequest};
 use http_body_util::Full;
 use hyper::{
     Request, Response,
@@ -60,6 +60,7 @@ impl JwtServerConnection {
         let response = match JwtServerRequest::dispatch(&service, &sigv4, request).await {
             Ok(response) => response,
             Err(error) => {
+                let error = JwtServerError::from(error);
                 tracing::warn!("rejected JWT request: {}", error.message());
                 error.response()
             }

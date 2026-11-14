@@ -1,7 +1,4 @@
-use crate::{
-    ApiToken, AuthService,
-    jwt_server_error::{JwtServerError, JwtServerResult},
-};
+use crate::{ApiToken, AuthService, jwt_server_error::JwtServerError};
 use chrono::Utc;
 use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
 use hyper::{
@@ -9,6 +6,7 @@ use hyper::{
     body::{Bytes, Incoming},
     header::{CONTENT_LENGTH, HeaderMap},
 };
+use platform_errors::{PlatformError, PlatformResult};
 use platform_messages::{JwtRequest, JwtResponse};
 use platform_sigv4::{SigV4Config, SigV4Request};
 use serde::Serialize;
@@ -28,64 +26,78 @@ impl JwtServerRequest {
         service: &AuthService,
         sigv4: &SigV4Config,
         request: Request<Incoming>,
-    ) -> JwtServerResult<Response<Full<Bytes>>> {
+    ) -> PlatformResult<Response<Full<Bytes>>> {
         if request.method() == Method::GET
             && matches!(request.uri().path(), JWKS_PATH | JWKS_ALIAS_PATH)
         {
             return Ok(Self::json(StatusCode::OK, service.jwks()));
         }
         if request.method() != Method::POST || request.uri().path() != JWT_PATH {
-            return Err(JwtServerError::new(StatusCode::NOT_FOUND, "not found"));
+            return Err(PlatformError::from(JwtServerError::new(
+                StatusCode::NOT_FOUND,
+                "not found",
+            )));
         }
         Self::ensure_content_length(&request)?;
         let (parts, incoming) = request.into_parts();
         let body = Self::read_body(incoming).await?;
         let headers = Self::headers(&parts.headers)?;
         let caller = Self::verify(sigv4, &parts, &headers, &body)?;
-        let request: JwtRequest = serde_json::from_slice(&body)
-            .map_err(|error| JwtServerError::new(StatusCode::BAD_REQUEST, error.to_string()))?;
-        let owner = ApiToken::validated_owner(request.owner())
-            .map_err(|error| JwtServerError::new(StatusCode::BAD_REQUEST, error.to_string()))?;
+        let request: JwtRequest = serde_json::from_slice(&body).map_err(|error| {
+            PlatformError::from(JwtServerError::new(
+                StatusCode::BAD_REQUEST,
+                error.to_string(),
+            ))
+        })?;
+        let owner = ApiToken::validated_owner(request.owner()).map_err(|error| {
+            PlatformError::from(JwtServerError::new(
+                StatusCode::BAD_REQUEST,
+                error.to_string(),
+            ))
+        })?;
         if owner != caller.owner() {
-            return Err(JwtServerError::new(
+            return Err(PlatformError::from(JwtServerError::new(
                 StatusCode::FORBIDDEN,
                 "requested owner does not match the authenticated caller",
-            ));
+            )));
         }
         let issued = service
             .issue_jwt_for_owner(owner, Utc::now())
             .await
-            .map_err(JwtServerError::issuance)?;
+            .map_err(|error| PlatformError::from(JwtServerError::issuance(error)))?;
         Ok(Self::json(
             StatusCode::OK,
             &JwtResponse::new(issued.token(), issued.expires_at().timestamp()),
         ))
     }
 
-    async fn read_body(body: Incoming) -> JwtServerResult<Bytes> {
+    async fn read_body(body: Incoming) -> PlatformResult<Bytes> {
         let body = Limited::new(body, MAX_REQUEST_BYTES);
         let collected = timeout(BODY_READ_TIMEOUT, body.collect())
             .await
             .map_err(|_| {
-                (
+                PlatformError::from(JwtServerError::new(
                     StatusCode::REQUEST_TIMEOUT,
-                    "JWT request body timed out".to_string(),
-                )
+                    "JWT request body timed out",
+                ))
             })?
             .map_err(|error| {
                 if error.downcast_ref::<LengthLimitError>().is_some() {
-                    (
+                    PlatformError::from(JwtServerError::new(
                         StatusCode::PAYLOAD_TOO_LARGE,
-                        "JWT request is too large".to_string(),
-                    )
+                        "JWT request is too large",
+                    ))
                 } else {
-                    (StatusCode::BAD_REQUEST, error.to_string())
+                    PlatformError::from(JwtServerError::new(
+                        StatusCode::BAD_REQUEST,
+                        error.to_string(),
+                    ))
                 }
             })?;
         Ok(collected.to_bytes())
     }
 
-    fn ensure_content_length(request: &Request<Incoming>) -> JwtServerResult<()> {
+    fn ensure_content_length(request: &Request<Incoming>) -> PlatformResult<()> {
         let too_large = request
             .headers()
             .get(CONTENT_LENGTH)
@@ -93,10 +105,10 @@ impl JwtServerRequest {
             .and_then(|value| value.parse::<usize>().ok())
             .is_some_and(|length| length > MAX_REQUEST_BYTES);
         if too_large {
-            Err(JwtServerError::new(
+            Err(PlatformError::from(JwtServerError::new(
                 StatusCode::PAYLOAD_TOO_LARGE,
                 "JWT request is too large",
-            ))
+            )))
         } else {
             Ok(())
         }
@@ -107,10 +119,13 @@ impl JwtServerRequest {
         parts: &hyper::http::request::Parts,
         headers: &BTreeMap<String, String>,
         body: &[u8],
-    ) -> JwtServerResult<platform_sigv4::VerifiedCaller> {
-        let host = headers
-            .get("host")
-            .ok_or_else(|| (StatusCode::UNAUTHORIZED, "missing host header".to_string()))?;
+    ) -> PlatformResult<platform_sigv4::VerifiedCaller> {
+        let host = headers.get("host").ok_or_else(|| {
+            PlatformError::from(JwtServerError::new(
+                StatusCode::UNAUTHORIZED,
+                "missing host header",
+            ))
+        })?;
         let path = parts
             .uri
             .path_and_query()
@@ -118,12 +133,15 @@ impl JwtServerRequest {
             .unwrap_or("/");
         let url = format!("http://{host}{path}");
         let request = SigV4Request::new(parts.method.as_str(), &url, headers, body);
-        sigv4
-            .verify(&request, SystemTime::now())
-            .map_err(|error| JwtServerError::new(StatusCode::UNAUTHORIZED, error.to_string()))
+        sigv4.verify(&request, SystemTime::now()).map_err(|error| {
+            PlatformError::from(JwtServerError::new(
+                StatusCode::UNAUTHORIZED,
+                error.to_string(),
+            ))
+        })
     }
 
-    fn headers(values: &HeaderMap) -> JwtServerResult<BTreeMap<String, String>> {
+    fn headers(values: &HeaderMap) -> PlatformResult<BTreeMap<String, String>> {
         values
             .iter()
             .map(|(name, value)| {
@@ -131,7 +149,10 @@ impl JwtServerRequest {
                     .to_str()
                     .map(|value| (name.as_str().to_ascii_lowercase(), value.to_string()))
                     .map_err(|error| {
-                        JwtServerError::new(StatusCode::BAD_REQUEST, error.to_string())
+                        PlatformError::from(JwtServerError::new(
+                            StatusCode::BAD_REQUEST,
+                            error.to_string(),
+                        ))
                     })
             })
             .collect()
