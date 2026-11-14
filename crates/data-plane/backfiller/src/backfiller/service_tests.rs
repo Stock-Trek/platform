@@ -1,7 +1,7 @@
 use super::test_support_tests::{
     ControlledStore, OnceFetcher, OneGapSource, RecordingPublisher, SavePolicy, TestFixtures,
 };
-use crate::{backfiller::BackfillService, gap_retry_store::InMemoryGapRetryStore};
+use crate::{backfiller::BackfillService, gap_retry_store_tests::InMemoryGapRetryStore};
 use parking_lot::Mutex;
 use platform_market_data::GapMarker;
 use std::{collections::BTreeMap, sync::Arc};
@@ -19,6 +19,7 @@ async fn acknowledges_after_processing_a_covered_gap() {
         },
         RecordingPublisher::default(),
         TestFixtures::options(),
+        Arc::new(InMemoryGapRetryStore::default()),
     );
 
     let error = service.run().await.unwrap_err();
@@ -46,11 +47,8 @@ async fn closes_a_depth_gap_with_a_snapshot_after_the_missing_range() {
         },
         publisher.clone(),
         TestFixtures::options(),
-    )
-    .with_retry_store_arc(Arc::new(ControlledStore::new(
-        store.clone(),
-        SavePolicy::Allow,
-    )));
+        Arc::new(ControlledStore::new(store.clone(), SavePolicy::Allow)),
+    );
 
     let error = service.run().await.unwrap_err();
     assert!(error.to_string().contains("before shutdown"));
@@ -79,11 +77,8 @@ async fn closes_a_book_ticker_gap_with_the_observed_snapshot_sequence() {
         },
         publisher.clone(),
         TestFixtures::options(),
-    )
-    .with_retry_store_arc(Arc::new(ControlledStore::new(
-        store.clone(),
-        SavePolicy::Allow,
-    )));
+        Arc::new(ControlledStore::new(store.clone(), SavePolicy::Allow)),
+    );
 
     let error = service.run().await.unwrap_err();
     assert!(error.to_string().contains("before shutdown"));
@@ -106,11 +101,8 @@ async fn persists_partial_ranges_instead_of_forgetting_them() {
         },
         RecordingPublisher::default(),
         TestFixtures::options(),
-    )
-    .with_retry_store_arc(Arc::new(ControlledStore::new(
-        store.clone(),
-        SavePolicy::Allow,
-    )));
+        Arc::new(ControlledStore::new(store.clone(), SavePolicy::Allow)),
+    );
 
     let pending = service.load_pending().await.unwrap();
     assert!(pending.is_empty());

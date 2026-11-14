@@ -4,7 +4,8 @@ use super::test_support_tests::{
 };
 use crate::{
     backfiller::BackfillService,
-    gap_retry_store::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
+    gap_retry_store::{GapRetryStore, PendingGap},
+    gap_retry_store_tests::InMemoryGapRetryStore,
 };
 use parking_lot::Mutex;
 use platform_market_data::GapMarker;
@@ -35,11 +36,8 @@ async fn retries_pending_ranges_after_the_source_ends() {
         },
         RecordingPublisher::default(),
         TestFixtures::options(),
-    )
-    .with_retry_store_arc(Arc::new(ControlledStore::new(
-        store.clone(),
-        SavePolicy::Allow,
-    )));
+        Arc::new(ControlledStore::new(store.clone(), SavePolicy::Allow)),
+    );
 
     let error = service.run().await.unwrap_err();
     assert!(error.to_string().contains("before shutdown"));
@@ -60,11 +58,8 @@ async fn delays_a_gap_whose_retry_cannot_be_persisted() {
         },
         RecordingPublisher::default(),
         TestFixtures::options(),
-    )
-    .with_retry_store_arc(Arc::new(ControlledStore::new(
-        store,
-        SavePolicy::AfterFirstSave,
-    )));
+        Arc::new(ControlledStore::new(store, SavePolicy::AfterFirstSave)),
+    );
 
     let mut pending = BTreeMap::new();
     service.accept(GapMarker::gap(2, 5), &mut pending).await;
@@ -104,11 +99,8 @@ async fn failed_retry_does_not_block_new_gap_markers() {
         },
         publisher.clone(),
         TestFixtures::options(),
-    )
-    .with_retry_store_arc(Arc::new(ControlledStore::new(
-        store,
-        SavePolicy::ForStream("empty"),
-    )));
+        Arc::new(ControlledStore::new(store, SavePolicy::ForStream("empty"))),
+    );
 
     let error = timeout(Duration::from_secs(2), service.run())
         .await

@@ -2,7 +2,7 @@ use crate::{
     backfiller_runner::BackfillerRunner,
     config::BackfillerConfig,
     event_fetcher::{BackfilledEvent, MissingEventFetcher},
-    gap_retry_store::InMemoryGapRetryStore,
+    gap_retry_store_tests::InMemoryGapRetryStore,
     nats_gap_marker_source::GapMarkerSource,
 };
 use async_trait::async_trait;
