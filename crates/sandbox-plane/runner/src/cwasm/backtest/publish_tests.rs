@@ -73,92 +73,6 @@ impl TestWebSocketServer {
     }
 }
 
-struct Fixture;
-
-impl Fixture {
-    fn spec(stream_url: &str, post_url: &str) -> Spec {
-        Spec {
-            strategy_name: "test".to_string(),
-            strategy_context: StrategyContextDto::default(),
-            initial_balances: BTreeMap::new(),
-            market_slots: Vec::new(),
-            driving_window_number: 0,
-            windows: Vec::new(),
-            historical_candle_count: 0,
-            open_candle_progress_millis: 0,
-            simulation_count: 1,
-            max_concurrent_simulations: 1,
-            random_seed: 0,
-            simulation: SimulationParameters::default(),
-            user_id: "user".to_string(),
-            algorithm_id: "algorithm".to_string(),
-            back_test_id: "back-test".to_string(),
-            results_stream_url: stream_url.to_string(),
-            results_post_url: post_url.to_string(),
-            steps: 0,
-        }
-    }
-
-    fn result() -> Value {
-        json!({"status": "complete", "balance": 1000.0})
-    }
-}
-
-#[tokio::test]
-async fn publishes_the_result_to_both_results_endpoints() {
-    let (stream_url, stream_server) = TestWebSocketServer::start().await;
-    let (post_url, post_server) = TestHttpServer::start("200 OK").await;
-    let result = Fixture::result();
-
-    ResultPublisher::publish(&Fixture::spec(&stream_url, &post_url), &result)
-        .await
-        .unwrap();
-
-    let streamed: Value = serde_json::from_str(&stream_server.await.unwrap()).unwrap();
-    let posted: Value = serde_json::from_str(&post_server.await.unwrap()).unwrap();
-    assert_eq!(streamed, result);
-    assert_eq!(posted, result);
-}
-
-#[tokio::test]
-async fn reports_failures_from_both_results_endpoints() {
-    let error =
-        ResultPublisher::publish(&Fixture::spec("not a url", "not a url"), &Fixture::result())
-            .await
-            .unwrap_err();
-
-    assert!(error.to_string().contains("results stream failed"));
-    assert!(error.to_string().contains("results post failed"));
-}
-
-#[tokio::test]
-async fn reports_a_rejected_post_even_when_the_stream_succeeds() {
-    let (stream_url, stream_server) = TestWebSocketServer::start().await;
-    let (post_url, post_server) = TestHttpServer::start("503 Service Unavailable").await;
-
-    let error =
-        ResultPublisher::publish(&Fixture::spec(&stream_url, &post_url), &Fixture::result())
-            .await
-            .unwrap_err();
-
-    stream_server.await.unwrap();
-    post_server.await.unwrap();
-    assert!(error.to_string().contains("503"));
-}
-
-#[tokio::test]
-async fn posts_the_result_even_when_the_stream_fails() {
-    let (post_url, post_server) = TestHttpServer::start("200 OK").await;
-    let result = Fixture::result();
-
-    ResultPublisher::publish(&Fixture::spec("not a url", &post_url), &result)
-        .await
-        .unwrap_err();
-
-    let posted: Value = serde_json::from_str(&post_server.await.unwrap()).unwrap();
-    assert_eq!(posted, result);
-}
-
 struct StalledServer;
 
 impl StalledServer {
@@ -173,14 +87,101 @@ impl StalledServer {
     }
 }
 
+struct Fixture;
+
+impl Fixture {
+    fn spec(stream_url: &str, post_url: &str) -> Spec {
+        Spec {
+            strategy_name: "test".to_string(),
+            strategy_context: StrategyContextDto::default(),
+            initial_balances: BTreeMap::new(),
+            market_slots: Vec::new(),
+            driving_window_number: 0,
+            windows: Vec::new(),
+            historical_candle_count: 0,
+            open_candle_progress_millis: 0,
+            simulation_count: 2,
+            max_concurrent_simulations: 2,
+            random_seed: 0,
+            simulation: SimulationParameters::default(),
+            user_id: "user".to_string(),
+            algorithm_id: "algorithm".to_string(),
+            back_test_id: "back-test".to_string(),
+            results_stream_url: stream_url.to_string(),
+            results_post_url: post_url.to_string(),
+            steps: 0,
+        }
+    }
+
+    fn result(index: u64) -> Value {
+        json!({"status": "complete", "simulationId": index})
+    }
+
+    fn collated() -> Value {
+        Value::Array((0..2).map(Self::result).collect())
+    }
+}
+
+#[tokio::test]
+async fn streams_the_result_to_the_stream_endpoint() {
+    let (stream_url, stream_server) = TestWebSocketServer::start().await;
+    let result = Fixture::result(0);
+
+    ResultPublisher::stream(&Fixture::spec(&stream_url, "not a url"), &result)
+        .await
+        .unwrap();
+
+    let streamed: Value = serde_json::from_str(&stream_server.await.unwrap()).unwrap();
+    assert_eq!(streamed, result);
+}
+
+#[tokio::test]
+async fn posts_the_collated_results_to_the_post_endpoint() {
+    let (post_url, post_server) = TestHttpServer::start("200 OK").await;
+    let results = Fixture::collated();
+
+    ResultPublisher::post(&Fixture::spec("not a url", &post_url), &results)
+        .await
+        .unwrap();
+
+    let posted: Value = serde_json::from_str(&post_server.await.unwrap()).unwrap();
+    assert_eq!(posted, results);
+}
+
+#[tokio::test]
+async fn reports_a_stream_failure() {
+    let error = ResultPublisher::stream(
+        &Fixture::spec("not a url", "not a url"),
+        &Fixture::result(0),
+    )
+    .await
+    .unwrap_err();
+
+    assert!(error.to_string().contains("results stream failed"));
+}
+
+#[tokio::test]
+async fn reports_a_rejected_post() {
+    let (post_url, post_server) = TestHttpServer::start("503 Service Unavailable").await;
+
+    let error = ResultPublisher::post(&Fixture::spec("not a url", &post_url), &Fixture::collated())
+        .await
+        .unwrap_err();
+
+    post_server.await.unwrap();
+    assert!(error.to_string().contains("503"));
+}
+
 #[tokio::test(start_paused = true)]
 async fn times_out_a_stalled_stream_endpoint() {
     let (stream_url, server) = StalledServer::start("ws").await;
 
-    let error =
-        ResultPublisher::publish(&Fixture::spec(&stream_url, "not a url"), &Fixture::result())
-            .await
-            .unwrap_err();
+    let error = ResultPublisher::stream(
+        &Fixture::spec(&stream_url, "not a url"),
+        &Fixture::result(0),
+    )
+    .await
+    .unwrap_err();
 
     server.abort();
     assert!(error.to_string().contains("connection timed out"));
@@ -190,10 +191,9 @@ async fn times_out_a_stalled_stream_endpoint() {
 async fn times_out_a_stalled_post_endpoint() {
     let (post_url, server) = StalledServer::start("http").await;
 
-    let error =
-        ResultPublisher::publish(&Fixture::spec("not a url", &post_url), &Fixture::result())
-            .await
-            .unwrap_err();
+    let error = ResultPublisher::post(&Fixture::spec("not a url", &post_url), &Fixture::collated())
+        .await
+        .unwrap_err();
 
     server.abort();
     assert!(error.to_string().contains("timed out"), "{error}");

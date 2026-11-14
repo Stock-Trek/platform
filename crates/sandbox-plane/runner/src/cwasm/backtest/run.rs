@@ -26,12 +26,33 @@ impl Backtest {
         let limits = WorkerLimits::global();
         let worker_count =
             limits.worker_count(spec.simulation_count, spec.max_concurrent_simulations);
-        let outcomes = SimulationPipeline::run(spec.simulation_count, worker_count, |index| {
-            Simulation::run(runner, cwasm_path, &spec, index)
-        })?;
-        let simulations = outcomes.into_iter().collect::<Result<Vec<_>, _>>()?;
+        let outcomes = SimulationPipeline::run(
+            spec.simulation_count,
+            worker_count,
+            worker_count,
+            |index| Simulation::run(runner, cwasm_path, &spec, index),
+            |runtime, result| runtime.block_on(ResultPublisher::stream(&spec, result)),
+        )?;
+        let mut simulations = Vec::new();
+        let mut first_error = None;
+        for outcome in outcomes {
+            match outcome.result {
+                Ok(value) => simulations.push(value),
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+            if let Some(error) = outcome.stream_error {
+                first_error.get_or_insert(error);
+            }
+        }
         let result = BacktestResults::collate(simulations);
-        WorkerRuntime::new()?.block_on(ResultPublisher::publish(&spec, &result))
+        let post = WorkerRuntime::new()?.block_on(ResultPublisher::post(&spec, &result));
+        match (first_error, post) {
+            (Some(error), _) => Err(error),
+            (None, Err(error)) => Err(error),
+            (None, Ok(())) => Ok(()),
+        }
     }
 
     pub fn run_simulations<F>(
@@ -61,12 +82,16 @@ impl Backtest {
     {
         limits.validate(simulation_count, max_concurrent)?;
         let worker_count = limits.worker_count(simulation_count, max_concurrent);
-        let outcomes = SimulationPipeline::run(simulation_count, worker_count, |index| {
-            simulate(index).map(|()| Value::Null)
-        })?;
+        let outcomes = SimulationPipeline::run(
+            simulation_count,
+            worker_count,
+            worker_count,
+            |index| simulate(index).map(|()| Value::Null),
+            |_, _| Ok(()),
+        )?;
         Ok(outcomes
             .into_iter()
-            .map(|result| result.map(|_| ()))
+            .map(|outcome| outcome.result.map(|_| ()))
             .collect())
     }
 }
