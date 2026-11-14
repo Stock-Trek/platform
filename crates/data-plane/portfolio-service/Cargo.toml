@@ -3,6 +3,7 @@ name = "platform-portfolio-service"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
+publish = false
 
 [dependencies]
 async-trait = { workspace = true }
