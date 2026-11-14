@@ -34,23 +34,16 @@ impl ClientCache {
 pub struct ResultPublisher;
 
 impl ResultPublisher {
-    pub async fn publish(spec: &Spec, result: &Value) -> Result<(), BacktestError> {
-        let (stream, post) = tokio::join!(
-            Self::stream_result(&spec.results_stream_url, result),
-            Self::post_result(&spec.results_post_url, result)
-        );
-        match (stream, post) {
-            (Ok(()), Ok(())) => Ok(()),
-            (Err(stream), Ok(())) => Err(BacktestError::Publish(format!(
-                "results stream failed: {stream}"
-            ))),
-            (Ok(()), Err(post)) => Err(BacktestError::Publish(format!(
-                "results post failed: {post}"
-            ))),
-            (Err(stream), Err(post)) => Err(BacktestError::Publish(format!(
-                "results stream failed: {stream}; results post failed: {post}"
-            ))),
-        }
+    pub async fn stream(spec: &Spec, result: &Value) -> Result<(), BacktestError> {
+        Self::stream_result(&spec.results_stream_url, result)
+            .await
+            .map_err(|error| BacktestError::Publish(format!("results stream failed: {error}")))
+    }
+
+    pub async fn post(spec: &Spec, result: &Value) -> Result<(), BacktestError> {
+        Self::post_result(&spec.results_post_url, result)
+            .await
+            .map_err(|error| BacktestError::Publish(format!("results post failed: {error}")))
     }
 
     async fn stream_result(url: &str, result: &Value) -> Result<(), String> {

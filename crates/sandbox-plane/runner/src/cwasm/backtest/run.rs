@@ -6,8 +6,9 @@ use crate::Command;
 use crate::cwasm::WasmRunner;
 
 use crate::cwasm::backtest::{
-    BacktestError, pipeline::PublisherPipeline, publish::ResultPublisher, simulation::Simulation,
-    spec::Spec, worker_limits::WorkerLimits,
+    BacktestError, pipeline::SimulationPipeline, publish::ResultPublisher,
+    results::BacktestResults, simulation::Simulation, spec::Spec, worker_limits::WorkerLimits,
+    worker_runtime::WorkerRuntime,
 };
 
 pub type Balances = BTreeMap<CexId, BTreeMap<AccountId, BTreeMap<AssetId, f64>>>;
@@ -25,16 +26,32 @@ impl Backtest {
         let limits = WorkerLimits::global();
         let worker_count =
             limits.worker_count(spec.simulation_count, spec.max_concurrent_simulations);
-        let results = PublisherPipeline::run(
+        let outcomes = SimulationPipeline::run(
             spec.simulation_count,
             worker_count,
             worker_count,
             |index| Simulation::run(runner, cwasm_path, &spec, index),
-            |runtime, _, result| runtime.block_on(ResultPublisher::publish(&spec, result)),
+            |runtime, result| runtime.block_on(ResultPublisher::stream(&spec, result)),
         )?;
-        match results.into_iter().find_map(Result::err) {
-            Some(error) => Err(error),
-            None => Ok(()),
+        let mut simulations = Vec::new();
+        let mut first_error = None;
+        for outcome in outcomes {
+            match outcome.result {
+                Ok(value) => simulations.push(value),
+                Err(error) => {
+                    first_error.get_or_insert(error);
+                }
+            }
+            if let Some(error) = outcome.stream_error {
+                first_error.get_or_insert(error);
+            }
+        }
+        let result = BacktestResults::collate(simulations);
+        let post = WorkerRuntime::new()?.block_on(ResultPublisher::post(&spec, &result));
+        match (first_error, post) {
+            (Some(error), _) => Err(error),
+            (None, Err(error)) => Err(error),
+            (None, Ok(())) => Ok(()),
         }
     }
 
@@ -65,12 +82,16 @@ impl Backtest {
     {
         limits.validate(simulation_count, max_concurrent)?;
         let worker_count = limits.worker_count(simulation_count, max_concurrent);
-        PublisherPipeline::run(
+        let outcomes = SimulationPipeline::run(
             simulation_count,
             worker_count,
             worker_count,
             |index| simulate(index).map(|()| Value::Null),
-            |_, _, _| Ok(()),
-        )
+            |_, _| Ok(()),
+        )?;
+        Ok(outcomes
+            .into_iter()
+            .map(|outcome| outcome.result.map(|_| ()))
+            .collect())
     }
 }

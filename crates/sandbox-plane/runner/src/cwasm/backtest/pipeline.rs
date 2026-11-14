@@ -10,37 +10,48 @@ use std::{
 
 use crate::cwasm::backtest::{BacktestError, worker_runtime::WorkerRuntime};
 
-pub const PUBLISHER_QUEUE_DEPTH: usize = 2;
+pub const SIMULATION_QUEUE_DEPTH: usize = 2;
 
-pub struct PublisherPipeline;
+#[derive(Debug)]
+pub struct SimulationOutcome {
+    pub result: Result<Value, BacktestError>,
+    pub stream_error: Option<BacktestError>,
+}
 
-impl PublisherPipeline {
-    pub fn run<P, Q>(
+pub struct SimulationPipeline;
+
+impl SimulationPipeline {
+    pub fn run<P, S>(
         simulation_count: u32,
         worker_count: u32,
         publisher_count: u32,
         produce: P,
-        publish: Q,
-    ) -> Result<Vec<Result<(), BacktestError>>, BacktestError>
+        stream: S,
+    ) -> Result<Vec<SimulationOutcome>, BacktestError>
     where
         P: Fn(u32) -> Result<Value, BacktestError> + Sync,
-        Q: Fn(&WorkerRuntime, u32, &Value) -> Result<(), BacktestError> + Sync,
+        S: Fn(&WorkerRuntime, &Value) -> Result<(), BacktestError> + Sync,
     {
-        let worker_count = worker_count.max(1);
-        let publisher_count = publisher_count.max(1);
+        if simulation_count == 0 {
+            return Err(BacktestError::invalid_argument(
+                "simulation count must be at least one",
+            ));
+        }
+        let worker_count = worker_count.max(1).min(simulation_count);
+        let publisher_count = publisher_count.max(1).min(simulation_count);
         let runtimes = (0..publisher_count)
             .map(|_| WorkerRuntime::new())
             .collect::<Result<Vec<_>, _>>()?;
-        let outcomes = Mutex::new(Vec::new());
         let next = AtomicU32::new(0);
+        let outcomes = Mutex::new(Vec::new());
         let (sender, receiver) =
-            mpsc::sync_channel(publisher_count as usize * PUBLISHER_QUEUE_DEPTH);
+            mpsc::sync_channel(publisher_count as usize * SIMULATION_QUEUE_DEPTH);
         let receiver = Mutex::new(receiver);
         std::thread::scope(|scope| {
             for runtime in runtimes {
                 let receiver = &receiver;
                 let outcomes = &outcomes;
-                let publish = &publish;
+                let stream = &stream;
                 scope.spawn(move || {
                     loop {
                         let job = {
@@ -50,10 +61,17 @@ impl PublisherPipeline {
                         let Ok((index, result)) = job else {
                             break;
                         };
-                        let outcome =
-                            catch_unwind(AssertUnwindSafe(|| publish(&runtime, index, &result)))
-                                .unwrap_or(Err(BacktestError::Panic));
-                        outcomes.lock().push((index, outcome));
+                        let stream_error =
+                            catch_unwind(AssertUnwindSafe(|| stream(&runtime, &result)))
+                                .unwrap_or(Err(BacktestError::Panic))
+                                .err();
+                        outcomes.lock().push((
+                            index,
+                            SimulationOutcome {
+                                result: Ok(result),
+                                stream_error,
+                            },
+                        ));
                     }
                 });
             }
@@ -75,14 +93,23 @@ impl PublisherPipeline {
                                 if sender.send((index, result)).is_err() {
                                     outcomes.lock().push((
                                         index,
-                                        Err(BacktestError::Publish(
-                                            "publisher pipeline closed".to_string(),
-                                        )),
+                                        SimulationOutcome {
+                                            result: Err(BacktestError::Publish(
+                                                "publisher pipeline closed".to_string(),
+                                            )),
+                                            stream_error: None,
+                                        },
                                     ));
                                     break;
                                 }
                             }
-                            Err(error) => outcomes.lock().push((index, Err(error))),
+                            Err(error) => outcomes.lock().push((
+                                index,
+                                SimulationOutcome {
+                                    result: Err(error),
+                                    stream_error: None,
+                                },
+                            )),
                         }
                     }
                 });
@@ -91,9 +118,6 @@ impl PublisherPipeline {
         });
         let mut outcomes = outcomes.into_inner();
         outcomes.sort_by_key(|(index, _)| *index);
-        Ok(outcomes
-            .into_iter()
-            .map(|(_, result)| result)
-            .collect::<Vec<_>>())
+        Ok(outcomes.into_iter().map(|(_, outcome)| outcome).collect())
     }
 }
