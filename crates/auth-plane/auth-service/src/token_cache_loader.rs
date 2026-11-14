@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, CachedTokenStore, circuit_breaker::BreakerDecision, flight_gates::FlightOutcome,
-    token_cache::CacheLookup,
+    ApiToken, CachedTokenStore, TokenMutation, circuit_breaker::BreakerDecision,
+    flight_gates::FlightOutcome, token_cache::CacheLookup,
 };
 use platform_errors::{AuthError, ErrorType, PlatformError, PlatformResult};
 use platform_metrics::AuthTokenCacheMetrics;
@@ -134,5 +134,45 @@ impl CachedTokenStore {
 
     fn unavailable(retry_after: Duration) -> PlatformError {
         PlatformError::Auth(AuthError::Unavailable { retry_after })
+    }
+}
+impl CachedTokenStore {
+    pub fn record_token(&self, token: &ApiToken) {
+        self.cache
+            .store_token(token.id(), token.clone(), Instant::now());
+    }
+
+    pub fn record_missing(&self, id: &str) {
+        self.cache.store_missing(id, Instant::now());
+    }
+
+    pub fn invalidate(&self, id: &str) {
+        self.cache.invalidate(id);
+    }
+
+    pub fn record_mutation(&self, mutation: &TokenMutation) {
+        match mutation {
+            TokenMutation::Create(token) => self.record_token(token),
+            TokenMutation::Update { expected, token } => {
+                if token.id() != expected.id() {
+                    self.invalidate(expected.id());
+                }
+                self.record_token(token);
+            }
+            TokenMutation::Delete { expected } => self.record_missing(expected.id()),
+        }
+    }
+
+    pub fn invalidate_mutation(&self, mutation: &TokenMutation) {
+        match mutation {
+            TokenMutation::Create(token) => self.invalidate(token.id()),
+            TokenMutation::Update { expected, token } => {
+                self.invalidate(expected.id());
+                if token.id() != expected.id() {
+                    self.invalidate(token.id());
+                }
+            }
+            TokenMutation::Delete { expected } => self.invalidate(expected.id()),
+        }
     }
 }

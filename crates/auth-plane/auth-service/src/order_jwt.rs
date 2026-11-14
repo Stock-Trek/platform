@@ -1,4 +1,4 @@
-use crate::ApiToken;
+use crate::{ApiToken, AuthService, TokenScope};
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 use serde::{Deserialize, Serialize};
@@ -103,5 +103,67 @@ impl OrderJwtClaims {
             return Err(PlatformError::auth_invalid_jwt("was issued in the future"));
         }
         Ok(())
+    }
+}
+impl AuthService {
+    pub async fn issue_jwt_for_owner(
+        &self,
+        owner: &str,
+        now: DateTime<Utc>,
+    ) -> PlatformResult<IssuedJwt> {
+        let token = self
+            .token_for_owner_with_scope(owner, TokenScope::OrdersWrite, now)
+            .await?;
+        self.issue_jwt_with_token(&token, now)
+    }
+
+    fn issue_jwt_with_token(
+        &self,
+        token: &ApiToken,
+        now: DateTime<Utc>,
+    ) -> PlatformResult<IssuedJwt> {
+        Self::ensure_active(token, now)?;
+        Self::ensure_scope(token, TokenScope::OrdersWrite)?;
+        let issued_at = DateTime::from_timestamp(now.timestamp(), 0).unwrap_or(now);
+        let requested_expiry = issued_at
+            .checked_add_signed(self.signature_validity)
+            .ok_or_else(|| {
+                PlatformError::auth_invalid_jwt("expires_at is outside the supported range")
+            })?;
+        let expires_at = requested_expiry.min(token.metadata().expires_at());
+        let claims = OrderJwtClaims::new(token.id(), token.owner(), issued_at, expires_at)?;
+        self.jwt_signer.sign(&claims)
+    }
+}
+impl AuthService {
+    pub async fn verify_jwt(
+        &self,
+        jwt: &str,
+        now: DateTime<Utc>,
+    ) -> PlatformResult<OrderJwtClaims> {
+        let verified = self.jwt_verifier().verify(jwt, now)?;
+        let token = self
+            .stored_token(verified.token_id())
+            .await?
+            .ok_or_else(|| PlatformError::auth_invalid_jwt("references an unknown token"))?;
+        if verified.token_id() != token.id() || verified.owner() != token.owner() {
+            return Err(PlatformError::auth_invalid_jwt(
+                "claims do not match the referenced token",
+            ));
+        }
+        Self::ensure_active(&token, now)?;
+        Self::ensure_scope(&token, TokenScope::OrdersWrite)?;
+        verified.validate_at(now)?;
+        if verified.expires_at().timestamp() > token.metadata().expires_at().timestamp() {
+            return Err(PlatformError::auth_invalid_jwt(
+                "expires after the referenced token",
+            ));
+        }
+        if verified.issued_at().timestamp() < token.created_at().timestamp() - CLOCK_SKEW_SECONDS {
+            return Err(PlatformError::auth_invalid_jwt(
+                "was issued before the referenced token",
+            ));
+        }
+        Ok(verified)
     }
 }

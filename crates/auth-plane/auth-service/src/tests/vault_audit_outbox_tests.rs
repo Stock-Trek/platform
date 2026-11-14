@@ -5,7 +5,7 @@ use crate::tests::{
 use crate::{
     TokenAuditAction, TokenAuditEvent, TokenMutation, TokenStore, VaultTokenStore,
     VaultTokenStoreConfig,
-    token_audit_outbox::TokenAuditOutbox,
+    token_usage::TokenAuditOutbox,
     vault_client::{VaultClient, WriteCondition},
 };
 use chrono::Utc;

@@ -1,6 +1,6 @@
 use crate::{
     ConsumeResult, ReplayKey, ReplayReservation, ReplayStore, ReplayStoreError,
-    ValkeyReplayStoreConfig, valkey_error::ValkeyError,
+    ValkeyReplayStoreConfig, valkey_config::ValkeyError,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};

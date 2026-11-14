@@ -1,4 +1,4 @@
-use crate::random_string::RandomString;
+use crate::secret_input::RandomString;
 
 struct RandomStringFixture;
 

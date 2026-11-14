@@ -2,8 +2,14 @@ use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use platform_errors::PlatformResult;
+use platform_sqs::Sqs;
+use platform_time::Deadline;
 use serde::{Deserialize, Serialize};
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    sync::Arc,
+    time::{Duration, SystemTime},
+};
 use strum::{Display, EnumString};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString, Serialize, Deserialize)]
@@ -109,5 +115,54 @@ impl TokenAuditLog for MemoryTokenAuditLog {
         }
         stored.push_back(event);
         Ok(())
+    }
+}
+#[async_trait]
+pub trait AuditQueue: Send + Sync {
+    async fn deliver(&self, events: &[TokenAuditEvent], deadline: Deadline) -> PlatformResult<()>;
+}
+
+#[async_trait]
+impl AuditQueue for Sqs {
+    async fn deliver(&self, events: &[TokenAuditEvent], deadline: Deadline) -> PlatformResult<()> {
+        self.send_json(events, deadline).await
+    }
+}
+
+/// Delivers audit events to an SQS queue.
+///
+/// Unlike the in-memory log, this sink is durable. It is used by
+/// [`crate::TokenAuditRelay`] to drain token outboxes; a failed send is returned
+/// to the relay so the event remains pending for a later retry.
+#[derive(Clone)]
+pub struct SqsTokenAuditLog {
+    queue: Arc<dyn AuditQueue>,
+    timeout: Duration,
+}
+
+impl SqsTokenAuditLog {
+    pub fn new(sqs: Sqs, timeout: Duration) -> Self {
+        Self {
+            queue: Arc::new(sqs),
+            timeout,
+        }
+    }
+
+    #[cfg(test)]
+    pub fn with_queue(queue: Arc<dyn AuditQueue>, timeout: Duration) -> Self {
+        Self { queue, timeout }
+    }
+
+    fn deadline(&self) -> Deadline {
+        Deadline::new(SystemTime::now() + self.timeout, Duration::ZERO)
+    }
+}
+
+#[async_trait]
+impl TokenAuditLog for SqsTokenAuditLog {
+    async fn record(&self, event: TokenAuditEvent) -> PlatformResult<()> {
+        self.queue
+            .deliver(std::slice::from_ref(&event), self.deadline())
+            .await
     }
 }

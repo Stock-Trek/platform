@@ -1,4 +1,4 @@
-use crate::{TokenAuditLog, TokenStore, token_audit_outbox::TokenAuditOutbox};
+use crate::{TokenAuditLog, TokenStore, token_usage::TokenAuditOutbox};
 use chrono::{DateTime, Utc};
 use platform_errors::{ErrorType, PlatformError, PlatformResult};
 use platform_metrics::AuthAuditRelayMetrics;

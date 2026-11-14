@@ -1,4 +1,4 @@
-use crate::{ApiToken, TokenAuditEvent, token_rotation_identity::TokenRotationIdentity};
+use crate::{ApiToken, TokenAuditEvent, token_rotation::TokenRotationIdentity};
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 use serde_json::{Value, json};

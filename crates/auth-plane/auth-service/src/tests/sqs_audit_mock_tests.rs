@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, MemoryTokenStore, TokenAuditEvent, TokenMutation, TokenRotationTransaction,
-    TokenStore, sqs_token_audit_log::AuditQueue,
+    TokenStore, audit::AuditQueue,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;

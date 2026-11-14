@@ -1,7 +1,7 @@
 use crate::{
     ApiToken,
-    token_audit_outbox::TokenAuditOutbox,
     token_rotation_transaction::TokenRotationTransaction,
+    token_usage::TokenAuditOutbox,
     vault_client::{TOMBSTONE_FIELD, VaultClient},
 };
 use platform_errors::{PlatformError, PlatformResult};

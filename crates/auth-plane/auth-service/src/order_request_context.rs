@@ -1,4 +1,4 @@
-use crate::{ApiToken, random_string::RandomString};
+use crate::{ApiToken, secret_input::RandomString};
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 

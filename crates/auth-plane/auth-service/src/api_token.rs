@@ -1,4 +1,4 @@
-use crate::TokenMetadata;
+use crate::{TokenMetadata, secret_input::RandomString};
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 use secrecy::{ExposeSecret, SecretString};
@@ -169,5 +169,18 @@ impl std::fmt::Debug for ApiToken {
             .field("created_at", &self.created_at)
             .field("metadata", &self.metadata)
             .finish()
+    }
+}
+const SECRET_LENGTH: usize = 32;
+
+impl ApiToken {
+    pub fn generate(
+        id: impl Into<String>,
+        owner: impl Into<String>,
+        created_at: DateTime<Utc>,
+        metadata: TokenMetadata,
+    ) -> PlatformResult<Self> {
+        let secret = RandomString::generate(SECRET_LENGTH);
+        Self::from_parts(id, owner, SecretString::from(secret), created_at, metadata)
     }
 }

@@ -125,7 +125,7 @@ impl TokenUsageWorker {
     async fn apply_usage(store: &Arc<dyn TokenStore>, usage: &TokenUsage) -> PlatformResult<()> {
         let mut events = usage.events().to_vec();
         for event in &mut events {
-            crate::token_audit_outbox::TokenAuditOutbox::ensure_event_id(event);
+            crate::token_usage::TokenAuditOutbox::ensure_event_id(event);
         }
         let Some(token_id) = usage.token_id() else {
             return Self::append_events(store, events).await;

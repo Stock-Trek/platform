@@ -1,8 +1,10 @@
-use crate::TokenAuditEvent;
+use crate::{TokenAuditEvent, secret_input::RandomString};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use platform_errors::PlatformResult;
+use platform_errors::{PlatformError, PlatformResult};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
+use std::sync::atomic::{AtomicU64, Ordering};
 
 /// Usage work that can be applied after the authentication hot path returns.
 ///
@@ -50,7 +52,7 @@ impl TokenUsage {
 
     pub fn ensure_event_ids(&mut self) {
         for event in &mut self.events {
-            crate::token_audit_outbox::TokenAuditOutbox::ensure_event_id(event);
+            TokenAuditOutbox::ensure_event_id(event);
         }
     }
 
@@ -113,5 +115,82 @@ impl crate::auth_service::AuthService {
     pub async fn enqueue_usage(&self, mut usage: TokenUsage) -> PlatformResult<()> {
         usage.ensure_event_ids();
         self.usage.enqueue(usage).await
+    }
+}
+static EVENT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+pub const AUDIT_EVENT_FIELD: &str = "__platform_audit_event__";
+pub const AUDIT_EVENT_PREFIX: &str = "audit/events/";
+
+pub struct TokenAuditOutbox;
+
+impl TokenAuditOutbox {
+    pub fn ensure_event_id(event: &mut TokenAuditEvent) {
+        if event.event_id.is_none() {
+            event.event_id = Some(Self::generate_event_id());
+        }
+    }
+
+    fn generate_event_id() -> String {
+        let random = RandomString::generate(16);
+        let sequence = EVENT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+        format!(
+            "{:020}-{sequence:020}-{random}",
+            Utc::now().timestamp_micros()
+        )
+    }
+
+    pub fn standalone_document(event: &TokenAuditEvent) -> PlatformResult<Value> {
+        let mut document = Map::new();
+        document.insert(AUDIT_EVENT_FIELD.to_string(), Value::Bool(true));
+        document.insert(
+            "event".to_string(),
+            serde_json::to_value(event).map_err(|error| {
+                Self::malformed(format!("could not serialize audit event: {error}"))
+            })?,
+        );
+        Ok(Value::Object(document))
+    }
+
+    pub fn standalone_event(value: &Value) -> PlatformResult<Option<TokenAuditEvent>> {
+        if !Self::is_standalone_document(value) {
+            return Ok(None);
+        }
+        let event = value.get("event").ok_or_else(|| {
+            Self::malformed("standalone audit document is missing its event".to_string())
+        })?;
+        let event = serde_json::from_value(event.clone())
+            .map_err(|error| Self::malformed(format!("invalid standalone audit event: {error}")))?;
+        Ok(Some(event))
+    }
+
+    pub fn is_standalone_document(value: &Value) -> bool {
+        value
+            .get(AUDIT_EVENT_FIELD)
+            .and_then(Value::as_bool)
+            .is_some_and(|standalone| standalone)
+    }
+
+    pub fn is_storage_key(key: &str) -> bool {
+        key.starts_with(AUDIT_EVENT_PREFIX)
+    }
+
+    pub fn storage_key(event_id: &str) -> String {
+        format!("{AUDIT_EVENT_PREFIX}{event_id}")
+    }
+
+    pub fn require_event_id(event: &TokenAuditEvent) -> PlatformResult<&str> {
+        event.event_id().ok_or_else(|| {
+            PlatformError::auth_store(
+                "relay",
+                event.token_id.as_deref().unwrap_or("audit"),
+                false,
+                "pending audit event is missing an event id".to_string(),
+            )
+        })
+    }
+
+    fn malformed(detail: String) -> PlatformError {
+        PlatformError::auth_store("read", "audit-outbox", false, detail)
     }
 }

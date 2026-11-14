@@ -1,4 +1,4 @@
-use crate::{ApiToken, AuthService, jwt_server_error::JwtServerError};
+use crate::{ApiToken, AuthService, jwt_server_connection::JwtServerError};
 use chrono::Utc;
 use http_body_util::{BodyExt, Full, LengthLimitError, Limited};
 use hyper::{

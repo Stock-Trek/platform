@@ -1,6 +1,6 @@
 use crate::{
     ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, TokenRotationTransaction,
-    api_token::MAX_TOKEN_ID_LENGTH, random_string::RandomString,
+    api_token::MAX_TOKEN_ID_LENGTH, secret_input::RandomString,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
@@ -91,5 +91,33 @@ impl AuthService {
             .with_token(token.id(), Some(token.owner()))
             .failure(error.to_string());
         self.record_audit_failure(event).await;
+    }
+}
+use sha2::{Digest, Sha256};
+
+pub struct TokenRotationIdentity;
+
+impl TokenRotationIdentity {
+    pub fn transaction_id(original_id: &str, replacement_id: &str) -> String {
+        Self::id("transaction", &[original_id, replacement_id])
+    }
+
+    pub fn event_id(transaction_id: &str, index: usize, event: &TokenAuditEvent) -> String {
+        let index = index.to_string();
+        let action = event.action.to_string();
+        let token_id = event.token_id.as_deref().unwrap_or_default();
+        Self::id(
+            "event",
+            &[transaction_id, &index, action.as_str(), token_id],
+        )
+    }
+
+    fn id(kind: &str, parts: &[&str]) -> String {
+        let mut hasher = Sha256::new();
+        for part in std::iter::once(kind).chain(parts.iter().copied()) {
+            hasher.update((part.len() as u64).to_be_bytes());
+            hasher.update(part.as_bytes());
+        }
+        format!("0-{}", data_encoding::HEXLOWER.encode(&hasher.finalize()))
     }
 }

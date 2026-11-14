@@ -1,5 +1,5 @@
 use crate::{
-    TokenAuditAction, TokenAuditEvent, TokenUsage, valkey_token_usage_reply::ValkeyTokenUsageReply,
+    TokenAuditAction, TokenAuditEvent, TokenUsage, token_usage_queue_config::ValkeyTokenUsageReply,
 };
 use chrono::Utc;
 use redis::Value;

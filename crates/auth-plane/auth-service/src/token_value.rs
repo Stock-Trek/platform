@@ -72,3 +72,42 @@ impl ApiToken {
             })
     }
 }
+impl ApiToken {
+    pub fn validate_temporal(&self) -> PlatformResult<()> {
+        if self.created_at >= self.metadata.expires_at {
+            return Err(PlatformError::auth_invalid_field(
+                "expires_at",
+                "must be after created_at",
+            ));
+        }
+        Self::ensure_not_before_creation("revoked_at", self.metadata.revoked_at, self.created_at)?;
+        Self::ensure_not_before_creation(
+            "last_used_at",
+            self.metadata.last_used_at,
+            self.created_at,
+        )?;
+        Self::ensure_not_before_creation(
+            "rotation_overlap_until",
+            self.metadata.rotation_overlap_until,
+            self.created_at,
+        )
+    }
+
+    pub fn is_active(&self, now: DateTime<Utc>) -> bool {
+        self.created_at <= now && self.metadata.is_active(now)
+    }
+
+    fn ensure_not_before_creation(
+        field: &'static str,
+        timestamp: Option<DateTime<Utc>>,
+        created_at: DateTime<Utc>,
+    ) -> PlatformResult<()> {
+        if timestamp.is_some_and(|timestamp| timestamp < created_at) {
+            return Err(PlatformError::auth_invalid_field(
+                field,
+                "must not be before created_at",
+            ));
+        }
+        Ok(())
+    }
+}
