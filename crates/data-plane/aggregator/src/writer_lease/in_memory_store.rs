@@ -1,27 +1,33 @@
 use crate::{
+    LeaseStore, LeaseWatch,
     shard_id::ShardId,
-    writer_lease::{LeaseStore, LeaseWatch, LeaseWatchStream, WriterLease},
+    writer_lease::{WriterLease, watch::LeaseWatchStream},
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::BuildResult;
 use platform_types::TimestampMilliseconds;
-use std::collections::HashMap;
-use std::sync::atomic::{AtomicUsize, Ordering};
-use std::time::Duration;
-use tokio::sync::{Notify, watch};
+use std::{
+    collections::HashMap,
+    sync::atomic::{AtomicUsize, Ordering},
+    time::Duration,
+};
+use tokio::sync::{
+    Notify,
+    watch::{Receiver, Sender, channel},
+};
 
 #[derive(Debug)]
 pub struct InMemoryLeaseStore {
     leases: Mutex<HashMap<ShardId, WriterLease>>,
     acquire_attempts: Notify,
     acquire_attempt_count: AtomicUsize,
-    changes: watch::Sender<Option<WriterLease>>,
+    changes: Sender<Option<WriterLease>>,
 }
 
 impl Default for InMemoryLeaseStore {
     fn default() -> Self {
-        let (changes, _receiver) = watch::channel(None);
+        let (changes, _receiver) = channel(None);
         Self {
             leases: Mutex::new(HashMap::new()),
             acquire_attempts: Notify::new(),
@@ -32,7 +38,7 @@ impl Default for InMemoryLeaseStore {
 }
 
 struct MemoryLeaseWatch {
-    changes: watch::Receiver<Option<WriterLease>>,
+    changes: Receiver<Option<WriterLease>>,
 }
 
 #[async_trait]

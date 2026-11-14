@@ -1,7 +1,4 @@
-use crate::{
-    clients::client::HttpClient, connector::Connector, server_clock::Clock,
-    submission::SubmissionOutcome,
-};
+use crate::{connector::Connector, server_clock::Clock, submission::SubmissionOutcome};
 use platform_errors::{BuildError, BuildResult, ConnectorError, RateLimitError, SendFailure};
 use platform_exchange_types::{
     binance::{
@@ -10,7 +7,7 @@ use platform_exchange_types::{
     },
     encode::ByteEncoder,
     exchange::ETExchange,
-    http::{HttpRequest, HttpResponse},
+    http::{HttpClient, HttpRequest, HttpResponse},
     rate_limited::RateLimitRestriction,
     signer::Signer,
 };

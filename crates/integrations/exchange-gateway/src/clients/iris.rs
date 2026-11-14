@@ -1,11 +1,9 @@
-use crate::{
-    clients::client::WebsocketClient, panic_guard::PanicUtils,
-    websocket_listener::WebsocketListener,
-};
+use crate::{panic_guard::PanicUtils, websocket_listener::WebsocketListener};
 use async_trait::async_trait;
 use futures_timer::Delay;
 use iris::{Client as IrisClient, Config as IrisConfig, ConnectionError, Listener as IrisListener};
 use platform_errors::{BuildError, BuildResult, ConnectorError, TimeoutError};
+use platform_exchange_types::websocket::WebsocketClient;
 use std::{
     future::{Future, poll_fn},
     sync::Arc,

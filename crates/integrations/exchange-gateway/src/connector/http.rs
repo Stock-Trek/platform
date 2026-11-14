@@ -1,12 +1,12 @@
 use crate::connector::Connector;
 use crate::{
-    clients::client::HttpClient,
     rate_limit::limiter_registry::RateLimitGuard,
     retry_after_header::RetryAfter,
     submission::{Submission, SubmissionOutcome},
 };
 use platform_errors::{BuildError, BuildResult, ConnectorError, RateLimitError, SendFailure};
 use platform_exchange_types::exchange_server_time::ETExchangeServerTimeHttp;
+use platform_exchange_types::http::HttpClient;
 use platform_exchange_types::{
     exchange::ETExchange, http::HttpResponse, rate_limited::RateLimitRestriction,
     request::ETHttpRequest, response::ETHttpResponse, server_time::ServerTimeResponse,

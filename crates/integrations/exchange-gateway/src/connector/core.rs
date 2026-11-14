@@ -1,5 +1,4 @@
 use crate::{
-    clients::client::{HttpClient, WebsocketClient},
     clients::{iris::IrisWebsocketClient, reqwest::ReqwestHttpClient},
     rate_limit::{
         limiter_registry::RateLimiters, limiter_state::RateLimiterState, rate_limiter::RateLimiter,
@@ -13,10 +12,12 @@ use platform_errors::{BuildError, BuildResult, SendFailure};
 use platform_exchange_types::{
     exchange::ETExchange,
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
+    http::HttpClient,
     rate_limited::{RateLimit, RateLimitRestriction},
     request::ETRequest,
     response::ETResponse,
     signer::Signer,
+    websocket::WebsocketClient,
 };
 use platform_types::{Protocol, TimestampMilliseconds, UsageCount};
 use std::{collections::HashMap, sync::Arc, time::Duration};

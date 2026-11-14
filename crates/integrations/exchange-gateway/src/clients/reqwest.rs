@@ -1,7 +1,6 @@
-use crate::clients::client::HttpClient;
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
-use platform_exchange_types::http::{HttpMethod, HttpRequest, HttpResponse};
+use platform_exchange_types::http::{HttpClient, HttpMethod, HttpRequest, HttpResponse};
 use std::time::Duration;
 
 #[derive(Clone)]

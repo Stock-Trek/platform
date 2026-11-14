@@ -1,12 +1,12 @@
 use crate::connector::Connector;
 use crate::{
-    clients::client::WebsocketClient,
     rate_limit::limiter_registry::RateLimitGuard,
     submission::{Submission, SubmissionOutcome},
 };
 use futures_timer::Delay;
 use platform_errors::{BuildError, BuildResult, ConnectorError, SendFailure, TimeoutError};
 use platform_exchange_types::exchange_server_time::ETExchangeServerTimeWebsocket;
+use platform_exchange_types::websocket::WebsocketClient;
 use platform_exchange_types::{
     exchange::ETExchange, rate_limited::RateLimitRestriction, request::ETWebsocketRequest,
     response::ETWebsocketResponse, server_time::ServerTimeResponse, websocket_id::ETWebsocketId,

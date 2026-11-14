@@ -1,7 +1,7 @@
 use crate::{
     config::AggregatorConfig,
     shard_id::ShardId,
-    writer_lease::{LeaseStore, LeaseWatch, LeaseWatchStream, WriterLease},
+    writer_lease::{LeaseStore, LeaseWatch, WriterLease, watch::LeaseWatchStream},
 };
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};

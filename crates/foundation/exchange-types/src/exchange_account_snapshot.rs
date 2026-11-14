@@ -1,4 +1,4 @@
-pub use crate::portfolio::{AccountEvent, AccountSnapshot};
+use crate::portfolio::{AccountEvent, AccountSnapshot};
 use crate::{exchange::ETExchange, request::ETHttpRequest};
 use platform_errors::BuildResult;
 use stock_trek_types::cex::asset_id::AssetId;

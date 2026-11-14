@@ -5,10 +5,9 @@
 //! acknowledged only after this record has been written, so a crash can replay
 //! work but cannot silently skip it.
 
-use crate::config::AggregatorConfig;
 use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
-use crate::writer_lease::WriterLease;
+use crate::{WriterLease, config::AggregatorConfig};
 use async_trait::async_trait;
 use platform_errors::{BuildError, BuildResult};
 use platform_nats::{JetStream, KeyValue, Message};

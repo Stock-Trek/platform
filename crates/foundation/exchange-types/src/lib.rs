@@ -18,4 +18,5 @@ pub mod server_time;
 pub mod signer;
 pub mod ticker;
 pub mod urls;
+pub mod websocket;
 pub mod websocket_id;
