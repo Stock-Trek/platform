@@ -84,13 +84,20 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Run checks
-        run: |
-          cargo fmt --check
-          cargo clippy --all-targets --all-features -- -D warnings
-          cargo test
-          cargo check --workspace
-          RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
+      - name: Format
+        run: cargo fmt --check
+
+      - name: Clippy
+        run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Test
+        run: cargo test
+
+      - name: Check
+        run: cargo check --workspace
+
+      - name: Documentation
+        run: RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
 
 
       # - name: Get version, check if tag exists, create and publish if not
