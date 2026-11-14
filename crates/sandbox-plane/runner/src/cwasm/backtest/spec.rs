@@ -9,6 +9,7 @@ use stock_trek::{markets::AlignedWindow, types::AssetId};
 
 use crate::cwasm::backtest::{
     BacktestError, Balances, Input, market_data::Series, slots::MarketSlot,
+    worker_limits::WorkerLimits,
 };
 
 pub struct Spec {
@@ -56,16 +57,10 @@ impl Spec {
         else {
             return Err(BacktestError::UnsupportedCommand);
         };
-        if *simulation_count < 1 {
-            return Err(BacktestError::invalid_argument(
-                "simulation count must be at least one",
-            ));
-        }
-        if *max_concurrent_simulations < 1 {
-            return Err(BacktestError::invalid_argument(
-                "max concurrent simulations must be at least one",
-            ));
-        }
+        let limits = WorkerLimits::global();
+        limits.validate(*simulation_count, *max_concurrent_simulations)?;
+        let max_concurrent_simulations =
+            limits.worker_count(*simulation_count, *max_concurrent_simulations);
         for (name, chance) in [
             ("candle loss chance", simulation.candle_loss_chance),
             ("slippage chance", simulation.slippage_chance),
@@ -169,7 +164,7 @@ impl Spec {
             historical_candle_count: *historical_candle_count as usize,
             open_candle_progress_millis: *open_candle_progress_millis,
             simulation_count: *simulation_count,
-            max_concurrent_simulations: *max_concurrent_simulations,
+            max_concurrent_simulations,
             random_seed: *random_seed,
             simulation: simulation.clone(),
             user_id: user_id.clone(),
