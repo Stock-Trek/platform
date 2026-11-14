@@ -9,7 +9,7 @@ mod spill_sorter;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use candle_spill::{CandleRecords, CandleSpill};
-pub(crate) use rebuild_options::{RebuildOptions, RebuildStats};
-pub(crate) use replay_spill::ReplaySpill;
-pub(crate) use spill::SpillUsage;
+pub use candle_spill::{CandleRecords, CandleSpill};
+pub use rebuild_options::{RebuildOptions, RebuildStats};
+pub use replay_spill::ReplaySpill;
+pub use spill::SpillUsage;

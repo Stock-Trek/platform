@@ -13,7 +13,7 @@ use std::{
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 use tokio::sync::{Mutex, watch};
 
-pub(super) struct ExchangePortfolioConnection {
+pub struct ExchangePortfolioConnection {
     cex_id: CexId,
     exchange: Arc<dyn PortfolioExchange>,
     credentials: Arc<dyn PortfolioCredentialSource>,
@@ -23,7 +23,7 @@ pub(super) struct ExchangePortfolioConnection {
 }
 
 impl ExchangePortfolioConnection {
-    pub(super) fn new(
+    pub fn new(
         cex_id: CexId,
         exchange: Arc<dyn PortfolioExchange>,
         credentials: Arc<dyn PortfolioCredentialSource>,
@@ -40,7 +40,7 @@ impl ExchangePortfolioConnection {
         }
     }
 
-    pub(super) async fn connecting(&self) {
+    pub async fn connecting(&self) {
         self.health
             .publish(ConnectorState::Connecting, 0, None)
             .await;

@@ -132,7 +132,7 @@ impl AggregatorState {
 }
 
 impl AggregatorState {
-    pub(super) fn candle_maps_eq(
+    pub fn candle_maps_eq(
         left: &HashMap<CandleKey, Vec<Candle>>,
         right: &HashMap<CandleKey, Vec<Candle>>,
     ) -> bool {
@@ -154,7 +154,7 @@ impl AggregatorState {
 }
 
 /// Serializes grouped open candles as one deterministically sorted list.
-pub(super) mod open_candles {
+pub mod open_candles {
     use platform_market_data::{Candle, CandleKey};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::collections::HashMap;

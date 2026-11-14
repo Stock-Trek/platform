@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::{BuildError, BuildResult};
 
 impl AuthService {
-    pub(crate) async fn select_token_from_scan(
+    pub async fn select_token_from_scan(
         &self,
         owner: &str,
         scope: Option<TokenScope>,
@@ -25,7 +25,7 @@ impl AuthService {
             .ok_or_else(|| Self::no_active_token(scope))
     }
 
-    pub(crate) async fn tokens_from_owner_scan(&self, owner: &str) -> BuildResult<Vec<ApiToken>> {
+    pub async fn tokens_from_owner_scan(&self, owner: &str) -> BuildResult<Vec<ApiToken>> {
         let mut tokens = self.scan_tokens_for_owner(owner).await?;
         tokens.sort_by(|left, right| left.id().cmp(right.id()));
         self.repair_owner_index(owner, &tokens).await;
@@ -54,7 +54,7 @@ impl AuthService {
         }
     }
 
-    pub(crate) fn no_active_token(scope: Option<TokenScope>) -> BuildError {
+    pub fn no_active_token(scope: Option<TokenScope>) -> BuildError {
         match scope {
             Some(scope) => BuildError::auth_invalid_field(
                 "scope",
@@ -64,7 +64,7 @@ impl AuthService {
         }
     }
 
-    pub(crate) fn owner_index_error(detail: String) -> BuildError {
+    pub fn owner_index_error(detail: String) -> BuildError {
         BuildError::auth_store("read", "owner-index", false, detail)
     }
 }

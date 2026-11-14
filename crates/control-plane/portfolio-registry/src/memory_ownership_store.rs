@@ -9,12 +9,12 @@ use std::collections::BTreeMap;
 use tokio::sync::Mutex;
 
 #[derive(Default)]
-pub(crate) struct MemoryOwnershipStore {
+pub struct MemoryOwnershipStore {
     records: Mutex<BTreeMap<AccountKey, OwnershipRecord>>,
 }
 
 impl MemoryOwnershipStore {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self::default()
     }
 }

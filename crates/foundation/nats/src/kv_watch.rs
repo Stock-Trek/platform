@@ -23,7 +23,7 @@ pub struct KeyValueWatch {
 }
 
 impl KeyValueWatch {
-    pub(super) fn new(store: Store, key: &str) -> Self {
+    pub fn new(store: Store, key: &str) -> Self {
         Self {
             store,
             key: key.to_string(),

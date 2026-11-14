@@ -20,18 +20,18 @@ use tokio::{
 
 const HEALTH_INTERVAL: Duration = Duration::from_secs(30);
 
-pub(super) struct Watcher {
-    pub(super) cex_id: CexId,
-    pub(super) account: AccountId,
-    pub(super) exchange: Arc<dyn PortfolioExchange>,
-    pub(super) credentials: Arc<dyn crate::connector::portfolio::PortfolioCredentialSource>,
-    pub(super) sink: Arc<dyn PortfolioUpdateSink>,
-    pub(super) health: HealthReporter,
-    pub(super) shutdown: watch::Receiver<bool>,
+pub struct Watcher {
+    pub cex_id: CexId,
+    pub account: AccountId,
+    pub exchange: Arc<dyn PortfolioExchange>,
+    pub credentials: Arc<dyn crate::connector::portfolio::PortfolioCredentialSource>,
+    pub sink: Arc<dyn PortfolioUpdateSink>,
+    pub health: HealthReporter,
+    pub shutdown: watch::Receiver<bool>,
 }
 
 impl Watcher {
-    pub(super) async fn run(self) {
+    pub async fn run(self) {
         let mut state = SessionState::new();
         let mut shutdown = self.shutdown.clone();
         let mut credential = None;

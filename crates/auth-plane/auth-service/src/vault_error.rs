@@ -12,7 +12,7 @@ use std::{
 const DEFAULT_RETRY_AFTER: Duration = Duration::from_secs(1);
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(crate) enum VaultWriteOutcome {
+pub enum VaultWriteOutcome {
     CasMismatch,
     Other,
 }
@@ -28,7 +28,7 @@ impl VaultWriteOutcome {
     }
 }
 
-pub(crate) struct VaultError;
+pub struct VaultError;
 
 impl VaultError {
     pub fn transport(operation: &'static str, target: &str, error: Error) -> BuildError {

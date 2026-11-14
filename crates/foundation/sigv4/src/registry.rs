@@ -64,7 +64,7 @@ impl SigV4Registry {
         Ok(&caller.credentials)
     }
 
-    pub(crate) fn caller(&self, access_key_id: &str) -> Option<(&SigV4Credentials, &str)> {
+    pub fn caller(&self, access_key_id: &str) -> Option<(&SigV4Credentials, &str)> {
         self.callers
             .get(access_key_id)
             .map(|caller| (&caller.credentials, caller.owner.as_str()))

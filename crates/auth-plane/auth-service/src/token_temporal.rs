@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::{BuildError, BuildResult};
 
 impl ApiToken {
-    pub(crate) fn validate_temporal(&self) -> BuildResult<()> {
+    pub fn validate_temporal(&self) -> BuildResult<()> {
         if self.created_at >= self.metadata.expires_at {
             return Err(BuildError::auth_invalid_field(
                 "expires_at",

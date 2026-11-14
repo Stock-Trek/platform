@@ -4,7 +4,7 @@ use platform_errors::{BuildError, BuildResult};
 use std::collections::HashSet;
 
 impl AuthService {
-    pub(crate) async fn replacement_for(
+    pub async fn replacement_for(
         &self,
         original: &ApiToken,
         replacement_id: &str,
@@ -25,7 +25,7 @@ impl AuthService {
         Ok(replacement)
     }
 
-    pub(crate) fn retired_for(
+    pub fn retired_for(
         original: &ApiToken,
         replacement_id: &str,
         overlap_until: DateTime<Utc>,
@@ -38,7 +38,7 @@ impl AuthService {
         Ok(retired)
     }
 
-    pub(crate) fn ensure_replacement_matches(
+    pub fn ensure_replacement_matches(
         original: &ApiToken,
         replacement: &ApiToken,
     ) -> BuildResult<()> {
@@ -102,7 +102,7 @@ impl AuthService {
         Ok(false)
     }
 
-    pub(crate) fn rotation_overlap_until(&self, now: DateTime<Utc>) -> BuildResult<DateTime<Utc>> {
+    pub fn rotation_overlap_until(&self, now: DateTime<Utc>) -> BuildResult<DateTime<Utc>> {
         now.checked_add_signed(self.rotation_overlap)
             .ok_or_else(|| {
                 BuildError::auth_invalid_field("rotation_overlap", "is outside the supported range")

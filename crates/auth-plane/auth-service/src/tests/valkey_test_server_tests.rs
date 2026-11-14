@@ -5,10 +5,10 @@ use tokio::{
     sync::Mutex,
 };
 
-pub(crate) struct FakeValkey;
+pub struct FakeValkey;
 
 impl FakeValkey {
-    pub(crate) async fn start() -> String {
+    pub async fn start() -> String {
         let listener = TcpListener::bind("127.0.0.1:0").await.expect("bind server");
         let address = listener.local_addr().expect("server address");
         let state = Arc::new(Mutex::new(HashMap::new()));

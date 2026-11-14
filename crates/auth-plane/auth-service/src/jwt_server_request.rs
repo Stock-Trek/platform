@@ -21,10 +21,10 @@ const JWT_PATH: &str = "/jwt";
 const JWKS_PATH: &str = "/.well-known/jwks.json";
 const JWKS_ALIAS_PATH: &str = "/jwks";
 
-pub(super) struct JwtServerRequest;
+pub struct JwtServerRequest;
 
 impl JwtServerRequest {
-    pub(super) async fn dispatch(
+    pub async fn dispatch(
         service: &AuthService,
         sigv4: &SigV4Config,
         request: Request<Incoming>,
@@ -151,7 +151,7 @@ impl JwtServerRequest {
         }
     }
 
-    pub(super) fn error(status: StatusCode) -> Response<Full<Bytes>> {
+    pub fn error(status: StatusCode) -> Response<Full<Bytes>> {
         Response::builder()
             .status(status)
             .body(Full::new(Bytes::from_static(b"JWT request failed")))

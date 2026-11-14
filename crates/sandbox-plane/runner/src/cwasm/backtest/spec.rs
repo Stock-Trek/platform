@@ -10,29 +10,29 @@ use stock_trek::{errors::StockTrekError, markets::AlignedWindow, types::AssetId}
 
 use crate::cwasm::backtest::{Balances, market_data::Series, slots::MarketSlot};
 
-pub(super) struct Spec {
-    pub(super) strategy_name: String,
-    pub(super) strategy_context: StrategyContextDto,
-    pub(super) initial_balances: Balances,
-    pub(super) market_slots: Vec<MarketSlot>,
-    pub(super) driving_window_number: u32,
-    pub(super) windows: Vec<(u32, AlignedWindow)>,
-    pub(super) historical_candle_count: usize,
-    pub(super) open_candle_progress_millis: u64,
-    pub(super) simulation_count: u32,
-    pub(super) max_concurrent_simulations: u32,
-    pub(super) random_seed: u64,
-    pub(super) simulation: SimulationParameters,
-    pub(super) user_id: String,
-    pub(super) algorithm_id: String,
-    pub(super) back_test_id: String,
-    pub(super) results_stream_url: String,
-    pub(super) results_post_url: String,
-    pub(super) steps: usize,
+pub struct Spec {
+    pub strategy_name: String,
+    pub strategy_context: StrategyContextDto,
+    pub initial_balances: Balances,
+    pub market_slots: Vec<MarketSlot>,
+    pub driving_window_number: u32,
+    pub windows: Vec<(u32, AlignedWindow)>,
+    pub historical_candle_count: usize,
+    pub open_candle_progress_millis: u64,
+    pub simulation_count: u32,
+    pub max_concurrent_simulations: u32,
+    pub random_seed: u64,
+    pub simulation: SimulationParameters,
+    pub user_id: String,
+    pub algorithm_id: String,
+    pub back_test_id: String,
+    pub results_stream_url: String,
+    pub results_post_url: String,
+    pub steps: usize,
 }
 
 impl Spec {
-    pub(super) fn new(command: &Command) -> Result<Self, i32> {
+    pub fn new(command: &Command) -> Result<Self, i32> {
         let Command::BackTest {
             strategy_name,
             strategy_context_path,
@@ -214,12 +214,12 @@ impl Spec {
         })
     }
 
-    pub(super) fn invalid_argument(message: &str) -> i32 {
+    pub fn invalid_argument(message: &str) -> i32 {
         eprintln!("cwasm-invoker: {message}");
         ExitCode::ServerEntryInvalidArgument.code()
     }
 
-    pub(super) fn not_decoded(message: &str) -> i32 {
+    pub fn not_decoded(message: &str) -> i32 {
         eprintln!("cwasm-invoker: {message}");
         ExitCode::ServerRunnerMarketDataNotDecoded.code()
     }

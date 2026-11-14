@@ -16,7 +16,7 @@ use std::{
 };
 
 pub struct IcebergCatalog {
-    pub(super) catalog: iceberg_catalog_rest::RestCatalog,
+    pub catalog: iceberg_catalog_rest::RestCatalog,
     namespace: NamespaceIdent,
     warehouse: String,
     namespace_name: String,
@@ -87,7 +87,7 @@ impl IcebergCatalog {
         }
     }
 
-    pub(super) async fn ensure_table(&self, table: ArchiveIcebergTable) -> BuildResult<Table> {
+    pub async fn ensure_table(&self, table: ArchiveIcebergTable) -> BuildResult<Table> {
         let ident = self.table_ident(table);
         match self.catalog.load_table(&ident).await {
             Ok(table) => return Ok(table),
@@ -115,7 +115,7 @@ impl IcebergCatalog {
         }
     }
 
-    pub(super) fn catalog_error(operation: &'static str, error: iceberg::Error) -> BuildError {
+    pub fn catalog_error(operation: &'static str, error: iceberg::Error) -> BuildError {
         BuildError::external(std::io::Error::other(format!("{operation}: {error}")))
     }
 }

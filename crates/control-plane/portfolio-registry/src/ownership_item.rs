@@ -3,17 +3,17 @@ use aws_sdk_dynamodb::types::AttributeValue;
 use platform_errors::{BuildError, BuildResult};
 use std::collections::HashMap;
 
-pub(crate) const ACCOUNT_KEY: &str = "accountKey";
-pub(crate) const OWNER: &str = "owner";
-pub(crate) const ACTIVE: &str = "active";
-pub(crate) const VERSION: &str = "version";
-pub(crate) const RECORD: &str = "record";
-pub(crate) const PENDING_EVENTS: &str = "pendingEvents";
+pub const ACCOUNT_KEY: &str = "accountKey";
+pub const OWNER: &str = "owner";
+pub const ACTIVE: &str = "active";
+pub const VERSION: &str = "version";
+pub const RECORD: &str = "record";
+pub const PENDING_EVENTS: &str = "pendingEvents";
 
-pub(crate) struct OwnershipItem;
+pub struct OwnershipItem;
 
 impl OwnershipItem {
-    pub(crate) fn parse(item: &HashMap<String, AttributeValue>) -> BuildResult<OwnershipRecord> {
+    pub fn parse(item: &HashMap<String, AttributeValue>) -> BuildResult<OwnershipRecord> {
         let payload = Self::string(item, RECORD)?;
         let mut record: OwnershipRecord = serde_json::from_str(payload)?;
         record.pending_events = match item.get(PENDING_EVENTS) {
@@ -23,9 +23,7 @@ impl OwnershipItem {
         Ok(record)
     }
 
-    pub(crate) fn attributes(
-        record: &OwnershipRecord,
-    ) -> BuildResult<HashMap<String, AttributeValue>> {
+    pub fn attributes(record: &OwnershipRecord) -> BuildResult<HashMap<String, AttributeValue>> {
         let mut item = HashMap::from([
             (
                 ACCOUNT_KEY.to_string(),

@@ -62,7 +62,7 @@ impl Default for SourceLimits {
 }
 
 pub struct Source {
-    pub(crate) bytes: Vec<u8>,
+    pub bytes: Vec<u8>,
 }
 
 impl Source {

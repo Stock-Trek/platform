@@ -109,7 +109,7 @@ impl StreamSpec {
         Ok(())
     }
 
-    pub(crate) fn config(&self) -> BuildResult<stream::Config> {
+    pub fn config(&self) -> BuildResult<stream::Config> {
         self.validate()?;
         Ok(stream::Config {
             name: JetStream::stream_name(&self.subject_prefix),

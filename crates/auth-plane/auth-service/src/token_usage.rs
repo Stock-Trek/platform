@@ -48,13 +48,13 @@ impl TokenUsage {
         &self.events
     }
 
-    pub(crate) fn ensure_event_ids(&mut self) {
+    pub fn ensure_event_ids(&mut self) {
         for event in &mut self.events {
             crate::token_audit_outbox::TokenAuditOutbox::ensure_event_id(event);
         }
     }
 
-    pub(crate) fn merge(&mut self, other: Self) {
+    pub fn merge(&mut self, other: Self) {
         if self.token_id.is_none() {
             self.token_id = other.token_id;
         }
@@ -73,7 +73,7 @@ pub struct TokenUsageReservation {
 }
 
 impl TokenUsageReservation {
-    pub(crate) fn new(id: impl Into<String>, usage: TokenUsage) -> Self {
+    pub fn new(id: impl Into<String>, usage: TokenUsage) -> Self {
         Self {
             id: id.into(),
             usage,
@@ -110,7 +110,7 @@ pub trait TokenUsageQueue: Send + Sync {
 }
 
 impl crate::auth_service::AuthService {
-    pub(crate) async fn enqueue_usage(&self, mut usage: TokenUsage) -> BuildResult<()> {
+    pub async fn enqueue_usage(&self, mut usage: TokenUsage) -> BuildResult<()> {
         usage.ensure_event_ids();
         self.usage.enqueue(usage).await
     }

@@ -6,7 +6,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::{AuthError, BuildError, BuildResult};
 
 impl AuthService {
-    pub(crate) async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> BuildResult<()> {
+    pub async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> BuildResult<()> {
         let Some(token) = self.stored_token(id).await? else {
             return Ok(());
         };
@@ -22,7 +22,7 @@ impl AuthService {
         }
     }
 
-    pub(crate) async fn revoke_token(
+    pub async fn revoke_token(
         &self,
         id: &str,
         reason: RevocationReason,
@@ -70,7 +70,7 @@ impl AuthService {
     /// revoked concurrently by another caller, are skipped on subsequent
     /// attempts, so a retry only needs to revoke the tokens that are still
     /// active.
-    pub(crate) async fn revoke_tokens_for_owner(
+    pub async fn revoke_tokens_for_owner(
         &self,
         owner: &str,
         reason: RevocationReason,

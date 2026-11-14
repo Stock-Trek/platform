@@ -11,10 +11,10 @@ use std::time::Duration;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 use strum::EnumCount;
 
-pub(in crate::config) const ESTIMATED_BYTES_PER_CLOSED_CANDLE: u64 = 512;
+pub const ESTIMATED_BYTES_PER_CLOSED_CANDLE: u64 = 512;
 
 impl AggregatorConfig {
-    pub(in crate::config) fn validate_kv_bucket(name: &str, bucket: &str) -> BuildResult<()> {
+    pub fn validate_kv_bucket(name: &str, bucket: &str) -> BuildResult<()> {
         let valid = !bucket.is_empty()
             && bucket.chars().all(|character| {
                 character.is_ascii_alphanumeric() || matches!(character, '-' | '_')
@@ -29,7 +29,7 @@ impl AggregatorConfig {
         }
     }
 
-    pub(in crate::config) fn parse_max_closed_candles_per_interval(
+    pub fn parse_max_closed_candles_per_interval(
         name: &str,
         value: &str,
         intervals: &[AlignedWindow],
@@ -103,7 +103,7 @@ impl AggregatorConfig {
 
 impl AggregatorConfig {
     #[allow(clippy::too_many_arguments)]
-    pub(in crate::config) fn validate_retention(
+    pub fn validate_retention(
         intervals: &[AlignedWindow],
         caps: &BTreeMap<AlignedWindow, usize>,
         shard_count: usize,
@@ -183,7 +183,7 @@ impl AggregatorConfig {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(in crate::config) struct RetentionLimits {
+pub struct RetentionLimits {
     pub static_pair_ceiling: u64,
     pub static_key_ceiling: u64,
     pub worst_case_retained_candles_per_shard: u64,
@@ -191,7 +191,7 @@ pub(in crate::config) struct RetentionLimits {
 }
 
 impl RetentionLimits {
-    pub(in crate::config) fn calculate(
+    pub fn calculate(
         intervals: &[AlignedWindow],
         caps: &BTreeMap<AlignedWindow, usize>,
         shard_count: usize,
@@ -257,7 +257,7 @@ impl RetentionLimits {
 }
 
 impl AggregatorConfig {
-    pub(in crate::config) fn parse_correction_cutoff(
+    pub fn parse_correction_cutoff(
         name: &str,
         value: u64,
         allowed_lateness: Duration,

@@ -93,7 +93,7 @@ impl WriterLease {
         )
     }
 
-    pub(crate) fn expires_at(now: TimestampMilliseconds, ttl: Duration) -> TimestampMilliseconds {
+    pub fn expires_at(now: TimestampMilliseconds, ttl: Duration) -> TimestampMilliseconds {
         let millis = i64::try_from(ttl.as_millis()).unwrap_or(i64::MAX);
         now + DurationMilliseconds(millis)
     }

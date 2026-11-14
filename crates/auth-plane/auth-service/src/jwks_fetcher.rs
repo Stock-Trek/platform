@@ -5,12 +5,12 @@ use std::{io, time::Duration};
 
 const JWKS_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub(super) enum Source {
+pub enum Source {
     Remote(JwksFetcher),
     Static,
 }
 
-pub(super) struct JwksFetcher {
+pub struct JwksFetcher {
     client: reqwest::Client,
     url: String,
 }

@@ -8,7 +8,7 @@ use std::{sync::Arc, time::Duration};
 use tokio::time::Instant;
 
 impl CachedTokenStore {
-    pub(crate) async fn cached_get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
+    pub async fn cached_get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         match self.cache.lookup(id, Instant::now()) {
             CacheLookup::Fresh(Some(token)) => {
                 AuthTokenCacheMetrics::record_hit("token");

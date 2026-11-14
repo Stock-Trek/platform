@@ -10,9 +10,9 @@ use tracing::{error, warn};
 pub struct Supervisor;
 
 impl Supervisor {
-    pub(crate) const INITIAL_RESTART_DELAY: Duration = Duration::from_secs(1);
-    pub(crate) const MAX_RESTART_DELAY: Duration = Duration::from_secs(30);
-    pub(crate) const HEALTHY_RUN_THRESHOLD: Duration = Duration::from_secs(60);
+    pub const INITIAL_RESTART_DELAY: Duration = Duration::from_secs(1);
+    pub const MAX_RESTART_DELAY: Duration = Duration::from_secs(30);
+    pub const HEALTHY_RUN_THRESHOLD: Duration = Duration::from_secs(60);
 
     pub async fn supervise<F, Fut>(name: &'static str, mut run: F) -> BuildResult<()>
     where

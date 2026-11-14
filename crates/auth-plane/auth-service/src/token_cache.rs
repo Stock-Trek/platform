@@ -20,13 +20,13 @@ struct NegativeEntry {
     stored_at: Instant,
 }
 
-pub(crate) enum CacheLookup {
+pub enum CacheLookup {
     Fresh(Option<ApiToken>),
     Stale(ApiToken),
     Miss,
 }
 
-pub(crate) struct TokenCache {
+pub struct TokenCache {
     positive: Mutex<LruCache<String, PositiveEntry>>,
     negative: Mutex<LruCache<String, NegativeEntry>>,
     generations: Mutex<LruCache<String, u64>>,
@@ -37,7 +37,7 @@ pub(crate) struct TokenCache {
 }
 
 impl TokenCache {
-    pub(crate) fn new(config: &TokenCacheConfig) -> Self {
+    pub fn new(config: &TokenCacheConfig) -> Self {
         let capacity = NonZeroUsize::new(config.max_entries()).unwrap_or(NonZeroUsize::MIN);
         let negative_capacity =
             NonZeroUsize::new(config.negative_entries()).unwrap_or(NonZeroUsize::MIN);
@@ -52,7 +52,7 @@ impl TokenCache {
         }
     }
 
-    pub(crate) fn lookup(&self, id: &str, now: Instant) -> CacheLookup {
+    pub fn lookup(&self, id: &str, now: Instant) -> CacheLookup {
         let positive = {
             let mut entries = self.positive.lock();
             entries
@@ -84,15 +84,15 @@ impl TokenCache {
         CacheLookup::Miss
     }
 
-    pub(crate) fn generation(&self, id: &str) -> u64 {
+    pub fn generation(&self, id: &str) -> u64 {
         self.generations.lock().get(id).copied().unwrap_or_default()
     }
 
-    pub(crate) fn epoch(&self) -> u64 {
+    pub fn epoch(&self) -> u64 {
         self.epoch.load(Ordering::SeqCst)
     }
 
-    pub(crate) fn store_token(&self, id: &str, token: ApiToken, now: Instant) {
+    pub fn store_token(&self, id: &str, token: ApiToken, now: Instant) {
         self.bump_generation(id);
         self.negative.lock().pop(id);
         self.positive.lock().put(
@@ -105,7 +105,7 @@ impl TokenCache {
         self.publish_sizes();
     }
 
-    pub(crate) fn store_missing(&self, id: &str, now: Instant) {
+    pub fn store_missing(&self, id: &str, now: Instant) {
         self.bump_generation(id);
         self.positive.lock().pop(id);
         self.negative
@@ -114,14 +114,14 @@ impl TokenCache {
         self.publish_sizes();
     }
 
-    pub(crate) fn invalidate(&self, id: &str) {
+    pub fn invalidate(&self, id: &str) {
         self.bump_generation(id);
         self.positive.lock().pop(id);
         self.negative.lock().pop(id);
         self.publish_sizes();
     }
 
-    pub(crate) fn insert_loaded_token(
+    pub fn insert_loaded_token(
         &self,
         id: &str,
         token: ApiToken,
@@ -146,7 +146,7 @@ impl TokenCache {
         true
     }
 
-    pub(crate) fn insert_loaded_missing(
+    pub fn insert_loaded_missing(
         &self,
         id: &str,
         generation: u64,

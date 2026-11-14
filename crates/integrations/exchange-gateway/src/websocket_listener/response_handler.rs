@@ -5,8 +5,8 @@ use platform_errors::{BuildError, BuildResult, ConnectorError};
 use std::sync::Arc;
 
 #[derive(Clone)]
-pub(crate) struct ResponseHandler {
-    pub(super) state: Arc<Mutex<WaiterState>>,
+pub struct ResponseHandler {
+    pub state: Arc<Mutex<WaiterState>>,
     filter: ArcPredicate<serde_json::Value>,
 }
 

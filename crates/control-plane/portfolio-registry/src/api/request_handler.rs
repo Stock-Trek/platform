@@ -6,6 +6,6 @@ use hyper::{
 };
 
 #[async_trait]
-pub(crate) trait RequestHandler: Send + Sync {
+pub trait RequestHandler: Send + Sync {
     async fn handle(&self, request: Request<Incoming>) -> Response<Full<Bytes>>;
 }

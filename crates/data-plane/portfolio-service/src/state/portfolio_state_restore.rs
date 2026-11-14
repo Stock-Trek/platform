@@ -3,7 +3,7 @@ use crate::state::{PortfolioState, PortfolioUpdateMetadata};
 use platform_portfolio_ownership::AccountKey;
 
 impl PortfolioState {
-    pub(crate) fn restore_portfolio(
+    pub fn restore_portfolio(
         &mut self,
         account: AccountKey,
         portfolio: CexAccountPortfolio,

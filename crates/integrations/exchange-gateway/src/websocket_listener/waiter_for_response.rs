@@ -9,8 +9,8 @@ use std::{
 };
 
 pub struct WaiterForResponse {
-    pub(super) state: Arc<Mutex<WaiterState>>,
-    pub(super) handlers: Handlers,
+    pub state: Arc<Mutex<WaiterState>>,
+    pub handlers: Handlers,
 }
 
 impl Future for WaiterForResponse {

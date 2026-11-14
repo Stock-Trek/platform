@@ -5,7 +5,7 @@ pub struct VerifiedCaller {
 }
 
 impl VerifiedCaller {
-    pub(crate) fn new(access_key_id: String, owner: String) -> Self {
+    pub fn new(access_key_id: String, owner: String) -> Self {
         Self {
             access_key_id,
             owner,

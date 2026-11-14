@@ -4,17 +4,17 @@ use platform_errors::{BuildError, BuildResult};
 use secrecy::{ExposeSecret, SecretString};
 use subtle::ConstantTimeEq;
 
-pub(crate) const MAX_TOKEN_ID_LENGTH: usize = 256;
-pub(crate) const MAX_OWNER_LENGTH: usize = 256;
-pub(crate) const MAX_SECRET_LENGTH: usize = 256;
+pub const MAX_TOKEN_ID_LENGTH: usize = 256;
+pub const MAX_OWNER_LENGTH: usize = 256;
+pub const MAX_SECRET_LENGTH: usize = 256;
 
 #[derive(Clone)]
 pub struct ApiToken {
-    pub(crate) id: String,
-    pub(crate) owner: String,
-    pub(crate) secret: SecretString,
-    pub(crate) created_at: DateTime<Utc>,
-    pub(crate) metadata: TokenMetadata,
+    pub id: String,
+    pub owner: String,
+    pub secret: SecretString,
+    pub created_at: DateTime<Utc>,
+    pub metadata: TokenMetadata,
 }
 
 impl ApiToken {
@@ -39,7 +39,7 @@ impl ApiToken {
         Ok(token)
     }
 
-    pub(crate) fn validate(&self) -> BuildResult<()> {
+    pub fn validate(&self) -> BuildResult<()> {
         Self::validate_id(&self.id)?;
         Self::validated_owner(&self.owner)?;
         Self::validate_secret(self.secret.expose_secret())?;

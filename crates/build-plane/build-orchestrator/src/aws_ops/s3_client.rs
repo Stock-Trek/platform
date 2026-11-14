@@ -136,11 +136,7 @@ impl S3 {
         Ok(UploadedObject { signed_get_url })
     }
 
-    pub(crate) async fn signed_get_url(
-        &self,
-        key: &str,
-        deadline: Deadline,
-    ) -> BuildResult<String> {
+    pub async fn signed_get_url(&self, key: &str, deadline: Deadline) -> BuildResult<String> {
         let target = format!("s3://{}/{key}", self.config.user_artifacts_bucket);
         let presigning_config = PresigningConfig::expires_in(self.config.signed_url_expiry)
             .map_err(|error| BuildError::config_invalid_source(S3_SIGNED_URL_EXPIRY_SECS, error))?;

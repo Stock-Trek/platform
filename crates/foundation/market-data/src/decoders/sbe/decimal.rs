@@ -3,10 +3,7 @@ use platform_errors::IngesterError;
 use rust_decimal::Decimal;
 
 impl<S> SbeCodec<S> {
-    pub(super) fn decimal_from_mantissa(
-        mantissa: i64,
-        exponent: i8,
-    ) -> Result<Decimal, IngesterError> {
+    pub fn decimal_from_mantissa(mantissa: i64, exponent: i8) -> Result<Decimal, IngesterError> {
         let value = if exponent <= 0 {
             let scale = u32::from(exponent.unsigned_abs());
             Decimal::try_from_i128_with_scale(i128::from(mantissa), scale)

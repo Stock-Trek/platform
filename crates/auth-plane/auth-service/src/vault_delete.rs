@@ -4,12 +4,12 @@ use reqwest::{Method, StatusCode};
 use serde_json::{Map, Value};
 
 impl VaultClient {
-    pub(crate) async fn delete(&self, id: &str) -> BuildResult<()> {
+    pub async fn delete(&self, id: &str) -> BuildResult<()> {
         ApiToken::validate_id(id)?;
         self.delete_key(id).await
     }
 
-    pub(crate) async fn delete_key(&self, key: &str) -> BuildResult<()> {
+    pub async fn delete_key(&self, key: &str) -> BuildResult<()> {
         let response = self
             .send(
                 "delete",
@@ -25,7 +25,7 @@ impl VaultClient {
             .map(|_| ())
     }
 
-    pub(crate) async fn delete_if(&self, expected: &ApiToken) -> BuildResult<bool> {
+    pub async fn delete_if(&self, expected: &ApiToken) -> BuildResult<bool> {
         expected.validate()?;
         let Some((data, version)) = self.get_value_entry(expected.id()).await? else {
             return Ok(false);
@@ -54,7 +54,7 @@ impl VaultClient {
         Ok(true)
     }
 
-    pub(crate) fn tombstone_value() -> Value {
+    pub fn tombstone_value() -> Value {
         let mut value = Map::new();
         value.insert(
             crate::vault_client::TOMBSTONE_FIELD.to_string(),
@@ -63,7 +63,7 @@ impl VaultClient {
         Value::Object(value)
     }
 
-    pub(crate) fn is_conflict(error: &BuildError) -> bool {
+    pub fn is_conflict(error: &BuildError) -> bool {
         matches!(error, BuildError::Auth(AuthError::Conflict { .. }))
     }
 }

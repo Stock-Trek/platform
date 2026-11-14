@@ -35,7 +35,7 @@ where
     K: OpenCandleStore + ClosedCandlePublisher + 'static,
 {
     #[allow(clippy::too_many_arguments)]
-    pub(super) async fn process_inputs(
+    pub async fn process_inputs(
         config: &AggregatorConfig,
         source: &mut S,
         checkpoints: &Arc<dyn StateStore>,
@@ -211,7 +211,7 @@ where
         }
     }
 
-    pub(super) fn record_update_metrics(
+    pub fn record_update_metrics(
         shard: ShardId,
         processor: &CandleProcessor,
         update: &ProcessorUpdate,

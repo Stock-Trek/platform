@@ -19,7 +19,7 @@ const MIN_OBJECT_SIZE_BYTES: u64 = 0;
 pub struct PresignedPost {
     pub url: String,
     pub fields: BTreeMap<String, String>,
-    pub(crate) max_artifact_size_bytes: NonZeroU64,
+    pub max_artifact_size_bytes: NonZeroU64,
 }
 
 impl PresignedPost {

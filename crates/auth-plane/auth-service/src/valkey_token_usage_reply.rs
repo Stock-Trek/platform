@@ -6,10 +6,10 @@ const PAYLOAD_FIELD: &str = "payload";
 const TARGET: &str = "token-usage-queue";
 
 /// Parses Redis stream replies and maps client failures into platform errors.
-pub(crate) struct ValkeyTokenUsageReply;
+pub struct ValkeyTokenUsageReply;
 
 impl ValkeyTokenUsageReply {
-    pub(crate) fn parse(reply: Value) -> BuildResult<Vec<TokenUsageReservation>> {
+    pub fn parse(reply: Value) -> BuildResult<Vec<TokenUsageReservation>> {
         let Value::Array(streams) = reply else {
             return Ok(Vec::new());
         };
@@ -38,7 +38,7 @@ impl ValkeyTokenUsageReply {
         Ok(reservations)
     }
 
-    pub(crate) fn error(operation: &'static str, error: RedisError) -> BuildError {
+    pub fn error(operation: &'static str, error: RedisError) -> BuildError {
         let retryable = error.is_io_error()
             || error.is_timeout()
             || error.is_connection_dropped()
@@ -54,11 +54,11 @@ impl ValkeyTokenUsageReply {
         BuildError::auth_store(operation, TARGET, retryable, error)
     }
 
-    pub(crate) fn malformed(detail: &'static str) -> BuildError {
+    pub fn malformed(detail: &'static str) -> BuildError {
         BuildError::auth_store("reserve", TARGET, false, detail.to_string())
     }
 
-    pub(crate) fn decode_error(detail: String) -> BuildError {
+    pub fn decode_error(detail: String) -> BuildError {
         BuildError::auth_store("reserve", TARGET, false, detail)
     }
 

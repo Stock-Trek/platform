@@ -3,15 +3,15 @@ use platform_errors::{BuildError, BuildResult, NatsError};
 use platform_types::UrlScheme;
 use url::Url;
 
-pub(super) const DEFAULT_NATS_PORT: u16 = 4222;
+pub const DEFAULT_NATS_PORT: u16 = 4222;
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 #[derive(Debug, Clone)]
 pub struct NatsAddress {
-    pub(super) host: String,
-    pub(super) port: u16,
-    pub(crate) username: Option<String>,
-    pub(crate) password: Option<String>,
+    pub host: String,
+    pub port: u16,
+    pub username: Option<String>,
+    pub password: Option<String>,
 }
 
 impl NatsAddress {
@@ -21,7 +21,7 @@ impl NatsAddress {
         Self::parse_named(name, value).map(|_| ())
     }
 
-    pub(crate) fn parse(value: &str) -> BuildResult<Self> {
+    pub fn parse(value: &str) -> BuildResult<Self> {
         Self::parse_named("NATS_URL", value)
     }
 
@@ -45,7 +45,7 @@ impl NatsAddress {
         })
     }
 
-    pub(crate) async fn connect(&self, name: &str) -> BuildResult<Client> {
+    pub async fn connect(&self, name: &str) -> BuildResult<Client> {
         let mut options = ConnectOptions::new()
             .name(name)
             .connection_timeout(CONNECT_TIMEOUT)
@@ -63,7 +63,7 @@ impl NatsAddress {
         })
     }
 
-    pub(super) fn server_url(&self) -> String {
+    pub fn server_url(&self) -> String {
         let host = self.host.trim_matches(['[', ']']);
         if host.contains(':') {
             format!("nats://[{host}]:{}", self.port)

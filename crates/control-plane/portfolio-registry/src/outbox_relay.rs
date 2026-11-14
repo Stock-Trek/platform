@@ -7,7 +7,7 @@ use tokio::time::{MissedTickBehavior, interval};
 
 const BATCH_SIZE: usize = 100;
 
-pub(crate) struct OwnershipOutboxRelay {
+pub struct OwnershipOutboxRelay {
     store: Arc<dyn OwnershipStore>,
     publisher: Arc<dyn EventPublisher>,
     subject: String,
@@ -15,7 +15,7 @@ pub(crate) struct OwnershipOutboxRelay {
 }
 
 impl OwnershipOutboxRelay {
-    pub(crate) fn new(
+    pub fn new(
         store: Arc<dyn OwnershipStore>,
         publisher: Arc<dyn EventPublisher>,
         interval: Duration,
@@ -34,7 +34,7 @@ impl OwnershipOutboxRelay {
         })
     }
 
-    pub(crate) async fn flush_once(&self) -> BuildResult<usize> {
+    pub async fn flush_once(&self) -> BuildResult<usize> {
         let events = self.store.pending_events(BATCH_SIZE).await?;
         let count = events.len();
         for event in events {
@@ -45,7 +45,7 @@ impl OwnershipOutboxRelay {
         Ok(count)
     }
 
-    pub(crate) async fn run<F>(&self, shutdown: F) -> BuildResult<()>
+    pub async fn run<F>(&self, shutdown: F) -> BuildResult<()>
     where
         F: Future<Output = BuildResult<()>> + Send,
     {

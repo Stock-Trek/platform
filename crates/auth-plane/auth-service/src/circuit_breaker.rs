@@ -11,7 +11,7 @@ pub enum BreakerState {
 }
 
 impl BreakerState {
-    pub(crate) fn gauge_value(self) -> u8 {
+    pub fn gauge_value(self) -> u8 {
         match self {
             Self::Closed => 0,
             Self::Open => 1,
@@ -19,7 +19,7 @@ impl BreakerState {
         }
     }
 
-    pub(crate) fn metric_label(self) -> &'static str {
+    pub fn metric_label(self) -> &'static str {
         match self {
             Self::Closed => "closed",
             Self::Open => "open",
@@ -36,14 +36,14 @@ struct BreakerData {
     epoch: u64,
 }
 
-pub(crate) struct CircuitBreaker {
+pub struct CircuitBreaker {
     failure_threshold: usize,
     open_duration: Duration,
     data: Mutex<BreakerData>,
 }
 
 impl CircuitBreaker {
-    pub(crate) fn new(failure_threshold: usize, open_duration: Duration) -> Self {
+    pub fn new(failure_threshold: usize, open_duration: Duration) -> Self {
         let breaker = Self {
             failure_threshold,
             open_duration,
@@ -58,15 +58,15 @@ impl CircuitBreaker {
         breaker
     }
 
-    pub(crate) fn state(&self) -> BreakerState {
+    pub fn state(&self) -> BreakerState {
         self.data.lock().state
     }
 
-    pub(crate) fn retry_after(&self) -> Duration {
+    pub fn retry_after(&self) -> Duration {
         self.open_duration
     }
 
-    pub(crate) fn allow_request(&self) -> BreakerDecision<'_> {
+    pub fn allow_request(&self) -> BreakerDecision<'_> {
         let now = Instant::now();
         let mut data = self.data.lock();
         match data.state {
@@ -136,12 +136,12 @@ impl CircuitBreaker {
     }
 }
 
-pub(crate) enum BreakerDecision<'a> {
+pub enum BreakerDecision<'a> {
     Allowed(BreakerPermit<'a>),
     Rejected(Duration),
 }
 
-pub(crate) struct BreakerPermit<'a> {
+pub struct BreakerPermit<'a> {
     breaker: &'a CircuitBreaker,
     epoch: u64,
     completed: bool,
@@ -156,12 +156,12 @@ impl<'a> BreakerPermit<'a> {
         }
     }
 
-    pub(crate) fn success(mut self) {
+    pub fn success(mut self) {
         self.breaker.record_success(self.epoch);
         self.completed = true;
     }
 
-    pub(crate) fn failure(mut self) {
+    pub fn failure(mut self) {
         self.breaker.record_failure(self.epoch, Instant::now());
         self.completed = true;
     }

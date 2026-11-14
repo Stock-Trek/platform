@@ -7,7 +7,7 @@ use platform_errors::{BuildError, BuildResult};
 use platform_metrics::AuthReplayMetrics;
 
 impl AuthService {
-    pub(crate) async fn reserve_order_request_replay(
+    pub async fn reserve_order_request_replay(
         &self,
         context: &OrderRequestContext,
         now: DateTime<Utc>,
@@ -24,7 +24,7 @@ impl AuthService {
         }
     }
 
-    pub(crate) async fn commit_signature_use(
+    pub async fn commit_signature_use(
         &self,
         token: ApiToken,
         now: DateTime<Utc>,

@@ -9,15 +9,15 @@ use std::collections::BTreeMap;
 use stock_trek_types::cex::{asset_id::AssetId, order_request::OrderRequest, tag::Tag};
 
 #[derive(serde::Serialize, serde::Deserialize)]
-pub(crate) struct PortfolioUpdateWire {
-    pub(super) schema_version: u32,
-    pub(super) account: AccountKey,
-    pub(super) owner: Option<String>,
-    pub(super) version: u64,
-    pub(super) occurred_at: DateTime<Utc>,
-    pub(super) exchange_time: Option<DateTime<Utc>>,
-    pub(super) balances: Vec<AssetBalanceWire>,
-    pub(super) pending_orders: Vec<PendingOrderWire>,
+pub struct PortfolioUpdateWire {
+    pub schema_version: u32,
+    pub account: AccountKey,
+    pub owner: Option<String>,
+    pub version: u64,
+    pub occurred_at: DateTime<Utc>,
+    pub exchange_time: Option<DateTime<Utc>>,
+    pub balances: Vec<AssetBalanceWire>,
+    pub pending_orders: Vec<PendingOrderWire>,
 }
 
 impl From<&PortfolioUpdate> for PortfolioUpdateWire {

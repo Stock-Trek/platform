@@ -7,13 +7,13 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 static EVENT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-pub(crate) const AUDIT_EVENT_FIELD: &str = "__platform_audit_event__";
-pub(crate) const AUDIT_EVENT_PREFIX: &str = "audit/events/";
+pub const AUDIT_EVENT_FIELD: &str = "__platform_audit_event__";
+pub const AUDIT_EVENT_PREFIX: &str = "audit/events/";
 
-pub(crate) struct TokenAuditOutbox;
+pub struct TokenAuditOutbox;
 
 impl TokenAuditOutbox {
-    pub(crate) fn ensure_event_id(event: &mut TokenAuditEvent) {
+    pub fn ensure_event_id(event: &mut TokenAuditEvent) {
         if event.event_id.is_none() {
             event.event_id = Some(Self::generate_event_id());
         }
@@ -32,7 +32,7 @@ impl TokenAuditOutbox {
         )
     }
 
-    pub(crate) fn standalone_document(event: &TokenAuditEvent) -> BuildResult<Value> {
+    pub fn standalone_document(event: &TokenAuditEvent) -> BuildResult<Value> {
         let mut document = Map::new();
         document.insert(AUDIT_EVENT_FIELD.to_string(), Value::Bool(true));
         document.insert(
@@ -44,7 +44,7 @@ impl TokenAuditOutbox {
         Ok(Value::Object(document))
     }
 
-    pub(crate) fn standalone_event(value: &Value) -> BuildResult<Option<TokenAuditEvent>> {
+    pub fn standalone_event(value: &Value) -> BuildResult<Option<TokenAuditEvent>> {
         if !Self::is_standalone_document(value) {
             return Ok(None);
         }
@@ -56,22 +56,22 @@ impl TokenAuditOutbox {
         Ok(Some(event))
     }
 
-    pub(crate) fn is_standalone_document(value: &Value) -> bool {
+    pub fn is_standalone_document(value: &Value) -> bool {
         value
             .get(AUDIT_EVENT_FIELD)
             .and_then(Value::as_bool)
             .is_some_and(|standalone| standalone)
     }
 
-    pub(crate) fn is_storage_key(key: &str) -> bool {
+    pub fn is_storage_key(key: &str) -> bool {
         key.starts_with(AUDIT_EVENT_PREFIX)
     }
 
-    pub(crate) fn storage_key(event_id: &str) -> String {
+    pub fn storage_key(event_id: &str) -> String {
         format!("{AUDIT_EVENT_PREFIX}{event_id}")
     }
 
-    pub(crate) fn require_event_id(event: &TokenAuditEvent) -> BuildResult<&str> {
+    pub fn require_event_id(event: &TokenAuditEvent) -> BuildResult<&str> {
         event.event_id().ok_or_else(|| {
             BuildError::auth_store(
                 "relay",

@@ -69,11 +69,11 @@ impl JetStream {
     }
 
     /// The subject a KV key is stored under.
-    pub(crate) fn kv_subject(bucket: &str, key: &str) -> String {
+    pub fn kv_subject(bucket: &str, key: &str) -> String {
         format!("$KV.{bucket}.{key}")
     }
 
-    pub(crate) fn message_id(subject: &str, payload: &[u8]) -> String {
+    pub fn message_id(subject: &str, payload: &[u8]) -> String {
         use sha2::{Digest, Sha256};
         let mut hasher = Sha256::new();
         hasher.update(subject.as_bytes());
@@ -82,7 +82,7 @@ impl JetStream {
         hex::encode(hasher.finalize())
     }
 
-    pub(crate) fn protocol_error(context: &str, error: impl Display) -> BuildError {
+    pub fn protocol_error(context: &str, error: impl Display) -> BuildError {
         BuildError::Nats(NatsError::protocol(format!("{context}: {error}")))
     }
 }

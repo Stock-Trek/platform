@@ -9,11 +9,11 @@ use reqwest::{Method, StatusCode};
 use serde_json::Value;
 
 impl VaultClient {
-    pub(crate) async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
+    pub async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         Ok(self.get_entry(id).await?.map(|(token, _)| token))
     }
 
-    pub(crate) async fn get_entry(&self, id: &str) -> BuildResult<Option<(ApiToken, u64)>> {
+    pub async fn get_entry(&self, id: &str) -> BuildResult<Option<(ApiToken, u64)>> {
         ApiToken::validate_id(id)?;
         let Some((data, version)) = self.get_value_entry(id).await? else {
             return Ok(None);
@@ -25,7 +25,7 @@ impl VaultClient {
         Ok(Some((token, version)))
     }
 
-    pub(crate) async fn get_value_entry(&self, path: &str) -> BuildResult<Option<(Value, u64)>> {
+    pub async fn get_value_entry(&self, path: &str) -> BuildResult<Option<(Value, u64)>> {
         let response = self
             .send(
                 "read",
@@ -50,19 +50,19 @@ impl VaultClient {
         Ok(Some((data, version)))
     }
 
-    pub(crate) fn token_from_value(id: &str, data: &Value) -> BuildResult<ApiToken> {
+    pub fn token_from_value(id: &str, data: &Value) -> BuildResult<ApiToken> {
         ApiToken::from_value(id, data)
             .map_err(|error| BuildError::auth_store("read", id, false, error))
     }
 
-    pub(crate) fn is_tombstone(value: &Value) -> bool {
+    pub fn is_tombstone(value: &Value) -> bool {
         value
             .get(TOMBSTONE_FIELD)
             .and_then(Value::as_bool)
             .is_some_and(|deleted| deleted)
     }
 
-    pub(crate) async fn keys(&self) -> BuildResult<Vec<String>> {
+    pub async fn keys(&self) -> BuildResult<Vec<String>> {
         let mut keys = self.list_directory("").await?;
         keys.retain(|key| {
             !key.ends_with('/')
@@ -75,7 +75,7 @@ impl VaultClient {
         Ok(keys)
     }
 
-    pub(crate) async fn keys_with_prefix(&self, prefix: &str) -> BuildResult<Vec<String>> {
+    pub async fn keys_with_prefix(&self, prefix: &str) -> BuildResult<Vec<String>> {
         let directory = prefix
             .rsplit_once('/')
             .map_or("", |(directory, _)| directory);
@@ -126,7 +126,7 @@ impl VaultClient {
             .collect())
     }
 
-    pub(crate) async fn ids(&self) -> BuildResult<Vec<String>> {
+    pub async fn ids(&self) -> BuildResult<Vec<String>> {
         Ok(self
             .keys()
             .await?

@@ -5,7 +5,7 @@ use stock_trek_types::cex::{
 };
 
 #[derive(Debug, Clone)]
-pub(crate) struct SemanticChecker;
+pub struct SemanticChecker;
 
 impl SemanticChecker {
     pub fn consistent_or_err(

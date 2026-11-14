@@ -7,7 +7,7 @@ use stock_trek_types::cex::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub(crate) struct FloatsToDecimals {
+pub struct FloatsToDecimals {
     trading_precision: TradingPrecision,
     rounding: CexRoundingPreferences,
 }

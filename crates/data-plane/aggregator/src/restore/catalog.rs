@@ -86,10 +86,10 @@ struct ArchiveSnapshot {
 
 /// An archive object with enough identity to stream it directly from S3.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct ArchiveObject {
-    pub(crate) bucket: Bucket,
-    pub(crate) key: ObjectKey,
-    pub(crate) size: i64,
+pub struct ArchiveObject {
+    pub bucket: Bucket,
+    pub key: ObjectKey,
+    pub size: i64,
 }
 
 impl ArchiveObject {
@@ -173,7 +173,7 @@ impl ArchiveObject {
     /// shard can discard every object belonging to another shard before
     /// downloading it. This keeps a cold rebuild at `O(archive)` across the
     /// cluster instead of making every shard scan the whole archive.
-    pub(crate) fn select_for_shard(
+    pub fn select_for_shard(
         objects: Vec<ArchiveObject>,
         shard: ShardId,
         shard_count: usize,
@@ -196,7 +196,7 @@ impl ArchiveObject {
     /// The layer prefix must not dominate ordering: an un-compacted older raw
     /// hour has to be replayed before a newer compacted hour so each shard
     /// observes its event history in time order.
-    pub(crate) fn sort(objects: &mut [ArchiveObject]) {
+    pub fn sort(objects: &mut [ArchiveObject]) {
         objects.sort_by(|left, right| {
             let left_hour = ArchivePath::bucket_start_from_key(left.key.as_str())
                 .map(|hour| hour.0)

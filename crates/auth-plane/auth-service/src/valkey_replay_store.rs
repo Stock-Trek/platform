@@ -83,7 +83,7 @@ impl ValkeyReplayStore {
     }
 
     #[cfg(test)]
-    pub(crate) fn key_for_test(&self, replay_key: &ReplayKey) -> String {
+    pub fn key_for_test(&self, replay_key: &ReplayKey) -> String {
         self.key(replay_key)
     }
 }

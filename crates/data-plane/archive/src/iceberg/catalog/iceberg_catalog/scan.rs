@@ -6,7 +6,7 @@ use platform_errors::BuildResult;
 use std::collections::HashSet;
 
 impl IcebergCatalog {
-    pub(super) async fn registered_paths(&self, table: &Table) -> BuildResult<HashSet<String>> {
+    pub async fn registered_paths(&self, table: &Table) -> BuildResult<HashSet<String>> {
         let scan = table
             .scan()
             .build()
@@ -26,10 +26,7 @@ impl IcebergCatalog {
         Ok(paths)
     }
 
-    pub(super) async fn data_files_from_table(
-        &self,
-        table: &Table,
-    ) -> BuildResult<Vec<IcebergDataFile>> {
+    pub async fn data_files_from_table(&self, table: &Table) -> BuildResult<Vec<IcebergDataFile>> {
         let scan = table
             .scan()
             .build()

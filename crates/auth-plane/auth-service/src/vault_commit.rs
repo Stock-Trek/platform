@@ -7,7 +7,7 @@ use crate::{
 use platform_errors::{BuildError, BuildResult};
 
 impl VaultClient {
-    pub(crate) async fn commit(
+    pub async fn commit(
         &self,
         mutation: TokenMutation,
         mut event: TokenAuditEvent,
@@ -16,7 +16,7 @@ impl VaultClient {
         self.commit_events(mutation, vec![event]).await
     }
 
-    pub(crate) async fn update_if_unchanged(
+    pub async fn update_if_unchanged(
         &self,
         expected: &ApiToken,
         token: &ApiToken,
@@ -40,12 +40,12 @@ impl VaultClient {
         .await
     }
 
-    pub(crate) async fn append_audit(&self, mut event: TokenAuditEvent) -> BuildResult<()> {
+    pub async fn append_audit(&self, mut event: TokenAuditEvent) -> BuildResult<()> {
         TokenAuditOutbox::ensure_event_id(&mut event);
         self.put_standalone_audit(&event).await.map(|_| ())
     }
 
-    pub(crate) async fn put_standalone_audit(&self, event: &TokenAuditEvent) -> BuildResult<bool> {
+    pub async fn put_standalone_audit(&self, event: &TokenAuditEvent) -> BuildResult<bool> {
         let event_id = TokenAuditOutbox::require_event_id(event)?;
         let key = TokenAuditOutbox::storage_key(event_id);
         match self
@@ -62,10 +62,7 @@ impl VaultClient {
         }
     }
 
-    pub(crate) async fn commit_rotation(
-        &self,
-        transaction: &TokenRotationTransaction,
-    ) -> BuildResult<()> {
+    pub async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
         let key = transaction.storage_key();
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             match self.get_value_entry(&key).await? {
@@ -104,7 +101,7 @@ impl VaultClient {
         Err(BuildError::token_conflict(transaction.original().id()))
     }
 
-    pub(crate) async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
+    pub async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
         let mut transactions = Vec::new();
         for key in self
             .keys_with_prefix(crate::token_rotation_transaction::ROTATION_TRANSACTION_PREFIX)
@@ -121,7 +118,7 @@ impl VaultClient {
         Ok(transactions)
     }
 
-    pub(crate) async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
+    pub async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
         let key = format!(
             "{}{}",
             crate::token_rotation_transaction::ROTATION_TRANSACTION_PREFIX,

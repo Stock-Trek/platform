@@ -8,10 +8,10 @@ use std::{collections::BTreeSet, sync::Arc};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
 pub struct PortfolioService {
-    pub(super) state: RwLock<PortfolioState>,
-    pub(super) ownership: RwLock<OwnershipRegistry>,
-    pub(super) feed: Arc<dyn PortfolioFeed>,
-    pub(super) freshness: FreshnessPolicy,
+    pub state: RwLock<PortfolioState>,
+    pub ownership: RwLock<OwnershipRegistry>,
+    pub feed: Arc<dyn PortfolioFeed>,
+    pub freshness: FreshnessPolicy,
 }
 
 impl PortfolioService {
@@ -28,7 +28,7 @@ impl PortfolioService {
         }
     }
 
-    pub(super) async fn sync(
+    pub async fn sync(
         &self,
         cex_id: CexId,
         current: BTreeSet<AccountId>,

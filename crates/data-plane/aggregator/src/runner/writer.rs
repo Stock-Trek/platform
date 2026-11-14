@@ -13,7 +13,7 @@ use std::time::Duration;
 use tracing::info;
 
 /// The identity and active lease of the writer owning a shard.
-pub(super) struct Writer {
+pub struct Writer {
     id: String,
     lease: WriterLease,
 }
@@ -21,7 +21,7 @@ pub(super) struct Writer {
 impl Writer {
     /// Acquires the shard lease, or returns `None` if shutdown was
     /// requested while waiting for another writer to release it.
-    pub(super) async fn acquire(
+    pub async fn acquire(
         leases: &Arc<dyn LeaseStore>,
         shard: ShardId,
         requested_id: Option<String>,
@@ -66,16 +66,16 @@ impl Writer {
         }))
     }
 
-    pub(super) fn id(&self) -> &str {
+    pub fn id(&self) -> &str {
         &self.id
     }
 
-    pub(super) fn lease(&self) -> &WriterLease {
+    pub fn lease(&self) -> &WriterLease {
         &self.lease
     }
 
     /// Extends the lease and replaces the local copy with the renewed one.
-    pub(super) async fn renew(
+    pub async fn renew(
         &mut self,
         leases: &Arc<dyn LeaseStore>,
         shard: ShardId,
@@ -92,7 +92,7 @@ impl Writer {
         Ok(())
     }
 
-    pub(super) async fn release(self, leases: &Arc<dyn LeaseStore>) -> BuildResult<()> {
+    pub async fn release(self, leases: &Arc<dyn LeaseStore>) -> BuildResult<()> {
         leases.release(&self.lease).await
     }
 }

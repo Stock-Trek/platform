@@ -7,7 +7,7 @@ use crate::rebuild::{
 use platform_errors::{BuildError, BuildResult};
 use std::path::{Path, PathBuf};
 
-pub(crate) struct SpillSorter<C: SpillCodec> {
+pub struct SpillSorter<C: SpillCodec> {
     directory: PathBuf,
     limit: usize,
     codec: C,
@@ -19,11 +19,7 @@ pub(crate) struct SpillSorter<C: SpillCodec> {
 }
 
 impl<C: SpillCodec> SpillSorter<C> {
-    pub(crate) fn with_codec(
-        directory: impl Into<PathBuf>,
-        limit: usize,
-        codec: C,
-    ) -> BuildResult<Self> {
+    pub fn with_codec(directory: impl Into<PathBuf>, limit: usize, codec: C) -> BuildResult<Self> {
         let directory = directory.into();
         std::fs::create_dir_all(&directory).map_err(|error| {
             BuildError::io(
@@ -44,7 +40,7 @@ impl<C: SpillCodec> SpillSorter<C> {
         })
     }
 
-    pub(crate) fn push_record(&mut self, record: C::Record) -> BuildResult<()> {
+    pub fn push_record(&mut self, record: C::Record) -> BuildResult<()> {
         let key = self.codec.key(&record);
         self.entries.push((key, record));
         if self.entries.len() >= self.limit {
@@ -53,15 +49,15 @@ impl<C: SpillCodec> SpillSorter<C> {
         Ok(())
     }
 
-    pub(crate) fn spilled_records(&self) -> usize {
+    pub fn spilled_records(&self) -> usize {
         self.spilled
     }
 
-    pub(crate) fn usage(&self) -> SpillUsage {
+    pub fn usage(&self) -> SpillUsage {
         self.usage
     }
 
-    pub(crate) fn finish(&mut self) -> BuildResult<SpillRecords<C>> {
+    pub fn finish(&mut self) -> BuildResult<SpillRecords<C>> {
         if self.runs.is_empty() {
             self.entries
                 .sort_by(|(left, _), (right, _)| left.cmp(right));

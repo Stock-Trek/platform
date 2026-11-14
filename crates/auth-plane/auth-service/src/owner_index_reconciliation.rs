@@ -3,7 +3,7 @@ use platform_errors::BuildResult;
 use std::collections::BTreeMap;
 
 impl AuthService {
-    pub(crate) async fn reconcile_owner_indexes(&self) -> BuildResult<usize> {
+    pub async fn reconcile_owner_indexes(&self) -> BuildResult<usize> {
         let mut ids = self.store.ids().await?;
         ids.sort();
         ids.dedup();
@@ -37,13 +37,13 @@ impl AuthService {
         Ok(written)
     }
 
-    pub(crate) async fn sync_owner_index_token(&self, token: &ApiToken) {
+    pub async fn sync_owner_index_token(&self, token: &ApiToken) {
         if let Err(error) = self.store.index_owner_token(token).await {
             tracing::warn!(%error, token_id = token.id(), "failed to update owner index");
         }
     }
 
-    pub(crate) async fn sync_owner_index_mutation(&self, mutation: &TokenMutation) {
+    pub async fn sync_owner_index_mutation(&self, mutation: &TokenMutation) {
         let result = match mutation {
             TokenMutation::Create(token) => self.store.index_owner_token(token).await,
             TokenMutation::Update { expected, token } => {

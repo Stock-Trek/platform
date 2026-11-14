@@ -51,7 +51,7 @@ where
         }
     }
 
-    pub(crate) async fn run_cycle(source: &S, compactor: &C) -> BuildResult<()> {
+    pub async fn run_cycle(source: &S, compactor: &C) -> BuildResult<()> {
         let batches = source.pending_batches().await?;
         info!(batches = batches.len(), "scanning archive for compaction");
         for batch in batches {

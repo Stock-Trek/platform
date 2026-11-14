@@ -26,7 +26,7 @@ struct BinanceWebsocketParams<R> {
     signature: Option<String>,
 }
 
-pub(crate) struct BinanceRequestFactory;
+pub struct BinanceRequestFactory;
 
 impl BinanceRequestFactory {
     pub fn try_into_http<R>(mut request: R, signer: &Signer) -> BuildResult<HttpRequest>

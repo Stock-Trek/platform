@@ -12,12 +12,12 @@ use stock_trek_types::cex::{
     order_request::OrderRequest, tag::Tag,
 };
 
-pub(super) const OWNER: &str = "portfolio-owner";
+pub const OWNER: &str = "portfolio-owner";
 
-pub(super) struct Fixture;
+pub struct Fixture;
 
 impl Fixture {
-    pub(super) fn auth_service(store: Arc<MemoryTokenStore>) -> AuthService {
+    pub fn auth_service(store: Arc<MemoryTokenStore>) -> AuthService {
         AuthService::new(
             store,
             AuthServiceConfig {
@@ -31,7 +31,7 @@ impl Fixture {
         .unwrap()
     }
 
-    pub(super) async fn service() -> (OrderRequestService, AuthService, ApiToken) {
+    pub async fn service() -> (OrderRequestService, AuthService, ApiToken) {
         let store = Arc::new(MemoryTokenStore::default());
         let now = Utc::now();
         let metadata = TokenMetadata::new(now + Duration::days(30), TokenScope::DEFAULT).unwrap();
@@ -45,11 +45,11 @@ impl Fixture {
         )
     }
 
-    pub(super) fn canonical_bytes(request: &UnsignedOrderRequest) -> Vec<u8> {
+    pub fn canonical_bytes(request: &UnsignedOrderRequest) -> Vec<u8> {
         request.canonical_bytes().unwrap()
     }
 
-    pub(super) async fn sign(
+    pub async fn sign(
         service: &OrderRequestService,
         auth_service: &AuthService,
         request: &UnsignedOrderRequest,
@@ -62,7 +62,7 @@ impl Fixture {
         service.sign_for_caller(request, &claims).await
     }
 
-    pub(super) fn unsigned(owner: &str) -> UnsignedOrderRequest {
+    pub fn unsigned(owner: &str) -> UnsignedOrderRequest {
         UnsignedOrderRequest::new(
             CexId::Binance,
             AccountId("account-1".to_string()),

@@ -76,7 +76,7 @@ impl ArchiveIcebergTable {
         ]
     }
 
-    pub(crate) fn schema(kind: ArchiveKind) -> BuildResult<Schema> {
+    pub fn schema(kind: ArchiveKind) -> BuildResult<Schema> {
         let arrow_schema = ArchiveBatch::schema(kind);
         let fields = arrow_schema
             .fields()

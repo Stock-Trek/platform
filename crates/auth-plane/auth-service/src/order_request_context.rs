@@ -4,7 +4,7 @@ use platform_errors::{BuildError, BuildResult};
 use rand::{Rng, distributions::Alphanumeric};
 
 const NONCE_LENGTH: usize = 32;
-pub(crate) const MAX_NONCE_LENGTH: usize = 128;
+pub const MAX_NONCE_LENGTH: usize = 128;
 const PROTOCOL: &str = "platform-auth-service/order-request";
 const VERSION: &str = "v1";
 const ALGORITHM: &str = "HMAC-SHA256";
@@ -124,7 +124,7 @@ impl OrderRequestContext {
         output.extend_from_slice(value);
     }
 
-    pub(crate) fn whole_seconds(value: DateTime<Utc>) -> DateTime<Utc> {
+    pub fn whole_seconds(value: DateTime<Utc>) -> DateTime<Utc> {
         DateTime::from_timestamp(value.timestamp(), 0).unwrap_or(value)
     }
 }

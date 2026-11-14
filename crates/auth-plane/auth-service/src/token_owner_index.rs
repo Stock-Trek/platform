@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::BuildResult;
 
 impl AuthService {
-    pub(crate) async fn tokens_for_owner(&self, owner: &str) -> BuildResult<Vec<ApiToken>> {
+    pub async fn tokens_for_owner(&self, owner: &str) -> BuildResult<Vec<ApiToken>> {
         let owner = ApiToken::validated_owner(owner)?;
         let Some(index) = self.store.owner_index(owner).await? else {
             return self.tokens_from_owner_scan(owner).await;
@@ -26,7 +26,7 @@ impl AuthService {
         }
     }
 
-    pub(crate) async fn active_tokens_for_owner(
+    pub async fn active_tokens_for_owner(
         &self,
         owner: &str,
         now: DateTime<Utc>,
@@ -39,15 +39,11 @@ impl AuthService {
             .collect())
     }
 
-    pub(crate) async fn token_for_owner(
-        &self,
-        owner: &str,
-        now: DateTime<Utc>,
-    ) -> BuildResult<ApiToken> {
+    pub async fn token_for_owner(&self, owner: &str, now: DateTime<Utc>) -> BuildResult<ApiToken> {
         self.select_token_for_owner(owner, None, now).await
     }
 
-    pub(crate) async fn token_for_owner_with_scope(
+    pub async fn token_for_owner_with_scope(
         &self,
         owner: &str,
         scope: TokenScope,

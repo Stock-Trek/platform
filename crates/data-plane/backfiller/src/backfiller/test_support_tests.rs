@@ -16,9 +16,9 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-pub(super) struct OneGapSource {
-    pub(super) gap: Option<GapMarker>,
-    pub(super) acked: Arc<Mutex<Vec<GapMarker>>>,
+pub struct OneGapSource {
+    pub gap: Option<GapMarker>,
+    pub acked: Arc<Mutex<Vec<GapMarker>>>,
 }
 
 #[async_trait]
@@ -33,8 +33,8 @@ impl GapMarkerSource for OneGapSource {
     }
 }
 
-pub(super) struct OnceFetcher {
-    pub(super) events: Mutex<Vec<BackfilledEvent>>,
+pub struct OnceFetcher {
+    pub events: Mutex<Vec<BackfilledEvent>>,
 }
 
 #[async_trait]
@@ -44,8 +44,8 @@ impl MissingEventFetcher for OnceFetcher {
     }
 }
 
-pub(super) struct StreamRangeFetcher {
-    pub(super) empty_stream: String,
+pub struct StreamRangeFetcher {
+    pub empty_stream: String,
 }
 
 #[async_trait]
@@ -61,8 +61,8 @@ impl MissingEventFetcher for StreamRangeFetcher {
 }
 
 #[derive(Default)]
-pub(super) struct RecordingPublisher {
-    pub(super) sequences: Mutex<Vec<u64>>,
+pub struct RecordingPublisher {
+    pub sequences: Mutex<Vec<u64>>,
 }
 
 #[async_trait]
@@ -76,10 +76,10 @@ impl EventPublisher for RecordingPublisher {
     }
 }
 
-pub(super) struct TestFixtures;
+pub struct TestFixtures;
 
 impl TestFixtures {
-    pub(super) fn event(sequence: u64) -> BackfilledEvent {
+    pub fn event(sequence: u64) -> BackfilledEvent {
         BackfilledEvent {
             sequence,
             exchange_timestamp: TimestampMilliseconds(sequence as i64),
@@ -87,7 +87,7 @@ impl TestFixtures {
         }
     }
 
-    pub(super) fn options() -> BackfillOptions {
+    pub fn options() -> BackfillOptions {
         BackfillOptions {
             event_subject_prefix: "market.events".to_string(),
         }
@@ -95,20 +95,20 @@ impl TestFixtures {
 }
 
 #[derive(Clone, Copy)]
-pub(super) enum SavePolicy {
+pub enum SavePolicy {
     Allow,
     AfterFirstSave,
     ForStream(&'static str),
 }
 
-pub(super) struct ControlledStore {
+pub struct ControlledStore {
     inner: Arc<InMemoryGapRetryStore>,
     policy: SavePolicy,
     saves: AtomicUsize,
 }
 
 impl ControlledStore {
-    pub(super) fn new(inner: Arc<InMemoryGapRetryStore>, policy: SavePolicy) -> Self {
+    pub fn new(inner: Arc<InMemoryGapRetryStore>, policy: SavePolicy) -> Self {
         Self {
             inner,
             policy,

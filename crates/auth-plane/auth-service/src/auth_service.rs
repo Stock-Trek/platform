@@ -8,7 +8,7 @@ use jsonwebtoken::jwk::JwkSet;
 use platform_errors::{AuthError, BuildError, BuildResult};
 use std::sync::Arc;
 
-pub(crate) const MAX_UPDATE_ATTEMPTS: usize = 5;
+pub const MAX_UPDATE_ATTEMPTS: usize = 5;
 
 pub struct AuthServiceConfig {
     pub token_lifetime: Duration,
@@ -18,13 +18,13 @@ pub struct AuthServiceConfig {
 
 #[derive(Clone)]
 pub struct AuthService {
-    pub(crate) store: Arc<dyn TokenStore>,
-    pub(crate) replay: Arc<dyn ReplayStore>,
-    pub(crate) signature_validity: Duration,
-    pub(crate) token_lifetime: Duration,
-    pub(crate) rotation_overlap: Duration,
-    pub(crate) jwt_signer: Arc<JwtSigningKey>,
-    pub(crate) usage: Arc<dyn TokenUsageQueue>,
+    pub store: Arc<dyn TokenStore>,
+    pub replay: Arc<dyn ReplayStore>,
+    pub signature_validity: Duration,
+    pub token_lifetime: Duration,
+    pub rotation_overlap: Duration,
+    pub jwt_signer: Arc<JwtSigningKey>,
+    pub usage: Arc<dyn TokenUsageQueue>,
 }
 
 impl AuthService {
@@ -93,7 +93,7 @@ impl AuthService {
         Ok(())
     }
 
-    pub(crate) async fn commit_mutation(
+    pub async fn commit_mutation(
         &self,
         mutation: TokenMutation,
         event: TokenAuditEvent,
@@ -106,20 +106,17 @@ impl AuthService {
         Ok(applied)
     }
 
-    pub(crate) async fn commit_rotation(
-        &self,
-        transaction: &TokenRotationTransaction,
-    ) -> BuildResult<()> {
+    pub async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
         self.store.commit_rotation(transaction).await
     }
 
-    pub(crate) async fn record_audit_failure(&self, event: TokenAuditEvent) {
+    pub async fn record_audit_failure(&self, event: TokenAuditEvent) {
         if let Err(error) = self.enqueue_usage(crate::TokenUsage::audit(event)).await {
             tracing::error!(%error, "failed to enqueue token audit event");
         }
     }
 
-    pub(crate) fn is_conflict(error: &BuildError) -> bool {
+    pub fn is_conflict(error: &BuildError) -> bool {
         matches!(error, BuildError::Auth(AuthError::Conflict { .. }))
     }
 }

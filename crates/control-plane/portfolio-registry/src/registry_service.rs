@@ -10,7 +10,7 @@ pub struct RegistryService {
 }
 
 impl RegistryService {
-    pub(crate) fn new(store: Arc<dyn OwnershipStore>) -> Self {
+    pub fn new(store: Arc<dyn OwnershipStore>) -> Self {
         Self { store }
     }
 

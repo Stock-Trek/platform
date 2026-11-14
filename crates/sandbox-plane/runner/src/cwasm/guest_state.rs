@@ -11,7 +11,7 @@ use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder, p1::WasiP1Ctx};
 
 pub type Emit = Arc<dyn Fn(&str, Value) + Send + Sync>;
 
-pub(super) struct GuestLimits {
+pub struct GuestLimits {
     limits: StoreLimits,
     exceeded: Arc<AtomicBool>,
 }
@@ -30,7 +30,7 @@ impl GuestLimits {
         }
     }
 
-    pub(super) fn exceeded(&self) -> bool {
+    pub fn exceeded(&self) -> bool {
         self.exceeded.load(Ordering::SeqCst)
     }
 
@@ -90,14 +90,14 @@ impl ResourceLimiter for GuestLimits {
     }
 }
 
-pub(super) struct GuestState {
+pub struct GuestState {
     wasi: WasiP1Ctx,
     emit: Emit,
-    pub(super) limits: GuestLimits,
+    pub limits: GuestLimits,
 }
 
 impl GuestState {
-    pub(super) fn new(
+    pub fn new(
         emit: Emit,
         working_directory: &Path,
         max_memory_bytes: usize,
@@ -115,7 +115,7 @@ impl GuestState {
         })
     }
 
-    pub(super) fn wasi(&mut self) -> &mut WasiP1Ctx {
+    pub fn wasi(&mut self) -> &mut WasiP1Ctx {
         &mut self.wasi
     }
 
@@ -123,11 +123,11 @@ impl GuestState {
         (self.emit)(kind, payload);
     }
 
-    pub(super) fn emit_stdout(kind: &str, payload: Value) {
+    pub fn emit_stdout(kind: &str, payload: Value) {
         println!("{}", json!({ "type": kind, "payload": payload }));
     }
 
-    pub(super) fn queue_metadata(
+    pub fn queue_metadata(
         mut caller: Caller<'_, GuestState>,
         name_ptr: i32,
         name_len: i32,
@@ -145,7 +145,7 @@ impl GuestState {
         Ok(())
     }
 
-    pub(super) fn queue_preferences(
+    pub fn queue_preferences(
         mut caller: Caller<'_, GuestState>,
         preferences_ptr: i32,
         preferences_len: i32,
@@ -158,7 +158,7 @@ impl GuestState {
         Ok(())
     }
 
-    pub(super) fn queue_signals(
+    pub fn queue_signals(
         mut caller: Caller<'_, GuestState>,
         signals_ptr: i32,
         signals_len: i32,
@@ -171,7 +171,7 @@ impl GuestState {
         Ok(())
     }
 
-    pub(super) fn queue_strategy(
+    pub fn queue_strategy(
         mut caller: Caller<'_, GuestState>,
         strategy_ptr: i32,
         strategy_len: i32,
@@ -184,7 +184,7 @@ impl GuestState {
         Ok(())
     }
 
-    pub(super) fn queue_action(
+    pub fn queue_action(
         mut caller: Caller<'_, GuestState>,
         action_ptr: i32,
         action_len: i32,

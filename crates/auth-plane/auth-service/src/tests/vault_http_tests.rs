@@ -4,17 +4,17 @@ use std::{
     net::TcpStream,
 };
 
-pub(crate) struct RawRequest {
-    pub(crate) method: String,
-    pub(crate) target: String,
-    pub(crate) token: Option<String>,
-    pub(crate) body: Value,
+pub struct RawRequest {
+    pub method: String,
+    pub target: String,
+    pub token: Option<String>,
+    pub body: Value,
 }
 
-pub(crate) struct VaultHttp;
+pub struct VaultHttp;
 
 impl VaultHttp {
-    pub(crate) fn read_request(stream: &mut TcpStream) -> Option<RawRequest> {
+    pub fn read_request(stream: &mut TcpStream) -> Option<RawRequest> {
         let mut bytes = Vec::new();
         let mut header_end = None;
         let mut content_length = 0;
@@ -73,7 +73,7 @@ impl VaultHttp {
         })
     }
 
-    pub(crate) fn respond(stream: &mut TcpStream, status: u16, body: Value) {
+    pub fn respond(stream: &mut TcpStream, status: u16, body: Value) {
         let reason = match status {
             200 => "OK",
             204 => "No Content",
