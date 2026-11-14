@@ -1,16 +1,13 @@
-use crate::{connector::Connector, panic_guard::PanicUtils, submission::Submission};
+use crate::{connector::Connector, panic_guard::PanicUtils};
 use parking_lot::Mutex;
 use platform_errors::{ConnectorError, PlatformError, PlatformResult};
 use platform_exchange_types::{
     exchange::ETExchange,
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
     http::HttpClient,
-    rate_limited::RateLimit,
-    request::{ETHttpRequest, ETWebsocketRequest},
     websocket::WebsocketClient,
 };
-use platform_types::{TimestampMilliseconds, UsageCount};
-use std::{collections::HashMap, sync::Arc, time::Duration};
+use std::{ops::Deref, sync::Arc, time::Duration};
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::{debug, warn};
 
@@ -119,15 +116,6 @@ where
             failure_callback: Arc::new(Mutex::new(None)),
         }
     }
-    pub fn duration_since_last_sync(&self) -> PlatformResult<Option<Duration>> {
-        self.connector.duration_since_last_sync()
-    }
-    pub fn remaining_rate_limit_capacity(&self) -> PlatformResult<HashMap<RateLimit, UsageCount>> {
-        self.connector.remaining_rate_limit_capacity()
-    }
-    pub fn server_time_estimate(&self) -> PlatformResult<TimestampMilliseconds> {
-        self.connector.server_time_estimate()
-    }
     pub fn on_clock_sync_failure<F>(&self, callback: F)
     where
         F: Fn(&PlatformError) + Send + Sync + 'static,
@@ -216,9 +204,6 @@ where
     Exchange: ETExchange + ETExchangeServerTimeHttp,
     Client: HttpClient,
 {
-    pub async fn sync_clock_http(&self) -> PlatformResult<()> {
-        self.connector.sync_clock_http().await
-    }
     #[allow(unused)]
     pub async fn set_clock_sync_frequency_http(&self, frequency: Duration) -> PlatformResult<()>
     where
@@ -233,19 +218,6 @@ where
         })
         .await
     }
-    pub fn submit_http<'connector, Request>(
-        &'connector self,
-        request: Request,
-    ) -> PlatformResult<
-        Submission<'connector, Request, Request::Response, Request::VerificationRequest>,
-    >
-    where
-        Request: ETHttpRequest<Exchange = Exchange> + Send + 'connector,
-        Exchange: Sync,
-        Client: Sync,
-    {
-        self.connector.submit_http(request)
-    }
 }
 
 impl<Exchange, Client> AutoResyncConnector<Exchange, Client>
@@ -253,18 +225,6 @@ where
     Exchange: ETExchange + ETExchangeServerTimeWebsocket,
     Client: WebsocketClient,
 {
-    pub async fn connect(&self) -> PlatformResult<()> {
-        self.connector.connect().await
-    }
-    pub fn is_connected(&self) -> PlatformResult<bool> {
-        self.connector.is_connected()
-    }
-    pub async fn disconnect(&self) -> PlatformResult<()> {
-        self.connector.disconnect().await
-    }
-    pub async fn sync_clock_websocket(&self) -> PlatformResult<()> {
-        self.connector.sync_clock_websocket().await
-    }
     #[allow(unused)]
     pub async fn set_clock_sync_frequency_websocket(
         &self,
@@ -282,17 +242,13 @@ where
         })
         .await
     }
-    pub fn submit_websocket<'connector, Request>(
-        &'connector self,
-        request: Request,
-    ) -> PlatformResult<
-        Submission<'connector, Request, Request::Response, Request::VerificationRequest>,
-    >
-    where
-        Request: ETWebsocketRequest<Exchange = Exchange> + Send + 'connector,
-        Exchange: Sync,
-    {
-        self.connector.submit_websocket(request)
+}
+
+impl<Exchange, Client> Deref for AutoResyncConnector<Exchange, Client> {
+    type Target = Connector<Exchange, Client>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.connector
     }
 }
 

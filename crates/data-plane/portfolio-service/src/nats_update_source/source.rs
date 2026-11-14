@@ -1,8 +1,7 @@
-use crate::nats_update_source::update_checkpoint::UpdateCheckpoint;
 use crate::{
     UpdateConfig,
     portfolio::{PORTFOLIO_UPDATE_STREAM_PREFIX, PORTFOLIO_UPDATE_SUBJECT, PortfolioUpdate},
-    update_source::{PortfolioUpdateMessage, PortfolioUpdateSource},
+    source::{Checkpoint, MessageSource, SourceMessage},
 };
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};
@@ -26,7 +25,7 @@ impl NatsUpdateSource {
         );
         let start_sequence = match checkpoints.get_last(&checkpoint_key).await? {
             Some(payload) => {
-                let checkpoint = UpdateCheckpoint::from_bytes(&payload)?;
+                let checkpoint = Checkpoint::from_bytes(&payload)?;
                 Some(checkpoint.sequence().saturating_add(1))
             }
             None => None,
@@ -49,8 +48,8 @@ impl NatsUpdateSource {
 }
 
 #[async_trait]
-impl PortfolioUpdateSource for NatsUpdateSource {
-    async fn next(&self) -> PlatformResult<Option<PortfolioUpdateMessage>> {
+impl MessageSource<PortfolioUpdate> for NatsUpdateSource {
+    async fn next(&self) -> PlatformResult<Option<SourceMessage<PortfolioUpdate>>> {
         let Some(message) = self.consumer.next_message_unacked().await else {
             return Ok(None);
         };
@@ -62,7 +61,7 @@ impl PortfolioUpdateSource for NatsUpdateSource {
             )
         })?;
         let update = PortfolioUpdate::from_bytes(&message.payload)?;
-        Ok(Some(PortfolioUpdateMessage::new(
+        Ok(Some(SourceMessage::new(
             update,
             Some(sequence),
             Some(message),
@@ -70,12 +69,12 @@ impl PortfolioUpdateSource for NatsUpdateSource {
     }
 
     async fn checkpoint(&self, sequence: u64) -> PlatformResult<()> {
-        let payload = UpdateCheckpoint::new(sequence).to_bytes()?;
+        let payload = Checkpoint::new(sequence).to_bytes()?;
         self.checkpoints.put(&self.checkpoint_key, &payload).await?;
         Ok(())
     }
 
-    async fn acknowledge(&self, message: &PortfolioUpdateMessage) -> PlatformResult<()> {
+    async fn acknowledge(&self, message: &SourceMessage<PortfolioUpdate>) -> PlatformResult<()> {
         match message.raw() {
             Some(raw) => self.consumer.ack(raw).await,
             None => Ok(()),

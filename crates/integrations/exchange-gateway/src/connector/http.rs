@@ -2,7 +2,7 @@ use crate::connector::Connector;
 use crate::{
     rate_limit::limiter_registry::RateLimitGuard,
     retry_after_header::RetryAfter,
-    submission::{Submission, SubmissionOutcome},
+    submission::{SubmissionFuture, SubmissionOutcome},
 };
 use platform_errors::{ConnectorError, PlatformError, PlatformResult, RateLimitError, SendFailure};
 use platform_exchange_types::exchange_server_time::ETExchangeServerTimeHttp;
@@ -57,20 +57,19 @@ where
         &'connector self,
         request: Request,
     ) -> PlatformResult<
-        Submission<'connector, Request, Request::Response, Request::VerificationRequest>,
+        SubmissionFuture<'connector, Request, Request::Response, Request::VerificationRequest>,
     >
     where
         Request: ETHttpRequest<Exchange = Exchange> + Send + 'connector,
         Exchange: Sync,
         Client: Sync,
     {
-        let future = async move {
+        Ok(Box::pin(async move {
             let costs = self
                 .validate_rate_limits(&request)
                 .map_err(PlatformError::send_not_sent)?;
             self.send_http(request, costs).await
-        };
-        Ok(Submission::new(future))
+        }))
     }
     async fn send_http<Request>(
         &self,

@@ -46,10 +46,6 @@ impl RunInvoker {
             runner_function = %self.config.runner_function_name,
             "run invoker cycle started"
         );
-        self.run_cycle().await
-    }
-
-    async fn run_cycle(&self) -> PlatformResult<()> {
         let due = self
             .store
             .due_runs(Utc::now(), self.config.max_batch)

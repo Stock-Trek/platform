@@ -28,5 +28,5 @@ pub use connector::{
 pub use iris;
 pub use resync_connector::AutoResyncConnector;
 pub use server_clock::Clock;
-pub use submission::{Submission, SubmissionOutcome};
+pub use submission::SubmissionOutcome;
 pub use websocket_listener::{WaiterForResponse, WebsocketListener};

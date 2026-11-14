@@ -1,6 +1,6 @@
 use crate::{
-    AccountKey, PortfolioService, PortfolioUpdateOutcome, PortfolioUpdateSource,
-    read_model::PortfolioReadModelStore,
+    AccountKey, MessageSource, PortfolioService, PortfolioUpdate, PortfolioUpdateOutcome,
+    SourceMessage, read_model::PortfolioReadModelStore,
 };
 use platform_errors::PlatformResult;
 use platform_metrics::PortfolioMetrics;
@@ -9,7 +9,7 @@ use std::{future::Future, sync::Arc, time::Duration};
 
 pub struct PortfolioUpdateConsumer {
     service: Arc<PortfolioService>,
-    source: Arc<dyn PortfolioUpdateSource>,
+    source: Arc<dyn MessageSource<PortfolioUpdate>>,
     retry_backoff: Duration,
     store: Option<Arc<PortfolioReadModelStore>>,
 }
@@ -17,7 +17,7 @@ pub struct PortfolioUpdateConsumer {
 impl PortfolioUpdateConsumer {
     pub fn new(
         service: Arc<PortfolioService>,
-        source: Arc<dyn PortfolioUpdateSource>,
+        source: Arc<dyn MessageSource<PortfolioUpdate>>,
         retry_backoff: Duration,
     ) -> Self {
         Self {
@@ -36,7 +36,7 @@ impl PortfolioUpdateConsumer {
     pub async fn run_once(&self) -> PlatformResult<usize> {
         let mut processed = 0;
         while let Some(message) = self.next().await? {
-            let update = message.update().clone();
+            let update = message.value().clone();
             let exchange = update.exchange_label();
             let lag = chrono::Utc::now().signed_duration_since(update.occurred_at());
             PortfolioMetrics::record_consumer_lag(lag.to_std().unwrap_or_default());
@@ -85,7 +85,7 @@ impl PortfolioUpdateConsumer {
         Ok(processed)
     }
 
-    async fn next(&self) -> PlatformResult<Option<crate::PortfolioUpdateMessage>> {
+    async fn next(&self) -> PlatformResult<Option<SourceMessage<PortfolioUpdate>>> {
         self.source.next().await.inspect_err(|_| {
             PortfolioMetrics::record_apply_failure("update", "fetch");
         })

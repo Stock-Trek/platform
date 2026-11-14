@@ -1,28 +1,23 @@
-use crate::PortfolioUpdate;
 use platform_nats::Message;
 
 #[derive(Debug, Clone)]
-pub struct PortfolioUpdateMessage {
-    update: PortfolioUpdate,
+pub struct SourceMessage<T> {
+    value: T,
     stream_sequence: Option<u64>,
     raw: Option<Message>,
 }
 
-impl PortfolioUpdateMessage {
-    pub fn new(
-        update: PortfolioUpdate,
-        stream_sequence: Option<u64>,
-        raw: Option<Message>,
-    ) -> Self {
+impl<T> SourceMessage<T> {
+    pub fn new(value: T, stream_sequence: Option<u64>, raw: Option<Message>) -> Self {
         Self {
-            update,
+            value,
             stream_sequence,
             raw,
         }
     }
 
-    pub fn update(&self) -> &PortfolioUpdate {
-        &self.update
+    pub fn value(&self) -> &T {
+        &self.value
     }
 
     pub fn stream_sequence(&self) -> Option<u64> {

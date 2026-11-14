@@ -93,7 +93,7 @@ async fn http_submission_acquires_rate_limits_only_when_awaited() {
         .submit_http(klines_request())
         .expect("submission construction");
     assert!(matches!(
-        submission.wait().await,
+        submission.await,
         Ok(SubmissionOutcome::Unknown { .. })
     ));
     assert_eq!(
@@ -110,8 +110,7 @@ async fn dropping_in_flight_http_submission_refunds_rate_limits() {
     let mut submission = Box::pin(
         connector
             .submit_http(klines_request())
-            .expect("submission construction")
-            .wait(),
+            .expect("submission construction"),
     );
 
     poll_fn(|cx| {
@@ -142,10 +141,7 @@ async fn http_rate_limit_rejection_is_deferred_until_awaited() {
         .submit_http(klines_request())
         .expect("submission construction must not acquire rate limits");
 
-    let error = submission
-        .wait()
-        .await
-        .expect_err("rate limited submission");
+    let error = submission.await.expect_err("rate limited submission");
     assert_eq!(error.send_failure(), Some(SendFailure::NotSent));
     assert!(matches!(
         error,

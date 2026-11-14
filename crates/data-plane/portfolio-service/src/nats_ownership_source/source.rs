@@ -1,7 +1,6 @@
-use crate::nats_ownership_source::ownership_checkpoint::OwnershipCheckpoint;
 use crate::{
     OwnershipConfig,
-    ownership_source::{OwnershipEventSource, OwnershipMessage},
+    source::{Checkpoint, MessageSource, SourceMessage},
 };
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};
@@ -28,7 +27,7 @@ impl NatsOwnershipSource {
         );
         let start_sequence = match checkpoints.get_last(&checkpoint_key).await? {
             Some(payload) => {
-                let checkpoint = OwnershipCheckpoint::from_bytes(&payload)?;
+                let checkpoint = Checkpoint::from_bytes(&payload)?;
                 Some(checkpoint.sequence().saturating_add(1))
             }
             None => None,
@@ -51,8 +50,8 @@ impl NatsOwnershipSource {
 }
 
 #[async_trait]
-impl OwnershipEventSource for NatsOwnershipSource {
-    async fn next(&self) -> PlatformResult<Option<OwnershipMessage>> {
+impl MessageSource<OwnershipEvent> for NatsOwnershipSource {
+    async fn next(&self) -> PlatformResult<Option<SourceMessage<OwnershipEvent>>> {
         let Some(message) = self.consumer.next_message_unacked().await else {
             return Ok(None);
         };
@@ -64,7 +63,7 @@ impl OwnershipEventSource for NatsOwnershipSource {
             )
         })?;
         let event: OwnershipEvent = serde_json::from_slice(&message.payload)?;
-        Ok(Some(OwnershipMessage::new(
+        Ok(Some(SourceMessage::new(
             event,
             Some(sequence),
             Some(message),
@@ -72,12 +71,12 @@ impl OwnershipEventSource for NatsOwnershipSource {
     }
 
     async fn checkpoint(&self, sequence: u64) -> PlatformResult<()> {
-        let payload = OwnershipCheckpoint::new(sequence).to_bytes()?;
+        let payload = Checkpoint::new(sequence).to_bytes()?;
         self.checkpoints.put(&self.checkpoint_key, &payload).await?;
         Ok(())
     }
 
-    async fn acknowledge(&self, message: &OwnershipMessage) -> PlatformResult<()> {
+    async fn acknowledge(&self, message: &SourceMessage<OwnershipEvent>) -> PlatformResult<()> {
         match message.raw() {
             Some(raw) => self.consumer.ack(raw).await,
             None => Ok(()),
