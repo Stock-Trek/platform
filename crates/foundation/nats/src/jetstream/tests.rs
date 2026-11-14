@@ -1,8 +1,8 @@
 use crate::{
     JetStream, StreamSpec,
     jetstream::{
-        DEFAULT_DUPLICATE_WINDOW, DEFAULT_STREAM_REPLICAS, STREAM_MAX_AGE, STREAM_MAX_BYTES,
-        STREAM_MAX_MESSAGES,
+        jetstream_helpers::{STREAM_MAX_AGE, STREAM_MAX_BYTES, STREAM_MAX_MESSAGES},
+        stream_spec::{DEFAULT_DUPLICATE_WINDOW, DEFAULT_STREAM_REPLICAS},
     },
 };
 use async_nats::jetstream::stream;

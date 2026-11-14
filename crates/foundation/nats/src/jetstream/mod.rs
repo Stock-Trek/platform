@@ -6,5 +6,5 @@ mod stream_spec;
 #[cfg(test)]
 mod tests;
 
-pub use jetstream_helpers::*;
-pub use stream_spec::*;
+pub use jetstream_helpers::{ACK_WAIT, JetStream};
+pub use stream_spec::StreamSpec;

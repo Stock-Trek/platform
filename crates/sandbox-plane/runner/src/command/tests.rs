@@ -1,4 +1,5 @@
-use crate::command::{Command, RunRequest, SimulationParameters, TradingPair};
+use super::run_request::TradingPair;
+use crate::command::{Command, RunRequest, SimulationParameters};
 use stock_trek::types::AssetId;
 
 #[test]
