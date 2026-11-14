@@ -121,7 +121,7 @@ impl CheckpointRecord {
 
     /// Age of this checkpoint relative to `now`.
     pub fn age(&self, now: TimestampMilliseconds) -> DurationMilliseconds {
-        now - self.created_at
+        now.saturating_duration_since(self.created_at)
     }
 
     /// Whether a writer with `writer_id` and `fencing_token` may overwrite

@@ -36,7 +36,7 @@ impl CandleProcessor {
             }) else {
                 continue;
             };
-            let cutoff = watermark - self.config.allowed_lateness;
+            let cutoff = watermark.saturating_sub(self.config.allowed_lateness);
             for candle in candles {
                 if candle.end_time() <= cutoff {
                     expired.push((key.clone(), candle.start_time().0, watermark));
@@ -81,7 +81,7 @@ impl CandleProcessor {
             ));
         }
         if let Some(watermark) = self.state.watermark {
-            let cutoff = watermark - self.config.allowed_lateness;
+            let cutoff = watermark.saturating_sub(self.config.allowed_lateness);
             self.state.prune_closed_windows(cutoff);
         }
     }
@@ -184,7 +184,10 @@ impl CandleProcessor {
                         }
                         match previous_stream_watermark {
                             Some(previous) => {
-                                candle.end_time() + self.config.allowed_lateness >= previous
+                                candle
+                                    .end_time()
+                                    .saturating_add(self.config.allowed_lateness)
+                                    >= previous
                                     || gap.detected_at < candle.end_time()
                             }
                             None => true,

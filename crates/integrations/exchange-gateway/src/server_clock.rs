@@ -44,8 +44,8 @@ impl Clock {
         let system_time = Self::system_time()?;
         let round_trip_time = DurationMilliseconds(round_trip_duration.as_millis() as i64);
         let half_round_trip = round_trip_time.checked_div(2_i64)?;
-        let system_time_estimate = system_time - half_round_trip;
-        let offset_estimate = system_time_estimate - server_time;
+        let system_time_estimate = system_time.checked_sub(half_round_trip)?;
+        let offset_estimate = system_time_estimate.checked_duration_since(server_time)?;
         self.server_offset_millis
             .store(offset_estimate.0, Ordering::Relaxed);
         let mut last_sync = self.last_sync.lock();
@@ -59,7 +59,7 @@ impl Clock {
         self.server_time_estimate_unchecked()
     }
     pub fn server_time_estimate_unchecked(&self) -> PlatformResult<TimestampMilliseconds> {
-        Ok(Self::system_time()? - self.server_offset())
+        Ok(Self::system_time()?.checked_sub(self.server_offset())?)
     }
 
     fn system_time() -> PlatformResult<TimestampMilliseconds> {

@@ -89,7 +89,10 @@ impl RateLimiterState {
         }
     }
     pub fn refund(&mut self, cost: UsageCount) {
-        self.current_capacity = (self.current_capacity + cost).min(self.capacity_per_interval);
+        self.current_capacity = self
+            .current_capacity
+            .saturating_add(cost)
+            .min(self.capacity_per_interval);
     }
     pub fn throttle(&mut self, until: Instant) {
         if until <= self.now() {
@@ -124,11 +127,14 @@ impl RateLimiterState {
                     // the next refill doesn't bank capacity from before the
                     // feedback arrived.
                     self.throttled_until = None;
-                    self.current_capacity = self.capacity_per_interval - used.min(limit);
+                    self.current_capacity =
+                        self.capacity_per_interval.saturating_sub(used.min(limit));
                 }
             }
             (Some(used), None) => {
-                let remaining = self.capacity_per_interval - used.min(self.capacity_per_interval);
+                let remaining = self
+                    .capacity_per_interval
+                    .saturating_sub(used.min(self.capacity_per_interval));
                 self.current_capacity = self.current_capacity.min(remaining);
             }
             (None, Some(limit)) => {
@@ -153,7 +159,7 @@ impl RateLimiterState {
         }
         let consumed = self.current_capacity >= cost;
         if consumed {
-            self.current_capacity -= cost;
+            self.current_capacity = self.current_capacity.saturating_sub(cost);
         }
         consumed
     }
@@ -172,11 +178,14 @@ impl RateLimiterState {
         }
         let elapsed_nanos =
             DurationNanoseconds(now.duration_since(self.last_calculation).as_nanos() as i64);
-        let total_nanos = self.excess_interval_nanos + elapsed_nanos;
+        let total_nanos = self.excess_interval_nanos.saturating_add(elapsed_nanos);
         let complete_intervals = total_nanos.checked_div(self.interval_nanos)? as u64;
         if complete_intervals > 0 {
-            let capacity_to_add = self.capacity_per_interval * complete_intervals;
-            let capacity_potentially_over_max = self.current_capacity + capacity_to_add;
+            let capacity_to_add = self
+                .capacity_per_interval
+                .saturating_mul(complete_intervals);
+            let capacity_potentially_over_max =
+                self.current_capacity.saturating_add(capacity_to_add);
             self.current_capacity = capacity_potentially_over_max.min(self.capacity_per_interval);
             self.excess_interval_nanos = total_nanos.checked_rem(self.interval_nanos)?;
             self.last_calculation = now;

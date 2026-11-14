@@ -35,8 +35,9 @@ impl CandleProcessor {
         for (interval, candle_start, candle_end) in interval_bounds {
             let key = CandleKey::new(trade.exchange, trade.trading_pair, interval);
             let watermark = self.watermark_for_trade(trade, stream);
-            let window_is_closed = watermark
-                .is_some_and(|watermark| candle_end + self.config.allowed_lateness <= watermark);
+            let window_is_closed = watermark.is_some_and(|watermark| {
+                candle_end.saturating_add(self.config.allowed_lateness) <= watermark
+            });
 
             if self.state.closed_candles.get(&key).is_some_and(|candles| {
                 candles
@@ -219,7 +220,7 @@ impl CandleProcessor {
         let Some(watermark) = watermark else {
             return true;
         };
-        window_end >= watermark - self.config.correction_cutoff
+        window_end >= watermark.saturating_sub(self.config.correction_cutoff)
     }
 
     #[allow(clippy::too_many_arguments)]

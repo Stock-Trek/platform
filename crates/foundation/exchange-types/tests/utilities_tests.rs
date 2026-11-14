@@ -2,7 +2,7 @@ use platform_exchange_types::{
     binance::{klines_limit::BinanceKlinesLimit, recv_window::BinanceRecvWindow},
     encode::ByteEncoder,
 };
-use platform_types::{DurationMilliseconds, NonZero, UsageCount};
+use platform_types::{ArithmeticError, DurationMilliseconds, NonZero, UsageCount};
 
 #[test]
 fn percent_encoding_preserves_unreserved_bytes() {
@@ -32,25 +32,19 @@ fn recv_window_accepts_only_one_to_maximum_milliseconds() {
 }
 
 #[test]
-#[should_panic(expected = "arithmetic overflow")]
-fn new_type_addition_panics_on_overflow() {
-    let _ = UsageCount(u64::MAX) + UsageCount::ONE;
-}
-
-#[test]
-#[should_panic(expected = "arithmetic overflow")]
-fn new_type_subtraction_panics_on_underflow() {
-    let _ = UsageCount::ZERO - UsageCount::ONE;
-}
-
-#[test]
-#[should_panic(expected = "arithmetic overflow")]
-fn new_type_scalar_multiplication_panics_on_overflow() {
-    let _ = UsageCount::TWO * u64::MAX;
-}
-
-#[test]
-fn new_type_saturating_arithmetic_is_explicit() {
+fn new_type_check_and_saturating_arithmetic_are_explicit() {
+    assert_eq!(
+        UsageCount(u64::MAX).checked_add(UsageCount::ONE),
+        Err(ArithmeticError::Overflow)
+    );
+    assert_eq!(
+        UsageCount::ZERO.checked_sub(UsageCount::ONE),
+        Err(ArithmeticError::Overflow)
+    );
+    assert_eq!(
+        UsageCount::TWO.checked_mul(u64::MAX),
+        Err(ArithmeticError::Overflow)
+    );
     assert_eq!(
         UsageCount(u64::MAX).saturating_add(UsageCount::ONE),
         UsageCount(u64::MAX)
