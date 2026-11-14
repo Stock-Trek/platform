@@ -1,4 +1,4 @@
-use crate::archive_record::{ArchiveRecord, ArchiveRecordKey};
+use crate::{ArchiveRecord, ArchiveRecordKey};
 use std::collections::{HashSet, VecDeque};
 
 /// Buffers records for a periodic Parquet flush while suppressing redeliveries.

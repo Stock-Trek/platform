@@ -1,4 +1,4 @@
-use crate::{archive_record::ArchiveKind, batch::ArchiveBatch, parquet_reader::ParquetReader};
+use crate::{ArchiveKind, batch::ArchiveBatch, parquet_reader::ParquetReader};
 use bytes::Bytes;
 use futures::StreamExt;
 use parquet::{

@@ -1,5 +1,5 @@
+use crate::MarketInput;
 use crate::checkpoint_record_tests::InMemoryStateStore;
-use crate::market_source::MarketInput;
 use crate::runner::ProcessorRunner;
 use crate::runner::tests::fixtures_tests::{FakeSink, FakeSource, Fixtures};
 use crate::shard_id::ShardId;

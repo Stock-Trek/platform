@@ -1,13 +1,7 @@
 use crate::TokenAuditEvent;
-use async_trait::async_trait;
 use chrono::{DateTime, Utc};
-use platform_errors::PlatformResult;
 use serde::{Deserialize, Serialize};
 
-/// Usage work that can be applied after the authentication hot path returns.
-///
-/// Audit events are carried with the usage update so a single queued record
-/// can update `last_used_at` and preserve every event produced by the request.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TokenUsage {
     token_id: Option<String>,
@@ -63,55 +57,5 @@ impl TokenUsage {
             (left, right) => left.or(right),
         };
         self.events.extend(other.events);
-    }
-}
-
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct TokenUsageReservation {
-    id: String,
-    usage: TokenUsage,
-}
-
-impl TokenUsageReservation {
-    pub fn new(id: impl Into<String>, usage: TokenUsage) -> Self {
-        Self {
-            id: id.into(),
-            usage,
-        }
-    }
-
-    pub fn id(&self) -> &str {
-        &self.id
-    }
-
-    pub fn usage(&self) -> &TokenUsage {
-        &self.usage
-    }
-
-    pub fn into_usage(self) -> TokenUsage {
-        self.usage
-    }
-}
-
-/// Durable queue for usage updates that must not block authentication.
-///
-/// Implementations must provide at-least-once delivery. A reservation remains
-/// recoverable until it is acknowledged, and releasing it makes the same
-/// logical record available to another worker.
-#[async_trait]
-pub trait TokenUsageQueue: Send + Sync {
-    async fn enqueue(&self, usage: TokenUsage) -> PlatformResult<()>;
-
-    async fn reserve(&self, limit: usize) -> PlatformResult<Vec<TokenUsageReservation>>;
-
-    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> PlatformResult<()>;
-
-    async fn release(&self, reservation: &TokenUsageReservation) -> PlatformResult<()>;
-}
-
-impl crate::auth_service::AuthService {
-    pub async fn enqueue_usage(&self, mut usage: TokenUsage) -> PlatformResult<()> {
-        usage.ensure_event_ids();
-        self.usage.enqueue(usage).await
     }
 }

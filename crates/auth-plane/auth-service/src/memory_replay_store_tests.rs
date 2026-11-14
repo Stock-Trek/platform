@@ -1,6 +1,4 @@
-use crate::replay_store::{
-    ConsumeResult, ReplayKey, ReplayReservation, ReplayStore, ReplayStoreError,
-};
+use crate::{ConsumeResult, ReplayKey, ReplayReservation, ReplayStore, ReplayStoreError};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;

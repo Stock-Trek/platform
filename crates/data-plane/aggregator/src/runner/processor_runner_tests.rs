@@ -1,9 +1,8 @@
 use crate::{
-    LeaseStore, ProcessorRunner, StateStore,
+    LeaseStore, MarketSource, ProcessorRunner, StateStore,
     candle_sink::{ClosedCandlePublisher, OpenCandleStore},
     checkpoint_record_tests::InMemoryStateStore,
     config::AggregatorConfig,
-    market_source::MarketSource,
     shard_id::ShardId,
     state::AggregatorState,
     writer_lease::InMemoryLeaseStore,

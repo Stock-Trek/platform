@@ -1,4 +1,4 @@
-use crate::archive_record::ArchiveKind;
+use crate::ArchiveKind;
 use platform_types::TimestampMilliseconds;
 
 /// A group of raw archive files that can be compacted together.

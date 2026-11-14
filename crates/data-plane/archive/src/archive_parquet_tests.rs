@@ -1,6 +1,6 @@
 use crate::{
-    ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetStream,
-    archive_record::{ArchiveRecord, ArchivedMarketEvent},
+    ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetStream, ArchiveRecord,
+    ArchivedMarketEvent,
 };
 use platform_market_data::MarketEvent;
 use platform_types::TimestampMilliseconds;

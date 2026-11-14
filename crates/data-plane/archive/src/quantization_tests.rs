@@ -1,6 +1,6 @@
 use chrono::{DateTime, TimeZone, Utc, Weekday};
 
-use crate::quantization::{Quantization, QuantizedTime, TopOfHour, TopOfMinute, TopOfMonth};
+use crate::{Quantization, QuantizedTime, TopOfHour, TopOfMinute, TopOfMonth};
 
 fn utc(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> DateTime<Utc> {
     Utc.with_ymd_and_hms(year, month, day, hour, minute, 0)

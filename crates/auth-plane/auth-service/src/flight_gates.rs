@@ -1,7 +1,7 @@
-use crate::ApiToken;
+use crate::{flight_gate::FlightGate, flight_outcome::FlightOutcome};
 use parking_lot::Mutex;
 use std::{collections::HashMap, sync::Arc};
-use tokio::sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
+use tokio::sync::Mutex as AsyncMutex;
 
 pub struct FlightGates {
     gates: Mutex<HashMap<String, Arc<Gate>>>,
@@ -23,11 +23,21 @@ impl FlightGates {
         gates.insert(id.to_string(), gate.clone());
         FlightGate::new(self, id, gate)
     }
+
+    pub(super) fn remove_gate_if_last(&self, id: &str, gate: &Arc<Gate>) {
+        let mut gates = self.gates.lock();
+        let is_last = gates
+            .get(id)
+            .is_some_and(|current| Arc::ptr_eq(current, gate) && Arc::strong_count(current) == 2);
+        if is_last {
+            gates.remove(id);
+        }
+    }
 }
 
-struct Gate {
-    lock: AsyncMutex<()>,
-    outcome: Mutex<Option<FlightOutcome>>,
+pub(super) struct Gate {
+    pub(super) lock: AsyncMutex<()>,
+    pub(super) outcome: Mutex<Option<FlightOutcome>>,
 }
 
 impl Gate {
@@ -36,62 +46,5 @@ impl Gate {
             lock: AsyncMutex::new(()),
             outcome: Mutex::new(None),
         }
-    }
-}
-
-#[derive(Clone)]
-pub enum FlightOutcome {
-    Found(Option<Arc<ApiToken>>),
-    Failed,
-}
-
-pub struct FlightGate<'a> {
-    owner: &'a FlightGates,
-    id: String,
-    gate: Arc<Gate>,
-}
-
-impl<'a> FlightGate<'a> {
-    fn new(owner: &'a FlightGates, id: &str, gate: Arc<Gate>) -> Self {
-        Self {
-            owner,
-            id: id.to_string(),
-            gate,
-        }
-    }
-
-    pub async fn lock(&self) -> FlightGuard<'_> {
-        let guard = self.gate.lock.lock().await;
-        FlightGuard {
-            gate: &self.gate,
-            _guard: guard,
-        }
-    }
-}
-
-impl Drop for FlightGate<'_> {
-    fn drop(&mut self) {
-        let mut gates = self.owner.gates.lock();
-        let is_last = gates
-            .get(&self.id)
-            .is_some_and(|gate| Arc::ptr_eq(gate, &self.gate) && Arc::strong_count(gate) == 2);
-        if is_last {
-            gates.remove(&self.id);
-        }
-    }
-}
-
-pub struct FlightGuard<'a> {
-    gate: &'a Gate,
-    _guard: AsyncMutexGuard<'a, ()>,
-}
-
-impl FlightGuard<'_> {
-    pub fn outcome(&self) -> Option<FlightOutcome> {
-        self.gate.outcome.lock().clone()
-    }
-
-    pub fn complete(&self, outcome: FlightOutcome) {
-        *self.gate.outcome.lock() = Some(outcome);
     }
 }

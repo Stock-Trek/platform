@@ -1,6 +1,9 @@
 use crate::dto::github::github_event_converter::GitHubEventConverter;
 use crate::{
-    dto::github::github_types::{GitHubInstallation, GitHubRefType, GitHubRepository},
+    dto::github::{
+        github_installation::GitHubInstallation, github_ref_type::GitHubRefType,
+        github_repository::GitHubRepository,
+    },
     event_response::EventResponse,
 };
 use hmac::{Hmac, KeyInit, Mac};

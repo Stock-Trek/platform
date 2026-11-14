@@ -1,6 +1,6 @@
+use crate::MarketInput;
 use crate::checkpoint_record::{CheckpointRecord, StateStore};
 use crate::checkpoint_record_tests::InMemoryStateStore;
-use crate::market_source::MarketInput;
 use crate::runner::ProcessorRunner;
 use crate::runner::tests::fixtures_tests::{FakeSink, FakeSource, Fixtures, SignalingSource};
 use crate::shard_id::ShardId;

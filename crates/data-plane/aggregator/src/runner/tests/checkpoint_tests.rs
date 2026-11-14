@@ -1,11 +1,11 @@
 use crate::checkpoint_record_tests::InMemoryStateStore;
-use crate::market_source::{MarketInput, SourceRecord};
 use crate::runner::ProcessorRunner;
 use crate::runner::tests::fixtures_tests::{
     FailingCheckpointStore, FakeSink, FakeSource, Fixtures,
 };
 use crate::shard_id::ShardId;
 use crate::state::DeduplicationKey;
+use crate::{MarketInput, SourceRecord};
 use parking_lot::Mutex;
 use platform_market_data::GapMarker;
 use platform_nats::Message;

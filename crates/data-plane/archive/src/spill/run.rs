@@ -1,7 +1,7 @@
 use crate::{
+    ArchiveKind, ArchiveRecord,
     archive_parquet::ArchiveParquetWriter,
     archive_parquet::{ArchiveParquet, ArchiveParquetBatches},
-    archive_record::{ArchiveKind, ArchiveRecord},
     batch::ArchiveBatch,
 };
 use platform_errors::{PlatformError, PlatformResult};
