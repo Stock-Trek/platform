@@ -6,7 +6,7 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
-aws-sdk-sqs = { workspace = true, features = ["default-https-client", "rt-tokio", "rustls"] }
+aws-sdk-sqs = { workspace = true, features = ["default-https-client", "rt-tokio"] }
 platform-auth-service = { workspace = true }
 platform-aws = { workspace = true }
 platform-config = { workspace = true }

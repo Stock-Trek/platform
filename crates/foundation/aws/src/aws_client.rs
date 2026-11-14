@@ -4,7 +4,6 @@ use aws_config::{BehaviorVersion, SdkConfig, timeout::TimeoutConfig};
 use aws_sdk_dynamodb::Client as DynamoDbClient;
 use aws_sdk_lambda::Client as LambdaClient;
 use aws_sdk_s3::Client as S3Client;
-use aws_sdk_s3_transfer_manager::Client as TransferClient;
 use aws_sdk_ssm::Client as SsmClient;
 use platform_time::Timeouts;
 
@@ -55,16 +54,6 @@ impl Aws {
             aws_sdk_s3::config::Builder::from(sdk_config)
                 .endpoint_url(endpoint_url)
                 .force_path_style(true)
-                .build(),
-        )
-    }
-
-    /// Builds an S3 transfer manager from the same SDK configuration used by
-    /// the ordinary S3 client.
-    pub fn transfer_client(sdk_config: &SdkConfig) -> TransferClient {
-        TransferClient::new(
-            aws_sdk_s3_transfer_manager::Config::builder()
-                .s3_config(sdk_config)
                 .build(),
         )
     }

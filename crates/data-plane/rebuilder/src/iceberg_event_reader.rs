@@ -1,4 +1,4 @@
-use aws_sdk_s3_transfer_manager::Client as TransferClient;
+use aws_sdk_s3::Client as S3Client;
 use platform_archive::{
     ArchiveBatch, ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind,
     ArchiveParquetStream, IcebergDataFile, ParquetReader, S3,
@@ -13,7 +13,7 @@ use crate::config::RebuildSourceLayer;
 /// Each selected object is streamed and decoded one bounded batch at a time,
 /// so a rebuild never holds a whole Parquet object in memory.
 pub struct IcebergEventReader {
-    transfer_client: TransferClient,
+    s3_client: S3Client,
     source_layer: RebuildSourceLayer,
     handoff: ArchiveHandoff,
     files: Vec<IcebergDataFile>,
@@ -34,7 +34,7 @@ impl IcebergEventReader {
         source_layer: RebuildSourceLayer,
     ) -> PlatformResult<Self> {
         let (source_layer, handoff) = Self::discover(catalog, source_layer).await?;
-        let transfer_client = S3::transfer_client().await;
+        let s3_client = S3::s3_client().await;
         let files = handoff.files().cloned().collect::<Vec<_>>();
         info!(
             source_layer = source_layer.label(),
@@ -44,7 +44,7 @@ impl IcebergEventReader {
             "discovered rebuild event partitions"
         );
         Ok(Self {
-            transfer_client,
+            s3_client,
             source_layer,
             handoff,
             files,
@@ -90,8 +90,7 @@ impl IcebergEventReader {
                             ),
                         ))
                     })?;
-                    let reader =
-                        ParquetReader::new(&self.transfer_client, &bucket, &key, file_size);
+                    let reader = ParquetReader::new(&self.s3_client, &bucket, &key, file_size);
                     ArchiveParquetStream::new(ArchiveKind::Events, reader).await?
                 }
             };

@@ -6,7 +6,7 @@
 use crate::restore::catalog::{ArchiveObject, ArchiveRecoveryConfig, S3ArchiveRecovery};
 use crate::shard_id::ShardId;
 use async_trait::async_trait;
-use aws_sdk_s3_transfer_manager::Client as TransferClient;
+use aws_sdk_s3::Client as S3Client;
 use platform_archive::{
     ArchiveKind, ArchiveParquetStream, ArchivedMarketEvent, ParquetReader, RoutingBucket,
 };
@@ -32,7 +32,7 @@ pub trait ArchivedEventSource: Send {
 /// process-wide semaphore bounds how many archive objects are streamed
 /// concurrently across all shards.
 pub struct S3ArchivedEventSource {
-    transfer_client: TransferClient,
+    s3_client: S3Client,
     shard: ShardId,
     shard_count: usize,
     objects: VecDeque<ArchiveObject>,
@@ -61,14 +61,14 @@ impl S3ArchivedEventSource {
     }
 
     pub fn from_objects(
-        transfer_client: TransferClient,
+        s3_client: S3Client,
         shard: ShardId,
         shard_count: usize,
         objects: VecDeque<ArchiveObject>,
         recovery_slots: Arc<Semaphore>,
     ) -> Self {
         Self {
-            transfer_client,
+            s3_client,
             shard,
             shard_count,
             objects,
@@ -114,12 +114,8 @@ impl S3ArchivedEventSource {
                                 "archive recovery limiter closed: {error}"
                             )))
                         })?;
-                let reader = ParquetReader::new(
-                    &self.transfer_client,
-                    &object.bucket,
-                    &object.key,
-                    file_size,
-                );
+                let reader =
+                    ParquetReader::new(&self.s3_client, &object.bucket, &object.key, file_size);
                 self.reader = Some(ArchiveParquetStream::new(ArchiveKind::Events, reader).await?);
                 self._reader_permit = Some(permit);
                 info!(

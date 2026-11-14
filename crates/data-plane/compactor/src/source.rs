@@ -37,7 +37,7 @@ impl S3ArchiveSource {
         config: &CompactorConfig,
         catalog: Arc<dyn ArchiveCatalog>,
     ) -> PlatformResult<Self> {
-        let (client, _) = S3::clients().await;
+        let client = S3::s3_client().await;
         let settle_millis = i64::try_from(config.settle.as_millis()).unwrap_or(i64::MAX);
         Ok(Self {
             client,

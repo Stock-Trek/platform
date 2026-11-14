@@ -1,5 +1,6 @@
 use crate::config::ArchiverConfig;
 use async_trait::async_trait;
+use aws_sdk_s3::Client as S3Client;
 use bytes::Bytes;
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveParquet,
@@ -33,7 +34,7 @@ pub trait ArchiveSink: Send + Sync {
 /// and commits the same data file instead of creating a duplicate. Objects left
 /// uncommitted by an earlier run are registered during startup.
 pub struct S3ParquetSink {
-    transfer_client: aws_sdk_s3_transfer_manager::Client,
+    s3_client: S3Client,
     catalog: Arc<dyn ArchiveCatalog>,
     bucket: Bucket,
     prefix: String,
@@ -46,7 +47,7 @@ impl S3ParquetSink {
         catalog: Arc<dyn ArchiveCatalog>,
     ) -> PlatformResult<Self> {
         Ok(Self {
-            transfer_client: S3::transfer_client().await,
+            s3_client: S3::s3_client().await,
             catalog,
             bucket: Bucket::new(config.s3_bucket.clone()),
             prefix: config.s3_prefix.clone(),
@@ -82,7 +83,7 @@ impl S3ParquetSink {
         .without_jitter();
         let mut attempt = 1_usize;
         loop {
-            match S3::upload_bytes(&self.transfer_client, &self.bucket, key, bytes.clone()).await {
+            match S3::upload_bytes(&self.s3_client, &self.bucket, key, bytes.clone()).await {
                 Ok(()) => return Ok(()),
                 Err(error) => {
                     if !retry.should_retry(attempt) {
@@ -153,7 +154,7 @@ impl S3ParquetSink {
                     continue;
                 };
                 let reader =
-                    ParquetReader::new(&self.transfer_client, &self.bucket, &object.key, file_size);
+                    ParquetReader::new(&self.s3_client, &self.bucket, &object.key, file_size);
                 let record_count = match reader.row_count().await {
                     Ok(record_count) => record_count,
                     Err(error) => {
