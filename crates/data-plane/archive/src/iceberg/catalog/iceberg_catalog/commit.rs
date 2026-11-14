@@ -131,6 +131,9 @@ impl IcebergCatalog {
         if files.is_empty() {
             return Ok(false);
         }
+        if Self::batch_registered_in_metadata(table, files) {
+            return Ok(true);
+        }
 
         let paths = self.registered_paths(table).await?;
         Ok(files.iter().all(|file| paths.contains(&file.file_path)))
