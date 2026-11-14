@@ -1,4 +1,3 @@
-use parking_lot::Mutex;
 use serde_json::Value;
 use std::{
     panic::{AssertUnwindSafe, catch_unwind},
@@ -8,59 +7,34 @@ use std::{
     },
 };
 
-use crate::cwasm::backtest::{BacktestError, worker_runtime::WorkerRuntime};
+use crate::cwasm::backtest::BacktestError;
 
-pub const PUBLISHER_QUEUE_DEPTH: usize = 2;
+pub const SIMULATION_QUEUE_DEPTH: usize = 2;
 
-pub struct PublisherPipeline;
+pub struct SimulationPipeline;
 
-impl PublisherPipeline {
-    pub fn run<P, Q>(
+impl SimulationPipeline {
+    pub fn run<P>(
         simulation_count: u32,
         worker_count: u32,
-        publisher_count: u32,
         produce: P,
-        publish: Q,
-    ) -> Result<Vec<Result<(), BacktestError>>, BacktestError>
+    ) -> Result<Vec<Result<Value, BacktestError>>, BacktestError>
     where
         P: Fn(u32) -> Result<Value, BacktestError> + Sync,
-        Q: Fn(&WorkerRuntime, u32, &Value) -> Result<(), BacktestError> + Sync,
     {
-        let worker_count = worker_count.max(1);
-        let publisher_count = publisher_count.max(1);
-        let runtimes = (0..publisher_count)
-            .map(|_| WorkerRuntime::new())
-            .collect::<Result<Vec<_>, _>>()?;
-        let outcomes = Mutex::new(Vec::new());
+        if simulation_count == 0 {
+            return Err(BacktestError::invalid_argument(
+                "simulation count must be at least one",
+            ));
+        }
+        let worker_count = worker_count.max(1).min(simulation_count);
         let next = AtomicU32::new(0);
-        let (sender, receiver) =
-            mpsc::sync_channel(publisher_count as usize * PUBLISHER_QUEUE_DEPTH);
-        let receiver = Mutex::new(receiver);
+        let (sender, receiver) = mpsc::sync_channel(worker_count as usize * SIMULATION_QUEUE_DEPTH);
+        let mut outcomes = Vec::new();
         std::thread::scope(|scope| {
-            for runtime in runtimes {
-                let receiver = &receiver;
-                let outcomes = &outcomes;
-                let publish = &publish;
-                scope.spawn(move || {
-                    loop {
-                        let job = {
-                            let receiver = receiver.lock();
-                            receiver.recv()
-                        };
-                        let Ok((index, result)) = job else {
-                            break;
-                        };
-                        let outcome =
-                            catch_unwind(AssertUnwindSafe(|| publish(&runtime, index, &result)))
-                                .unwrap_or(Err(BacktestError::Panic));
-                        outcomes.lock().push((index, outcome));
-                    }
-                });
-            }
             for _ in 0..worker_count {
                 let sender = sender.clone();
                 let next = &next;
-                let outcomes = &outcomes;
                 let produce = &produce;
                 scope.spawn(move || {
                     loop {
@@ -70,26 +44,17 @@ impl PublisherPipeline {
                         }
                         let result = catch_unwind(AssertUnwindSafe(|| produce(index)))
                             .unwrap_or(Err(BacktestError::Panic));
-                        match result {
-                            Ok(result) => {
-                                if sender.send((index, result)).is_err() {
-                                    outcomes.lock().push((
-                                        index,
-                                        Err(BacktestError::Publish(
-                                            "publisher pipeline closed".to_string(),
-                                        )),
-                                    ));
-                                    break;
-                                }
-                            }
-                            Err(error) => outcomes.lock().push((index, Err(error))),
+                        if sender.send((index, result)).is_err() {
+                            break;
                         }
                     }
                 });
             }
             drop(sender);
+            for outcome in receiver {
+                outcomes.push(outcome);
+            }
         });
-        let mut outcomes = outcomes.into_inner();
         outcomes.sort_by_key(|(index, _)| *index);
         Ok(outcomes
             .into_iter()
