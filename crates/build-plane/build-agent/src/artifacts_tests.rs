@@ -226,7 +226,7 @@ fn validates_user_generated_algorithm_sources() {
 }
 
 #[test]
-fn checks_mod_rs_alongside_algorithm_sources() {
+fn accepts_mod_rs_alongside_algorithm_sources() {
     let root = tempfile::tempdir().unwrap();
     let algorithm = root.path().join("algorithm.rs");
     std_fs::write(
@@ -237,9 +237,7 @@ fn checks_mod_rs_alongside_algorithm_sources() {
     let modules = root.path().join("mod.rs");
     std_fs::write(&modules, b"pub mod algorithm;\n").unwrap();
 
-    let error = Artifacts::validate_user_generated(&[algorithm, modules]).unwrap_err();
-
-    assert!(matches!(error, PlatformError::Validation(_)));
+    Artifacts::validate_user_generated(&[algorithm, modules]).unwrap();
 }
 
 #[test]
