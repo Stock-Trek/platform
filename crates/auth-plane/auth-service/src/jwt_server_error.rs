@@ -21,6 +21,13 @@ impl JwtServerError {
     }
 
     pub fn issuance(error: PlatformError) -> Self {
+        let error = match error {
+            PlatformError::System(SystemError::External(source)) => match source.downcast::<Self>() {
+                Ok(error) => return *error,
+                Err(source) => PlatformError::System(SystemError::External(source)),
+            },
+            error => error,
+        };
         let retry_after = match &error {
             PlatformError::Auth(AuthError::Unavailable { retry_after }) => Some(*retry_after),
             _ => None,
@@ -55,21 +62,5 @@ impl JwtServerError {
 impl From<JwtServerError> for PlatformError {
     fn from(error: JwtServerError) -> Self {
         Self::external(error)
-    }
-}
-
-impl From<PlatformError> for JwtServerError {
-    fn from(error: PlatformError) -> Self {
-        match error {
-            PlatformError::System(SystemError::External(source)) => {
-                match source.downcast::<Self>() {
-                    Ok(error) => *error,
-                    Err(source) => {
-                        Self::issuance(PlatformError::System(SystemError::External(source)))
-                    }
-                }
-            }
-            error => Self::issuance(error),
-        }
     }
 }
