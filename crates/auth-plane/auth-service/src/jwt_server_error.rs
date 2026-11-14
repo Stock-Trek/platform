@@ -22,7 +22,8 @@ impl JwtServerError {
 
     pub fn issuance(error: PlatformError) -> Self {
         let error = match error {
-            PlatformError::System(SystemError::External(source)) => match source.downcast::<Self>() {
+            PlatformError::System(SystemError::External(source)) => match source.downcast::<Self>()
+            {
                 Ok(error) => return *error,
                 Err(source) => PlatformError::System(SystemError::External(source)),
             },
@@ -56,6 +57,12 @@ impl JwtServerError {
         builder
             .body(Full::new(Bytes::from_static(b"JWT request failed")))
             .expect("static response is valid")
+    }
+}
+
+impl From<(StatusCode, String)> for JwtServerError {
+    fn from((status, message): (StatusCode, String)) -> Self {
+        Self::new(status, message)
     }
 }
 
