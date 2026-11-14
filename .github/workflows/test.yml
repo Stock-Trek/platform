@@ -42,11 +42,6 @@ jobs:
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@v1
 
-      - name: Configure SSH for Cargo
-        run: |
-          echo "CARGO_NET_GIT_FETCH_WITH_CLI=true" >> $GITHUB_ENV
-          echo "GIT_SSH_COMMAND=ssh -o StrictHostKeyChecking=accept-new" >> $GITHUB_ENV
-
       - name: Run cargo-deny
         uses: EmbarkStudios/cargo-deny-action@v2
 
