@@ -5,7 +5,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use crate::cwasm::backtest::BackTest;
+use crate::cwasm::backtest::Backtest;
 
 #[test]
 fn simulations_respect_the_concurrency_limit() {
@@ -13,7 +13,7 @@ fn simulations_respect_the_concurrency_limit() {
     let peak = AtomicUsize::new(0);
     let seen = Mutex::new(Vec::new());
     let barrier = Barrier::new(3);
-    let results = BackTest::run_simulations(12, 3, |index| {
+    let results = Backtest::run_simulations(12, 3, |index| {
         let running = active.fetch_add(1, Ordering::SeqCst) + 1;
         peak.fetch_max(running, Ordering::SeqCst);
         seen.lock().push(index);
@@ -31,7 +31,7 @@ fn simulations_respect_the_concurrency_limit() {
 
 #[test]
 fn a_panicking_simulation_is_reported_without_stopping_the_others() {
-    let results = BackTest::run_simulations(4, 2, |index| {
+    let results = Backtest::run_simulations(4, 2, |index| {
         if index == 2 {
             panic!("simulation failed");
         }

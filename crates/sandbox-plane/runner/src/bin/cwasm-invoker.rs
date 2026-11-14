@@ -118,8 +118,8 @@ impl CwasmInvoker {
             }
         };
 
-        if matches!(request.command, Command::BackTest { .. }) {
-            return match backtest::BackTest::run(&runner, cwasm.path(), &request.command) {
+        if matches!(request.command, Command::Backtest { .. }) {
+            return match backtest::Backtest::run(&runner, cwasm.path(), &request.command) {
                 Ok(()) => ExitCode::Success.code(),
                 Err(error) => {
                     eprintln!("cwasm-invoker: {error}");

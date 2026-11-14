@@ -19,5 +19,5 @@ mod run_tests;
 mod tests;
 
 pub use error::{BacktestError, Input};
-pub use run::BackTest;
+pub use run::Backtest;
 use run::{Balances, PriceMap};

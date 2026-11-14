@@ -34,7 +34,7 @@ pub struct Spec {
 
 impl Spec {
     pub fn new(command: &Command) -> Result<Self, BacktestError> {
-        let Command::BackTest {
+        let Command::Backtest {
             strategy_name,
             strategy_context_path,
             portfolio_path,

@@ -188,7 +188,7 @@ fn builds_entry_arguments_for_every_command() {
 fn deserialises_the_back_test_command() {
     let command: Command = serde_json::from_str(
         r#"{
-                "command": "backTest",
+                "command": "backtest",
                 "strategyName": "AlgorithmStub",
                 "strategyContextPath": "/tmp/strategy-context.bin",
                 "portfolioPath": "/tmp/portfolio.bin",
@@ -210,8 +210,8 @@ fn deserialises_the_back_test_command() {
     .unwrap();
 
     assert_eq!(command.strategy_name(), "AlgorithmStub");
-    assert_eq!(command.arguments(), vec!["BackTest", "AlgorithmStub"]);
-    let Command::BackTest {
+    assert_eq!(command.arguments(), vec!["Backtest", "AlgorithmStub"]);
+    let Command::Backtest {
         simulation_count,
         max_concurrent_simulations,
         random_seed,
@@ -245,7 +245,7 @@ fn deserialises_the_back_test_command() {
 fn deserialises_back_test_simulation_parameters() {
     let command: Command = serde_json::from_str(
         r#"{
-                "command": "backTest",
+                "command": "backtest",
                 "strategyName": "AlgorithmStub",
                 "strategyContextPath": "/tmp/strategy-context.bin",
                 "portfolioPath": "/tmp/portfolio.bin",
@@ -272,7 +272,7 @@ fn deserialises_back_test_simulation_parameters() {
     )
     .unwrap();
 
-    let Command::BackTest {
+    let Command::Backtest {
         simulation,
         max_concurrent_simulations,
         ..

@@ -49,7 +49,7 @@ pub enum Command {
         strategy_name: String,
         strategy_context_path: String,
     },
-    BackTest {
+    Backtest {
         strategy_name: String,
         strategy_context_path: String,
         portfolio_path: String,
@@ -96,7 +96,7 @@ impl Command {
     pub fn strategy_name(&self) -> &str {
         match self {
             Command::Algorithm { strategy_name }
-            | Command::BackTest { strategy_name, .. }
+            | Command::Backtest { strategy_name, .. }
             | Command::Execute { strategy_name, .. }
             | Command::Metadata { strategy_name }
             | Command::Preferences { strategy_name }
@@ -107,7 +107,7 @@ impl Command {
     pub fn arguments(&self) -> Vec<&str> {
         match self {
             Command::Algorithm { strategy_name } => vec!["Algorithm", strategy_name],
-            Command::BackTest { strategy_name, .. } => vec!["BackTest", strategy_name],
+            Command::Backtest { strategy_name, .. } => vec!["Backtest", strategy_name],
             Command::Execute {
                 strategy_name,
                 strategy_context_path,
