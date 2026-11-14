@@ -305,9 +305,8 @@ impl JetStreamConsumer {
         }
     }
 
-    /// Fetches the next message, waiting up to [`FETCH_WINDOW`] and retrying
-    /// transient failures with [`RETRY_BACKOFF`]. The message is left
-    /// unacknowledged so callers can acknowledge it after durable processing.
+    /// Fetches the next message. The message is left unacknowledged
+    /// so callers can acknowledge it after durable processing.
     ///
     /// Returns `None` when the fetch window expired or all messages were
     /// negatively acknowledged.

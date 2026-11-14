@@ -151,8 +151,7 @@ pub trait TokenStore: Send + Sync {
     /// This must be a single durable write so a rotation can never be
     /// materialized without its audit events. Stores that cannot keep a
     /// separate transaction record must still persist the events before they
-    /// materialize the rotation; they must not silently drop
-    /// [`TokenRotationTransaction::events`].
+    /// materialize the rotation; they must not silently drop events.
     async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> PlatformResult<()>;
 
     /// Applies a committed rotation transaction idempotently.
