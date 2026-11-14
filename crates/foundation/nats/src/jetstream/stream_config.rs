@@ -1,6 +1,7 @@
+use crate::StreamSpec;
+use crate::jetstream::stream_spec::{DEFAULT_DUPLICATE_WINDOW, DEFAULT_STREAM_REPLICAS};
 use platform_config::EnvVars;
 use platform_errors::PlatformResult;
-use platform_nats::StreamSpec;
 use std::time::Duration;
 
 const REPLICAS_SUFFIX: &str = "REPLICAS";
@@ -8,8 +9,35 @@ const MAX_AGE_SUFFIX: &str = "MAX_AGE_SECS";
 const MAX_BYTES_SUFFIX: &str = "MAX_BYTES";
 const MAX_MESSAGES_SUFFIX: &str = "MAX_MESSAGES";
 const DUPLICATE_WINDOW_SUFFIX: &str = "DUPLICATE_WINDOW_SECS";
-const DEFAULT_REPLICAS: usize = 3;
-const DEFAULT_DUPLICATE_WINDOW_SECS: u64 = 120;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct StreamDefaults {
+    max_age: Duration,
+    max_bytes: i64,
+    max_messages: i64,
+}
+
+impl StreamDefaults {
+    pub const fn new(max_age: Duration, max_bytes: i64, max_messages: i64) -> Self {
+        Self {
+            max_age,
+            max_bytes,
+            max_messages,
+        }
+    }
+
+    pub const fn max_age(&self) -> Duration {
+        self.max_age
+    }
+
+    pub const fn max_bytes(&self) -> i64 {
+        self.max_bytes
+    }
+
+    pub const fn max_messages(&self) -> i64 {
+        self.max_messages
+    }
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NatsStreamConfig {
@@ -21,24 +49,28 @@ pub struct NatsStreamConfig {
 }
 
 impl NatsStreamConfig {
-    pub fn from_vars(vars: &EnvVars, prefix: &str) -> PlatformResult<Self> {
+    pub fn from_vars(
+        vars: &EnvVars,
+        prefix: &str,
+        defaults: StreamDefaults,
+    ) -> PlatformResult<Self> {
         let config = Self {
             replicas: vars
                 .optional_parsed::<usize>(&Self::name(prefix, REPLICAS_SUFFIX))?
-                .unwrap_or(DEFAULT_REPLICAS),
+                .unwrap_or(DEFAULT_STREAM_REPLICAS),
             max_age: Duration::from_secs(
                 vars.optional_parsed::<u64>(&Self::name(prefix, MAX_AGE_SUFFIX))?
-                    .unwrap_or(30 * 24 * 60 * 60),
+                    .unwrap_or(defaults.max_age.as_secs()),
             ),
             max_bytes: vars
                 .optional_parsed::<i64>(&Self::name(prefix, MAX_BYTES_SUFFIX))?
-                .unwrap_or(1024 * 1024 * 1024),
+                .unwrap_or(defaults.max_bytes),
             max_messages: vars
                 .optional_parsed::<i64>(&Self::name(prefix, MAX_MESSAGES_SUFFIX))?
-                .unwrap_or(10_000_000),
+                .unwrap_or(defaults.max_messages),
             duplicate_window: Duration::from_secs(
                 vars.optional_parsed::<u64>(&Self::name(prefix, DUPLICATE_WINDOW_SUFFIX))?
-                    .unwrap_or(DEFAULT_DUPLICATE_WINDOW_SECS),
+                    .unwrap_or(DEFAULT_DUPLICATE_WINDOW.as_secs()),
             ),
         };
         config.spec("portfolio").validate()?;
