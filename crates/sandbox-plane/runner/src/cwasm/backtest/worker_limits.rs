@@ -7,7 +7,7 @@ const MAX_WORKERS_ENV: &str = "CWASM_INVOKER_BACKTEST_MAX_WORKERS";
 
 pub const ABSOLUTE_MAX_WORKERS: u32 = 32;
 pub const DEFAULT_MAX_WORKERS: u32 = 4;
-pub const MAX_SIMULATION_COUNT: u32 = 1_000_000;
+pub const MAX_SIMULATION_COUNT: u32 = 1_000;
 
 pub struct WorkerLimits {
     max_workers: u32,

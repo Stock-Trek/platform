@@ -35,8 +35,10 @@ fn environment_configuration_stays_below_the_absolute_ceiling() {
 #[test]
 fn request_validation_rejects_zero_and_oversized_values() {
     let limits = WorkerLimits::new(4);
+    assert_eq!(MAX_SIMULATION_COUNT, 1_000);
     assert!(limits.validate(0, 1).is_err());
     assert!(limits.validate(1, 0).is_err());
+    assert!(limits.validate(1_001, 1).is_err());
     assert!(limits.validate(MAX_SIMULATION_COUNT + 1, 1).is_err());
     assert!(limits.validate(MAX_SIMULATION_COUNT, 1).is_ok());
 }
