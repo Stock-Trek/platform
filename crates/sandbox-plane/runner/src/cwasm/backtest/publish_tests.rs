@@ -127,8 +127,8 @@ async fn reports_failures_from_both_results_endpoints() {
             .await
             .unwrap_err();
 
-    assert!(error.contains("results stream failed"));
-    assert!(error.contains("results post failed"));
+    assert!(error.to_string().contains("results stream failed"));
+    assert!(error.to_string().contains("results post failed"));
 }
 
 #[tokio::test]
@@ -143,7 +143,7 @@ async fn reports_a_rejected_post_even_when_the_stream_succeeds() {
 
     stream_server.await.unwrap();
     post_server.await.unwrap();
-    assert!(error.contains("503"));
+    assert!(error.to_string().contains("503"));
 }
 
 #[tokio::test]
@@ -183,7 +183,7 @@ async fn times_out_a_stalled_stream_endpoint() {
             .unwrap_err();
 
     server.abort();
-    assert!(error.contains("connection timed out"));
+    assert!(error.to_string().contains("connection timed out"));
 }
 
 #[tokio::test(start_paused = true)]
@@ -196,5 +196,5 @@ async fn times_out_a_stalled_post_endpoint() {
             .unwrap_err();
 
     server.abort();
-    assert!(error.contains("timed out"), "{error}");
+    assert!(error.to_string().contains("timed out"), "{error}");
 }

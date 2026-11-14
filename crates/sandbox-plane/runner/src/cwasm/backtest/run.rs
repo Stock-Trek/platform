@@ -1,6 +1,5 @@
-use crate::Command;
 use parking_lot::Mutex;
-use platform_exit_codes::ExitCode;
+use platform_runner::Command;
 use std::{
     collections::BTreeMap,
     panic::{AssertUnwindSafe, catch_unwind},
@@ -11,7 +10,9 @@ use stock_trek::types::{AccountId, AssetId, CexId};
 
 use crate::cwasm::WasmRunner;
 
-use crate::cwasm::backtest::{publish::ResultPublisher, simulation::Simulation, spec::Spec};
+use crate::cwasm::backtest::{
+    BacktestError, BacktestResult, publish::ResultPublisher, simulation::Simulation, spec::Spec,
+};
 
 pub type Balances = BTreeMap<CexId, BTreeMap<AccountId, BTreeMap<AssetId, f64>>>;
 pub type PriceMap = BTreeMap<(CexId, AssetId, AssetId), f64>;
@@ -19,28 +20,28 @@ pub type PriceMap = BTreeMap<(CexId, AssetId, AssetId), f64>;
 pub struct BackTest;
 
 impl BackTest {
-    pub fn run(runner: &WasmRunner, cwasm_path: &Path, command: &Command) -> i32 {
-        let spec = match Spec::new(command) {
-            Ok(spec) => spec,
-            Err(code) => return code,
-        };
-        Self::run_simulations(
+    pub fn run(runner: &WasmRunner, cwasm_path: &Path, command: &Command) -> BacktestResult<()> {
+        let spec = Spec::new(command)?;
+        match Self::run_simulations(
             spec.simulation_count,
             spec.max_concurrent_simulations,
             |index| Self::simulate(runner, cwasm_path, &spec, index),
         )
         .into_iter()
         .find_map(Result::err)
-        .unwrap_or(ExitCode::Success.code())
+        {
+            Some(error) => Err(error),
+            None => Ok(()),
+        }
     }
 
     pub fn run_simulations<F>(
         simulation_count: u32,
         max_concurrent: u32,
         simulate: F,
-    ) -> Vec<Result<(), i32>>
+    ) -> Vec<BacktestResult<()>>
     where
-        F: Fn(u32) -> Result<(), i32> + Sync,
+        F: Fn(u32) -> BacktestResult<()> + Sync,
     {
         let worker_count = simulation_count.min(max_concurrent) as usize;
         let next = AtomicU32::new(0);
@@ -55,7 +56,7 @@ impl BackTest {
                             break;
                         }
                         let result = catch_unwind(AssertUnwindSafe(|| simulate(index)))
-                            .unwrap_or_else(|_| Err(ExitCode::BotErrorPanic.code()));
+                            .unwrap_or(Err(BacktestError::Panic));
                         worker_results.push((index, result));
                     }
                     results.lock().extend(worker_results);
@@ -72,21 +73,13 @@ impl BackTest {
         cwasm_path: &Path,
         spec: &Spec,
         index: u32,
-    ) -> Result<(), i32> {
+    ) -> BacktestResult<()> {
         let result = Simulation::run(runner, cwasm_path, spec, index)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
             .build()
-            .map_err(|error| {
-                eprintln!("cwasm-invoker: failed to start tokio runtime: {error}");
-                ExitCode::ServerRunnerRuntimeStartFailed.code()
-            })?;
-        runtime
-            .block_on(ResultPublisher::publish(spec, &result))
-            .map_err(|error| {
-                eprintln!("cwasm-invoker: failed to publish simulation result: {error}");
-                ExitCode::ServerRunnerResultPublishFailed.code()
-            })?;
+            .map_err(BacktestError::RuntimeStart)?;
+        runtime.block_on(ResultPublisher::publish(spec, &result))?;
         Ok(())
     }
 }

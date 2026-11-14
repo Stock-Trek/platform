@@ -3,8 +3,8 @@ use std::collections::BTreeMap;
 use stock_trek::types::{AssetId, CexId};
 
 use crate::cwasm::backtest::{
+    BacktestError, BacktestResult,
     market_data::{MarketData, Series},
-    spec::Spec,
 };
 
 pub struct MarketSlot {
@@ -21,7 +21,7 @@ impl MarketSlot {
         strategy_context: &StrategyContextDto,
         data: &MarketData,
         pairs: &[(AssetId, AssetId)],
-    ) -> Result<Vec<MarketSlot>, i32> {
+    ) -> BacktestResult<Vec<MarketSlot>> {
         let mut cex_keys: BTreeMap<CexId, String> = BTreeMap::new();
         for key in strategy_context.exchange_asset_markets_dto.keys() {
             if let Ok(cex) = JsonString::deserialize::<CexId>(key) {
@@ -31,7 +31,7 @@ impl MarketSlot {
         let mut slots = Vec::new();
         for (cex, pairs_data) in data {
             let Some(cex_key) = cex_keys.get(cex) else {
-                return Err(Spec::invalid_argument(&format!(
+                return Err(BacktestError::invalid_argument(format!(
                     "strategy context has no {cex} markets"
                 )));
             };
@@ -54,9 +54,9 @@ impl MarketSlot {
         strategy_context: &StrategyContextDto,
         cex_key: &str,
         pair: &(AssetId, AssetId),
-    ) -> Result<(usize, usize), i32> {
+    ) -> BacktestResult<(usize, usize)> {
         let Some(asset_markets) = strategy_context.exchange_asset_markets_dto.get(cex_key) else {
-            return Err(Spec::invalid_argument(&format!(
+            return Err(BacktestError::invalid_argument(format!(
                 "strategy context has no {cex_key} markets"
             )));
         };
@@ -71,7 +71,7 @@ impl MarketSlot {
                     == Some(pair.0)
             })
             .ok_or_else(|| {
-                Spec::invalid_argument(&format!(
+                BacktestError::invalid_argument(format!(
                     "strategy context has no {cex_key} {} market",
                     pair.0
                 ))
@@ -87,7 +87,7 @@ impl MarketSlot {
                     == Some(pair.1)
             })
             .ok_or_else(|| {
-                Spec::invalid_argument(&format!(
+                BacktestError::invalid_argument(format!(
                     "strategy context has no {cex_key} {}/{} market",
                     pair.0, pair.1
                 ))

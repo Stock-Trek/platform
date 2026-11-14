@@ -1,21 +1,22 @@
-use crate::{
+use platform_runner::{
     decimal::ToDecimal,
     dto::{DecimalDto, MarketCandleDto, MarketCandlesDto, StrategyContextDto},
 };
-use platform_exit_codes::ExitCode;
 use rand::{Rng, rngs::StdRng};
 use rust_decimal::Decimal;
 use std::collections::BTreeMap;
 use stock_trek::markets::{AlignedWindow, TimestampMillis};
 
-use crate::cwasm::backtest::{PriceMap, market_data::Series, portfolio::Portfolio, spec::Spec};
+use crate::cwasm::backtest::{
+    BacktestError, BacktestResult, PriceMap, market_data::Series, portfolio::Portfolio, spec::Spec,
+};
 
 impl Spec {
     pub fn step_context(
         &self,
         step: usize,
         rng: &mut StdRng,
-    ) -> Result<(StrategyContextDto, PriceMap, u64), i32> {
+    ) -> BacktestResult<(StrategyContextDto, PriceMap, u64)> {
         let mut context = self.strategy_context.clone();
         let mut prices: PriceMap = BTreeMap::new();
         let mut timestamp = u64::MAX;
@@ -27,37 +28,51 @@ impl Spec {
             let ohlcv = candle
                 .ohlcv_dto
                 .as_ref()
-                .ok_or(ExitCode::ServerRunnerMarketDataNotDecoded.code())?;
+                .ok_or_else(|| BacktestError::invalid_market_data("candle ohlcv is missing"))?;
             let open_price = f64::try_from(
                 ohlcv
                     .open_dto
-                    .ok_or(ExitCode::ServerRunnerMarketDataNotDecoded.code())?,
+                    .ok_or_else(|| BacktestError::invalid_market_data("candle open is missing"))?,
             )
-            .map_err(|_| ExitCode::ServerRunnerMarketDataNotDecoded.code())?;
+            .map_err(|_| BacktestError::invalid_market_data("candle open is invalid"))?;
             prices.insert((slot.cex, slot.pair.0, slot.pair.1), open_price);
             let Some(asset_markets) = context.exchange_asset_markets_dto.get_mut(&slot.cex_key)
             else {
-                return Err(ExitCode::ServerEntryInvalidArgument.code());
+                return Err(BacktestError::invalid_argument(format!(
+                    "strategy context has no {} markets",
+                    slot.cex_key
+                )));
             };
             let Some(market_by_base) = asset_markets.markets_by_base_dto.get_mut(slot.base_index)
             else {
-                return Err(ExitCode::ServerEntryInvalidArgument.code());
+                return Err(BacktestError::invalid_argument(format!(
+                    "strategy context has no base market index {}",
+                    slot.base_index
+                )));
             };
             let Some(market_by_quote) = market_by_base
                 .markets_by_quote_dto
                 .get_mut(slot.quote_index)
             else {
-                return Err(ExitCode::ServerEntryInvalidArgument.code());
+                return Err(BacktestError::invalid_argument(format!(
+                    "strategy context has no quote market index {}",
+                    slot.quote_index
+                )));
             };
             let Some(market) = market_by_quote.market_dto.as_mut() else {
-                return Err(ExitCode::ServerEntryInvalidArgument.code());
+                return Err(BacktestError::invalid_argument(format!(
+                    "strategy context has no market for {} {}/{}",
+                    slot.cex_key, slot.pair.0, slot.pair.1
+                )));
             };
             let mut aligned = std::mem::take(&mut market.aligned_dto);
             for (number, window) in &self.windows {
-                let series = slot
-                    .series
-                    .get(number)
-                    .ok_or(ExitCode::ServerEntryInvalidArgument.code())?;
+                let series = slot.series.get(number).ok_or_else(|| {
+                    BacktestError::invalid_argument(format!(
+                        "strategy context has no window {number} series for {} {}/{}",
+                        slot.cex_key, slot.pair.0, slot.pair.1
+                    ))
+                })?;
                 let mut candles = series.window_candles(*window, now, self, rng)?;
                 for candle in &mut candles.candles_dto {
                     candle.window = *number;
@@ -77,7 +92,7 @@ impl Series {
         now: u64,
         spec: &Spec,
         rng: &mut StdRng,
-    ) -> Result<MarketCandlesDto, i32> {
+    ) -> BacktestResult<MarketCandlesDto> {
         let closed_count = self.ends.partition_point(|&end| end <= now);
         let start = closed_count.saturating_sub(spec.historical_candle_count);
         let mut candles = self.candles[start..closed_count].to_vec();
@@ -94,12 +109,13 @@ impl Series {
         })
     }
 
-    fn open_candle_start(&self, window: AlignedWindow, now: u64) -> Result<Option<u64>, i32> {
+    fn open_candle_start(&self, window: AlignedWindow, now: u64) -> BacktestResult<Option<u64>> {
         let bounds = window
             .bounds_for(TimestampMillis::new(now))
             .map_err(|error| {
-                eprintln!("cwasm-invoker: could not compute window bounds: {error}");
-                ExitCode::ServerRunnerMarketDataNotDecoded.code()
+                BacktestError::invalid_market_data(format!(
+                    "could not compute window bounds: {error}"
+                ))
             })?;
         let lower = bounds.lower().as_millis();
         Ok(self
@@ -114,11 +130,11 @@ impl Series {
         start: u64,
         now: u64,
         window: AlignedWindow,
-    ) -> Result<Option<MarketCandleDto>, i32> {
+    ) -> BacktestResult<Option<MarketCandleDto>> {
         let index = self
             .candles
             .binary_search_by_key(&start, |candle| candle.start_time_millis_inc)
-            .map_err(|_| ExitCode::ServerRunnerMarketDataNotDecoded.code())?;
+            .map_err(|_| BacktestError::invalid_market_data("open candle is missing"))?;
         let mut candle = self.candles[index];
         candle.is_candle_closed = false;
         let window_millis = window.millis().upper_bound();

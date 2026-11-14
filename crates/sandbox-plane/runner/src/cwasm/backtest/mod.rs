@@ -1,3 +1,4 @@
+mod error;
 mod market;
 mod market_data;
 mod order_events;
@@ -14,5 +15,6 @@ mod publish_tests;
 #[cfg(test)]
 mod tests;
 
+pub use error::{BacktestError, BacktestResult, Input};
 pub use run::BackTest;
 use run::{Balances, PriceMap};

@@ -223,7 +223,7 @@ fn a_panicking_simulation_is_reported_without_stopping_the_others() {
     });
     assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
     assert_eq!(
-        results[2],
-        Err(platform_exit_codes::ExitCode::BotErrorPanic.code())
+        results[2].as_ref().unwrap_err().exit_code(),
+        platform_exit_codes::ExitCode::BotErrorPanic.code()
     );
 }

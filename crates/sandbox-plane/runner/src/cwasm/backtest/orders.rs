@@ -1,5 +1,4 @@
-use crate::SimulationParameters;
-use platform_exit_codes::ExitCode;
+use platform_runner::SimulationParameters;
 use rand::{Rng, rngs::StdRng};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
@@ -8,7 +7,9 @@ use stock_trek::{
     types::{AccountId, AssetId, CexId, OrderRequest, Quantity, Side},
 };
 
-use crate::cwasm::backtest::{Balances, PriceMap, order_events::OrderEvents};
+use crate::cwasm::backtest::{
+    BacktestError, BacktestResult, Balances, PriceMap, order_events::OrderEvents,
+};
 
 pub struct OrderProcessor;
 
@@ -19,7 +20,7 @@ impl OrderProcessor {
         prices: &PriceMap,
         rng: &mut StdRng,
         parameters: &SimulationParameters,
-    ) -> Result<Value, i32> {
+    ) -> BacktestResult<Value> {
         match action {
             ResolvedAction::PlaceOrder {
                 cex_id,
@@ -43,10 +44,7 @@ impl OrderProcessor {
                 account_id,
                 tag,
             } => Ok(OrderEvents::cancelled(Some(cex_id), Some(account_id), tag)),
-            _ => {
-                eprintln!("cwasm-invoker: unsupported action in back test");
-                Err(ExitCode::BotErrorResolvingAction.code())
-            }
+            _ => Err(BacktestError::UnsupportedAction),
         }
     }
 
@@ -58,7 +56,7 @@ impl OrderProcessor {
         prices: &PriceMap,
         rng: &mut StdRng,
         parameters: &SimulationParameters,
-    ) -> Result<Value, i32> {
+    ) -> BacktestResult<Value> {
         if rng.gen_range(0.0..1.0) < parameters.lost_order_chance {
             return Ok(json!({
                 "type": "order_lost",
@@ -265,11 +263,15 @@ impl OrderProcessor {
         side: Option<&Side>,
         rng: &mut StdRng,
         parameters: &SimulationParameters,
-    ) -> Result<(f64, bool), i32> {
-        let market_price = *prices.get(&(cex_id, *base, *quote)).ok_or_else(|| {
-            eprintln!("cwasm-invoker: no market data for an order on {cex_id} {base}/{quote}");
-            ExitCode::BotErrorResolvingAction.code()
-        })?;
+    ) -> BacktestResult<(f64, bool)> {
+        let market_price =
+            *prices
+                .get(&(cex_id, *base, *quote))
+                .ok_or(BacktestError::MissingMarket {
+                    cex: cex_id,
+                    base: *base,
+                    quote: *quote,
+                })?;
         if rng.gen_range(0.0..1.0) < parameters.slippage_chance {
             let slipped = match side {
                 Some(&Side::Buy) => market_price * (1.0 + parameters.slippage_proportion),

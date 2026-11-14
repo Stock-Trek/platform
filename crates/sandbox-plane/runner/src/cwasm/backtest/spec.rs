@@ -1,14 +1,15 @@
-use crate::{
+use platform_runner::{
     Command, SimulationParameters,
     dto::{PortfolioDto, StrategyContextDto},
     string::JsonString,
 };
-use platform_exit_codes::ExitCode;
 use prost::Message;
-use std::{collections::BTreeMap, fs};
-use stock_trek::{errors::StockTrekError, markets::AlignedWindow, types::AssetId};
+use std::{collections::BTreeMap, fs, path::PathBuf};
+use stock_trek::{markets::AlignedWindow, types::AssetId};
 
-use crate::cwasm::backtest::{Balances, market_data::Series, slots::MarketSlot};
+use crate::cwasm::backtest::{
+    BacktestError, BacktestResult, Balances, Input, market_data::Series, slots::MarketSlot,
+};
 
 pub struct Spec {
     pub strategy_name: String,
@@ -32,7 +33,7 @@ pub struct Spec {
 }
 
 impl Spec {
-    pub fn new(command: &Command) -> Result<Self, i32> {
+    pub fn new(command: &Command) -> BacktestResult<Self> {
         let Command::BackTest {
             strategy_name,
             strategy_context_path,
@@ -53,15 +54,15 @@ impl Spec {
             simulation,
         } = command
         else {
-            return Err(ExitCode::ServerEntryFailedToParseRequest.code());
+            return Err(BacktestError::UnsupportedCommand);
         };
         if *simulation_count < 1 {
-            return Err(Self::invalid_argument(
+            return Err(BacktestError::invalid_argument(
                 "simulation count must be at least one",
             ));
         }
         if *max_concurrent_simulations < 1 {
-            return Err(Self::invalid_argument(
+            return Err(BacktestError::invalid_argument(
                 "max concurrent simulations must be at least one",
             ));
         }
@@ -71,31 +72,22 @@ impl Spec {
             ("lost order chance", simulation.lost_order_chance),
         ] {
             if !(0.0..=1.0).contains(&chance) {
-                return Err(Self::invalid_argument(&format!(
+                return Err(BacktestError::invalid_argument(format!(
                     "{name} must be between zero and one"
                 )));
             }
         }
         if !(0.0..=1.0).contains(&simulation.slippage_proportion) {
-            return Err(Self::invalid_argument(
+            return Err(BacktestError::invalid_argument(
                 "slippage proportion must be between zero and one",
             ));
         }
-        let strategy_context: StrategyContextDto = Self::read_dto(
-            strategy_context_path,
-            ExitCode::ServerRunnerStrategyContextFileNotFound,
-            ExitCode::ServerRunnerStrategyContextNotDecoded,
-        )?;
-        let portfolio: PortfolioDto = Self::read_dto(
-            portfolio_path,
-            ExitCode::ServerRunnerPortfolioFileNotFound,
-            ExitCode::ServerRunnerPortfolioNotDecoded,
-        )?;
-        let portfolio: stock_trek::Portfolio =
-            portfolio.try_into().map_err(|error: StockTrekError| {
-                eprintln!("cwasm-invoker: portfolio could not be created: {error}");
-                ExitCode::ServerRunnerPortfolioNotCreated.code()
-            })?;
+        let strategy_context: StrategyContextDto =
+            Self::read_dto(strategy_context_path, Input::StrategyContext)?;
+        let portfolio: PortfolioDto = Self::read_dto(portfolio_path, Input::Portfolio)?;
+        let portfolio: stock_trek::Portfolio = portfolio
+            .try_into()
+            .map_err(BacktestError::InvalidPortfolio)?;
         let mut initial_balances: Balances = BTreeMap::new();
         for (cex, account, asset, total) in portfolio.assets_iter() {
             initial_balances
@@ -105,18 +97,14 @@ impl Spec {
                 .or_default()
                 .insert(*asset, *total);
         }
-        let market_data: StrategyContextDto = Self::read_dto(
-            market_data_path,
-            ExitCode::ServerRunnerMarketDataFileNotFound,
-            ExitCode::ServerRunnerMarketDataNotDecoded,
-        )?;
+        let market_data: StrategyContextDto = Self::read_dto(market_data_path, Input::MarketData)?;
         let mut pairs = Vec::new();
         for pair in trading_pairs {
             let base: AssetId = JsonString::deserialize(&pair.base).map_err(|error| {
-                Self::invalid_argument(&format!("trading pair base is invalid: {error}"))
+                BacktestError::invalid_argument(format!("trading pair base is invalid: {error}"))
             })?;
             let quote: AssetId = JsonString::deserialize(&pair.quote).map_err(|error| {
-                Self::invalid_argument(&format!("trading pair quote is invalid: {error}"))
+                BacktestError::invalid_argument(format!("trading pair quote is invalid: {error}"))
             })?;
             pairs.push((base, quote));
         }
@@ -124,19 +112,23 @@ impl Spec {
         pairs.dedup();
         let mut parsed_windows = Vec::new();
         for number in windows.iter().copied() {
-            let repr = u8::try_from(number)
-                .map_err(|_| Self::invalid_argument(&format!("window {number} is invalid")))?;
-            let window = AlignedWindow::from_repr(repr)
-                .ok_or_else(|| Self::invalid_argument(&format!("window {number} is invalid")))?;
+            let repr = u8::try_from(number).map_err(|_| {
+                BacktestError::invalid_argument(format!("window {number} is invalid"))
+            })?;
+            let window = AlignedWindow::from_repr(repr).ok_or_else(|| {
+                BacktestError::invalid_argument(format!("window {number} is invalid"))
+            })?;
             parsed_windows.push((number, window));
         }
         parsed_windows.sort();
         parsed_windows.dedup();
         if parsed_windows.is_empty() {
-            return Err(Self::invalid_argument("at least one window is required"));
+            return Err(BacktestError::invalid_argument(
+                "at least one window is required",
+            ));
         }
         if pairs.is_empty() {
-            return Err(Self::invalid_argument(
+            return Err(BacktestError::invalid_argument(
                 "at least one trading pair is required",
             ));
         }
@@ -148,7 +140,7 @@ impl Spec {
         let (driving_number, driving_window) = *parsed_windows
             .iter()
             .min_by_key(|(_, window)| *window)
-            .ok_or(ExitCode::ServerEntryInvalidArgument.code())?;
+            .ok_or_else(|| BacktestError::invalid_argument("no driving window is available"))?;
         let market_slots = MarketSlot::build_all(&strategy_context, &data, &pairs)?;
 
         let steps = market_slots
@@ -157,13 +149,13 @@ impl Spec {
             .min()
             .unwrap_or_default();
         if steps == 0 {
-            return Err(Self::invalid_argument(
+            return Err(BacktestError::invalid_argument(
                 "market data has no simulation steps",
             ));
         }
         let driving_millis = driving_window.millis().upper_bound();
         if *open_candle_progress_millis >= driving_millis {
-            return Err(Self::invalid_argument(
+            return Err(BacktestError::invalid_argument(
                 "open candle progress must be smaller than the shortest window",
             ));
         }
@@ -189,32 +181,16 @@ impl Spec {
         })
     }
 
-    fn read_dto<T: Message + Default>(
-        path: &str,
-        not_found: ExitCode,
-        not_decoded: ExitCode,
-    ) -> Result<T, i32> {
-        let bytes = fs::read(path).map_err(|error| {
-            eprintln!("cwasm-invoker: failed to read {path:?}: {error}");
-            if error.kind() == std::io::ErrorKind::NotFound {
-                not_found.code()
-            } else {
-                not_decoded.code()
-            }
+    fn read_dto<T: Message + Default>(path: &str, input: Input) -> BacktestResult<T> {
+        let bytes = fs::read(path).map_err(|source| BacktestError::ReadInput {
+            input,
+            path: PathBuf::from(path),
+            source,
         })?;
-        T::decode(&bytes[..]).map_err(|error| {
-            eprintln!("cwasm-invoker: failed to decode {path:?}: {error}");
-            not_decoded.code()
+        T::decode(&bytes[..]).map_err(|source| BacktestError::DecodeInput {
+            input,
+            path: PathBuf::from(path),
+            source,
         })
-    }
-
-    pub fn invalid_argument(message: &str) -> i32 {
-        eprintln!("cwasm-invoker: {message}");
-        ExitCode::ServerEntryInvalidArgument.code()
-    }
-
-    pub fn not_decoded(message: &str) -> i32 {
-        eprintln!("cwasm-invoker: {message}");
-        ExitCode::ServerRunnerMarketDataNotDecoded.code()
     }
 }
