@@ -1,7 +1,6 @@
 use crate::{
     shard_id::ShardId,
-    writer_lease::{LeaseStore, WriterLease},
-    writer_lease_tests::InMemoryLeaseStore,
+    writer_lease::{LeaseStore, WriterLease, in_memory_store::InMemoryLeaseStore},
 };
 use std::time::Duration;
 

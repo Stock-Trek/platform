@@ -26,8 +26,6 @@ mod shard_id_tests;
 mod supervisor;
 #[cfg(test)]
 mod supervisor_tests;
-#[cfg(test)]
-mod writer_lease_tests;
 
 pub use candle_sink::{ClosedCandlePublisher, NatsCandleSink, OpenCandleStore};
 pub use checkpoint_record::{CheckpointRecord, NatsStateStore, StateStore};

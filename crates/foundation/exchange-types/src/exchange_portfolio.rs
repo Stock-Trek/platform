@@ -1,17 +1,10 @@
-pub use crate::portfolio::{
-    AuthBinder, AuthError, Credential, CredentialProvider, PortfolioAuth, PortfolioIrisClient,
-    RenewalSchedule, SessionLifecycle,
-};
+use crate::portfolio::PortfolioAuth;
 use crate::{
-    api_key_credential::ApiKeyCredentials,
-    exchange::ETExchange,
+    api_key_credential::ApiKeyCredentials, exchange_account_snapshot::ETExchangeAccountSnapshot,
     http::HttpClient,
-    portfolio::{AccountEvent, AccountSnapshot},
-    request::ETHttpRequest,
 };
 use platform_errors::BuildResult;
 use std::{sync::Arc, time::Duration};
-use stock_trek_types::cex::asset_id::AssetId;
 
 pub struct PortfolioAuthContext {
     credentials: ApiKeyCredentials,
@@ -52,17 +45,6 @@ impl PortfolioAuthContext {
     }
 }
 
-pub trait ETExchangePortfolio: ETExchange {
-    type SnapshotRequest: ETHttpRequest<Exchange = Self> + Send;
-
-    fn account_snapshot_request() -> Self::SnapshotRequest;
-    fn account_snapshot(
-        response: <Self::SnapshotRequest as ETHttpRequest>::Response,
-        mapping: &dyn Fn(&str) -> Option<AssetId>,
-    ) -> BuildResult<AccountSnapshot>;
-    fn account_event(
-        value: &serde_json::Value,
-        mapping: &dyn Fn(&str) -> Option<AssetId>,
-    ) -> BuildResult<Option<AccountEvent>>;
+pub trait ETExchangePortfolio: ETExchangeAccountSnapshot {
     fn portfolio_auth(&self, context: PortfolioAuthContext) -> BuildResult<PortfolioAuth>;
 }

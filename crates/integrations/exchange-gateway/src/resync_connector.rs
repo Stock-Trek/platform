@@ -1,16 +1,13 @@
-use crate::{
-    clients::client::{HttpClient, WebsocketClient},
-    connector::Connector,
-    panic_guard::PanicUtils,
-    submission::Submission,
-};
+use crate::{connector::Connector, panic_guard::PanicUtils, submission::Submission};
 use parking_lot::Mutex;
 use platform_errors::{BuildError, BuildResult, ConnectorError};
 use platform_exchange_types::{
     exchange::ETExchange,
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
+    http::HttpClient,
     rate_limited::RateLimit,
     request::{ETHttpRequest, ETWebsocketRequest},
+    websocket::WebsocketClient,
 };
 use platform_types::{TimestampMilliseconds, UsageCount};
 use std::{collections::HashMap, sync::Arc, time::Duration};

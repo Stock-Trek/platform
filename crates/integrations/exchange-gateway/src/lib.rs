@@ -16,11 +16,7 @@ mod retry_after_header_tests;
 mod server_clock_tests;
 
 pub use async_trait::async_trait;
-pub use clients::{
-    client::{HttpClient, WebsocketClient},
-    iris::IrisWebsocketClient,
-    reqwest::ReqwestHttpClient,
-};
+pub use clients::{iris::IrisWebsocketClient, reqwest::ReqwestHttpClient};
 pub use connector::{
     CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT, Connector, ConnectorHealth,
     ConnectorHealthSink, ConnectorPortfolioUpdate, ConnectorState, ExchangePortfolio,

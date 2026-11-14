@@ -11,6 +11,7 @@ use platform_errors::{BuildError, BuildResult, ExchangeError};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     exchange::ETExchange,
+    exchange_account_snapshot::AccountSnapshotContext,
     exchange_portfolio::{ETExchangePortfolio, PortfolioAuthContext},
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
     portfolio::{AccountSnapshot, Credential, PortfolioAuth},
@@ -123,11 +124,13 @@ where
         let connector = self.http_connector(credentials)?;
         let response = Self::submit(&connector, Exchange::account_snapshot_request()).await?;
         let mapping = self.mapping;
-        Exchange::account_snapshot(response, &|asset| {
+        let asset_id = |asset: &str| {
             mapping
                 .asset_id(&platform_exchange_types::ticker::Ticker(asset.to_string()))
                 .copied()
-        })
+        };
+        let context = AccountSnapshotContext::new(&asset_id);
+        Exchange::account_snapshot(response, &context)
     }
 
     async fn open_stream(

@@ -6,7 +6,7 @@ use crate::{
     market_source::MarketSource,
     shard_id::ShardId,
     state::AggregatorState,
-    writer_lease_tests::InMemoryLeaseStore,
+    writer_lease::InMemoryLeaseStore,
 };
 use std::sync::Arc;
 
