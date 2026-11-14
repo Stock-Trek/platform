@@ -3,8 +3,8 @@ use hyper::{Response, StatusCode, body::Bytes, header::RETRY_AFTER};
 use platform_errors::{AuthError, PlatformError};
 use std::time::Duration;
 
-pub type JwtServerResult<T> = Result<T, JwtServerError>;
-
+#[derive(Debug, thiserror::Error)]
+#[error("{message}")]
 pub struct JwtServerError {
     status: StatusCode,
     message: String,
@@ -55,5 +55,11 @@ impl JwtServerError {
 impl From<(StatusCode, String)> for JwtServerError {
     fn from((status, message): (StatusCode, String)) -> Self {
         Self::new(status, message)
+    }
+}
+
+impl From<JwtServerError> for PlatformError {
+    fn from(error: JwtServerError) -> Self {
+        Self::external(error)
     }
 }
