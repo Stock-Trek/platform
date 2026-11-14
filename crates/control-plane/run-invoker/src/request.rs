@@ -1,5 +1,5 @@
 use platform_aws::PresignedPost;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_run_store::RunRecord;
 use serde::Serialize;
 
@@ -59,7 +59,7 @@ impl RunRequest {
         )
     }
 
-    pub fn to_json(&self) -> BuildResult<String> {
-        serde_json::to_string(self).map_err(BuildError::external)
+    pub fn to_json(&self) -> PlatformResult<String> {
+        serde_json::to_string(self).map_err(PlatformError::external)
     }
 }

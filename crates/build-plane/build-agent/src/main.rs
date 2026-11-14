@@ -20,13 +20,13 @@ use crate::{
 };
 use lambda_runtime::service_fn;
 use metrics_cloudwatch_embedded::lambda::service::run;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_runtime::Service;
 
 const SERVICE: Service = Service::new("platform-build-agent");
 
 #[tokio::main]
-async fn main() -> BuildResult<()> {
+async fn main() -> PlatformResult<()> {
     let config = AgentConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let recorder =
@@ -51,5 +51,5 @@ async fn main() -> BuildResult<()> {
         }),
     )
     .await
-    .map_err(BuildError::external)
+    .map_err(PlatformError::external)
 }

@@ -1,7 +1,7 @@
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use serde::{Deserialize, Serialize};
 use std::collections::VecDeque;
 use strum::{Display, EnumString};
@@ -75,7 +75,7 @@ impl TokenAuditEvent {
 /// the token's outbox, and [`crate::TokenAuditRelay`] drains it afterwards.
 #[async_trait]
 pub trait TokenAuditLog: Send + Sync {
-    async fn record(&self, event: TokenAuditEvent) -> BuildResult<()>;
+    async fn record(&self, event: TokenAuditEvent) -> PlatformResult<()>;
 }
 
 #[derive(Debug)]
@@ -99,7 +99,7 @@ impl MemoryTokenAuditLog {
 
 #[async_trait]
 impl TokenAuditLog for MemoryTokenAuditLog {
-    async fn record(&self, event: TokenAuditEvent) -> BuildResult<()> {
+    async fn record(&self, event: TokenAuditEvent) -> PlatformResult<()> {
         if self.capacity == 0 {
             return Ok(());
         }

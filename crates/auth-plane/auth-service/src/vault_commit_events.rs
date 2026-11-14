@@ -3,14 +3,14 @@ use crate::{
     token_audit_outbox::TokenAuditOutbox,
     vault_client::{VaultClient, WriteCondition},
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 impl VaultClient {
     pub async fn commit_events(
         &self,
         mutation: TokenMutation,
         mut events: Vec<TokenAuditEvent>,
-    ) -> BuildResult<bool> {
+    ) -> PlatformResult<bool> {
         for event in &mut events {
             TokenAuditOutbox::ensure_event_id(event);
         }
@@ -50,23 +50,27 @@ impl VaultClient {
         }
     }
 
-    fn validate_mutation(mutation: &TokenMutation) -> BuildResult<()> {
+    fn validate_mutation(mutation: &TokenMutation) -> PlatformResult<()> {
         match mutation {
             TokenMutation::Create(token) | TokenMutation::Update { token, .. } => token.validate(),
             TokenMutation::Delete { expected } => expected.validate(),
         }
     }
 
-    async fn commit_update_events(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
+    async fn commit_update_events(
+        &self,
+        expected: &ApiToken,
+        token: &ApiToken,
+    ) -> PlatformResult<()> {
         let Some((data, version)) = self.get_value_entry(token.id()).await? else {
-            return Err(BuildError::unknown_token(token.id()));
+            return Err(PlatformError::unknown_token(token.id()));
         };
         if Self::is_tombstone(&data) {
-            return Err(BuildError::unknown_token(token.id()));
+            return Err(PlatformError::unknown_token(token.id()));
         }
         let current = Self::token_from_value(token.id(), &data)?;
         if current.to_value() != expected.to_value() {
-            return Err(BuildError::token_conflict(token.id()));
+            return Err(PlatformError::token_conflict(token.id()));
         }
         self.put_entry(
             token.id(),
@@ -76,7 +80,7 @@ impl VaultClient {
         .await
     }
 
-    async fn commit_delete_events(&self, expected: &ApiToken) -> BuildResult<bool> {
+    async fn commit_delete_events(&self, expected: &ApiToken) -> PlatformResult<bool> {
         let Some((data, version)) = self.get_value_entry(expected.id()).await? else {
             return Ok(false);
         };

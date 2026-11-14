@@ -2,7 +2,7 @@ use crate::dto::github::github_event_converter::GitHubEventConverter;
 use crate::{dto::event_converter::EventConverter, event_response::EventResponse};
 use hmac::{Hmac, KeyInit, Mac};
 use lambda_http::Body;
-use platform_errors::{BuildError, BuildResult, GitHubError};
+use platform_errors::{GitHubError, PlatformError, PlatformResult};
 use platform_github::HostAllowlist;
 use sha2::Sha256;
 
@@ -23,7 +23,7 @@ where
     }
 }
 
-fn host_from_converter(converter: &GitHubEventConverter, html_url: &str) -> BuildResult<String> {
+fn host_from_converter(converter: &GitHubEventConverter, html_url: &str) -> PlatformResult<String> {
     let body = installation_payload(html_url);
     let request = signed_request(SECRET, "installation", &body);
     match converter.event_response(&request)? {
@@ -50,7 +50,7 @@ fn installation_payload(html_url: &str) -> Vec<u8> {
     .into_bytes()
 }
 
-fn host_from_installation(html_url: &str) -> BuildResult<String> {
+fn host_from_installation(html_url: &str) -> PlatformResult<String> {
     host_from_converter(&converter(), html_url)
 }
 
@@ -118,7 +118,7 @@ fn installation_event_rejects_disallowed_host() {
     let request = signed_request(SECRET, "installation", &body);
     assert!(matches!(
         converter().event_response(&request),
-        Err(BuildError::GitHub(GitHubError::HostNotAllowed { host: url })) if url == "https://evil.com/"
+        Err(PlatformError::GitHub(GitHubError::HostNotAllowed { host: url })) if url == "https://evil.com/"
     ));
 }
 
@@ -126,7 +126,7 @@ fn installation_event_rejects_disallowed_host() {
 fn installation_event_rejects_non_https_scheme() {
     assert!(matches!(
         host_from_installation("http://github.com/"),
-        Err(BuildError::GitHub(GitHubError::HostInvalid { host: url })) if url == "http://github.com/"
+        Err(PlatformError::GitHub(GitHubError::HostInvalid { host: url })) if url == "http://github.com/"
     ));
 }
 
@@ -164,6 +164,6 @@ fn installation_event_rejects_github_com_on_custom_port() {
 fn installation_event_rejects_userinfo_trick() {
     assert!(matches!(
         host_from_installation("https://github.com@evil.com/"),
-        Err(BuildError::GitHub(GitHubError::HostInvalid { host: url })) if url == "https://github.com@evil.com/"
+        Err(PlatformError::GitHub(GitHubError::HostInvalid { host: url })) if url == "https://github.com@evil.com/"
     ));
 }

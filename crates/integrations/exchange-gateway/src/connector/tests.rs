@@ -1,5 +1,5 @@
 use crate::{connector::Connector, server_clock::Clock, submission::SubmissionOutcome};
-use platform_errors::{BuildError, BuildResult, ConnectorError, RateLimitError, SendFailure};
+use platform_errors::{ConnectorError, PlatformError, PlatformResult, RateLimitError, SendFailure};
 use platform_exchange_types::{
     binance::{
         exchange::BinanceExchange,
@@ -18,8 +18,12 @@ struct UnknownOutcomeClient;
 
 #[async_trait::async_trait]
 impl HttpClient for UnknownOutcomeClient {
-    async fn send(&self, _request: HttpRequest, _timeout: Duration) -> BuildResult<HttpResponse> {
-        Err(BuildError::send_unknown(BuildError::System(
+    async fn send(
+        &self,
+        _request: HttpRequest,
+        _timeout: Duration,
+    ) -> PlatformResult<HttpResponse> {
+        Err(PlatformError::send_unknown(PlatformError::System(
             platform_errors::SystemError::SemaphoreClosed,
         )))
     }
@@ -29,7 +33,11 @@ struct PendingClient;
 
 #[async_trait::async_trait]
 impl HttpClient for PendingClient {
-    async fn send(&self, _request: HttpRequest, _timeout: Duration) -> BuildResult<HttpResponse> {
+    async fn send(
+        &self,
+        _request: HttpRequest,
+        _timeout: Duration,
+    ) -> PlatformResult<HttpResponse> {
         std::future::pending().await
     }
 }
@@ -141,8 +149,8 @@ async fn http_rate_limit_rejection_is_deferred_until_awaited() {
     assert_eq!(error.send_failure(), Some(SendFailure::NotSent));
     assert!(matches!(
         error,
-        BuildError::Connector(ConnectorError::Send { source, .. })
-            if matches!(*source, BuildError::RateLimit(RateLimitError::RateLimited))
+        PlatformError::Connector(ConnectorError::Send { source, .. })
+            if matches!(*source, PlatformError::RateLimit(RateLimitError::RateLimited))
     ));
 }
 #[test]

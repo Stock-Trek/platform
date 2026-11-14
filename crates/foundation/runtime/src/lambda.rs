@@ -1,7 +1,7 @@
 //! Lambda-specific bootstrap shared by the Lambda services.
 
 use metrics_cloudwatch_embedded::Collector;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_metrics::{COLD_STARTS_TOTAL, DescriptionsMetrics};
 
 /// Installs the CloudWatch metrics recorder used by Lambda services.
@@ -13,7 +13,7 @@ impl LambdaMetrics {
     pub fn init(
         namespace: &str,
         function_name: impl Into<String>,
-    ) -> BuildResult<&'static Collector> {
+    ) -> PlatformResult<&'static Collector> {
         let recorder = metrics_cloudwatch_embedded::Builder::new()
             .cloudwatch_namespace(namespace.to_owned())
             .with_dimension("function", function_name.into())

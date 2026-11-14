@@ -1,5 +1,5 @@
 use platform_config::EnvVars;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_types::UrlScheme;
 
 pub const ICEBERG_CATALOG_URI: &str = "ICEBERG_CATALOG_URI";
@@ -16,11 +16,11 @@ pub struct IcebergConfig {
 }
 
 impl IcebergConfig {
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let catalog_uri = vars.required_url(ICEBERG_CATALOG_URI, &UrlScheme::HTTP)?;
         let warehouse = vars.required(ICEBERG_CATALOG_WAREHOUSE)?;
         if !warehouse.starts_with("s3://") {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 ICEBERG_CATALOG_WAREHOUSE,
                 "must be an s3:// URI",
             ));
@@ -40,7 +40,7 @@ impl IcebergConfig {
     ///
     /// Used by starts that do not replay the archive; a partially configured
     /// catalog still fails validation instead of being silently ignored.
-    pub fn optional_from_vars(vars: &EnvVars) -> BuildResult<Option<Self>> {
+    pub fn optional_from_vars(vars: &EnvVars) -> PlatformResult<Option<Self>> {
         if vars.optional(ICEBERG_CATALOG_URI)?.is_none() {
             return Ok(None);
         }

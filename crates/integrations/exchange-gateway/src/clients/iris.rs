@@ -2,7 +2,7 @@ use crate::{panic_guard::PanicUtils, websocket_listener::WebsocketListener};
 use async_trait::async_trait;
 use futures_timer::Delay;
 use iris::{Client as IrisClient, Config as IrisConfig, ConnectionError, Listener as IrisListener};
-use platform_errors::{BuildError, BuildResult, ConnectorError, TimeoutError};
+use platform_errors::{ConnectorError, PlatformError, PlatformResult, TimeoutError};
 use platform_exchange_types::websocket::WebsocketClient;
 use std::{
     future::{Future, poll_fn},
@@ -25,7 +25,7 @@ impl IrisWebsocketClient {
         );
         Self { client }
     }
-    async fn send_message_with_delay<D>(&self, message: String, delay: D) -> BuildResult<()>
+    async fn send_message_with_delay<D>(&self, message: String, delay: D) -> PlatformResult<()>
     where
         D: Future<Output = ()> + Send + 'static,
     {
@@ -34,38 +34,41 @@ impl IrisWebsocketClient {
         poll_fn(move |cx| match send.as_mut().poll(cx) {
             Poll::Ready(result) => Poll::Ready(result.map_err(Self::map_send_error)),
             Poll::Pending => match delay.as_mut().poll(cx) {
-                Poll::Ready(()) => Poll::Ready(Err(BuildError::send_unknown(BuildError::Timeout(
-                    TimeoutError::TimedOut,
-                )))),
+                Poll::Ready(()) => Poll::Ready(Err(PlatformError::send_unknown(
+                    PlatformError::Timeout(TimeoutError::TimedOut),
+                ))),
                 Poll::Pending => Poll::Pending,
             },
         })
         .await
     }
-    fn map_send_error(error: ConnectionError) -> BuildError {
+    fn map_send_error(error: ConnectionError) -> PlatformError {
         match error {
             ConnectionError::ConnectionClosed | ConnectionError::SendMessage(_) => {
-                BuildError::send_not_sent_external(error)
+                PlatformError::send_not_sent_external(error)
             }
-            error => BuildError::send_unknown_external(error),
+            error => PlatformError::send_unknown_external(error),
         }
     }
 }
 
 #[async_trait]
 impl WebsocketClient for IrisWebsocketClient {
-    async fn connect(&self) -> BuildResult<()> {
-        self.client.connect().await.map_err(BuildError::external)
+    async fn connect(&self) -> PlatformResult<()> {
+        self.client.connect().await.map_err(PlatformError::external)
     }
     fn is_connected(&self) -> bool {
         self.client.is_connected()
     }
-    async fn send(&self, message: String, timeout: Duration) -> BuildResult<()> {
+    async fn send(&self, message: String, timeout: Duration) -> PlatformResult<()> {
         self.send_message_with_delay(message, Delay::new(timeout))
             .await
     }
-    async fn disconnect(&self) -> BuildResult<()> {
-        self.client.disconnect().await.map_err(BuildError::external)
+    async fn disconnect(&self) -> PlatformResult<()> {
+        self.client
+            .disconnect()
+            .await
+            .map_err(PlatformError::external)
     }
 }
 
@@ -88,7 +91,7 @@ impl IrisListener<serde_json::Value> for IrisListenerAdapter {
         let _ = match PanicUtils::catch_panic_async(future).await {
             Ok(result) => result,
             Err(panic) => {
-                let error = BuildError::Connector(ConnectorError::CallbackPanicked(
+                let error = PlatformError::Connector(ConnectorError::CallbackPanicked(
                     panic.message().to_string(),
                 ));
                 error!(error = %error, "websocket on_message callback panicked");

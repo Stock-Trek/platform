@@ -7,7 +7,7 @@ use crate::{
 };
 use aws_sdk_lambda::Client as LambdaClient;
 use aws_sdk_sqs::Client as SqsClient;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_github::GitHubAuth;
 use platform_sqs::{Sqs, SqsConfig, SqsDedup};
 use std::time::Duration;
@@ -23,7 +23,7 @@ pub struct RsOrchestratorContext {
 }
 
 impl RsOrchestratorContext {
-    pub async fn new(config: &OrchestratorConfig) -> BuildResult<Self> {
+    pub async fn new(config: &OrchestratorConfig) -> PlatformResult<Self> {
         let aws_timeouts = config.aws_timeouts;
         let sdk_config = platform_aws::Aws::load_sdk_config(aws_timeouts).await;
         let lambda = Lambda::new(

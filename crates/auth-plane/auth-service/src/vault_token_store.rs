@@ -5,14 +5,14 @@ use crate::{
     vault_client::{VaultClient, WriteCondition},
 };
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 
 pub struct VaultTokenStore {
     client: VaultClient,
 }
 
 impl VaultTokenStore {
-    pub fn new(config: VaultTokenStoreConfig) -> BuildResult<Self> {
+    pub fn new(config: VaultTokenStoreConfig) -> PlatformResult<Self> {
         Ok(Self {
             client: VaultClient::new(config)?,
         })
@@ -50,17 +50,17 @@ impl VaultTokenStore {
 
 #[async_trait]
 impl TokenStore for VaultTokenStore {
-    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
+    async fn put(&self, token: &ApiToken) -> PlatformResult<()> {
         self.client.put(token, WriteCondition::Create).await?;
         self.sync_token_index(token).await;
         Ok(())
     }
 
-    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> PlatformResult<Option<ApiToken>> {
         self.client.get(id).await
     }
 
-    async fn delete(&self, id: &str) -> BuildResult<()> {
+    async fn delete(&self, id: &str) -> PlatformResult<()> {
         let owner = self
             .client
             .get(id)
@@ -73,7 +73,7 @@ impl TokenStore for VaultTokenStore {
         Ok(())
     }
 
-    async fn delete_if(&self, expected: &ApiToken) -> BuildResult<bool> {
+    async fn delete_if(&self, expected: &ApiToken) -> PlatformResult<bool> {
         let deleted = self.client.delete_if(expected).await?;
         if deleted {
             self.sync_removed_index(expected.owner(), expected.id())
@@ -82,31 +82,31 @@ impl TokenStore for VaultTokenStore {
         Ok(deleted)
     }
 
-    async fn ids(&self) -> BuildResult<Vec<String>> {
+    async fn ids(&self) -> PlatformResult<Vec<String>> {
         self.client.ids().await
     }
 
-    async fn owner_index(&self, owner: &str) -> BuildResult<Option<OwnerIndex>> {
+    async fn owner_index(&self, owner: &str) -> PlatformResult<Option<OwnerIndex>> {
         self.client.owner_index(owner).await
     }
 
-    async fn put_owner_index(&self, index: &OwnerIndex) -> BuildResult<()> {
+    async fn put_owner_index(&self, index: &OwnerIndex) -> PlatformResult<()> {
         self.client.put_owner_index(index).await
     }
 
-    async fn owner_indexes(&self) -> BuildResult<Vec<OwnerIndex>> {
+    async fn owner_indexes(&self) -> PlatformResult<Vec<OwnerIndex>> {
         self.client.owner_indexes().await
     }
 
-    async fn index_owner_token(&self, token: &ApiToken) -> BuildResult<()> {
+    async fn index_owner_token(&self, token: &ApiToken) -> PlatformResult<()> {
         self.client.upsert_owner_index_token(token).await
     }
 
-    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BuildResult<()> {
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> PlatformResult<()> {
         self.client.remove_owner_index_token(owner, id).await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> PlatformResult<()> {
         self.client.update_if_unchanged(expected, token).await?;
         if expected.owner() != token.owner() {
             self.sync_removed_index(expected.owner(), expected.id())
@@ -116,7 +116,11 @@ impl TokenStore for VaultTokenStore {
         Ok(())
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
+    async fn commit(
+        &self,
+        mutation: TokenMutation,
+        event: TokenAuditEvent,
+    ) -> PlatformResult<bool> {
         let index_mutation = mutation.clone();
         let applied = self.client.commit(mutation, event).await?;
         if applied {
@@ -129,7 +133,7 @@ impl TokenStore for VaultTokenStore {
         &self,
         mutation: TokenMutation,
         events: Vec<TokenAuditEvent>,
-    ) -> BuildResult<bool> {
+    ) -> PlatformResult<bool> {
         let index_mutation = mutation.clone();
         let applied = self.client.commit_events(mutation, events).await?;
         if applied {
@@ -138,27 +142,27 @@ impl TokenStore for VaultTokenStore {
         Ok(applied)
     }
 
-    async fn append_audit(&self, event: TokenAuditEvent) -> BuildResult<()> {
+    async fn append_audit(&self, event: TokenAuditEvent) -> PlatformResult<()> {
         self.client.append_audit(event).await
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> PlatformResult<()> {
         self.client.commit_rotation(transaction).await
     }
 
-    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> PlatformResult<Vec<TokenAuditEvent>> {
         self.client.pending_audits().await
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> PlatformResult<()> {
         self.client.acknowledge_audit(event_id).await
     }
 
-    async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
+    async fn pending_rotations(&self) -> PlatformResult<Vec<TokenRotationTransaction>> {
         self.client.pending_rotations().await
     }
 
-    async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
+    async fn acknowledge_rotation(&self, transaction_id: &str) -> PlatformResult<()> {
         self.client.acknowledge_rotation(transaction_id).await
     }
 }

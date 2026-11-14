@@ -1,6 +1,6 @@
 use crate::{AccountKey, CexAccountPortfolio, PortfolioUpdateMetadata};
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use stock_trek_types::cex::asset_id::AssetId;
@@ -47,7 +47,7 @@ impl PortfolioRecord {
         )
     }
 
-    pub fn into_portfolio(self) -> BuildResult<CexAccountPortfolio> {
-        CexAccountPortfolio::new(self.balances, Vec::new()).map_err(BuildError::external)
+    pub fn into_portfolio(self) -> PlatformResult<CexAccountPortfolio> {
+        CexAccountPortfolio::new(self.balances, Vec::new()).map_err(PlatformError::external)
     }
 }

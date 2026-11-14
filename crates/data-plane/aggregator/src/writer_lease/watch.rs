@@ -1,10 +1,10 @@
 use crate::writer_lease::WriterLease;
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 
 #[async_trait]
 pub trait LeaseWatchStream: Send {
-    async fn next(&mut self) -> BuildResult<Option<WriterLease>>;
+    async fn next(&mut self) -> PlatformResult<Option<WriterLease>>;
 }
 
 pub struct LeaseWatch {
@@ -18,7 +18,7 @@ impl LeaseWatch {
         }
     }
 
-    pub async fn next(&mut self) -> BuildResult<Option<WriterLease>> {
+    pub async fn next(&mut self) -> PlatformResult<Option<WriterLease>> {
         self.inner.next().await
     }
 }

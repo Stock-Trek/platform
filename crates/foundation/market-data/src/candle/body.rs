@@ -2,7 +2,7 @@ use crate::{
     candle::{AlignedWindow, key::CandleKey},
     decoders::Trade,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_types::TimestampMilliseconds;
 use rust_decimal::{Decimal, prelude::ToPrimitive};
 use serde::{Deserialize, Serialize};
@@ -85,7 +85,7 @@ impl TryFrom<CandleWire> for Candle {
 }
 
 impl Candle {
-    pub fn open(trade: &Trade, interval: AlignedWindow) -> BuildResult<Self> {
+    pub fn open(trade: &Trade, interval: AlignedWindow) -> PlatformResult<Self> {
         let price = Self::to_f64("price", trade.price)?;
         let quantity = Self::to_f64("quantity", trade.quantity)?;
         let quote_volume = price * quantity;
@@ -97,7 +97,7 @@ impl Candle {
             end_time_millis_exc: bounds.1,
             is_candle_closed: false,
             ohlcv: MarketOhlcv::new(price, price, price, price, quantity, quote_volume)
-                .map_err(|error| BuildError::candle_conversion("ohlcv", error))?,
+                .map_err(|error| PlatformError::candle_conversion("ohlcv", error))?,
             trade_count: 1,
             is_complete: true,
         })
@@ -123,13 +123,13 @@ impl Candle {
         self.is_complete = true;
     }
 
-    pub fn apply_trade(&mut self, trade: &Trade) -> BuildResult<()> {
+    pub fn apply_trade(&mut self, trade: &Trade) -> PlatformResult<()> {
         let price = Self::to_f64("price", trade.price)?;
         let quantity = Self::to_f64("quantity", trade.quantity)?;
 
         self.ohlcv
             .apply_trade(price, quantity)
-            .map_err(|error| BuildError::candle_conversion("trade", error))?;
+            .map_err(|error| PlatformError::candle_conversion("trade", error))?;
         self.trade_count = self.trade_count.saturating_add(1);
         Ok(())
     }
@@ -154,26 +154,26 @@ impl Candle {
     fn window_bounds(
         timestamp: TimestampMilliseconds,
         interval: AlignedWindow,
-    ) -> BuildResult<(u64, u64)> {
+    ) -> PlatformResult<(u64, u64)> {
         let timestamp = TimestampMillis::try_from(timestamp.0)
-            .map_err(|error| BuildError::candle_conversion("timestamp", error))?;
+            .map_err(|error| PlatformError::candle_conversion("timestamp", error))?;
         let bounds = interval
             .bounds_for(timestamp)
-            .map_err(|error| BuildError::candle_conversion("timestamp", error))?;
+            .map_err(|error| PlatformError::candle_conversion("timestamp", error))?;
         let start_millis = bounds.lower().as_millis();
         let end_millis = bounds.upper().as_millis();
         Self::validate_timestamp(start_millis)
             .and_then(|_| Self::validate_timestamp(end_millis))
-            .map_err(|error| BuildError::candle_conversion("timestamp", error))?;
+            .map_err(|error| PlatformError::candle_conversion("timestamp", error))?;
         Ok((start_millis, end_millis))
     }
 
-    fn to_f64(field: &'static str, value: Decimal) -> BuildResult<f64> {
+    fn to_f64(field: &'static str, value: Decimal) -> PlatformResult<f64> {
         value
             .to_f64()
             .filter(|value| value.is_finite())
             .ok_or_else(|| {
-                BuildError::candle_conversion(field, DecimalConversionError { field, value })
+                PlatformError::candle_conversion(field, DecimalConversionError { field, value })
             })
     }
 

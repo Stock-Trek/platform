@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use tracing_subscriber::{EnvFilter, fmt::Subscriber};
 
 pub struct TracingSetup;
@@ -8,9 +8,9 @@ impl TracingSetup {
     ///
     /// The process configuration validates `RUST_LOG` before calling this, so
     /// startup fails fast when the value is missing or invalid.
-    pub fn setup(filter: &str) -> BuildResult<()> {
+    pub fn setup(filter: &str) -> PlatformResult<()> {
         let filter = EnvFilter::try_new(filter)
-            .map_err(|error| BuildError::config_invalid_source(EnvFilter::DEFAULT_ENV, error))?;
+            .map_err(|error| PlatformError::config_invalid_source(EnvFilter::DEFAULT_ENV, error))?;
         let subscriber = Subscriber::builder()
             .with_ansi(false)
             .with_env_filter(filter)

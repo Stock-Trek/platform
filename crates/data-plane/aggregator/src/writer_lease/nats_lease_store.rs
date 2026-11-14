@@ -4,7 +4,7 @@ use crate::{
     writer_lease::{LeaseStore, LeaseWatch, WriterLease, watch::LeaseWatchStream},
 };
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_nats::{KeyValue, KeyValueWatch};
 use platform_types::TimestampMilliseconds;
 use std::time::Duration;
@@ -14,7 +14,7 @@ pub struct NatsLeaseStore {
 }
 
 impl NatsLeaseStore {
-    pub async fn connect(config: &AggregatorConfig) -> BuildResult<Self> {
+    pub async fn connect(config: &AggregatorConfig) -> PlatformResult<Self> {
         let values = KeyValue::connect(
             &config.nats_url,
             "platform-aggregator-leases",
@@ -24,7 +24,7 @@ impl NatsLeaseStore {
         Ok(Self { values })
     }
 
-    async fn load(&self, shard: ShardId) -> BuildResult<Option<(WriterLease, u64)>> {
+    async fn load(&self, shard: ShardId) -> PlatformResult<Option<(WriterLease, u64)>> {
         let Some((payload, revision)) = self
             .values
             .get_with_revision(&WriterLease::key(shard))
@@ -43,7 +43,7 @@ struct NatsLeaseWatch {
 
 #[async_trait]
 impl LeaseWatchStream for NatsLeaseWatch {
-    async fn next(&mut self) -> BuildResult<Option<WriterLease>> {
+    async fn next(&mut self) -> PlatformResult<Option<WriterLease>> {
         let change = self.values.next().await?;
         Ok(change
             .value
@@ -60,7 +60,7 @@ impl LeaseStore for NatsLeaseStore {
         shard: ShardId,
         owner_id: &str,
         ttl: Duration,
-    ) -> BuildResult<Option<WriterLease>> {
+    ) -> PlatformResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
         let key = WriterLease::key(shard);
         let Some((existing, revision)) = self.load(shard).await? else {
@@ -75,7 +75,7 @@ impl LeaseStore for NatsLeaseStore {
                 Ok(_) => Ok(Some(lease)),
                 Err(_) => {
                     let Some((current, _)) = self.load(shard).await? else {
-                        return Err(BuildError::bad_value(
+                        return Err(PlatformError::bad_value(
                             "aggregator lease",
                             shard.to_string(),
                             "lease creation conflicted without a visible holder",
@@ -84,7 +84,7 @@ impl LeaseStore for NatsLeaseStore {
                     if current.owner_id != owner_id && !current.is_expired(now) {
                         Ok(None)
                     } else {
-                        Err(BuildError::bad_value(
+                        Err(PlatformError::bad_value(
                             "aggregator lease",
                             shard.to_string(),
                             "lease creation conflicted; retry acquisition",
@@ -115,7 +115,11 @@ impl LeaseStore for NatsLeaseStore {
         }
     }
 
-    async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BuildResult<Option<WriterLease>> {
+    async fn renew(
+        &self,
+        lease: &WriterLease,
+        ttl: Duration,
+    ) -> PlatformResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
         let Some((current, revision)) = self.load(lease.shard).await? else {
             return Ok(None);
@@ -136,7 +140,7 @@ impl LeaseStore for NatsLeaseStore {
         }
     }
 
-    async fn release(&self, lease: &WriterLease) -> BuildResult<()> {
+    async fn release(&self, lease: &WriterLease) -> PlatformResult<()> {
         let Some((mut current, revision)) = self.load(lease.shard).await? else {
             return Ok(());
         };
@@ -150,11 +154,11 @@ impl LeaseStore for NatsLeaseStore {
         Ok(())
     }
 
-    async fn current(&self, shard: ShardId) -> BuildResult<Option<WriterLease>> {
+    async fn current(&self, shard: ShardId) -> PlatformResult<Option<WriterLease>> {
         Ok(self.load(shard).await?.map(|(lease, _)| lease))
     }
 
-    fn watch(&self, shard: ShardId) -> BuildResult<LeaseWatch> {
+    fn watch(&self, shard: ShardId) -> PlatformResult<LeaseWatch> {
         let values = self.values.watch(&WriterLease::key(shard))?;
         Ok(LeaseWatch::new(NatsLeaseWatch { values }))
     }

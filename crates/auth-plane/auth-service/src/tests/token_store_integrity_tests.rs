@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BuildError, BuildResult};
+use platform_errors::{AuthError, PlatformError, PlatformResult};
 use std::sync::Arc;
 
 struct MismatchedTokenStore {
@@ -14,23 +14,23 @@ struct MismatchedTokenStore {
 
 #[async_trait]
 impl TokenStore for MismatchedTokenStore {
-    async fn put(&self, _token: &ApiToken) -> BuildResult<()> {
+    async fn put(&self, _token: &ApiToken) -> PlatformResult<()> {
         Ok(())
     }
 
-    async fn get(&self, _id: &str) -> BuildResult<Option<ApiToken>> {
+    async fn get(&self, _id: &str) -> PlatformResult<Option<ApiToken>> {
         Ok(Some(self.token.clone()))
     }
 
-    async fn delete(&self, _id: &str) -> BuildResult<()> {
+    async fn delete(&self, _id: &str) -> PlatformResult<()> {
         Ok(())
     }
 
-    async fn ids(&self) -> BuildResult<Vec<String>> {
+    async fn ids(&self) -> PlatformResult<Vec<String>> {
         Ok(vec!["token-a".to_string()])
     }
 
-    async fn owner_index(&self, owner: &str) -> BuildResult<Option<OwnerIndex>> {
+    async fn owner_index(&self, owner: &str) -> PlatformResult<Option<OwnerIndex>> {
         let token = ApiToken::generate(
             "token-a",
             owner,
@@ -40,8 +40,8 @@ impl TokenStore for MismatchedTokenStore {
         Ok(Some(OwnerIndex::from_tokens(owner, &[token])))
     }
 
-    async fn commit_rotation(&self, _transaction: &TokenRotationTransaction) -> BuildResult<()> {
-        Err(BuildError::auth_store(
+    async fn commit_rotation(&self, _transaction: &TokenRotationTransaction) -> PlatformResult<()> {
+        Err(PlatformError::auth_store(
             "write",
             "rotation-transaction",
             false,
@@ -49,11 +49,15 @@ impl TokenStore for MismatchedTokenStore {
         ))
     }
 
-    async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> BuildResult<()> {
+    async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> PlatformResult<()> {
         Ok(())
     }
 
-    async fn commit(&self, _mutation: TokenMutation, _event: TokenAuditEvent) -> BuildResult<bool> {
+    async fn commit(
+        &self,
+        _mutation: TokenMutation,
+        _event: TokenAuditEvent,
+    ) -> PlatformResult<bool> {
         Ok(true)
     }
 }
@@ -68,10 +72,10 @@ impl StoreIntegrityFixture {
         AuthServiceBuilder::new().store(Arc::new(store)).build()
     }
 
-    fn assert_store_error<T>(result: BuildResult<T>) {
+    fn assert_store_error<T>(result: PlatformResult<T>) {
         assert!(matches!(
             result,
-            Err(BuildError::Auth(AuthError::Store {
+            Err(PlatformError::Auth(AuthError::Store {
                 retryable: false,
                 ..
             }))
@@ -104,27 +108,27 @@ struct DuplicateIdsStore {
 
 #[async_trait]
 impl TokenStore for DuplicateIdsStore {
-    async fn put(&self, _token: &ApiToken) -> BuildResult<()> {
+    async fn put(&self, _token: &ApiToken) -> PlatformResult<()> {
         Ok(())
     }
 
-    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> PlatformResult<Option<ApiToken>> {
         Ok((id == self.token.id()).then(|| self.token.clone()))
     }
 
-    async fn delete(&self, _id: &str) -> BuildResult<()> {
+    async fn delete(&self, _id: &str) -> PlatformResult<()> {
         Ok(())
     }
 
-    async fn ids(&self) -> BuildResult<Vec<String>> {
+    async fn ids(&self) -> PlatformResult<Vec<String>> {
         Ok(vec![
             self.token.id().to_string(),
             self.token.id().to_string(),
         ])
     }
 
-    async fn commit_rotation(&self, _transaction: &TokenRotationTransaction) -> BuildResult<()> {
-        Err(BuildError::auth_store(
+    async fn commit_rotation(&self, _transaction: &TokenRotationTransaction) -> PlatformResult<()> {
+        Err(PlatformError::auth_store(
             "write",
             "rotation-transaction",
             false,
@@ -132,11 +136,15 @@ impl TokenStore for DuplicateIdsStore {
         ))
     }
 
-    async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> BuildResult<()> {
+    async fn update(&self, _expected: &ApiToken, _token: &ApiToken) -> PlatformResult<()> {
         Ok(())
     }
 
-    async fn commit(&self, _mutation: TokenMutation, _event: TokenAuditEvent) -> BuildResult<bool> {
+    async fn commit(
+        &self,
+        _mutation: TokenMutation,
+        _event: TokenAuditEvent,
+    ) -> PlatformResult<bool> {
         Ok(true)
     }
 }

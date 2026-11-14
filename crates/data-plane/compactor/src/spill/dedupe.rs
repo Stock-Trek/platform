@@ -1,7 +1,7 @@
 use platform_archive::{
     ArchiveBatch, ArchiveKind, ArchiveRecord, ArchiveRecordKey, SpillRun, SpillRunReader,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::{
     cmp::Ordering,
     collections::{BinaryHeap, HashMap},
@@ -27,10 +27,10 @@ impl DedupeSpill {
         kind: ArchiveKind,
         directory: impl Into<PathBuf>,
         limit: usize,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let directory = directory.into();
         std::fs::create_dir_all(&directory).map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "create compaction spill directory",
                 directory.display().to_string(),
                 error,
@@ -45,7 +45,7 @@ impl DedupeSpill {
         })
     }
 
-    pub fn push(&mut self, record: ArchiveRecord) -> BuildResult<()> {
+    pub fn push(&mut self, record: ArchiveRecord) -> PlatformResult<()> {
         self.records.insert(record.key(), record);
         if self.records.len() >= self.limit {
             self.spill()?;
@@ -53,7 +53,7 @@ impl DedupeSpill {
         Ok(())
     }
 
-    pub fn finish(mut self) -> BuildResult<DedupedRecords> {
+    pub fn finish(mut self) -> PlatformResult<DedupedRecords> {
         if self.runs.is_empty() {
             let mut entries = self.records.into_iter().collect::<Vec<_>>();
             entries.sort_by(|left, right| left.0.cmp(&right.0));
@@ -69,11 +69,11 @@ impl DedupeSpill {
             .runs
             .iter()
             .map(|path| SpillRunReader::open(self.kind, path))
-            .collect::<BuildResult<Vec<_>>>()?;
+            .collect::<PlatformResult<Vec<_>>>()?;
         Ok(DedupedRecords::Runs(DedupeMerge::new(readers)?))
     }
 
-    fn spill(&mut self) -> BuildResult<()> {
+    fn spill(&mut self) -> PlatformResult<()> {
         if self.records.is_empty() {
             return Ok(());
         }
@@ -99,7 +99,7 @@ pub enum DedupedRecords {
 }
 
 impl DedupedRecords {
-    pub fn next_record(&mut self) -> BuildResult<Option<ArchiveRecord>> {
+    pub fn next_record(&mut self) -> PlatformResult<Option<ArchiveRecord>> {
         match self {
             Self::Memory(records) => Ok(records.next()),
             Self::Runs(merge) => merge.next_record(),
@@ -144,7 +144,7 @@ pub struct DedupeMerge {
 }
 
 impl DedupeMerge {
-    fn new(mut runs: Vec<SpillRunReader>) -> BuildResult<Self> {
+    fn new(mut runs: Vec<SpillRunReader>) -> PlatformResult<Self> {
         let mut heap = BinaryHeap::with_capacity(runs.len());
         for (index, run) in runs.iter_mut().enumerate() {
             if let Some(record) = run.next_record()? {
@@ -158,7 +158,7 @@ impl DedupeMerge {
         Ok(Self { runs, heap })
     }
 
-    fn advance(&mut self, run: usize) -> BuildResult<()> {
+    fn advance(&mut self, run: usize) -> PlatformResult<()> {
         if let Some(record) = self.runs[run].next_record()? {
             self.heap.push(DedupeEntry {
                 key: record.key(),
@@ -169,7 +169,7 @@ impl DedupeMerge {
         Ok(())
     }
 
-    fn next_record(&mut self) -> BuildResult<Option<ArchiveRecord>> {
+    fn next_record(&mut self) -> PlatformResult<Option<ArchiveRecord>> {
         let Some(mut best) = self.heap.pop() else {
             return Ok(None);
         };

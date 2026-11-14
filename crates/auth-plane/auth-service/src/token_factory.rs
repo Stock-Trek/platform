@@ -1,6 +1,6 @@
 use crate::{ApiToken, TokenMetadata};
 use chrono::{DateTime, Utc};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use rand::{Rng, distributions::Alphanumeric};
 use secrecy::SecretString;
 
@@ -12,7 +12,7 @@ impl ApiToken {
         owner: impl Into<String>,
         created_at: DateTime<Utc>,
         metadata: TokenMetadata,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let secret: String = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(SECRET_LENGTH)

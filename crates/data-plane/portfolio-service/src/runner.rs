@@ -4,7 +4,7 @@ use crate::{
     PortfolioAuthService, PortfolioConfig, PortfolioService, PortfolioUpdateConsumer,
     PublishingPortfolioUpdateSink, read_model::PortfolioReadModelStore,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_gateway::{CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT};
 use platform_nats::{EventPublisher, NatsPublisher};
 use platform_portfolio_ownership::OWNERSHIP_STREAM_PREFIX;
@@ -16,7 +16,7 @@ const SERVICE: Service = Service::new("platform-portfolio-service");
 pub struct PortfolioRunner;
 
 impl PortfolioRunner {
-    pub async fn run(config: PortfolioConfig) -> BuildResult<()> {
+    pub async fn run(config: PortfolioConfig) -> PlatformResult<()> {
         SERVICE.init_logging(config.log_filter())?;
         let _metrics = SERVICE.init_metrics("platform/portfolio-service")?;
         let auth_service = PortfolioAuthService::connect(config.auth().clone()).await?;
@@ -80,7 +80,7 @@ impl PortfolioRunner {
         Ok(())
     }
 
-    async fn publisher(config: &PortfolioConfig) -> BuildResult<NatsPublisher> {
+    async fn publisher(config: &PortfolioConfig) -> PlatformResult<NatsPublisher> {
         let publisher = NatsPublisher::connect(
             config.update().nats_url(),
             &format!("{}-publisher", config.update().client_name()),

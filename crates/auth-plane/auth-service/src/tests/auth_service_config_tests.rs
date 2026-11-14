@@ -1,7 +1,7 @@
 use crate::tests::support_tests::AuthServiceBuilder;
 use crate::{AuthService, AuthServiceConfig};
 use chrono::Duration;
-use platform_errors::{AuthError, BuildError, BuildResult};
+use platform_errors::{AuthError, PlatformError, PlatformResult};
 struct ConfigFixture;
 
 impl ConfigFixture {
@@ -13,7 +13,7 @@ impl ConfigFixture {
         }
     }
 
-    fn service(config: AuthServiceConfig) -> BuildResult<AuthService> {
+    fn service(config: AuthServiceConfig) -> PlatformResult<AuthService> {
         AuthServiceBuilder::new().config(config).try_build()
     }
 }
@@ -27,7 +27,7 @@ fn rejects_rotation_overlap_longer_than_token_lifetime() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "rotation_overlap",
             ..
         }))
@@ -50,7 +50,7 @@ fn rejects_sub_second_signature_validity() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "signature_validity",
             ..
         }))

@@ -1,5 +1,5 @@
 use platform_config::EnvVars;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_types::UrlScheme;
 use std::net::SocketAddr;
 
@@ -13,7 +13,7 @@ pub struct ReadConfig {
 }
 
 impl ReadConfig {
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let jwks_url = vars.required_url(JWKS_URL, &UrlScheme::HTTP)?;
         Ok(Self {
             bind_address: vars.required_parsed(BIND_ADDRESS)?,

@@ -5,7 +5,7 @@ use crate::{
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
-use platform_errors::{BuildError, BuildResult, ExchangeError};
+use platform_errors::{ExchangeError, PlatformError, PlatformResult};
 use serde::Serialize;
 use serde_with::skip_serializing_none;
 use std::sync::Arc;
@@ -29,7 +29,7 @@ struct BinanceWebsocketParams<R> {
 pub struct BinanceRequestFactory;
 
 impl BinanceRequestFactory {
-    pub fn try_into_http<R>(mut request: R, signer: &Signer) -> BuildResult<HttpRequest>
+    pub fn try_into_http<R>(mut request: R, signer: &Signer) -> PlatformResult<HttpRequest>
     where
         R: ETHttpRequest,
     {
@@ -65,7 +65,7 @@ impl BinanceRequestFactory {
         mut request: R,
         signer: &Signer,
         id: ETWebsocketId,
-    ) -> BuildResult<(String, WebsocketResponseMatcher)>
+    ) -> PlatformResult<(String, WebsocketResponseMatcher)>
     where
         R: ETWebsocketRequest,
     {
@@ -91,7 +91,7 @@ impl BinanceRequestFactory {
             params,
         };
         let message = serde_json::to_string(&websocket_request)
-            .map_err(|error| BuildError::Exchange(ExchangeError::SerializeRequest(error)))?;
+            .map_err(|error| PlatformError::Exchange(ExchangeError::SerializeRequest(error)))?;
         let response_matcher: WebsocketResponseMatcher =
             Arc::new(move |value| match value.get("id") {
                 None => false,

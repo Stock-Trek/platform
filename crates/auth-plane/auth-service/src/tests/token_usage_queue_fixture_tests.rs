@@ -3,7 +3,7 @@ use crate::{
     TokenUsageWorker,
 };
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -24,7 +24,7 @@ impl ImmediateTokenUsageQueue {
         }
     }
 
-    async fn drain(&self) -> BuildResult<()> {
+    async fn drain(&self) -> PlatformResult<()> {
         TokenUsageWorker::new(self.store.clone(), self.inner.clone(), 100)
             .drain()
             .await?;
@@ -34,20 +34,20 @@ impl ImmediateTokenUsageQueue {
 
 #[async_trait]
 impl TokenUsageQueue for ImmediateTokenUsageQueue {
-    async fn enqueue(&self, usage: TokenUsage) -> BuildResult<()> {
+    async fn enqueue(&self, usage: TokenUsage) -> PlatformResult<()> {
         self.inner.enqueue(usage).await?;
         self.drain().await
     }
 
-    async fn reserve(&self, limit: usize) -> BuildResult<Vec<TokenUsageReservation>> {
+    async fn reserve(&self, limit: usize) -> PlatformResult<Vec<TokenUsageReservation>> {
         self.inner.reserve(limit).await
     }
 
-    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
+    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> PlatformResult<()> {
         self.inner.acknowledge(reservation).await
     }
 
-    async fn release(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
+    async fn release(&self, reservation: &TokenUsageReservation) -> PlatformResult<()> {
         self.inner.release(reservation).await
     }
 }
@@ -76,9 +76,9 @@ impl ToggleTokenUsageQueue {
 
 #[async_trait]
 impl TokenUsageQueue for ToggleTokenUsageQueue {
-    async fn enqueue(&self, usage: TokenUsage) -> BuildResult<()> {
+    async fn enqueue(&self, usage: TokenUsage) -> PlatformResult<()> {
         if self.failing.load(Ordering::SeqCst) {
-            return Err(BuildError::auth_store(
+            return Err(PlatformError::auth_store(
                 "usage",
                 "test-queue",
                 true,
@@ -88,15 +88,15 @@ impl TokenUsageQueue for ToggleTokenUsageQueue {
         self.inner.enqueue(usage).await
     }
 
-    async fn reserve(&self, limit: usize) -> BuildResult<Vec<TokenUsageReservation>> {
+    async fn reserve(&self, limit: usize) -> PlatformResult<Vec<TokenUsageReservation>> {
         self.inner.reserve(limit).await
     }
 
-    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
+    async fn acknowledge(&self, reservation: &TokenUsageReservation) -> PlatformResult<()> {
         self.inner.acknowledge(reservation).await
     }
 
-    async fn release(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
+    async fn release(&self, reservation: &TokenUsageReservation) -> PlatformResult<()> {
         self.inner.release(reservation).await
     }
 }

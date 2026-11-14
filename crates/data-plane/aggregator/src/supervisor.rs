@@ -1,4 +1,4 @@
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_runtime::Runtime;
 use platform_time::RetryBackoff;
 use std::{
@@ -14,10 +14,10 @@ impl Supervisor {
     pub const MAX_RESTART_DELAY: Duration = Duration::from_secs(30);
     pub const HEALTHY_RUN_THRESHOLD: Duration = Duration::from_secs(60);
 
-    pub async fn supervise<F, Fut>(name: &'static str, mut run: F) -> BuildResult<()>
+    pub async fn supervise<F, Fut>(name: &'static str, mut run: F) -> PlatformResult<()>
     where
         F: FnMut() -> Fut,
-        Fut: Future<Output = BuildResult<()>>,
+        Fut: Future<Output = PlatformResult<()>>,
     {
         let mut restart =
             RetryBackoff::exponential(Self::INITIAL_RESTART_DELAY, Self::MAX_RESTART_DELAY);

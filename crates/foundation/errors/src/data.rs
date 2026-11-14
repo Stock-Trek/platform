@@ -1,4 +1,4 @@
-use crate::{build::BuildError, retryability::Retryability};
+use crate::{platform::PlatformError, retryability::Retryability};
 use chrono::{DateTime, Utc};
 use std::error::Error as StdError;
 
@@ -41,7 +41,7 @@ pub enum DataError {
         .failures.len(),
         Self::format_failures(.failures)
     )]
-    Multiple { failures: Vec<BuildError> },
+    Multiple { failures: Vec<PlatformError> },
     #[error("Cannot get subfolders from path with too many delimiters {path}")]
     TooManyPathSegments { path: String },
     #[error("Trading pair {pair} is not configured for data collection")]
@@ -49,7 +49,7 @@ pub enum DataError {
 }
 
 impl DataError {
-    pub fn multiple(failures: impl IntoIterator<Item = BuildError>) -> Self {
+    pub fn multiple(failures: impl IntoIterator<Item = PlatformError>) -> Self {
         let failures = failures
             .into_iter()
             .flat_map(Self::flatten_failure)
@@ -71,14 +71,14 @@ impl DataError {
         }
     }
 
-    fn flatten_failure(error: BuildError) -> Vec<BuildError> {
+    fn flatten_failure(error: PlatformError) -> Vec<PlatformError> {
         match error {
-            BuildError::Data(Self::Multiple { failures }) => failures,
+            PlatformError::Data(Self::Multiple { failures }) => failures,
             error => vec![error],
         }
     }
 
-    fn format_failures(failures: &[BuildError]) -> String {
+    fn format_failures(failures: &[PlatformError]) -> String {
         failures
             .iter()
             .map(ToString::to_string)

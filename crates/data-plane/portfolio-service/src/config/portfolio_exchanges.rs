@@ -1,5 +1,5 @@
 use platform_config::EnvVars;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_gateway::{ExchangePortfolio, PortfolioExchangeConfig};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
@@ -16,7 +16,7 @@ impl PortfolioExchanges {
     pub fn from_vars(
         vars: &EnvVars,
         selected: Option<&BTreeSet<CexId>>,
-    ) -> BuildResult<Vec<PortfolioExchangeConfig>> {
+    ) -> PlatformResult<Vec<PortfolioExchangeConfig>> {
         let mut exchanges = Vec::new();
         if selected.is_none_or(|selected| selected.contains(&CexId::Binance))
             && let Some(binance) = BinancePortfolioConfig::from_vars(vars)?

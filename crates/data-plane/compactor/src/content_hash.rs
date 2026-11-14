@@ -1,5 +1,5 @@
 use platform_archive::ArchiveRecord;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 const CONTENT_ID_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
 const CONTENT_ID_PRIME: u64 = 0x0000_0100_0000_01b3;
@@ -16,8 +16,8 @@ impl ContentId {
         }
     }
 
-    pub fn update(&mut self, record: &ArchiveRecord) -> BuildResult<()> {
-        let bytes = serde_json::to_vec(record).map_err(BuildError::external)?;
+    pub fn update(&mut self, record: &ArchiveRecord) -> PlatformResult<()> {
+        let bytes = serde_json::to_vec(record).map_err(PlatformError::external)?;
         for byte in bytes {
             self.hash ^= u64::from(byte);
             self.hash = self.hash.wrapping_mul(CONTENT_ID_PRIME);

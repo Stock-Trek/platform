@@ -9,7 +9,7 @@ use crate::{
     request::{ETHttpRequest, ETRequest},
     signer::Signer,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use serde::{Deserialize, Serialize};
@@ -41,12 +41,12 @@ pub struct BinanceBookTickerResponse {
 }
 
 impl BinanceResponse<BinanceBookTickerResponse> {
-    pub fn book_ticker(self) -> BuildResult<BinanceBookTickerResponse> {
+    pub fn book_ticker(self) -> PlatformResult<BinanceBookTickerResponse> {
         match self.payload {
             BinanceResponsePayload::Success(payload) => Ok(payload),
             BinanceResponsePayload::Failure(error) => {
                 let retry_after = self.metadata.retry_after.or_else(|| error.retry_after());
-                Err(BuildError::Exchange(
+                Err(PlatformError::Exchange(
                     error.exchange_error(self.metadata.status, retry_after),
                 ))
             }
@@ -86,7 +86,7 @@ impl ETHttpRequest for BinanceBookTickerRequest {
     fn http_method(&self) -> HttpMethod {
         HttpMethod::GET
     }
-    fn try_into_http(self, signer: &Signer) -> BuildResult<HttpRequest> {
+    fn try_into_http(self, signer: &Signer) -> PlatformResult<HttpRequest> {
         BinanceRequestFactory::try_into_http(self, signer)
     }
 }

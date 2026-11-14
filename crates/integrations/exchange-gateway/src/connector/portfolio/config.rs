@@ -3,7 +3,7 @@ use crate::connector::portfolio::{
     PortfolioCredentialSource, PortfolioExchange, PortfolioFeed,
 };
 use platform_config::EnvVars;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use std::{collections::BTreeSet, fmt, sync::Arc};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
@@ -48,7 +48,7 @@ impl PortfolioConnectorConfig {
     pub fn from_vars(
         vars: &EnvVars,
         exchanges: impl IntoIterator<Item = PortfolioExchangeConfig>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let mut supported_exchanges: Vec<Arc<dyn PortfolioExchange>> = Vec::new();
         let mut accounts = Vec::new();
         let selected = Self::selected_cexes(vars)?;
@@ -79,7 +79,7 @@ impl PortfolioConnectorConfig {
         cex_id: CexId,
         account: AccountId,
         credentials: ApiKeyCredentials,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         self.ensure_supported(cex_id)?;
         self.accounts.insert(cex_id, account, credentials);
         Ok(())
@@ -89,7 +89,7 @@ impl PortfolioConnectorConfig {
         &self,
         cex_id: CexId,
         account: &AccountId,
-    ) -> BuildResult<Option<ApiKeyCredentials>> {
+    ) -> PlatformResult<Option<ApiKeyCredentials>> {
         self.ensure_supported(cex_id)?;
         Ok(self.accounts.remove(cex_id, account))
     }
@@ -117,7 +117,7 @@ impl PortfolioConnectorConfig {
             .collect()
     }
 
-    fn ensure_supported(&self, cex_id: CexId) -> BuildResult<()> {
+    fn ensure_supported(&self, cex_id: CexId) -> PlatformResult<()> {
         if self
             .exchanges
             .iter()
@@ -125,30 +125,33 @@ impl PortfolioConnectorConfig {
         {
             return Ok(());
         }
-        Err(BuildError::bad_value(
+        Err(PlatformError::bad_value(
             "portfolio exchange",
             cex_id.to_string(),
             "is not supported",
         ))
     }
 
-    pub fn selected_cexes(vars: &EnvVars) -> BuildResult<Option<BTreeSet<CexId>>> {
+    pub fn selected_cexes(vars: &EnvVars) -> PlatformResult<Option<BTreeSet<CexId>>> {
         let Some(value) = vars.optional(CONNECTOR_CEXES)? else {
             return Ok(None);
         };
         let mut selected = BTreeSet::new();
         for exchange in value.split(',').map(str::trim) {
             if exchange.is_empty() {
-                return Err(BuildError::config_invalid(
+                return Err(PlatformError::config_invalid(
                     CONNECTOR_CEXES,
                     "contains an empty exchange",
                 ));
             }
             let exchange = exchange.parse::<CexId>().map_err(|_| {
-                BuildError::config_invalid(CONNECTOR_CEXES, format!("unknown exchange {exchange}"))
+                PlatformError::config_invalid(
+                    CONNECTOR_CEXES,
+                    format!("unknown exchange {exchange}"),
+                )
             })?;
             if !selected.insert(exchange) {
-                return Err(BuildError::config_invalid(
+                return Err(PlatformError::config_invalid(
                     CONNECTOR_CEXES,
                     format!("duplicate exchange {exchange}"),
                 ));

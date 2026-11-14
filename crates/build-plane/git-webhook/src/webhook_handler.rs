@@ -6,7 +6,7 @@ use crate::{
 use http::{Response, StatusCode};
 use lambda_http::{Body, Request, RequestExt};
 use platform_errors::{
-    BuildError, BuildResult, ErrorType, GitHubError, HttpError, SecretsError, SqsError,
+    ErrorType, GitHubError, HttpError, PlatformError, PlatformResult, SecretsError, SqsError,
 };
 use platform_messages::SqsMessage;
 use platform_metrics::{EventMetrics, RouteMetrics};
@@ -21,7 +21,7 @@ struct WebhookOutcome {
 }
 
 impl WebhookOutcome {
-    fn success(response: BuildResult<Response<Body>>) -> BuildResult<Self> {
+    fn success(response: PlatformResult<Response<Body>>) -> PlatformResult<Self> {
         Ok(Self {
             response: response?,
             error_type: None,
@@ -30,8 +30,8 @@ impl WebhookOutcome {
 
     fn failure(
         error_type: &'static str,
-        response: BuildResult<Response<Body>>,
-    ) -> BuildResult<Self> {
+        response: PlatformResult<Response<Body>>,
+    ) -> PlatformResult<Self> {
         Ok(Self {
             response: response?,
             error_type: Some(error_type),
@@ -46,7 +46,7 @@ impl WebhookHandler {
         &self,
         context: &RsWebhookContext,
         event: Request,
-    ) -> BuildResult<Response<Body>> {
+    ) -> PlatformResult<Response<Body>> {
         let metrics = RouteMetrics::start(WEBHOOK_ROUTE);
         let result = self.handle_request(context, event).await;
         match result {
@@ -64,7 +64,7 @@ impl WebhookHandler {
                 }
                 Ok(response)
             }
-            Err(BuildError::Secrets(SecretsError::Unavailable { retry_after })) => {
+            Err(PlatformError::Secrets(SecretsError::Unavailable { retry_after })) => {
                 let status = StatusCode::SERVICE_UNAVAILABLE;
                 metrics.record_error_status("secrets_unavailable", status.as_u16());
                 Responses::service_unavailable(retry_after)
@@ -95,7 +95,7 @@ impl WebhookHandler {
         &self,
         context: &RsWebhookContext,
         event: Request,
-    ) -> BuildResult<WebhookOutcome> {
+    ) -> PlatformResult<WebhookOutcome> {
         let request_context = RequestContext {
             context,
             deadline: Deadline::new(event.lambda_context().deadline(), context.deadline_buffer()),
@@ -107,7 +107,7 @@ impl WebhookHandler {
         &self,
         request_context: RequestContext<&RsWebhookContext>,
         event: Request,
-    ) -> BuildResult<WebhookOutcome> {
+    ) -> PlatformResult<WebhookOutcome> {
         let converters = request_context
             .context
             .converters(request_context.deadline)
@@ -144,7 +144,7 @@ impl WebhookHandler {
         request_context: &RequestContext<&RsWebhookContext>,
         converters: &Converters,
         event: &Request,
-    ) -> BuildResult<EventResponse> {
+    ) -> PlatformResult<EventResponse> {
         let mut ignored = false;
         let mut unauthorized = false;
         for converter in converters.iter() {
@@ -233,15 +233,15 @@ impl WebhookHandler {
                 Ok(EventResponse::Unauthorized) => unauthorized = true,
                 Ok(EventResponse::WrongGitProvider) => continue,
                 Ok(EventResponse::Rejected) => return Ok(EventResponse::Rejected),
-                Err(BuildError::Http(HttpError::Serde(error))) => {
+                Err(PlatformError::Http(HttpError::Serde(error))) => {
                     tracing::warn!("rejecting malformed payload: {error}");
                     return Ok(EventResponse::Rejected);
                 }
-                Err(BuildError::GitHub(GitHubError::HostInvalid { host: url })) => {
+                Err(PlatformError::GitHub(GitHubError::HostInvalid { host: url })) => {
                     tracing::warn!("rejecting payload with unparseable host URL: {url:?}");
                     return Ok(EventResponse::Rejected);
                 }
-                Err(BuildError::GitHub(GitHubError::HostNotAllowed { host: url })) => {
+                Err(PlatformError::GitHub(GitHubError::HostNotAllowed { host: url })) => {
                     tracing::warn!("rejecting payload from disallowed host: {url:?}");
                     return Ok(EventResponse::Rejected);
                 }
@@ -257,8 +257,8 @@ impl WebhookHandler {
         })
     }
 
-    fn unsent_failure_messages(error: &BuildError) -> Option<(usize, Vec<SqsMessage>)> {
-        let BuildError::Sqs(SqsError::PartialBatch {
+    fn unsent_failure_messages(error: &PlatformError) -> Option<(usize, Vec<SqsMessage>)> {
+        let PlatformError::Sqs(SqsError::PartialBatch {
             unsent, failures, ..
         }) = error
         else {
@@ -273,7 +273,7 @@ impl WebhookHandler {
         ))
     }
 
-    fn respond(response: EventResponse) -> BuildResult<WebhookOutcome> {
+    fn respond(response: EventResponse) -> PlatformResult<WebhookOutcome> {
         match response {
             EventResponse::Accept(_) => WebhookOutcome::success(Responses::accepted()),
             EventResponse::Pong => WebhookOutcome::success(Responses::ok("pong")),

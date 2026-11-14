@@ -1,6 +1,6 @@
 use crate::OrderRequestContext;
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 const ENVELOPE_VERSION: &str = "v1";
 const SIGNATURE_LENGTH: usize = 64;
@@ -18,7 +18,7 @@ impl SignedOrderRequest {
     pub fn from_context(
         context: &OrderRequestContext,
         signature: impl Into<String>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         Self::from_parts(
             context.token_id(),
             context.issued_at(),
@@ -34,7 +34,7 @@ impl SignedOrderRequest {
         expires_at: DateTime<Utc>,
         nonce: impl Into<String>,
         signature: impl Into<String>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let token_id = token_id.into();
         let nonce = nonce.into();
         let signature = signature.into();
@@ -44,9 +44,9 @@ impl SignedOrderRequest {
         Self::decode(&envelope)
     }
 
-    pub fn decode(signature: &str) -> BuildResult<Self> {
+    pub fn decode(signature: &str) -> PlatformResult<Self> {
         if signature.chars().count() > MAX_ENVELOPE_LENGTH {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "signature",
                 format!("must be at most {MAX_ENVELOPE_LENGTH} characters"),
             ));
@@ -74,13 +74,13 @@ impl SignedOrderRequest {
             raw_signature,
         )
         else {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "signature",
                 "is not a supported signed order request envelope",
             ));
         };
         if version != ENVELOPE_VERSION || parts.next().is_some() || raw_signature.is_empty() {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "signature",
                 "is not a supported signed order request envelope",
             ));
@@ -93,7 +93,7 @@ impl SignedOrderRequest {
                 .bytes()
                 .all(|byte| byte.is_ascii_digit() || matches!(byte, b'a'..=b'f'))
         {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "signature",
                 "must be a 64-character lowercase hexadecimal digest",
             ));
@@ -106,7 +106,7 @@ impl SignedOrderRequest {
             envelope: Self::encode(token_id, issued_at, expires_at, nonce, raw_signature),
         };
         if signed.envelope != signature {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "signature",
                 "must use canonical timestamp encodings",
             ));
@@ -140,7 +140,7 @@ impl SignedOrderRequest {
             .map_or(self.envelope.as_str(), |(_, signature)| signature)
     }
 
-    pub fn context(&self) -> BuildResult<OrderRequestContext> {
+    pub fn context(&self) -> PlatformResult<OrderRequestContext> {
         OrderRequestContext::new(
             self.token_id.clone(),
             self.issued_at,
@@ -167,12 +167,14 @@ impl SignedOrderRequest {
         )
     }
 
-    fn parse_timestamp(value: &str) -> BuildResult<DateTime<Utc>> {
+    fn parse_timestamp(value: &str) -> PlatformResult<DateTime<Utc>> {
         value
             .parse::<i64>()
             .ok()
             .and_then(|seconds| DateTime::from_timestamp(seconds, 0))
-            .ok_or_else(|| BuildError::auth_invalid_field("signature", "has an invalid timestamp"))
+            .ok_or_else(|| {
+                PlatformError::auth_invalid_field("signature", "has an invalid timestamp")
+            })
     }
 }
 

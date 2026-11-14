@@ -1,6 +1,6 @@
 use crate::{ApiToken, AuthService};
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 impl AuthService {
     pub async fn completed_rotation(
@@ -8,11 +8,11 @@ impl AuthService {
         original: &ApiToken,
         replacement_id: &str,
         now: DateTime<Utc>,
-    ) -> BuildResult<ApiToken> {
+    ) -> PlatformResult<ApiToken> {
         let replacement = self
             .stored_token(replacement_id)
             .await?
-            .ok_or_else(|| BuildError::unknown_token(replacement_id))?;
+            .ok_or_else(|| PlatformError::unknown_token(replacement_id))?;
         Self::ensure_replacement_usable(original, &replacement, now)?;
         if original.metadata().replaced_by() == Some(replacement_id) {
             self.sync_owner_index_token(original).await;
@@ -27,11 +27,11 @@ impl AuthService {
         original: &ApiToken,
         replacement: &ApiToken,
         now: DateTime<Utc>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         Self::ensure_replacement_matches(original, replacement)?;
         Self::ensure_active(replacement, now)?;
         if let Some(next) = replacement.metadata().replaced_by() {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "replacement_id",
                 format!("has already been rotated to {next:?}"),
             ));

@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -34,8 +34,8 @@ impl FailingMaterializeStore {
         self.fail_after.store(true, Ordering::SeqCst);
     }
 
-    fn transient_error() -> BuildError {
-        BuildError::auth_store(
+    fn transient_error() -> PlatformError {
+        PlatformError::auth_store(
             "write",
             "rotation-test",
             true,
@@ -46,50 +46,54 @@ impl FailingMaterializeStore {
 
 #[async_trait]
 impl TokenStore for FailingMaterializeStore {
-    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
+    async fn put(&self, token: &ApiToken) -> PlatformResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> PlatformResult<Option<ApiToken>> {
         self.inner.get(id).await
     }
 
-    async fn delete(&self, id: &str) -> BuildResult<()> {
+    async fn delete(&self, id: &str) -> PlatformResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn ids(&self) -> BuildResult<Vec<String>> {
+    async fn ids(&self) -> PlatformResult<Vec<String>> {
         self.inner.ids().await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> PlatformResult<()> {
         self.inner.update(expected, token).await
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
+    async fn commit(
+        &self,
+        mutation: TokenMutation,
+        event: TokenAuditEvent,
+    ) -> PlatformResult<bool> {
         self.inner.commit(mutation, event).await
     }
 
-    async fn append_audit(&self, event: TokenAuditEvent) -> BuildResult<()> {
+    async fn append_audit(&self, event: TokenAuditEvent) -> PlatformResult<()> {
         self.inner.append_audit(event).await
     }
 
-    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> PlatformResult<Vec<TokenAuditEvent>> {
         self.inner.pending_audits().await
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> PlatformResult<()> {
         self.inner.acknowledge_audit(event_id).await
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> PlatformResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 
     async fn materialize_rotation(
         &self,
         transaction: &TokenRotationTransaction,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         if self.fail_before.swap(false, Ordering::SeqCst) {
             return Err(Self::transient_error());
         }
@@ -100,11 +104,11 @@ impl TokenStore for FailingMaterializeStore {
         Ok(())
     }
 
-    async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
+    async fn pending_rotations(&self) -> PlatformResult<Vec<TokenRotationTransaction>> {
         self.inner.pending_rotations().await
     }
 
-    async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
+    async fn acknowledge_rotation(&self, transaction_id: &str) -> PlatformResult<()> {
         self.inner.acknowledge_rotation(transaction_id).await
     }
 }

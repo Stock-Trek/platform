@@ -5,7 +5,7 @@ use crate::restore::tests::fixtures_tests::{FailingStateStore, Fixtures, VecArch
 use crate::shard_id::ShardId;
 use crate::state::{AggregatorState, STATE_SCHEMA_VERSION};
 use platform_archive::ICEBERG_CATALOG_URI;
-use platform_errors::{BuildError, ConfigError, Retryability};
+use platform_errors::{ConfigError, PlatformError, Retryability};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -88,14 +88,14 @@ async fn a_failing_archive_connection_fails_fast_during_checkpoint_restore() {
 
     let error = Fixtures::options(shard, 1)
         .restore(&store, || async {
-            Err(BuildError::config_missing(ICEBERG_CATALOG_URI))
+            Err(PlatformError::config_missing(ICEBERG_CATALOG_URI))
         })
         .await
         .unwrap_err();
 
     assert!(matches!(
         error,
-        BuildError::Config(ConfigError::Missing { name })
+        PlatformError::Config(ConfigError::Missing { name })
             if name == ICEBERG_CATALOG_URI
     ));
 }

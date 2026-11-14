@@ -4,13 +4,13 @@ use platform_auth_service::{
     AuthService, AuthServiceConfig, CachedTokenStore, ValkeyReplayStore, ValkeyTokenUsageQueue,
     VaultTokenStore,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::sync::Arc;
 
 pub struct PortfolioAuthService;
 
 impl PortfolioAuthService {
-    pub async fn connect(config: AuthConfig) -> BuildResult<AuthService> {
+    pub async fn connect(config: AuthConfig) -> PlatformResult<AuthService> {
         let vault = Arc::new(VaultTokenStore::new(config.vault().clone())?);
         let store = Arc::new(CachedTokenStore::new(vault, config.token_cache().clone()));
         let replay = ValkeyReplayStore::connect(config.valkey().clone()).await?;

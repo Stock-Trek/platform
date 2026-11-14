@@ -1,4 +1,4 @@
-use crate::BuildError;
+use crate::PlatformError;
 #[cfg(feature = "http")]
 use crate::http::HttpError;
 #[cfg(feature = "storage")]
@@ -9,7 +9,7 @@ use crate::{
 };
 use std::{path::PathBuf, process::ExitStatus};
 
-impl BuildError {
+impl PlatformError {
     pub fn unknown_token(token_id: impl Into<String>) -> Self {
         Self::Auth(AuthError::UnknownToken {
             token_id: token_id.into(),
@@ -177,7 +177,7 @@ impl BuildError {
 
     pub fn exchange<E>(operation: &'static str, source: E) -> Self
     where
-        E: Into<BuildError>,
+        E: Into<PlatformError>,
     {
         Self::Exchange(ExchangeError::Exchange {
             operation,
@@ -259,7 +259,7 @@ impl BuildError {
         Self::Connector(ConnectorError::send_unknown_external(source))
     }
 
-    pub fn multiple(failures: impl IntoIterator<Item = BuildError>) -> Self {
+    pub fn multiple(failures: impl IntoIterator<Item = PlatformError>) -> Self {
         Self::Data(DataError::multiple(failures))
     }
 }

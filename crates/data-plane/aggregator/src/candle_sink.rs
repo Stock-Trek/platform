@@ -1,7 +1,7 @@
 use crate::config::AggregatorConfig;
 use async_trait::async_trait;
 use futures::{StreamExt, TryStreamExt, stream};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::{Candle, CandleKey, ClosedCandle, EnvelopeCodec};
 use platform_nats::{JetStream, KeyValue, NatsPublisher};
 use std::collections::HashMap;
@@ -19,11 +19,11 @@ const MAX_CONCURRENT_SINK_OPERATIONS: usize = 16;
 /// shard checkpoints, not this bucket.
 #[async_trait]
 pub trait OpenCandleStore: Send + Sync {
-    async fn update_open(&self, candles: &[Candle]) -> BuildResult<()>;
+    async fn update_open(&self, candles: &[Candle]) -> PlatformResult<()>;
 
     /// Removes open-candle entries whose windows have closed and that no longer
     /// have a newer open window for the same candle key.
-    async fn delete_open(&self, keys: &[CandleKey]) -> BuildResult<()> {
+    async fn delete_open(&self, keys: &[CandleKey]) -> PlatformResult<()> {
         let _ = keys;
         Ok(())
     }
@@ -32,7 +32,7 @@ pub trait OpenCandleStore: Send + Sync {
 /// Publishes candles after they close.
 #[async_trait]
 pub trait ClosedCandlePublisher: Send + Sync {
-    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BuildResult<()>;
+    async fn publish_closed(&self, candles: &[ClosedCandle]) -> PlatformResult<()>;
 }
 
 /// Stores open candles in a NATS KV bucket and publishes closed candles to
@@ -56,7 +56,7 @@ pub struct NatsCandleSink {
 }
 
 impl NatsCandleSink {
-    pub async fn connect(config: &AggregatorConfig) -> BuildResult<Self> {
+    pub async fn connect(config: &AggregatorConfig) -> PlatformResult<Self> {
         let publisher =
             NatsPublisher::connect(&config.nats_url, "platform-aggregator-candles").await?;
         publisher
@@ -86,11 +86,11 @@ impl<T> OpenCandleStore for Arc<T>
 where
     T: OpenCandleStore + ?Sized,
 {
-    async fn update_open(&self, candles: &[Candle]) -> BuildResult<()> {
+    async fn update_open(&self, candles: &[Candle]) -> PlatformResult<()> {
         (**self).update_open(candles).await
     }
 
-    async fn delete_open(&self, keys: &[CandleKey]) -> BuildResult<()> {
+    async fn delete_open(&self, keys: &[CandleKey]) -> PlatformResult<()> {
         (**self).delete_open(keys).await
     }
 }
@@ -100,14 +100,14 @@ impl<T> ClosedCandlePublisher for Arc<T>
 where
     T: ClosedCandlePublisher + ?Sized,
 {
-    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BuildResult<()> {
+    async fn publish_closed(&self, candles: &[ClosedCandle]) -> PlatformResult<()> {
         (**self).publish_closed(candles).await
     }
 }
 
 #[async_trait]
 impl OpenCandleStore for NatsCandleSink {
-    async fn update_open(&self, candles: &[Candle]) -> BuildResult<()> {
+    async fn update_open(&self, candles: &[Candle]) -> PlatformResult<()> {
         stream::iter(candles.iter().cloned())
             .map(|candle| async move {
                 let key = candle.key.subject_suffix();
@@ -120,7 +120,7 @@ impl OpenCandleStore for NatsCandleSink {
         Ok(())
     }
 
-    async fn delete_open(&self, keys: &[CandleKey]) -> BuildResult<()> {
+    async fn delete_open(&self, keys: &[CandleKey]) -> PlatformResult<()> {
         stream::iter(keys.iter().cloned())
             .map(|key| async move { self.open_candles.delete(&key.subject_suffix()).await })
             .buffer_unordered(MAX_CONCURRENT_SINK_OPERATIONS)
@@ -132,7 +132,7 @@ impl OpenCandleStore for NatsCandleSink {
 
 #[async_trait]
 impl ClosedCandlePublisher for NatsCandleSink {
-    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BuildResult<()> {
+    async fn publish_closed(&self, candles: &[ClosedCandle]) -> PlatformResult<()> {
         // Group by candle key so revisions for the same key are published in
         // input order, while independent keys can be published concurrently.
         let mut groups: HashMap<CandleKey, Vec<ClosedCandle>> = HashMap::new();
@@ -153,7 +153,7 @@ impl ClosedCandlePublisher for NatsCandleSink {
                         .publish_with_message_id(&subject, &message_id, &payload)
                         .await?;
                 }
-                Ok::<(), BuildError>(())
+                Ok::<(), PlatformError>(())
             })
             .buffer_unordered(MAX_CONCURRENT_SINK_OPERATIONS)
             .try_collect::<Vec<_>>()

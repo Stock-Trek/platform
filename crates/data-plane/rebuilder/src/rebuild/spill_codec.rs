@@ -1,18 +1,18 @@
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::path::Path;
 
 pub trait SpillReader {
     type Record;
 
-    fn read(&mut self) -> BuildResult<Option<Self::Record>>;
+    fn read(&mut self) -> PlatformResult<Option<Self::Record>>;
 }
 
 pub trait SpillWriter {
     type Record;
 
-    fn write(&mut self, record: Self::Record) -> BuildResult<()>;
+    fn write(&mut self, record: Self::Record) -> PlatformResult<()>;
 
-    fn finish(self) -> BuildResult<()>;
+    fn finish(self) -> PlatformResult<()>;
 }
 
 pub trait SpillCodec: Clone {
@@ -35,7 +35,7 @@ pub trait SpillCodec: Clone {
 
     fn prefer_latest_run(&self) -> bool;
 
-    fn open(&self, path: &Path, batch: usize) -> BuildResult<Self::Reader>;
+    fn open(&self, path: &Path, batch: usize) -> PlatformResult<Self::Reader>;
 
-    fn create(&self, path: &Path, batch: usize) -> BuildResult<Self::Writer>;
+    fn create(&self, path: &Path, batch: usize) -> PlatformResult<Self::Writer>;
 }

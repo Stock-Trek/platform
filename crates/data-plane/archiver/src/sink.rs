@@ -6,7 +6,7 @@ use platform_archive::{
     ArchivePath, ArchiveRecord, Bucket, IcebergDataFile, ObjectKey, ParquetReader, RoutingBucket,
     S3,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_metrics::MarketDataMetrics;
 use platform_metrics::S3_OPERATION_ARCHIVE_UPLOAD;
 use platform_time::RetryPolicy;
@@ -23,7 +23,7 @@ const UPLOAD_MAX_BACKOFF: Duration = Duration::from_millis(500 * UPLOAD_MAX_ATTE
 pub trait ArchiveSink: Send + Sync {
     /// Writes the records, reordering them in place so callers can keep
     /// ownership of the batch and retry it if the write fails.
-    async fn write(&self, records: &mut [ArchiveRecord]) -> BuildResult<()>;
+    async fn write(&self, records: &mut [ArchiveRecord]) -> PlatformResult<()>;
 }
 
 /// Writes Parquet files to S3 and commits them to an Iceberg REST catalog.
@@ -44,7 +44,7 @@ impl S3ParquetSink {
     pub async fn connect(
         config: &ArchiverConfig,
         catalog: Arc<dyn ArchiveCatalog>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         Ok(Self {
             transfer_client: S3::transfer_client().await,
             catalog,
@@ -59,7 +59,7 @@ impl S3ParquetSink {
         partition: ArchiveBucket,
         routing_bucket: RoutingBucket,
         bytes: &[u8],
-    ) -> BuildResult<ObjectKey> {
+    ) -> PlatformResult<ObjectKey> {
         partition
             .raw_key(
                 &self.prefix,
@@ -69,7 +69,7 @@ impl S3ParquetSink {
             .map(ObjectKey::new)
     }
 
-    async fn upload_with_retry(&self, key: &ObjectKey, bytes: Bytes) -> BuildResult<()> {
+    async fn upload_with_retry(&self, key: &ObjectKey, bytes: Bytes) -> PlatformResult<()> {
         let retry = RetryPolicy::linear(
             UPLOAD_MAX_ATTEMPTS,
             UPLOAD_RETRY_BACKOFF,
@@ -101,7 +101,7 @@ impl S3ParquetSink {
         )
     }
 
-    pub async fn recover_uncommitted(&self) -> BuildResult<()> {
+    pub async fn recover_uncommitted(&self) -> PlatformResult<()> {
         let prefix = self.prefix.trim_matches('/');
         let list_prefix = if prefix.is_empty() {
             String::new()
@@ -175,7 +175,7 @@ impl S3ParquetSink {
 
 #[async_trait]
 impl ArchiveSink for S3ParquetSink {
-    async fn write(&self, records: &mut [ArchiveRecord]) -> BuildResult<()> {
+    async fn write(&self, records: &mut [ArchiveRecord]) -> PlatformResult<()> {
         // Sort by archive bucket in place. Each contiguous group can then be
         // encoded from a borrowed slice instead of cloning every record into a
         // per-partition `Vec`.

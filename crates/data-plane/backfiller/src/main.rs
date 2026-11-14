@@ -21,14 +21,14 @@ use crate::{
     config::BackfillerConfig, event_fetcher::FetcherRegistry, gap_retry_store::NatsGapRetryStore,
     nats_gap_marker_source::NatsGapMarkerSource,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_nats::NatsPublisher;
 use platform_runtime::Service;
 
 const SERVICE: Service = Service::new("platform-backfiller");
 const NATS_CLIENT_NAME: &str = "platform-backfiller-events";
 #[tokio::main]
-async fn main() -> BuildResult<()> {
+async fn main() -> PlatformResult<()> {
     let config = BackfillerConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let _metrics = SERVICE.init_metrics("platform/backfiller")?;

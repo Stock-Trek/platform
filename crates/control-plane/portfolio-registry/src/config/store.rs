@@ -1,5 +1,5 @@
 use platform_config::EnvVars;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 
 const TABLE: &str = "PORTFOLIO_REGISTRY_TABLE";
 
@@ -9,7 +9,7 @@ pub struct RegistryStoreConfig {
 }
 
 impl RegistryStoreConfig {
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         Ok(Self {
             table: vars.required(TABLE)?,
         })

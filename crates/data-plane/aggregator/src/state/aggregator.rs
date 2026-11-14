@@ -7,7 +7,7 @@
 
 use crate::state::gaps::{IncompleteWindow, KnownGap};
 use crate::state::streams::StreamProgress;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::{Candle, CandleKey};
 use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
@@ -91,15 +91,15 @@ impl AggregatorState {
         self.schema_version == expected_version
     }
 
-    pub fn ensure_schema_compatible(&self) -> BuildResult<()> {
+    pub fn ensure_schema_compatible(&self) -> PlatformResult<()> {
         self.ensure_schema_compatible_with(STATE_SCHEMA_VERSION)
     }
 
-    pub fn ensure_schema_compatible_with(&self, expected_version: u32) -> BuildResult<()> {
+    pub fn ensure_schema_compatible_with(&self, expected_version: u32) -> PlatformResult<()> {
         if self.is_schema_compatible_with(expected_version) {
             return Ok(());
         }
-        Err(BuildError::bad_value(
+        Err(PlatformError::bad_value(
             "aggregator state",
             self.schema_version.to_string(),
             format!("expected schema version {expected_version}"),

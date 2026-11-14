@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, BuildResult, TimeoutError};
+use platform_errors::{PlatformError, PlatformResult, TimeoutError};
 use std::time::{Duration, Instant, SystemTime};
 
 #[derive(Debug, Clone, Copy)]
@@ -31,16 +31,16 @@ impl Deadline {
             .saturating_sub(self.buffer)
     }
 
-    pub fn fail_if_exceeded(self) -> BuildResult<()> {
+    pub fn fail_if_exceeded(self) -> PlatformResult<()> {
         self.checked_remaining()?;
         Ok(())
     }
 
     /// Returns the time left after the deadline buffer.
-    pub fn checked_remaining(self) -> BuildResult<Duration> {
+    pub fn checked_remaining(self) -> PlatformResult<Duration> {
         let remaining = self.remaining_or_zero();
         if remaining.is_zero() {
-            return Err(BuildError::Timeout(TimeoutError::DeadlineExceeded));
+            return Err(PlatformError::Timeout(TimeoutError::DeadlineExceeded));
         }
         Ok(remaining)
     }

@@ -1,5 +1,5 @@
 use platform_auth_service::SignedOrderRequest;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_messages::UnsignedOrderRequest;
 use serde::Serialize;
 use stock_trek_types::cex::{
@@ -53,7 +53,7 @@ impl SignedOrderSubmission {
         &self.signature
     }
 
-    pub fn canonical_bytes(&self) -> BuildResult<Vec<u8>> {
+    pub fn canonical_bytes(&self) -> PlatformResult<Vec<u8>> {
         UnsignedOrderRequest::new(
             self.cex,
             self.account.clone(),
@@ -61,6 +61,6 @@ impl SignedOrderSubmission {
             self.order_request.clone(),
         )
         .canonical_bytes()
-        .map_err(BuildError::external)
+        .map_err(PlatformError::external)
     }
 }

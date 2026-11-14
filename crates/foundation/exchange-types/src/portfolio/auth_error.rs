@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, ExchangeError};
+use platform_errors::{ExchangeError, PlatformError};
 use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,7 +42,7 @@ impl fmt::Display for AuthError {
 
 impl std::error::Error for AuthError {}
 
-impl From<AuthError> for BuildError {
+impl From<AuthError> for PlatformError {
     fn from(error: AuthError) -> Self {
         Self::Exchange(ExchangeError::BadResponse(error.to_string()))
     }

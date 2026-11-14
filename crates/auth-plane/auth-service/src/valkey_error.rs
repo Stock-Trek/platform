@@ -1,5 +1,5 @@
 use crate::ReplayStoreError;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use redis::{ErrorKind, RedisError};
 
 const TARGET: &str = "valkey-replay-store";
@@ -11,11 +11,11 @@ impl ValkeyError {
         ReplayStoreError::unavailable(operation, Self::retryable(&error), error)
     }
 
-    pub fn connect(error: ReplayStoreError) -> BuildError {
-        BuildError::auth_store("connect", TARGET, error.is_retryable(), error)
+    pub fn connect(error: ReplayStoreError) -> PlatformError {
+        PlatformError::auth_store("connect", TARGET, error.is_retryable(), error)
     }
 
-    pub fn result<T>(result: Result<T, ReplayStoreError>) -> BuildResult<T> {
+    pub fn result<T>(result: Result<T, ReplayStoreError>) -> PlatformResult<T> {
         result.map_err(Self::connect)
     }
 

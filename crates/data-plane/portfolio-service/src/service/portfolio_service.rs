@@ -2,7 +2,7 @@ use crate::{
     freshness::FreshnessPolicy, ownership_registry::OwnershipRegistry, state::PortfolioState,
 };
 use parking_lot::RwLock;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_gateway::PortfolioFeed;
 use std::{collections::BTreeSet, sync::Arc};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
@@ -33,7 +33,7 @@ impl PortfolioService {
         cex_id: CexId,
         current: BTreeSet<AccountId>,
         next: BTreeSet<AccountId>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         if current == next {
             return Ok(());
         }

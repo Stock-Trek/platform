@@ -1,6 +1,6 @@
 use crate::{signed_post::SignedPost, source_archive::SourceLimits};
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::{io::Write, path::PathBuf, sync::Arc};
 use tempfile::TempDir;
 
@@ -40,9 +40,9 @@ impl Artifacts {
         source_dir: PathBuf,
         build_cache_dir: PathBuf,
         source_limits: SourceLimits,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let build_dir = tempfile::tempdir().map_err(|source| {
-            BuildError::io(
+            PlatformError::io(
                 "create build directory",
                 "temporary build directory",
                 source,
@@ -59,7 +59,7 @@ impl Artifacts {
         })
     }
 
-    pub async fn compile(&self) -> BuildResult<PathBuf> {
+    pub async fn compile(&self) -> PlatformResult<PathBuf> {
         self.prepare_workspace()?;
         let sources = self.unpack_source().await?;
         Self::validate_user_generated(&sources)?;

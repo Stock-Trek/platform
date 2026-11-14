@@ -4,7 +4,7 @@ use crate::connector::portfolio::{
     portfolio_test_fakes_tests::{Fixture, TestTransport},
 };
 use platform_config::EnvVars;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::{sync::Arc, time::Duration};
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -16,7 +16,7 @@ impl ConfigFixture {
     fn config(
         vars: &[(&str, &str)],
         exchanges: impl IntoIterator<Item = PortfolioExchangeConfig>,
-    ) -> BuildResult<PortfolioConnectorConfig> {
+    ) -> PlatformResult<PortfolioConnectorConfig> {
         PortfolioConnectorConfig::from_vars(
             &EnvVars::from_map(
                 vars.iter()

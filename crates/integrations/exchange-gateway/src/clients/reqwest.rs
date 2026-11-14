@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_exchange_types::http::{HttpClient, HttpMethod, HttpRequest, HttpResponse};
 use std::time::Duration;
 
@@ -10,10 +10,10 @@ pub struct ReqwestHttpClient {
 }
 
 impl ReqwestHttpClient {
-    pub fn try_new(base_url: &str) -> BuildResult<Self> {
+    pub fn try_new(base_url: &str) -> PlatformResult<Self> {
         let client = reqwest::Client::builder()
             .build()
-            .map_err(BuildError::external)?;
+            .map_err(PlatformError::external)?;
         Ok(Self::with_client(base_url.trim_end_matches('/'), client))
     }
     pub fn with_client(base_url: &str, client: reqwest::Client) -> Self {
@@ -43,7 +43,7 @@ impl ReqwestHttpClient {
 
 #[async_trait]
 impl HttpClient for ReqwestHttpClient {
-    async fn send(&self, request: HttpRequest, timeout: Duration) -> BuildResult<HttpResponse> {
+    async fn send(&self, request: HttpRequest, timeout: Duration) -> PlatformResult<HttpResponse> {
         let url = self.build_url(&request.path, request.query.as_deref());
         let mut request_builder = self
             .client
@@ -62,9 +62,9 @@ impl HttpClient for ReqwestHttpClient {
             // the exchange, so the outcome is unknown. `is_connect()` is checked
             // first because a connect timeout satisfies both predicates.
             if error.is_connect() || error.is_builder() {
-                BuildError::send_not_sent_external(error)
+                PlatformError::send_not_sent_external(error)
             } else {
-                BuildError::send_unknown_external(error)
+                PlatformError::send_unknown_external(error)
             }
         })?;
         let status = response.status();
@@ -81,7 +81,7 @@ impl HttpClient for ReqwestHttpClient {
         let body = response
             .bytes()
             .await
-            .map_err(BuildError::send_unknown_external)?
+            .map_err(PlatformError::send_unknown_external)?
             .to_vec();
         Ok(HttpResponse {
             status: status.as_u16(),

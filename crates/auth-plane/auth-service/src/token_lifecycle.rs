@@ -3,10 +3,10 @@ use crate::{
     TokenMutation, auth_service::MAX_UPDATE_ATTEMPTS,
 };
 use chrono::{DateTime, Utc};
-use platform_errors::{AuthError, BuildError, BuildResult};
+use platform_errors::{AuthError, PlatformError, PlatformResult};
 
 impl AuthService {
-    pub async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> BuildResult<()> {
+    pub async fn delete_token(&self, id: &str, now: DateTime<Utc>) -> PlatformResult<()> {
         let Some(token) = self.stored_token(id).await? else {
             return Ok(());
         };
@@ -18,7 +18,7 @@ impl AuthService {
         if deleted {
             Ok(())
         } else {
-            Err(BuildError::token_conflict(id))
+            Err(PlatformError::token_conflict(id))
         }
     }
 
@@ -28,11 +28,11 @@ impl AuthService {
         reason: RevocationReason,
         revoked_by: RevokedBy,
         now: DateTime<Utc>,
-    ) -> BuildResult<ApiToken> {
+    ) -> PlatformResult<ApiToken> {
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             let mut token = self.token(id).await?;
             if token.metadata.is_revoked() {
-                return Err(BuildError::auth_revoked(token.id()));
+                return Err(PlatformError::auth_revoked(token.id()));
             }
             let original = token.clone();
             token.metadata.revoke(now, reason, revoked_by);
@@ -51,7 +51,7 @@ impl AuthService {
                 }
             }
         }
-        let error = BuildError::token_conflict(id);
+        let error = PlatformError::token_conflict(id);
         let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)
             .with_token(id, None)
             .failure(error.to_string());
@@ -76,7 +76,7 @@ impl AuthService {
         reason: RevocationReason,
         revoked_by: RevokedBy,
         now: DateTime<Utc>,
-    ) -> BuildResult<Vec<ApiToken>> {
+    ) -> PlatformResult<Vec<ApiToken>> {
         let mut revoked = Vec::new();
         let mut first_error = None;
         for token in self.tokens_for_owner(owner).await? {
@@ -99,15 +99,15 @@ impl AuthService {
         }
     }
 
-    fn is_already_revoked(error: &BuildError) -> bool {
-        matches!(error, BuildError::Auth(AuthError::Revoked { .. }))
+    fn is_already_revoked(error: &PlatformError) -> bool {
+        matches!(error, PlatformError::Auth(AuthError::Revoked { .. }))
     }
 
     async fn record_revocation_failure(
         &self,
         token: &ApiToken,
         now: DateTime<Utc>,
-        error: &BuildError,
+        error: &PlatformError,
     ) {
         let event = TokenAuditEvent::new(TokenAuditAction::Revoked, now)
             .with_token(token.id(), Some(token.owner()))

@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 /// Environment variable containing the SSM parameter path to load secrets from.
 pub const SSM_PATH_ENV: &str = "SECRETS_SSM_PATH";
@@ -11,16 +11,16 @@ pub struct SsmConfig {
 }
 
 impl SsmConfig {
-    pub fn new(mut path: String, decrypt: bool) -> BuildResult<Self> {
+    pub fn new(mut path: String, decrypt: bool) -> PlatformResult<Self> {
         path = path.trim().to_string();
         if path.is_empty() {
-            return Err(BuildError::config_empty(SSM_PATH_ENV));
+            return Err(PlatformError::config_empty(SSM_PATH_ENV));
         }
         if !path.starts_with('/') {
             path.insert(0, '/');
         }
         if path.ends_with('/') {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 SSM_PATH_ENV,
                 "must not end with '/'",
             ));

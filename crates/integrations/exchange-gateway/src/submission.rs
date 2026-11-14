@@ -1,4 +1,4 @@
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::{fmt, future::Future, pin::Pin};
 
 #[derive(Debug)]
@@ -16,8 +16,9 @@ pub struct Submission<'connector, Request, Response, VerificationRequest> {
 
 type BoxedFuture<'connector, Request, Response, VerificationRequest> = Pin<
     Box<
-        dyn Future<Output = BuildResult<SubmissionOutcome<Request, Response, VerificationRequest>>>
-            + Send
+        dyn Future<
+                Output = PlatformResult<SubmissionOutcome<Request, Response, VerificationRequest>>,
+            > + Send
             + 'connector,
     >,
 >;
@@ -27,7 +28,7 @@ impl<'connector, Request, Response, VerificationRequest>
 {
     pub fn new(
         future: impl Future<
-            Output = BuildResult<SubmissionOutcome<Request, Response, VerificationRequest>>,
+            Output = PlatformResult<SubmissionOutcome<Request, Response, VerificationRequest>>,
         > + Send
         + 'connector,
     ) -> Self {
@@ -37,7 +38,7 @@ impl<'connector, Request, Response, VerificationRequest>
     }
     pub async fn wait(
         self,
-    ) -> BuildResult<SubmissionOutcome<Request, Response, VerificationRequest>> {
+    ) -> PlatformResult<SubmissionOutcome<Request, Response, VerificationRequest>> {
         self.future.await
     }
 }

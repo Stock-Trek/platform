@@ -1,7 +1,7 @@
 use crate::artifacts::{
     Artifacts, COMPILE_OUTPUT_FILE, USER_GENERATED_ARCHIVE, USER_GENERATED_DIR,
 };
-use platform_errors::{BuildError, BuildResult, ConfigError, IoError};
+use platform_errors::{ConfigError, IoError, PlatformError, PlatformResult};
 use std::{
     fs as std_fs,
     io::{Cursor, Write},
@@ -12,14 +12,14 @@ use tracing::info;
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 impl Artifacts {
-    pub async fn publish(&self, cwasm: &Path) -> BuildResult<()> {
+    pub async fn publish(&self, cwasm: &Path) -> PlatformResult<()> {
         self.publish_source().await?;
         self.publish_cwasm(cwasm).await?;
         info!("published build artifacts");
         Ok(())
     }
 
-    pub async fn publish_failure(&self, error: &BuildError) -> BuildResult<()> {
+    pub async fn publish_failure(&self, error: &PlatformError) -> PlatformResult<()> {
         let source_result = self.publish_source().await;
         if let Err(source_error) = &source_result {
             tracing::error!(
@@ -38,13 +38,13 @@ impl Artifacts {
         source_result
     }
 
-    async fn publish_source(&self) -> BuildResult<()> {
+    async fn publish_source(&self) -> PlatformResult<()> {
         let root = self.build_dir.path().join(USER_GENERATED_DIR);
         let files = Self::user_generated_files(&root).await?;
         let archive = Self::source_archive(&root, &files)?;
         let archive_path = self.build_dir.path().join(USER_GENERATED_ARCHIVE);
         fs::write(&archive_path, archive).await.map_err(|source| {
-            BuildError::io(
+            PlatformError::io(
                 "write source archive",
                 archive_path.display().to_string(),
                 source,
@@ -57,13 +57,13 @@ impl Artifacts {
         Ok(())
     }
 
-    async fn publish_cwasm(&self, cwasm: &Path) -> BuildResult<()> {
+    async fn publish_cwasm(&self, cwasm: &Path) -> PlatformResult<()> {
         self.signed_post.upload(cwasm).await?;
         info!(artifact = %cwasm.display(), "published compiled artifact");
         Ok(())
     }
 
-    async fn publish_compile_output(&self, error: &BuildError) -> BuildResult<()> {
+    async fn publish_compile_output(&self, error: &PlatformError) -> PlatformResult<()> {
         let mut output = self.take_compile_output().unwrap_or_default();
         if output.is_empty() {
             output = format!("build failed: {error}\n").into_bytes();
@@ -75,7 +75,7 @@ impl Artifacts {
         }
         let output_path = self.build_dir.path().join(COMPILE_OUTPUT_FILE);
         fs::write(&output_path, &output).await.map_err(|source| {
-            BuildError::io(
+            PlatformError::io(
                 "write compile output",
                 output_path.display().to_string(),
                 source,
@@ -88,12 +88,12 @@ impl Artifacts {
         Ok(())
     }
 
-    pub fn source_archive(root: &Path, files: &[PathBuf]) -> BuildResult<Vec<u8>> {
+    pub fn source_archive(root: &Path, files: &[PathBuf]) -> PlatformResult<Vec<u8>> {
         let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
         for file in files {
             let relative = file.strip_prefix(root).map_err(|_| {
-                BuildError::Config(ConfigError::Build(format!(
+                PlatformError::Config(ConfigError::Build(format!(
                     "artifact path {} is outside {USER_GENERATED_DIR}",
                     file.display()
                 )))
@@ -101,7 +101,7 @@ impl Artifacts {
             let name = relative
                 .to_str()
                 .ok_or_else(|| {
-                    BuildError::Config(ConfigError::Build(format!(
+                    PlatformError::Config(ConfigError::Build(format!(
                         "artifact path {} is not valid UTF-8",
                         file.display()
                     )))
@@ -109,23 +109,23 @@ impl Artifacts {
                 .replace('\\', "/");
             archive
                 .start_file(name, options)
-                .map_err(|error| BuildError::Io(IoError::Zip(error)))?;
+                .map_err(|error| PlatformError::Io(IoError::Zip(error)))?;
             let contents = std_fs::read(file).map_err(|source| {
-                BuildError::io("read artifact", file.display().to_string(), source)
+                PlatformError::io("read artifact", file.display().to_string(), source)
             })?;
             archive.write_all(&contents).map_err(|source| {
-                BuildError::io("write source archive", file.display().to_string(), source)
+                PlatformError::io("write source archive", file.display().to_string(), source)
             })?;
         }
         Ok(archive
             .finish()
-            .map_err(|error| BuildError::Io(IoError::Zip(error)))?
+            .map_err(|error| PlatformError::Io(IoError::Zip(error)))?
             .into_inner())
     }
 
-    async fn user_generated_files(root: &Path) -> BuildResult<Vec<PathBuf>> {
+    async fn user_generated_files(root: &Path) -> PlatformResult<Vec<PathBuf>> {
         let root = fs::canonicalize(root).await.map_err(|source| {
-            BuildError::io(
+            PlatformError::io(
                 "read artifact directory",
                 root.display().to_string(),
                 source,
@@ -135,14 +135,14 @@ impl Artifacts {
         let mut pending = vec![root.clone()];
         while let Some(directory) = pending.pop() {
             let mut entries = fs::read_dir(&directory).await.map_err(|source| {
-                BuildError::io(
+                PlatformError::io(
                     "read artifact directory",
                     directory.display().to_string(),
                     source,
                 )
             })?;
             while let Some(entry) = entries.next_entry().await.map_err(|source| {
-                BuildError::io(
+                PlatformError::io(
                     "read artifact directory",
                     directory.display().to_string(),
                     source,
@@ -150,28 +150,28 @@ impl Artifacts {
             })? {
                 let path = entry.path();
                 let file_type = entry.file_type().await.map_err(|source| {
-                    BuildError::io(
+                    PlatformError::io(
                         "read artifact directory",
                         directory.display().to_string(),
                         source,
                     )
                 })?;
                 let resolved = fs::canonicalize(&path).await.map_err(|source| {
-                    BuildError::io("read artifact", path.display().to_string(), source)
+                    PlatformError::io("read artifact", path.display().to_string(), source)
                 })?;
                 if !resolved.starts_with(&root) {
-                    return Err(BuildError::Config(ConfigError::Build(format!(
+                    return Err(PlatformError::Config(ConfigError::Build(format!(
                         "artifact path {} resolves outside {USER_GENERATED_DIR}",
                         path.display()
                     ))));
                 }
 
                 let target = fs::metadata(&resolved).await.map_err(|source| {
-                    BuildError::io("read artifact", path.display().to_string(), source)
+                    PlatformError::io("read artifact", path.display().to_string(), source)
                 })?;
                 if target.is_dir() {
                     if file_type.is_symlink() {
-                        return Err(BuildError::Config(ConfigError::Build(format!(
+                        return Err(PlatformError::Config(ConfigError::Build(format!(
                             "artifact path {} is a symlinked directory",
                             path.display()
                         ))));
@@ -180,7 +180,7 @@ impl Artifacts {
                 } else if target.is_file() {
                     files.push(path);
                 } else {
-                    return Err(BuildError::Config(ConfigError::Build(format!(
+                    return Err(PlatformError::Config(ConfigError::Build(format!(
                         "artifact path {} is not a regular file or directory",
                         path.display()
                     ))));

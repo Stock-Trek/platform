@@ -1,6 +1,6 @@
 use crate::tests::support_tests::TestFixture;
 use chrono::Utc;
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 
 #[tokio::test]
 async fn rejects_rotation_back_to_the_predecessor_id() {
@@ -19,7 +19,7 @@ async fn rejects_rotation_back_to_the_predecessor_id() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "replacement_id",
             ..
         }))
@@ -35,7 +35,7 @@ async fn rejects_rotation_back_to_the_predecessor_id() {
     );
     assert!(matches!(
         service.token(original.id()).await,
-        Err(BuildError::Auth(AuthError::UnknownToken { .. }))
+        Err(PlatformError::Auth(AuthError::UnknownToken { .. }))
     ));
 }
 
@@ -58,7 +58,7 @@ async fn rejects_rotation_that_would_close_a_cross_token_cycle() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "replacement_id",
             ..
         }))

@@ -5,7 +5,7 @@ use crate::{
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_archive::ArchiveRecord;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::MarketEvent;
 use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
@@ -20,9 +20,9 @@ struct FakeSource {
 
 #[async_trait]
 impl ArchiveSource for FakeSource {
-    async fn next_record(&mut self) -> BuildResult<Option<ArchiveRecord>> {
+    async fn next_record(&mut self) -> PlatformResult<Option<ArchiveRecord>> {
         if self.fail {
-            return Err(platform_errors::BuildError::external("source failed"));
+            return Err(platform_errors::PlatformError::external("source failed"));
         }
         if self.records.is_empty() {
             Ok(None)
@@ -31,7 +31,7 @@ impl ArchiveSource for FakeSource {
         }
     }
 
-    async fn ack(&mut self, _record: &ArchiveRecord) -> BuildResult<()> {
+    async fn ack(&mut self, _record: &ArchiveRecord) -> PlatformResult<()> {
         *self.acked.lock() += 1;
         Ok(())
     }
@@ -45,9 +45,9 @@ struct FakeSink {
 
 #[async_trait]
 impl ArchiveSink for FakeSink {
-    async fn write(&self, records: &mut [ArchiveRecord]) -> BuildResult<()> {
+    async fn write(&self, records: &mut [ArchiveRecord]) -> PlatformResult<()> {
         if self.fail {
-            return Err(platform_errors::BuildError::bad_value(
+            return Err(platform_errors::PlatformError::bad_value(
                 "sink",
                 "test",
                 "write failed",

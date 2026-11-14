@@ -5,7 +5,7 @@ use platform_auth_service::{
     TokenUsageWorker, ValkeyTokenUsageQueue, VaultTokenStore,
 };
 use platform_aws::Aws;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_sqs::{Sqs, SqsConfig};
 use std::sync::Arc;
 
@@ -15,7 +15,7 @@ pub struct AuthRelay {
 }
 
 impl AuthRelay {
-    pub async fn connect(config: &AuthRelayConfig) -> BuildResult<Self> {
+    pub async fn connect(config: &AuthRelayConfig) -> PlatformResult<Self> {
         let store = Arc::new(VaultTokenStore::new(config.vault.clone())?);
         let usage = Arc::new(ValkeyTokenUsageQueue::connect(config.usage_queue.clone()).await?);
         let sdk_config = Aws::load_sdk_config(config.aws_timeouts).await;
@@ -46,7 +46,7 @@ impl AuthRelay {
         }
     }
 
-    pub async fn drain(&self) -> BuildResult<usize> {
+    pub async fn drain(&self) -> PlatformResult<usize> {
         let usage_result = self.usage.drain().await;
         let audit_result = self.relay.drain().await;
         match (usage_result, audit_result) {

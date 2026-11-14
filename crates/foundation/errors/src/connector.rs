@@ -1,7 +1,7 @@
 #[cfg(feature = "http")]
 use crate::http::HttpError;
 use crate::{
-    build::BuildError, retryability::Retryability, system::SystemError, timeout::TimeoutError,
+    platform::PlatformError, retryability::Retryability, system::SystemError, timeout::TimeoutError,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -40,7 +40,7 @@ pub enum ConnectorError {
     #[error("Failed to parse HTTP response: {source}")]
     HttpParseError {
         #[source]
-        source: Box<BuildError>,
+        source: Box<PlatformError>,
     },
     #[error("Clock sync frequency must be at least 1 minute")]
     InvalidSyncFrequency,
@@ -52,23 +52,23 @@ pub enum ConnectorError {
     Send {
         failure: SendFailure,
         #[source]
-        source: Box<BuildError>,
+        source: Box<PlatformError>,
     },
     #[error("Connector was not initialised with a websocket listener")]
     WebsocketListenerMissing,
     #[error("Failed to parse websocket response: {source}")]
     WebsocketParseError {
         #[source]
-        source: Box<BuildError>,
+        source: Box<PlatformError>,
     },
 }
 
 impl ConnectorError {
     pub fn external(source: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Self::from(BuildError::external(source))
+        Self::from(PlatformError::external(source))
     }
 
-    pub fn send_not_sent(source: BuildError) -> Self {
+    pub fn send_not_sent(source: PlatformError) -> Self {
         Self::Send {
             failure: SendFailure::NotSent,
             source: Box::new(source),
@@ -76,17 +76,17 @@ impl ConnectorError {
     }
 
     pub fn send_not_sent_external(source: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Self::send_not_sent(BuildError::external(source))
+        Self::send_not_sent(PlatformError::external(source))
     }
 
-    pub fn send_failed(source: BuildError) -> Self {
+    pub fn send_failed(source: PlatformError) -> Self {
         Self::Send {
             failure: SendFailure::Failed,
             source: Box::new(source),
         }
     }
 
-    pub fn send_unknown(source: BuildError) -> Self {
+    pub fn send_unknown(source: PlatformError) -> Self {
         Self::Send {
             failure: SendFailure::Unknown,
             source: Box::new(source),
@@ -94,7 +94,7 @@ impl ConnectorError {
     }
 
     pub fn send_unknown_external(source: impl std::error::Error + Send + Sync + 'static) -> Self {
-        Self::send_unknown(BuildError::external(source))
+        Self::send_unknown(PlatformError::external(source))
     }
 
     pub fn send_failure(&self) -> Option<SendFailure> {
@@ -108,13 +108,13 @@ impl ConnectorError {
         match self {
             Self::GatewayHttpStatus { status } => Retryability::from_http_status(*status),
             Self::Send { source, .. } => match source.as_ref() {
-                BuildError::Timeout(TimeoutError::TimedOut)
-                | BuildError::System(SystemError::External(_)) => Retryability::Retryable,
-                BuildError::Connector(Self::GatewayHttpStatus { status }) => {
+                PlatformError::Timeout(TimeoutError::TimedOut)
+                | PlatformError::System(SystemError::External(_)) => Retryability::Retryable,
+                PlatformError::Connector(Self::GatewayHttpStatus { status }) => {
                     Retryability::from_http_status(*status)
                 }
                 #[cfg(feature = "http")]
-                BuildError::Http(HttpError::Request { source, .. }) => {
+                PlatformError::Http(HttpError::Request { source, .. }) => {
                     Retryability::from_reqwest(source)
                 }
                 _ => Retryability::Permanent,
@@ -124,10 +124,10 @@ impl ConnectorError {
     }
 }
 
-impl From<BuildError> for ConnectorError {
-    fn from(source: BuildError) -> Self {
+impl From<PlatformError> for ConnectorError {
+    fn from(source: PlatformError) -> Self {
         match source {
-            BuildError::Connector(error) => error,
+            PlatformError::Connector(error) => error,
             source => Self::Send {
                 failure: SendFailure::Unknown,
                 source: Box::new(source),

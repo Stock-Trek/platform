@@ -4,7 +4,7 @@ use crate::{
     archive_record::{ArchiveKind, ArchiveRecord},
     batch::ArchiveBatch,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::{fs::File, path::Path, vec::IntoIter};
 
 const RUN_BATCH_RECORDS: usize = 8_192;
@@ -13,9 +13,9 @@ const RUN_BATCH_RECORDS: usize = 8_192;
 pub struct SpillRun;
 
 impl SpillRun {
-    pub fn write(path: &Path, batch: &ArchiveBatch) -> BuildResult<()> {
+    pub fn write(path: &Path, batch: &ArchiveBatch) -> PlatformResult<()> {
         let file = File::create(path).map_err(|error| {
-            BuildError::io("create spill run", path.display().to_string(), error)
+            PlatformError::io("create spill run", path.display().to_string(), error)
         })?;
         let mut writer = ArchiveParquetWriter::try_new(batch.kind(), file)?;
         writer.write(batch)?;
@@ -40,9 +40,9 @@ impl SpillRunWriter {
         path: &Path,
         kind: ArchiveKind,
         batch_size: usize,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let file = File::create(path).map_err(|error| {
-            BuildError::io("create spill run", path.display().to_string(), error)
+            PlatformError::io("create spill run", path.display().to_string(), error)
         })?;
         Ok(Self {
             kind,
@@ -53,7 +53,7 @@ impl SpillRunWriter {
         })
     }
 
-    pub fn push(&mut self, record: ArchiveRecord) -> BuildResult<()> {
+    pub fn push(&mut self, record: ArchiveRecord) -> PlatformResult<()> {
         if record.kind() != self.kind {
             return Err(ArchiveBatch::kind_mismatch(self.kind, &record));
         }
@@ -65,12 +65,12 @@ impl SpillRunWriter {
         Ok(())
     }
 
-    pub fn close(mut self) -> BuildResult<()> {
+    pub fn close(mut self) -> PlatformResult<()> {
         self.flush()?;
         self.writer.close()
     }
 
-    fn flush(&mut self) -> BuildResult<()> {
+    fn flush(&mut self) -> PlatformResult<()> {
         if self.buffer.is_empty() {
             return Ok(());
         }
@@ -87,7 +87,7 @@ pub struct SpillRunReader {
 }
 
 impl SpillRunReader {
-    pub fn open(kind: ArchiveKind, path: &Path) -> BuildResult<Self> {
+    pub fn open(kind: ArchiveKind, path: &Path) -> PlatformResult<Self> {
         Self::open_with_batch_size(kind, path, RUN_BATCH_RECORDS)
     }
 
@@ -95,16 +95,17 @@ impl SpillRunReader {
         kind: ArchiveKind,
         path: &Path,
         batch_size: usize,
-    ) -> BuildResult<Self> {
-        let file = File::open(path)
-            .map_err(|error| BuildError::io("open spill run", path.display().to_string(), error))?;
+    ) -> PlatformResult<Self> {
+        let file = File::open(path).map_err(|error| {
+            PlatformError::io("open spill run", path.display().to_string(), error)
+        })?;
         Ok(Self {
             batches: ArchiveParquet::decode_batches_with_batch_size(kind, file, batch_size)?,
             buffer: Vec::new().into_iter(),
         })
     }
 
-    pub fn next_record(&mut self) -> BuildResult<Option<ArchiveRecord>> {
+    pub fn next_record(&mut self) -> PlatformResult<Option<ArchiveRecord>> {
         loop {
             if let Some(record) = self.buffer.next() {
                 return Ok(Some(record));

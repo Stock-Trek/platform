@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, BuildResult, RateLimitError};
+use platform_errors::{PlatformError, PlatformResult, RateLimitError};
 use platform_types::{DurationNanoseconds, NonZero, UsageCount};
 use std::{
     sync::Arc,
@@ -22,7 +22,7 @@ impl RateLimiterState {
     pub fn try_new(
         interval_nanos: DurationNanoseconds,
         capacity_per_interval: UsageCount,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         Self::with_clock(
             interval_nanos,
             capacity_per_interval,
@@ -33,14 +33,14 @@ impl RateLimiterState {
         interval_nanos: DurationNanoseconds,
         capacity_per_interval: UsageCount,
         now: Arc<dyn Fn() -> Instant + Send + Sync>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         if capacity_per_interval <= UsageCount::ZERO {
-            return Err(BuildError::RateLimit(
+            return Err(PlatformError::RateLimit(
                 RateLimitError::InvalidRateLimitCapacity,
             ));
         }
         let interval_nanos = NonZero::new(interval_nanos)
-            .map_err(|_| BuildError::RateLimit(RateLimitError::InvalidRateLimitInterval))?;
+            .map_err(|_| PlatformError::RateLimit(RateLimitError::InvalidRateLimitInterval))?;
         Ok(Self {
             interval_nanos,
             capacity_per_interval,
@@ -60,13 +60,13 @@ impl RateLimiterState {
     pub fn cost_exceeds_capacity(&self, cost: UsageCount) -> bool {
         cost > self.capacity_per_interval
     }
-    pub fn remaining_capacity(&mut self) -> BuildResult<UsageCount> {
+    pub fn remaining_capacity(&mut self) -> PlatformResult<UsageCount> {
         self.update_capacity()?;
         Ok(self.current_capacity)
     }
-    pub fn did_consume(&mut self, cost: UsageCount) -> BuildResult<()> {
+    pub fn did_consume(&mut self, cost: UsageCount) -> PlatformResult<()> {
         if self.cost_exceeds_capacity(cost) {
-            return Err(BuildError::RateLimit(
+            return Err(PlatformError::RateLimit(
                 RateLimitError::RequestExceedsRateLimit {
                     cost,
                     capacity: self.capacity_per_interval,
@@ -75,7 +75,7 @@ impl RateLimiterState {
             ));
         }
         if self.is_throttled() {
-            return Err(BuildError::RateLimit(RateLimitError::RateLimited));
+            return Err(PlatformError::RateLimit(RateLimitError::RateLimited));
         }
         if self.did_quick_consume(cost) {
             Ok(())
@@ -84,7 +84,7 @@ impl RateLimiterState {
             if self.did_quick_consume(cost) {
                 Ok(())
             } else {
-                Err(BuildError::RateLimit(RateLimitError::RateLimited))
+                Err(PlatformError::RateLimit(RateLimitError::RateLimited))
             }
         }
     }
@@ -157,7 +157,7 @@ impl RateLimiterState {
         }
         consumed
     }
-    fn update_capacity(&mut self) -> BuildResult<()> {
+    fn update_capacity(&mut self) -> PlatformResult<()> {
         let now = self.now();
         if let Some(throttled_until) = self.throttled_until {
             if now < throttled_until {

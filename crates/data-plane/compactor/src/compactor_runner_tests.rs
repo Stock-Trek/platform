@@ -6,7 +6,7 @@ use crate::{
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_archive::{ArchiveKind, SourceBatch};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
 
@@ -16,7 +16,7 @@ struct FakeSource {
 
 #[async_trait]
 impl ArchiveBatchSource for FakeSource {
-    async fn pending_batches(&self) -> BuildResult<Vec<SourceBatch>> {
+    async fn pending_batches(&self) -> PlatformResult<Vec<SourceBatch>> {
         Ok(self.batches.clone())
     }
 }
@@ -28,7 +28,7 @@ struct FakeCompactor {
 
 #[async_trait]
 impl BatchCompactor for FakeCompactor {
-    async fn compact(&self, _batch: &SourceBatch) -> BuildResult<CompactionStats> {
+    async fn compact(&self, _batch: &SourceBatch) -> PlatformResult<CompactionStats> {
         *self.batches.lock() += 1;
         Ok(CompactionStats::default())
     }

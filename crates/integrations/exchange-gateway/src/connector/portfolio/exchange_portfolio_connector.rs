@@ -4,7 +4,7 @@ use crate::connector::portfolio::{
     exchange_portfolio_connection::ExchangePortfolioConnection, health_reporter::HealthReporter,
 };
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::{collections::BTreeMap, sync::Arc};
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -46,9 +46,9 @@ impl PortfolioConnector for ExchangePortfolioConnector {
         &self,
         cex_id: CexId,
         sink: Arc<dyn PortfolioUpdateSink>,
-    ) -> BuildResult<Arc<dyn crate::connector::portfolio::PortfolioConnection>> {
+    ) -> PlatformResult<Arc<dyn crate::connector::portfolio::PortfolioConnection>> {
         let Some(exchange) = self.exchanges.get(&cex_id) else {
-            return Err(BuildError::bad_value(
+            return Err(PlatformError::bad_value(
                 "portfolio connector",
                 cex_id.to_string(),
                 "is not supported",

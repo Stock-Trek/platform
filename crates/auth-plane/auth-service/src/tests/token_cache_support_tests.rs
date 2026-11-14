@@ -1,6 +1,6 @@
 use crate::{ApiToken, CachedTokenStore, MemoryTokenStore, TokenCacheConfig, TokenStore};
 use async_trait::async_trait;
-use platform_errors::{AuthError, BuildError, BuildResult};
+use platform_errors::{AuthError, PlatformError, PlatformResult};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, AtomicUsize, Ordering},
@@ -78,14 +78,14 @@ impl TestStore {
 
 #[async_trait]
 impl TokenStore for TestStore {
-    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
+    async fn put(&self, token: &ApiToken) -> PlatformResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> PlatformResult<Option<ApiToken>> {
         self.get_calls.fetch_add(1, Ordering::SeqCst);
         if self.permanent_fail.load(Ordering::SeqCst) {
-            return Err(BuildError::auth_store(
+            return Err(PlatformError::auth_store(
                 "read",
                 id,
                 false,
@@ -94,7 +94,7 @@ impl TokenStore for TestStore {
         }
         if self.fail.load(Ordering::SeqCst) {
             self.hold_read_if_requested().await;
-            return Err(BuildError::Auth(AuthError::Unavailable {
+            return Err(PlatformError::Auth(AuthError::Unavailable {
                 retry_after: Duration::from_secs(1),
             }));
         }
@@ -103,15 +103,15 @@ impl TokenStore for TestStore {
         result
     }
 
-    async fn delete(&self, id: &str) -> BuildResult<()> {
+    async fn delete(&self, id: &str) -> PlatformResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn ids(&self) -> BuildResult<Vec<String>> {
+    async fn ids(&self) -> PlatformResult<Vec<String>> {
         self.inner.ids().await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> PlatformResult<()> {
         self.inner.update(expected, token).await
     }
 
@@ -119,14 +119,14 @@ impl TokenStore for TestStore {
         &self,
         mutation: crate::TokenMutation,
         event: crate::TokenAuditEvent,
-    ) -> BuildResult<bool> {
+    ) -> PlatformResult<bool> {
         self.inner.commit(mutation, event).await
     }
 
     async fn commit_rotation(
         &self,
         transaction: &crate::TokenRotationTransaction,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 }

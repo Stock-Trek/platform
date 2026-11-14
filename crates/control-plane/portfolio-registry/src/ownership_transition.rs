@@ -1,5 +1,5 @@
 use crate::{OwnershipCommand, OwnershipRecord};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_portfolio_ownership::OwnershipEvent;
 
 pub enum OwnershipTransition {
@@ -11,16 +11,16 @@ impl OwnershipTransition {
     pub fn apply(
         existing: Option<OwnershipRecord>,
         command: &OwnershipCommand,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         match existing {
             None => Self::initial(command),
             Some(record) => Self::next(record, command),
         }
     }
 
-    fn initial(command: &OwnershipCommand) -> BuildResult<Self> {
+    fn initial(command: &OwnershipCommand) -> PlatformResult<Self> {
         if !command.action.is_add() {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "account",
                 "cannot remove a mapping that does not exist",
             ));
@@ -36,13 +36,13 @@ impl OwnershipTransition {
         )))
     }
 
-    fn next(record: OwnershipRecord, command: &OwnershipCommand) -> BuildResult<Self> {
+    fn next(record: OwnershipRecord, command: &OwnershipCommand) -> PlatformResult<Self> {
         if command.action.is_add() {
             if !record.active {
                 return Ok(Self::Applied(Self::advance(record, true, command)));
             }
             if record.owner != command.owner {
-                return Err(BuildError::auth_invalid_field(
+                return Err(PlatformError::auth_invalid_field(
                     "owner",
                     "account belongs to a different owner",
                 ));
@@ -53,7 +53,7 @@ impl OwnershipTransition {
             return Ok(Self::Unchanged(record));
         }
         if record.owner != command.owner {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "owner",
                 "account belongs to a different owner",
             ));

@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::{AlignedWindow, CandleKey, GapMarker, MarketEvent};
 use platform_nats::EventPublisher;
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
@@ -119,7 +119,7 @@ struct FakeSource {
 
 #[async_trait]
 impl MarketSource for FakeSource {
-    async fn next_input(&mut self) -> BuildResult<Option<SourceRecord>> {
+    async fn next_input(&mut self) -> PlatformResult<Option<SourceRecord>> {
         if self.records.is_empty() {
             Ok(None)
         } else {
@@ -127,7 +127,7 @@ impl MarketSource for FakeSource {
         }
     }
 
-    async fn ack(&mut self, _record: &SourceRecord) -> BuildResult<()> {
+    async fn ack(&mut self, _record: &SourceRecord) -> PlatformResult<()> {
         *self.acked.lock() += 1;
         Ok(())
     }
@@ -142,7 +142,7 @@ struct FakePublisher {
 
 #[async_trait]
 impl EventPublisher for FakePublisher {
-    async fn publish(&self, subject: &str, payload: &[u8]) -> BuildResult<()> {
+    async fn publish(&self, subject: &str, payload: &[u8]) -> PlatformResult<()> {
         self.published
             .lock()
             .push((subject.to_string(), payload.to_vec()));

@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use serde::Deserialize;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -39,9 +39,9 @@ pub struct BinanceUserDataEvent {
 }
 
 impl BinanceUserDataEvent {
-    pub fn from_value(value: &serde_json::Value) -> BuildResult<Self> {
+    pub fn from_value(value: &serde_json::Value) -> PlatformResult<Self> {
         let wire: WireEvent =
-            serde_json::from_value(value.clone()).map_err(BuildError::external)?;
+            serde_json::from_value(value.clone()).map_err(PlatformError::external)?;
         Ok(Self {
             event_type: wire.event_type,
             event_time: wire.event_time,

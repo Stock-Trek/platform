@@ -1,7 +1,7 @@
 use crate::connector::portfolio::PortfolioCredentialSource;
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use std::collections::{BTreeMap, BTreeSet};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
@@ -64,13 +64,13 @@ impl PortfolioCredentialSource for PortfolioAccounts {
         &self,
         cex_id: CexId,
         account_id: &AccountId,
-    ) -> BuildResult<ApiKeyCredentials> {
+    ) -> PlatformResult<ApiKeyCredentials> {
         self.credentials
             .read()
             .get(&(cex_id, account_id.clone()))
             .cloned()
             .ok_or_else(|| {
-                BuildError::bad_value(
+                PlatformError::bad_value(
                     "portfolio account",
                     format!("{cex_id}:{}", account_id.0),
                     "has no configured credentials",

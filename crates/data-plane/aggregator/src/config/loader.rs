@@ -13,7 +13,7 @@ use crate::config::env::{
 use crate::config::replay::ReplayStartPolicy;
 use platform_archive::RoutingBucket;
 use platform_config::EnvVars;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::AlignedWindow;
 use platform_nats::NatsSubject;
 use platform_runtime::Config;
@@ -21,11 +21,11 @@ use std::time::Duration;
 use strum::VariantArray;
 
 impl AggregatorConfig {
-    pub fn from_env() -> BuildResult<Self> {
+    pub fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let nats_url = Config::required_nats_url(vars, AGGREGATOR_NATS_URL)?;
         let event_subject_prefix =
@@ -52,7 +52,7 @@ impl AggregatorConfig {
             Config::required_positive_duration_secs(vars, AGGREGATOR_WATERMARK_IDLE_TIMEOUT_SECS)?;
         let replay_value = vars.required(AGGREGATOR_REPLAY_START_POLICY)?;
         let replay_start_policy = ReplayStartPolicy::parse(&replay_value).ok_or_else(|| {
-            BuildError::config_invalid(
+            PlatformError::config_invalid(
                 AGGREGATOR_REPLAY_START_POLICY,
                 "must be one of checkpoint, archive, earliest, or latest",
             )
@@ -62,7 +62,7 @@ impl AggregatorConfig {
         NatsSubject::validate_named(AGGREGATOR_DURABLE_PREFIX, &consumer_prefix)?;
         let lease_ttl = Config::required_positive_duration_secs(vars, AGGREGATOR_LEASE_TTL_SECS)?;
         if checkpoint_interval >= lease_ttl {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 AGGREGATOR_CHECKPOINT_INTERVAL_SECS,
                 format!("must be lower than {AGGREGATOR_LEASE_TTL_SECS}"),
             ));
@@ -84,13 +84,13 @@ impl AggregatorConfig {
             vars.required_parsed(AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES)?;
         let closed_candle_memory_budget_bytes =
             usize::try_from(memory_budget_bytes).map_err(|error| {
-                BuildError::config_invalid_source(
+                PlatformError::config_invalid_source(
                     AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES,
                     error,
                 )
             })?;
         if closed_candle_memory_budget_bytes == 0 {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES,
                 "must be greater than zero",
             ));
@@ -108,7 +108,7 @@ impl AggregatorConfig {
             closed_candle_memory_budget_bytes,
         )?;
         if shard_count as u64 > RoutingBucket::COUNT {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 AGGREGATOR_SHARD_COUNT,
                 format!(
                     "must not exceed the archive routing bucket count ({})",
@@ -120,7 +120,7 @@ impl AggregatorConfig {
         if let Some(shard_index) = shard_index
             && shard_index >= shard_count
         {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 AGGREGATOR_SHARD_INDEX,
                 format!("must be lower than {AGGREGATOR_SHARD_COUNT} ({shard_count})"),
             ));

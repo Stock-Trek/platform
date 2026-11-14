@@ -6,7 +6,7 @@ use aws_sigv4::{
     http_request::{SignableBody, SignableRequest, SigningParams, sign},
     sign::v4,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::{collections::BTreeMap, time::SystemTime};
 use url::{Host, Url};
 
@@ -37,11 +37,11 @@ impl SigV4Signer {
         headers: &mut BTreeMap<String, String>,
         body: &[u8],
         now: SystemTime,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let url =
-            Url::parse(url).map_err(|error| BuildError::config_invalid_source("url", error))?;
+            Url::parse(url).map_err(|error| PlatformError::config_invalid_source("url", error))?;
         if !matches!(url.scheme(), "http" | "https") {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "url",
                 "SigV4 signing requires an http or https URL",
             ));
@@ -62,7 +62,7 @@ impl SigV4Signer {
             .time(now)
             .settings(Default::default())
             .build()
-            .map_err(|error| BuildError::config_invalid_source("sigv4", error))?;
+            .map_err(|error| PlatformError::config_invalid_source("sigv4", error))?;
         let request = SignableRequest::new(
             method,
             url.as_str(),
@@ -71,19 +71,19 @@ impl SigV4Signer {
                 .map(|(name, value)| (name.as_str(), value.as_str())),
             SignableBody::Bytes(body),
         )
-        .map_err(BuildError::external)?;
-        let output = sign(request, &SigningParams::V4(params)).map_err(BuildError::external)?;
+        .map_err(PlatformError::external)?;
+        let output = sign(request, &SigningParams::V4(params)).map_err(PlatformError::external)?;
         for (name, value) in output.output().headers() {
             headers.insert(name.to_string(), value.to_string());
         }
         Ok(())
     }
 
-    fn host_header(url: &Url) -> BuildResult<String> {
+    fn host_header(url: &Url) -> PlatformResult<String> {
         let host = match url.host() {
             Some(Host::Ipv6(address)) => format!("[{address}]"),
             Some(host) => host.to_string(),
-            None => return Err(BuildError::config_invalid("url", "must contain a host")),
+            None => return Err(PlatformError::config_invalid("url", "must contain a host")),
         };
         Ok(match url.port() {
             Some(port) => format!("{host}:{port}"),

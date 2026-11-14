@@ -4,7 +4,7 @@ use crate::{
     api_token::{MAX_OWNER_LENGTH, MAX_SECRET_LENGTH, MAX_TOKEN_ID_LENGTH},
 };
 use chrono::Utc;
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use secrecy::{ExposeSecret, SecretString};
 use serde_json::json;
 
@@ -50,7 +50,7 @@ fn rejects_invalid_token_ids() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField { .. }))
+        Err(PlatformError::Auth(AuthError::InvalidField { .. }))
     ));
 }
 
@@ -61,7 +61,7 @@ fn rejects_overlong_token_ids() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "token_id",
             ..
         }))
@@ -74,7 +74,7 @@ fn rejects_overlong_owners_and_secrets() {
     let owner_error = ApiToken::generate("token-a", owner, Utc::now(), TestFixture::metadata());
     assert!(matches!(
         owner_error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "owner",
             ..
         }))
@@ -90,7 +90,7 @@ fn rejects_overlong_owners_and_secrets() {
     );
     assert!(matches!(
         secret_error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "secret",
             ..
         }))
@@ -108,7 +108,7 @@ fn rejects_control_characters_in_owners() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "owner",
             ..
         }))
@@ -123,7 +123,7 @@ fn rejects_a_value_for_a_different_token_id() {
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::InvalidField { field: "id", .. })
+        PlatformError::Auth(AuthError::InvalidField { field: "id", .. })
     ));
 }
 
@@ -133,7 +133,7 @@ fn rejects_missing_vault_value_fields() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField { .. }))
+        Err(PlatformError::Auth(AuthError::InvalidField { .. }))
     ));
 }
 
@@ -150,7 +150,7 @@ fn rejects_blank_secrets() {
 
         assert!(matches!(
             error,
-            Err(BuildError::Auth(AuthError::InvalidField {
+            Err(PlatformError::Auth(AuthError::InvalidField {
                 field: "secret",
                 ..
             }))
@@ -170,7 +170,7 @@ fn rejects_control_characters_in_secrets() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "secret",
             ..
         }))

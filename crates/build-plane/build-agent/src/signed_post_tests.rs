@@ -1,6 +1,6 @@
 use crate::signed_post::{POLICY_FIELD, SignedPost};
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use platform_errors::{BuildError, ErrorType, StorageError};
+use platform_errors::{ErrorType, PlatformError, StorageError};
 use serde_json::json;
 use std::{collections::BTreeMap, num::NonZeroU64, time::Duration};
 
@@ -68,7 +68,7 @@ async fn rejects_oversized_artifacts_before_uploading() {
 
     assert!(matches!(
         error,
-        BuildError::Storage(StorageError::ArtifactTooLarge { .. })
+        PlatformError::Storage(StorageError::ArtifactTooLarge { .. })
     ));
     assert_eq!(error.error_type(), "artifact_too_large");
     assert!(error.to_string().contains("maximum artifact size"));

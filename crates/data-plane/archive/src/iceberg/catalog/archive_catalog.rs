@@ -1,7 +1,7 @@
 use crate::iceberg::ArchiveIcebergTable;
 use crate::iceberg::catalog::IcebergDataFile;
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::collections::HashSet;
 
 #[async_trait]
@@ -11,19 +11,19 @@ pub trait ArchiveCatalog: Send + Sync {
         table: ArchiveIcebergTable,
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
-    ) -> BuildResult<()>;
+    ) -> PlatformResult<()>;
 
     async fn registered_data_files(
         &self,
         table: ArchiveIcebergTable,
-    ) -> BuildResult<HashSet<String>>;
+    ) -> PlatformResult<HashSet<String>>;
 
     /// Lists the live data files in a table.
     ///
     /// Rebuild tooling needs file sizes as well as paths so it can construct a
     /// bounded S3 reader without issuing an extra HEAD request per object.
-    async fn data_files(&self, table: ArchiveIcebergTable) -> BuildResult<Vec<IcebergDataFile>> {
-        Err(BuildError::external(std::io::Error::new(
+    async fn data_files(&self, table: ArchiveIcebergTable) -> PlatformResult<Vec<IcebergDataFile>> {
+        Err(PlatformError::external(std::io::Error::new(
             std::io::ErrorKind::Unsupported,
             format!(
                 "archive catalog does not expose data files for {}",
@@ -35,7 +35,7 @@ pub trait ArchiveCatalog: Send + Sync {
     async fn processed_source_files(
         &self,
         table: ArchiveIcebergTable,
-    ) -> BuildResult<HashSet<String>>;
+    ) -> PlatformResult<HashSet<String>>;
 
     /// Reads the compacted data files and the processed raw-source set from one
     /// table snapshot.
@@ -47,7 +47,7 @@ pub trait ArchiveCatalog: Send + Sync {
     async fn compacted_snapshot(
         &self,
         table: ArchiveIcebergTable,
-    ) -> BuildResult<(Vec<IcebergDataFile>, HashSet<String>)> {
+    ) -> PlatformResult<(Vec<IcebergDataFile>, HashSet<String>)> {
         Ok((
             self.data_files(table).await?,
             self.processed_source_files(table).await?,

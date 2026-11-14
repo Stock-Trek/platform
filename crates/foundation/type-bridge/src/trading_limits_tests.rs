@@ -1,5 +1,5 @@
 use crate::{MinMaxStep, TradingPrecision};
-use platform_errors::{BuildError, ValidationError};
+use platform_errors::{PlatformError, ValidationError};
 use rust_decimal::{Decimal, RoundingStrategy};
 
 fn precision_with(min: Decimal, max: Decimal, step: Decimal) -> TradingPrecision {
@@ -17,7 +17,9 @@ fn non_finite_values_return_an_error() {
         let result = precision().to_valid_quote(value, RoundingStrategy::MidpointNearestEven);
         assert!(matches!(
             result,
-            Err(BuildError::Validation(ValidationError::InvalidValue { .. }))
+            Err(PlatformError::Validation(
+                ValidationError::InvalidValue { .. }
+            ))
         ));
     }
 }
@@ -38,7 +40,9 @@ fn values_outside_the_bounds_return_an_error() {
         let result = precision.to_valid_quote(value, RoundingStrategy::MidpointNearestEven);
         assert!(matches!(
             result,
-            Err(BuildError::Validation(ValidationError::InvalidValue { .. }))
+            Err(PlatformError::Validation(
+                ValidationError::InvalidValue { .. }
+            ))
         ));
     }
 }
@@ -49,7 +53,9 @@ fn values_that_only_round_outside_the_bounds_return_an_error() {
     let result = precision.to_valid_quote(99.6, RoundingStrategy::MidpointNearestEven);
     assert!(matches!(
         result,
-        Err(BuildError::Validation(ValidationError::InvalidValue { .. }))
+        Err(PlatformError::Validation(
+            ValidationError::InvalidValue { .. }
+        ))
     ));
 }
 
@@ -59,7 +65,9 @@ fn values_below_the_minimum_that_would_round_up_return_an_error() {
     let result = precision.to_valid_quote(0.6, RoundingStrategy::MidpointNearestEven);
     assert!(matches!(
         result,
-        Err(BuildError::Validation(ValidationError::InvalidValue { .. }))
+        Err(PlatformError::Validation(
+            ValidationError::InvalidValue { .. }
+        ))
     ));
 }
 
@@ -69,6 +77,8 @@ fn invalid_bounds_return_an_error_instead_of_panicking() {
     let result = precision.to_valid_quote(7.0, RoundingStrategy::MidpointNearestEven);
     assert!(matches!(
         result,
-        Err(BuildError::Validation(ValidationError::InvalidValue { .. }))
+        Err(PlatformError::Validation(
+            ValidationError::InvalidValue { .. }
+        ))
     ));
 }

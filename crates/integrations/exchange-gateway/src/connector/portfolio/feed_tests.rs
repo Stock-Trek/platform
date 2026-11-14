@@ -4,7 +4,7 @@ use crate::connector::portfolio::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::{
     collections::BTreeSet,
     sync::{
@@ -57,7 +57,7 @@ impl PortfolioConnector for FakeConnector {
         &self,
         _cex_id: CexId,
         _sink: Arc<dyn PortfolioUpdateSink>,
-    ) -> BuildResult<Arc<dyn PortfolioConnection>> {
+    ) -> PlatformResult<Arc<dyn PortfolioConnection>> {
         self.state.connects.fetch_add(1, Ordering::SeqCst);
         Ok(Arc::new(FakeConnection {
             state: Arc::clone(&self.state),
@@ -71,12 +71,12 @@ struct FakeConnection {
 
 #[async_trait]
 impl PortfolioConnection for FakeConnection {
-    async fn update_accounts(&self, accounts: BTreeSet<AccountId>) -> BuildResult<()> {
+    async fn update_accounts(&self, accounts: BTreeSet<AccountId>) -> PlatformResult<()> {
         self.state.updates.lock().push(accounts);
         Ok(())
     }
 
-    async fn disconnect(&self) -> BuildResult<()> {
+    async fn disconnect(&self) -> PlatformResult<()> {
         self.state.disconnects.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
@@ -89,7 +89,7 @@ impl PortfolioUpdateSink for NoopSink {
     async fn apply_update(
         &self,
         _update: ConnectorPortfolioUpdate,
-    ) -> BuildResult<PortfolioUpdateOutcome> {
+    ) -> PlatformResult<PortfolioUpdateOutcome> {
         Ok(PortfolioUpdateOutcome::Applied)
     }
 }

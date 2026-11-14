@@ -1,6 +1,6 @@
 use async_nats::jetstream::kv::{Operation, Store, Watch};
 use futures::StreamExt;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_time::RetryBackoff;
 use std::pin::Pin;
 use std::time::Duration;
@@ -32,7 +32,7 @@ impl KeyValueWatch {
         }
     }
 
-    pub async fn next(&mut self) -> BuildResult<KeyValueChange> {
+    pub async fn next(&mut self) -> PlatformResult<KeyValueChange> {
         let mut backoff = RetryBackoff::constant(WATCH_RETRY_BACKOFF).without_jitter();
         loop {
             if self.watch.is_none() {

@@ -1,6 +1,6 @@
 use crate::{ApiToken, RevocationReason, RevokedBy, TokenScope};
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::{borrow::Borrow, collections::HashSet};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,7 +20,7 @@ impl TokenMetadata {
     pub fn new(
         expires_at: DateTime<Utc>,
         scopes: impl IntoIterator<Item = impl Borrow<TokenScope>>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let scopes: Vec<TokenScope> = scopes.into_iter().map(|scope| *scope.borrow()).collect();
         Self::validate_scopes(&scopes)?;
         Ok(Self {
@@ -99,16 +99,16 @@ impl TokenMetadata {
         }
     }
 
-    fn validate_scopes(scopes: &[TokenScope]) -> BuildResult<()> {
+    fn validate_scopes(scopes: &[TokenScope]) -> PlatformResult<()> {
         if scopes.is_empty() {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "scopes",
                 "must not be empty",
             ));
         }
         let mut seen = HashSet::new();
         if scopes.iter().any(|scope| !seen.insert(*scope)) {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "scopes",
                 "must not contain duplicates",
             ));
@@ -116,20 +116,20 @@ impl TokenMetadata {
         Ok(())
     }
 
-    pub fn validate(&self) -> BuildResult<()> {
+    pub fn validate(&self) -> PlatformResult<()> {
         Self::validate_scopes(&self.scopes)?;
         if let Some(token_id) = &self.rotated_from {
             ApiToken::validate_id(token_id).map_err(|_| {
-                BuildError::auth_invalid_field("rotated_from", "must be a valid token id")
+                PlatformError::auth_invalid_field("rotated_from", "must be a valid token id")
             })?;
         }
         if let Some(token_id) = &self.replaced_by {
             ApiToken::validate_id(token_id).map_err(|_| {
-                BuildError::auth_invalid_field("replaced_by", "must be a valid token id")
+                PlatformError::auth_invalid_field("replaced_by", "must be a valid token id")
             })?;
         }
         if self.rotated_from.is_some() && self.rotated_from == self.replaced_by {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "rotated_from",
                 "must refer to a different token than replaced_by",
             ));
@@ -137,19 +137,19 @@ impl TokenMetadata {
         match (self.revoked_at, self.revocation_reason, self.revoked_by) {
             (None, None, None) | (Some(_), Some(_), Some(_)) => {}
             (None, _, _) => {
-                return Err(BuildError::auth_invalid_field(
+                return Err(PlatformError::auth_invalid_field(
                     "revoked_at",
                     "is required when revocation metadata is present",
                 ));
             }
             (Some(_), None, _) => {
-                return Err(BuildError::auth_invalid_field(
+                return Err(PlatformError::auth_invalid_field(
                     "revocation_reason",
                     "is required for a revoked token",
                 ));
             }
             (Some(_), Some(_), None) => {
-                return Err(BuildError::auth_invalid_field(
+                return Err(PlatformError::auth_invalid_field(
                     "revoked_by",
                     "is required for a revoked token",
                 ));
@@ -157,11 +157,11 @@ impl TokenMetadata {
         }
         match (&self.replaced_by, self.rotation_overlap_until) {
             (None, None) | (Some(_), Some(_)) => Ok(()),
-            (Some(_), None) => Err(BuildError::auth_invalid_field(
+            (Some(_), None) => Err(PlatformError::auth_invalid_field(
                 "rotation_overlap_until",
                 "is required when replaced_by is set",
             )),
-            (None, Some(_)) => Err(BuildError::auth_invalid_field(
+            (None, Some(_)) => Err(PlatformError::auth_invalid_field(
                 "replaced_by",
                 "is required when rotation_overlap_until is set",
             )),

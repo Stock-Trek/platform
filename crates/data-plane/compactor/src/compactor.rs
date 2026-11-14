@@ -9,7 +9,7 @@ use platform_archive::{
     ArchiveCatalog, ArchiveHour, ArchiveIcebergTable, ArchiveParquet, ArchivePath, IcebergDataFile,
     S3, SourceBatch,
 };
-use platform_errors::{BuildError, BuildResult, DataError};
+use platform_errors::{DataError, PlatformError, PlatformResult};
 use std::{fs::File, path::Path, sync::Arc};
 use tokio::io::{AsyncWriteExt, copy};
 use tracing::{info, warn};
@@ -25,7 +25,7 @@ pub struct CompactionStats {
 /// Compacts a batch of raw archive files into partitioned output files.
 #[async_trait]
 pub trait BatchCompactor: Send + Sync {
-    async fn compact(&self, batch: &SourceBatch) -> BuildResult<CompactionStats>;
+    async fn compact(&self, batch: &SourceBatch) -> PlatformResult<CompactionStats>;
 }
 
 /// Reads raw archive files, de-duplicates and sorts their rows, then writes one
@@ -52,7 +52,7 @@ impl Compactor {
     pub async fn connect(
         config: &CompactorConfig,
         catalog: Arc<dyn ArchiveCatalog>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         Ok(Self {
             client: S3::s3_client().await,
             catalog,
@@ -62,9 +62,9 @@ impl Compactor {
         })
     }
 
-    pub async fn compact(&self, batch: &SourceBatch) -> BuildResult<CompactionStats> {
+    pub async fn compact(&self, batch: &SourceBatch) -> PlatformResult<CompactionStats> {
         let temp_dir = tempfile::tempdir().map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "create compaction temporary directory",
                 std::env::temp_dir().display().to_string(),
                 error,
@@ -82,7 +82,7 @@ impl Compactor {
 
             {
                 let file = File::open(&path).map_err(|error| {
-                    BuildError::io(
+                    PlatformError::io(
                         "open downloaded archive object",
                         path.display().to_string(),
                         error,
@@ -148,7 +148,7 @@ impl Compactor {
         Ok(stats)
     }
 
-    async fn download_to_file(&self, key: &str, path: &Path) -> BuildResult<()> {
+    async fn download_to_file(&self, key: &str, path: &Path) -> PlatformResult<()> {
         let target = format!("s3://{}/{key}", self.bucket);
         let output = self
             .client
@@ -157,11 +157,11 @@ impl Compactor {
             .key(key)
             .send()
             .await
-            .map_err(|error| BuildError::s3("get raw archive object", target.clone(), error))?;
+            .map_err(|error| PlatformError::s3("get raw archive object", target.clone(), error))?;
 
         let mut body = Box::pin(output.body.into_async_read());
         let mut file = tokio::fs::File::create(path).await.map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "create temporary source file",
                 path.display().to_string(),
                 error,
@@ -169,9 +169,9 @@ impl Compactor {
         })?;
         copy(&mut body, &mut file)
             .await
-            .map_err(|error| BuildError::io("stream raw archive object", target, error))?;
+            .map_err(|error| PlatformError::io("stream raw archive object", target, error))?;
         file.flush().await.map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "flush temporary source file",
                 path.display().to_string(),
                 error,
@@ -180,9 +180,9 @@ impl Compactor {
         Ok(())
     }
 
-    async fn write_object_from_path(&self, key: &str, path: &Path) -> BuildResult<()> {
+    async fn write_object_from_path(&self, key: &str, path: &Path) -> PlatformResult<()> {
         let body = ByteStream::from_path(path).await.map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "read compacted parquet file",
                 path.display().to_string(),
                 error,
@@ -197,7 +197,7 @@ impl Compactor {
             .body(body)
             .send()
             .await
-            .map_err(|error| BuildError::s3("put compacted parquet object", target, error))?;
+            .map_err(|error| PlatformError::s3("put compacted parquet object", target, error))?;
         Ok(())
     }
 
@@ -207,8 +207,8 @@ impl Compactor {
         partition: &str,
         content_id: u64,
         length: u64,
-    ) -> BuildResult<String> {
-        let hour = ArchiveHour::from_timestamp(batch.bucket_start).ok_or(BuildError::Data(
+    ) -> PlatformResult<String> {
+        let hour = ArchiveHour::from_timestamp(batch.bucket_start).ok_or(PlatformError::Data(
             DataError::DateTimeOutOfRange {
                 operation: "build compacted object key",
             },
@@ -225,7 +225,7 @@ impl Compactor {
 
 #[async_trait]
 impl BatchCompactor for Compactor {
-    async fn compact(&self, batch: &SourceBatch) -> BuildResult<CompactionStats> {
+    async fn compact(&self, batch: &SourceBatch) -> PlatformResult<CompactionStats> {
         Compactor::compact(self, batch).await
     }
 }

@@ -9,7 +9,7 @@ use iceberg_catalog_rest::{
     REST_CATALOG_PROP_URI, REST_CATALOG_PROP_WAREHOUSE, RestCatalogBuilder,
 };
 use iceberg_storage_opendal::OpenDalStorageFactory;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -23,7 +23,7 @@ pub struct IcebergCatalog {
 }
 
 impl IcebergCatalog {
-    pub async fn connect(config: &IcebergConfig) -> BuildResult<Self> {
+    pub async fn connect(config: &IcebergConfig) -> PlatformResult<Self> {
         let warehouse = config.warehouse.trim_end_matches('/').to_string();
         let namespace = NamespaceIdent::new(config.namespace.clone());
         let mut props = HashMap::from([
@@ -66,7 +66,7 @@ impl IcebergCatalog {
         )
     }
 
-    async fn ensure_namespace(&self) -> BuildResult<()> {
+    async fn ensure_namespace(&self) -> PlatformResult<()> {
         if self
             .catalog
             .namespace_exists(&self.namespace)
@@ -87,7 +87,7 @@ impl IcebergCatalog {
         }
     }
 
-    pub async fn ensure_table(&self, table: ArchiveIcebergTable) -> BuildResult<Table> {
+    pub async fn ensure_table(&self, table: ArchiveIcebergTable) -> PlatformResult<Table> {
         let ident = self.table_ident(table);
         match self.catalog.load_table(&ident).await {
             Ok(table) => return Ok(table),
@@ -115,8 +115,8 @@ impl IcebergCatalog {
         }
     }
 
-    pub fn catalog_error(operation: &'static str, error: iceberg::Error) -> BuildError {
-        BuildError::external(std::io::Error::other(format!("{operation}: {error}")))
+    pub fn catalog_error(operation: &'static str, error: iceberg::Error) -> PlatformError {
+        PlatformError::external(std::io::Error::other(format!("{operation}: {error}")))
     }
 }
 
@@ -127,19 +127,19 @@ impl ArchiveCatalog for IcebergCatalog {
         table: ArchiveIcebergTable,
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         self.commit_files(table, files, source_files).await
     }
 
     async fn registered_data_files(
         &self,
         table: ArchiveIcebergTable,
-    ) -> BuildResult<HashSet<String>> {
+    ) -> PlatformResult<HashSet<String>> {
         let table = self.ensure_table(table).await?;
         self.registered_paths(&table).await
     }
 
-    async fn data_files(&self, table: ArchiveIcebergTable) -> BuildResult<Vec<IcebergDataFile>> {
+    async fn data_files(&self, table: ArchiveIcebergTable) -> PlatformResult<Vec<IcebergDataFile>> {
         let table = self.ensure_table(table).await?;
         self.data_files_from_table(&table).await
     }
@@ -147,7 +147,7 @@ impl ArchiveCatalog for IcebergCatalog {
     async fn processed_source_files(
         &self,
         table: ArchiveIcebergTable,
-    ) -> BuildResult<HashSet<String>> {
+    ) -> PlatformResult<HashSet<String>> {
         let table = self.ensure_table(table).await?;
         Ok(Self::source_files_from_metadata(&table))
     }
@@ -155,7 +155,7 @@ impl ArchiveCatalog for IcebergCatalog {
     async fn compacted_snapshot(
         &self,
         table: ArchiveIcebergTable,
-    ) -> BuildResult<(Vec<IcebergDataFile>, HashSet<String>)> {
+    ) -> PlatformResult<(Vec<IcebergDataFile>, HashSet<String>)> {
         // Load the table once and derive both views from that metadata so the
         // processed set can never describe a newer snapshot than the files.
         let table = self.ensure_table(table).await?;

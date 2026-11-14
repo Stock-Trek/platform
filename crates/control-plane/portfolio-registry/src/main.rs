@@ -1,8 +1,8 @@
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_portfolio_registry::{PortfolioRegistryConfig, RegistryRunner};
 
 #[tokio::main]
-async fn main() -> BuildResult<()> {
+async fn main() -> PlatformResult<()> {
     let config = PortfolioRegistryConfig::from_env()?;
     RegistryRunner::run(config).await
 }

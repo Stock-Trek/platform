@@ -1,7 +1,7 @@
 use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{ApiToken, AuthService, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 
 struct AdministrationFixture;
 
@@ -24,10 +24,10 @@ impl AdministrationFixture {
             .unwrap()
     }
 
-    fn assert_missing_scope(error: BuildError, expected: &str) {
+    fn assert_missing_scope(error: PlatformError, expected: &str) {
         assert!(matches!(
             error,
-            BuildError::Auth(AuthError::MissingScope { ref scope, .. }) if scope == expected
+            PlatformError::Auth(AuthError::MissingScope { ref scope, .. }) if scope == expected
         ));
     }
 }

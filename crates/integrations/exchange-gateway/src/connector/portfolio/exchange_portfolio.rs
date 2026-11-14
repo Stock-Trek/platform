@@ -7,7 +7,7 @@ use crate::{
     submission::SubmissionOutcome,
 };
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult, ExchangeError};
+use platform_errors::{ExchangeError, PlatformError, PlatformResult};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     exchange::ETExchange,
@@ -60,7 +60,7 @@ where
     fn http_connector(
         &self,
         credentials: &ApiKeyCredentials,
-    ) -> BuildResult<Connector<Exchange, ReqwestHttpClient>> {
+    ) -> PlatformResult<Connector<Exchange, ReqwestHttpClient>> {
         Connector::try_new_http_reqwest(
             self.rest_url.clone(),
             self.exchange.clone(),
@@ -73,13 +73,13 @@ where
     async fn submit<Request>(
         connector: &Connector<Exchange, ReqwestHttpClient>,
         request: Request,
-    ) -> BuildResult<Request::Response>
+    ) -> PlatformResult<Request::Response>
     where
         Request: ETHttpRequest<Exchange = Exchange> + Send,
     {
         match connector.submit_http(request)?.wait().await? {
             SubmissionOutcome::Submitted(response) => Ok(response),
-            SubmissionOutcome::Unknown { .. } => Err(BuildError::Exchange(
+            SubmissionOutcome::Unknown { .. } => Err(PlatformError::Exchange(
                 ExchangeError::BadResponse("portfolio request outcome is unknown".to_string()),
             )),
         }
@@ -106,7 +106,10 @@ where
         self.reconnect_backoff
     }
 
-    async fn portfolio_auth(&self, credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
+    async fn portfolio_auth(
+        &self,
+        credentials: &ApiKeyCredentials,
+    ) -> PlatformResult<PortfolioAuth> {
         let http = Arc::new(ReqwestHttpClient::try_new(&self.rest_url)?);
         let context = PortfolioAuthContext::new(
             credentials.clone(),
@@ -120,7 +123,7 @@ where
     async fn account_snapshot(
         &self,
         credentials: &ApiKeyCredentials,
-    ) -> BuildResult<AccountSnapshot> {
+    ) -> PlatformResult<AccountSnapshot> {
         let connector = self.http_connector(credentials)?;
         let response = Self::submit(&connector, Exchange::account_snapshot_request()).await?;
         let mapping = self.mapping;
@@ -137,14 +140,14 @@ where
         &self,
         auth: &PortfolioAuth,
         credential: Option<&Credential>,
-    ) -> BuildResult<PortfolioStream> {
+    ) -> PlatformResult<PortfolioStream> {
         let binder = auth.auth_binder();
         let url = binder.websocket_url(&self.websocket_url, credential, auth.signer())?;
         let config = binder.configure(iris::Config::new(), credential, auth.signer())?;
         let (sender, events) = tokio::sync::mpsc::unbounded_channel();
         let listener = PortfolioStream::listener::<Exchange>(sender, self.mapping);
         let client = iris::Client::new(config, listener, &url);
-        client.connect().await.map_err(BuildError::external)?;
+        client.connect().await.map_err(PlatformError::external)?;
         Ok(PortfolioStream::new(client, events))
     }
 }

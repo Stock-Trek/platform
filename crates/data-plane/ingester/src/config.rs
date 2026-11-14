@@ -1,6 +1,6 @@
 use crate::websocket_source::StreamFormat;
 use platform_config::EnvVars;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_runtime::Config;
 use platform_types::UrlScheme;
 use std::collections::HashMap;
@@ -26,11 +26,11 @@ pub struct IngesterConfig {
 }
 
 impl IngesterConfig {
-    pub fn from_env() -> BuildResult<Self> {
+    pub fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let exchange = Config::required_exchange(vars, INGESTER_EXCHANGE)?;
         let websocket_url = vars.required_url(INGESTER_WEBSOCKET_URL, &UrlScheme::WEBSOCKET)?;
@@ -38,7 +38,7 @@ impl IngesterConfig {
         let websocket_api_key = vars.optional(INGESTER_WEBSOCKET_API_KEY)?;
         let stream_format =
             StreamFormat::for_exchange(&vars.required(INGESTER_STREAM_FORMAT)?, exchange).map_err(
-                |error| BuildError::config_invalid_source(INGESTER_STREAM_FORMAT, error),
+                |error| PlatformError::config_invalid_source(INGESTER_STREAM_FORMAT, error),
             )?;
         let nats_url = Config::required_nats_url(vars, INGESTER_NATS_URL)?;
         let nats_subject_prefix =
@@ -58,13 +58,13 @@ impl IngesterConfig {
     /// Rejects subscribing to both individual and aggregate trade streams for
     /// the same symbol. They carry the same economic trades with independent
     /// sequence numbers, so consuming both would double-count every trade.
-    pub fn validate_trade_streams(exchange: CexId, websocket_url: &str) -> BuildResult<()> {
+    pub fn validate_trade_streams(exchange: CexId, websocket_url: &str) -> PlatformResult<()> {
         if exchange != CexId::Binance {
             return Ok(());
         }
 
         let url = Url::parse(websocket_url)
-            .map_err(|error| BuildError::config_invalid_source(INGESTER_WEBSOCKET_URL, error))?;
+            .map_err(|error| PlatformError::config_invalid_source(INGESTER_WEBSOCKET_URL, error))?;
         let mut trade_streams = HashMap::new();
 
         for stream in Self::websocket_streams(&url) {
@@ -79,7 +79,7 @@ impl IngesterConfig {
                 .insert(symbol.clone(), kind)
                 .is_some_and(|previous| previous != kind)
             {
-                return Err(BuildError::config_invalid(
+                return Err(PlatformError::config_invalid(
                     INGESTER_WEBSOCKET_URL,
                     format!(
                         "must not subscribe to both @trade and @aggTrade for {symbol}; use one trade stream per symbol"

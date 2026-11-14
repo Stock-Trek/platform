@@ -2,7 +2,7 @@ use crate::{
     AuthService, TokenMutation, TokenUsage, TokenUsageQueue, TokenUsageReservation,
     auth_service::MAX_UPDATE_ATTEMPTS, token_store::TokenStore,
 };
-use platform_errors::{BuildError, BuildResult, ErrorType};
+use platform_errors::{ErrorType, PlatformError, PlatformResult};
 use platform_metrics::AuthUsageQueueMetrics;
 use std::{collections::HashMap, sync::Arc, time::Instant};
 
@@ -30,7 +30,7 @@ impl TokenUsageWorker {
         }
     }
 
-    pub async fn drain(&self) -> BuildResult<usize> {
+    pub async fn drain(&self) -> PlatformResult<usize> {
         let started = Instant::now();
         let result = self.drain_all().await;
         AuthUsageQueueMetrics::record_drain_duration(started.elapsed());
@@ -41,7 +41,7 @@ impl TokenUsageWorker {
         result
     }
 
-    async fn drain_all(&self) -> BuildResult<usize> {
+    async fn drain_all(&self) -> PlatformResult<usize> {
         let mut applied = 0;
         loop {
             let (batch_applied, reserved) = self.drain_batch().await?;
@@ -52,7 +52,7 @@ impl TokenUsageWorker {
         }
     }
 
-    async fn drain_batch(&self) -> BuildResult<(usize, usize)> {
+    async fn drain_batch(&self) -> PlatformResult<(usize, usize)> {
         let reservations = self.queue.reserve(self.batch_size).await?;
         let reserved = reservations.len();
         if reservations.is_empty() {
@@ -122,7 +122,7 @@ impl TokenUsageWorker {
         groups
     }
 
-    async fn apply_usage(store: &Arc<dyn TokenStore>, usage: &TokenUsage) -> BuildResult<()> {
+    async fn apply_usage(store: &Arc<dyn TokenStore>, usage: &TokenUsage) -> PlatformResult<()> {
         let mut events = usage.events().to_vec();
         for event in &mut events {
             crate::token_audit_outbox::TokenAuditOutbox::ensure_event_id(event);
@@ -153,13 +153,13 @@ impl TokenUsageWorker {
                 Err(error) => return Err(error),
             }
         }
-        Err(BuildError::token_conflict(token_id))
+        Err(PlatformError::token_conflict(token_id))
     }
 
     async fn append_events(
         store: &Arc<dyn TokenStore>,
         events: Vec<crate::TokenAuditEvent>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         for event in events {
             store.append_audit(event).await?;
         }

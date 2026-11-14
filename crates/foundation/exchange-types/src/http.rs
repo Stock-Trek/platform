@@ -29,5 +29,5 @@ pub trait HttpClient: Send + Sync {
         &self,
         request: HttpRequest,
         timeout: std::time::Duration,
-    ) -> platform_errors::BuildResult<HttpResponse>;
+    ) -> platform_errors::PlatformResult<HttpResponse>;
 }

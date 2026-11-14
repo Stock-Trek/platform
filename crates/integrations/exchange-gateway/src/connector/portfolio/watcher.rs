@@ -4,7 +4,7 @@ use crate::connector::portfolio::{
 };
 use crate::connector::portfolio::{PortfolioExchange, PortfolioSession};
 use chrono::Utc;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_exchange_types::portfolio::{AccountEvent, AccountPositionEvent, Credential};
 use platform_metrics::PortfolioMetrics;
 use platform_time::RetryBackoff;
@@ -74,7 +74,7 @@ impl Watcher {
         shutdown: &mut watch::Receiver<bool>,
         state: &mut SessionState,
         previous: &mut Option<Credential>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let credentials = self
             .credentials
             .credentials(self.cex_id, &self.account)
@@ -107,7 +107,7 @@ impl Watcher {
         session: &mut PortfolioSession,
         shutdown: &mut watch::Receiver<bool>,
         state: &mut SessionState,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let snapshot = session.snapshot().await?;
         state.replace_snapshot(snapshot.balances().clone(), snapshot.occurred_at());
         state.version = SessionState::next_version(state.version, 0);
@@ -155,16 +155,16 @@ impl Watcher {
                         None => std::future::pending::<()>().await,
                     }
                 } => {
-                    return Err(BuildError::external(std::io::Error::other("portfolio session lifetime expired")));
+                    return Err(PlatformError::external(std::io::Error::other("portfolio session lifetime expired")));
                 }
                 _ = heartbeat.tick() => {
                     self.publish_health(ConnectorState::Connected, state.last_update).await;
                 }
                 event = session.next() => {
                     match event? {
-                        None => return Err(BuildError::external(std::io::Error::other("portfolio event stream closed"))),
+                        None => return Err(PlatformError::external(std::io::Error::other("portfolio event stream closed"))),
                         Some(AccountEvent::SessionExpired) => {
-                            return Err(BuildError::external(std::io::Error::other("portfolio session expired")));
+                            return Err(PlatformError::external(std::io::Error::other("portfolio session expired")));
                         }
                         Some(AccountEvent::Position(event)) => {
                             self.apply_position(event, state).await?;
@@ -179,7 +179,7 @@ impl Watcher {
         &self,
         event: AccountPositionEvent,
         state: &mut SessionState,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         if event.occurred_at() < state.last_exchange_time {
             return Ok(());
         }
@@ -206,7 +206,7 @@ impl Watcher {
         occurred_at: chrono::DateTime<Utc>,
         exchange_time: Option<chrono::DateTime<Utc>>,
         last_update: &mut Option<Instant>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let update = ConnectorPortfolioUpdate::new(
             self.cex_id,
             self.account.clone(),

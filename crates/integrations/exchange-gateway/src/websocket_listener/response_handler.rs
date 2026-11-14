@@ -1,7 +1,7 @@
 use crate::panic_guard::PanicUtils;
 use crate::websocket_listener::{arc_predicate::ArcPredicate, waiter_state::WaiterState};
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult, ConnectorError};
+use platform_errors::{ConnectorError, PlatformError, PlatformResult};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -15,11 +15,11 @@ impl ResponseHandler {
         Self { state, filter }
     }
 
-    pub fn handle(&self, response: &serde_json::Value) -> BuildResult<bool> {
+    pub fn handle(&self, response: &serde_json::Value) -> PlatformResult<bool> {
         let is_handled = match PanicUtils::catch_panic(|| (self.filter)(response)) {
             Ok(is_handled) => is_handled,
             Err(panic) => {
-                let error = BuildError::Connector(ConnectorError::CallbackPanicked(
+                let error = PlatformError::Connector(ConnectorError::CallbackPanicked(
                     panic.message().to_string(),
                 ));
                 let mut state = self.state.lock();

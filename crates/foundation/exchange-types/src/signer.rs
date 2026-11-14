@@ -3,7 +3,7 @@ use crate::{
     encode::ByteEncoder,
     encrypt::{EncryptionAlgorithm, Encryptor},
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 
 pub struct Signer {
     api_key: String,
@@ -30,7 +30,7 @@ impl Signer {
         credentials: ApiKeyCredentials,
         algorithm: EncryptionAlgorithm,
         encoder: ByteEncoder,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let api_key = credentials.api_key.clone();
         let encryptor = algorithm.encryptor(credentials)?;
         Ok(Self {
@@ -42,7 +42,7 @@ impl Signer {
     pub fn api_key(&self) -> &str {
         &self.api_key
     }
-    pub fn signature(&self, bytes: &[u8]) -> BuildResult<String> {
+    pub fn signature(&self, bytes: &[u8]) -> PlatformResult<String> {
         let encrypted = self.encryptor.encrypt(bytes)?;
         Ok(self.encoder.encode(&encrypted))
     }

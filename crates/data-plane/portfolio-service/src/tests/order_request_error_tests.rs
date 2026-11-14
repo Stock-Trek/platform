@@ -1,37 +1,37 @@
 use crate::OrderRequestError;
 use http_body_util::BodyExt;
-use platform_errors::BuildError;
+use platform_errors::PlatformError;
 use serde_json::json;
 
 #[test]
 fn maps_signing_failures_to_public_statuses() {
     let cases = [
         (
-            BuildError::unknown_token("ghost"),
+            PlatformError::unknown_token("ghost"),
             OrderRequestError::NotFound,
         ),
         (
-            BuildError::auth_invalid_field("owner", "has no active API token"),
+            PlatformError::auth_invalid_field("owner", "has no active API token"),
             OrderRequestError::NotFound,
         ),
         (
-            BuildError::auth_invalid_field("account", "is not owned by the owner"),
+            PlatformError::auth_invalid_field("account", "is not owned by the owner"),
             OrderRequestError::Forbidden,
         ),
         (
-            BuildError::auth_missing_scope("token-a", "orders:write"),
+            PlatformError::auth_missing_scope("token-a", "orders:write"),
             OrderRequestError::Forbidden,
         ),
         (
-            BuildError::auth_invalid_field("issued_at", "must not be in the future"),
+            PlatformError::auth_invalid_field("issued_at", "must not be in the future"),
             OrderRequestError::InvalidRequest,
         ),
         (
-            BuildError::auth_store("read", "vault", true, "vault unavailable"),
+            PlatformError::auth_store("read", "vault", true, "vault unavailable"),
             OrderRequestError::ServiceUnavailable,
         ),
         (
-            BuildError::auth_store("read", "vault", false, "invalid response"),
+            PlatformError::auth_store("read", "vault", false, "invalid response"),
             OrderRequestError::Internal,
         ),
     ];
@@ -44,11 +44,11 @@ fn maps_signing_failures_to_public_statuses() {
 #[test]
 fn maps_authentication_failures_to_public_statuses() {
     assert_eq!(
-        OrderRequestError::from_authentication_error(&BuildError::auth_invalid_jwt("expired")),
+        OrderRequestError::from_authentication_error(&PlatformError::auth_invalid_jwt("expired")),
         OrderRequestError::Unauthorized
     );
     assert_eq!(
-        OrderRequestError::from_authentication_error(&BuildError::auth_store(
+        OrderRequestError::from_authentication_error(&PlatformError::auth_store(
             "read",
             "jwks",
             true,
@@ -57,7 +57,7 @@ fn maps_authentication_failures_to_public_statuses() {
         OrderRequestError::ServiceUnavailable
     );
     assert_eq!(
-        OrderRequestError::from_authentication_error(&BuildError::System(
+        OrderRequestError::from_authentication_error(&PlatformError::System(
             platform_errors::SystemError::SemaphoreClosed
         )),
         OrderRequestError::Internal
@@ -66,7 +66,7 @@ fn maps_authentication_failures_to_public_statuses() {
 
 #[tokio::test]
 async fn public_bodies_omit_internal_error_details() {
-    let error = BuildError::auth_store(
+    let error = PlatformError::auth_store(
         "read",
         "vault-internal-target",
         true,

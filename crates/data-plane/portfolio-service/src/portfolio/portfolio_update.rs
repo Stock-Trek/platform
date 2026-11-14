@@ -1,7 +1,7 @@
 use crate::portfolio::CexAccountPortfolio;
 use crate::{AccountKey, portfolio_codec::PortfolioUpdateWire};
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_exchange_gateway::ConnectorPortfolioUpdate;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as DeError};
 
@@ -81,12 +81,12 @@ impl PortfolioUpdate {
         (self.account, self.portfolio)
     }
 
-    pub fn to_bytes(&self) -> BuildResult<Vec<u8>> {
+    pub fn to_bytes(&self) -> PlatformResult<Vec<u8>> {
         Ok(serde_json::to_vec(self)?)
     }
 
-    pub fn from_bytes(payload: &[u8]) -> BuildResult<Self> {
-        serde_json::from_slice(payload).map_err(BuildError::external)
+    pub fn from_bytes(payload: &[u8]) -> PlatformResult<Self> {
+        serde_json::from_slice(payload).map_err(PlatformError::external)
     }
 
     pub fn with_optional_exchange_time(mut self, exchange_time: Option<DateTime<Utc>>) -> Self {
@@ -117,9 +117,9 @@ impl<'de> Deserialize<'de> for PortfolioUpdate {
 }
 
 impl TryFrom<ConnectorPortfolioUpdate> for PortfolioUpdate {
-    type Error = BuildError;
+    type Error = PlatformError;
 
-    fn try_from(update: ConnectorPortfolioUpdate) -> BuildResult<Self> {
+    fn try_from(update: ConnectorPortfolioUpdate) -> PlatformResult<Self> {
         let portfolio = CexAccountPortfolio::new(
             update
                 .balances()
@@ -127,7 +127,7 @@ impl TryFrom<ConnectorPortfolioUpdate> for PortfolioUpdate {
                 .map(|(asset, total)| (*asset, *total)),
             Vec::new(),
         )
-        .map_err(BuildError::external)?;
+        .map_err(PlatformError::external)?;
         Ok(Self::versioned(
             AccountKey::from((update.cex_id(), update.account_id().clone())),
             None,

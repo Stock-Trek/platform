@@ -6,7 +6,7 @@ use platform_auth_service::{
     MemoryTokenStore, MemoryTokenUsageQueue, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
     TokenStore, TokenUsageQueueConfig, VaultTokenStoreConfig,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_time::Timeouts;
 use std::sync::{
     Arc,
@@ -42,9 +42,9 @@ impl ToggleAudit {
 
 #[async_trait]
 impl TokenAuditLog for ToggleAudit {
-    async fn record(&self, event: TokenAuditEvent) -> BuildResult<()> {
+    async fn record(&self, event: TokenAuditEvent) -> PlatformResult<()> {
         if self.failing.load(Ordering::SeqCst) {
-            return Err(BuildError::auth_store(
+            return Err(PlatformError::auth_store(
                 "audit",
                 "relay-test",
                 true,

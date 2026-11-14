@@ -1,7 +1,7 @@
 use crate::ApiToken;
 use crate::tests::support_tests::TestFixture;
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use serde_json::{Value, json};
 
 struct MetadataInvariantFixture;
@@ -16,7 +16,7 @@ impl MetadataInvariantFixture {
 
         assert!(matches!(
             error,
-            BuildError::Auth(AuthError::InvalidField { field, .. }) if field == expected
+            PlatformError::Auth(AuthError::InvalidField { field, .. }) if field == expected
         ));
     }
 }

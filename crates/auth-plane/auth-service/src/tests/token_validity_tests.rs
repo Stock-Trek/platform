@@ -1,7 +1,7 @@
 use crate::tests::support_tests::TestFixture;
 use crate::{ApiToken, AuthService, TokenExpiry, TokenMetadata, TokenOptions, TokenScope};
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 
 struct ValidityFixture;
 
@@ -19,10 +19,10 @@ impl ValidityFixture {
         ApiToken::generate(id, owner, now + Duration::hours(1), metadata).unwrap()
     }
 
-    fn assert_invalid_field(error: BuildError, expected: &'static str) {
+    fn assert_invalid_field(error: PlatformError, expected: &'static str) {
         assert!(matches!(
             error,
-            BuildError::Auth(AuthError::InvalidField { field, .. }) if field == expected
+            PlatformError::Auth(AuthError::InvalidField { field, .. }) if field == expected
         ));
     }
 }

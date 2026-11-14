@@ -1,7 +1,7 @@
 use crate::tests::order_request_server_fixture_tests::{Fixture, OWNER};
 use crate::{OrderRequestDelivery, OrderRequestServer, OrderRequestService};
 use chrono::Utc;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::sync::Arc;
 use tokio::sync::oneshot;
 
@@ -15,7 +15,7 @@ async fn drains_in_flight_requests_before_shutdown_completes() {
         .await
         .unwrap();
     let address = server.local_addr().unwrap();
-    let (shutdown_tx, shutdown_rx) = oneshot::channel::<BuildResult<()>>();
+    let (shutdown_tx, shutdown_rx) = oneshot::channel::<PlatformResult<()>>();
     let running = tokio::spawn(
         server.serve_with_shutdown(async move { shutdown_rx.await.unwrap_or(Ok(())) }),
     );

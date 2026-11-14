@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, BuildResult, ExchangeError};
+use platform_errors::{ExchangeError, PlatformError, PlatformResult};
 use std::collections::BTreeMap;
 use stock_trek_types::cex::asset_id::AssetId;
 
@@ -8,7 +8,7 @@ impl BalanceParser {
     pub fn parse<F>(
         balances: impl IntoIterator<Item = (String, String, String)>,
         mapping: &F,
-    ) -> BuildResult<BTreeMap<AssetId, f64>>
+    ) -> PlatformResult<BTreeMap<AssetId, f64>>
     where
         F: Fn(&str) -> Option<AssetId> + ?Sized,
     {
@@ -22,14 +22,14 @@ impl BalanceParser {
         Ok(parsed)
     }
 
-    fn decimal(value: &str) -> BuildResult<f64> {
+    fn decimal(value: &str) -> PlatformResult<f64> {
         let parsed = value.parse::<f64>().map_err(|error| {
-            BuildError::Exchange(ExchangeError::BadResponse(format!(
+            PlatformError::Exchange(ExchangeError::BadResponse(format!(
                 "invalid balance {value}: {error}"
             )))
         })?;
         if !parsed.is_finite() {
-            return Err(BuildError::Exchange(ExchangeError::BadResponse(
+            return Err(PlatformError::Exchange(ExchangeError::BadResponse(
                 "non-finite balance".to_string(),
             )));
         }

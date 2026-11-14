@@ -3,7 +3,7 @@ use crate::{SecretInput, TokenAuditAction, TokenAuditEvent, TokenAuditLog, Token
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -37,9 +37,9 @@ impl ControllableAuditLog {
 
 #[async_trait]
 impl TokenAuditLog for ControllableAuditLog {
-    async fn record(&self, event: TokenAuditEvent) -> BuildResult<()> {
+    async fn record(&self, event: TokenAuditEvent) -> PlatformResult<()> {
         if self.failing.load(Ordering::SeqCst) {
-            return Err(platform_errors::BuildError::auth_store(
+            return Err(platform_errors::PlatformError::auth_store(
                 "audit",
                 "outbox-test",
                 true,

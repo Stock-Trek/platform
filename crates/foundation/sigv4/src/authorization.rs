@@ -1,5 +1,5 @@
 use crate::headers::{ALGORITHM, AUTHORIZATION};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::collections::BTreeSet;
 
 pub struct ParsedAuthorization {
@@ -12,7 +12,7 @@ pub struct ParsedAuthorization {
 }
 
 impl ParsedAuthorization {
-    pub fn parse(value: &str) -> BuildResult<Self> {
+    pub fn parse(value: &str) -> PlatformResult<Self> {
         let rest = value
             .strip_prefix(ALGORITHM)
             .and_then(|value| value.strip_prefix(' '))
@@ -64,11 +64,11 @@ impl ParsedAuthorization {
         })
     }
 
-    pub fn invalid(message: impl Into<String>) -> BuildError {
-        BuildError::auth_invalid_jwt(message)
+    pub fn invalid(message: impl Into<String>) -> PlatformError {
+        PlatformError::auth_invalid_jwt(message)
     }
 
-    fn signed_headers(value: &str) -> BuildResult<Vec<String>> {
+    fn signed_headers(value: &str) -> PlatformResult<Vec<String>> {
         let headers = value
             .split(';')
             .map(str::to_string)

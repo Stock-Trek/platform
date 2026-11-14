@@ -7,7 +7,7 @@ use crate::{
     vault_client::{VaultClient, WriteCondition},
 };
 use chrono::Utc;
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use secrecy::SecretString;
 use std::time::Duration;
 
@@ -90,7 +90,7 @@ async fn create_is_cas_zero_and_duplicates_map_to_token_exists() {
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::TokenExists { .. })
+        PlatformError::Auth(AuthError::TokenExists { .. })
     ));
     assert_eq!(fixture.server.current("token-a").unwrap().1, 1);
     let requests = fixture.server.requests();
@@ -133,7 +133,7 @@ async fn update_uses_the_read_version_and_rejects_stale_cas() {
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::Conflict { .. })
+        PlatformError::Auth(AuthError::Conflict { .. })
     ));
     assert_eq!(fixture.server.current("token-a").unwrap().1, 2);
     assert_eq!(

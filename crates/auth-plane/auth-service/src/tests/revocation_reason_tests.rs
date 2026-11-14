@@ -1,7 +1,7 @@
 use crate::tests::support_tests::TestFixture;
 use crate::{ApiToken, RevocationReason, RevokedBy};
 use chrono::Utc;
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use serde_json::json;
 
 struct RevocationReasonFixture;
@@ -82,7 +82,7 @@ fn rejects_unknown_actor_strings() {
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::InvalidField {
+        PlatformError::Auth(AuthError::InvalidField {
             field: "revoked_by",
             ..
         })

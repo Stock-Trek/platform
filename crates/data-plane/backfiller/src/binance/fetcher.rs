@@ -7,7 +7,7 @@ use crate::{
     event_fetcher::{BackfilledEvent, MissingEventFetcher, PaginatedFetcher},
 };
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult, ExchangeError};
+use platform_errors::{ExchangeError, PlatformError, PlatformResult};
 use platform_exchange_gateway::{Connector, ReqwestHttpClient};
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials, binance::exchange::BinanceExchange, encode::ByteEncoder,
@@ -27,14 +27,19 @@ pub struct BinanceGapFetcher {
 }
 
 impl BinanceGapFetcher {
-    pub fn try_new(config: &BackfillerConfig, credentials: ApiKeyCredentials) -> BuildResult<Self> {
+    pub fn try_new(
+        config: &BackfillerConfig,
+        credentials: ApiKeyCredentials,
+    ) -> PlatformResult<Self> {
         if config.exchange != CexId::Binance {
-            return Err(BuildError::Exchange(ExchangeError::UnsupportedExchange {
-                exchange: config.exchange.to_string(),
-            }));
+            return Err(PlatformError::Exchange(
+                ExchangeError::UnsupportedExchange {
+                    exchange: config.exchange.to_string(),
+                },
+            ));
         }
         if config.signing_algorithm != EncryptionAlgorithm::Ed25519 {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "BACKFILLER_EXCHANGE_SIGNING_ALGORITHM",
                 "only ed25519 is supported",
             ));
@@ -48,7 +53,7 @@ impl BinanceGapFetcher {
             REQUEST_TIMEOUT,
             MAX_RETRIES,
         )
-        .map_err(|error| BuildError::exchange("create Binance backfill connector", error))?;
+        .map_err(|error| PlatformError::exchange("create Binance backfill connector", error))?;
         Ok(Self {
             connector: Arc::new(connector),
             api_key,
@@ -62,7 +67,7 @@ impl BinanceGapFetcher {
 
 #[async_trait]
 impl MissingEventFetcher for BinanceGapFetcher {
-    async fn fetch(&self, gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
+    async fn fetch(&self, gap: &GapMarker) -> PlatformResult<Vec<BackfilledEvent>> {
         let stream = MarketStream::parse(&gap.stream)?;
         let source = self.source();
         match stream.kind {
@@ -81,7 +86,7 @@ impl MissingEventFetcher for BinanceGapFetcher {
                     .fetch_book_ticker(&stream.symbol, gap.observed_sequence)
                     .await
             }
-            MarketStreamKind::Kline(interval) => Err(BuildError::bad_value(
+            MarketStreamKind::Kline(interval) => Err(PlatformError::bad_value(
                 "stream",
                 gap.stream.as_str(),
                 format!(

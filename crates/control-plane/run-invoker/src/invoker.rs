@@ -4,7 +4,7 @@ use aws_sdk_s3::{Client as S3Client, presigning::PresigningConfig};
 use chrono::Utc;
 use platform_aws::{PresignedPost, PresignedPostSigner};
 use platform_config::S3_SIGNED_URL_EXPIRY_SECS;
-use platform_errors::{BuildError, BuildResult, StorageError};
+use platform_errors::{PlatformError, PlatformResult, StorageError};
 use platform_run_store::{RunRecord, RunStore};
 use serde_json::json;
 use std::time::SystemTime;
@@ -38,7 +38,7 @@ impl RunInvoker {
         }
     }
 
-    pub async fn run(self) -> BuildResult<()> {
+    pub async fn run(self) -> PlatformResult<()> {
         info!(
             table = %self.config.table,
             artifact_bucket = %self.config.artifact_bucket,
@@ -49,7 +49,7 @@ impl RunInvoker {
         self.run_cycle().await
     }
 
-    async fn run_cycle(&self) -> BuildResult<()> {
+    async fn run_cycle(&self) -> PlatformResult<()> {
         let due = self
             .store
             .due_runs(Utc::now(), self.config.max_batch)
@@ -85,7 +85,7 @@ impl RunInvoker {
         }
     }
 
-    async fn invoke_claimed(&self, record: &RunRecord) -> BuildResult<()> {
+    async fn invoke_claimed(&self, record: &RunRecord) -> PlatformResult<()> {
         let cwasm_get_url = self.presigned_get_url(&record.cwasm_key).await?;
         let logs_post = self.presigned_logs_post(record).await?;
         let request = RunRequest::from_record(
@@ -104,10 +104,12 @@ impl RunInvoker {
         Ok(())
     }
 
-    async fn presigned_get_url(&self, key: &str) -> BuildResult<String> {
+    async fn presigned_get_url(&self, key: &str) -> PlatformResult<String> {
         let target = format!("s3://{}/{key}", self.config.artifact_bucket);
         let presigning_config = PresigningConfig::expires_in(self.config.signed_url_expiry)
-            .map_err(|error| BuildError::config_invalid_source(S3_SIGNED_URL_EXPIRY_SECS, error))?;
+            .map_err(|error| {
+                PlatformError::config_invalid_source(S3_SIGNED_URL_EXPIRY_SECS, error)
+            })?;
         let request = self
             .s3
             .get_object()
@@ -115,16 +117,16 @@ impl RunInvoker {
             .key(key)
             .presigned(presigning_config)
             .await
-            .map_err(|error| BuildError::s3("presign artifact download", target, error))?;
+            .map_err(|error| PlatformError::s3("presign artifact download", target, error))?;
         Ok(request.uri().to_string())
     }
 
-    async fn presigned_logs_post(&self, record: &RunRecord) -> BuildResult<PresignedPost> {
+    async fn presigned_logs_post(&self, record: &RunRecord) -> PlatformResult<PresignedPost> {
         let credentials = self
             .credentials_provider
             .provide_credentials()
             .await
-            .map_err(|error| BuildError::Storage(StorageError::Credentials(error)))?;
+            .map_err(|error| PlatformError::Storage(StorageError::Credentials(error)))?;
         let log_key = RunRequest::log_key(record);
         self.signer.sign(
             &credentials,

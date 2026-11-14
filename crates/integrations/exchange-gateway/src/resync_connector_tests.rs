@@ -1,5 +1,5 @@
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult, ConnectorError};
+use platform_errors::{ConnectorError, PlatformError, PlatformResult};
 use std::sync::{
     Arc,
     atomic::{AtomicUsize, Ordering},
@@ -14,7 +14,7 @@ use crate::resync_connector::{
 fn sync_counter(
     counter: Arc<AtomicUsize>,
     notify: UnboundedSender<()>,
-) -> impl Fn() -> std::future::Ready<BuildResult<()>> {
+) -> impl Fn() -> std::future::Ready<PlatformResult<()>> {
     move || {
         counter.fetch_add(1, Ordering::SeqCst);
         let _ = notify.send(());
@@ -90,7 +90,7 @@ async fn failed_syncs_are_reported_to_failure_callback() {
     let (_command_sender, command_receiver) = unbounded_channel();
     let (failure_sender, mut failure_receiver) = unbounded_channel();
     let failure_callback: SharedClockSyncFailureCallback =
-        Arc::new(Mutex::new(Some(Arc::new(move |error: &BuildError| {
+        Arc::new(Mutex::new(Some(Arc::new(move |error: &PlatformError| {
             let _ = failure_sender.send(error.to_string());
         }))));
     let (first_sync_sender, first_sync_receiver) = tokio::sync::oneshot::channel();
@@ -99,20 +99,20 @@ async fn failed_syncs_are_reported_to_failure_callback() {
         first_sync_sender,
         command_receiver,
         failure_callback,
-        || std::future::ready(Err(BuildError::Connector(ConnectorError::NotConnected))),
+        || std::future::ready(Err(PlatformError::Connector(ConnectorError::NotConnected))),
     ));
 
     let first_sync_result = first_sync_receiver.await.unwrap();
     assert!(matches!(
         first_sync_result,
-        Err(BuildError::Connector(ConnectorError::NotConnected))
+        Err(PlatformError::Connector(ConnectorError::NotConnected))
     ));
     assert!(failure_receiver.try_recv().is_err());
 
     tokio::time::advance(Duration::from_mins(30)).await;
     assert_eq!(
         failure_receiver.recv().await.unwrap(),
-        BuildError::Connector(ConnectorError::NotConnected).to_string()
+        PlatformError::Connector(ConnectorError::NotConnected).to_string()
     );
 
     join.abort();
@@ -123,7 +123,7 @@ async fn first_sync_failure_is_reported_when_caller_is_gone() {
     let (_command_sender, command_receiver) = unbounded_channel();
     let (failure_sender, mut failure_receiver) = unbounded_channel();
     let failure_callback: SharedClockSyncFailureCallback =
-        Arc::new(Mutex::new(Some(Arc::new(move |error: &BuildError| {
+        Arc::new(Mutex::new(Some(Arc::new(move |error: &PlatformError| {
             let _ = failure_sender.send(error.to_string());
         }))));
     let (first_sync_sender, first_sync_receiver) = tokio::sync::oneshot::channel();
@@ -133,12 +133,12 @@ async fn first_sync_failure_is_reported_when_caller_is_gone() {
         first_sync_sender,
         command_receiver,
         failure_callback,
-        || std::future::ready(Err(BuildError::Connector(ConnectorError::NotConnected))),
+        || std::future::ready(Err(PlatformError::Connector(ConnectorError::NotConnected))),
     ));
 
     assert_eq!(
         failure_receiver.recv().await.unwrap(),
-        BuildError::Connector(ConnectorError::NotConnected).to_string()
+        PlatformError::Connector(ConnectorError::NotConnected).to_string()
     );
 
     join.abort();
@@ -149,7 +149,7 @@ async fn panicking_syncs_are_reported_to_failure_callback() {
     let (_command_sender, command_receiver) = unbounded_channel();
     let (failure_sender, mut failure_receiver) = unbounded_channel();
     let failure_callback: SharedClockSyncFailureCallback =
-        Arc::new(Mutex::new(Some(Arc::new(move |error: &BuildError| {
+        Arc::new(Mutex::new(Some(Arc::new(move |error: &PlatformError| {
             let _ = failure_sender.send(error.to_string());
         }))));
     let (first_sync_sender, first_sync_receiver) = tokio::sync::oneshot::channel();
@@ -158,12 +158,12 @@ async fn panicking_syncs_are_reported_to_failure_callback() {
         first_sync_sender,
         command_receiver,
         failure_callback,
-        || -> std::future::Ready<BuildResult<()>> { panic!("sync clock panicked") },
+        || -> std::future::Ready<PlatformResult<()>> { panic!("sync clock panicked") },
     ));
 
     assert_eq!(
         failure_receiver.recv().await.unwrap(),
-        BuildError::Connector(ConnectorError::AutoResyncClockPanicked).to_string()
+        PlatformError::Connector(ConnectorError::AutoResyncClockPanicked).to_string()
     );
     assert!(first_sync_receiver.await.is_err());
     assert!(join.await.unwrap_err().is_panic());

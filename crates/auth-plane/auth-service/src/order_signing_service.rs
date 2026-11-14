@@ -4,7 +4,7 @@ use crate::{
     order_verification::CLOCK_SKEW_SECONDS,
 };
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use secrecy::ExposeSecret;
 
 impl AuthService {
@@ -15,7 +15,7 @@ impl AuthService {
         order_request: &[u8],
         issued_at: DateTime<Utc>,
         now: DateTime<Utc>,
-    ) -> BuildResult<SignedOrderRequest> {
+    ) -> PlatformResult<SignedOrderRequest> {
         let candidate = secret.secret_input().to_string();
         let token = match self.token(token_id).await {
             Ok(token) => token,
@@ -35,7 +35,7 @@ impl AuthService {
         order_request: &[u8],
         issued_at: DateTime<Utc>,
         now: DateTime<Utc>,
-    ) -> BuildResult<SignedOrderRequest> {
+    ) -> PlatformResult<SignedOrderRequest> {
         let token = self.token(token_id).await?;
         self.sign_with_loaded_token(token, None, order_request, issued_at, now)
             .await
@@ -48,11 +48,11 @@ impl AuthService {
         order_request: &[u8],
         issued_at: DateTime<Utc>,
         now: DateTime<Utc>,
-    ) -> BuildResult<SignedOrderRequest> {
+    ) -> PlatformResult<SignedOrderRequest> {
         let token_id = token.id().to_string();
         let candidate = candidate.unwrap_or_else(|| token.secret().expose_secret().to_string());
         if !token.matches_secret(&candidate) {
-            let error = BuildError::auth_invalid_secret(token.id());
+            let error = PlatformError::auth_invalid_secret(token.id());
             self.record_authentication_failure(&token_id, Some(&token), now, &error)
                 .await;
             return Err(error);
@@ -79,12 +79,12 @@ impl AuthService {
             .checked_add_signed(Duration::seconds(CLOCK_SKEW_SECONDS))
             .unwrap_or(DateTime::<Utc>::MAX_UTC);
         if context.issued_at() > latest_issued_at {
-            let error = BuildError::auth_invalid_field("issued_at", "must not be in the future");
+            let error = PlatformError::auth_invalid_field("issued_at", "must not be in the future");
             self.record_signing_failure(&token, now, &error).await;
             return Err(error);
         }
         if context.expires_at() <= now {
-            let error = BuildError::auth_invalid_field("expires_at", "has already expired");
+            let error = PlatformError::auth_invalid_field("expires_at", "has already expired");
             self.record_signing_failure(&token, now, &error).await;
             return Err(error);
         }
@@ -127,7 +127,7 @@ impl AuthService {
         &self,
         token: &ApiToken,
         now: DateTime<Utc>,
-        error: &BuildError,
+        error: &PlatformError,
     ) {
         let event = TokenAuditEvent::new(TokenAuditAction::Signed, now)
             .with_token(token.id(), Some(token.owner()))

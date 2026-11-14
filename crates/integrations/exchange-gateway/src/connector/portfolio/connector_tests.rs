@@ -5,7 +5,7 @@ use crate::connector::portfolio::{
     portfolio_test_fakes_tests::{Fixture, TestTransport},
 };
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_types::api_key_credential::ApiKeyCredentials;
 use std::{collections::BTreeSet, sync::Arc, time::Duration};
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
@@ -20,7 +20,7 @@ impl PortfolioUpdateSink for Sink {
     async fn apply_update(
         &self,
         update: ConnectorPortfolioUpdate,
-    ) -> BuildResult<PortfolioUpdateOutcome> {
+    ) -> PlatformResult<PortfolioUpdateOutcome> {
         self.updates.send(update).expect("receiver");
         Ok(PortfolioUpdateOutcome::Applied)
     }

@@ -3,7 +3,7 @@ use crate::{
     api_key_credential::ApiKeyCredentials, exchange_account_snapshot::ETExchangeAccountSnapshot,
     http::HttpClient,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::{sync::Arc, time::Duration};
 
 pub struct PortfolioAuthContext {
@@ -46,5 +46,5 @@ impl PortfolioAuthContext {
 }
 
 pub trait ETExchangePortfolio: ETExchangeAccountSnapshot {
-    fn portfolio_auth(&self, context: PortfolioAuthContext) -> BuildResult<PortfolioAuth>;
+    fn portfolio_auth(&self, context: PortfolioAuthContext) -> PlatformResult<PortfolioAuth>;
 }

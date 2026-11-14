@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::Utc;
-use platform_errors::{AuthError, BuildError, BuildResult};
+use platform_errors::{AuthError, PlatformError, PlatformResult};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -36,9 +36,9 @@ impl RaceStore {
         self.race_next_update.store(true, Ordering::SeqCst);
     }
 
-    async fn apply_race(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
+    async fn apply_race(&self, expected: &ApiToken, token: &ApiToken) -> PlatformResult<()> {
         let Some(mut current) = self.inner.get(token.id()).await? else {
-            return Err(BuildError::unknown_token(token.id()));
+            return Err(PlatformError::unknown_token(token.id()));
         };
         match self.mode {
             RaceMode::Revoke => current.metadata.revoke(
@@ -54,42 +54,46 @@ impl RaceStore {
 
 #[async_trait]
 impl TokenStore for RaceStore {
-    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
+    async fn put(&self, token: &ApiToken) -> PlatformResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> PlatformResult<Option<ApiToken>> {
         self.inner.get(id).await
     }
 
-    async fn delete(&self, id: &str) -> BuildResult<()> {
+    async fn delete(&self, id: &str) -> PlatformResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn ids(&self) -> BuildResult<Vec<String>> {
+    async fn ids(&self) -> PlatformResult<Vec<String>> {
         self.inner.ids().await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> PlatformResult<()> {
         if self.race_next_update.swap(false, Ordering::SeqCst) {
             self.apply_race(expected, token).await?;
         }
         self.inner.update(expected, token).await
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> PlatformResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 
-    async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
+    async fn pending_rotations(&self) -> PlatformResult<Vec<TokenRotationTransaction>> {
         self.inner.pending_rotations().await
     }
 
-    async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
+    async fn acknowledge_rotation(&self, transaction_id: &str) -> PlatformResult<()> {
         self.inner.acknowledge_rotation(transaction_id).await
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
+    async fn commit(
+        &self,
+        mutation: TokenMutation,
+        event: TokenAuditEvent,
+    ) -> PlatformResult<bool> {
         match mutation {
             TokenMutation::Create(token) => {
                 self.inner.commit(TokenMutation::Create(token), event).await
@@ -110,15 +114,15 @@ impl TokenStore for RaceStore {
         }
     }
 
-    async fn append_audit(&self, event: TokenAuditEvent) -> BuildResult<()> {
+    async fn append_audit(&self, event: TokenAuditEvent) -> PlatformResult<()> {
         self.inner.append_audit(event).await
     }
 
-    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> PlatformResult<Vec<TokenAuditEvent>> {
         self.inner.pending_audits().await
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> PlatformResult<()> {
         self.inner.acknowledge_audit(event_id).await
     }
 }
@@ -132,10 +136,10 @@ impl CasFixture {
         (service, store)
     }
 
-    fn assert_conflict<T>(result: BuildResult<T>) {
+    fn assert_conflict<T>(result: PlatformResult<T>) {
         assert!(matches!(
             result,
-            Err(BuildError::Auth(AuthError::Conflict { .. }))
+            Err(PlatformError::Auth(AuthError::Conflict { .. }))
         ));
     }
 }

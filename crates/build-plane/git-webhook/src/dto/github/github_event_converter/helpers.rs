@@ -4,7 +4,7 @@ use crate::{
     event_response::EventResponse,
 };
 use hmac::{Hmac, KeyInit, Mac};
-use platform_errors::{BuildError, BuildResult, GitHubError};
+use platform_errors::{GitHubError, PlatformError, PlatformResult};
 use platform_messages::{GitSource, SqsDetail, SqsMessage, SqsRefType};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
@@ -48,17 +48,17 @@ impl GitHubEventConverter {
         }
     }
 
-    pub fn host(&self, installation: &GitHubInstallation) -> BuildResult<String> {
+    pub fn host(&self, installation: &GitHubInstallation) -> PlatformResult<String> {
         self.allowed_hosts
             .validate_url(&installation.html_url)
             .map_err(|error| match error {
-                BuildError::GitHub(GitHubError::HostInvalid { .. }) => {
-                    BuildError::GitHub(GitHubError::HostInvalid {
+                PlatformError::GitHub(GitHubError::HostInvalid { .. }) => {
+                    PlatformError::GitHub(GitHubError::HostInvalid {
                         host: installation.html_url.clone(),
                     })
                 }
-                BuildError::GitHub(GitHubError::HostNotAllowed { .. }) => {
-                    BuildError::GitHub(GitHubError::HostNotAllowed {
+                PlatformError::GitHub(GitHubError::HostNotAllowed { .. }) => {
+                    PlatformError::GitHub(GitHubError::HostNotAllowed {
                         host: installation.html_url.clone(),
                     })
                 }
@@ -80,7 +80,7 @@ impl GitHubEventConverter {
         delivery_id: Option<String>,
         installation_id: u64,
         detail: SqsDetail,
-    ) -> BuildResult<EventResponse> {
+    ) -> PlatformResult<EventResponse> {
         let message = SqsMessage {
             source: GitSource::GitHub {
                 host,

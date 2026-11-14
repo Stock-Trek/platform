@@ -6,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, Trade};
 use platform_types::TimestampMilliseconds;
 use rust_decimal::Decimal;
@@ -36,13 +36,13 @@ impl RecordingSink {
 
 #[async_trait]
 impl OpenCandleStore for RecordingSink {
-    async fn update_open(&self, candles: &[Candle]) -> BuildResult<()> {
+    async fn update_open(&self, candles: &[Candle]) -> PlatformResult<()> {
         self.calls.lock().push("open");
         self.open.lock().extend_from_slice(candles);
         Ok(())
     }
 
-    async fn delete_open(&self, keys: &[CandleKey]) -> BuildResult<()> {
+    async fn delete_open(&self, keys: &[CandleKey]) -> PlatformResult<()> {
         self.calls.lock().push("delete");
         self.deleted.lock().extend_from_slice(keys);
         Ok(())
@@ -51,7 +51,7 @@ impl OpenCandleStore for RecordingSink {
 
 #[async_trait]
 impl ClosedCandlePublisher for RecordingSink {
-    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BuildResult<()> {
+    async fn publish_closed(&self, candles: &[ClosedCandle]) -> PlatformResult<()> {
         self.calls.lock().push("closed");
         self.closed.lock().extend_from_slice(candles);
         Ok(())
@@ -67,14 +67,14 @@ struct BlockingSink {
 
 #[async_trait]
 impl OpenCandleStore for BlockingSink {
-    async fn update_open(&self, _candles: &[Candle]) -> BuildResult<()> {
+    async fn update_open(&self, _candles: &[Candle]) -> PlatformResult<()> {
         Ok(())
     }
 }
 
 #[async_trait]
 impl ClosedCandlePublisher for BlockingSink {
-    async fn publish_closed(&self, _candles: &[ClosedCandle]) -> BuildResult<()> {
+    async fn publish_closed(&self, _candles: &[ClosedCandle]) -> PlatformResult<()> {
         self.started.notify_one();
         self.gate.notified().await;
         *self.published.lock() += 1;
@@ -90,7 +90,7 @@ struct BlockingOpenSink {
 
 #[async_trait]
 impl OpenCandleStore for BlockingOpenSink {
-    async fn update_open(&self, _candles: &[Candle]) -> BuildResult<()> {
+    async fn update_open(&self, _candles: &[Candle]) -> PlatformResult<()> {
         self.gate.notified().await;
         *self.opens.lock() += 1;
         Ok(())
@@ -99,7 +99,7 @@ impl OpenCandleStore for BlockingOpenSink {
 
 #[async_trait]
 impl ClosedCandlePublisher for BlockingOpenSink {
-    async fn publish_closed(&self, _candles: &[ClosedCandle]) -> BuildResult<()> {
+    async fn publish_closed(&self, _candles: &[ClosedCandle]) -> PlatformResult<()> {
         Ok(())
     }
 }
@@ -112,16 +112,20 @@ struct RetrySink {
 
 #[async_trait]
 impl OpenCandleStore for RetrySink {
-    async fn update_open(&self, _candles: &[Candle]) -> BuildResult<()> {
+    async fn update_open(&self, _candles: &[Candle]) -> PlatformResult<()> {
         Ok(())
     }
 }
 
 #[async_trait]
 impl ClosedCandlePublisher for RetrySink {
-    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BuildResult<()> {
+    async fn publish_closed(&self, candles: &[ClosedCandle]) -> PlatformResult<()> {
         if self.attempts.fetch_add(1, Ordering::SeqCst) == 0 {
-            return Err(BuildError::bad_value("sink", "test", "transient failure"));
+            return Err(PlatformError::bad_value(
+                "sink",
+                "test",
+                "transient failure",
+            ));
         }
         self.published.lock().extend_from_slice(candles);
         Ok(())

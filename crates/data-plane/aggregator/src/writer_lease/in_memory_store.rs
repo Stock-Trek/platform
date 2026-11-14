@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_types::TimestampMilliseconds;
 use std::{
     collections::HashMap,
@@ -43,7 +43,7 @@ struct MemoryLeaseWatch {
 
 #[async_trait]
 impl LeaseWatchStream for MemoryLeaseWatch {
-    async fn next(&mut self) -> BuildResult<Option<WriterLease>> {
+    async fn next(&mut self) -> PlatformResult<Option<WriterLease>> {
         if self.changes.changed().await.is_err() {
             return Ok(None);
         }
@@ -76,7 +76,7 @@ impl LeaseStore for InMemoryLeaseStore {
         shard: ShardId,
         owner_id: &str,
         ttl: Duration,
-    ) -> BuildResult<Option<WriterLease>> {
+    ) -> PlatformResult<Option<WriterLease>> {
         self.acquire_attempts.notify_one();
         self.acquire_attempt_count.fetch_add(1, Ordering::Relaxed);
         let now = TimestampMilliseconds::now();
@@ -107,7 +107,11 @@ impl LeaseStore for InMemoryLeaseStore {
         Ok(Some(lease))
     }
 
-    async fn renew(&self, lease: &WriterLease, ttl: Duration) -> BuildResult<Option<WriterLease>> {
+    async fn renew(
+        &self,
+        lease: &WriterLease,
+        ttl: Duration,
+    ) -> PlatformResult<Option<WriterLease>> {
         let now = TimestampMilliseconds::now();
         let mut leases = self.leases.lock();
         let Some(current) = leases.get_mut(&lease.shard) else {
@@ -123,7 +127,7 @@ impl LeaseStore for InMemoryLeaseStore {
         Ok(Some(renewed))
     }
 
-    async fn release(&self, lease: &WriterLease) -> BuildResult<()> {
+    async fn release(&self, lease: &WriterLease) -> PlatformResult<()> {
         let mut leases = self.leases.lock();
         if let Some(current) = leases.get_mut(&lease.shard)
             && current.is_held_by(&lease.owner_id, lease.fencing_token)
@@ -138,11 +142,11 @@ impl LeaseStore for InMemoryLeaseStore {
         Ok(())
     }
 
-    async fn current(&self, shard: ShardId) -> BuildResult<Option<WriterLease>> {
+    async fn current(&self, shard: ShardId) -> PlatformResult<Option<WriterLease>> {
         Ok(self.leases.lock().get(&shard).cloned())
     }
 
-    fn watch(&self, _shard: ShardId) -> BuildResult<LeaseWatch> {
+    fn watch(&self, _shard: ShardId) -> PlatformResult<LeaseWatch> {
         Ok(LeaseWatch::new(MemoryLeaseWatch {
             changes: self.changes.subscribe(),
         }))

@@ -1,5 +1,5 @@
 use crate::{AuthServiceRunner, JwtServerConfig};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 
 pub struct Entry;
 
@@ -14,7 +14,7 @@ impl Entry {
         }
     }
 
-    fn execute() -> BuildResult<()> {
+    fn execute() -> PlatformResult<()> {
         let config = JwtServerConfig::from_env()?;
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()

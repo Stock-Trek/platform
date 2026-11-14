@@ -1,7 +1,7 @@
 use crate::tests::support_tests::TestFixture;
 use crate::{RevocationReason, RevokedBy, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 
 #[tokio::test]
 async fn expires_tokens_are_rejected() {
@@ -17,7 +17,7 @@ async fn expires_tokens_are_rejected() {
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::Expired { ref token_id }) if token_id == token.id()
+        PlatformError::Auth(AuthError::Expired { ref token_id }) if token_id == token.id()
     ));
     assert!(token.metadata().is_expired(expires_at));
 }
@@ -52,7 +52,7 @@ async fn rejects_non_positive_relative_lifetimes() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "expires_at",
             ..
         }))
@@ -89,7 +89,7 @@ async fn rejects_an_already_past_absolute_expiry() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "expires_at",
             ..
         }))
@@ -128,7 +128,7 @@ async fn revocation_records_metadata_and_blocks_use() {
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::Revoked { ref token_id }) if token_id == token.id()
+        PlatformError::Auth(AuthError::Revoked { ref token_id }) if token_id == token.id()
     ));
 }
 

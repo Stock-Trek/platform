@@ -3,7 +3,7 @@ use crate::{
     auth_service::MAX_UPDATE_ATTEMPTS, token_audit_outbox::TokenAuditOutbox,
 };
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 /// A single token mutation that can be committed together with an audit event.
 #[allow(clippy::large_enum_variant)]
@@ -16,13 +16,13 @@ pub enum TokenMutation {
 
 #[async_trait]
 pub trait TokenStore: Send + Sync {
-    async fn put(&self, token: &ApiToken) -> BuildResult<()>;
+    async fn put(&self, token: &ApiToken) -> PlatformResult<()>;
 
-    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>>;
+    async fn get(&self, id: &str) -> PlatformResult<Option<ApiToken>>;
 
-    async fn delete(&self, id: &str) -> BuildResult<()>;
+    async fn delete(&self, id: &str) -> PlatformResult<()>;
 
-    async fn delete_if(&self, expected: &ApiToken) -> BuildResult<bool> {
+    async fn delete_if(&self, expected: &ApiToken) -> PlatformResult<bool> {
         let Some(current) = self.get(expected.id()).await? else {
             return Ok(false);
         };
@@ -33,27 +33,27 @@ pub trait TokenStore: Send + Sync {
         Ok(true)
     }
 
-    async fn ids(&self) -> BuildResult<Vec<String>>;
+    async fn ids(&self) -> PlatformResult<Vec<String>>;
 
-    async fn owner_index(&self, _owner: &str) -> BuildResult<Option<OwnerIndex>> {
+    async fn owner_index(&self, _owner: &str) -> PlatformResult<Option<OwnerIndex>> {
         Ok(None)
     }
 
-    async fn put_owner_index(&self, _index: &OwnerIndex) -> BuildResult<()> {
+    async fn put_owner_index(&self, _index: &OwnerIndex) -> PlatformResult<()> {
         Ok(())
     }
 
-    async fn owner_indexes(&self) -> BuildResult<Vec<OwnerIndex>> {
+    async fn owner_indexes(&self) -> PlatformResult<Vec<OwnerIndex>> {
         Ok(Vec::new())
     }
 
-    async fn index_owner_token(&self, token: &ApiToken) -> BuildResult<()> {
+    async fn index_owner_token(&self, token: &ApiToken) -> PlatformResult<()> {
         let mut index = self
             .owner_index(token.owner())
             .await?
             .unwrap_or_else(|| OwnerIndex::new(token.owner()));
         if index.owner() != token.owner() {
-            return Err(BuildError::auth_store(
+            return Err(PlatformError::auth_store(
                 "write",
                 OwnerIndex::storage_key(token.owner()),
                 false,
@@ -64,7 +64,7 @@ pub trait TokenStore: Send + Sync {
         self.put_owner_index(&index).await
     }
 
-    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BuildResult<()> {
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> PlatformResult<()> {
         let Some(mut index) = self.owner_index(owner).await? else {
             return Ok(());
         };
@@ -72,7 +72,7 @@ pub trait TokenStore: Send + Sync {
         self.put_owner_index(&index).await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()>;
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> PlatformResult<()>;
 
     /// Applies `mutation` and records `event` in the same token document.
     ///
@@ -80,7 +80,8 @@ pub trait TokenStore: Send + Sync {
     /// compare-and-swap write. Stores must override this method; there is no
     /// safe default because silently discarding the audit event would lose
     /// audit data.
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool>;
+    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent)
+    -> PlatformResult<bool>;
 
     /// Applies `mutation` and records all `events` as one durable operation
     /// where the store supports it.
@@ -91,7 +92,7 @@ pub trait TokenStore: Send + Sync {
         &self,
         mutation: TokenMutation,
         events: Vec<TokenAuditEvent>,
-    ) -> BuildResult<bool> {
+    ) -> PlatformResult<bool> {
         let mut events = events.into_iter();
         let Some(first) = events.next() else {
             return Ok(false);
@@ -111,10 +112,10 @@ pub trait TokenStore: Send + Sync {
     /// this. The default attaches the event to an existing token so stores that
     /// only implement transactional commits can still preserve events for known
     /// tokens.
-    async fn append_audit(&self, mut event: TokenAuditEvent) -> BuildResult<()> {
+    async fn append_audit(&self, mut event: TokenAuditEvent) -> PlatformResult<()> {
         TokenAuditOutbox::ensure_event_id(&mut event);
         let Some(token_id) = event.token_id.clone() else {
-            return Err(BuildError::auth_store(
+            return Err(PlatformError::auth_store(
                 "audit",
                 "outbox",
                 false,
@@ -122,7 +123,7 @@ pub trait TokenStore: Send + Sync {
             ));
         };
         let Some(token) = self.get(&token_id).await? else {
-            return Err(BuildError::auth_store(
+            return Err(PlatformError::auth_store(
                 "audit",
                 "outbox",
                 false,
@@ -139,7 +140,7 @@ pub trait TokenStore: Send + Sync {
             )
             .await?
         {
-            return Err(BuildError::token_conflict(token_id));
+            return Err(PlatformError::token_conflict(token_id));
         }
         Ok(())
     }
@@ -151,7 +152,7 @@ pub trait TokenStore: Send + Sync {
     /// separate transaction record must still persist the events before they
     /// materialize the rotation; they must not silently drop
     /// [`TokenRotationTransaction::events`].
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()>;
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> PlatformResult<()>;
 
     /// Applies a committed rotation transaction idempotently.
     ///
@@ -161,16 +162,16 @@ pub trait TokenStore: Send + Sync {
     async fn materialize_rotation(
         &self,
         transaction: &TokenRotationTransaction,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let replacement = transaction.replacement();
         let existing = match self.get(replacement.id()).await? {
             Some(existing) => Some(existing),
             None => match self.put(replacement).await {
                 Ok(()) => None,
-                Err(BuildError::Auth(platform_errors::AuthError::TokenExists { .. })) => Some(
+                Err(PlatformError::Auth(platform_errors::AuthError::TokenExists { .. })) => Some(
                     self.get(replacement.id())
                         .await?
-                        .ok_or_else(|| BuildError::token_conflict(replacement.id()))?,
+                        .ok_or_else(|| PlatformError::token_conflict(replacement.id()))?,
                 ),
                 Err(error) => return Err(error),
             },
@@ -179,45 +180,45 @@ pub trait TokenStore: Send + Sync {
             if existing.owner() != replacement.owner()
                 || existing.metadata().rotated_from() != Some(transaction.original().id())
             {
-                return Err(BuildError::token_conflict(replacement.id()));
+                return Err(PlatformError::token_conflict(replacement.id()));
             }
             if let Some(next) = existing.metadata().replaced_by() {
-                return Err(BuildError::auth_invalid_field(
+                return Err(PlatformError::auth_invalid_field(
                     "replacement_id",
                     format!("has already been rotated to {next:?}"),
                 ));
             }
             if existing.metadata().is_revoked() {
-                return Err(BuildError::auth_revoked(replacement.id()));
+                return Err(PlatformError::auth_revoked(replacement.id()));
             }
             let now = transaction.timestamp();
             if existing.created_at() > now {
-                return Err(BuildError::auth_invalid_field(
+                return Err(PlatformError::auth_invalid_field(
                     "created_at",
                     "must not be in the future",
                 ));
             }
             if existing.metadata().is_expired(now) {
-                return Err(BuildError::auth_expired(replacement.id()));
+                return Err(PlatformError::auth_expired(replacement.id()));
             }
             if existing.metadata().is_rotation_overlap_ended(now) {
-                return Err(BuildError::auth_rotation_overlap_ended(replacement.id()));
+                return Err(PlatformError::auth_rotation_overlap_ended(replacement.id()));
             }
             if !existing.same_rotation_replacement(replacement) {
-                return Err(BuildError::token_conflict(replacement.id()));
+                return Err(PlatformError::token_conflict(replacement.id()));
             }
         }
 
         let mut current = self
             .get(transaction.original().id())
             .await?
-            .ok_or_else(|| BuildError::unknown_token(transaction.original().id()))?;
+            .ok_or_else(|| PlatformError::unknown_token(transaction.original().id()))?;
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             if current.metadata().replaced_by() == Some(replacement.id()) {
                 return Ok(());
             }
             if let Some(next) = current.metadata().replaced_by() {
-                return Err(BuildError::auth_invalid_field(
+                return Err(PlatformError::auth_invalid_field(
                     "token_id",
                     format!("has already been rotated to {next:?}"),
                 ));
@@ -227,7 +228,7 @@ pub trait TokenStore: Send + Sync {
                 .metadata()
                 .rotation_overlap_until()
                 .ok_or_else(|| {
-                    BuildError::auth_invalid_field(
+                    PlatformError::auth_invalid_field(
                         "rotation_overlap_until",
                         "is missing from the rotation transaction",
                     )
@@ -239,31 +240,31 @@ pub trait TokenStore: Send + Sync {
             retired.validate()?;
             match self.update(&current, &retired).await {
                 Ok(()) => return Ok(()),
-                Err(BuildError::Auth(platform_errors::AuthError::Conflict { .. })) => {
+                Err(PlatformError::Auth(platform_errors::AuthError::Conflict { .. })) => {
                     current = self
                         .get(transaction.original().id())
                         .await?
-                        .ok_or_else(|| BuildError::unknown_token(transaction.original().id()))?;
+                        .ok_or_else(|| PlatformError::unknown_token(transaction.original().id()))?;
                 }
                 Err(error) => return Err(error),
             }
         }
-        Err(BuildError::token_conflict(transaction.original().id()))
+        Err(PlatformError::token_conflict(transaction.original().id()))
     }
 
-    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> PlatformResult<Vec<TokenAuditEvent>> {
         Ok(Vec::new())
     }
 
-    async fn acknowledge_audit(&self, _event_id: &str) -> BuildResult<()> {
+    async fn acknowledge_audit(&self, _event_id: &str) -> PlatformResult<()> {
         Ok(())
     }
 
-    async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
+    async fn pending_rotations(&self) -> PlatformResult<Vec<TokenRotationTransaction>> {
         Ok(Vec::new())
     }
 
-    async fn acknowledge_rotation(&self, _transaction_id: &str) -> BuildResult<()> {
+    async fn acknowledge_rotation(&self, _transaction_id: &str) -> PlatformResult<()> {
         Ok(())
     }
 }

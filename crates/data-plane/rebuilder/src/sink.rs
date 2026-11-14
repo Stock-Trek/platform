@@ -5,7 +5,7 @@ use platform_archive::{
     ArchiveParquetWriter, ArchivePartition, ArchiveRecord, ArchiveTableLayer, Bucket,
     IcebergDataFile, ObjectKey, RoutingBucket, S3,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::ClosedCandle;
 use std::{
     fs::File,
@@ -29,7 +29,7 @@ pub struct CandleWriteStats {
 /// Supplies closed candles to the sink in its object order: archive bucket,
 /// routing bucket, compacted partition, sort key, and record identity.
 pub trait CandleRecordSource: Send {
-    fn next_candle(&mut self) -> BuildResult<Option<ClosedCandle>>;
+    fn next_candle(&mut self) -> PlatformResult<Option<ClosedCandle>>;
 }
 
 /// Writes regenerated candles to the archive.
@@ -41,7 +41,7 @@ pub trait CandleSink: Send + Sync {
         &self,
         candles: &mut dyn CandleRecordSource,
         work_dir: &Path,
-    ) -> BuildResult<CandleWriteStats>;
+    ) -> PlatformResult<CandleWriteStats>;
 }
 
 /// Writes regenerated candles to the selected archive layer.
@@ -67,7 +67,7 @@ impl S3CandleSink {
         bucket_millis: i64,
         catalog: Arc<dyn ArchiveCatalog>,
         layer: ArchiveTableLayer,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         Ok(Self {
             s3_client: S3::s3_client().await,
             catalog,
@@ -85,7 +85,7 @@ impl S3CandleSink {
         routing_bucket: RoutingBucket,
         content_id: u64,
         length: u64,
-    ) -> BuildResult<ObjectKey> {
+    ) -> PlatformResult<ObjectKey> {
         let file_name = format!("{content_id}-{length:x}.parquet");
         let key = match self.layer {
             ArchiveTableLayer::Raw => bucket.raw_key(&self.prefix, routing_bucket, file_name),
@@ -110,7 +110,7 @@ impl S3CandleSink {
         buffer: &mut ArchiveBatch,
         data_files: &mut Vec<IcebergDataFile>,
         stats: &mut CandleWriteStats,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         if !buffer.is_empty() {
             file.writer.write(buffer)?;
             file.records += buffer.len();
@@ -137,9 +137,9 @@ impl S3CandleSink {
         Ok(())
     }
 
-    fn hash_file(path: &Path) -> BuildResult<(u64, u64)> {
+    fn hash_file(path: &Path) -> PlatformResult<(u64, u64)> {
         let mut file = File::open(path).map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "read rebuilt candle file",
                 path.display().to_string(),
                 error,
@@ -150,7 +150,7 @@ impl S3CandleSink {
         let mut chunk = [0_u8; 64 * 1024];
         loop {
             let read = file.read(&mut chunk).map_err(|error| {
-                BuildError::io(
+                PlatformError::io(
                     "read rebuilt candle file",
                     path.display().to_string(),
                     error,
@@ -168,10 +168,10 @@ impl S3CandleSink {
         Ok((hash, length))
     }
 
-    async fn upload_partition(&self, key: &ObjectKey, path: &Path) -> BuildResult<()> {
+    async fn upload_partition(&self, key: &ObjectKey, path: &Path) -> PlatformResult<()> {
         let target = format!("s3://{}/{}", self.bucket, key);
         let body = ByteStream::from_path(path).await.map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "read rebuilt candle file",
                 path.display().to_string(),
                 error,
@@ -185,7 +185,7 @@ impl S3CandleSink {
             .body(body)
             .send()
             .await
-            .map_err(|error| BuildError::s3("put rebuilt candle object", target, error))?;
+            .map_err(|error| PlatformError::s3("put rebuilt candle object", target, error))?;
         Ok(())
     }
 }
@@ -205,7 +205,7 @@ impl CandleSink for S3CandleSink {
         &self,
         candles: &mut dyn CandleRecordSource,
         work_dir: &Path,
-    ) -> BuildResult<CandleWriteStats> {
+    ) -> PlatformResult<CandleWriteStats> {
         let mut stats = CandleWriteStats::default();
         let mut data_files = Vec::new();
         let mut buffer = ArchiveBatch::new(ArchiveKind::Candles, Vec::new())?;
@@ -276,10 +276,10 @@ impl PartitionFile {
         bucket: ArchiveBucket,
         routing_bucket: RoutingBucket,
         partition: ArchivePartition,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let path = work_dir.join(format!("candles-{index}.parquet"));
         let file = File::create(&path).map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "create rebuilt candle file",
                 path.display().to_string(),
                 error,

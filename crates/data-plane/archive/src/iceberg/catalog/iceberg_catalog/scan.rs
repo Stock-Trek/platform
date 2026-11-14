@@ -2,11 +2,11 @@ use crate::iceberg::catalog::IcebergDataFile;
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use futures::TryStreamExt;
 use iceberg::table::Table;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::collections::HashSet;
 
 impl IcebergCatalog {
-    pub async fn registered_paths(&self, table: &Table) -> BuildResult<HashSet<String>> {
+    pub async fn registered_paths(&self, table: &Table) -> PlatformResult<HashSet<String>> {
         let scan = table
             .scan()
             .build()
@@ -26,7 +26,10 @@ impl IcebergCatalog {
         Ok(paths)
     }
 
-    pub async fn data_files_from_table(&self, table: &Table) -> BuildResult<Vec<IcebergDataFile>> {
+    pub async fn data_files_from_table(
+        &self,
+        table: &Table,
+    ) -> PlatformResult<Vec<IcebergDataFile>> {
         let scan = table
             .scan()
             .build()

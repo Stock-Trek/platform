@@ -1,6 +1,6 @@
 use crate::connector::portfolio::PortfolioFeed;
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::collections::BTreeSet;
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
@@ -19,7 +19,7 @@ impl PortfolioFeed for NoopPortfolioFeed {
         &self,
         _cex_id: CexId,
         _accounts: BTreeSet<AccountId>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         Ok(())
     }
 }

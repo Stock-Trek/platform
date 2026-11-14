@@ -4,7 +4,7 @@ use crate::{
     submission::{Submission, SubmissionOutcome},
 };
 use futures_timer::Delay;
-use platform_errors::{BuildError, BuildResult, ConnectorError, SendFailure, TimeoutError};
+use platform_errors::{ConnectorError, PlatformError, PlatformResult, SendFailure, TimeoutError};
 use platform_exchange_types::exchange_server_time::ETExchangeServerTimeWebsocket;
 use platform_exchange_types::websocket::WebsocketClient;
 use platform_exchange_types::{
@@ -25,24 +25,24 @@ where
     Exchange: ETExchange + ETExchangeServerTimeWebsocket,
     Client: WebsocketClient,
 {
-    pub async fn connect(&self) -> BuildResult<()> {
+    pub async fn connect(&self) -> PlatformResult<()> {
         debug!(
             exchange = self.exchange.cex_id().to_string(),
             "connecting websocket"
         );
         self.client.connect().await
     }
-    pub fn is_connected(&self) -> BuildResult<bool> {
+    pub fn is_connected(&self) -> PlatformResult<bool> {
         Ok(self.client.is_connected())
     }
-    pub async fn disconnect(&self) -> BuildResult<()> {
+    pub async fn disconnect(&self) -> PlatformResult<()> {
         debug!(
             exchange = self.exchange.cex_id().to_string(),
             "disconnecting websocket"
         );
         self.client.disconnect().await
     }
-    pub async fn sync_clock_websocket(&self) -> BuildResult<()> {
+    pub async fn sync_clock_websocket(&self) -> PlatformResult<()> {
         debug!(
             exchange = self.exchange.cex_id().to_string(),
             "syncing clock over websocket"
@@ -55,7 +55,7 @@ where
                 Ok(request) => request,
                 Err(error) => {
                     self.refund(costs)?;
-                    return Err(BuildError::external(error));
+                    return Err(PlatformError::external(error));
                 }
             };
         let start = Instant::now();
@@ -67,7 +67,7 @@ where
         let round_trip_time = start.elapsed();
         let server_time = response
             .server_time()
-            .map_err(|_| BuildError::Connector(ConnectorError::MissingServerTime))?;
+            .map_err(|_| PlatformError::Connector(ConnectorError::MissingServerTime))?;
         self.clock.sync(server_time, round_trip_time)?;
         debug!(
             exchange = self.exchange.cex_id().to_string(),
@@ -79,7 +79,9 @@ where
     pub fn submit_websocket<'connector, Request>(
         &'connector self,
         request: Request,
-    ) -> BuildResult<Submission<'connector, Request, Request::Response, Request::VerificationRequest>>
+    ) -> PlatformResult<
+        Submission<'connector, Request, Request::Response, Request::VerificationRequest>,
+    >
     where
         Request: ETWebsocketRequest<Exchange = Exchange> + Send + 'connector,
         Exchange: Sync,
@@ -87,7 +89,7 @@ where
         let future = async move {
             let costs = self
                 .validate_rate_limits(&request)
-                .map_err(BuildError::send_not_sent)?;
+                .map_err(PlatformError::send_not_sent)?;
             self.send_websocket(request, costs).await
         };
         Ok(Submission::new(future))
@@ -96,7 +98,7 @@ where
         &self,
         mut request: Request,
         mut costs: Vec<(RateLimitRestriction, UsageCount)>,
-    ) -> BuildResult<SubmissionOutcome<Request, Request::Response, Request::VerificationRequest>>
+    ) -> PlatformResult<SubmissionOutcome<Request, Request::Response, Request::VerificationRequest>>
     where
         Request: ETWebsocketRequest<Exchange = Exchange> + Send,
         Exchange: Sync,
@@ -118,7 +120,7 @@ where
                 Err(error) => {
                     return self.submission_error_websocket(
                         request,
-                        BuildError::send_not_sent(error),
+                        PlatformError::send_not_sent(error),
                         costs,
                     );
                 }
@@ -133,7 +135,7 @@ where
                 Err(error) => {
                     return self.submission_error_websocket(
                         request,
-                        BuildError::send_not_sent_external(error),
+                        PlatformError::send_not_sent_external(error),
                         costs,
                     );
                 }
@@ -169,14 +171,14 @@ where
         &self,
         message: String,
         response_matcher: Arc<dyn Fn(&serde_json::Value) -> bool + Send + Sync>,
-    ) -> BuildResult<Response>
+    ) -> PlatformResult<Response>
     where
         Response: ETWebsocketResponse,
     {
         let listener = match self.websocket_listener.as_ref() {
             Some(listener) => listener,
             None => {
-                return Err(BuildError::send_not_sent(BuildError::Connector(
+                return Err(PlatformError::send_not_sent(PlatformError::Connector(
                     ConnectorError::WebsocketListenerMissing,
                 )));
             }
@@ -184,7 +186,7 @@ where
         let waiter = match listener.waiter_for_filtered_response(response_matcher) {
             Ok(waiter) => waiter,
             Err(error) => {
-                return Err(BuildError::send_not_sent(error));
+                return Err(PlatformError::send_not_sent(error));
             }
         };
         let exchange = self.exchange.cex_id().to_string();
@@ -195,11 +197,11 @@ where
         let mut waiter = Box::pin(waiter);
         let mut delay = Box::pin(Delay::new(remaining));
         let response_value = poll_fn(move |cx| match waiter.as_mut().poll(cx) {
-            Poll::Ready(result) => Poll::Ready(result.map_err(BuildError::send_unknown)),
+            Poll::Ready(result) => Poll::Ready(result.map_err(PlatformError::send_unknown)),
             Poll::Pending => match delay.as_mut().poll(cx) {
                 Poll::Ready(()) => {
                     warn!(exchange, "websocket request timed out");
-                    Poll::Ready(Err(BuildError::send_unknown(BuildError::Timeout(
+                    Poll::Ready(Err(PlatformError::send_unknown(PlatformError::Timeout(
                         TimeoutError::TimedOut,
                     ))))
                 }
@@ -208,20 +210,22 @@ where
         })
         .await?;
         let response = Response::try_from_websocket(response_value).map_err(|source| {
-            BuildError::send_unknown(BuildError::Connector(ConnectorError::WebsocketParseError {
-                source: Box::new(source),
-            }))
+            PlatformError::send_unknown(PlatformError::Connector(
+                ConnectorError::WebsocketParseError {
+                    source: Box::new(source),
+                },
+            ))
         })?;
         self.set_rate_limits(&response)
-            .map_err(BuildError::send_unknown)?;
+            .map_err(PlatformError::send_unknown)?;
         Ok(response)
     }
     fn submission_error_websocket<Request>(
         &self,
         request: Request,
-        error: BuildError,
+        error: PlatformError,
         costs: Vec<(RateLimitRestriction, UsageCount)>,
-    ) -> BuildResult<SubmissionOutcome<Request, Request::Response, Request::VerificationRequest>>
+    ) -> PlatformResult<SubmissionOutcome<Request, Request::Response, Request::VerificationRequest>>
     where
         Request: ETWebsocketRequest,
     {

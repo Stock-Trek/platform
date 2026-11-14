@@ -5,7 +5,7 @@ use crate::{
     },
     signed_post::SignedPost,
 };
-use platform_errors::{BuildError, ConfigError};
+use platform_errors::{ConfigError, PlatformError};
 use std::{
     collections::BTreeMap,
     fs as std_fs,
@@ -24,7 +24,7 @@ impl Artifacts {
         source_get_url: String,
         source_dir: PathBuf,
         build_cache_dir: PathBuf,
-    ) -> platform_errors::BuildResult<Self> {
+    ) -> platform_errors::PlatformResult<Self> {
         Self::with_source_limits(
             signed_post,
             source_get_url,
@@ -125,7 +125,7 @@ async fn publishes_source_before_compile_output_on_failure() {
     let artifacts = upload_artifacts(url);
     create_user_generated_source(&artifacts);
     artifacts.set_compile_output(b"error[E0425]: cannot find value `foo`\n".to_vec());
-    let error = BuildError::Config(ConfigError::Build("compile failed".to_string()));
+    let error = PlatformError::Config(ConfigError::Build("compile failed".to_string()));
 
     artifacts.publish_failure(&error).await.unwrap();
 
@@ -239,7 +239,7 @@ fn checks_mod_rs_alongside_algorithm_sources() {
 
     let error = Artifacts::validate_user_generated(&[algorithm, modules]).unwrap_err();
 
-    assert!(matches!(error, BuildError::Validation(_)));
+    assert!(matches!(error, PlatformError::Validation(_)));
 }
 
 #[test]
@@ -250,7 +250,7 @@ fn checks_sources_without_rust_extension() {
 
     let error = Artifacts::validate_user_generated(&[source]).unwrap_err();
 
-    assert!(matches!(error, BuildError::Validation(_)));
+    assert!(matches!(error, PlatformError::Validation(_)));
 }
 
 #[test]
@@ -261,6 +261,6 @@ fn rejects_user_generated_sources_with_blocked_syntax() {
 
     let error = Artifacts::validate_user_generated(&[algorithm]).unwrap_err();
 
-    assert!(matches!(error, BuildError::Validation(_)));
+    assert!(matches!(error, PlatformError::Validation(_)));
     assert!(error.to_string().contains("user generated code"));
 }

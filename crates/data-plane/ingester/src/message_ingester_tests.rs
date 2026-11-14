@@ -4,7 +4,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::ParsedMessage;
 use platform_nats::EventPublisher;
 use platform_types::TimestampMilliseconds;
@@ -30,7 +30,7 @@ impl RecordingPublisher {
 
 #[async_trait]
 impl EventPublisher for RecordingPublisher {
-    async fn publish(&self, subject: &str, payload: &[u8]) -> BuildResult<()> {
+    async fn publish(&self, subject: &str, payload: &[u8]) -> PlatformResult<()> {
         let value: Value = serde_json::from_slice(payload)?;
         let should_fail = value
             .get("sequence")
@@ -45,7 +45,7 @@ impl EventPublisher for RecordingPublisher {
                 }
             });
         if should_fail {
-            return Err(platform_errors::BuildError::bad_value(
+            return Err(platform_errors::PlatformError::bad_value(
                 "publish",
                 subject,
                 "injected publish failure",

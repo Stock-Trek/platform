@@ -1,5 +1,5 @@
 use crate::{decoders::trade_schema_decoder::SchemaTradeDecoder, event::MarketEvent};
-use platform_errors::{BuildError, BuildResult, ExchangeError};
+use platform_errors::{ExchangeError, PlatformError, PlatformResult};
 use platform_exchange_types::binance::market_data::BinanceTradeSchema;
 use platform_type_bridge::BinanceConverter;
 use platform_types::TimestampMilliseconds;
@@ -18,10 +18,10 @@ pub struct Trade {
 }
 
 pub trait TradeDecoder: Send + Sync {
-    fn decode(&self, event: &MarketEvent) -> BuildResult<Vec<Trade>>;
+    fn decode(&self, event: &MarketEvent) -> PlatformResult<Vec<Trade>>;
 
-    fn trading_pair_for_stream(&self, stream: &str) -> BuildResult<TradingPair> {
-        Err(BuildError::bad_value(
+    fn trading_pair_for_stream(&self, stream: &str) -> PlatformResult<TradingPair> {
+        Err(PlatformError::bad_value(
             "stream",
             stream,
             "trade decoder does not support stream resolution",
@@ -34,18 +34,20 @@ pub type SharedTradeDecoder = Arc<dyn TradeDecoder>;
 pub struct TradeDecoderFactory;
 
 impl TradeDecoderFactory {
-    pub fn for_exchange(exchange: CexId) -> BuildResult<SharedTradeDecoder> {
+    pub fn for_exchange(exchange: CexId) -> PlatformResult<SharedTradeDecoder> {
         match exchange {
             CexId::Binance => Ok(Arc::new(SchemaTradeDecoder::<BinanceTradeSchema>::new(
                 Self::binance_trading_pair,
             ))),
-            exchange => Err(BuildError::Exchange(ExchangeError::UnsupportedExchange {
-                exchange: exchange.to_string(),
-            })),
+            exchange => Err(PlatformError::Exchange(
+                ExchangeError::UnsupportedExchange {
+                    exchange: exchange.to_string(),
+                },
+            )),
         }
     }
 
-    pub fn trading_pair_for_stream(exchange: CexId, stream: &str) -> BuildResult<TradingPair> {
+    pub fn trading_pair_for_stream(exchange: CexId, stream: &str) -> PlatformResult<TradingPair> {
         Self::for_exchange(exchange)?.trading_pair_for_stream(stream)
     }
 

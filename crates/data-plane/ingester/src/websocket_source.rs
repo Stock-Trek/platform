@@ -4,7 +4,7 @@ use iris::{
     Client as IrisClient, Config as IrisConfig, ConnectionError as IrisConnectionError,
     Listener as IrisListener, ServerCloseBehavior,
 };
-use platform_errors::{BuildError, BuildResult, ExchangeError, IngesterError};
+use platform_errors::{ExchangeError, IngesterError, PlatformError, PlatformResult};
 use platform_market_data::{CodecFactory, CodecHandle, DecodedFrame, ParsedMessage, SharedCodec};
 use platform_metrics::MarketDataMetrics;
 use platform_metrics::{DECODE_KIND_FRAME, DROP_REASON_CHANNEL_CLOSED, STAGE_INGESTER};
@@ -59,7 +59,7 @@ impl fmt::Debug for StreamFormat {
 /// Source of parsed exchange websocket messages.
 #[async_trait]
 pub trait MarketMessageSource: Send + Sync {
-    async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BuildResult<()>;
+    async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> PlatformResult<()>;
 }
 
 /// Websocket transport shared by all exchange codecs.
@@ -94,7 +94,7 @@ impl WebsocketSource {
         )
     }
 
-    pub async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BuildResult<()> {
+    pub async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> PlatformResult<()> {
         IngesterConfig::validate_trade_streams(self.exchange, &self.url)?;
         let codec = match &self.stream_format {
             StreamFormat::Json(codec) | StreamFormat::Binary(codec) => codec.clone(),
@@ -106,11 +106,11 @@ impl WebsocketSource {
             &self.url,
             CodecHandle::new(codec),
         );
-        client.connect().await.map_err(BuildError::external)?;
+        client.connect().await.map_err(PlatformError::external)?;
         self.wait_for_shutdown().await
     }
 
-    async fn wait_for_shutdown(&self) -> BuildResult<()> {
+    async fn wait_for_shutdown(&self) -> PlatformResult<()> {
         info!(
             exchange = %self.exchange,
             format = ?self.stream_format,
@@ -123,31 +123,33 @@ impl WebsocketSource {
         Ok(())
     }
 
-    fn iris_config(&self) -> BuildResult<IrisConfig> {
+    fn iris_config(&self) -> PlatformResult<IrisConfig> {
         let mut config =
             IrisConfig::new().with_server_close_behavior(ServerCloseBehavior::Reconnect);
         if let Some(api_key) = &self.api_key {
             let header = Self::api_key_header(self.exchange)?;
             config = config
                 .with_header_str(header, api_key)
-                .map_err(BuildError::external)?;
+                .map_err(PlatformError::external)?;
         }
         Ok(config)
     }
 
-    pub fn api_key_header(exchange: CexId) -> BuildResult<&'static str> {
+    pub fn api_key_header(exchange: CexId) -> PlatformResult<&'static str> {
         match exchange {
             CexId::Binance => Ok(BINANCE_API_KEY_HEADER),
-            exchange => Err(BuildError::Exchange(ExchangeError::UnsupportedExchange {
-                exchange: exchange.to_string(),
-            })),
+            exchange => Err(PlatformError::Exchange(
+                ExchangeError::UnsupportedExchange {
+                    exchange: exchange.to_string(),
+                },
+            )),
         }
     }
 }
 
 #[async_trait]
 impl MarketMessageSource for WebsocketSource {
-    async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> BuildResult<()> {
+    async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> PlatformResult<()> {
         WebsocketSource::run(self, sender).await
     }
 }

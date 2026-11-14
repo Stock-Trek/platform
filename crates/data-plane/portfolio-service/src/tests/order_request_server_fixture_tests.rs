@@ -4,7 +4,7 @@ use platform_auth_service::{
     ApiToken, AuthService, AuthServiceConfig, MemoryReplayStore, MemoryTokenStore,
     MemoryTokenUsageQueue, TokenMetadata, TokenScope, TokenStore,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_messages::UnsignedOrderRequest;
 use std::{collections::BTreeMap, net::SocketAddr, sync::Arc};
 use stock_trek_types::cex::{
@@ -150,7 +150,7 @@ impl Fixture {
     pub async fn running_server(
         delivery_url: &str,
         auth_service: AuthService,
-    ) -> (SocketAddr, JoinHandle<BuildResult<()>>) {
+    ) -> (SocketAddr, JoinHandle<PlatformResult<()>>) {
         let service = Arc::new(OrderRequestService::new(auth_service));
         let delivery = Arc::new(OrderRequestDelivery::new(delivery_url).unwrap());
         let server = OrderRequestServer::bind(Self::address(), service, delivery)

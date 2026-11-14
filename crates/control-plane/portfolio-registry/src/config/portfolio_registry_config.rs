@@ -2,7 +2,7 @@ use crate::config::{
     admin::AdminConfig, nats::RegistryNatsConfig, read::ReadConfig, store::RegistryStoreConfig,
 };
 use platform_config::EnvVars;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_runtime::Config;
 
 #[derive(Debug, Clone)]
@@ -15,11 +15,11 @@ pub struct PortfolioRegistryConfig {
 }
 
 impl PortfolioRegistryConfig {
-    pub fn from_env() -> BuildResult<Self> {
+    pub fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         Ok(Self {
             log_filter: Config::log_filter(vars)?,
             store: RegistryStoreConfig::from_vars(vars)?,

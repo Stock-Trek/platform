@@ -1,5 +1,5 @@
 use platform_config::EnvVars;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use secrecy::SecretString;
 use serde::Deserialize;
 use std::{collections::BTreeSet, fmt};
@@ -29,26 +29,35 @@ impl BinanceCredentialConfig {
         }
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Vec<Self>> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Vec<Self>> {
         let Some(payload) = vars.optional(CREDENTIALS)? else {
             return Ok(Vec::new());
         };
         let entries: Vec<CredentialEntry> = serde_json::from_str(&payload)
-            .map_err(|error| BuildError::config_invalid_source(CREDENTIALS, error))?;
+            .map_err(|error| PlatformError::config_invalid_source(CREDENTIALS, error))?;
         let mut seen = BTreeSet::new();
         let mut credentials = Vec::with_capacity(entries.len());
         for entry in entries {
             if entry.account.trim().is_empty() {
-                return Err(BuildError::config_invalid(CREDENTIALS, "account is empty"));
+                return Err(PlatformError::config_invalid(
+                    CREDENTIALS,
+                    "account is empty",
+                ));
             }
             if entry.api_key.trim().is_empty() {
-                return Err(BuildError::config_invalid(CREDENTIALS, "api_key is empty"));
+                return Err(PlatformError::config_invalid(
+                    CREDENTIALS,
+                    "api_key is empty",
+                ));
             }
             if entry.secret.trim().is_empty() {
-                return Err(BuildError::config_invalid(CREDENTIALS, "secret is empty"));
+                return Err(PlatformError::config_invalid(
+                    CREDENTIALS,
+                    "secret is empty",
+                ));
             }
             if !seen.insert(entry.account.clone()) {
-                return Err(BuildError::config_invalid(
+                return Err(PlatformError::config_invalid(
                     CREDENTIALS,
                     format!("duplicate account {}", entry.account),
                 ));

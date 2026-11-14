@@ -1,9 +1,5 @@
 mod auth;
 mod binance;
-mod build;
-mod build_classification;
-mod build_constructors;
-mod build_conversions;
 mod config;
 mod connector;
 mod data;
@@ -19,6 +15,10 @@ mod io;
 #[cfg(feature = "lambda")]
 mod lambda;
 mod nats;
+mod platform;
+mod platform_classification;
+mod platform_constructors;
+mod platform_conversions;
 mod rate_limit;
 mod retryability;
 mod secrets;
@@ -48,7 +48,6 @@ mod system_tests;
 
 pub use auth::AuthError;
 pub use binance::{BinanceError, BinanceErrorData};
-pub use build::{BuildError, BuildResult};
 pub use config::ConfigError;
 pub use connector::{ConnectorError, SendFailure};
 pub use data::DataError;
@@ -64,6 +63,7 @@ pub use io::IoError;
 #[cfg(feature = "lambda")]
 pub use lambda::LambdaError;
 pub use nats::NatsError;
+pub use platform::{PlatformError, PlatformResult};
 pub use rate_limit::RateLimitError;
 pub use retryability::Retryability;
 pub use secrets::SecretsError;

@@ -6,7 +6,7 @@ use crate::{
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_types::{TimestampMilliseconds, UsageCount};
 use serde::Serialize;
 use std::{fmt::Debug, sync::Arc};
@@ -33,7 +33,7 @@ where
 
     fn http_method(&self) -> HttpMethod;
     fn http_endpoint(&self) -> &'static str;
-    fn try_into_http(self, signer: &Signer) -> BuildResult<HttpRequest>;
+    fn try_into_http(self, signer: &Signer) -> PlatformResult<HttpRequest>;
     fn verification_request_http(&self) -> Option<Self::VerificationRequest> {
         None as Option<Self::VerificationRequest>
     }
@@ -51,7 +51,7 @@ where
         self,
         signer: &Signer,
         id: ETWebsocketId,
-    ) -> BuildResult<(String, WebsocketResponseMatcher)>;
+    ) -> PlatformResult<(String, WebsocketResponseMatcher)>;
     fn verification_request_websocket(&self) -> Option<Self::VerificationRequest> {
         None as Option<Self::VerificationRequest>
     }

@@ -2,7 +2,7 @@ use crate::{
     AccountKey, PortfolioService, PortfolioUpdateOutcome, PortfolioUpdateSource,
     read_model::PortfolioReadModelStore,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_metrics::PortfolioMetrics;
 use platform_time::RetryBackoff;
 use std::{future::Future, sync::Arc, time::Duration};
@@ -33,7 +33,7 @@ impl PortfolioUpdateConsumer {
         self
     }
 
-    pub async fn run_once(&self) -> BuildResult<usize> {
+    pub async fn run_once(&self) -> PlatformResult<usize> {
         let mut processed = 0;
         while let Some(message) = self.next().await? {
             let update = message.update().clone();
@@ -85,13 +85,13 @@ impl PortfolioUpdateConsumer {
         Ok(processed)
     }
 
-    async fn next(&self) -> BuildResult<Option<crate::PortfolioUpdateMessage>> {
+    async fn next(&self) -> PlatformResult<Option<crate::PortfolioUpdateMessage>> {
         self.source.next().await.inspect_err(|_| {
             PortfolioMetrics::record_apply_failure("update", "fetch");
         })
     }
 
-    async fn persist_portfolio(&self, account: &AccountKey) -> BuildResult<()> {
+    async fn persist_portfolio(&self, account: &AccountKey) -> PlatformResult<()> {
         let Some(store) = &self.store else {
             return Ok(());
         };
@@ -101,9 +101,9 @@ impl PortfolioUpdateConsumer {
         }
     }
 
-    pub async fn run<F>(&self, shutdown: F) -> BuildResult<()>
+    pub async fn run<F>(&self, shutdown: F) -> PlatformResult<()>
     where
-        F: Future<Output = BuildResult<()>> + Send,
+        F: Future<Output = PlatformResult<()>> + Send,
     {
         tokio::pin!(shutdown);
         let mut backoff =

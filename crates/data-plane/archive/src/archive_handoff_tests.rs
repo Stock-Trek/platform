@@ -1,6 +1,6 @@
 use crate::{ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind, IcebergDataFile};
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::collections::HashSet;
 
 #[derive(Default)]
@@ -17,18 +17,18 @@ impl ArchiveCatalog for FakeCatalog {
         _table: ArchiveIcebergTable,
         _files: &[IcebergDataFile],
         _source_files: Option<&[String]>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         Ok(())
     }
 
     async fn registered_data_files(
         &self,
         _table: ArchiveIcebergTable,
-    ) -> BuildResult<HashSet<String>> {
+    ) -> PlatformResult<HashSet<String>> {
         Ok(HashSet::new())
     }
 
-    async fn data_files(&self, table: ArchiveIcebergTable) -> BuildResult<Vec<IcebergDataFile>> {
+    async fn data_files(&self, table: ArchiveIcebergTable) -> PlatformResult<Vec<IcebergDataFile>> {
         let files = match table.layer() {
             crate::ArchiveTableLayer::Raw => &self.raw,
             crate::ArchiveTableLayer::Compacted => &self.compacted,
@@ -39,7 +39,7 @@ impl ArchiveCatalog for FakeCatalog {
     async fn processed_source_files(
         &self,
         table: ArchiveIcebergTable,
-    ) -> BuildResult<HashSet<String>> {
+    ) -> PlatformResult<HashSet<String>> {
         if table.layer() == crate::ArchiveTableLayer::Compacted {
             Ok(self.processed.clone())
         } else {

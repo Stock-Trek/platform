@@ -6,7 +6,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::{GapMarker, MarketEvent};
 use platform_nats::EventPublisher;
 use platform_types::TimestampMilliseconds;
@@ -23,11 +23,11 @@ pub struct OneGapSource {
 
 #[async_trait]
 impl GapMarkerSource for OneGapSource {
-    async fn next_gap(&mut self) -> BuildResult<Option<GapMarker>> {
+    async fn next_gap(&mut self) -> PlatformResult<Option<GapMarker>> {
         Ok(self.gap.take())
     }
 
-    async fn ack(&mut self, gap: &GapMarker) -> BuildResult<()> {
+    async fn ack(&mut self, gap: &GapMarker) -> PlatformResult<()> {
         self.acked.lock().push(gap.clone());
         Ok(())
     }
@@ -39,7 +39,7 @@ pub struct OnceFetcher {
 
 #[async_trait]
 impl MissingEventFetcher for OnceFetcher {
-    async fn fetch(&self, _gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
+    async fn fetch(&self, _gap: &GapMarker) -> PlatformResult<Vec<BackfilledEvent>> {
         Ok(std::mem::take(&mut *self.events.lock()))
     }
 }
@@ -50,7 +50,7 @@ pub struct StreamRangeFetcher {
 
 #[async_trait]
 impl MissingEventFetcher for StreamRangeFetcher {
-    async fn fetch(&self, gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
+    async fn fetch(&self, gap: &GapMarker) -> PlatformResult<Vec<BackfilledEvent>> {
         if gap.stream == self.empty_stream {
             return Ok(Vec::new());
         }
@@ -67,7 +67,7 @@ pub struct RecordingPublisher {
 
 #[async_trait]
 impl EventPublisher for RecordingPublisher {
-    async fn publish(&self, _subject: &str, payload: &[u8]) -> BuildResult<()> {
+    async fn publish(&self, _subject: &str, payload: &[u8]) -> PlatformResult<()> {
         let event: MarketEvent = serde_json::from_slice(payload)?;
         self.sequences
             .lock()
@@ -119,11 +119,11 @@ impl ControlledStore {
 
 #[async_trait]
 impl GapRetryStore for ControlledStore {
-    async fn load(&self) -> BuildResult<Vec<PendingGap>> {
+    async fn load(&self) -> PlatformResult<Vec<PendingGap>> {
         self.inner.load().await
     }
 
-    async fn save(&self, pending: &PendingGap) -> BuildResult<()> {
+    async fn save(&self, pending: &PendingGap) -> PlatformResult<()> {
         let save_number = self.saves.fetch_add(1, Ordering::SeqCst);
         let fail = match self.policy {
             SavePolicy::Allow => false,
@@ -131,12 +131,12 @@ impl GapRetryStore for ControlledStore {
             SavePolicy::ForStream(stream) => pending.stream == stream,
         };
         if fail {
-            return Err(BuildError::external("retry store save failed"));
+            return Err(PlatformError::external("retry store save failed"));
         }
         self.inner.save(pending).await
     }
 
-    async fn remove(&self, key: &str) -> BuildResult<()> {
+    async fn remove(&self, key: &str) -> PlatformResult<()> {
         self.inner.remove(key).await
     }
 }

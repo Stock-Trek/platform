@@ -1,6 +1,6 @@
 use crate::{ApiToken, TokenScope};
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
@@ -89,7 +89,7 @@ impl OwnerIndexEntry {
         })
     }
 
-    fn from_value(value: &Value) -> BuildResult<Self> {
+    fn from_value(value: &Value) -> PlatformResult<Self> {
         let scopes = Self::string_array(value, "scopes")?
             .into_iter()
             .map(|scope| {
@@ -97,7 +97,7 @@ impl OwnerIndexEntry {
                     .parse::<TokenScope>()
                     .map_err(|_| Self::malformed(format!("{scope:?} is not a valid token scope")))
             })
-            .collect::<BuildResult<Vec<_>>>()?;
+            .collect::<PlatformResult<Vec<_>>>()?;
         Ok(Self {
             id: Self::required_string(value, "id")?,
             owner: Self::required_string(value, "owner")?,
@@ -111,12 +111,12 @@ impl OwnerIndexEntry {
         })
     }
 
-    fn required_string(value: &Value, field: &'static str) -> BuildResult<String> {
+    fn required_string(value: &Value, field: &'static str) -> PlatformResult<String> {
         Self::optional_string(value, field)?
             .ok_or_else(|| Self::malformed(format!("{field} is required")))
     }
 
-    fn optional_string(value: &Value, field: &'static str) -> BuildResult<Option<String>> {
+    fn optional_string(value: &Value, field: &'static str) -> PlatformResult<Option<String>> {
         match value.get(field) {
             None | Some(Value::Null) => Ok(None),
             Some(Value::String(value)) => Ok(Some(value.clone())),
@@ -124,7 +124,7 @@ impl OwnerIndexEntry {
         }
     }
 
-    fn string_array(value: &Value, field: &'static str) -> BuildResult<Vec<String>> {
+    fn string_array(value: &Value, field: &'static str) -> PlatformResult<Vec<String>> {
         value
             .get(field)
             .and_then(Value::as_array)
@@ -139,12 +139,12 @@ impl OwnerIndexEntry {
             .collect()
     }
 
-    fn required_timestamp(value: &Value, field: &'static str) -> BuildResult<DateTime<Utc>> {
+    fn required_timestamp(value: &Value, field: &'static str) -> PlatformResult<DateTime<Utc>> {
         Self::timestamp(value, field)?
             .ok_or_else(|| Self::malformed(format!("{field} is required")))
     }
 
-    fn timestamp(value: &Value, field: &'static str) -> BuildResult<Option<DateTime<Utc>>> {
+    fn timestamp(value: &Value, field: &'static str) -> PlatformResult<Option<DateTime<Utc>>> {
         let Some(value) = Self::optional_string(value, field)? else {
             return Ok(None);
         };
@@ -155,8 +155,8 @@ impl OwnerIndexEntry {
             })
     }
 
-    fn malformed(detail: String) -> BuildError {
-        BuildError::auth_store("read", "owner-index", false, detail)
+    fn malformed(detail: String) -> PlatformError {
+        PlatformError::auth_store("read", "owner-index", false, detail)
     }
 }
 
@@ -220,7 +220,7 @@ impl OwnerIndex {
         })
     }
 
-    pub fn from_value(value: &Value) -> BuildResult<Self> {
+    pub fn from_value(value: &Value) -> PlatformResult<Self> {
         let owner = value
             .get("owner")
             .and_then(Value::as_str)
@@ -232,7 +232,7 @@ impl OwnerIndex {
             .ok_or_else(|| Self::malformed("tokens must be an array".to_string()))?
             .iter()
             .map(OwnerIndexEntry::from_value)
-            .collect::<BuildResult<Vec<_>>>()?;
+            .collect::<PlatformResult<Vec<_>>>()?;
         if tokens.iter().any(|entry| entry.owner != owner) {
             return Err(Self::malformed(
                 "owner index contains an entry for another owner".to_string(),
@@ -250,7 +250,7 @@ impl OwnerIndex {
         )
     }
 
-    fn malformed(detail: String) -> BuildError {
-        BuildError::auth_store("read", "owner-index", false, detail)
+    fn malformed(detail: String) -> PlatformError {
+        PlatformError::auth_store("read", "owner-index", false, detail)
     }
 }

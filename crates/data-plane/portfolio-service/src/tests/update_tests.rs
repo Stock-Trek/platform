@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 #[derive(Default)]
@@ -34,16 +34,16 @@ impl FakeUpdateSource {
 
 #[async_trait]
 impl PortfolioUpdateSource for FakeUpdateSource {
-    async fn next(&self) -> BuildResult<Option<PortfolioUpdateMessage>> {
+    async fn next(&self) -> PlatformResult<Option<PortfolioUpdateMessage>> {
         Ok(self.messages.lock().pop_front())
     }
 
-    async fn checkpoint(&self, sequence: u64) -> BuildResult<()> {
+    async fn checkpoint(&self, sequence: u64) -> PlatformResult<()> {
         self.checkpoints.lock().push(sequence);
         Ok(())
     }
 
-    async fn acknowledge(&self, _message: &PortfolioUpdateMessage) -> BuildResult<()> {
+    async fn acknowledge(&self, _message: &PortfolioUpdateMessage) -> PlatformResult<()> {
         *self.acknowledged.lock() += 1;
         Ok(())
     }

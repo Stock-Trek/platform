@@ -1,7 +1,7 @@
 use crate::{CwasmArtifact, run_status::RunStatus};
 use aws_sdk_dynamodb::types::AttributeValue;
 use chrono::{DateTime, SecondsFormat, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::collections::HashMap;
 
 pub const ALGORITHM_ID: &str = "algorithmId";
@@ -102,7 +102,7 @@ impl RunRecord {
         item
     }
 
-    pub fn from_item(item: &Item) -> BuildResult<Self> {
+    pub fn from_item(item: &Item) -> PlatformResult<Self> {
         Ok(Self {
             algorithm_id: Self::string(item, ALGORITHM_ID)?,
             owner: Self::string(item, OWNER)?,
@@ -132,20 +132,20 @@ impl RunRecord {
         timestamp.to_rfc3339_opts(SecondsFormat::Millis, true)
     }
 
-    pub fn parse_timestamp(value: &str) -> BuildResult<DateTime<Utc>> {
+    pub fn parse_timestamp(value: &str) -> PlatformResult<DateTime<Utc>> {
         DateTime::parse_from_rfc3339(value)
             .map(|timestamp| timestamp.with_timezone(&Utc))
             .map_err(|source| Self::invalid_attribute_source(SCHEDULED_AT, &source))
     }
 
-    fn string(item: &Item, name: &str) -> BuildResult<String> {
+    fn string(item: &Item, name: &str) -> PlatformResult<String> {
         let value = item
             .get(name)
             .ok_or_else(|| Self::missing_attribute(name))?;
         Self::string_value(name, value)
     }
 
-    fn string_value(name: &str, value: &AttributeValue) -> BuildResult<String> {
+    fn string_value(name: &str, value: &AttributeValue) -> PlatformResult<String> {
         value
             .as_s()
             .map_err(|_| Self::invalid_attribute(name, "is not a string"))
@@ -158,7 +158,7 @@ impl RunRecord {
             })
     }
 
-    fn number(item: &Item, name: &str) -> BuildResult<u64> {
+    fn number(item: &Item, name: &str) -> PlatformResult<u64> {
         let value = item
             .get(name)
             .ok_or_else(|| Self::missing_attribute(name))?;
@@ -170,23 +170,23 @@ impl RunRecord {
             .map_err(|_| Self::invalid_attribute(name, "is not an unsigned integer"))
     }
 
-    fn timestamp(item: &Item, name: &str) -> BuildResult<DateTime<Utc>> {
+    fn timestamp(item: &Item, name: &str) -> PlatformResult<DateTime<Utc>> {
         let value = item
             .get(name)
             .ok_or_else(|| Self::missing_attribute(name))?;
         Self::parse_timestamp(&Self::string_value(name, value)?)
     }
 
-    fn missing_attribute(name: &str) -> BuildError {
+    fn missing_attribute(name: &str) -> PlatformError {
         Self::invalid_attribute(name, "is missing")
     }
 
-    fn invalid_attribute(name: &str, reason: &str) -> BuildError {
-        BuildError::external(format!("run record attribute {name} {reason}"))
+    fn invalid_attribute(name: &str, reason: &str) -> PlatformError {
+        PlatformError::external(format!("run record attribute {name} {reason}"))
     }
 
-    fn invalid_attribute_source(name: &str, source: &chrono::ParseError) -> BuildError {
-        BuildError::external(format!(
+    fn invalid_attribute_source(name: &str, source: &chrono::ParseError) -> PlatformError {
+        PlatformError::external(format!(
             "run record attribute {name} is not a valid timestamp: {source}"
         ))
     }

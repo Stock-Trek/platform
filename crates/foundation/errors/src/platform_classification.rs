@@ -1,11 +1,11 @@
-use crate::BuildError;
 use crate::ErrorType;
+use crate::PlatformError;
 use crate::connector::SendFailure;
 #[cfg(feature = "github")]
 use crate::github::GitHubError;
 use crate::retryability::Retryability;
 
-impl BuildError {
+impl PlatformError {
     pub fn any_sent(&self) -> bool {
         matches!(self, Self::Sqs(error) if error.any_sent())
     }
@@ -60,7 +60,7 @@ impl BuildError {
     }
 }
 
-impl ErrorType for BuildError {
+impl ErrorType for PlatformError {
     fn error_type(&self) -> &'static str {
         match self {
             Self::Auth(error) => error.error_type(),

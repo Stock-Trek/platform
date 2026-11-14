@@ -1,7 +1,7 @@
 use platform_archive::{
     ArchiveBatch, ArchiveKind, ArchivePath, ArchiveRecord, ArchiveSortKey, SpillRun, SpillRunReader,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::{cmp::Ordering, collections::BinaryHeap, path::PathBuf, vec::IntoIter};
 
 /// A record plus the cached values used to order its compaction output.
@@ -44,10 +44,10 @@ impl PartitionSpill {
         kind: ArchiveKind,
         directory: impl Into<PathBuf>,
         limit: usize,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let directory = directory.into();
         std::fs::create_dir_all(&directory).map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "create compaction spill directory",
                 directory.display().to_string(),
                 error,
@@ -62,7 +62,7 @@ impl PartitionSpill {
         })
     }
 
-    pub fn push(&mut self, record: ArchiveRecord) -> BuildResult<()> {
+    pub fn push(&mut self, record: ArchiveRecord) -> PlatformResult<()> {
         self.records.push(PartitionItem::new(record));
         if self.records.len() >= self.limit {
             self.spill()?;
@@ -70,7 +70,7 @@ impl PartitionSpill {
         Ok(())
     }
 
-    pub fn finish(mut self) -> BuildResult<PartitionRecords> {
+    pub fn finish(mut self) -> PlatformResult<PartitionRecords> {
         if self.runs.is_empty() {
             self.records.sort_by(PartitionItem::compare);
             return Ok(PartitionRecords::Memory(self.records.into_iter()));
@@ -81,11 +81,11 @@ impl PartitionSpill {
             .runs
             .iter()
             .map(|path| SpillRunReader::open(self.kind, path))
-            .collect::<BuildResult<Vec<_>>>()?;
+            .collect::<PlatformResult<Vec<_>>>()?;
         Ok(PartitionRecords::Runs(PartitionMerge::new(readers)?))
     }
 
-    fn spill(&mut self) -> BuildResult<()> {
+    fn spill(&mut self) -> PlatformResult<()> {
         if self.records.is_empty() {
             return Ok(());
         }
@@ -111,7 +111,7 @@ pub enum PartitionRecords {
 }
 
 impl PartitionRecords {
-    pub fn next_item(&mut self) -> BuildResult<Option<PartitionItem>> {
+    pub fn next_item(&mut self) -> PlatformResult<Option<PartitionItem>> {
         match self {
             Self::Memory(items) => Ok(items.next()),
             Self::Runs(merge) => merge.next_item(),
@@ -155,7 +155,7 @@ pub struct PartitionMerge {
 }
 
 impl PartitionMerge {
-    fn new(mut readers: Vec<SpillRunReader>) -> BuildResult<Self> {
+    fn new(mut readers: Vec<SpillRunReader>) -> PlatformResult<Self> {
         let mut heap = BinaryHeap::with_capacity(readers.len());
         for (index, run) in readers.iter_mut().enumerate() {
             if let Some(record) = run.next_record()? {
@@ -171,7 +171,7 @@ impl PartitionMerge {
         })
     }
 
-    fn advance(&mut self, run: usize) -> BuildResult<()> {
+    fn advance(&mut self, run: usize) -> PlatformResult<()> {
         if let Some(record) = self.runs[run].next_record()? {
             self.heap.push(PartitionEntry {
                 item: PartitionItem::new(record),
@@ -181,7 +181,7 @@ impl PartitionMerge {
         Ok(())
     }
 
-    fn next_item(&mut self) -> BuildResult<Option<PartitionItem>> {
+    fn next_item(&mut self) -> PlatformResult<Option<PartitionItem>> {
         let Some(entry) = self.heap.pop() else {
             return Ok(None);
         };

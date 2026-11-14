@@ -1,7 +1,7 @@
 use crate::config::ArchiverConfig;
 use async_trait::async_trait;
 use platform_archive::{ArchiveRecord, ArchiveRecordKey, ArchivedMarketEvent, STATE_EPOCH_HEADER};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::{ClosedCandle, EnvelopeCodec, MarketEvent, MarketEventSubject};
 use platform_metrics::MarketDataMetrics;
 use platform_metrics::{DECODE_KIND_CLOSED_CANDLE, DECODE_KIND_MARKET_EVENT, STAGE_ARCHIVER};
@@ -16,11 +16,11 @@ const CANDLES_DURABLE_NAME: &str = "archiver-candles";
 #[async_trait]
 pub trait ArchiveSource: Send {
     /// Returns `None` when the source has reached its end.
-    async fn next_record(&mut self) -> BuildResult<Option<ArchiveRecord>>;
+    async fn next_record(&mut self) -> PlatformResult<Option<ArchiveRecord>>;
 
     /// Acknowledges the record returned by the previous call to
     /// [`Self::next_record`].
-    async fn ack(&mut self, _record: &ArchiveRecord) -> BuildResult<()> {
+    async fn ack(&mut self, _record: &ArchiveRecord) -> PlatformResult<()> {
         Ok(())
     }
 }
@@ -51,7 +51,7 @@ enum Consumer {
 }
 
 impl NatsArchiveSource {
-    pub async fn connect(config: &ArchiverConfig) -> BuildResult<Self> {
+    pub async fn connect(config: &ArchiverConfig) -> PlatformResult<Self> {
         let ack_wait = config.ack_wait();
         let events = JetStreamConsumer::connect_with_start_and_ack_wait(
             &config.nats_url,
@@ -97,7 +97,7 @@ impl NatsArchiveSource {
 
 #[async_trait]
 impl ArchiveSource for NatsArchiveSource {
-    async fn next_record(&mut self) -> BuildResult<Option<ArchiveRecord>> {
+    async fn next_record(&mut self) -> PlatformResult<Option<ArchiveRecord>> {
         loop {
             tokio::select! {
                 message = self.events.next_message_unacked() => {
@@ -148,7 +148,7 @@ impl ArchiveSource for NatsArchiveSource {
         }
     }
 
-    async fn ack(&mut self, record: &ArchiveRecord) -> BuildResult<()> {
+    async fn ack(&mut self, record: &ArchiveRecord) -> PlatformResult<()> {
         let key = record.key();
         let Some(index) = self.in_flight.iter().position(|pending| pending.key == key) else {
             return Ok(());

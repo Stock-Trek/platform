@@ -5,7 +5,7 @@ use crate::{
 };
 use aws_sdk_sqs::Client as SqsClient;
 use platform_aws::{SdkConfig, SsmConfig, SsmSecrets};
-use platform_errors::{BuildError, BuildResult, ErrorType, SecretsError};
+use platform_errors::{ErrorType, PlatformError, PlatformResult, SecretsError};
 use platform_github::HostAllowlist;
 use platform_metrics::SecretMetrics;
 use platform_sqs::{Sqs, SqsConfig};
@@ -41,7 +41,7 @@ pub struct RsWebhookContext {
 }
 
 impl RsWebhookContext {
-    pub async fn new(config: &WebhookConfig) -> BuildResult<Self> {
+    pub async fn new(config: &WebhookConfig) -> PlatformResult<Self> {
         let aws_timeouts = config.aws_timeouts;
         let sdk_config = platform_aws::Aws::load_sdk_config(aws_timeouts).await;
         let sqs = Sqs::new(
@@ -93,7 +93,7 @@ impl RsWebhookContext {
     /// Returns the current converters, loading secrets on first use. Failed
     /// loads are throttled by a jittered backoff so a flood of unauthenticated
     /// webhooks cannot amplify into unbounded SSM traffic.
-    pub async fn converters(&self, deadline: Deadline) -> BuildResult<Converters> {
+    pub async fn converters(&self, deadline: Deadline) -> PlatformResult<Converters> {
         if let Some(converters) = self.converters.read().await.clone() {
             return Ok(converters);
         }
@@ -106,13 +106,16 @@ impl RsWebhookContext {
     /// rate limiting them stops forged webhooks from amplifying into a stream
     /// of outbound auth calls; callers should fall back to the cached
     /// converters (and reject the request) when `None` is returned.
-    pub async fn refresh_converters(&self, deadline: Deadline) -> BuildResult<Option<Converters>> {
+    pub async fn refresh_converters(
+        &self,
+        deadline: Deadline,
+    ) -> PlatformResult<Option<Converters>> {
         match self
             .load_converters(deadline, LoadReason::SignatureRefresh)
             .await
         {
             Ok(converters) => Ok(Some(converters)),
-            Err(BuildError::Secrets(SecretsError::RefreshThrottled)) => Ok(None),
+            Err(PlatformError::Secrets(SecretsError::RefreshThrottled)) => Ok(None),
             Err(error) => Err(error),
         }
     }
@@ -121,7 +124,7 @@ impl RsWebhookContext {
         &self,
         deadline: Deadline,
         reason: LoadReason,
-    ) -> BuildResult<Converters> {
+    ) -> PlatformResult<Converters> {
         let _guard = self.acquire_load_lock().await;
 
         if reason == LoadReason::CacheMiss {
@@ -129,12 +132,12 @@ impl RsWebhookContext {
                 return Ok(converters);
             }
         } else if self.refreshed_recently().await {
-            return Err(BuildError::Secrets(SecretsError::RefreshThrottled));
+            return Err(PlatformError::Secrets(SecretsError::RefreshThrottled));
         }
 
         if let Some(retry_after) = self.remaining_backoff().await {
             SecretMetrics::record_secret_load_backoff_hit();
-            return Err(BuildError::Secrets(SecretsError::Unavailable {
+            return Err(PlatformError::Secrets(SecretsError::Unavailable {
                 retry_after,
             }));
         }
@@ -156,14 +159,14 @@ impl RsWebhookContext {
                 }
                 let retry_after = RetryPolicy::constant(1, self.failure_backoff).delay(0);
                 *self.backoff_until.lock().await = Some(Instant::now() + retry_after);
-                Err(BuildError::Secrets(SecretsError::Unavailable {
+                Err(PlatformError::Secrets(SecretsError::Unavailable {
                     retry_after,
                 }))
             }
         }
     }
 
-    async fn try_load(&self, deadline: Deadline) -> BuildResult<Converters> {
+    async fn try_load(&self, deadline: Deadline) -> PlatformResult<Converters> {
         let secrets =
             SsmSecrets::load(&self.sdk_config, self.timeouts, deadline, &self.ssm).await?;
         Ok(Arc::new(EventConverters::all(

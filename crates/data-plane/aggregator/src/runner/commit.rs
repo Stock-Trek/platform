@@ -11,7 +11,7 @@ use crate::{
     state::AggregatorState,
     writer_lease::LeaseStore,
 };
-use platform_errors::{BuildError, BuildResult, ErrorType};
+use platform_errors::{ErrorType, PlatformError, PlatformResult};
 use platform_metrics::AggregatorMetrics;
 use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
@@ -96,7 +96,7 @@ where
         state: &mut CommitState,
         outputs: &CandleOutputWriter,
         drain_open: bool,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         writer.renew(leases, shard, config.lease_ttl).await?;
 
         // Durable outputs must reach the sink before the checkpoint that
@@ -123,7 +123,7 @@ where
                     processor.state().clone(),
                 )?
                 else {
-                    return Err(BuildError::bad_value(
+                    return Err(PlatformError::bad_value(
                         "aggregator checkpoint",
                         shard.to_string(),
                         "source record has no JetStream sequence to checkpoint",
@@ -136,7 +136,7 @@ where
                     if state.pending.is_empty() {
                         return Ok(());
                     }
-                    return Err(BuildError::bad_value(
+                    return Err(PlatformError::bad_value(
                         "aggregator checkpoint",
                         shard.to_string(),
                         "cannot checkpoint without a source record",

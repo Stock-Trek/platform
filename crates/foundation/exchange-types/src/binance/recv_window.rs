@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_types::DurationMilliseconds;
 use serde::Serialize;
 use std::fmt;
@@ -11,11 +11,11 @@ impl BinanceRecvWindow {
     pub const DEFAULT: Self = Self(DurationMilliseconds(5000));
     pub const MAXIMUM: DurationMilliseconds = DurationMilliseconds(60_000);
 
-    pub fn try_new(recv_window: DurationMilliseconds) -> BuildResult<Self> {
+    pub fn try_new(recv_window: DurationMilliseconds) -> PlatformResult<Self> {
         if Self::is_valid(recv_window) {
             Ok(Self(recv_window))
         } else {
-            Err(BuildError::bad_value(
+            Err(PlatformError::bad_value(
                 "recv_window",
                 recv_window.to_string(),
                 format!(

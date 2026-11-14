@@ -2,7 +2,7 @@ use crate::{
     shard_id::ShardId,
     writer_lease::{LeaseStore, LeaseWatch},
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_metrics::AggregatorMetrics;
 use platform_time::RetryBackoff;
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
@@ -40,7 +40,7 @@ impl WriterLease {
         shard: ShardId,
         owner_id: &str,
         ttl: Duration,
-    ) -> BuildResult<WriterLease> {
+    ) -> PlatformResult<WriterLease> {
         let mut waiting = false;
         let mut watch: Option<LeaseWatch> = None;
         let mut watch_backoff = RetryBackoff::constant(LEASE_WATCH_ERROR_BACKOFF).without_jitter();

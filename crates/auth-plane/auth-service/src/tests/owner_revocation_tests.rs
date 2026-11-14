@@ -5,7 +5,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use chrono::Utc;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -29,45 +29,45 @@ impl FailingStore {
 
 #[async_trait]
 impl TokenStore for FailingStore {
-    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
+    async fn put(&self, token: &ApiToken) -> PlatformResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> PlatformResult<Option<ApiToken>> {
         self.inner.get(id).await
     }
 
-    async fn delete(&self, id: &str) -> BuildResult<()> {
+    async fn delete(&self, id: &str) -> PlatformResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn ids(&self) -> BuildResult<Vec<String>> {
+    async fn ids(&self) -> PlatformResult<Vec<String>> {
         self.inner.ids().await
     }
 
-    async fn owner_index(&self, owner: &str) -> BuildResult<Option<OwnerIndex>> {
+    async fn owner_index(&self, owner: &str) -> PlatformResult<Option<OwnerIndex>> {
         self.inner.owner_index(owner).await
     }
 
-    async fn put_owner_index(&self, index: &OwnerIndex) -> BuildResult<()> {
+    async fn put_owner_index(&self, index: &OwnerIndex) -> PlatformResult<()> {
         self.inner.put_owner_index(index).await
     }
 
-    async fn owner_indexes(&self) -> BuildResult<Vec<OwnerIndex>> {
+    async fn owner_indexes(&self) -> PlatformResult<Vec<OwnerIndex>> {
         self.inner.owner_indexes().await
     }
 
-    async fn index_owner_token(&self, token: &ApiToken) -> BuildResult<()> {
+    async fn index_owner_token(&self, token: &ApiToken) -> PlatformResult<()> {
         self.inner.index_owner_token(token).await
     }
 
-    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BuildResult<()> {
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> PlatformResult<()> {
         self.inner.remove_owner_index_token(owner, id).await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> PlatformResult<()> {
         if token.id() == self.fail_on_id && self.fail_pending.swap(false, Ordering::SeqCst) {
-            return Err(BuildError::auth_store(
+            return Err(PlatformError::auth_store(
                 "update",
                 token.id(),
                 true,
@@ -77,11 +77,15 @@ impl TokenStore for FailingStore {
         self.inner.update(expected, token).await
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> PlatformResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
+    async fn commit(
+        &self,
+        mutation: TokenMutation,
+        event: TokenAuditEvent,
+    ) -> PlatformResult<bool> {
         match mutation {
             TokenMutation::Create(token) => {
                 self.inner.commit(TokenMutation::Create(token), event).await
@@ -102,15 +106,15 @@ impl TokenStore for FailingStore {
         }
     }
 
-    async fn append_audit(&self, event: TokenAuditEvent) -> BuildResult<()> {
+    async fn append_audit(&self, event: TokenAuditEvent) -> PlatformResult<()> {
         self.inner.append_audit(event).await
     }
 
-    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> PlatformResult<Vec<TokenAuditEvent>> {
         self.inner.pending_audits().await
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> PlatformResult<()> {
         self.inner.acknowledge_audit(event_id).await
     }
 }
@@ -130,9 +134,13 @@ impl RacingStore {
         }
     }
 
-    async fn revoke_concurrently(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
+    async fn revoke_concurrently(
+        &self,
+        expected: &ApiToken,
+        token: &ApiToken,
+    ) -> PlatformResult<()> {
         let Some(mut current) = self.inner.get(token.id()).await? else {
-            return Err(BuildError::unknown_token(token.id()));
+            return Err(PlatformError::unknown_token(token.id()));
         };
         current.metadata.revoke(
             Utc::now(),
@@ -145,62 +153,66 @@ impl RacingStore {
 
 #[async_trait]
 impl TokenStore for RacingStore {
-    async fn put(&self, token: &ApiToken) -> BuildResult<()> {
+    async fn put(&self, token: &ApiToken) -> PlatformResult<()> {
         self.inner.put(token).await
     }
 
-    async fn get(&self, id: &str) -> BuildResult<Option<ApiToken>> {
+    async fn get(&self, id: &str) -> PlatformResult<Option<ApiToken>> {
         self.inner.get(id).await
     }
 
-    async fn delete(&self, id: &str) -> BuildResult<()> {
+    async fn delete(&self, id: &str) -> PlatformResult<()> {
         self.inner.delete(id).await
     }
 
-    async fn ids(&self) -> BuildResult<Vec<String>> {
+    async fn ids(&self) -> PlatformResult<Vec<String>> {
         self.inner.ids().await
     }
 
-    async fn owner_index(&self, owner: &str) -> BuildResult<Option<OwnerIndex>> {
+    async fn owner_index(&self, owner: &str) -> PlatformResult<Option<OwnerIndex>> {
         self.inner.owner_index(owner).await
     }
 
-    async fn put_owner_index(&self, index: &OwnerIndex) -> BuildResult<()> {
+    async fn put_owner_index(&self, index: &OwnerIndex) -> PlatformResult<()> {
         self.inner.put_owner_index(index).await
     }
 
-    async fn owner_indexes(&self) -> BuildResult<Vec<OwnerIndex>> {
+    async fn owner_indexes(&self) -> PlatformResult<Vec<OwnerIndex>> {
         self.inner.owner_indexes().await
     }
 
-    async fn index_owner_token(&self, token: &ApiToken) -> BuildResult<()> {
+    async fn index_owner_token(&self, token: &ApiToken) -> PlatformResult<()> {
         self.inner.index_owner_token(token).await
     }
 
-    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> BuildResult<()> {
+    async fn remove_owner_index_token(&self, owner: &str, id: &str) -> PlatformResult<()> {
         self.inner.remove_owner_index_token(owner, id).await
     }
 
-    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> BuildResult<()> {
+    async fn update(&self, expected: &ApiToken, token: &ApiToken) -> PlatformResult<()> {
         if token.id() == self.race_on_id && self.race_pending.swap(false, Ordering::SeqCst) {
             self.revoke_concurrently(expected, token).await?;
         }
         self.inner.update(expected, token).await
     }
 
-    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
+    async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> PlatformResult<()> {
         self.inner.commit_rotation(transaction).await
     }
 
-    async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
+    async fn pending_rotations(&self) -> PlatformResult<Vec<TokenRotationTransaction>> {
         self.inner.pending_rotations().await
     }
 
-    async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
+    async fn acknowledge_rotation(&self, transaction_id: &str) -> PlatformResult<()> {
         self.inner.acknowledge_rotation(transaction_id).await
     }
 
-    async fn commit(&self, mutation: TokenMutation, event: TokenAuditEvent) -> BuildResult<bool> {
+    async fn commit(
+        &self,
+        mutation: TokenMutation,
+        event: TokenAuditEvent,
+    ) -> PlatformResult<bool> {
         match mutation {
             TokenMutation::Create(token) => {
                 self.inner.commit(TokenMutation::Create(token), event).await
@@ -221,15 +233,15 @@ impl TokenStore for RacingStore {
         }
     }
 
-    async fn append_audit(&self, event: TokenAuditEvent) -> BuildResult<()> {
+    async fn append_audit(&self, event: TokenAuditEvent) -> PlatformResult<()> {
         self.inner.append_audit(event).await
     }
 
-    async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
+    async fn pending_audits(&self) -> PlatformResult<Vec<TokenAuditEvent>> {
         self.inner.pending_audits().await
     }
 
-    async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
+    async fn acknowledge_audit(&self, event_id: &str) -> PlatformResult<()> {
         self.inner.acknowledge_audit(event_id).await
     }
 }
@@ -251,7 +263,7 @@ impl OwnerRevocationFixture {
         service.token(id).await.unwrap().metadata().is_revoked()
     }
 
-    async fn revoke_owner(service: &AuthService) -> BuildResult<Vec<ApiToken>> {
+    async fn revoke_owner(service: &AuthService) -> PlatformResult<Vec<ApiToken>> {
         service
             .revoke_tokens_for_owner(
                 "owner-a",

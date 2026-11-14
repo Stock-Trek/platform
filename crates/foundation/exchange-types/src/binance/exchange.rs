@@ -17,7 +17,7 @@ use crate::{
     signer::Signer,
     urls::Urls,
 };
-use platform_errors::{BuildError, BuildResult, ExchangeError};
+use platform_errors::{ExchangeError, PlatformError, PlatformResult};
 use platform_types::{DurationNanoseconds, UsageCount};
 use std::{collections::HashMap, time::Duration};
 use stock_trek_types::cex::cex_id::CexId;
@@ -58,7 +58,7 @@ impl ETExchange for BinanceExchange {
         map
     }
 
-    fn signer(credentials: &ApiKeyCredentials) -> BuildResult<Signer> {
+    fn signer(credentials: &ApiKeyCredentials) -> PlatformResult<Signer> {
         Self::signer_hmac_sha256(credentials.clone())
     }
 
@@ -68,7 +68,7 @@ impl ETExchange for BinanceExchange {
 }
 
 impl BinanceExchange {
-    pub fn signer_hmac_sha256(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
+    pub fn signer_hmac_sha256(credentials: ApiKeyCredentials) -> PlatformResult<Signer> {
         Signer::try_new(
             credentials,
             EncryptionAlgorithm::HmacSha256,
@@ -76,7 +76,7 @@ impl BinanceExchange {
         )
     }
 
-    pub fn signer_rsa_sha256(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
+    pub fn signer_rsa_sha256(credentials: ApiKeyCredentials) -> PlatformResult<Signer> {
         Signer::try_new(
             credentials,
             EncryptionAlgorithm::RsaSha256,
@@ -84,7 +84,7 @@ impl BinanceExchange {
         )
     }
 
-    pub fn signer_ed25519(credentials: ApiKeyCredentials) -> BuildResult<Signer> {
+    pub fn signer_ed25519(credentials: ApiKeyCredentials) -> PlatformResult<Signer> {
         Signer::try_new(
             credentials,
             EncryptionAlgorithm::Ed25519,
@@ -92,10 +92,10 @@ impl BinanceExchange {
         )
     }
 
-    pub fn success<R>(response: BinanceResponse<R>) -> BuildResult<R> {
+    pub fn success<R>(response: BinanceResponse<R>) -> PlatformResult<R> {
         match response.payload {
             BinanceResponsePayload::Success(payload) => Ok(payload),
-            BinanceResponsePayload::Failure(error) => Err(BuildError::Exchange(
+            BinanceResponsePayload::Failure(error) => Err(PlatformError::Exchange(
                 ExchangeError::BadResponse(error.to_string()),
             )),
         }
@@ -131,7 +131,7 @@ impl ETExchangeKlinesWebsocket for BinanceExchange {
 }
 
 impl ETExchangePortfolio for BinanceExchange {
-    fn portfolio_auth(&self, context: PortfolioAuthContext) -> BuildResult<PortfolioAuth> {
+    fn portfolio_auth(&self, context: PortfolioAuthContext) -> PlatformResult<PortfolioAuth> {
         self.build_portfolio_auth(context)
     }
 }

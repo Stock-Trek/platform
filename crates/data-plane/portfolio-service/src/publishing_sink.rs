@@ -1,6 +1,6 @@
 use crate::{PORTFOLIO_UPDATE_SUBJECT, PortfolioService, PortfolioUpdate};
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_gateway::{
     ConnectorPortfolioUpdate, PortfolioUpdateOutcome, PortfolioUpdateSink,
 };
@@ -44,7 +44,7 @@ impl PortfolioUpdateSink for PublishingPortfolioUpdateSink {
     async fn apply_update(
         &self,
         update: ConnectorPortfolioUpdate,
-    ) -> BuildResult<PortfolioUpdateOutcome> {
+    ) -> PlatformResult<PortfolioUpdateOutcome> {
         let update = PortfolioUpdate::try_from(update)?;
         self.publisher
             .publish(&self.subject, &update.to_bytes()?)

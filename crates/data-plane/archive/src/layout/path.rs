@@ -5,7 +5,7 @@
 
 use crate::layout::hour::{ArchiveHour, DAY_FIELD, HOUR_FIELD, MONTH_FIELD, YEAR_FIELD};
 use crate::{ArchiveKind, ArchivePartition, routing_key::RoutingBucket};
-use platform_errors::{BuildError, BuildResult, DataError};
+use platform_errors::{DataError, PlatformError, PlatformResult};
 use platform_types::TimestampMilliseconds;
 
 /// The single place where archive object keys are built and parsed.
@@ -35,7 +35,7 @@ impl ArchivePath {
         bucket_start: TimestampMilliseconds,
         routing_bucket: RoutingBucket,
         file_name: impl AsRef<str>,
-    ) -> BuildResult<String> {
+    ) -> PlatformResult<String> {
         let hour = Self::hour(bucket_start, "build archive object key")?;
         Ok(Self::join(
             prefix,
@@ -58,7 +58,7 @@ impl ArchivePath {
         bucket_start: TimestampMilliseconds,
         routing_bucket: RoutingBucket,
         file_name: impl AsRef<str>,
-    ) -> BuildResult<String> {
+    ) -> PlatformResult<String> {
         let hour = Self::hour(bucket_start, "build compacted object key")?;
         Ok(Self::join(
             prefix,
@@ -100,10 +100,10 @@ impl ArchivePath {
     /// inside one. Paths must contain a known archive kind and a complete set
     /// of `year=`, `month=`, `day=`, and `hour=` fields after the kind/partition
     /// prefix. The returned prefix always ends in a slash.
-    pub fn compaction_prefix(target: &str) -> BuildResult<String> {
+    pub fn compaction_prefix(target: &str) -> PlatformResult<String> {
         let target = target.trim();
         if target.is_empty() {
-            return Err(BuildError::Data(DataError::InvalidJob {
+            return Err(PlatformError::Data(DataError::InvalidJob {
                 message: "compact target cannot be empty".to_string(),
             }));
         }
@@ -117,7 +117,7 @@ impl ArchivePath {
             .iter()
             .any(|segment| matches!(*segment, "." | ".."))
         {
-            return Err(BuildError::Data(DataError::InvalidJob {
+            return Err(PlatformError::Data(DataError::InvalidJob {
                 message: format!("compact target {target} contains an invalid path segment"),
             }));
         }
@@ -135,14 +135,14 @@ impl ArchivePath {
                 index == 0 || segments.len() < index + 4 || !Self::is_hour_path(&segments[index..])
             })
         {
-            return Err(BuildError::Data(DataError::InvalidJob {
+            return Err(PlatformError::Data(DataError::InvalidJob {
                 message: format!(
                     "compact target {target} must end with an hourly archive partition"
                 ),
             }));
         }
         if Self::kind(&segments[..segments.len() - 4].join("/")).is_none() {
-            return Err(BuildError::Data(DataError::InvalidJob {
+            return Err(PlatformError::Data(DataError::InvalidJob {
                 message: format!("compact target {target} must include an archive kind"),
             }));
         }
@@ -194,8 +194,8 @@ impl ArchivePath {
     fn hour(
         bucket_start: TimestampMilliseconds,
         operation: &'static str,
-    ) -> BuildResult<ArchiveHour> {
-        ArchiveHour::from_timestamp(bucket_start).ok_or(BuildError::Data(
+    ) -> PlatformResult<ArchiveHour> {
+        ArchiveHour::from_timestamp(bucket_start).ok_or(PlatformError::Data(
             DataError::DateTimeOutOfRange { operation },
         ))
     }

@@ -1,7 +1,7 @@
 use crate::installation::types::{CommitsParams, GitHubCommit};
 use octocrab::{Octocrab, models::InstallationId};
 use platform_config::DirectoryLimits;
-use platform_errors::{BuildError, BuildResult, GitHubError, TimeoutError};
+use platform_errors::{GitHubError, PlatformError, PlatformResult, TimeoutError};
 use platform_git::{GitFile, GitHost};
 use platform_time::{Deadline, Timeouts};
 use std::sync::Arc;
@@ -25,33 +25,37 @@ impl GitHost<u64> for GitHubInstallation {
         &self.host
     }
 
-    fn parse_repo_id(&self, repo_id: &str) -> BuildResult<u64> {
+    fn parse_repo_id(&self, repo_id: &str) -> PlatformResult<u64> {
         repo_id.parse().map_err(|error| {
-            BuildError::GitHub(GitHubError::InvalidRepositoryId {
+            PlatformError::GitHub(GitHubError::InvalidRepositoryId {
                 repo_id: repo_id.to_owned(),
                 source: error,
             })
         })
     }
 
-    async fn repo_ids(&self, deadline: Deadline) -> BuildResult<Vec<u64>> {
+    async fn repo_ids(&self, deadline: Deadline) -> PlatformResult<Vec<u64>> {
         let timeout = self.timeouts.operation_timeout(deadline)?;
         let repos = tokio::time::timeout(timeout, self.repos())
             .await
             .map_err(|_| {
-                BuildError::Timeout(TimeoutError::Operation {
+                PlatformError::Timeout(TimeoutError::Operation {
                     operation: "GitHub list repositories",
                 })
             })??;
         Ok(repos.into_iter().map(|repo| repo.id).collect())
     }
 
-    async fn repo_default_branch(&self, repo_id: u64, deadline: Deadline) -> BuildResult<String> {
+    async fn repo_default_branch(
+        &self,
+        repo_id: u64,
+        deadline: Deadline,
+    ) -> PlatformResult<String> {
         let timeout = self.timeouts.operation_timeout(deadline)?;
         let repo = tokio::time::timeout(timeout, self.repo(repo_id))
             .await
             .map_err(|_| {
-                BuildError::Timeout(TimeoutError::Operation {
+                PlatformError::Timeout(TimeoutError::Operation {
                     operation: "GitHub get repository",
                 })
             })?;
@@ -63,7 +67,7 @@ impl GitHost<u64> for GitHubInstallation {
         repo_id: u64,
         ref_name: &str,
         deadline: Deadline,
-    ) -> BuildResult<String> {
+    ) -> PlatformResult<String> {
         let timeout = self.timeouts.operation_timeout(deadline)?;
         let params = CommitsParams {
             sha: ref_name,
@@ -78,12 +82,12 @@ impl GitHost<u64> for GitHubInstallation {
         )
         .await
         .map_err(|_| {
-            BuildError::Timeout(TimeoutError::Operation {
+            PlatformError::Timeout(TimeoutError::Operation {
                 operation: "GitHub get commit",
             })
         })?
         .map_err(|error| {
-            BuildError::GitHub(GitHubError::GetCommit {
+            PlatformError::GitHub(GitHubError::GetCommit {
                 repo_id,
                 ref_name: ref_name.to_owned(),
                 source: error,
@@ -94,7 +98,7 @@ impl GitHost<u64> for GitHubInstallation {
             .next()
             .map(|commit| commit.sha)
             .ok_or_else(|| {
-                BuildError::GitHub(GitHubError::CommitNotFound {
+                PlatformError::GitHub(GitHubError::CommitNotFound {
                     repo_id,
                     ref_name: ref_name.to_owned(),
                 })
@@ -107,7 +111,7 @@ impl GitHost<u64> for GitHubInstallation {
         ref_name: &str,
         directory: &str,
         deadline: Deadline,
-    ) -> BuildResult<Vec<GitFile>> {
+    ) -> PlatformResult<Vec<GitFile>> {
         let timeout = self.timeouts.operation_timeout(deadline)?;
         tokio::time::timeout(
             timeout,
@@ -115,7 +119,7 @@ impl GitHost<u64> for GitHubInstallation {
         )
         .await
         .map_err(|_| {
-            BuildError::Timeout(TimeoutError::Operation {
+            PlatformError::Timeout(TimeoutError::Operation {
                 operation: "GitHub get repository contents",
             })
         })?
@@ -128,7 +132,7 @@ impl GitHubInstallation {
         host: &str,
         installation_id: u64,
         timeouts: Timeouts,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         Self::with_limits(
             app,
             host,
@@ -144,11 +148,11 @@ impl GitHubInstallation {
         installation_id: u64,
         timeouts: Timeouts,
         directory_limits: DirectoryLimits,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let client = app
             .installation(InstallationId::from(installation_id))
             .map_err(|error| {
-                BuildError::GitHub(GitHubError::Installation {
+                PlatformError::GitHub(GitHubError::Installation {
                     installation_id,
                     source: error,
                 })

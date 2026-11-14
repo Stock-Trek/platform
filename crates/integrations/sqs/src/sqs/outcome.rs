@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, BuildResult, SqsBatchFailure, SqsError};
+use platform_errors::{PlatformError, PlatformResult, SqsBatchFailure, SqsError};
 use platform_messages::SqsMessage;
 use platform_metrics::SqsMetrics;
 use serde::Serialize;
@@ -6,12 +6,12 @@ use serde::Serialize;
 use crate::sqs::Sqs;
 
 impl Sqs {
-    pub fn serialize<T: Serialize>(messages: &[T]) -> BuildResult<Vec<String>> {
+    pub fn serialize<T: Serialize>(messages: &[T]) -> PlatformResult<Vec<String>> {
         messages
             .iter()
             .map(serde_json::to_string)
             .collect::<Result<Vec<_>, _>>()
-            .map_err(BuildError::from)
+            .map_err(PlatformError::from)
             .inspect_err(|_| SqsMetrics::record_messages_failed(messages.len()))
     }
 
@@ -36,7 +36,7 @@ impl Sqs {
         sources.and_then(|sources| sources.get(index).cloned())
     }
 
-    pub fn finish(message_count: usize, failures: Vec<SqsBatchFailure>) -> BuildResult<()> {
+    pub fn finish(message_count: usize, failures: Vec<SqsBatchFailure>) -> PlatformResult<()> {
         if failures.is_empty() {
             SqsMetrics::record_messages_sent(message_count);
             Ok(())
@@ -45,7 +45,7 @@ impl Sqs {
             let sent = message_count - unsent;
             SqsMetrics::record_messages_sent(sent);
             SqsMetrics::record_messages_failed(unsent);
-            Err(BuildError::Sqs(SqsError::PartialBatch {
+            Err(PlatformError::Sqs(SqsError::PartialBatch {
                 sent,
                 unsent,
                 failures,

@@ -1,7 +1,7 @@
 use crate::tests::support_tests::TestFixture;
 use crate::{ApiToken, AuthService, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use serde_json::json;
 
 struct ScopePersistenceFixture;
@@ -41,7 +41,7 @@ fn rejects_empty_scopes_when_restored() {
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::InvalidField {
+        PlatformError::Auth(AuthError::InvalidField {
             field: "scopes",
             ..
         })
@@ -57,7 +57,7 @@ fn invalid_scopes_are_rejected_when_restored() {
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::InvalidField {
+        PlatformError::Auth(AuthError::InvalidField {
             field: "scopes",
             ..
         })
@@ -81,7 +81,7 @@ async fn authorization_rejects_tokens_without_the_required_scope() {
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::MissingScope {
+        PlatformError::Auth(AuthError::MissingScope {
             ref token_id,
             ref scope,
         }) if token_id == token.id() && scope == "orders:write"

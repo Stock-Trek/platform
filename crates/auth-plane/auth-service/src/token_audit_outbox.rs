@@ -1,6 +1,6 @@
 use crate::TokenAuditEvent;
 use chrono::Utc;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use rand::{Rng, distributions::Alphanumeric};
 use serde_json::{Map, Value};
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -32,7 +32,7 @@ impl TokenAuditOutbox {
         )
     }
 
-    pub fn standalone_document(event: &TokenAuditEvent) -> BuildResult<Value> {
+    pub fn standalone_document(event: &TokenAuditEvent) -> PlatformResult<Value> {
         let mut document = Map::new();
         document.insert(AUDIT_EVENT_FIELD.to_string(), Value::Bool(true));
         document.insert(
@@ -44,7 +44,7 @@ impl TokenAuditOutbox {
         Ok(Value::Object(document))
     }
 
-    pub fn standalone_event(value: &Value) -> BuildResult<Option<TokenAuditEvent>> {
+    pub fn standalone_event(value: &Value) -> PlatformResult<Option<TokenAuditEvent>> {
         if !Self::is_standalone_document(value) {
             return Ok(None);
         }
@@ -71,9 +71,9 @@ impl TokenAuditOutbox {
         format!("{AUDIT_EVENT_PREFIX}{event_id}")
     }
 
-    pub fn require_event_id(event: &TokenAuditEvent) -> BuildResult<&str> {
+    pub fn require_event_id(event: &TokenAuditEvent) -> PlatformResult<&str> {
         event.event_id().ok_or_else(|| {
-            BuildError::auth_store(
+            PlatformError::auth_store(
                 "relay",
                 event.token_id.as_deref().unwrap_or("audit"),
                 false,
@@ -82,7 +82,7 @@ impl TokenAuditOutbox {
         })
     }
 
-    fn malformed(detail: String) -> BuildError {
-        BuildError::auth_store("read", "audit-outbox", false, detail)
+    fn malformed(detail: String) -> PlatformError {
+        PlatformError::auth_store("read", "audit-outbox", false, detail)
     }
 }

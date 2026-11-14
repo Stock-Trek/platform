@@ -8,7 +8,7 @@ use crate::{
     websocket_listener::WebsocketListener,
 };
 use iris::{Config as IrisConfig, DisconnectedBehavior, ServerCloseBehavior};
-use platform_errors::{BuildError, BuildResult, SendFailure};
+use platform_errors::{PlatformError, PlatformResult, SendFailure};
 use platform_exchange_types::{
     exchange::ETExchange,
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
@@ -39,17 +39,17 @@ impl Connector<(), ()> {
         url: String,
         exchange: Exchange,
         signer: Signer,
-        client_creator: impl FnOnce(String) -> BuildResult<Client>,
+        client_creator: impl FnOnce(String) -> PlatformResult<Client>,
         request_timeout: Duration,
         max_retries: u8,
-    ) -> BuildResult<Connector<Exchange, Client>>
+    ) -> PlatformResult<Connector<Exchange, Client>>
     where
         Exchange: ETExchange + ETExchangeServerTimeHttp,
         Client: HttpClient + Send + Sync,
     {
         Protocol::Http
             .validate_url("url", &url)
-            .map_err(BuildError::external)?;
+            .map_err(PlatformError::external)?;
         let client = client_creator(url)?;
         let rate_limiters = Self::rate_limiters(exchange.default_capacity())?;
         Ok(Connector {
@@ -69,7 +69,7 @@ impl Connector<(), ()> {
         signer: Signer,
         request_timeout: Duration,
         max_retries: u8,
-    ) -> BuildResult<Connector<Exchange, ReqwestHttpClient>>
+    ) -> PlatformResult<Connector<Exchange, ReqwestHttpClient>>
     where
         Exchange: ETExchange + ETExchangeServerTimeHttp,
     {
@@ -88,17 +88,17 @@ impl Connector<(), ()> {
         url: String,
         exchange: Exchange,
         signer: Signer,
-        client_creator: impl FnOnce(String, Arc<WebsocketListener>) -> BuildResult<Client>,
+        client_creator: impl FnOnce(String, Arc<WebsocketListener>) -> PlatformResult<Client>,
         request_timeout: Duration,
         max_retries: u8,
-    ) -> BuildResult<Connector<Exchange, Client>>
+    ) -> PlatformResult<Connector<Exchange, Client>>
     where
         Exchange: ETExchange + ETExchangeServerTimeWebsocket,
         Client: WebsocketClient,
     {
         Protocol::Websocket
             .validate_url("url", &url)
-            .map_err(BuildError::external)?;
+            .map_err(PlatformError::external)?;
         let websocket_listener = Arc::new(WebsocketListener::new());
         let client = client_creator(url, websocket_listener.clone())?;
         let rate_limiters = Self::rate_limiters(exchange.default_capacity())?;
@@ -121,7 +121,7 @@ impl Connector<(), ()> {
         mut iris_config: IrisConfig,
         request_timeout: Duration,
         max_retries: u8,
-    ) -> BuildResult<Connector<Exchange, IrisWebsocketClient>>
+    ) -> PlatformResult<Connector<Exchange, IrisWebsocketClient>>
     where
         Exchange: ETExchange + ETExchangeServerTimeWebsocket,
     {
@@ -146,7 +146,7 @@ impl Connector<(), ()> {
     }
     pub fn rate_limiters(
         default_capacity: HashMap<RateLimit, UsageCount>,
-    ) -> BuildResult<RateLimiters> {
+    ) -> PlatformResult<RateLimiters> {
         let mut limiter_states = HashMap::new();
         for (rate_limit, capacity) in default_capacity {
             let RateLimit {
@@ -177,19 +177,19 @@ where
     {
         AutoResyncConnector::new(Arc::new(self))
     }
-    pub fn duration_since_last_sync(&self) -> BuildResult<Option<Duration>> {
+    pub fn duration_since_last_sync(&self) -> PlatformResult<Option<Duration>> {
         self.clock.duration_since_last_sync()
     }
-    pub fn remaining_rate_limit_capacity(&self) -> BuildResult<HashMap<RateLimit, UsageCount>> {
+    pub fn remaining_rate_limit_capacity(&self) -> PlatformResult<HashMap<RateLimit, UsageCount>> {
         self.rate_limiters.remaining_capacity()
     }
-    pub fn server_time_estimate(&self) -> BuildResult<TimestampMilliseconds> {
+    pub fn server_time_estimate(&self) -> PlatformResult<TimestampMilliseconds> {
         self.clock.server_time_estimate()
     }
     pub fn validate_rate_limits<Request>(
         &self,
         request: &Request,
-    ) -> BuildResult<Vec<(RateLimitRestriction, UsageCount)>>
+    ) -> PlatformResult<Vec<(RateLimitRestriction, UsageCount)>>
     where
         Request: ETRequest,
     {
@@ -204,15 +204,15 @@ where
     }
     pub fn refund_if_not_sent(
         &self,
-        error: &BuildError,
+        error: &PlatformError,
         costs: &mut Vec<(RateLimitRestriction, UsageCount)>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         if error.send_failure().is_some_and(SendFailure::is_not_sent) {
             self.refund(std::mem::take(costs))?;
         }
         Ok(())
     }
-    pub fn refund(&self, costs: Vec<(RateLimitRestriction, UsageCount)>) -> BuildResult<()> {
+    pub fn refund(&self, costs: Vec<(RateLimitRestriction, UsageCount)>) -> PlatformResult<()> {
         for (restriction, cost) in costs {
             self.rate_limiters.refund(restriction, cost)?;
         }
@@ -220,15 +220,15 @@ where
     }
     pub fn on_send_failure<T>(
         &self,
-        error: BuildError,
+        error: PlatformError,
         costs: Vec<(RateLimitRestriction, UsageCount)>,
-    ) -> BuildResult<T> {
+    ) -> PlatformResult<T> {
         if error.send_failure().is_some_and(SendFailure::is_not_sent) {
             self.refund(costs)?;
         }
         Err(error)
     }
-    pub fn set_rate_limits(&self, response: &impl ETResponse) -> BuildResult<()> {
+    pub fn set_rate_limits(&self, response: &impl ETResponse) -> PlatformResult<()> {
         if let Some(usage) = response.rate_limit_usage() {
             self.rate_limiters.set_usage(usage)?;
         }

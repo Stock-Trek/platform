@@ -12,7 +12,7 @@
 //! of the uploaded file.
 
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use platform_errors::{BuildError, BuildResult, ConfigError, StorageError};
+use platform_errors::{ConfigError, PlatformError, PlatformResult, StorageError};
 use platform_messages::{BuildRequestSignedPost, FILENAME_VARIABLE, KEY_FIELD};
 use std::{
     collections::BTreeMap,
@@ -41,7 +41,7 @@ impl SignedPost {
     pub fn from_build_request(
         payload: &BuildRequestSignedPost,
         timeout: Duration,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let signed_post = Self::new(payload.url.clone(), payload.fields.clone(), timeout)?;
         Ok(match payload.max_artifact_size_bytes {
             Some(max_bytes) => signed_post.with_max_artifact_size(max_bytes),
@@ -53,14 +53,14 @@ impl SignedPost {
         url: String,
         fields: BTreeMap<String, String>,
         timeout: Duration,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let key = fields.get(KEY_FIELD).ok_or_else(|| {
-            BuildError::Config(ConfigError::Build(format!(
+            PlatformError::Config(ConfigError::Build(format!(
                 "signed_post.fields must include a {KEY_FIELD} field containing {FILENAME_VARIABLE}"
             )))
         })?;
         if !key.contains(FILENAME_VARIABLE) {
-            return Err(BuildError::Config(ConfigError::Build(format!(
+            return Err(PlatformError::Config(ConfigError::Build(format!(
                 "signed_post.fields.{KEY_FIELD} must contain {FILENAME_VARIABLE} so artifacts do not overwrite each other"
             ))));
         }
@@ -69,7 +69,7 @@ impl SignedPost {
             .timeout(timeout)
             .build()
             .map_err(|source| {
-                BuildError::Config(ConfigError::Build(format!(
+                PlatformError::Config(ConfigError::Build(format!(
                     "failed to build HTTP client: {source}"
                 )))
             })?;
@@ -109,15 +109,15 @@ impl SignedPost {
     }
 
     /// Upload `path` using the configured pre-signed POST.
-    pub async fn upload(&self, path: &Path) -> BuildResult<()> {
+    pub async fn upload(&self, path: &Path) -> PlatformResult<()> {
         let file_name = Self::file_name(path)?;
         self.upload_named(path, Path::new(&file_name)).await
     }
 
     /// Upload `path` using `name` as the S3 object name.
-    pub async fn upload_named(&self, path: &Path, name: &Path) -> BuildResult<()> {
+    pub async fn upload_named(&self, path: &Path, name: &Path) -> PlatformResult<()> {
         let metadata = tokio::fs::metadata(path).await.map_err(|source| {
-            BuildError::io("read artifact", path.display().to_string(), source)
+            PlatformError::io("read artifact", path.display().to_string(), source)
         })?;
         let size = metadata.len();
         self.check_artifact_size(path, size)?;
@@ -129,11 +129,17 @@ impl SignedPost {
         // sent.
         let file = reqwest::multipart::Part::file(path)
             .await
-            .map_err(|source| BuildError::io("read artifact", path.display().to_string(), source))?
+            .map_err(|source| {
+                PlatformError::io("read artifact", path.display().to_string(), source)
+            })?
             .file_name(file_name.clone())
             .mime_str("application/octet-stream")
             .map_err(|source| {
-                BuildError::http_request("build upload request", path.display().to_string(), source)
+                PlatformError::http_request(
+                    "build upload request",
+                    path.display().to_string(),
+                    source,
+                )
             })?;
 
         // S3 requires the file to be the last field in the multipart body.
@@ -153,13 +159,13 @@ impl SignedPost {
             .send()
             .await
             .map_err(|source| {
-                BuildError::http_request("upload artifact", path.display().to_string(), source)
+                PlatformError::http_request("upload artifact", path.display().to_string(), source)
             })?;
 
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.map_err(|source| {
-                BuildError::http_request(
+                PlatformError::http_request(
                     "read upload failure response",
                     path.display().to_string(),
                     source,
@@ -168,13 +174,13 @@ impl SignedPost {
             if let Some(max_bytes) = self.max_artifact_size_bytes
                 && Self::is_entity_too_large(&body)
             {
-                return Err(BuildError::Storage(StorageError::ArtifactTooLarge {
+                return Err(PlatformError::Storage(StorageError::ArtifactTooLarge {
                     artifact: path.display().to_string(),
                     size: usize::try_from(size).unwrap_or(usize::MAX),
                     max_bytes: max_bytes.get(),
                 }));
             }
-            return Err(BuildError::http_rejected(
+            return Err(PlatformError::http_rejected(
                 "upload artifact",
                 path.display().to_string(),
                 status.as_u16(),
@@ -186,11 +192,11 @@ impl SignedPost {
         Ok(())
     }
 
-    fn check_artifact_size(&self, path: &Path, size: u64) -> BuildResult<()> {
+    fn check_artifact_size(&self, path: &Path, size: u64) -> PlatformResult<()> {
         if let Some(max_bytes) = self.max_artifact_size_bytes
             && size > max_bytes.get()
         {
-            return Err(BuildError::Storage(StorageError::ArtifactTooLarge {
+            return Err(PlatformError::Storage(StorageError::ArtifactTooLarge {
                 artifact: path.display().to_string(),
                 size: usize::try_from(size).unwrap_or(usize::MAX),
                 max_bytes: max_bytes.get(),
@@ -203,31 +209,31 @@ impl SignedPost {
         body.contains("EntityTooLarge") || body.contains("content-length-range")
     }
 
-    fn file_name(path: &Path) -> BuildResult<String> {
+    fn file_name(path: &Path) -> PlatformResult<String> {
         path.file_name()
             .and_then(|name| name.to_str())
             .map(str::to_string)
             .ok_or_else(|| {
-                BuildError::Config(ConfigError::Build(format!(
+                PlatformError::Config(ConfigError::Build(format!(
                     "artifact path {path:?} has no file name"
                 )))
             })
     }
 
-    fn upload_name(path: &Path) -> BuildResult<String> {
+    fn upload_name(path: &Path) -> PlatformResult<String> {
         let mut parts = Vec::new();
         for component in path.components() {
             match component {
                 Component::Normal(part) => {
                     let part = part.to_str().ok_or_else(|| {
-                        BuildError::Config(ConfigError::Build(format!(
+                        PlatformError::Config(ConfigError::Build(format!(
                             "artifact name {path:?} is not valid UTF-8"
                         )))
                     })?;
                     parts.push(part);
                 }
                 _ => {
-                    return Err(BuildError::Config(ConfigError::Build(format!(
+                    return Err(PlatformError::Config(ConfigError::Build(format!(
                         "artifact name {path:?} must be relative"
                     ))));
                 }
@@ -235,7 +241,7 @@ impl SignedPost {
         }
 
         if parts.is_empty() {
-            return Err(BuildError::Config(ConfigError::Build(format!(
+            return Err(PlatformError::Config(ConfigError::Build(format!(
                 "artifact name {path:?} is empty"
             ))));
         }

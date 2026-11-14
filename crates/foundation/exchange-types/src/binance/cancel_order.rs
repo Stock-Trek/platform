@@ -10,7 +10,7 @@ use crate::{
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use serde::Serialize;
@@ -89,7 +89,7 @@ impl ETHttpRequest for BinanceCancelOrderRequest {
     fn http_method(&self) -> HttpMethod {
         HttpMethod::DELETE
     }
-    fn try_into_http(self, signer: &Signer) -> BuildResult<HttpRequest> {
+    fn try_into_http(self, signer: &Signer) -> PlatformResult<HttpRequest> {
         BinanceRequestFactory::try_into_http(self, signer)
     }
     fn verification_request_http(&self) -> Option<Self::VerificationRequest> {
@@ -111,7 +111,7 @@ impl ETWebsocketRequest for BinanceCancelOrderRequest {
         self,
         signer: &Signer,
         id: ETWebsocketId,
-    ) -> BuildResult<(String, WebsocketResponseMatcher)> {
+    ) -> PlatformResult<(String, WebsocketResponseMatcher)> {
         BinanceRequestFactory::try_into_websocket(self, signer, id)
     }
     fn verification_request_websocket(&self) -> Option<Self::VerificationRequest> {

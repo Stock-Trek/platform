@@ -1,5 +1,5 @@
 use crate::sequence_tracker::{SequenceObservation, SequenceStore, SequenceTracker};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::{
     EnvelopeCodec, GapMarker, MarketEvent, MarketEventSubject, ParsedMessage,
 };
@@ -49,7 +49,7 @@ impl<P: EventPublisher> Ingester<P> {
         }
     }
 
-    pub async fn ingest(&mut self, message: ParsedMessage) -> BuildResult<()> {
+    pub async fn ingest(&mut self, message: ParsedMessage) -> PlatformResult<()> {
         let ParsedMessage {
             stream,
             sequence,
@@ -144,7 +144,7 @@ impl<P: EventPublisher> Ingester<P> {
         event: &MarketEvent,
         first_sequence: u64,
         sequence: u64,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let result = self.publisher.publish(subject, &event.encode()?).await;
         let tracker = self.sequence_tracker(&event.stream).await?;
         match &result {
@@ -159,7 +159,7 @@ impl<P: EventPublisher> Ingester<P> {
         result
     }
 
-    async fn sequence_tracker(&mut self, stream: &str) -> BuildResult<&mut SequenceTracker> {
+    async fn sequence_tracker(&mut self, stream: &str) -> PlatformResult<&mut SequenceTracker> {
         if !self.loaded_streams.contains(stream) {
             let key = self.sequence_key(stream);
             let tracker = self.store.load(&key).await?.unwrap_or_default();
@@ -167,7 +167,7 @@ impl<P: EventPublisher> Ingester<P> {
             self.loaded_streams.insert(stream.to_string());
         }
         self.sequences.get_mut(stream).ok_or_else(|| {
-            platform_errors::BuildError::bad_value(
+            platform_errors::PlatformError::bad_value(
                 "sequence tracker",
                 stream,
                 "sequence tracker is not loaded",
@@ -175,7 +175,7 @@ impl<P: EventPublisher> Ingester<P> {
         })
     }
 
-    async fn persist_sequence(&self, stream: &str) -> BuildResult<()> {
+    async fn persist_sequence(&self, stream: &str) -> PlatformResult<()> {
         let Some(tracker) = self.sequences.get(stream) else {
             return Ok(());
         };

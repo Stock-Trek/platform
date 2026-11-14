@@ -1,11 +1,11 @@
 use crate::ApiToken;
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 impl ApiToken {
-    pub fn validate_temporal(&self) -> BuildResult<()> {
+    pub fn validate_temporal(&self) -> PlatformResult<()> {
         if self.created_at >= self.metadata.expires_at {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "expires_at",
                 "must be after created_at",
             ));
@@ -31,9 +31,9 @@ impl ApiToken {
         field: &'static str,
         timestamp: Option<DateTime<Utc>>,
         created_at: DateTime<Utc>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         if timestamp.is_some_and(|timestamp| timestamp < created_at) {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 field,
                 "must not be before created_at",
             ));

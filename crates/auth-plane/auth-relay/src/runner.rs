@@ -1,5 +1,5 @@
 use crate::{config::AuthRelayConfig, relay::AuthRelay};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use tracing::info;
 
 pub struct AuthRelayRunner {
@@ -15,7 +15,7 @@ impl AuthRelayRunner {
         }
     }
 
-    pub async fn run(self) -> BuildResult<()> {
+    pub async fn run(self) -> PlatformResult<()> {
         info!(
             audit_queue_url = %self.audit_queue_url,
             "auth relay drain started"

@@ -1,5 +1,5 @@
 use crate::SignedOrderSubmission;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_types::UrlScheme;
 use std::time::Duration;
 
@@ -13,11 +13,11 @@ pub struct OrderRequestDelivery {
 }
 
 impl OrderRequestDelivery {
-    pub fn new(url: &str) -> BuildResult<Self> {
+    pub fn new(url: &str) -> PlatformResult<Self> {
         let url = reqwest::Url::parse(url)
-            .map_err(|error| BuildError::config_invalid_source("order_request_url", error))?;
+            .map_err(|error| PlatformError::config_invalid_source("order_request_url", error))?;
         if !UrlScheme::from_url(&url).is_some_and(UrlScheme::is_http) {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "order_request_url",
                 "must use the http or https scheme",
             ));
@@ -27,11 +27,11 @@ impl OrderRequestDelivery {
             .read_timeout(READ_TIMEOUT)
             .timeout(REQUEST_TIMEOUT)
             .build()
-            .map_err(BuildError::external)?;
+            .map_err(PlatformError::external)?;
         Ok(Self { url, client })
     }
 
-    pub async fn deliver(&self, submission: &SignedOrderSubmission) -> BuildResult<()> {
+    pub async fn deliver(&self, submission: &SignedOrderSubmission) -> PlatformResult<()> {
         let response = self
             .client
             .post(self.url.clone())
@@ -39,12 +39,16 @@ impl OrderRequestDelivery {
             .send()
             .await
             .map_err(|error| {
-                BuildError::http_request("deliver signed order request", self.url.as_str(), error)
+                PlatformError::http_request(
+                    "deliver signed order request",
+                    self.url.as_str(),
+                    error,
+                )
             })?;
         let status = response.status();
         if !status.is_success() {
             let body = response.text().await.unwrap_or_default();
-            return Err(BuildError::http_rejected(
+            return Err(PlatformError::http_rejected(
                 "deliver signed order request",
                 self.url.as_str(),
                 status.as_u16(),

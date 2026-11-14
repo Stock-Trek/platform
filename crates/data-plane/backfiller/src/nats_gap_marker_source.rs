@@ -1,6 +1,6 @@
 use crate::config::BackfillerConfig;
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::{EnvelopeCodec, GapMarker, MarketEventSubject};
 use platform_metrics::MarketDataMetrics;
 use platform_metrics::{DECODE_KIND_GAP_MARKER, STAGE_BACKFILLER};
@@ -15,10 +15,10 @@ pub trait GapMarkerSource: Send {
     /// Returns `None` when the source has reached its end. Sources that wait
     /// indefinitely for new gaps must keep waiting through idle periods instead
     /// of reporting `None`.
-    async fn next_gap(&mut self) -> BuildResult<Option<GapMarker>>;
+    async fn next_gap(&mut self) -> PlatformResult<Option<GapMarker>>;
 
     /// Acknowledges the gap returned by the previous call to [`Self::next_gap`].
-    async fn ack(&mut self, _gap: &GapMarker) -> BuildResult<()> {
+    async fn ack(&mut self, _gap: &GapMarker) -> PlatformResult<()> {
         Ok(())
     }
 }
@@ -33,7 +33,7 @@ pub struct NatsGapMarkerSource {
 }
 
 impl NatsGapMarkerSource {
-    pub async fn connect(config: &BackfillerConfig) -> BuildResult<Self> {
+    pub async fn connect(config: &BackfillerConfig) -> PlatformResult<Self> {
         let subject =
             MarketEventSubject::new(&config.gap_subject_prefix, config.exchange).gap_wildcard();
         let durable = format!("{DURABLE_NAME}-{}", config.exchange).to_lowercase();
@@ -54,7 +54,7 @@ impl NatsGapMarkerSource {
 
 #[async_trait]
 impl GapMarkerSource for NatsGapMarkerSource {
-    async fn next_gap(&mut self) -> BuildResult<Option<GapMarker>> {
+    async fn next_gap(&mut self) -> PlatformResult<Option<GapMarker>> {
         loop {
             // An expired fetch window means the gap marker stream is idle, not
             // that it has ended. Keep polling until a marker arrives or the
@@ -79,7 +79,7 @@ impl GapMarkerSource for NatsGapMarkerSource {
         }
     }
 
-    async fn ack(&mut self, _gap: &GapMarker) -> BuildResult<()> {
+    async fn ack(&mut self, _gap: &GapMarker) -> PlatformResult<()> {
         let Some(message) = self.in_flight.take() else {
             return Ok(());
         };

@@ -1,5 +1,5 @@
 use crate::{VaultTokenStoreConfig, vault_error::VaultError};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use reqwest::{Method, Url};
 use secrecy::ExposeSecret;
 use serde_json::Value;
@@ -15,16 +15,16 @@ pub struct VaultClient {
 }
 
 impl VaultClient {
-    pub fn new(config: VaultTokenStoreConfig) -> BuildResult<Self> {
+    pub fn new(config: VaultTokenStoreConfig) -> PlatformResult<Self> {
         let client = reqwest::Client::builder()
             .timeout(config.timeout())
             .redirect(reqwest::redirect::Policy::none())
             .build()
-            .map_err(|e| BuildError::auth_store("client build", config.address(), false, e))?;
+            .map_err(|e| PlatformError::auth_store("client build", config.address(), false, e))?;
         Ok(Self { client, config })
     }
 
-    pub fn url_for_path(&self, area: &str, path: &str) -> BuildResult<Url> {
+    pub fn url_for_path(&self, area: &str, path: &str) -> PlatformResult<Url> {
         let mut segments = vec![area];
         segments.extend(path.split('/').filter(|segment| !segment.is_empty()));
         self.config.url(&segments)
@@ -41,7 +41,7 @@ impl VaultClient {
         operation: &'static str,
         target: &str,
         request: reqwest::RequestBuilder,
-    ) -> BuildResult<reqwest::Response> {
+    ) -> PlatformResult<reqwest::Response> {
         request
             .send()
             .await
@@ -53,7 +53,7 @@ impl VaultClient {
         operation: &'static str,
         target: &str,
         response: reqwest::Response,
-    ) -> BuildResult<reqwest::Response> {
+    ) -> PlatformResult<reqwest::Response> {
         let status = response.status();
         if status.is_success() {
             return Ok(response);
@@ -73,10 +73,10 @@ impl VaultClient {
         operation: &'static str,
         target: &str,
         response: reqwest::Response,
-    ) -> BuildResult<Value> {
+    ) -> PlatformResult<Value> {
         response
             .json::<Value>()
             .await
-            .map_err(|e| BuildError::auth_store(operation, target, false, e))
+            .map_err(|e| PlatformError::auth_store(operation, target, false, e))
     }
 }

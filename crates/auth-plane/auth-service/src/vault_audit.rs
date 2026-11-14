@@ -3,17 +3,17 @@ use crate::{
     token_audit_outbox::{AUDIT_EVENT_PREFIX, TokenAuditOutbox},
     vault_client::VaultClient,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 impl VaultClient {
-    pub async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
+    pub async fn pending_audits(&self) -> PlatformResult<Vec<TokenAuditEvent>> {
         let mut events = Vec::new();
         for key in self.keys_with_prefix(AUDIT_EVENT_PREFIX).await? {
             let Some((data, _)) = self.get_value_entry(&key).await? else {
                 continue;
             };
             let event = TokenAuditOutbox::standalone_event(&data)?.ok_or_else(|| {
-                BuildError::auth_store(
+                PlatformError::auth_store(
                     "read",
                     "audit-outbox",
                     false,
@@ -30,7 +30,7 @@ impl VaultClient {
         Ok(events)
     }
 
-    pub async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
+    pub async fn acknowledge_audit(&self, event_id: &str) -> PlatformResult<()> {
         self.delete_key(&TokenAuditOutbox::storage_key(event_id))
             .await
     }

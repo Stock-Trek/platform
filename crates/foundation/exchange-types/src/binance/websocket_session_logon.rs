@@ -8,7 +8,7 @@ use crate::{
     signer::Signer,
     websocket_id::ETWebsocketId,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use serde::Serialize;
@@ -76,7 +76,7 @@ impl ETWebsocketRequest for BinanceSessionLogonRequest {
         self,
         signer: &Signer,
         id: ETWebsocketId,
-    ) -> BuildResult<(String, WebsocketResponseMatcher)> {
+    ) -> PlatformResult<(String, WebsocketResponseMatcher)> {
         BinanceRequestFactory::try_into_websocket(self, signer, id)
     }
 }

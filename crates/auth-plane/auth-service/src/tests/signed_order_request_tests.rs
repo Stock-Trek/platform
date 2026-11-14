@@ -4,7 +4,7 @@ use crate::{
     signed_order_request::MAX_ENVELOPE_LENGTH,
 };
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 
 struct SignedRequestFixture;
 
@@ -90,7 +90,7 @@ fn rejects_overlong_nonces() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "nonce",
             ..
         }))
@@ -104,7 +104,7 @@ fn rejects_overlong_envelopes() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "signature",
             ..
         }))
@@ -133,7 +133,7 @@ fn from_parts_validates_the_context() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "token_id",
             ..
         }))
@@ -162,7 +162,7 @@ fn from_parts_rejects_invalid_raw_signatures() {
 
         assert!(matches!(
             error,
-            Err(BuildError::Auth(AuthError::InvalidField {
+            Err(PlatformError::Auth(AuthError::InvalidField {
                 field: "signature",
                 ..
             }))

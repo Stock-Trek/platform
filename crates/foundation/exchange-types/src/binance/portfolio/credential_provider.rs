@@ -8,7 +8,7 @@ use crate::{
     response::ETHttpResponse,
 };
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::{
     sync::Arc,
     time::{Duration, Instant},
@@ -65,7 +65,7 @@ impl BinanceCredentialProvider {
             .map_err(|error| AuthError::Revoke(error.to_string()))
     }
 
-    async fn send<Request>(&self, request: Request) -> BuildResult<Request::Response>
+    async fn send<Request>(&self, request: Request) -> PlatformResult<Request::Response>
     where
         Request: ETHttpRequest<Exchange = BinanceExchange> + Send,
     {

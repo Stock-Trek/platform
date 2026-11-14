@@ -1,5 +1,5 @@
 use crate::cwasm::{CWASM_FILE_NAME, Cwasm, CwasmIntegrity, CwasmLimits, WASMTIME_VERSION};
-use platform_errors::{BuildError, ErrorType, StorageError};
+use platform_errors::{ErrorType, PlatformError, StorageError};
 use sha2::{Digest, Sha256};
 use std::{num::NonZeroU64, time::Duration};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
@@ -104,7 +104,7 @@ async fn rejects_an_artifact_with_the_wrong_hash() {
     server.await.unwrap();
     assert!(matches!(
         error,
-        BuildError::Storage(StorageError::CwasmHashMismatch { .. })
+        PlatformError::Storage(StorageError::CwasmHashMismatch { .. })
     ));
     assert_eq!(error.error_type(), "cwasm_hash_mismatch");
 }
@@ -124,7 +124,7 @@ async fn rejects_an_artifact_with_the_wrong_size() {
     server.await.unwrap();
     assert!(matches!(
         error,
-        BuildError::Storage(StorageError::CwasmSizeMismatch { .. })
+        PlatformError::Storage(StorageError::CwasmSizeMismatch { .. })
     ));
     assert_eq!(error.error_type(), "cwasm_size_mismatch");
 }
@@ -140,7 +140,7 @@ async fn rejects_an_artifact_from_a_different_wasmtime_version() {
 
     assert!(matches!(
         error,
-        BuildError::Storage(StorageError::CwasmWasmtimeVersionMismatch { .. })
+        PlatformError::Storage(StorageError::CwasmWasmtimeVersionMismatch { .. })
     ));
     assert_eq!(error.error_type(), "cwasm_wasmtime_version_mismatch");
 }
@@ -155,7 +155,7 @@ async fn rejects_an_invalid_artifact_hash_before_downloading() {
 
     assert!(matches!(
         error,
-        BuildError::Storage(StorageError::CwasmHashInvalid { .. })
+        PlatformError::Storage(StorageError::CwasmHashInvalid { .. })
     ));
     assert_eq!(error.error_type(), "cwasm_hash_invalid");
 }
@@ -172,7 +172,7 @@ async fn does_not_follow_download_redirects() {
         .unwrap_err();
 
     server.await.unwrap();
-    assert!(matches!(error, BuildError::Http(_)));
+    assert!(matches!(error, PlatformError::Http(_)));
 }
 
 #[tokio::test]
@@ -186,7 +186,7 @@ async fn rejects_an_expected_size_above_the_limit_before_downloading() {
 
     assert!(matches!(
         error,
-        BuildError::Storage(StorageError::CwasmTooLarge { .. })
+        PlatformError::Storage(StorageError::CwasmTooLarge { .. })
     ));
 }
 
@@ -204,7 +204,7 @@ async fn rejects_artifacts_larger_than_the_content_length_limit() {
     server.await.unwrap();
     assert!(matches!(
         error,
-        BuildError::Storage(StorageError::CwasmTooLarge { .. })
+        PlatformError::Storage(StorageError::CwasmTooLarge { .. })
     ));
     assert_eq!(error.error_type(), "cwasm_too_large");
     assert!(!error.retryability().is_retryable());
@@ -225,7 +225,7 @@ async fn rejects_streamed_artifacts_that_exceed_the_limit() {
     server.await.unwrap();
     assert!(matches!(
         error,
-        BuildError::Storage(StorageError::CwasmTooLarge { .. })
+        PlatformError::Storage(StorageError::CwasmTooLarge { .. })
     ));
 }
 
@@ -241,6 +241,6 @@ async fn rejects_a_failed_download_response() {
     };
 
     server.await.unwrap();
-    assert!(matches!(error, BuildError::Http(_)));
+    assert!(matches!(error, PlatformError::Http(_)));
     assert_eq!(error.error_type(), "rejected");
 }

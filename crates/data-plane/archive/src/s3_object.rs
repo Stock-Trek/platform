@@ -2,7 +2,7 @@ use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3_transfer_manager::{Client as TransferClient, io::InputStream};
 use bytes::Bytes;
 use platform_aws::Aws;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::fmt;
 use tracing::info;
 
@@ -119,7 +119,7 @@ impl S3 {
         s3_client: &S3Client,
         bucket: &Bucket,
         prefix: &ObjectKey,
-    ) -> BuildResult<Vec<S3Object>> {
+    ) -> PlatformResult<Vec<S3Object>> {
         let target = Self::object_target(bucket, prefix);
         info!("listing files with prefix {}", prefix);
         let mut files = Vec::new();
@@ -131,7 +131,7 @@ impl S3 {
             .send();
         while let Some(page_result) = paginator.next().await {
             let page = page_result
-                .map_err(|error| BuildError::s3("list objects", target.clone(), error))?;
+                .map_err(|error| PlatformError::s3("list objects", target.clone(), error))?;
             for object in page.contents() {
                 if let Some(key) = object.key() {
                     files.push(S3Object {
@@ -150,7 +150,7 @@ impl S3 {
         bucket: &Bucket,
         key: &ObjectKey,
         bytes: Bytes,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let target = Self::object_target(bucket, key);
         info!("upload bytes for key {}", key);
         let stream = InputStream::from(bytes);
@@ -160,10 +160,10 @@ impl S3 {
             .key(key.as_str())
             .body(stream)
             .initiate()
-            .map_err(|error| BuildError::s3("start upload", target.clone(), error))?
+            .map_err(|error| PlatformError::s3("start upload", target.clone(), error))?
             .join()
             .await
-            .map_err(|error| BuildError::s3("upload object", target, error))?;
+            .map_err(|error| PlatformError::s3("upload object", target, error))?;
         Ok(())
     }
 
@@ -172,7 +172,7 @@ impl S3 {
         s3_client: &S3Client,
         bucket: &Bucket,
         key: &ObjectKey,
-    ) -> BuildResult<Bytes> {
+    ) -> PlatformResult<Bytes> {
         let target = Self::object_target(bucket, key);
         let output = s3_client
             .get_object()
@@ -180,13 +180,13 @@ impl S3 {
             .key(key.as_str())
             .send()
             .await
-            .map_err(|error| BuildError::s3("get object", target.clone(), error))?;
+            .map_err(|error| PlatformError::s3("get object", target.clone(), error))?;
         output
             .body
             .collect()
             .await
             .map(|data| data.into_bytes())
-            .map_err(|error| BuildError::s3("read object body", target, error))
+            .map_err(|error| PlatformError::s3("read object body", target, error))
     }
 
     pub fn object_target(bucket: &Bucket, key: &ObjectKey) -> String {
@@ -194,21 +194,21 @@ impl S3 {
     }
 
     /// Splits an `s3://bucket/key` URI into its object identity.
-    pub fn parse_uri(uri: &str) -> BuildResult<(Bucket, ObjectKey)> {
+    pub fn parse_uri(uri: &str) -> PlatformResult<(Bucket, ObjectKey)> {
         let path = uri.strip_prefix("s3://").ok_or_else(|| {
-            BuildError::external(std::io::Error::new(
+            PlatformError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!("expected an s3:// URI, got {uri}"),
             ))
         })?;
         let (bucket, key) = path.split_once('/').ok_or_else(|| {
-            BuildError::external(std::io::Error::new(
+            PlatformError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!("expected an s3://bucket/key URI, got {uri}"),
             ))
         })?;
         if bucket.is_empty() || key.is_empty() {
-            return Err(BuildError::external(std::io::Error::new(
+            return Err(PlatformError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!("expected an s3://bucket/key URI, got {uri}"),
             )));

@@ -1,6 +1,6 @@
 use crate::jetstream::JetStream;
 use async_nats::jetstream::stream;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::time::Duration;
 
 pub const MIN_STREAM_REPLICAS: usize = 1;
@@ -69,39 +69,39 @@ impl StreamSpec {
         self.duplicate_window
     }
 
-    pub fn validate(&self) -> BuildResult<()> {
+    pub fn validate(&self) -> PlatformResult<()> {
         if self.subject_prefix.trim().is_empty() {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "stream subject prefix",
                 "must not be empty",
             ));
         }
         if !(MIN_STREAM_REPLICAS..=MAX_STREAM_REPLICAS).contains(&self.replicas) {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "stream replicas",
                 format!("must be between {MIN_STREAM_REPLICAS} and {MAX_STREAM_REPLICAS}"),
             ));
         }
         if self.max_age.is_zero() {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "stream max age",
                 "must be greater than zero",
             ));
         }
         if self.max_bytes <= 0 {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "stream max bytes",
                 "must be greater than zero",
             ));
         }
         if self.max_messages <= 0 {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "stream max messages",
                 "must be greater than zero",
             ));
         }
         if self.duplicate_window.is_zero() || self.duplicate_window > self.max_age {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "stream duplicate window",
                 "must be greater than zero and no greater than the max age",
             ));
@@ -109,7 +109,7 @@ impl StreamSpec {
         Ok(())
     }
 
-    pub fn config(&self) -> BuildResult<stream::Config> {
+    pub fn config(&self) -> PlatformResult<stream::Config> {
         self.validate()?;
         Ok(stream::Config {
             name: JetStream::stream_name(&self.subject_prefix),
@@ -127,9 +127,9 @@ impl StreamSpec {
 }
 
 impl TryFrom<&StreamSpec> for stream::Config {
-    type Error = BuildError;
+    type Error = PlatformError;
 
-    fn try_from(spec: &StreamSpec) -> BuildResult<Self> {
+    fn try_from(spec: &StreamSpec) -> PlatformResult<Self> {
         spec.config()
     }
 }

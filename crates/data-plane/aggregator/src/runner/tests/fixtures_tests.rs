@@ -10,7 +10,7 @@ use crate::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::{AlignedWindow, Candle, CandleKey, ClosedCandle, MarketEvent};
 use platform_nats::Message;
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
@@ -27,9 +27,9 @@ pub struct FakeSource {
 
 #[async_trait]
 impl MarketSource for FakeSource {
-    async fn next_input(&mut self) -> BuildResult<Option<SourceRecord>> {
+    async fn next_input(&mut self) -> PlatformResult<Option<SourceRecord>> {
         if self.fail {
-            return Err(BuildError::external("source failed"));
+            return Err(PlatformError::external("source failed"));
         }
         if self.records.is_empty() {
             Ok(None)
@@ -38,7 +38,7 @@ impl MarketSource for FakeSource {
         }
     }
 
-    async fn ack(&mut self, _record: &SourceRecord) -> BuildResult<()> {
+    async fn ack(&mut self, _record: &SourceRecord) -> PlatformResult<()> {
         *self.acked.lock() += 1;
         Ok(())
     }
@@ -68,17 +68,17 @@ impl FakeSink {
 
 #[async_trait]
 impl OpenCandleStore for FakeSink {
-    async fn update_open(&self, candles: &[Candle]) -> BuildResult<()> {
+    async fn update_open(&self, candles: &[Candle]) -> PlatformResult<()> {
         if self.fail {
-            return Err(BuildError::bad_value("sink", "test", "write failed"));
+            return Err(PlatformError::bad_value("sink", "test", "write failed"));
         }
         *self.open_updates.lock() += candles.len();
         Ok(())
     }
 
-    async fn delete_open(&self, keys: &[CandleKey]) -> BuildResult<()> {
+    async fn delete_open(&self, keys: &[CandleKey]) -> PlatformResult<()> {
         if self.fail {
-            return Err(BuildError::bad_value("sink", "test", "write failed"));
+            return Err(PlatformError::bad_value("sink", "test", "write failed"));
         }
         *self.deleted_open_updates.lock() += keys.len();
         Ok(())
@@ -87,9 +87,9 @@ impl OpenCandleStore for FakeSink {
 
 #[async_trait]
 impl ClosedCandlePublisher for FakeSink {
-    async fn publish_closed(&self, candles: &[ClosedCandle]) -> BuildResult<()> {
+    async fn publish_closed(&self, candles: &[ClosedCandle]) -> PlatformResult<()> {
         if self.fail {
-            return Err(BuildError::bad_value("sink", "test", "write failed"));
+            return Err(PlatformError::bad_value("sink", "test", "write failed"));
         }
         *self.closed_updates.lock() += candles.len();
         Ok(())
@@ -100,12 +100,16 @@ pub struct FailingCheckpointStore;
 
 #[async_trait]
 impl StateStore for FailingCheckpointStore {
-    async fn load(&self, _shard: ShardId) -> BuildResult<Option<CheckpointRecord>> {
+    async fn load(&self, _shard: ShardId) -> PlatformResult<Option<CheckpointRecord>> {
         Ok(None)
     }
 
-    async fn save(&self, _checkpoint: &CheckpointRecord) -> BuildResult<()> {
-        Err(BuildError::bad_value("checkpoint", "test", "write failed"))
+    async fn save(&self, _checkpoint: &CheckpointRecord) -> PlatformResult<()> {
+        Err(PlatformError::bad_value(
+            "checkpoint",
+            "test",
+            "write failed",
+        ))
     }
 }
 
@@ -118,7 +122,7 @@ pub struct SignalingSource {
 
 #[async_trait]
 impl MarketSource for SignalingSource {
-    async fn next_input(&mut self) -> BuildResult<Option<SourceRecord>> {
+    async fn next_input(&mut self) -> PlatformResult<Option<SourceRecord>> {
         self.polls.fetch_add(1, Ordering::SeqCst);
         if self.records.is_empty() {
             return std::future::pending().await;
@@ -128,7 +132,7 @@ impl MarketSource for SignalingSource {
         Ok(Some(record))
     }
 
-    async fn ack(&mut self, _record: &SourceRecord) -> BuildResult<()> {
+    async fn ack(&mut self, _record: &SourceRecord) -> PlatformResult<()> {
         *self.acked.lock() += 1;
         Ok(())
     }

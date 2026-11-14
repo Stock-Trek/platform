@@ -8,7 +8,7 @@ use crate::{
     request::{ETHttpRequest, ETRequest},
     signer::Signer,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use serde::{Deserialize, Serialize};
@@ -64,12 +64,12 @@ pub struct BinanceTradeResponse {
 }
 
 impl BinanceResponse<BinanceHistoricalTradesResponse> {
-    pub fn historical_trades(self) -> BuildResult<Vec<BinanceTradeResponse>> {
+    pub fn historical_trades(self) -> PlatformResult<Vec<BinanceTradeResponse>> {
         match self.payload {
             BinanceResponsePayload::Success(payload) => Ok(payload),
             BinanceResponsePayload::Failure(error) => {
                 let retry_after = self.metadata.retry_after.or_else(|| error.retry_after());
-                Err(BuildError::Exchange(
+                Err(PlatformError::Exchange(
                     error.exchange_error(self.metadata.status, retry_after),
                 ))
             }
@@ -113,7 +113,7 @@ impl ETHttpRequest for BinanceHistoricalTradesRequest {
     fn http_endpoint(&self) -> &'static str {
         "historicalTrades"
     }
-    fn try_into_http(self, _signer: &Signer) -> BuildResult<HttpRequest> {
+    fn try_into_http(self, _signer: &Signer) -> PlatformResult<HttpRequest> {
         let path = self.http_endpoint().to_string();
         let query = self.query.query_params(true, true);
         let headers = self

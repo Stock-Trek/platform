@@ -2,7 +2,7 @@ use crate::{
     request::{ETHttpRequest, ETWebsocketRequest},
     response::{ETHttpResponse, ETWebsocketResponse},
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_types::TimestampMilliseconds;
 
 pub trait ServerTimeHttpRequest<Response>: ETHttpRequest<Response = Response>
@@ -18,5 +18,5 @@ where
 }
 
 pub trait ServerTimeResponse {
-    fn server_time(&self) -> BuildResult<TimestampMilliseconds>;
+    fn server_time(&self) -> PlatformResult<TimestampMilliseconds>;
 }

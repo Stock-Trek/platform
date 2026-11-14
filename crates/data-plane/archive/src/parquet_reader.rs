@@ -7,7 +7,7 @@ use parquet::{
     errors::{ParquetError, Result as ParquetResult},
     file::metadata::{ParquetMetaData, ParquetMetaDataReader},
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::{ops::Range, sync::Arc};
 
 #[derive(Clone)]
@@ -33,7 +33,7 @@ impl ParquetReader {
         }
     }
 
-    pub async fn row_count(mut self) -> BuildResult<i64> {
+    pub async fn row_count(mut self) -> PlatformResult<i64> {
         let metadata = self.get_metadata(None).await?;
         Ok(metadata.file_metadata().num_rows())
     }
@@ -52,7 +52,7 @@ impl ParquetReader {
             .range(range_header)
             .initiate()
             .map_err(|error| {
-                ParquetError::External(Box::new(BuildError::s3(
+                ParquetError::External(Box::new(PlatformError::s3(
                     "start ranged download",
                     target.clone(),
                     error,
@@ -61,7 +61,7 @@ impl ParquetReader {
         let mut data = Vec::with_capacity((range.end - range.start) as usize);
         while let Some(chunk) = handle.body_mut().next().await {
             let chunk = chunk.map_err(|error| {
-                ParquetError::External(Box::new(BuildError::s3(
+                ParquetError::External(Box::new(PlatformError::s3(
                     "read ranged download",
                     target.clone(),
                     error,

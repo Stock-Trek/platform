@@ -7,7 +7,7 @@ use jsonwebtoken::{
         OctetKeyPairParameters, OctetKeyPairType, PublicKeyUse,
     },
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::fmt;
 
 pub const JWT_SIGNING_ALGORITHM: Algorithm = Algorithm::EdDSA;
@@ -21,29 +21,29 @@ pub struct JwtSigningKey {
 }
 
 impl JwtSigningKey {
-    pub fn generate(key_id: impl Into<String>) -> BuildResult<Self> {
+    pub fn generate(key_id: impl Into<String>) -> PlatformResult<Self> {
         let key_pair = KeyPair::generate();
         Self::from_key_pair(key_id.into(), &key_pair)
     }
 
-    pub fn from_pkcs8_der(key_id: impl Into<String>, der: &[u8]) -> BuildResult<Self> {
+    pub fn from_pkcs8_der(key_id: impl Into<String>, der: &[u8]) -> PlatformResult<Self> {
         let key_pair = KeyPair::from_der(der)
-            .map_err(|error| BuildError::auth_invalid_field(JWT_KEY_FIELD, error.to_string()))?;
+            .map_err(|error| PlatformError::auth_invalid_field(JWT_KEY_FIELD, error.to_string()))?;
         Self::from_key_pair(key_id.into(), &key_pair)
     }
 
-    pub fn from_pkcs8_pem(key_id: impl Into<String>, pem: &str) -> BuildResult<Self> {
+    pub fn from_pkcs8_pem(key_id: impl Into<String>, pem: &str) -> PlatformResult<Self> {
         let pem = pem.replace("\\n", "\n");
         let key_pair = KeyPair::from_pem(&pem)
-            .map_err(|error| BuildError::auth_invalid_field(JWT_KEY_FIELD, error.to_string()))?;
+            .map_err(|error| PlatformError::auth_invalid_field(JWT_KEY_FIELD, error.to_string()))?;
         Self::from_key_pair(key_id.into(), &key_pair)
     }
 
-    pub fn sign(&self, claims: &OrderJwtClaims) -> BuildResult<IssuedJwt> {
+    pub fn sign(&self, claims: &OrderJwtClaims) -> PlatformResult<IssuedJwt> {
         let mut header = Header::new(JWT_SIGNING_ALGORITHM);
         header.kid = Some(self.key_id.clone());
         let token = encode(&header, claims, &self.encoding)
-            .map_err(|error| BuildError::auth_invalid_jwt(error.to_string()))?;
+            .map_err(|error| PlatformError::auth_invalid_jwt(error.to_string()))?;
         Ok(IssuedJwt::new(token, claims.expires_at()))
     }
 
@@ -55,9 +55,9 @@ impl JwtSigningKey {
         &self.jwks
     }
 
-    fn from_key_pair(key_id: String, key_pair: &KeyPair) -> BuildResult<Self> {
+    fn from_key_pair(key_id: String, key_pair: &KeyPair) -> PlatformResult<Self> {
         if key_id.trim().is_empty() {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "jwt_key_id",
                 "must not be empty",
             ));

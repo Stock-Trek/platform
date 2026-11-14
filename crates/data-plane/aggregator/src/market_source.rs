@@ -7,7 +7,7 @@
 use crate::config::AggregatorConfig;
 use crate::shard_id::ShardId;
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::{EVENT_CATEGORY, EnvelopeCodec, GAP_CATEGORY, GapMarker, MarketEvent};
 use platform_metrics::MarketDataMetrics;
 use platform_metrics::{DECODE_KIND_GAP_MARKER, DECODE_KIND_MARKET_EVENT, STAGE_AGGREGATOR};
@@ -36,11 +36,11 @@ impl MarketInput {
         matches!(self, Self::Gap(_))
     }
 
-    pub fn encode(&self) -> BuildResult<Vec<u8>> {
+    pub fn encode(&self) -> PlatformResult<Vec<u8>> {
         Ok(serde_json::to_vec(self)?)
     }
 
-    pub fn decode(payload: &[u8]) -> BuildResult<Self> {
+    pub fn decode(payload: &[u8]) -> PlatformResult<Self> {
         Ok(serde_json::from_slice(payload)?)
     }
 
@@ -48,7 +48,7 @@ impl MarketInput {
     ///
     /// The ingester subject contract puts the category (`events` or `gaps`) in
     /// the subject, so the payload does not need a discriminator.
-    pub fn from_market_message(message: &Message) -> BuildResult<Self> {
+    pub fn from_market_message(message: &Message) -> PlatformResult<Self> {
         if Self::is_gap_subject(&message.subject) {
             Ok(Self::Gap(GapMarker::decode(&message.payload)?))
         } else {
@@ -115,12 +115,12 @@ impl SourceRecord {
 #[async_trait]
 pub trait MarketSource: Send {
     /// Returns `None` when the source has reached its end.
-    async fn next_input(&mut self) -> BuildResult<Option<SourceRecord>>;
+    async fn next_input(&mut self) -> PlatformResult<Option<SourceRecord>>;
 
     /// Acknowledges the record returned by the previous call to
     /// [`Self::next_input`]. It must only be called after the caller's state
     /// checkpoint has been saved.
-    async fn ack(&mut self, _record: &SourceRecord) -> BuildResult<()> {
+    async fn ack(&mut self, _record: &SourceRecord) -> PlatformResult<()> {
         Ok(())
     }
 }
@@ -147,11 +147,11 @@ impl NatsMarketSource {
         (!shared.is_empty()).then(|| shared.join("."))
     }
 
-    pub async fn connect(config: &AggregatorConfig) -> BuildResult<Self> {
+    pub async fn connect(config: &AggregatorConfig) -> PlatformResult<Self> {
         let root =
             Self::common_subject_prefix(&config.event_subject_prefix, &config.gap_subject_prefix)
                 .ok_or_else(|| {
-                BuildError::config_invalid(
+                PlatformError::config_invalid(
                     "aggregator subject prefixes",
                     "event and gap prefixes must share a common root",
                 )
@@ -174,7 +174,7 @@ impl NatsMarketSource {
 
 #[async_trait]
 impl MarketSource for NatsMarketSource {
-    async fn next_input(&mut self) -> BuildResult<Option<SourceRecord>> {
+    async fn next_input(&mut self) -> PlatformResult<Option<SourceRecord>> {
         loop {
             let Some(message) = self.consumer.next_message_unacked().await else {
                 continue;
@@ -205,7 +205,7 @@ impl MarketSource for NatsMarketSource {
         }
     }
 
-    async fn ack(&mut self, _record: &SourceRecord) -> BuildResult<()> {
+    async fn ack(&mut self, _record: &SourceRecord) -> PlatformResult<()> {
         let Some(message) = self.in_flight.take() else {
             return Ok(());
         };
@@ -226,7 +226,7 @@ impl NatsShardSource {
         config: &AggregatorConfig,
         shard: ShardId,
         start: ConsumerStart,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let shard_subject = shard.subject(&config.shard_subject_prefix);
         let filter = format!("{shard_subject}.>");
         let durable = config.shard_durable_name(shard);
@@ -248,7 +248,7 @@ impl NatsShardSource {
 
 #[async_trait]
 impl MarketSource for NatsShardSource {
-    async fn next_input(&mut self) -> BuildResult<Option<SourceRecord>> {
+    async fn next_input(&mut self) -> PlatformResult<Option<SourceRecord>> {
         loop {
             let Some(message) = self.consumer.next_message_unacked().await else {
                 continue;
@@ -270,7 +270,7 @@ impl MarketSource for NatsShardSource {
         }
     }
 
-    async fn ack(&mut self, _record: &SourceRecord) -> BuildResult<()> {
+    async fn ack(&mut self, _record: &SourceRecord) -> PlatformResult<()> {
         let Some(message) = self.in_flight.take() else {
             return Ok(());
         };

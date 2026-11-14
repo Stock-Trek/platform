@@ -5,7 +5,7 @@ use crate::{
     websocket_source::{MarketMessageSource, StreamFormat},
 };
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::ParsedMessage;
 use platform_nats::EventPublisher;
 use std::sync::Arc;
@@ -18,9 +18,9 @@ struct FakeSource {
 
 #[async_trait]
 impl MarketMessageSource for FakeSource {
-    async fn run(&self, _sender: mpsc::Sender<ParsedMessage>) -> BuildResult<()> {
+    async fn run(&self, _sender: mpsc::Sender<ParsedMessage>) -> PlatformResult<()> {
         if self.fail {
-            Err(platform_errors::BuildError::external("source failed"))
+            Err(platform_errors::PlatformError::external("source failed"))
         } else {
             Ok(())
         }
@@ -32,7 +32,7 @@ struct FakePublisher;
 
 #[async_trait]
 impl EventPublisher for FakePublisher {
-    async fn publish(&self, _subject: &str, _payload: &[u8]) -> BuildResult<()> {
+    async fn publish(&self, _subject: &str, _payload: &[u8]) -> PlatformResult<()> {
         Ok(())
     }
 }

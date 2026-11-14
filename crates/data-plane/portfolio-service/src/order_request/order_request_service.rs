@@ -1,7 +1,7 @@
 use crate::{AccountKey, PortfolioService, SignedOrderSubmission};
 use chrono::{DateTime, Utc};
 use platform_auth_service::{ApiToken, AuthService, JwksCache, OrderJwtClaims};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_messages::UnsignedOrderRequest;
 use std::sync::Arc;
 
@@ -25,7 +25,7 @@ impl OrderRequestService {
         }
     }
 
-    pub fn with_jwks_url(auth_service: AuthService, url: &str) -> BuildResult<Self> {
+    pub fn with_jwks_url(auth_service: AuthService, url: &str) -> PlatformResult<Self> {
         Ok(Self::with_jwks_cache(auth_service, JwksCache::new(url)?))
     }
 
@@ -34,7 +34,11 @@ impl OrderRequestService {
         self
     }
 
-    pub async fn authenticate(&self, jwt: &str, now: DateTime<Utc>) -> BuildResult<OrderJwtClaims> {
+    pub async fn authenticate(
+        &self,
+        jwt: &str,
+        now: DateTime<Utc>,
+    ) -> PlatformResult<OrderJwtClaims> {
         self.jwt_verifier.verify(jwt, now).await
     }
 
@@ -43,11 +47,11 @@ impl OrderRequestService {
         jwt: &str,
         request: &UnsignedOrderRequest,
         now: DateTime<Utc>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let claims = self.authenticate(jwt, now).await?;
         let owner = ApiToken::validated_owner(request.owner())?;
         if claims.owner() != owner {
-            return Err(BuildError::auth_invalid_jwt(
+            return Err(PlatformError::auth_invalid_jwt(
                 "owner does not match the order request",
             ));
         }
@@ -58,11 +62,11 @@ impl OrderRequestService {
         &self,
         request: &UnsignedOrderRequest,
         claims: &OrderJwtClaims,
-    ) -> BuildResult<SignedOrderSubmission> {
+    ) -> PlatformResult<SignedOrderSubmission> {
         let owner = ApiToken::validated_owner(claims.owner())?;
         let request = request.clone().with_owner(owner);
         self.authorize_account(owner, &request)?;
-        let order_request = request.canonical_bytes().map_err(BuildError::external)?;
+        let order_request = request.canonical_bytes().map_err(PlatformError::external)?;
         let now = Utc::now();
         let signed = self
             .auth_service
@@ -71,7 +75,7 @@ impl OrderRequestService {
         Ok(SignedOrderSubmission::new(&request, &signed))
     }
 
-    fn authorize_account(&self, owner: &str, request: &UnsignedOrderRequest) -> BuildResult<()> {
+    fn authorize_account(&self, owner: &str, request: &UnsignedOrderRequest) -> PlatformResult<()> {
         let Some(portfolio) = &self.portfolio else {
             return Ok(());
         };

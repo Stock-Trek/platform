@@ -1,6 +1,6 @@
 use crate::{ApiToken, AuthService, OwnerIndex, OwnerIndexEntry, TokenScope};
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 impl AuthService {
     pub async fn select_token_from_scan(
@@ -8,7 +8,7 @@ impl AuthService {
         owner: &str,
         scope: Option<TokenScope>,
         now: DateTime<Utc>,
-    ) -> BuildResult<ApiToken> {
+    ) -> PlatformResult<ApiToken> {
         let tokens = self.scan_tokens_for_owner(owner).await?;
         self.repair_owner_index(owner, &tokens).await;
         tokens
@@ -25,14 +25,14 @@ impl AuthService {
             .ok_or_else(|| Self::no_active_token(scope))
     }
 
-    pub async fn tokens_from_owner_scan(&self, owner: &str) -> BuildResult<Vec<ApiToken>> {
+    pub async fn tokens_from_owner_scan(&self, owner: &str) -> PlatformResult<Vec<ApiToken>> {
         let mut tokens = self.scan_tokens_for_owner(owner).await?;
         tokens.sort_by(|left, right| left.id().cmp(right.id()));
         self.repair_owner_index(owner, &tokens).await;
         Ok(tokens)
     }
 
-    async fn scan_tokens_for_owner(&self, owner: &str) -> BuildResult<Vec<ApiToken>> {
+    async fn scan_tokens_for_owner(&self, owner: &str) -> PlatformResult<Vec<ApiToken>> {
         let mut ids = self.store.ids().await?;
         ids.sort();
         ids.dedup();
@@ -54,17 +54,17 @@ impl AuthService {
         }
     }
 
-    pub fn no_active_token(scope: Option<TokenScope>) -> BuildError {
+    pub fn no_active_token(scope: Option<TokenScope>) -> PlatformError {
         match scope {
-            Some(scope) => BuildError::auth_invalid_field(
+            Some(scope) => PlatformError::auth_invalid_field(
                 "scope",
                 format!("owner has no active API token with required scope {scope:?}"),
             ),
-            None => BuildError::auth_invalid_field("owner", "has no active API token"),
+            None => PlatformError::auth_invalid_field("owner", "has no active API token"),
         }
     }
 
-    pub fn owner_index_error(detail: String) -> BuildError {
-        BuildError::auth_store("read", "owner-index", false, detail)
+    pub fn owner_index_error(detail: String) -> PlatformError {
+        PlatformError::auth_store("read", "owner-index", false, detail)
     }
 }

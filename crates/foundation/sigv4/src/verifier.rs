@@ -8,7 +8,7 @@ use aws_sigv4::{
     http_request::{SignableBody, SignableRequest, SigningParams, sign},
     sign::v4,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use sha2::{Digest, Sha256};
 use std::{collections::BTreeMap, time::SystemTime};
 use subtle::ConstantTimeEq;
@@ -38,7 +38,7 @@ impl SigV4Verifier {
         registry: &SigV4Registry,
         request: &SigV4Request<'_>,
         now: SystemTime,
-    ) -> BuildResult<VerifiedCaller> {
+    ) -> PlatformResult<VerifiedCaller> {
         let headers = Self::normalize_headers(request.headers());
         let authorization = Self::header(&headers, AUTHORIZATION)?;
         let parsed = ParsedAuthorization::parse(authorization)?;
@@ -133,7 +133,7 @@ impl SigV4Verifier {
             .collect()
     }
 
-    fn header<'a>(headers: &'a BTreeMap<String, String>, name: &str) -> BuildResult<&'a str> {
+    fn header<'a>(headers: &'a BTreeMap<String, String>, name: &str) -> PlatformResult<&'a str> {
         headers
             .get(name)
             .map(String::as_str)
@@ -143,7 +143,7 @@ impl SigV4Verifier {
     fn verify_session_token(
         headers: &BTreeMap<String, String>,
         expected: Option<&str>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         match (headers.get(AMZ_SECURITY_TOKEN), expected) {
             (Some(actual), Some(expected))
                 if actual.as_bytes().ct_eq(expected.as_bytes()).into() =>
@@ -157,7 +157,7 @@ impl SigV4Verifier {
         }
     }
 
-    fn verify_signature(actual: &str, expected: &str) -> BuildResult<()> {
+    fn verify_signature(actual: &str, expected: &str) -> PlatformResult<()> {
         let actual = hex::decode(actual)
             .map_err(|_| ParsedAuthorization::invalid("signature is not valid hex"))?;
         let expected = hex::decode(expected)

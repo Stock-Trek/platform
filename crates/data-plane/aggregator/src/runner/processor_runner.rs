@@ -14,7 +14,7 @@ use crate::{
     state::AggregatorState,
     writer_lease::{LeaseStore, WriterLease},
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_metrics::AggregatorMetrics;
 use platform_runtime::Runtime;
 use platform_types::TimestampMilliseconds;
@@ -106,7 +106,7 @@ where
         }
     }
 
-    pub async fn run(self) -> BuildResult<()> {
+    pub async fn run(self) -> PlatformResult<()> {
         let Self {
             config,
             mut source,

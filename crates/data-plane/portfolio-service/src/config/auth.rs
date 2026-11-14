@@ -2,7 +2,7 @@ use platform_auth_service::{
     TokenCacheConfig, TokenUsageQueueConfig, ValkeyReplayStoreConfig, VaultTokenStoreConfig,
 };
 use platform_config::EnvVars;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_types::UrlScheme;
 use secrecy::SecretString;
 use std::fmt;
@@ -38,7 +38,7 @@ pub struct AuthConfig {
 }
 
 impl AuthConfig {
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let vault = VaultTokenStoreConfig::new(
             vars.required_url(VAULT_ADDRESS, &UrlScheme::HTTP)?,
             SecretString::from(vars.required(VAULT_TOKEN)?),
@@ -78,9 +78,9 @@ impl AuthConfig {
         )?;
         let jwks_url = vars.required(JWKS_URL)?;
         let parsed = reqwest::Url::parse(&jwks_url)
-            .map_err(|error| BuildError::config_invalid_source(JWKS_URL, error))?;
+            .map_err(|error| PlatformError::config_invalid_source(JWKS_URL, error))?;
         if !UrlScheme::from_url(&parsed).is_some_and(UrlScheme::is_http) {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 JWKS_URL,
                 "must use http or https",
             ));

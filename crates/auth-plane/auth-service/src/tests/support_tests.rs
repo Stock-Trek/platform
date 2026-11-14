@@ -5,7 +5,7 @@ use crate::{
     TokenStore, TokenUsageQueue,
 };
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::sync::Arc;
 
 pub const ORDER_REQUEST: &[u8] = br#"{"limit":{"base_dto":"BTC","quote_dto":"USDC","side":"buy"}}"#;
@@ -70,7 +70,7 @@ impl AuthServiceBuilder {
         self.try_build().expect("valid service")
     }
 
-    pub fn try_build(self) -> BuildResult<AuthService> {
+    pub fn try_build(self) -> PlatformResult<AuthService> {
         let usage = self
             .usage
             .unwrap_or_else(|| Arc::new(ImmediateTokenUsageQueue::new(self.store.clone())));

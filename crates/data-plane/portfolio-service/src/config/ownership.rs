@@ -1,6 +1,6 @@
 use crate::config::{NatsStreamConfig, StreamDefaults};
 use platform_config::EnvVars;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_runtime::Config;
 use std::time::Duration;
 
@@ -26,7 +26,7 @@ pub struct OwnershipConfig {
 }
 
 impl OwnershipConfig {
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         Ok(Self {
             nats_url: Config::required_nats_url(vars, NATS_URL)?,
             client_name: vars.required(CLIENT_NAME)?,

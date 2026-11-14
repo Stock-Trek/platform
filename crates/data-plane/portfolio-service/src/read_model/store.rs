@@ -1,5 +1,5 @@
 use crate::read_model::{OwnershipRecord, PortfolioReadModel, PortfolioRecord};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_nats::KeyValue;
 
 const OWNERSHIP_PREFIX: &str = "read_model.ownership";
@@ -10,13 +10,13 @@ pub struct PortfolioReadModelStore {
 }
 
 impl PortfolioReadModelStore {
-    pub async fn connect(url: &str, name: &str, bucket: &str) -> BuildResult<Self> {
+    pub async fn connect(url: &str, name: &str, bucket: &str) -> PlatformResult<Self> {
         Ok(Self {
             values: KeyValue::connect(url, name, bucket).await?,
         })
     }
 
-    pub async fn load(&self) -> BuildResult<PortfolioReadModel> {
+    pub async fn load(&self) -> PlatformResult<PortfolioReadModel> {
         let mut ownership = Vec::new();
         let mut portfolios = Vec::new();
         for key in self.values.keys().await? {
@@ -26,43 +26,43 @@ impl PortfolioReadModelStore {
             if key.starts_with(OWNERSHIP_PREFIX) {
                 ownership.push(
                     serde_json::from_slice::<OwnershipRecord>(&payload)
-                        .map_err(BuildError::external)?,
+                        .map_err(PlatformError::external)?,
                 );
             } else if key.starts_with(PORTFOLIO_PREFIX) {
                 portfolios.push(
                     serde_json::from_slice::<PortfolioRecord>(&payload)
-                        .map_err(BuildError::external)?,
+                        .map_err(PlatformError::external)?,
                 );
             }
         }
         Ok(PortfolioReadModel::new(ownership, portfolios))
     }
 
-    pub async fn save_ownership(&self, record: &OwnershipRecord) -> BuildResult<()> {
-        let payload = serde_json::to_vec(record).map_err(BuildError::external)?;
+    pub async fn save_ownership(&self, record: &OwnershipRecord) -> PlatformResult<()> {
+        let payload = serde_json::to_vec(record).map_err(PlatformError::external)?;
         self.values
             .put(&Self::key(OWNERSHIP_PREFIX, record.account()), &payload)
             .await?;
         Ok(())
     }
 
-    pub async fn remove_ownership(&self, account: &crate::AccountKey) -> BuildResult<()> {
+    pub async fn remove_ownership(&self, account: &crate::AccountKey) -> PlatformResult<()> {
         Self::remove(&self.values, &Self::key(OWNERSHIP_PREFIX, account)).await
     }
 
-    pub async fn save_portfolio(&self, record: &PortfolioRecord) -> BuildResult<()> {
-        let payload = serde_json::to_vec(record).map_err(BuildError::external)?;
+    pub async fn save_portfolio(&self, record: &PortfolioRecord) -> PlatformResult<()> {
+        let payload = serde_json::to_vec(record).map_err(PlatformError::external)?;
         self.values
             .put(&Self::key(PORTFOLIO_PREFIX, record.account()), &payload)
             .await?;
         Ok(())
     }
 
-    pub async fn remove_portfolio(&self, account: &crate::AccountKey) -> BuildResult<()> {
+    pub async fn remove_portfolio(&self, account: &crate::AccountKey) -> PlatformResult<()> {
         Self::remove(&self.values, &Self::key(PORTFOLIO_PREFIX, account)).await
     }
 
-    async fn remove(values: &KeyValue, key: &str) -> BuildResult<()> {
+    async fn remove(values: &KeyValue, key: &str) -> PlatformResult<()> {
         if values.get_last(key).await?.is_some() {
             values.delete(key).await?;
         }

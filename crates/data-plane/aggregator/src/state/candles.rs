@@ -1,7 +1,7 @@
 //! Candle storage, lookup, equality, and serialization for aggregator state.
 
 use crate::state::AggregatorState;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::{AlignedWindow, Candle, CandleKey};
 use platform_types::TimestampMilliseconds;
 use std::collections::HashMap;
@@ -92,11 +92,11 @@ impl AggregatorState {
     pub fn prune_closed_candles_to_caps(
         &mut self,
         caps: &std::collections::BTreeMap<AlignedWindow, usize>,
-    ) -> BuildResult<Vec<Candle>> {
+    ) -> PlatformResult<Vec<Candle>> {
         let mut evicted = Vec::new();
         for (key, candles) in &mut self.closed_candles {
             let Some(cap) = caps.get(&key.interval).copied() else {
-                return Err(BuildError::config_invalid(
+                return Err(PlatformError::config_invalid(
                     "closed candle retention",
                     format!(
                         "restored state contains unconfigured interval {}",

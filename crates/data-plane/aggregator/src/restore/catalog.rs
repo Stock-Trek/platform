@@ -12,7 +12,7 @@ use platform_archive::{
     RoutingBucket, S3,
 };
 use platform_config::EnvVars;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::sync::Arc;
 use tokio::sync::{OnceCell, Semaphore};
 use tracing::info;
@@ -30,7 +30,7 @@ pub struct ArchiveRecoveryConfig {
 impl ArchiveRecoveryConfig {
     /// Reads the required archive recovery settings from a captured
     /// environment.
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         Ok(Self {
             iceberg: IcebergConfig::from_vars(vars)?,
         })
@@ -41,7 +41,7 @@ impl ArchiveRecoveryConfig {
     /// Explicit `earliest` and `latest` starts intentionally discard persisted
     /// state, so they can run without an archive. When a catalog is provided,
     /// the rest of the catalog configuration is still validated.
-    pub fn optional_from_vars(vars: &EnvVars) -> BuildResult<Option<Self>> {
+    pub fn optional_from_vars(vars: &EnvVars) -> PlatformResult<Option<Self>> {
         IcebergConfig::optional_from_vars(vars)?
             .map_or(Ok(None), |iceberg| Ok(Some(Self { iceberg })))
     }
@@ -55,7 +55,7 @@ impl ArchiveRecoveryConfig {
     pub fn from_vars_for_policy(
         vars: &EnvVars,
         policy: ReplayStartPolicy,
-    ) -> BuildResult<Option<Self>> {
+    ) -> PlatformResult<Option<Self>> {
         if policy.requires_archive() {
             Self::from_vars(vars).map(Some)
         } else {
@@ -93,7 +93,7 @@ pub struct ArchiveObject {
 }
 
 impl ArchiveObject {
-    fn from_data_file(file: &platform_archive::IcebergDataFile) -> BuildResult<Self> {
+    fn from_data_file(file: &platform_archive::IcebergDataFile) -> PlatformResult<Self> {
         let (bucket, key) = S3::parse_uri(&file.file_path)?;
         Ok(Self {
             bucket,
@@ -121,7 +121,7 @@ impl S3ArchiveRecovery {
         &self,
         shard: ShardId,
         shard_count: usize,
-    ) -> BuildResult<S3ArchivedEventSource> {
+    ) -> PlatformResult<S3ArchivedEventSource> {
         let snapshot = self
             .snapshot
             .get_or_try_init(|| async {
@@ -133,9 +133,9 @@ impl S3ArchiveRecovery {
                 let objects = handoff
                     .files()
                     .map(ArchiveObject::from_data_file)
-                    .collect::<BuildResult<Vec<_>>>()?;
+                    .collect::<PlatformResult<Vec<_>>>()?;
 
-                Ok::<_, BuildError>(ArchiveSnapshot {
+                Ok::<_, PlatformError>(ArchiveSnapshot {
                     transfer_client,
                     compacted_objects,
                     raw_tail_objects,

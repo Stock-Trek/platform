@@ -1,6 +1,6 @@
 use crate::ApiToken;
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use rand::{Rng, distributions::Alphanumeric};
 
 const NONCE_LENGTH: usize = 32;
@@ -22,7 +22,7 @@ impl OrderRequestContext {
         issued_at: DateTime<Utc>,
         expires_at: DateTime<Utc>,
         nonce: impl Into<String>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let token_id = token_id.into();
         ApiToken::validate_id(&token_id)?;
         let issued_at = Self::whole_seconds(issued_at);
@@ -34,7 +34,7 @@ impl OrderRequestContext {
                 .chars()
                 .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
         {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "nonce",
                 format!(
                     "must be 1-{MAX_NONCE_LENGTH} characters of ASCII letters, digits, '-' and '_'"
@@ -42,7 +42,7 @@ impl OrderRequestContext {
             ));
         }
         if expires_at <= issued_at {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "expires_at",
                 "must be after the issue time",
             ));
@@ -59,7 +59,7 @@ impl OrderRequestContext {
         token_id: impl Into<String>,
         issued_at: DateTime<Utc>,
         validity: Duration,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let nonce: String = rand::thread_rng()
             .sample_iter(&Alphanumeric)
             .take(NONCE_LENGTH)
@@ -67,7 +67,7 @@ impl OrderRequestContext {
             .collect();
         let issued_at = Self::whole_seconds(issued_at);
         let expires_at = issued_at.checked_add_signed(validity).ok_or_else(|| {
-            BuildError::auth_invalid_field("expires_at", "is outside the supported range")
+            PlatformError::auth_invalid_field("expires_at", "is outside the supported range")
         })?;
         Self::new(token_id, issued_at, expires_at, nonce)
     }

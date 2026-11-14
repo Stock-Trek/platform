@@ -9,13 +9,13 @@ use crate::{
     exchange_portfolio::PortfolioAuthContext,
     portfolio::PortfolioAuth,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 
 impl BinanceExchange {
     pub fn build_portfolio_auth(
         &self,
         context: PortfolioAuthContext,
-    ) -> BuildResult<PortfolioAuth> {
+    ) -> PlatformResult<PortfolioAuth> {
         let signer = Self::signer(context.credentials())?;
         let provider =
             BinanceCredentialProvider::new(context.http(), context.credentials().clone());

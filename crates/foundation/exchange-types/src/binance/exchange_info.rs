@@ -15,7 +15,7 @@ use crate::{
     ticker::Ticker,
     websocket_id::ETWebsocketId,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_types::{TimestampMilliseconds, UsageCount};
 use serde::{Deserialize, Serialize};
 use strum::Display;
@@ -197,7 +197,7 @@ impl ETHttpRequest for BinanceExchangeInfoRequest {
     fn http_method(&self) -> HttpMethod {
         HttpMethod::GET
     }
-    fn try_into_http(self, signer: &Signer) -> BuildResult<HttpRequest> {
+    fn try_into_http(self, signer: &Signer) -> PlatformResult<HttpRequest> {
         BinanceRequestFactory::try_into_http(self, signer)
     }
 }
@@ -213,7 +213,7 @@ impl ETWebsocketRequest for BinanceExchangeInfoRequest {
         self,
         signer: &Signer,
         id: ETWebsocketId,
-    ) -> BuildResult<(String, WebsocketResponseMatcher)> {
+    ) -> PlatformResult<(String, WebsocketResponseMatcher)> {
         BinanceRequestFactory::try_into_websocket(self, signer, id)
     }
 }

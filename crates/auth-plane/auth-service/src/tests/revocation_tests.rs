@@ -1,7 +1,7 @@
 use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{AuthService, MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction};
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use std::sync::Arc;
 
 struct RevocationFixture;
@@ -85,7 +85,7 @@ async fn revoking_a_token_twice_preserves_the_first_revocation() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::Revoked { .. }))
+        Err(PlatformError::Auth(AuthError::Revoked { .. }))
     ));
     assert_eq!(stored.metadata().revoked_at(), Some(first));
     assert_eq!(

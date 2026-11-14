@@ -15,7 +15,7 @@ struct Fixture;
 impl Fixture {
     fn config(
         vars: &[(&str, &str)],
-    ) -> platform_errors::BuildResult<Option<BinancePortfolioConfig>> {
+    ) -> platform_errors::PlatformResult<Option<BinancePortfolioConfig>> {
         BinancePortfolioConfig::from_vars(&EnvVars::from_map(
             vars.iter()
                 .map(|(name, value)| ((*name).to_string(), (*value).to_string())),

@@ -3,11 +3,11 @@ use crate::{
 };
 use lambda_http::Request;
 use platform_aws::SsmSecrets;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_github::HostAllowlist;
 
 pub trait EventConverter: Send + Sync {
-    fn event_response(&self, event: &Request) -> BuildResult<EventResponse>;
+    fn event_response(&self, event: &Request) -> PlatformResult<EventResponse>;
 }
 
 pub struct EventConverters;
@@ -16,7 +16,7 @@ impl EventConverters {
     pub fn all(
         secrets: &SsmSecrets,
         allowed_hosts: HostAllowlist,
-    ) -> BuildResult<Vec<Box<dyn EventConverter>>> {
+    ) -> PlatformResult<Vec<Box<dyn EventConverter>>> {
         Ok(vec![Box::new(GitHubEventConverter::new(
             secrets,
             allowed_hosts,

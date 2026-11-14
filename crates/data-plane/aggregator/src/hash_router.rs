@@ -10,7 +10,7 @@ use crate::{
     shard_id::ShardId,
 };
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::{GapMarker, MarketEvent, SharedTradeDecoder, TradeDecoderFactory};
 use platform_metrics::{
     DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, MarketDataMetrics, STAGE_AGGREGATOR,
@@ -35,14 +35,18 @@ impl HashRouter {
     /// updates, are routed by the trading pair encoded in their exchange
     /// stream. Gap markers are routed by the trading pair encoded in their
     /// exchange stream.
-    pub fn shards(&self, input: &MarketInput, shard_count: usize) -> BuildResult<Vec<ShardId>> {
+    pub fn shards(&self, input: &MarketInput, shard_count: usize) -> PlatformResult<Vec<ShardId>> {
         match input {
             MarketInput::Gap(gap) => self.gap_shards(gap, shard_count),
             MarketInput::Event(event) => self.event_shards(event, shard_count),
         }
     }
 
-    fn event_shards(&self, event: &MarketEvent, shard_count: usize) -> BuildResult<Vec<ShardId>> {
+    fn event_shards(
+        &self,
+        event: &MarketEvent,
+        shard_count: usize,
+    ) -> PlatformResult<Vec<ShardId>> {
         let decoder = self.decoder(event.exchange)?;
         let trades = decoder.decode(event)?;
         let mut shards = BTreeSet::new();
@@ -64,7 +68,7 @@ impl HashRouter {
         Ok(shards.into_iter().collect())
     }
 
-    fn decoder(&self, exchange: CexId) -> BuildResult<SharedTradeDecoder> {
+    fn decoder(&self, exchange: CexId) -> PlatformResult<SharedTradeDecoder> {
         let mut decoders = self.decoders.lock();
         if let Some(decoder) = decoders.get(&exchange) {
             return Ok(decoder.clone());
@@ -74,7 +78,7 @@ impl HashRouter {
         Ok(decoder)
     }
 
-    fn gap_shards(&self, gap: &GapMarker, shard_count: usize) -> BuildResult<Vec<ShardId>> {
+    fn gap_shards(&self, gap: &GapMarker, shard_count: usize) -> PlatformResult<Vec<ShardId>> {
         let decoder = self.decoder(gap.exchange)?;
         let trading_pair = decoder.trading_pair_for_stream(&gap.stream)?;
         Ok(vec![ShardId::for_trading_pair(
@@ -107,7 +111,7 @@ where
         }
     }
 
-    pub async fn run(self) -> BuildResult<()> {
+    pub async fn run(self) -> PlatformResult<()> {
         let Self {
             config,
             mut source,
@@ -135,7 +139,7 @@ where
         source: &mut S,
         publisher: &P,
         router: &HashRouter,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         while let Some(record) = source.next_input().await? {
             Self::route_input(config, source, publisher, router, record).await?;
         }
@@ -149,7 +153,7 @@ where
         publisher: &P,
         router: &HashRouter,
         record: SourceRecord,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let shards = match router.shards(&record.input, config.shard_count) {
             Ok(shards) => shards,
             Err(error) => {

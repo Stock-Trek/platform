@@ -6,7 +6,7 @@ use crate::{
 };
 use platform_aggregator::ProcessorConfig;
 use platform_archive::IcebergCatalog;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::ClosedCandle;
 use std::{collections::HashMap, path::Path, sync::Arc};
 use tracing::info;
@@ -32,7 +32,7 @@ impl RebuildCandles {
 }
 
 impl CandleRecordSource for RebuildCandles {
-    fn next_candle(&mut self) -> BuildResult<Option<ClosedCandle>> {
+    fn next_candle(&mut self) -> PlatformResult<Option<ClosedCandle>> {
         let candle = self.records.next_candle()?;
         if candle.is_some() {
             self.emitted += 1;
@@ -42,16 +42,16 @@ impl CandleRecordSource for RebuildCandles {
 }
 
 impl RebuildConfig {
-    fn work_dir(spill_dir: &Path) -> BuildResult<tempfile::TempDir> {
+    fn work_dir(spill_dir: &Path) -> PlatformResult<tempfile::TempDir> {
         std::fs::create_dir_all(spill_dir).map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "create rebuild spill directory",
                 spill_dir.display().to_string(),
                 error,
             )
         })?;
         tempfile::TempDir::new_in(spill_dir).map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "create rebuild temporary directory",
                 spill_dir.display().to_string(),
                 error,
@@ -66,7 +66,7 @@ impl RebuildConfig {
     /// candles are streamed to the sink as one archive object per partition
     /// group. The final partial candle is closed deterministically when the
     /// input ends, because rebuilds normally run over a finite time range.
-    pub async fn run(self) -> BuildResult<()> {
+    pub async fn run(self) -> PlatformResult<()> {
         let catalog = Arc::new(IcebergCatalog::connect(&self.iceberg).await?);
         let mut reader = IcebergEventReader::connect(catalog.as_ref(), self.source_layer).await?;
         let options = RebuildOptions {

@@ -1,5 +1,5 @@
 use crate::{BinanceConverter, Converter, MinMaxStep, TBExchangeInfo, TradingPrecision};
-use platform_errors::{BuildError, ValidationError};
+use platform_errors::{PlatformError, ValidationError};
 use rust_decimal::{Decimal, RoundingStrategy};
 use std::collections::HashMap;
 use stock_trek_types::cex::{
@@ -81,6 +81,6 @@ fn trading_converter_rejects_pairs_without_precision() {
 
     assert!(matches!(
         result,
-        Err(BuildError::Validation(ValidationError::MissingValue(_)))
+        Err(PlatformError::Validation(ValidationError::MissingValue(_)))
     ));
 }

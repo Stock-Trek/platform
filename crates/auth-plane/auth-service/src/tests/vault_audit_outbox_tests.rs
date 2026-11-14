@@ -9,7 +9,7 @@ use crate::{
     vault_client::{VaultClient, WriteCondition},
 };
 use chrono::Utc;
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use secrecy::SecretString;
 use serde_json::json;
 use std::time::Duration;
@@ -247,7 +247,7 @@ async fn corrupt_audit_records_are_reported_instead_of_dropped() {
 
     assert!(matches!(
         result,
-        Err(BuildError::Auth(AuthError::Store {
+        Err(PlatformError::Auth(AuthError::Store {
             retryable: false,
             ..
         }))

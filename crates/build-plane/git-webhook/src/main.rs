@@ -12,14 +12,14 @@ mod delivery_dedup_tests;
 use crate::{config::WebhookConfig, context::RsWebhookContext, webhook_handler::WebhookHandler};
 use lambda_http::{Request, service_fn};
 use metrics_cloudwatch_embedded::lambda::service::run_http;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_runtime::Service;
 use std::sync::Arc;
 
 const SERVICE: Service = Service::new("platform-git-webhook");
 
 #[tokio::main]
-async fn main() -> BuildResult<()> {
+async fn main() -> PlatformResult<()> {
     let config = WebhookConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let recorder =
@@ -33,5 +33,5 @@ async fn main() -> BuildResult<()> {
     };
     run_http(recorder, service_fn(handler))
         .await
-        .map_err(BuildError::external)
+        .map_err(PlatformError::external)
 }

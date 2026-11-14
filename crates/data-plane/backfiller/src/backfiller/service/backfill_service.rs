@@ -3,7 +3,7 @@ use crate::{
     gap_retry_store::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
     nats_gap_marker_source::GapMarkerSource,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::{GapMarker, MarketEventSubject};
 use platform_metrics::BACKFILL_OUTCOME_ERROR;
 use platform_metrics::MarketDataMetrics;
@@ -56,12 +56,15 @@ where
         self
     }
 
-    pub async fn run(self) -> BuildResult<()> {
+    pub async fn run(self) -> PlatformResult<()> {
         let pending = self.load_pending().await?;
         Runtime::run_until_shutdown(self.process_gaps(pending)).await
     }
 
-    async fn process_gaps(mut self, mut pending: BTreeMap<String, PendingGap>) -> BuildResult<()> {
+    async fn process_gaps(
+        mut self,
+        mut pending: BTreeMap<String, PendingGap>,
+    ) -> PlatformResult<()> {
         let mut source_ended = false;
 
         loop {
@@ -87,7 +90,7 @@ where
                         }
                     }
                 }
-                return Err(BuildError::external(
+                return Err(PlatformError::external(
                     "gap marker source ended before shutdown was requested",
                 ));
             }
@@ -110,7 +113,7 @@ where
 
     async fn requeue_failed_retry(
         &self,
-        error: &BuildError,
+        error: &PlatformError,
         gap: PendingGap,
         pending: &mut BTreeMap<String, PendingGap>,
     ) {
@@ -133,7 +136,7 @@ where
         pending.insert(gap.key(), gap);
     }
 
-    pub async fn load_pending(&self) -> BuildResult<BTreeMap<String, PendingGap>> {
+    pub async fn load_pending(&self) -> PlatformResult<BTreeMap<String, PendingGap>> {
         let mut pending = BTreeMap::new();
         for gap in self.retries.load().await? {
             pending.insert(gap.key(), gap);

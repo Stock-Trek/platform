@@ -12,7 +12,7 @@ use parquet::{
     basic::Compression,
     file::{properties::WriterProperties, reader::ChunkReader},
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::io::Write;
 
 const READ_BATCH_SIZE: usize = 8_192;
@@ -28,7 +28,7 @@ pub struct ArchiveParquetBatches {
 }
 
 impl Iterator for ArchiveParquetBatches {
-    type Item = BuildResult<ArchiveBatch>;
+    type Item = PlatformResult<ArchiveBatch>;
 
     fn next(&mut self) -> Option<Self::Item> {
         match self.reader.next()? {
@@ -52,7 +52,7 @@ impl<T> ArchiveParquetStream<T>
 where
     T: AsyncFileReader + Unpin + Send + 'static,
 {
-    pub async fn new(kind: ArchiveKind, reader: T) -> BuildResult<Self> {
+    pub async fn new(kind: ArchiveKind, reader: T) -> PlatformResult<Self> {
         Self::with_batch_size(kind, reader, READ_BATCH_SIZE).await
     }
 
@@ -60,14 +60,14 @@ where
         kind: ArchiveKind,
         reader: T,
         batch_size: usize,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let builder = ParquetRecordBatchStreamBuilder::new(reader).await?;
         let stream = builder.with_batch_size(batch_size).build()?;
         Ok(Self { kind, stream })
     }
 
     /// Returns the next bounded batch, or `None` when the object is exhausted.
-    pub async fn next_batch(&mut self) -> BuildResult<Option<ArchiveBatch>> {
+    pub async fn next_batch(&mut self) -> PlatformResult<Option<ArchiveBatch>> {
         match self.stream.next().await {
             Some(Ok(batch)) => Ok(Some(ArchiveBatch::from_record_batch(self.kind, &batch)?)),
             Some(Err(error)) => Err(error.into()),
@@ -84,7 +84,7 @@ pub struct ArchiveParquetWriter<W: Write + Send> {
 }
 
 impl<W: Write + Send> ArchiveParquetWriter<W> {
-    pub fn try_new(kind: ArchiveKind, sink: W) -> BuildResult<Self> {
+    pub fn try_new(kind: ArchiveKind, sink: W) -> PlatformResult<Self> {
         let writer = ArrowWriter::try_new(
             sink,
             ArchiveBatch::schema(kind),
@@ -93,7 +93,7 @@ impl<W: Write + Send> ArchiveParquetWriter<W> {
         Ok(Self { kind, writer })
     }
 
-    pub fn write(&mut self, batch: &ArchiveBatch) -> BuildResult<()> {
+    pub fn write(&mut self, batch: &ArchiveBatch) -> PlatformResult<()> {
         if batch.kind() != self.kind {
             return Err(Self::kind_mismatch(self.kind, batch.kind()));
         }
@@ -104,13 +104,13 @@ impl<W: Write + Send> ArchiveParquetWriter<W> {
         Ok(())
     }
 
-    pub fn close(self) -> BuildResult<()> {
+    pub fn close(self) -> PlatformResult<()> {
         self.writer.close()?;
         Ok(())
     }
 
-    fn kind_mismatch(writer: ArchiveKind, batch: ArchiveKind) -> BuildError {
-        BuildError::io(
+    fn kind_mismatch(writer: ArchiveKind, batch: ArchiveKind) -> PlatformError {
+        PlatformError::io(
             "write archived parquet",
             writer.label(),
             std::io::Error::new(
@@ -126,7 +126,7 @@ impl<W: Write + Send> ArchiveParquetWriter<W> {
 }
 
 impl ArchiveParquet {
-    pub fn encode(batch: &ArchiveBatch) -> BuildResult<Vec<u8>> {
+    pub fn encode(batch: &ArchiveBatch) -> PlatformResult<Vec<u8>> {
         let batch = batch.to_record_batch()?;
         let mut buffer = Vec::new();
         let mut writer =
@@ -136,7 +136,7 @@ impl ArchiveParquet {
         Ok(buffer)
     }
 
-    pub fn decode(kind: ArchiveKind, bytes: Bytes) -> BuildResult<ArchiveBatch> {
+    pub fn decode(kind: ArchiveKind, bytes: Bytes) -> PlatformResult<ArchiveBatch> {
         let mut records = Vec::new();
         for batch in Self::decode_batches(kind, bytes)? {
             records.extend(batch?.into_records());
@@ -147,7 +147,7 @@ impl ArchiveParquet {
     /// Decodes a Parquet source in bounded batches. The source can be an
     /// in-memory buffer or a file, so callers can avoid materializing both the
     /// encoded object and every decoded record at once.
-    pub fn decode_batches<R>(kind: ArchiveKind, source: R) -> BuildResult<ArchiveParquetBatches>
+    pub fn decode_batches<R>(kind: ArchiveKind, source: R) -> PlatformResult<ArchiveParquetBatches>
     where
         R: ChunkReader + 'static,
     {
@@ -160,7 +160,7 @@ impl ArchiveParquet {
         kind: ArchiveKind,
         source: R,
         batch_size: usize,
-    ) -> BuildResult<ArchiveParquetBatches>
+    ) -> PlatformResult<ArchiveParquetBatches>
     where
         R: ChunkReader + 'static,
     {
@@ -176,7 +176,7 @@ impl ArchiveParquet {
     pub async fn decode_reader(
         kind: ArchiveKind,
         reader: ParquetReader,
-    ) -> BuildResult<ArchiveBatch> {
+    ) -> PlatformResult<ArchiveBatch> {
         let mut stream = ArchiveParquetStream::new(kind, reader).await?;
         let mut records = Vec::new();
         while let Some(batch) = stream.next_batch().await? {

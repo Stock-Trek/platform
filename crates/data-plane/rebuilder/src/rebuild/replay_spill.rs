@@ -4,7 +4,7 @@ use crate::rebuild::{
     spill_merge::SpillRecords,
     spill_sorter::SpillSorter,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::{MarketEvent, Trade};
 use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
@@ -70,11 +70,11 @@ impl SpillCodec for ReplayCodec {
         false
     }
 
-    fn open(&self, path: &Path, _batch: usize) -> BuildResult<Self::Reader> {
+    fn open(&self, path: &Path, _batch: usize) -> PlatformResult<Self::Reader> {
         ReplayRunReader::open(path)
     }
 
-    fn create(&self, path: &Path, _batch: usize) -> BuildResult<Self::Writer> {
+    fn create(&self, path: &Path, _batch: usize) -> PlatformResult<Self::Writer> {
         ReplayRunWriter::create(path)
     }
 }
@@ -84,9 +84,9 @@ struct ReplayRunReader {
 }
 
 impl ReplayRunReader {
-    fn open(path: &Path) -> BuildResult<Self> {
+    fn open(path: &Path) -> PlatformResult<Self> {
         let file = File::open(path).map_err(|error| {
-            BuildError::io("open rebuild spill run", path.display().to_string(), error)
+            PlatformError::io("open rebuild spill run", path.display().to_string(), error)
         })?;
         Ok(Self {
             lines: std::io::BufReader::new(file).lines(),
@@ -97,19 +97,20 @@ impl ReplayRunReader {
 impl SpillReader for ReplayRunReader {
     type Record = ReplayRecord;
 
-    fn read(&mut self) -> BuildResult<Option<Self::Record>> {
+    fn read(&mut self) -> PlatformResult<Option<Self::Record>> {
         loop {
             let Some(line) = self.lines.next() else {
                 return Ok(None);
             };
-            let line = line
-                .map_err(|error| BuildError::io("read rebuild spill run", String::new(), error))?;
+            let line = line.map_err(|error| {
+                PlatformError::io("read rebuild spill run", String::new(), error)
+            })?;
             if line.is_empty() {
                 continue;
             }
             return serde_json::from_str(&line)
                 .map(Some)
-                .map_err(BuildError::external);
+                .map_err(PlatformError::external);
         }
     }
 }
@@ -120,9 +121,9 @@ struct ReplayRunWriter {
 }
 
 impl ReplayRunWriter {
-    fn create(path: &Path) -> BuildResult<Self> {
+    fn create(path: &Path) -> PlatformResult<Self> {
         let file = File::create(path).map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "create rebuild spill run",
                 path.display().to_string(),
                 error,
@@ -138,10 +139,10 @@ impl ReplayRunWriter {
 impl SpillWriter for ReplayRunWriter {
     type Record = ReplayRecord;
 
-    fn write(&mut self, record: Self::Record) -> BuildResult<()> {
-        serde_json::to_writer(&mut self.writer, &record).map_err(BuildError::external)?;
+    fn write(&mut self, record: Self::Record) -> PlatformResult<()> {
+        serde_json::to_writer(&mut self.writer, &record).map_err(PlatformError::external)?;
         self.writer.write_all(b"\n").map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "write rebuild spill run",
                 self.path.display().to_string(),
                 error,
@@ -149,9 +150,9 @@ impl SpillWriter for ReplayRunWriter {
         })
     }
 
-    fn finish(mut self) -> BuildResult<()> {
+    fn finish(mut self) -> PlatformResult<()> {
         self.writer.flush().map_err(|error| {
-            BuildError::io(
+            PlatformError::io(
                 "flush rebuild spill run",
                 self.path.display().to_string(),
                 error,
@@ -165,13 +166,13 @@ pub struct ReplaySpill {
 }
 
 impl ReplaySpill {
-    pub fn new(directory: impl Into<PathBuf>, limit: usize) -> BuildResult<Self> {
+    pub fn new(directory: impl Into<PathBuf>, limit: usize) -> PlatformResult<Self> {
         Ok(Self {
             sorter: SpillSorter::with_codec(directory, limit, ReplayCodec)?,
         })
     }
 
-    pub fn push(&mut self, record: ReplayRecord) -> BuildResult<()> {
+    pub fn push(&mut self, record: ReplayRecord) -> PlatformResult<()> {
         self.sorter.push_record(record)
     }
 
@@ -183,7 +184,7 @@ impl ReplaySpill {
         self.sorter.usage()
     }
 
-    pub fn finish(&mut self) -> BuildResult<ReplayRecords> {
+    pub fn finish(&mut self) -> PlatformResult<ReplayRecords> {
         Ok(ReplayRecords {
             records: self.sorter.finish()?,
         })
@@ -195,7 +196,7 @@ pub struct ReplayRecords {
 }
 
 impl ReplayRecords {
-    pub fn next_record(&mut self) -> BuildResult<Option<ReplayRecord>> {
+    pub fn next_record(&mut self) -> PlatformResult<Option<ReplayRecord>> {
         self.records.next_record()
     }
 }

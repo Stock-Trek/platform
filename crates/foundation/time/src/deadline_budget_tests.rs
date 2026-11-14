@@ -1,5 +1,5 @@
 use crate::deadline_budget::Deadline;
-use platform_errors::{BuildError, TimeoutError};
+use platform_errors::{PlatformError, TimeoutError};
 use std::time::{Duration, SystemTime};
 
 #[test]
@@ -19,7 +19,7 @@ fn expired_deadline_has_no_time_left() {
     assert_eq!(deadline.remaining_or_zero(), Duration::ZERO);
     assert!(matches!(
         deadline.fail_if_exceeded(),
-        Err(BuildError::Timeout(TimeoutError::DeadlineExceeded))
+        Err(PlatformError::Timeout(TimeoutError::DeadlineExceeded))
     ));
 }
 

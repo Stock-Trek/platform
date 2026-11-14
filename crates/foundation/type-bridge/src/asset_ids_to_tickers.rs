@@ -1,5 +1,5 @@
 use crate::ticker_map::TickerMapping;
-use platform_errors::{BuildError, BuildResult, ValidationError};
+use platform_errors::{PlatformError, PlatformResult, ValidationError};
 use platform_exchange_types::ticker::Ticker;
 use stock_trek_types::cex::{asset_id::AssetId, order_request::OrderRequest};
 
@@ -10,7 +10,7 @@ impl AssetIdsToTickers {
     pub fn asset_ids_to_tickers<N>(
         order_request: OrderRequest<AssetId, N>,
         ticker_mapping: &TickerMapping,
-    ) -> BuildResult<OrderRequest<Ticker, N>> {
+    ) -> PlatformResult<OrderRequest<Ticker, N>> {
         let (base, quote) = match order_request {
             OrderRequest::Limit { base, quote, .. }
             | OrderRequest::MarketBuy { base, quote, .. }
@@ -18,14 +18,14 @@ impl AssetIdsToTickers {
         };
         let base = ticker_mapping
             .ticker(&base)
-            .ok_or(BuildError::Validation(ValidationError::Unsupported {
+            .ok_or(PlatformError::Validation(ValidationError::Unsupported {
                 name: "AssetId".into(),
                 value: base.to_string(),
             }))?
             .clone();
         let quote = ticker_mapping
             .ticker(&quote)
-            .ok_or(BuildError::Validation(ValidationError::Unsupported {
+            .ok_or(PlatformError::Validation(ValidationError::Unsupported {
                 name: "AssetId".into(),
                 value: quote.to_string(),
             }))?

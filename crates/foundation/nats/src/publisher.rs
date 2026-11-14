@@ -7,7 +7,7 @@ use async_nats::{
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -15,7 +15,7 @@ use tokio::sync::Mutex as AsyncMutex;
 /// in-memory publisher instead of a live NATS connection.
 #[async_trait]
 pub trait EventPublisher: Send + Sync {
-    async fn publish(&self, subject: &str, payload: &[u8]) -> BuildResult<()>;
+    async fn publish(&self, subject: &str, payload: &[u8]) -> PlatformResult<()>;
 }
 
 /// Acknowledgement returned by JetStream for a stored message.
@@ -51,7 +51,7 @@ pub struct NatsPublisher {
 
 #[async_trait]
 impl EventPublisher for NatsPublisher {
-    async fn publish(&self, subject: &str, payload: &[u8]) -> BuildResult<()> {
+    async fn publish(&self, subject: &str, payload: &[u8]) -> PlatformResult<()> {
         NatsPublisher::publish(self, subject, payload).await
     }
 }
@@ -61,13 +61,13 @@ impl<T> EventPublisher for Arc<T>
 where
     T: EventPublisher + ?Sized,
 {
-    async fn publish(&self, subject: &str, payload: &[u8]) -> BuildResult<()> {
+    async fn publish(&self, subject: &str, payload: &[u8]) -> PlatformResult<()> {
         (**self).publish(subject, payload).await
     }
 }
 
 impl NatsPublisher {
-    pub async fn connect(url: &str, name: &str) -> BuildResult<Self> {
+    pub async fn connect(url: &str, name: &str) -> PlatformResult<Self> {
         let address = NatsAddress::parse(url)?;
         Ok(Self {
             address,
@@ -79,19 +79,19 @@ impl NatsPublisher {
 
     /// Ensures a JetStream stream covering every subject below `prefix` exists,
     /// creating or updating it on first use.
-    pub async fn ensure_stream(&self, subject_prefix: &str) -> BuildResult<()> {
+    pub async fn ensure_stream(&self, subject_prefix: &str) -> PlatformResult<()> {
         NatsSubject::validate_named("subject prefix", subject_prefix)?;
         self.ensure_stream_config(JetStream::stream_config(subject_prefix))
             .await
     }
 
-    pub async fn ensure_stream_spec(&self, spec: &StreamSpec) -> BuildResult<()> {
+    pub async fn ensure_stream_spec(&self, spec: &StreamSpec) -> PlatformResult<()> {
         NatsSubject::validate_named("subject prefix", spec.subject_prefix())?;
         self.ensure_stream_config(stream::Config::try_from(spec)?)
             .await
     }
 
-    async fn ensure_stream_config(&self, config: stream::Config) -> BuildResult<()> {
+    async fn ensure_stream_config(&self, config: stream::Config) -> PlatformResult<()> {
         let stream = config.name.clone();
         if self.streams.lock().contains(&stream) {
             return Ok(());
@@ -117,7 +117,7 @@ impl NatsPublisher {
 
     /// Publishes with a deterministic message id derived from the subject and
     /// payload, waiting for the JetStream acknowledgement.
-    pub async fn publish(&self, subject: &str, payload: &[u8]) -> BuildResult<()> {
+    pub async fn publish(&self, subject: &str, payload: &[u8]) -> PlatformResult<()> {
         self.publish_with_message_id(subject, &JetStream::message_id(subject, payload), payload)
             .await
             .map(|_| ())
@@ -130,7 +130,7 @@ impl NatsPublisher {
         subject: &str,
         message_id: &str,
         payload: &[u8],
-    ) -> BuildResult<PublishAck> {
+    ) -> PlatformResult<PublishAck> {
         NatsSubject::validate(subject)?;
         let context = self.context().await?;
         let mut headers = HeaderMap::new();
@@ -155,7 +155,7 @@ impl NatsPublisher {
         result
     }
 
-    async fn context(&self) -> BuildResult<Context> {
+    async fn context(&self) -> PlatformResult<Context> {
         let mut context = self.context.lock().await;
         if let Some(initialised) = context.as_ref() {
             return Ok(initialised.clone());

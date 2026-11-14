@@ -17,7 +17,7 @@ use crate::{
     config::IngesterConfig, ingester_runner::IngesterRunner, sequence_tracker::NatsSequenceStore,
     websocket_source::WebsocketSource,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_nats::NatsPublisher;
 use platform_runtime::Service;
 use std::sync::Arc;
@@ -25,7 +25,7 @@ use std::sync::Arc;
 const SERVICE: Service = Service::new("platform-ingester");
 
 #[tokio::main]
-async fn main() -> BuildResult<()> {
+async fn main() -> PlatformResult<()> {
     let config = IngesterConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let _metrics = SERVICE.init_metrics("platform/ingester")?;

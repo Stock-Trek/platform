@@ -1,9 +1,9 @@
 use crate::{ApiToken, AuthService, OwnerIndex, TokenMutation};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::collections::BTreeMap;
 
 impl AuthService {
-    pub async fn reconcile_owner_indexes(&self) -> BuildResult<usize> {
+    pub async fn reconcile_owner_indexes(&self) -> PlatformResult<usize> {
         let mut ids = self.store.ids().await?;
         ids.sort();
         ids.dedup();

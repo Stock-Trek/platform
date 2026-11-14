@@ -9,7 +9,7 @@ use crate::{
     portfolio::{AccountEvent, AccountSnapshot, BalanceParser},
 };
 use chrono::{TimeZone, Utc};
-use platform_errors::{BuildError, BuildResult, ExchangeError};
+use platform_errors::{ExchangeError, PlatformError, PlatformResult};
 
 impl ETExchangeAccountSnapshot for BinanceExchange {
     type SnapshotRequest = BinanceAccountStatusRequest;
@@ -21,13 +21,13 @@ impl ETExchangeAccountSnapshot for BinanceExchange {
     fn account_snapshot(
         response: BinanceResponse<BinanceAccountStatusResponse>,
         context: &AccountSnapshotContext<'_>,
-    ) -> BuildResult<AccountSnapshot> {
+    ) -> PlatformResult<AccountSnapshot> {
         let account = Self::success(response)?;
         let occurred_at = Utc
             .timestamp_millis_opt(account.updateTime)
             .single()
             .ok_or_else(|| {
-                BuildError::Exchange(ExchangeError::BadResponse(
+                PlatformError::Exchange(ExchangeError::BadResponse(
                     "invalid account timestamp".to_string(),
                 ))
             })?;
@@ -47,7 +47,7 @@ impl ETExchangeAccountSnapshot for BinanceExchange {
     fn account_event(
         value: &serde_json::Value,
         context: &AccountSnapshotContext<'_>,
-    ) -> BuildResult<Option<AccountEvent>> {
+    ) -> PlatformResult<Option<AccountEvent>> {
         EventParser::parse(value, context.mapping())
     }
 }

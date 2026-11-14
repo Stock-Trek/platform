@@ -1,6 +1,6 @@
 use crate::freshness::{PortfolioFreshness, StaleOrderPolicy};
 use chrono::Duration;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct FreshnessPolicy {
@@ -9,9 +9,9 @@ pub struct FreshnessPolicy {
 }
 
 impl FreshnessPolicy {
-    pub fn new(max_age: Duration, stale_order_policy: StaleOrderPolicy) -> BuildResult<Self> {
+    pub fn new(max_age: Duration, stale_order_policy: StaleOrderPolicy) -> PlatformResult<Self> {
         if max_age <= Duration::zero() {
-            return Err(BuildError::bad_value(
+            return Err(PlatformError::bad_value(
                 "portfolio max update age",
                 max_age.to_string(),
                 "must be positive",
@@ -46,12 +46,12 @@ impl FreshnessPolicy {
         }
     }
 
-    pub fn authorize_order(&self, age: Option<Duration>) -> BuildResult<PortfolioFreshness> {
+    pub fn authorize_order(&self, age: Option<Duration>) -> PlatformResult<PortfolioFreshness> {
         let freshness = self.evaluate(age);
         if freshness == PortfolioFreshness::Stale
             && self.stale_order_policy == StaleOrderPolicy::Reject
         {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "account",
                 "has stale portfolio data",
             ));

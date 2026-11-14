@@ -3,7 +3,7 @@ use crate::connector::portfolio::{
 };
 use async_trait::async_trait;
 use parking_lot::RwLock;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::{
     collections::{BTreeMap, BTreeSet},
     sync::Arc,
@@ -30,17 +30,20 @@ impl ExchangePortfolioFeed {
         self.connections.lock().await.len()
     }
 
-    fn update_sink(&self) -> BuildResult<Arc<dyn PortfolioUpdateSink>> {
-        self.update_sink
-            .read()
-            .clone()
-            .ok_or_else(|| BuildError::bad_value("portfolio update sink", "", "is not configured"))
+    fn update_sink(&self) -> PlatformResult<Arc<dyn PortfolioUpdateSink>> {
+        self.update_sink.read().clone().ok_or_else(|| {
+            PlatformError::bad_value("portfolio update sink", "", "is not configured")
+        })
     }
 }
 
 #[async_trait]
 impl PortfolioFeed for ExchangePortfolioFeed {
-    async fn set_accounts(&self, cex_id: CexId, accounts: BTreeSet<AccountId>) -> BuildResult<()> {
+    async fn set_accounts(
+        &self,
+        cex_id: CexId,
+        accounts: BTreeSet<AccountId>,
+    ) -> PlatformResult<()> {
         let mut connections = self.connections.lock().await;
         if accounts.is_empty() {
             if let Some(connection) = connections.remove(&cex_id) {

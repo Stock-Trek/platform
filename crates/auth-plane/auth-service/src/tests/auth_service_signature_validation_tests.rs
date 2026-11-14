@@ -1,7 +1,7 @@
 use crate::OrderRequestSigner;
 use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use secrecy::{ExposeSecret, SecretString};
 
 #[tokio::test]
@@ -53,7 +53,7 @@ fn rejects_blank_signing_secrets() {
 
         assert!(matches!(
             error,
-            Err(BuildError::Auth(AuthError::InvalidField {
+            Err(PlatformError::Auth(AuthError::InvalidField {
                 field: "secret",
                 ..
             }))
@@ -110,7 +110,7 @@ async fn signing_rejects_an_already_expired_request() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "expires_at",
             ..
         }))

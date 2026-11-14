@@ -1,7 +1,7 @@
 use crate::tests::support_tests::TEST_SIGNATURE;
 use crate::{OrderRequestContext, SignedOrderRequest};
 use chrono::{DateTime, Duration, Timelike};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 
 struct PrecisionFixture;
 
@@ -52,7 +52,7 @@ fn rejects_sub_second_signature_validity() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "expires_at",
             ..
         }))

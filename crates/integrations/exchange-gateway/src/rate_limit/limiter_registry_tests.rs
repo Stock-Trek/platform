@@ -3,7 +3,7 @@ use crate::rate_limit::{
     limiter_state::RateLimiterState,
     rate_limiter::RateLimiter,
 };
-use platform_errors::{BuildError, RateLimitError};
+use platform_errors::{PlatformError, RateLimitError};
 use platform_exchange_types::rate_limited::RateLimitRestriction;
 use platform_types::{DurationNanoseconds, UsageCount};
 use std::collections::HashMap;
@@ -26,7 +26,7 @@ fn retry_after_blocks_zero_cost_requests() {
         .expect("set retry after");
     assert!(matches!(
         rate_limiters.did_acquire(&[]),
-        Err(BuildError::RateLimit(RateLimitError::RateLimited))
+        Err(PlatformError::RateLimit(RateLimitError::RateLimited))
     ));
 }
 
@@ -57,7 +57,7 @@ fn zero_retry_after_does_not_clear_an_existing_throttle() {
 
     assert!(matches!(
         rate_limiters.did_acquire(&[]),
-        Err(BuildError::RateLimit(RateLimitError::RateLimited))
+        Err(PlatformError::RateLimit(RateLimitError::RateLimited))
     ));
 }
 
@@ -112,7 +112,7 @@ fn partial_acquisition_failure_refunds_without_deadlock() {
     ];
     assert!(matches!(
         rate_limiters.did_acquire(&costs),
-        Err(BuildError::RateLimit(
+        Err(PlatformError::RateLimit(
             RateLimitError::RequestExceedsRateLimit { .. }
         ))
     ));

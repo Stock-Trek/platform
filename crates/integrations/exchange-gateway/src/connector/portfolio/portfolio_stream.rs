@@ -1,5 +1,5 @@
 use iris::{Client, Listener};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_types::{
     exchange_account_snapshot::{AccountSnapshotContext, ETExchangeAccountSnapshot},
     portfolio::AccountEvent,
@@ -43,21 +43,21 @@ impl PortfolioStream {
         })
     }
 
-    pub async fn next(&mut self) -> BuildResult<Option<AccountEvent>> {
+    pub async fn next(&mut self) -> PlatformResult<Option<AccountEvent>> {
         match self.events.recv().await {
             Some(PortfolioEvent::Account(event)) => Ok(Some(event)),
             Some(PortfolioEvent::Closed) | None => Ok(None),
-            Some(PortfolioEvent::Failed(error)) => Err(platform_errors::BuildError::external(
+            Some(PortfolioEvent::Failed(error)) => Err(platform_errors::PlatformError::external(
                 std::io::Error::other(error),
             )),
         }
     }
 
-    pub async fn disconnect(&self) -> BuildResult<()> {
+    pub async fn disconnect(&self) -> PlatformResult<()> {
         self.client
             .disconnect()
             .await
-            .map_err(platform_errors::BuildError::external)
+            .map_err(platform_errors::PlatformError::external)
     }
 }
 

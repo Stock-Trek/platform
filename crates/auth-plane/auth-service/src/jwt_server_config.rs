@@ -3,7 +3,7 @@ use crate::{
     VaultTokenStoreConfig,
 };
 use platform_config::{EnvVars, RUST_LOG};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_sigv4::SigV4Config;
 use platform_types::UrlScheme;
 use secrecy::SecretString;
@@ -46,11 +46,11 @@ pub struct JwtServerConfig {
 }
 
 impl JwtServerConfig {
-    pub fn from_env() -> BuildResult<Self> {
+    pub fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let vault = VaultTokenStoreConfig::new(
             vars.required_url(AUTH_SERVICE_VAULT_ADDRESS, &UrlScheme::HTTP)?,
             SecretString::from(vars.required(AUTH_SERVICE_VAULT_TOKEN)?),
@@ -136,7 +136,7 @@ impl JwtServerConfig {
         &self.token_cache
     }
 
-    pub fn jwt_signing_key(&self) -> BuildResult<JwtSigningKey> {
+    pub fn jwt_signing_key(&self) -> PlatformResult<JwtSigningKey> {
         use secrecy::ExposeSecret;
         JwtSigningKey::from_pkcs8_pem(&self.jwt_key_id, self.jwt_private_key_pem.expose_secret())
     }

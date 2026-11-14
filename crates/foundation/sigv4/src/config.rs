@@ -1,6 +1,6 @@
 use crate::{SigV4Registry, SigV4Request, SigV4Signer, VerifiedCaller, verifier::SigV4Verifier};
 use platform_config::{EnvVars, SIGV4_CREDENTIALS, SIGV4_REGION, SIGV4_SERVICE};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::time::SystemTime;
 
 const DEFAULT_MAX_CLOCK_SKEW_SECS: i64 = 300;
@@ -18,7 +18,7 @@ impl SigV4Config {
         registry: SigV4Registry,
         region: impl Into<String>,
         service: impl Into<String>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         Self::with_clock_skew(registry, region, service, DEFAULT_MAX_CLOCK_SKEW_SECS)
     }
 
@@ -27,13 +27,13 @@ impl SigV4Config {
         region: impl Into<String>,
         service: impl Into<String>,
         max_clock_skew_secs: i64,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let region = region.into();
         let service = service.into();
         Self::validate_name(SIGV4_REGION, &region)?;
         Self::validate_name(SIGV4_SERVICE, &service)?;
         if max_clock_skew_secs < 0 {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "sigv4_max_clock_skew_secs",
                 "must not be negative",
             ));
@@ -46,11 +46,11 @@ impl SigV4Config {
         })
     }
 
-    pub fn from_env() -> BuildResult<Self> {
+    pub fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let registry = SigV4Registry::from_json(&vars.required(SIGV4_CREDENTIALS)?)?;
         Self::new(
             registry,
@@ -59,7 +59,7 @@ impl SigV4Config {
         )
     }
 
-    pub fn signer_for_owner(&self, owner: &str) -> BuildResult<SigV4Signer> {
+    pub fn signer_for_owner(&self, owner: &str) -> PlatformResult<SigV4Signer> {
         Ok(SigV4Signer::new(
             self.registry.credentials_for_owner(owner)?.clone(),
             self.region.clone(),
@@ -71,7 +71,7 @@ impl SigV4Config {
         &self,
         request: &SigV4Request<'_>,
         now: SystemTime,
-    ) -> BuildResult<VerifiedCaller> {
+    ) -> PlatformResult<VerifiedCaller> {
         SigV4Verifier::new(
             self.region.clone(),
             self.service.clone(),
@@ -96,12 +96,12 @@ impl SigV4Config {
         self.max_clock_skew_secs
     }
 
-    fn validate_name(name: &'static str, value: &str) -> BuildResult<()> {
+    fn validate_name(name: &'static str, value: &str) -> PlatformResult<()> {
         if value.is_empty() {
-            return Err(BuildError::config_invalid(name, "must not be empty"));
+            return Err(PlatformError::config_invalid(name, "must not be empty"));
         }
         if value.trim() != value || value.chars().any(char::is_control) {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 name,
                 "must not contain surrounding whitespace or control characters",
             ));

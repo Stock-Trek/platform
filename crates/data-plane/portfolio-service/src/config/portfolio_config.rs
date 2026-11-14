@@ -3,7 +3,7 @@ use crate::config::{
     UpdateConfig,
 };
 use platform_config::EnvVars;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_gateway::PortfolioConnectorConfig;
 use platform_runtime::Config;
 
@@ -19,11 +19,11 @@ pub struct PortfolioConfig {
 }
 
 impl PortfolioConfig {
-    pub fn from_env() -> BuildResult<Self> {
+    pub fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let selected = PortfolioConnectorConfig::selected_cexes(vars)?;
         let exchanges = PortfolioExchanges::from_vars(vars, selected.as_ref())?;
         Ok(Self {

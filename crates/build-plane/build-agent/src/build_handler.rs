@@ -1,5 +1,5 @@
 use crate::{artifacts::Artifacts, signed_post::SignedPost, source_archive::SourceLimits};
-use platform_errors::{BuildError, BuildResult, TimeoutError};
+use platform_errors::{PlatformError, PlatformResult, TimeoutError};
 use platform_messages::BuildRequest;
 use std::{
     path::PathBuf,
@@ -33,7 +33,7 @@ impl Handler {
         }
     }
 
-    pub async fn handle(&self, request: BuildRequest, deadline: Instant) -> BuildResult<()> {
+    pub async fn handle(&self, request: BuildRequest, deadline: Instant) -> PlatformResult<()> {
         tracing::info!(
             git_host = %request.git_host,
             git_provider = %request.git_provider,
@@ -61,7 +61,7 @@ impl Handler {
             artifacts.publish(&cwasm).await
         })
         .await
-        .unwrap_or(Err(BuildError::Timeout(TimeoutError::BuildTimeout(
+        .unwrap_or(Err(PlatformError::Timeout(TimeoutError::BuildTimeout(
             self.build_timeout,
         ))));
 

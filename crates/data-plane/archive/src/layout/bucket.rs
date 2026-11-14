@@ -1,6 +1,6 @@
 use crate::layout::ArchivePath;
 use crate::{ArchiveKind, ArchivePartition, ArchiveRecord, routing_key::RoutingBucket};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_types::TimestampMilliseconds;
 
 /// A record kind and the hourly bucket it belongs to.
@@ -27,7 +27,7 @@ impl ArchiveBucket {
         prefix: &str,
         routing_bucket: RoutingBucket,
         file_name: impl AsRef<str>,
-    ) -> BuildResult<String> {
+    ) -> PlatformResult<String> {
         ArchivePath::raw_key(
             prefix,
             self.kind,
@@ -43,7 +43,7 @@ impl ArchiveBucket {
         partition: &ArchivePartition,
         routing_bucket: RoutingBucket,
         file_name: impl AsRef<str>,
-    ) -> BuildResult<String> {
+    ) -> PlatformResult<String> {
         ArchivePath::compacted_key(
             prefix,
             partition,

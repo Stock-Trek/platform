@@ -13,10 +13,10 @@ use crate::{
     system::SystemError, timeout::TimeoutError, validation::ValidationError,
 };
 
-pub type BuildResult<T> = Result<T, BuildError>;
+pub type PlatformResult<T> = Result<T, PlatformError>;
 
 #[derive(Debug, thiserror::Error)]
-pub enum BuildError {
+pub enum PlatformError {
     #[error(transparent)]
     Auth(#[from] AuthError),
     #[error(transparent)]

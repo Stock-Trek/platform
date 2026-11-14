@@ -4,7 +4,7 @@ use crate::{
     TokenAuditAction,
 };
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use std::sync::Arc;
 
 struct FutureSignatureFixture;
@@ -49,7 +49,7 @@ async fn signing_rejects_a_signature_issued_in_the_future() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "issued_at",
             ..
         }))

@@ -4,7 +4,7 @@ use crate::{
     TokenRotationTransaction, TokenStore,
 };
 use chrono::{DateTime, Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use secrecy::{ExposeSecret, SecretString};
 
 struct RotationIdempotencyFixture;
@@ -103,7 +103,7 @@ async fn materializing_a_different_secret_for_an_existing_replacement_is_rejecte
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::Conflict { ref token_id }) if token_id == "token-b"
+        PlatformError::Auth(AuthError::Conflict { ref token_id }) if token_id == "token-b"
     ));
     let stored = store.get("token-b").await.unwrap().unwrap();
     assert!(stored.matches_secret("persisted-secret"));

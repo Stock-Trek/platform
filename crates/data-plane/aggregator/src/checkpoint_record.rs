@@ -9,7 +9,7 @@ use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
 use crate::{WriterLease, config::AggregatorConfig};
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_nats::{JetStream, KeyValue, Message};
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
@@ -73,13 +73,13 @@ impl CheckpointRecord {
         message: &Message,
         shard: ShardId,
         state: AggregatorState,
-    ) -> BuildResult<Option<Self>> {
+    ) -> PlatformResult<Option<Self>> {
         let (Some(stream), Some(stream_sequence)) = (&message.stream, message.stream_sequence)
         else {
             return Ok(None);
         };
         if stream.is_empty() {
-            return Err(BuildError::bad_value(
+            return Err(PlatformError::bad_value(
                 "checkpoint",
                 "stream",
                 "stream name must not be empty",
@@ -141,9 +141,9 @@ impl CheckpointRecord {
 /// Durable storage for complete shard checkpoints.
 #[async_trait]
 pub trait StateStore: Send + Sync {
-    async fn load(&self, shard: ShardId) -> BuildResult<Option<CheckpointRecord>>;
+    async fn load(&self, shard: ShardId) -> PlatformResult<Option<CheckpointRecord>>;
 
-    async fn save(&self, checkpoint: &CheckpointRecord) -> BuildResult<()>;
+    async fn save(&self, checkpoint: &CheckpointRecord) -> PlatformResult<()>;
 }
 
 /// Checkpoints stored in a NATS KV bucket owned by the aggregator.
@@ -158,7 +158,7 @@ impl NatsStateStore {
         JetStream::kv_bucket_name(&format!("{shard_subject_prefix}.checkpoints"))
     }
 
-    pub async fn connect(config: &AggregatorConfig) -> BuildResult<Self> {
+    pub async fn connect(config: &AggregatorConfig) -> PlatformResult<Self> {
         let bucket = config.checkpoint_bucket();
         let values =
             KeyValue::connect(&config.nats_url, "platform-aggregator-checkpoints", &bucket).await?;
@@ -180,7 +180,7 @@ impl NatsStateStore {
     pub async fn load_with_revision(
         &self,
         shard: ShardId,
-    ) -> BuildResult<Option<(CheckpointRecord, u64)>> {
+    ) -> PlatformResult<Option<(CheckpointRecord, u64)>> {
         let Some((payload, revision)) = self.values.get_with_revision(&self.key(shard)).await?
         else {
             return Ok(None);
@@ -197,7 +197,7 @@ impl NatsStateStore {
         &self,
         checkpoint: &CheckpointRecord,
         expected_revision: Option<u64>,
-    ) -> BuildResult<u64> {
+    ) -> PlatformResult<u64> {
         let payload = serde_json::to_vec(checkpoint)?;
         let key = self.key(checkpoint.shard);
         match expected_revision {
@@ -206,13 +206,13 @@ impl NatsStateStore {
         }
     }
 
-    async fn ensure_lease_holder(&self, checkpoint: &CheckpointRecord) -> BuildResult<()> {
+    async fn ensure_lease_holder(&self, checkpoint: &CheckpointRecord) -> PlatformResult<()> {
         let Some((payload, _)) = self
             .values
             .get_with_revision(&WriterLease::key(checkpoint.shard))
             .await?
         else {
-            return Err(BuildError::bad_value(
+            return Err(PlatformError::bad_value(
                 "checkpoint lease",
                 checkpoint.shard.to_string(),
                 "no active writer lease",
@@ -222,7 +222,7 @@ impl NatsStateStore {
         if !lease.is_held_by(&checkpoint.writer_id, checkpoint.fencing_token)
             || lease.is_expired(TimestampMilliseconds::now())
         {
-            return Err(BuildError::bad_value(
+            return Err(PlatformError::bad_value(
                 "checkpoint lease",
                 checkpoint.fencing_token.to_string(),
                 format!(
@@ -242,11 +242,11 @@ impl NatsStateStore {
     pub fn ensure_fence_allows(
         existing: &CheckpointRecord,
         checkpoint: &CheckpointRecord,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         if existing.is_writable_by(&checkpoint.writer_id, checkpoint.fencing_token) {
             return Ok(());
         }
-        Err(BuildError::bad_value(
+        Err(PlatformError::bad_value(
             "checkpoint fencing token",
             checkpoint.fencing_token.to_string(),
             format!(
@@ -259,14 +259,14 @@ impl NatsStateStore {
 
 #[async_trait]
 impl StateStore for NatsStateStore {
-    async fn load(&self, shard: ShardId) -> BuildResult<Option<CheckpointRecord>> {
+    async fn load(&self, shard: ShardId) -> PlatformResult<Option<CheckpointRecord>> {
         Ok(self
             .load_with_revision(shard)
             .await?
             .map(|(checkpoint, _)| checkpoint))
     }
 
-    async fn save(&self, checkpoint: &CheckpointRecord) -> BuildResult<()> {
+    async fn save(&self, checkpoint: &CheckpointRecord) -> PlatformResult<()> {
         self.ensure_lease_holder(checkpoint).await?;
         // Load the current checkpoint and revision together. Checking the
         // stored fencing token prevents a stalled writer that reads the

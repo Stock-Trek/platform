@@ -1,5 +1,5 @@
 use crate::server_clock::Clock;
-use platform_errors::{BuildError, ConnectorError};
+use platform_errors::{ConnectorError, PlatformError};
 use platform_types::TimestampMilliseconds;
 use std::time::Duration;
 
@@ -9,7 +9,7 @@ fn server_time_estimate_errors_before_sync() {
     assert!(!clock.is_synced().unwrap());
     assert!(matches!(
         clock.server_time_estimate(),
-        Err(BuildError::Connector(ConnectorError::ClockNotSynced))
+        Err(PlatformError::Connector(ConnectorError::ClockNotSynced))
     ));
 }
 

@@ -1,6 +1,6 @@
 use crate::tests::support_tests::TestFixture;
 use chrono::Utc;
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use secrecy::ExposeSecret;
 use std::sync::Arc;
 
@@ -16,7 +16,7 @@ async fn adding_a_duplicate_token_fails_without_replacing_it() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::TokenExists { .. }))
+        Err(PlatformError::Auth(AuthError::TokenExists { .. }))
     ));
     let stored = service.token("token-a").await.unwrap();
     assert_eq!(stored.owner(), original.owner());
@@ -95,7 +95,7 @@ async fn looking_up_an_unknown_token_fails() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::UnknownToken { .. }))
+        Err(PlatformError::Auth(AuthError::UnknownToken { .. }))
     ));
 }
 
@@ -123,7 +123,7 @@ async fn authentication_rejects_the_wrong_secret() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidSecret { ref token_id }))
+        Err(PlatformError::Auth(AuthError::InvalidSecret { ref token_id }))
             if token_id == added.id()
     ));
 }
@@ -138,7 +138,7 @@ async fn authenticating_an_unknown_token_fails() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::UnknownToken { .. }))
+        Err(PlatformError::Auth(AuthError::UnknownToken { .. }))
     ));
 }
 
@@ -150,17 +150,17 @@ async fn rejects_path_traversal_token_ids_before_store_access() {
         let error = service.token(id).await;
         assert!(matches!(
             error,
-            Err(BuildError::Auth(AuthError::InvalidField { .. }))
+            Err(PlatformError::Auth(AuthError::InvalidField { .. }))
         ));
         let error = service.delete_token(id, Utc::now()).await;
         assert!(matches!(
             error,
-            Err(BuildError::Auth(AuthError::InvalidField { .. }))
+            Err(PlatformError::Auth(AuthError::InvalidField { .. }))
         ));
         let error = service.authenticate(id, "secret", None, Utc::now()).await;
         assert!(matches!(
             error,
-            Err(BuildError::Auth(AuthError::InvalidField { .. }))
+            Err(PlatformError::Auth(AuthError::InvalidField { .. }))
         ));
     }
 }

@@ -2,7 +2,7 @@ use platform_config::{
     AWS_LAMBDA_FUNCTION_NAME, BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS, BUILD_AGENT_TIMEOUT_SECS,
     EnvVars, RUST_LOG, S3_MAX_SOURCE_ARCHIVE_SIZE_BYTES,
 };
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::{num::NonZeroU64, path::PathBuf, time::Duration};
 
 const BUILD_AGENT_BUILD_CACHE_DIR: &str = "BUILD_AGENT_BUILD_CACHE_DIR";
@@ -30,11 +30,11 @@ pub struct AgentConfig {
 }
 
 impl AgentConfig {
-    pub fn from_env() -> BuildResult<Self> {
+    pub fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let build_timeout = vars.required_positive_duration_secs(BUILD_AGENT_TIMEOUT_SECS)?;
         let source_download_timeout =
             vars.required_positive_duration_secs(BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS)?;

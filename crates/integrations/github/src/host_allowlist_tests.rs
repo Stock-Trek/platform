@@ -1,5 +1,5 @@
 use crate::host_allowlist::{DEFAULT_HOST, HostAllowlist};
-use platform_errors::{BuildError, GitHubError};
+use platform_errors::{GitHubError, PlatformError};
 
 fn allowlist() -> HostAllowlist {
     HostAllowlist::from_hosts([DEFAULT_HOST, "ghe.example.com"]).unwrap()
@@ -113,7 +113,7 @@ fn rejects_non_https_schemes() {
 fn rejects_non_allowlisted_host() {
     assert!(matches!(
         allowlist().validate_url("https://evil.com/"),
-        Err(BuildError::GitHub(GitHubError::HostNotAllowed { .. }))
+        Err(PlatformError::GitHub(GitHubError::HostNotAllowed { .. }))
     ));
 }
 

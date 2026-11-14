@@ -1,5 +1,5 @@
 use crate::connector::portfolio::{PortfolioExchange, PortfolioStream};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     portfolio::{
@@ -23,7 +23,7 @@ impl PortfolioSession {
         exchange: Arc<dyn PortfolioExchange>,
         account: &AccountId,
         credentials: &ApiKeyCredentials,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         Self::open_with_credential(exchange, account, credentials, None).await
     }
 
@@ -32,7 +32,7 @@ impl PortfolioSession {
         account: &AccountId,
         credentials: &ApiKeyCredentials,
         previous: Option<Credential>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let auth = exchange.portfolio_auth(credentials).await?;
         let lifecycle = auth.lifecycle();
         let credential = match previous {
@@ -78,11 +78,11 @@ impl PortfolioSession {
         }
     }
 
-    pub async fn snapshot(&self) -> BuildResult<AccountSnapshot> {
+    pub async fn snapshot(&self) -> PlatformResult<AccountSnapshot> {
         self.exchange.account_snapshot(&self.credentials).await
     }
 
-    pub async fn refresh(&mut self) -> BuildResult<()> {
+    pub async fn refresh(&mut self) -> PlatformResult<()> {
         let Some(credential) = self.credential.as_ref() else {
             return Ok(());
         };
@@ -93,11 +93,11 @@ impl PortfolioSession {
         Ok(())
     }
 
-    pub async fn disconnect(&self) -> BuildResult<()> {
+    pub async fn disconnect(&self) -> PlatformResult<()> {
         self.stream.disconnect().await
     }
 
-    pub async fn close(&mut self) -> BuildResult<()> {
+    pub async fn close(&mut self) -> PlatformResult<()> {
         let credential = self.credential.take();
         let disconnect = self.stream.disconnect().await;
         if let Some(credential) = credential
@@ -108,7 +108,7 @@ impl PortfolioSession {
         disconnect
     }
 
-    pub async fn next(&mut self) -> BuildResult<Option<AccountEvent>> {
+    pub async fn next(&mut self) -> PlatformResult<Option<AccountEvent>> {
         self.stream.next().await
     }
 

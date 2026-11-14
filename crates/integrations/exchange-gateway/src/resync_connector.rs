@@ -1,6 +1,6 @@
 use crate::{connector::Connector, panic_guard::PanicUtils, submission::Submission};
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult, ConnectorError};
+use platform_errors::{ConnectorError, PlatformError, PlatformResult};
 use platform_exchange_types::{
     exchange::ETExchange,
     exchange_server_time::{ETExchangeServerTimeHttp, ETExchangeServerTimeWebsocket},
@@ -14,7 +14,7 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::{debug, warn};
 
-pub type ClockSyncFailureCallback = Arc<dyn Fn(&BuildError) + Send + Sync>;
+pub type ClockSyncFailureCallback = Arc<dyn Fn(&PlatformError) + Send + Sync>;
 pub type SharedClockSyncFailureCallback = Arc<Mutex<Option<ClockSyncFailureCallback>>>;
 
 pub struct AutoResyncConnector<Exchange, Client> {
@@ -36,13 +36,13 @@ pub enum ClockSyncCommand {
 impl<Exchange, Client> AutoResyncConnector<Exchange, Client> {
     pub async fn clock_sync_loop<F, Fut>(
         frequency: Duration,
-        first_sync_sender: tokio::sync::oneshot::Sender<BuildResult<()>>,
+        first_sync_sender: tokio::sync::oneshot::Sender<PlatformResult<()>>,
         receiver: tokio::sync::mpsc::UnboundedReceiver<ClockSyncCommand>,
         failure_callback: SharedClockSyncFailureCallback,
         sync_clock_fn: F,
     ) where
         F: Fn() -> Fut + Send + 'static,
-        Fut: Future<Output = BuildResult<()>> + Send + 'static,
+        Fut: Future<Output = PlatformResult<()>> + Send + 'static,
     {
         let panic_callback = failure_callback.clone();
         let result = PanicUtils::catch_panic_async(Self::clock_sync_loop_inner(
@@ -57,7 +57,7 @@ impl<Exchange, Client> AutoResyncConnector<Exchange, Client> {
             // Surface the panic before letting it propagate so the task never dies silently.
             Self::report_failure(
                 &panic_callback,
-                &BuildError::Connector(ConnectorError::AutoResyncClockPanicked),
+                &PlatformError::Connector(ConnectorError::AutoResyncClockPanicked),
             );
             std::panic::resume_unwind(panic.into_payload());
         }
@@ -65,13 +65,13 @@ impl<Exchange, Client> AutoResyncConnector<Exchange, Client> {
 
     async fn clock_sync_loop_inner<F, Fut>(
         mut frequency: Duration,
-        first_sync_sender: tokio::sync::oneshot::Sender<BuildResult<()>>,
+        first_sync_sender: tokio::sync::oneshot::Sender<PlatformResult<()>>,
         mut receiver: tokio::sync::mpsc::UnboundedReceiver<ClockSyncCommand>,
         failure_callback: SharedClockSyncFailureCallback,
         sync_clock_fn: F,
     ) where
         F: Fn() -> Fut + Send + 'static,
-        Fut: Future<Output = BuildResult<()>> + Send + 'static,
+        Fut: Future<Output = PlatformResult<()>> + Send + 'static,
     {
         let first_sync_result = sync_clock_fn().await;
         if let Err(Err(error)) = first_sync_sender.send(first_sync_result) {
@@ -97,7 +97,7 @@ impl<Exchange, Client> AutoResyncConnector<Exchange, Client> {
         }
     }
 
-    fn report_failure(failure_callback: &SharedClockSyncFailureCallback, error: &BuildError) {
+    fn report_failure(failure_callback: &SharedClockSyncFailureCallback, error: &PlatformError) {
         warn!(error = %error, "auto-resync clock sync failed");
         let callback = failure_callback.lock().clone();
         if let Some(callback) = callback.as_ref() {
@@ -119,23 +119,23 @@ where
             failure_callback: Arc::new(Mutex::new(None)),
         }
     }
-    pub fn duration_since_last_sync(&self) -> BuildResult<Option<Duration>> {
+    pub fn duration_since_last_sync(&self) -> PlatformResult<Option<Duration>> {
         self.connector.duration_since_last_sync()
     }
-    pub fn remaining_rate_limit_capacity(&self) -> BuildResult<HashMap<RateLimit, UsageCount>> {
+    pub fn remaining_rate_limit_capacity(&self) -> PlatformResult<HashMap<RateLimit, UsageCount>> {
         self.connector.remaining_rate_limit_capacity()
     }
-    pub fn server_time_estimate(&self) -> BuildResult<TimestampMilliseconds> {
+    pub fn server_time_estimate(&self) -> PlatformResult<TimestampMilliseconds> {
         self.connector.server_time_estimate()
     }
     pub fn on_clock_sync_failure<F>(&self, callback: F)
     where
-        F: Fn(&BuildError) + Send + Sync + 'static,
+        F: Fn(&PlatformError) + Send + Sync + 'static,
     {
         let mut guard = self.failure_callback.lock();
         *guard = Some(Arc::new(callback));
     }
-    pub async fn stop_clock_sync(&self) -> BuildResult<()> {
+    pub async fn stop_clock_sync(&self) -> PlatformResult<()> {
         let handle = self.resync_handle.lock().take();
         let Some(handle) = handle else { return Ok(()) };
         debug!("stopping auto-resync clock sync");
@@ -143,7 +143,7 @@ where
         drop(handle.sender); // let the loop drain
         match handle.join.await {
             Ok(()) => Ok(()),
-            Err(e) if e.is_panic() => Err(BuildError::Connector(
+            Err(e) if e.is_panic() => Err(PlatformError::Connector(
                 ConnectorError::AutoResyncClockPanicked,
             )),
             Err(_) => Ok(()),
@@ -153,13 +153,15 @@ where
         &self,
         frequency: Duration,
         sync_clock_fn: F,
-    ) -> BuildResult<()>
+    ) -> PlatformResult<()>
     where
         F: Fn() -> Fut + Send + 'static,
-        Fut: Future<Output = BuildResult<()>> + Send + 'static,
+        Fut: Future<Output = PlatformResult<()>> + Send + 'static,
     {
         if frequency < Duration::from_mins(1) {
-            return Err(BuildError::Connector(ConnectorError::InvalidSyncFrequency));
+            return Err(PlatformError::Connector(
+                ConnectorError::InvalidSyncFrequency,
+            ));
         }
         let (first_sync_sender, first_sync_receiver) = tokio::sync::oneshot::channel();
         {
@@ -172,7 +174,7 @@ where
                         .is_err()
                 {
                     *resync_handle = None;
-                    return Err(BuildError::Connector(
+                    return Err(PlatformError::Connector(
                         ConnectorError::AutoResyncClockStopped,
                     ));
                 }
@@ -192,7 +194,7 @@ where
         }
         match first_sync_receiver.await {
             Ok(result) => result,
-            Err(_) => Err(BuildError::Connector(
+            Err(_) => Err(PlatformError::Connector(
                 ConnectorError::AutoResyncClockPanicked,
             )),
         }
@@ -214,11 +216,11 @@ where
     Exchange: ETExchange + ETExchangeServerTimeHttp,
     Client: HttpClient,
 {
-    pub async fn sync_clock_http(&self) -> BuildResult<()> {
+    pub async fn sync_clock_http(&self) -> PlatformResult<()> {
         self.connector.sync_clock_http().await
     }
     #[allow(unused)]
-    pub async fn set_clock_sync_frequency_http(&self, frequency: Duration) -> BuildResult<()>
+    pub async fn set_clock_sync_frequency_http(&self, frequency: Duration) -> PlatformResult<()>
     where
         Exchange: Send + Sync + 'static,
         Exchange::ServerTimeRequestHttp: Send,
@@ -234,7 +236,9 @@ where
     pub fn submit_http<'connector, Request>(
         &'connector self,
         request: Request,
-    ) -> BuildResult<Submission<'connector, Request, Request::Response, Request::VerificationRequest>>
+    ) -> PlatformResult<
+        Submission<'connector, Request, Request::Response, Request::VerificationRequest>,
+    >
     where
         Request: ETHttpRequest<Exchange = Exchange> + Send + 'connector,
         Exchange: Sync,
@@ -249,20 +253,23 @@ where
     Exchange: ETExchange + ETExchangeServerTimeWebsocket,
     Client: WebsocketClient,
 {
-    pub async fn connect(&self) -> BuildResult<()> {
+    pub async fn connect(&self) -> PlatformResult<()> {
         self.connector.connect().await
     }
-    pub fn is_connected(&self) -> BuildResult<bool> {
+    pub fn is_connected(&self) -> PlatformResult<bool> {
         self.connector.is_connected()
     }
-    pub async fn disconnect(&self) -> BuildResult<()> {
+    pub async fn disconnect(&self) -> PlatformResult<()> {
         self.connector.disconnect().await
     }
-    pub async fn sync_clock_websocket(&self) -> BuildResult<()> {
+    pub async fn sync_clock_websocket(&self) -> PlatformResult<()> {
         self.connector.sync_clock_websocket().await
     }
     #[allow(unused)]
-    pub async fn set_clock_sync_frequency_websocket(&self, frequency: Duration) -> BuildResult<()>
+    pub async fn set_clock_sync_frequency_websocket(
+        &self,
+        frequency: Duration,
+    ) -> PlatformResult<()>
     where
         Exchange: Send + Sync + 'static,
         Exchange::ServerTimeRequestWebsocket: Send,
@@ -278,7 +285,9 @@ where
     pub fn submit_websocket<'connector, Request>(
         &'connector self,
         request: Request,
-    ) -> BuildResult<Submission<'connector, Request, Request::Response, Request::VerificationRequest>>
+    ) -> PlatformResult<
+        Submission<'connector, Request, Request::Response, Request::VerificationRequest>,
+    >
     where
         Request: ETWebsocketRequest<Exchange = Exchange> + Send + 'connector,
         Exchange: Sync,

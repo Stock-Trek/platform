@@ -5,7 +5,7 @@ use crate::{
     update_source::{PortfolioUpdateMessage, PortfolioUpdateSource},
 };
 use async_trait::async_trait;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_nats::{JetStreamConsumer, KeyValue, NatsSubject};
 
 const CONSUMER_NAME: &str = "platform-portfolio-update-consumer";
@@ -17,7 +17,7 @@ pub struct NatsUpdateSource {
 }
 
 impl NatsUpdateSource {
-    pub async fn connect(config: &UpdateConfig) -> BuildResult<Self> {
+    pub async fn connect(config: &UpdateConfig) -> PlatformResult<Self> {
         let checkpoints =
             KeyValue::connect(config.nats_url(), CONSUMER_NAME, config.checkpoint_bucket()).await?;
         let checkpoint_key = format!(
@@ -50,12 +50,12 @@ impl NatsUpdateSource {
 
 #[async_trait]
 impl PortfolioUpdateSource for NatsUpdateSource {
-    async fn next(&self) -> BuildResult<Option<PortfolioUpdateMessage>> {
+    async fn next(&self) -> PlatformResult<Option<PortfolioUpdateMessage>> {
         let Some(message) = self.consumer.next_message_unacked().await else {
             return Ok(None);
         };
         let sequence = message.stream_sequence.ok_or_else(|| {
-            BuildError::bad_value(
+            PlatformError::bad_value(
                 "portfolio update message",
                 message.subject.clone(),
                 "missing sequence",
@@ -69,13 +69,13 @@ impl PortfolioUpdateSource for NatsUpdateSource {
         )))
     }
 
-    async fn checkpoint(&self, sequence: u64) -> BuildResult<()> {
+    async fn checkpoint(&self, sequence: u64) -> PlatformResult<()> {
         let payload = UpdateCheckpoint::new(sequence).to_bytes()?;
         self.checkpoints.put(&self.checkpoint_key, &payload).await?;
         Ok(())
     }
 
-    async fn acknowledge(&self, message: &PortfolioUpdateMessage) -> BuildResult<()> {
+    async fn acknowledge(&self, message: &PortfolioUpdateMessage) -> PlatformResult<()> {
         match message.raw() {
             Some(raw) => self.consumer.ack(raw).await,
             None => Ok(()),

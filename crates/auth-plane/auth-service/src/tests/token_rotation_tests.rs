@@ -1,7 +1,7 @@
 use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{AuthService, api_token::MAX_TOKEN_ID_LENGTH};
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 
 struct RotationFixture;
 
@@ -41,7 +41,7 @@ async fn rotation_keeps_the_old_token_valid_for_the_overlap() {
 
     assert!(matches!(
         error,
-        BuildError::Auth(AuthError::RotationOverlapEnded { ref token_id })
+        PlatformError::Auth(AuthError::RotationOverlapEnded { ref token_id })
             if token_id == old.id()
     ));
 }
@@ -110,7 +110,7 @@ async fn rotation_rejects_reusing_the_original_id() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "replacement_id",
             ..
         }))
@@ -149,7 +149,7 @@ async fn rotation_rejects_an_invalid_replacement_id() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "replacement_id",
             ..
         }))
@@ -170,7 +170,7 @@ async fn a_token_can_only_be_rotated_once() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "token_id",
             ..
         }))

@@ -1,6 +1,6 @@
 use crate::binance::portfolio::credentials::BinanceCredentialConfig;
 use platform_config::EnvVars;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_types::UrlScheme;
 use std::time::Duration;
 
@@ -30,7 +30,7 @@ impl BinancePortfolioConfig {
         websocket_url: impl Into<String>,
         listen_key_refresh: Duration,
         reconnect_backoff: Duration,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let rest_url = rest_url.into();
         let websocket_url = websocket_url.into();
         Self::validate_url(REST_URL, &rest_url, &UrlScheme::HTTP)?;
@@ -46,7 +46,7 @@ impl BinancePortfolioConfig {
         })
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Option<Self>> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Option<Self>> {
         if !vars.optional_parsed::<bool>(ENABLED)?.unwrap_or(false) {
             return Ok(None);
         }
@@ -106,17 +106,17 @@ impl BinancePortfolioConfig {
         name: &str,
         default: &str,
         allowed: &[UrlScheme],
-    ) -> BuildResult<String> {
+    ) -> PlatformResult<String> {
         let value = vars.optional(name)?.unwrap_or_else(|| default.to_string());
         Self::validate_url(name, &value, allowed)?;
         Ok(value)
     }
 
-    fn validate_url(name: &str, value: &str, allowed: &[UrlScheme]) -> BuildResult<()> {
+    fn validate_url(name: &str, value: &str, allowed: &[UrlScheme]) -> PlatformResult<()> {
         let parsed = url::Url::parse(value)
-            .map_err(|error| BuildError::config_invalid_source(name, error))?;
+            .map_err(|error| PlatformError::config_invalid_source(name, error))?;
         if !UrlScheme::from_url(&parsed).is_some_and(|scheme| allowed.contains(&scheme)) {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 name,
                 "has an unsupported URL scheme",
             ));
@@ -124,16 +124,16 @@ impl BinancePortfolioConfig {
         Ok(())
     }
 
-    fn duration(vars: &EnvVars, name: &str, default: u64) -> BuildResult<Duration> {
+    fn duration(vars: &EnvVars, name: &str, default: u64) -> PlatformResult<Duration> {
         let value = vars.optional_parsed::<u64>(name)?.unwrap_or(default);
         let duration = Duration::from_secs(value);
         Self::validate_duration(name, duration)?;
         Ok(duration)
     }
 
-    fn validate_duration(name: &str, value: Duration) -> BuildResult<()> {
+    fn validate_duration(name: &str, value: Duration) -> PlatformResult<()> {
         if value.is_zero() {
-            return Err(BuildError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 name,
                 "must be greater than zero",
             ));

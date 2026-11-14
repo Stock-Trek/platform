@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_exchange_types::binance::klines::BinanceKlinesInterval;
 
 /// The market data stream behind a Binance stream name.
@@ -11,7 +11,7 @@ pub enum MarketStreamKind {
 }
 
 impl MarketStreamKind {
-    fn parse(stream: &str, suffix: &str) -> BuildResult<Self> {
+    fn parse(stream: &str, suffix: &str) -> PlatformResult<Self> {
         let lower = suffix.to_ascii_lowercase();
         match lower.as_str() {
             "trade" => Ok(Self::Trade),
@@ -21,9 +21,9 @@ impl MarketStreamKind {
         }
     }
 
-    fn parse_kline(stream: &str, suffix: &str) -> BuildResult<Self> {
+    fn parse_kline(stream: &str, suffix: &str) -> PlatformResult<Self> {
         let Some(interval) = suffix.strip_prefix("kline_") else {
-            return Err(BuildError::bad_value(
+            return Err(PlatformError::bad_value(
                 "stream",
                 stream,
                 "unsupported stream; expected trade, depth, bookTicker, or kline_<interval>",
@@ -32,7 +32,7 @@ impl MarketStreamKind {
         BinanceKlinesInterval::try_from(interval)
             .map(Self::Kline)
             .map_err(|_| {
-                BuildError::bad_value(
+                PlatformError::bad_value(
                     "stream",
                     stream,
                     format!("unsupported kline interval {interval}"),
@@ -67,16 +67,20 @@ pub struct MarketStream {
 }
 
 impl MarketStream {
-    pub fn parse(stream: &str) -> BuildResult<Self> {
+    pub fn parse(stream: &str) -> PlatformResult<Self> {
         let Some((symbol, suffix)) = stream.split_once('@') else {
-            return Err(BuildError::bad_value(
+            return Err(PlatformError::bad_value(
                 "stream",
                 stream,
                 "expected <symbol>@<stream>",
             ));
         };
         if symbol.is_empty() {
-            return Err(BuildError::bad_value("stream", stream, "symbol is empty"));
+            return Err(PlatformError::bad_value(
+                "stream",
+                stream,
+                "symbol is empty",
+            ));
         }
         let kind = MarketStreamKind::parse(stream, suffix)?;
         Ok(Self {

@@ -1,7 +1,7 @@
 use crate::{TokenUsage, TokenUsageQueue, TokenUsageReservation};
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_metrics::AuthUsageQueueMetrics;
 use std::{
     collections::VecDeque,
@@ -36,8 +36,8 @@ impl MemoryTokenUsageQueue {
         self.len() == 0
     }
 
-    fn capacity_error(&self) -> BuildError {
-        BuildError::auth_store(
+    fn capacity_error(&self) -> PlatformError {
+        PlatformError::auth_store(
             "enqueue",
             "token-usage-queue",
             true,
@@ -52,7 +52,7 @@ impl MemoryTokenUsageQueue {
 
 #[async_trait]
 impl TokenUsageQueue for MemoryTokenUsageQueue {
-    async fn enqueue(&self, mut usage: TokenUsage) -> BuildResult<()> {
+    async fn enqueue(&self, mut usage: TokenUsage) -> PlatformResult<()> {
         usage.ensure_event_ids();
         let mut state = self.state.lock();
         if state.pending.len() >= self.capacity {
@@ -65,17 +65,17 @@ impl TokenUsageQueue for MemoryTokenUsageQueue {
         Ok(())
     }
 
-    async fn reserve(&self, limit: usize) -> BuildResult<Vec<TokenUsageReservation>> {
+    async fn reserve(&self, limit: usize) -> PlatformResult<Vec<TokenUsageReservation>> {
         let mut state = self.state.lock();
         let count = limit.min(state.pending.len());
         Ok(state.pending.drain(..count).collect())
     }
 
-    async fn acknowledge(&self, _reservation: &TokenUsageReservation) -> BuildResult<()> {
+    async fn acknowledge(&self, _reservation: &TokenUsageReservation) -> PlatformResult<()> {
         Ok(())
     }
 
-    async fn release(&self, reservation: &TokenUsageReservation) -> BuildResult<()> {
+    async fn release(&self, reservation: &TokenUsageReservation) -> PlatformResult<()> {
         self.state.lock().pending.push_back(reservation.clone());
         Ok(())
     }

@@ -1,7 +1,7 @@
 use crate::event_fetcher::{BackfilledEvent, FetcherRegistry, MissingEventFetcher};
 use async_trait::async_trait;
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::GapMarker;
 use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
@@ -14,7 +14,7 @@ struct StubFetcher {
 
 #[async_trait]
 impl MissingEventFetcher for StubFetcher {
-    async fn fetch(&self, _gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
+    async fn fetch(&self, _gap: &GapMarker) -> PlatformResult<Vec<BackfilledEvent>> {
         Ok(vec![self.event.clone()])
     }
 
@@ -22,7 +22,7 @@ impl MissingEventFetcher for StubFetcher {
         &self,
         _gap: &GapMarker,
         attempt: u32,
-    ) -> BuildResult<Vec<BackfilledEvent>> {
+    ) -> PlatformResult<Vec<BackfilledEvent>> {
         self.attempts.lock().push(attempt);
         Ok(vec![self.event.clone()])
     }

@@ -4,7 +4,7 @@ use crate::{OrderRequestService, PortfolioService, PortfolioUpdate};
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_gateway::{
     ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
     NoopPortfolioFeed, PortfolioCredentialSource, PortfolioEvent, PortfolioExchange, PortfolioFeed,
@@ -40,7 +40,7 @@ impl PortfolioCredentialSource for Credentials {
         &self,
         _cex_id: CexId,
         _account_id: &AccountId,
-    ) -> BuildResult<ApiKeyCredentials> {
+    ) -> PlatformResult<ApiKeyCredentials> {
         Ok(ApiKeyCredentials {
             api_key: "api-key".to_string(),
             secret: SecretString::from("secret"),
@@ -124,7 +124,10 @@ impl PortfolioExchange for Transport {
         Duration::from_millis(10)
     }
 
-    async fn portfolio_auth(&self, _credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
+    async fn portfolio_auth(
+        &self,
+        _credentials: &ApiKeyCredentials,
+    ) -> PlatformResult<PortfolioAuth> {
         Ok(PortfolioAuth::new(
             TestCredentialProvider {
                 closes: Arc::clone(&self.closes),
@@ -146,7 +149,7 @@ impl PortfolioExchange for Transport {
     async fn account_snapshot(
         &self,
         _credentials: &ApiKeyCredentials,
-    ) -> BuildResult<AccountSnapshot> {
+    ) -> PlatformResult<AccountSnapshot> {
         Ok(AccountSnapshot::new(
             BTreeMap::from([(AssetId::Bitcoin, 1.0)]),
             Utc::now(),
@@ -157,7 +160,7 @@ impl PortfolioExchange for Transport {
         &self,
         _auth: &PortfolioAuth,
         _credential: Option<&Credential>,
-    ) -> BuildResult<PortfolioStream> {
+    ) -> PlatformResult<PortfolioStream> {
         Ok(Self::stream())
     }
 }
@@ -173,7 +176,7 @@ impl PortfolioUpdateSink for ServiceSink {
     async fn apply_update(
         &self,
         update: ConnectorPortfolioUpdate,
-    ) -> BuildResult<PortfolioUpdateOutcome> {
+    ) -> PlatformResult<PortfolioUpdateOutcome> {
         let update = PortfolioUpdate::try_from(update)?;
         let outcome = self.service.apply_portfolio_update(update.clone());
         self.updates.lock().push(update);

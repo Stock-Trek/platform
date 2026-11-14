@@ -1,7 +1,7 @@
 use crate::tests::support_tests::TestFixture;
 use crate::{ApiToken, TokenExpiry, TokenOptions, TokenScope};
 use chrono::{Duration, Utc};
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 use secrecy::SecretString;
 
 #[tokio::test]
@@ -25,7 +25,7 @@ async fn an_owner_without_a_token_cannot_be_used() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField { .. }))
+        Err(PlatformError::Auth(AuthError::InvalidField { .. }))
     ));
 }
 
@@ -37,7 +37,7 @@ async fn rejects_an_empty_owner() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField { .. }))
+        Err(PlatformError::Auth(AuthError::InvalidField { .. }))
     ));
 }
 
@@ -106,7 +106,7 @@ async fn selecting_a_token_for_an_owner_requires_the_required_scope() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidField {
+        Err(PlatformError::Auth(AuthError::InvalidField {
             field: "scope",
             ..
         }))

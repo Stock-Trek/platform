@@ -1,6 +1,6 @@
 use crate::portfolio::{AccountEvent, AccountSnapshot};
 use crate::{exchange::ETExchange, request::ETHttpRequest};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use stock_trek_types::cex::asset_id::AssetId;
 
 pub struct AccountSnapshotContext<'a> {
@@ -24,9 +24,9 @@ pub trait ETExchangeAccountSnapshot: ETExchange {
     fn account_snapshot(
         response: <Self::SnapshotRequest as ETHttpRequest>::Response,
         context: &AccountSnapshotContext<'_>,
-    ) -> BuildResult<AccountSnapshot>;
+    ) -> PlatformResult<AccountSnapshot>;
     fn account_event(
         value: &serde_json::Value,
         context: &AccountSnapshotContext<'_>,
-    ) -> BuildResult<Option<AccountEvent>>;
+    ) -> PlatformResult<Option<AccountEvent>>;
 }

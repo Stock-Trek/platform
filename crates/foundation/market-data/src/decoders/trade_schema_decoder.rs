@@ -7,7 +7,7 @@ use crate::{
     event::MarketEvent,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD};
-use platform_errors::{BuildError, BuildResult, IngesterError};
+use platform_errors::{IngesterError, PlatformError, PlatformResult};
 use platform_exchange_types::market_data::{SbeTradeRecord, TradeSchemaDefinition};
 use platform_metrics::{DROP_REASON_INVALID_TRADE, MarketDataMetrics, STAGE_AGGREGATOR};
 use platform_types::TimestampMilliseconds;
@@ -31,7 +31,7 @@ impl<S> SchemaTradeDecoder<S> {
 }
 
 impl<S: TradeSchemaDefinition + Send + Sync + 'static> TradeDecoder for SchemaTradeDecoder<S> {
-    fn decode(&self, event: &MarketEvent) -> BuildResult<Vec<Trade>> {
+    fn decode(&self, event: &MarketEvent) -> PlatformResult<Vec<Trade>> {
         let schema = S::SCHEMA;
         let stream = event.stream.to_ascii_lowercase();
         if !schema
@@ -71,7 +71,7 @@ impl<S: TradeSchemaDefinition + Send + Sync + 'static> TradeDecoder for SchemaTr
             .or_else(|| stream.split_once('@').map(|(symbol, _)| symbol))
             .ok_or(IngesterError::MissingField(schema.symbol_field))?;
         let trading_pair = self.trading_pair(symbol).ok_or_else(|| {
-            BuildError::bad_value("symbol", symbol, "could not resolve base and quote assets")
+            PlatformError::bad_value("symbol", symbol, "could not resolve base and quote assets")
         })?;
         let price = self.decimal_field(&data, schema.price_field)?;
         let quantity = self.decimal_field(&data, schema.quantity_field)?;
@@ -97,28 +97,32 @@ impl<S: TradeSchemaDefinition + Send + Sync + 'static> TradeDecoder for SchemaTr
         }])
     }
 
-    fn trading_pair_for_stream(&self, stream: &str) -> BuildResult<TradingPair> {
+    fn trading_pair_for_stream(&self, stream: &str) -> PlatformResult<TradingPair> {
         let symbol = stream
             .split_once('@')
             .map_or(stream, |(symbol, _)| symbol)
             .trim();
         if symbol.is_empty() {
-            return Err(BuildError::bad_value("stream", stream, "symbol is empty"));
+            return Err(PlatformError::bad_value(
+                "stream",
+                stream,
+                "symbol is empty",
+            ));
         }
         self.trading_pair(symbol).ok_or_else(|| {
-            BuildError::bad_value("stream", stream, "could not resolve base and quote assets")
+            PlatformError::bad_value("stream", stream, "could not resolve base and quote assets")
         })
     }
 }
 
 impl<S: TradeSchemaDefinition> SchemaTradeDecoder<S> {
-    fn decode_sbe_trades(&self, event: &MarketEvent, frame: &[u8]) -> BuildResult<Vec<Trade>> {
+    fn decode_sbe_trades(&self, event: &MarketEvent, frame: &[u8]) -> PlatformResult<Vec<Trade>> {
         let sbe_trades = SbeCodec::<S::Sbe>::default().decode_trades(frame)?;
         let Some(first) = sbe_trades.first() else {
             return Ok(Vec::new());
         };
         let trading_pair = self.trading_pair(first.symbol()).ok_or_else(|| {
-            BuildError::bad_value(
+            PlatformError::bad_value(
                 "symbol",
                 first.symbol(),
                 "could not resolve base and quote assets",
@@ -162,12 +166,12 @@ impl<S: TradeSchemaDefinition> SchemaTradeDecoder<S> {
         &self,
         data: &Map<String, Value>,
         field: &'static str,
-    ) -> BuildResult<Decimal> {
+    ) -> PlatformResult<Decimal> {
         let value = data
             .get(field)
             .and_then(Value::as_str)
             .ok_or(IngesterError::MissingField(field))?;
         Decimal::from_str_exact(value)
-            .map_err(|error| BuildError::bad_value(field, value, error.to_string()))
+            .map_err(|error| PlatformError::bad_value(field, value, error.to_string()))
     }
 }

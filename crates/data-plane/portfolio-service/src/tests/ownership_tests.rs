@@ -6,7 +6,7 @@ use crate::{
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_gateway::PortfolioFeed;
 use platform_portfolio_ownership::{OwnershipAction, OwnershipEvent};
 use std::{collections::VecDeque, time::Duration};
@@ -38,16 +38,16 @@ impl FakeSource {
 
 #[async_trait]
 impl OwnershipEventSource for FakeSource {
-    async fn next(&self) -> BuildResult<Option<OwnershipMessage>> {
+    async fn next(&self) -> PlatformResult<Option<OwnershipMessage>> {
         Ok(self.messages.lock().pop_front())
     }
 
-    async fn checkpoint(&self, sequence: u64) -> BuildResult<()> {
+    async fn checkpoint(&self, sequence: u64) -> PlatformResult<()> {
         self.checkpoints.lock().push(sequence);
         Ok(())
     }
 
-    async fn acknowledge(&self, _message: &OwnershipMessage) -> BuildResult<()> {
+    async fn acknowledge(&self, _message: &OwnershipMessage) -> PlatformResult<()> {
         *self.acknowledged.lock() += 1;
         Ok(())
     }
@@ -270,7 +270,7 @@ impl PortfolioFeed for SnapshotFeed {
         &self,
         _cex_id: stock_trek_types::cex::cex_id::CexId,
         accounts: std::collections::BTreeSet<stock_trek_types::cex::account_id::AccountId>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         if accounts.is_empty() {
             return Ok(());
         }

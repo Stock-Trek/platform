@@ -4,14 +4,14 @@ use crate::{
     token_audit_outbox::TokenAuditOutbox,
     vault_client::{VaultClient, WriteCondition},
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 
 impl VaultClient {
     pub async fn commit(
         &self,
         mutation: TokenMutation,
         mut event: TokenAuditEvent,
-    ) -> BuildResult<bool> {
+    ) -> PlatformResult<bool> {
         TokenAuditOutbox::ensure_event_id(&mut event);
         self.commit_events(mutation, vec![event]).await
     }
@@ -20,17 +20,17 @@ impl VaultClient {
         &self,
         expected: &ApiToken,
         token: &ApiToken,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         token.validate()?;
         let Some((data, version)) = self.get_value_entry(token.id()).await? else {
-            return Err(BuildError::unknown_token(token.id()));
+            return Err(PlatformError::unknown_token(token.id()));
         };
         if Self::is_tombstone(&data) {
-            return Err(BuildError::unknown_token(token.id()));
+            return Err(PlatformError::unknown_token(token.id()));
         }
         let current = Self::token_from_value(token.id(), &data)?;
         if current.to_value() != expected.to_value() {
-            return Err(BuildError::token_conflict(token.id()));
+            return Err(PlatformError::token_conflict(token.id()));
         }
         self.put_entry(
             token.id(),
@@ -40,12 +40,12 @@ impl VaultClient {
         .await
     }
 
-    pub async fn append_audit(&self, mut event: TokenAuditEvent) -> BuildResult<()> {
+    pub async fn append_audit(&self, mut event: TokenAuditEvent) -> PlatformResult<()> {
         TokenAuditOutbox::ensure_event_id(&mut event);
         self.put_standalone_audit(&event).await.map(|_| ())
     }
 
-    pub async fn put_standalone_audit(&self, event: &TokenAuditEvent) -> BuildResult<bool> {
+    pub async fn put_standalone_audit(&self, event: &TokenAuditEvent) -> PlatformResult<bool> {
         let event_id = TokenAuditOutbox::require_event_id(event)?;
         let key = TokenAuditOutbox::storage_key(event_id);
         match self
@@ -57,12 +57,15 @@ impl VaultClient {
             .await
         {
             Ok(()) => Ok(true),
-            Err(BuildError::Auth(platform_errors::AuthError::TokenExists { .. })) => Ok(false),
+            Err(PlatformError::Auth(platform_errors::AuthError::TokenExists { .. })) => Ok(false),
             Err(error) => Err(error),
         }
     }
 
-    pub async fn commit_rotation(&self, transaction: &TokenRotationTransaction) -> BuildResult<()> {
+    pub async fn commit_rotation(
+        &self,
+        transaction: &TokenRotationTransaction,
+    ) -> PlatformResult<()> {
         let key = transaction.storage_key();
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             match self.get_value_entry(&key).await? {
@@ -71,7 +74,9 @@ impl VaultClient {
                     .await
                 {
                     Ok(()) => return Ok(()),
-                    Err(BuildError::Auth(platform_errors::AuthError::TokenExists { .. })) => {
+                    Err(PlatformError::Auth(platform_errors::AuthError::TokenExists {
+                        ..
+                    })) => {
                         continue;
                     }
                     Err(error) => return Err(error),
@@ -79,7 +84,7 @@ impl VaultClient {
                 Some((data, version)) => {
                     let existing = TokenRotationTransaction::from_value(&data)?;
                     if !existing.has_same_rotation(transaction) {
-                        return Err(BuildError::token_conflict(transaction.original().id()));
+                        return Err(PlatformError::token_conflict(transaction.original().id()));
                     }
                     match self
                         .put_entry(
@@ -90,7 +95,9 @@ impl VaultClient {
                         .await
                     {
                         Ok(()) => return Ok(()),
-                        Err(BuildError::Auth(platform_errors::AuthError::Conflict { .. })) => {
+                        Err(PlatformError::Auth(platform_errors::AuthError::Conflict {
+                            ..
+                        })) => {
                             continue;
                         }
                         Err(error) => return Err(error),
@@ -98,10 +105,10 @@ impl VaultClient {
                 }
             }
         }
-        Err(BuildError::token_conflict(transaction.original().id()))
+        Err(PlatformError::token_conflict(transaction.original().id()))
     }
 
-    pub async fn pending_rotations(&self) -> BuildResult<Vec<TokenRotationTransaction>> {
+    pub async fn pending_rotations(&self) -> PlatformResult<Vec<TokenRotationTransaction>> {
         let mut transactions = Vec::new();
         for key in self
             .keys_with_prefix(crate::token_rotation_transaction::ROTATION_TRANSACTION_PREFIX)
@@ -118,7 +125,7 @@ impl VaultClient {
         Ok(transactions)
     }
 
-    pub async fn acknowledge_rotation(&self, transaction_id: &str) -> BuildResult<()> {
+    pub async fn acknowledge_rotation(&self, transaction_id: &str) -> PlatformResult<()> {
         let key = format!(
             "{}{}",
             crate::token_rotation_transaction::ROTATION_TRANSACTION_PREFIX,

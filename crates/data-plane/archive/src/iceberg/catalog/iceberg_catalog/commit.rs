@@ -5,7 +5,7 @@ use iceberg::{
     table::Table,
     transaction::{ApplyTransactionAction, Transaction},
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_time::RetryPolicy;
 use std::time::Duration;
 use tracing::{info, warn};
@@ -16,7 +16,7 @@ const COMMIT_MAX_BACKOFF: Duration = Duration::from_secs(1);
 
 enum CommitOutcome {
     Applied,
-    Retry(BuildError),
+    Retry(PlatformError),
 }
 
 impl IcebergCatalog {
@@ -25,7 +25,7 @@ impl IcebergCatalog {
         table: ArchiveIcebergTable,
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         if files.is_empty() && source_files.is_none() {
             return Ok(());
         }
@@ -46,7 +46,7 @@ impl IcebergCatalog {
         }
 
         Err(last_error.unwrap_or_else(|| {
-            BuildError::external(std::io::Error::other(
+            PlatformError::external(std::io::Error::other(
                 "Iceberg commit failed without a reported error",
             ))
         }))
@@ -58,7 +58,7 @@ impl IcebergCatalog {
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
         attempt: usize,
-    ) -> BuildResult<CommitOutcome> {
+    ) -> PlatformResult<CommitOutcome> {
         let current = match self.ensure_table(table).await {
             Ok(current) => current,
             Err(error) => return Ok(CommitOutcome::Retry(error)),
@@ -76,7 +76,7 @@ impl IcebergCatalog {
         let data_files = files
             .iter()
             .map(|file| self.data_file(&current, file))
-            .collect::<BuildResult<Vec<_>>>()?;
+            .collect::<PlatformResult<Vec<_>>>()?;
         let snapshot_properties = Self::snapshot_properties(files, source_files);
 
         let transaction = Transaction::new(&current);
@@ -123,7 +123,7 @@ impl IcebergCatalog {
         table: &Table,
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
-    ) -> BuildResult<bool> {
+    ) -> PlatformResult<bool> {
         if let Some(source_files) = source_files {
             let processed = Self::source_files_from_metadata(table);
             return Ok(source_files.iter().all(|file| processed.contains(file)));
@@ -136,9 +136,9 @@ impl IcebergCatalog {
         Ok(files.iter().all(|file| paths.contains(&file.file_path)))
     }
 
-    fn data_file(&self, table: &Table, file: &IcebergDataFile) -> BuildResult<DataFile> {
+    fn data_file(&self, table: &Table, file: &IcebergDataFile) -> PlatformResult<DataFile> {
         let record_count = u64::try_from(file.record_count).map_err(|_| {
-            BuildError::external(std::io::Error::new(
+            PlatformError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!(
                     "Iceberg data file {} has a negative record count {}",
@@ -147,7 +147,7 @@ impl IcebergCatalog {
             ))
         })?;
         let file_size_in_bytes = u64::try_from(file.file_size_in_bytes).map_err(|_| {
-            BuildError::external(std::io::Error::new(
+            PlatformError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!(
                     "Iceberg data file {} has a negative size {}",
@@ -166,7 +166,7 @@ impl IcebergCatalog {
             .file_size_in_bytes(file_size_in_bytes)
             .build()
             .map_err(|error| {
-                BuildError::external(std::io::Error::other(format!(
+                PlatformError::external(std::io::Error::other(format!(
                     "build Iceberg data file: {error}"
                 )))
             })

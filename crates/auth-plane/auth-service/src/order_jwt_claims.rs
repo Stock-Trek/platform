@@ -1,6 +1,6 @@
 use crate::ApiToken;
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use serde::{Deserialize, Serialize};
 
 pub const CLOCK_SKEW_SECONDS: i64 = 60;
@@ -45,7 +45,7 @@ impl OrderJwtClaims {
         owner: impl Into<String>,
         issued_at: DateTime<Utc>,
         expires_at: DateTime<Utc>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         let token_id = token_id.into();
         let owner = owner.into();
         let owner = ApiToken::validated_owner(&owner)?.to_string();
@@ -53,7 +53,7 @@ impl OrderJwtClaims {
         let issued_at = issued_at.timestamp();
         let expires_at = expires_at.timestamp();
         if expires_at <= issued_at {
-            return Err(BuildError::auth_invalid_jwt(
+            return Err(PlatformError::auth_invalid_jwt(
                 "expires_at must be after issued_at",
             ));
         }
@@ -85,22 +85,22 @@ impl OrderJwtClaims {
         self.expires_at <= now.timestamp()
     }
 
-    pub fn normalize_owner(&mut self) -> BuildResult<()> {
+    pub fn normalize_owner(&mut self) -> PlatformResult<()> {
         self.owner = ApiToken::validated_owner(&self.owner)?.to_string();
         Ok(())
     }
 
-    pub fn validate_at(&self, now: DateTime<Utc>) -> BuildResult<()> {
+    pub fn validate_at(&self, now: DateTime<Utc>) -> PlatformResult<()> {
         if self.expires_at <= self.issued_at {
-            return Err(BuildError::auth_invalid_jwt(
+            return Err(PlatformError::auth_invalid_jwt(
                 "expires_at must be after issued_at",
             ));
         }
         if self.is_expired(now) {
-            return Err(BuildError::auth_invalid_jwt("has expired"));
+            return Err(PlatformError::auth_invalid_jwt("has expired"));
         }
         if self.issued_at > now.timestamp().saturating_add(CLOCK_SKEW_SECONDS) {
-            return Err(BuildError::auth_invalid_jwt("was issued in the future"));
+            return Err(PlatformError::auth_invalid_jwt("was issued in the future"));
         }
         Ok(())
     }

@@ -1,6 +1,6 @@
 use crate::connector::portfolio::ConnectorState;
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use serde::{Deserialize, Serialize};
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -50,11 +50,11 @@ impl ConnectorHealth {
         self.occurred_at
     }
 
-    pub fn to_bytes(&self) -> BuildResult<Vec<u8>> {
+    pub fn to_bytes(&self) -> PlatformResult<Vec<u8>> {
         Ok(serde_json::to_vec(self)?)
     }
 
-    pub fn from_bytes(payload: &[u8]) -> BuildResult<Self> {
-        serde_json::from_slice(payload).map_err(BuildError::external)
+    pub fn from_bytes(payload: &[u8]) -> PlatformResult<Self> {
+        serde_json::from_slice(payload).map_err(PlatformError::external)
     }
 }

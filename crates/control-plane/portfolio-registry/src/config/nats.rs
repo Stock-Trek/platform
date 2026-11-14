@@ -1,6 +1,6 @@
 use crate::config::stream::NatsStreamConfig;
 use platform_config::EnvVars;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_runtime::Config;
 use std::time::Duration;
 
@@ -18,7 +18,7 @@ pub struct RegistryNatsConfig {
 }
 
 impl RegistryNatsConfig {
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         Ok(Self {
             url: Config::required_nats_url(vars, URL)?,
             client_name: vars.required(CLIENT_NAME)?,

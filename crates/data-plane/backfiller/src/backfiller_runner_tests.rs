@@ -6,7 +6,7 @@ use crate::{
     nats_gap_marker_source::GapMarkerSource,
 };
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::GapMarker;
 use platform_nats::EventPublisher;
 use stock_trek_types::cex::cex_id::CexId;
@@ -15,7 +15,7 @@ struct FakeSource;
 
 #[async_trait]
 impl GapMarkerSource for FakeSource {
-    async fn next_gap(&mut self) -> BuildResult<Option<GapMarker>> {
+    async fn next_gap(&mut self) -> PlatformResult<Option<GapMarker>> {
         Ok(None)
     }
 }
@@ -24,7 +24,7 @@ struct FakeFetcher;
 
 #[async_trait]
 impl MissingEventFetcher for FakeFetcher {
-    async fn fetch(&self, _gap: &GapMarker) -> BuildResult<Vec<BackfilledEvent>> {
+    async fn fetch(&self, _gap: &GapMarker) -> PlatformResult<Vec<BackfilledEvent>> {
         Ok(Vec::new())
     }
 }
@@ -34,7 +34,7 @@ struct FakePublisher;
 
 #[async_trait]
 impl EventPublisher for FakePublisher {
-    async fn publish(&self, _subject: &str, _payload: &[u8]) -> BuildResult<()> {
+    async fn publish(&self, _subject: &str, _payload: &[u8]) -> PlatformResult<()> {
         Ok(())
     }
 }

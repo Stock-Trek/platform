@@ -1,5 +1,5 @@
 use crate::source_archive::{Source, SourceLimits};
-use platform_errors::{BuildError, ErrorType, StorageError};
+use platform_errors::{ErrorType, PlatformError, StorageError};
 use std::{
     io::{Cursor, Write},
     num::NonZeroU64,
@@ -51,7 +51,7 @@ fn rejects_archives_whose_declared_extracted_size_exceeds_the_limit() {
 
     assert!(matches!(
         error,
-        BuildError::Storage(StorageError::ExtractedSourceTooLarge { .. })
+        PlatformError::Storage(StorageError::ExtractedSourceTooLarge { .. })
     ));
     assert_eq!(error.error_type(), "extracted_source_too_large");
     assert!(!error.retryability().is_retryable());
@@ -93,7 +93,7 @@ async fn rejects_downloads_larger_than_the_limit() {
     server.await.unwrap();
     assert!(matches!(
         error,
-        BuildError::Storage(StorageError::SourceArchiveTooLarge { .. })
+        PlatformError::Storage(StorageError::SourceArchiveTooLarge { .. })
     ));
     assert_eq!(error.error_type(), "source_archive_too_large");
     assert!(!error.retryability().is_retryable());

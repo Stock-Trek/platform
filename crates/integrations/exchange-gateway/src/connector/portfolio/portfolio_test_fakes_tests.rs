@@ -1,6 +1,6 @@
 use crate::connector::portfolio::{PortfolioEvent, PortfolioExchange, PortfolioStream};
 use chrono::Utc;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
     encode::ByteEncoder,
@@ -168,7 +168,10 @@ impl PortfolioExchange for TestTransport {
         self.reconnect_backoff
     }
 
-    async fn portfolio_auth(&self, _credentials: &ApiKeyCredentials) -> BuildResult<PortfolioAuth> {
+    async fn portfolio_auth(
+        &self,
+        _credentials: &ApiKeyCredentials,
+    ) -> PlatformResult<PortfolioAuth> {
         Ok(PortfolioAuth::new(
             TestCredentialProvider {
                 acquired: Arc::clone(&self.acquired),
@@ -191,7 +194,7 @@ impl PortfolioExchange for TestTransport {
     async fn account_snapshot(
         &self,
         _credentials: &ApiKeyCredentials,
-    ) -> BuildResult<AccountSnapshot> {
+    ) -> PlatformResult<AccountSnapshot> {
         Ok(AccountSnapshot::new(self.snapshot.clone(), Utc::now()))
     }
 
@@ -199,7 +202,7 @@ impl PortfolioExchange for TestTransport {
         &self,
         _auth: &PortfolioAuth,
         _credential: Option<&Credential>,
-    ) -> BuildResult<PortfolioStream> {
+    ) -> PlatformResult<PortfolioStream> {
         self.opened.fetch_add(1, Ordering::SeqCst);
         Ok(Self::stream(&self.events))
     }

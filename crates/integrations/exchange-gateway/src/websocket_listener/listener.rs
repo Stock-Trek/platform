@@ -4,7 +4,7 @@ use crate::websocket_listener::{
     waiter_state::WaiterState, websocket_event_stream::WebsocketEventStream,
 };
 use parking_lot::Mutex;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -21,7 +21,7 @@ impl WebsocketListener {
         }
     }
 
-    pub async fn on_message(&self, message: serde_json::Value) -> BuildResult<()> {
+    pub async fn on_message(&self, message: serde_json::Value) -> PlatformResult<()> {
         self.events.publish(&message);
         let handlers = self.handlers.lock().clone();
         for handler in handlers {
@@ -42,7 +42,7 @@ impl WebsocketListener {
     pub fn waiter_for_filtered_response(
         &self,
         filter: ArcPredicate<serde_json::Value>,
-    ) -> BuildResult<WaiterForResponse> {
+    ) -> PlatformResult<WaiterForResponse> {
         let state = Arc::new(Mutex::new(WaiterState::default()));
         let handler = ResponseHandler::new(Arc::clone(&state), filter);
         self.handlers.lock().push(handler);

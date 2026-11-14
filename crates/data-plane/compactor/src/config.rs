@@ -1,6 +1,6 @@
 use platform_archive::IcebergConfig;
 use platform_config::EnvVars;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_runtime::Config;
 use std::time::Duration;
 
@@ -26,11 +26,11 @@ pub struct CompactorConfig {
 }
 
 impl CompactorConfig {
-    pub fn from_env() -> BuildResult<Self> {
+    pub fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(COMPACTOR_S3_BUCKET)?;
         let s3_prefix = vars.required(COMPACTOR_S3_PREFIX)?;

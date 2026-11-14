@@ -5,7 +5,7 @@ use crate::{
     },
     source_archive::Source,
 };
-use platform_errors::{BuildError, BuildResult, ConfigError, ValidationError};
+use platform_errors::{ConfigError, PlatformError, PlatformResult, ValidationError};
 use std::{
     fs as std_fs, io,
     path::{Path, PathBuf},
@@ -15,17 +15,17 @@ use tokio::process::Command;
 use tracing::info;
 
 impl Artifacts {
-    pub fn prepare_workspace(&self) -> BuildResult<()> {
+    pub fn prepare_workspace(&self) -> PlatformResult<()> {
         let workspace = self.build_dir.path();
         if !self.source_dir.join("Cargo.toml").is_file() {
-            return Err(BuildError::Config(ConfigError::Build(format!(
+            return Err(PlatformError::Config(ConfigError::Build(format!(
                 "build workspace source {} does not contain Cargo.toml",
                 self.source_dir.display()
             ))));
         }
 
         std_fs::create_dir_all(workspace).map_err(|source| {
-            BuildError::io(
+            PlatformError::io(
                 "prepare build workspace",
                 workspace.display().to_string(),
                 source,
@@ -38,7 +38,7 @@ impl Artifacts {
             }
             let to = workspace.join(entry);
             Self::copy_path(&from, &to).map_err(|source| {
-                BuildError::io(
+                PlatformError::io(
                     "copy build workspace entry",
                     from.display().to_string(),
                     source,
@@ -48,7 +48,7 @@ impl Artifacts {
         Ok(())
     }
 
-    pub async fn unpack_source(&self) -> BuildResult<Vec<PathBuf>> {
+    pub async fn unpack_source(&self) -> PlatformResult<Vec<PathBuf>> {
         let source = Source::download(&self.source_get_url, self.source_limits).await?;
         source.extract(
             self.build_dir.path(),
@@ -56,10 +56,10 @@ impl Artifacts {
         )
     }
 
-    pub fn validate_user_generated(sources: &[PathBuf]) -> BuildResult<()> {
+    pub fn validate_user_generated(sources: &[PathBuf]) -> PlatformResult<()> {
         for path in sources {
             stock_trek_check::verify::verify(path.display().to_string()).map_err(|error| {
-                BuildError::Validation(ValidationError::InvalidValue {
+                PlatformError::Validation(ValidationError::InvalidValue {
                     name: format!("user generated code {}", path.display()),
                     value: error.to_string(),
                 })
@@ -69,7 +69,7 @@ impl Artifacts {
         Ok(())
     }
 
-    pub async fn build_wasm(&self, target_dir: &Path) -> BuildResult<PathBuf> {
+    pub async fn build_wasm(&self, target_dir: &Path) -> PlatformResult<PathBuf> {
         let workspace = self.build_dir.path();
         let manifest = workspace.join(WASM_MANIFEST);
         let module = target_dir
@@ -93,12 +93,12 @@ impl Artifacts {
             .output()
             .await
             .map_err(|source| {
-                BuildError::io("compile artifact", module.display().to_string(), source)
+                PlatformError::io("compile artifact", module.display().to_string(), source)
             })?;
         self.set_compile_output(Self::command_output("cargo build", &output));
 
         if !output.status.success() {
-            return Err(BuildError::command_failed(
+            return Err(PlatformError::command_failed(
                 "compile artifact",
                 module,
                 output.status,
@@ -118,10 +118,10 @@ impl Artifacts {
     /// The prebuilt target directory baked into the image is copied into a
     /// fresh temporary directory every time, so cargo never sees artifacts
     /// produced by user code from an earlier invocation.
-    pub async fn prepare_target_dir(&self) -> BuildResult<TempDir> {
+    pub async fn prepare_target_dir(&self) -> PlatformResult<TempDir> {
         let cache_root = self.build_cache_dir.clone();
         std_fs::create_dir_all(&cache_root).map_err(|source| {
-            BuildError::io(
+            PlatformError::io(
                 "prepare build cache",
                 cache_root.display().to_string(),
                 source,
@@ -131,7 +131,7 @@ impl Artifacts {
             .prefix("platform-target-")
             .tempdir_in(&cache_root)
             .map_err(|source| {
-                BuildError::io(
+                PlatformError::io(
                     "prepare build cache",
                     cache_root.display().to_string(),
                     source,
@@ -145,12 +145,12 @@ impl Artifacts {
             tokio::task::spawn_blocking(move || Self::copy_path(&from, &to))
                 .await
                 .map_err(|source| {
-                    BuildError::Config(ConfigError::Build(format!(
+                    PlatformError::Config(ConfigError::Build(format!(
                         "failed to prepare build cache: {source}"
                     )))
                 })?
                 .map_err(|source| {
-                    BuildError::io(
+                    PlatformError::io(
                         "copy build cache",
                         target_dir.path().display().to_string(),
                         source,
@@ -161,7 +161,7 @@ impl Artifacts {
         Ok(target_dir)
     }
 
-    pub async fn compile_wasm(&self, module: &Path) -> BuildResult<PathBuf> {
+    pub async fn compile_wasm(&self, module: &Path) -> PlatformResult<PathBuf> {
         let output = self.build_dir.path().join(CWASM_ARTIFACT_FILE);
         let command_output = Command::new(WASMTIME)
             .arg("compile")
@@ -176,12 +176,12 @@ impl Artifacts {
             .output()
             .await
             .map_err(|source| {
-                BuildError::io("compile artifact", module.display().to_string(), source)
+                PlatformError::io("compile artifact", module.display().to_string(), source)
             })?;
         self.set_compile_output(Self::command_output("wasmtime compile", &command_output));
 
         if !command_output.status.success() {
-            return Err(BuildError::command_failed(
+            return Err(PlatformError::command_failed(
                 "compile artifact",
                 module.to_path_buf(),
                 command_output.status,

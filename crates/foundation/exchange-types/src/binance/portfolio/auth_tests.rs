@@ -12,7 +12,7 @@ use crate::{
     signer::Signer,
 };
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use secrecy::SecretString;
 use std::{
     sync::{
@@ -30,7 +30,7 @@ struct TestHttpClient {
 
 #[async_trait]
 impl HttpClient for TestHttpClient {
-    async fn send(&self, request: HttpRequest, _timeout: Duration) -> BuildResult<HttpResponse> {
+    async fn send(&self, request: HttpRequest, _timeout: Duration) -> PlatformResult<HttpResponse> {
         match request.method {
             HttpMethod::POST => {
                 self.created.fetch_add(1, Ordering::SeqCst);

@@ -5,7 +5,7 @@ use crate::{
     nats_gap_marker_source::GapMarkerSource,
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_market_data::{EnvelopeCodec, GapMarker, MarketEvent};
 use platform_metrics::MarketDataMetrics;
 use platform_nats::EventPublisher;
@@ -23,7 +23,7 @@ where
         &self,
         pending: PendingGap,
         all_pending: &mut BTreeMap<String, PendingGap>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let now = TimestampMilliseconds::now();
         let requested = pending.gap_marker(now);
         let fetch_gap = PendingGap::widened_gap(&requested, pending.attempts);
@@ -100,7 +100,7 @@ where
         &self,
         gap: &GapMarker,
         events: Vec<BackfilledEvent>,
-    ) -> BuildResult<Vec<BackfilledEvent>> {
+    ) -> PlatformResult<Vec<BackfilledEvent>> {
         let mut seen = HashSet::new();
         let mut events: Vec<_> = events
             .into_iter()
@@ -126,7 +126,7 @@ where
         &self,
         pending: &PendingGap,
         all_pending: &mut BTreeMap<String, PendingGap>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let key = pending.key();
         self.retries.remove(&key).await?;
         all_pending.remove(&key);
@@ -140,7 +140,7 @@ where
         all_pending: &mut BTreeMap<String, PendingGap>,
         ranges: Vec<(u64, u64)>,
         last_error: Option<String>,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         let now = TimestampMilliseconds::now();
         let attempts = pending.attempts.saturating_add(1);
         let next_attempt_at = PendingGap::retry_at(now, attempts);
@@ -168,7 +168,7 @@ where
         Ok(())
     }
 
-    async fn publish(&self, gap: &GapMarker, event: BackfilledEvent) -> BuildResult<()> {
+    async fn publish(&self, gap: &GapMarker, event: BackfilledEvent) -> PlatformResult<()> {
         let frame = json!({
             "stream": gap.stream,
             "data": event.data,

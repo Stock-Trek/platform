@@ -5,7 +5,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{Header, decode_header, jwk::JwkSet};
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_time::RetryPolicy;
 use std::{io, time::Duration};
 use tokio::{sync::watch, time::Instant};
@@ -38,13 +38,13 @@ pub struct JwksCache {
 }
 
 impl JwksCache {
-    pub fn new(url: impl Into<String>) -> BuildResult<Self> {
+    pub fn new(url: impl Into<String>) -> PlatformResult<Self> {
         Self::with_ttl(url, DEFAULT_JWKS_TTL)
     }
 
-    pub fn with_ttl(url: impl Into<String>, ttl: Duration) -> BuildResult<Self> {
+    pub fn with_ttl(url: impl Into<String>, ttl: Duration) -> PlatformResult<Self> {
         if ttl.is_zero() {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "jwks_ttl",
                 "must be greater than zero",
             ));
@@ -72,14 +72,14 @@ impl JwksCache {
         }
     }
 
-    pub async fn verify(&self, jwt: &str, now: DateTime<Utc>) -> BuildResult<OrderJwtClaims> {
-        let header =
-            decode_header(jwt).map_err(|error| BuildError::auth_invalid_jwt(error.to_string()))?;
+    pub async fn verify(&self, jwt: &str, now: DateTime<Utc>) -> PlatformResult<OrderJwtClaims> {
+        let header = decode_header(jwt)
+            .map_err(|error| PlatformError::auth_invalid_jwt(error.to_string()))?;
         match &self.source {
             Source::Static => {
                 let verifier = self.state.lock().verifier.clone();
                 verifier
-                    .ok_or_else(|| BuildError::auth_invalid_jwt("JWKS cache is empty"))?
+                    .ok_or_else(|| PlatformError::auth_invalid_jwt("JWKS cache is empty"))?
                     .verify_with_header(&header, jwt, now)
             }
             Source::Remote(_) => self.verify_remote(&header, jwt, now).await,
@@ -91,7 +91,7 @@ impl JwksCache {
         header: &Header,
         jwt: &str,
         now: DateTime<Utc>,
-    ) -> BuildResult<OrderJwtClaims> {
+    ) -> PlatformResult<OrderJwtClaims> {
         loop {
             let mut refreshed = self.refresh.subscribe();
             match self.action(header) {
@@ -99,7 +99,7 @@ impl JwksCache {
                     return verifier.verify_with_header(header, jwt, now);
                 }
                 Action::Unavailable => {
-                    return Err(BuildError::external(io::Error::other(
+                    return Err(PlatformError::external(io::Error::other(
                         "JWKS refresh is backing off after an earlier failure",
                     )));
                 }

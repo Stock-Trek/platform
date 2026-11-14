@@ -13,7 +13,7 @@ use crate::restore::rebuild::RebuiltArchiveState;
 use crate::restore::replay::ArchivedEventSource;
 use crate::restore::restored_shard::{RestoreOptions, RestoreSource, RestoredShard};
 use crate::state::AggregatorState;
-use platform_errors::{BuildResult, ErrorType};
+use platform_errors::{ErrorType, PlatformResult};
 use platform_metrics::AggregatorMetrics;
 use platform_nats::ConsumerStart;
 use platform_types::TimestampMilliseconds;
@@ -38,10 +38,10 @@ impl RestoreOptions {
         &self,
         store: &dyn StateStore,
         connect_archive: F,
-    ) -> BuildResult<RestoredShard>
+    ) -> PlatformResult<RestoredShard>
     where
         F: FnOnce() -> Fut,
-        Fut: Future<Output = BuildResult<Box<dyn ArchivedEventSource>>>,
+        Fut: Future<Output = PlatformResult<Box<dyn ArchivedEventSource>>>,
     {
         let started = Instant::now();
         let result = self.restore_inner(store, connect_archive).await;
@@ -57,10 +57,10 @@ impl RestoreOptions {
         &self,
         store: &dyn StateStore,
         connect_archive: F,
-    ) -> BuildResult<RestoredShard>
+    ) -> PlatformResult<RestoredShard>
     where
         F: FnOnce() -> Fut,
-        Fut: Future<Output = BuildResult<Box<dyn ArchivedEventSource>>>,
+        Fut: Future<Output = PlatformResult<Box<dyn ArchivedEventSource>>>,
     {
         let shard = self.shard;
         match self.replay_start_policy {

@@ -1,5 +1,5 @@
 use crate::vault_error::{VaultError, VaultWriteOutcome};
-use platform_errors::{AuthError, BuildError, Retryability};
+use platform_errors::{AuthError, PlatformError, Retryability};
 use reqwest::{
     StatusCode,
     header::{HeaderMap, HeaderValue, RETRY_AFTER},
@@ -9,7 +9,7 @@ use std::time::{Duration, SystemTime};
 struct VaultErrorFixture;
 
 impl VaultErrorFixture {
-    fn response(status: StatusCode, headers: HeaderMap) -> BuildError {
+    fn response(status: StatusCode, headers: HeaderMap) -> PlatformError {
         VaultError::response("read", "token-a", status, &headers, "body".to_string())
     }
 
@@ -19,9 +19,12 @@ impl VaultErrorFixture {
         headers
     }
 
-    fn assert_store_retryability(error: &BuildError, expected: Retryability) {
+    fn assert_store_retryability(error: &PlatformError, expected: Retryability) {
         assert_eq!(error.retryability(), expected);
-        assert!(matches!(error, BuildError::Auth(AuthError::Store { .. })));
+        assert!(matches!(
+            error,
+            PlatformError::Auth(AuthError::Store { .. })
+        ));
     }
 }
 
@@ -43,7 +46,7 @@ fn precondition_failed_is_permanent() {
 fn rate_limiting_uses_a_default_retry_after() {
     let error = VaultErrorFixture::response(StatusCode::TOO_MANY_REQUESTS, HeaderMap::new());
 
-    let BuildError::Auth(AuthError::Unavailable { retry_after }) = error else {
+    let PlatformError::Auth(AuthError::Unavailable { retry_after }) = error else {
         panic!("expected an unavailable error");
     };
     assert_eq!(retry_after, Duration::from_secs(1));
@@ -54,7 +57,7 @@ fn retry_after_seconds_are_preserved() {
     let headers = VaultErrorFixture::headers_with_retry_after("7");
     let error = VaultErrorFixture::response(StatusCode::TOO_MANY_REQUESTS, headers);
 
-    let BuildError::Auth(AuthError::Unavailable { retry_after }) = error else {
+    let PlatformError::Auth(AuthError::Unavailable { retry_after }) = error else {
         panic!("expected an unavailable error");
     };
     assert_eq!(retry_after, Duration::from_secs(7));
@@ -66,7 +69,7 @@ fn retry_after_http_dates_are_supported() {
     let headers = VaultErrorFixture::headers_with_retry_after(&value);
     let error = VaultErrorFixture::response(StatusCode::SERVICE_UNAVAILABLE, headers);
 
-    let BuildError::Auth(AuthError::Unavailable { retry_after }) = error else {
+    let PlatformError::Auth(AuthError::Unavailable { retry_after }) = error else {
         panic!("expected an unavailable error");
     };
     assert!(retry_after > Duration::ZERO);

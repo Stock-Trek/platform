@@ -1,6 +1,6 @@
 use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
 use chrono::Utc;
-use platform_errors::{AuthError, BuildError};
+use platform_errors::{AuthError, PlatformError};
 
 #[tokio::test]
 async fn signing_requires_the_token_secret() {
@@ -14,7 +14,7 @@ async fn signing_requires_the_token_secret() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::InvalidSecret { .. }))
+        Err(PlatformError::Auth(AuthError::InvalidSecret { .. }))
     ));
 }
 
@@ -29,7 +29,7 @@ async fn signing_an_unknown_token_fails() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::UnknownToken { .. }))
+        Err(PlatformError::Auth(AuthError::UnknownToken { .. }))
     ));
 }
 
@@ -46,7 +46,7 @@ async fn signing_after_deletion_fails() {
 
     assert!(matches!(
         error,
-        Err(BuildError::Auth(AuthError::UnknownToken { .. }))
+        Err(PlatformError::Auth(AuthError::UnknownToken { .. }))
     ));
 
     let verified = service
@@ -72,7 +72,7 @@ async fn rejects_path_traversal_token_ids_before_signing() {
             .await;
         assert!(matches!(
             error,
-            Err(BuildError::Auth(AuthError::InvalidField { .. }))
+            Err(PlatformError::Auth(AuthError::InvalidField { .. }))
         ));
     }
 }

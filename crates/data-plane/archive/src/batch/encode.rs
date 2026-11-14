@@ -3,16 +3,19 @@ use crate::batch::ArchiveBatch;
 use arrow_array::{
     ArrayRef, BooleanArray, Float64Array, Int64Array, RecordBatch, StringArray, UInt64Array,
 };
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::{ClosedCandle, EnvelopeCodec};
 use std::sync::Arc;
 
 impl ArchiveBatch {
-    pub fn to_record_batch(&self) -> BuildResult<RecordBatch> {
+    pub fn to_record_batch(&self) -> PlatformResult<RecordBatch> {
         Self::record_batch(self.kind, &self.records)
     }
 
-    pub fn record_batch(kind: ArchiveKind, records: &[ArchiveRecord]) -> BuildResult<RecordBatch> {
+    pub fn record_batch(
+        kind: ArchiveKind,
+        records: &[ArchiveRecord],
+    ) -> PlatformResult<RecordBatch> {
         match kind {
             ArchiveKind::Events => {
                 let events = Self::events(records)?;
@@ -45,10 +48,10 @@ impl ArchiveBatch {
                     .map(|closed| {
                         let payload = closed.revision().encode()?;
                         Ok(std::str::from_utf8(&payload)
-                            .map_err(BuildError::external)?
+                            .map_err(PlatformError::external)?
                             .to_string())
                     })
-                    .collect::<BuildResult<Vec<_>>>()?;
+                    .collect::<PlatformResult<Vec<_>>>()?;
                 let revision_ids = candles
                     .iter()
                     .map(|closed| closed.message_id())
@@ -147,7 +150,7 @@ impl ArchiveBatch {
         }
     }
 
-    fn events(records: &[ArchiveRecord]) -> BuildResult<Vec<&ArchivedMarketEvent>> {
+    fn events(records: &[ArchiveRecord]) -> PlatformResult<Vec<&ArchivedMarketEvent>> {
         records
             .iter()
             .map(|record| match record {
@@ -159,7 +162,7 @@ impl ArchiveBatch {
             .collect()
     }
 
-    fn candles(records: &[ArchiveRecord]) -> BuildResult<Vec<&ClosedCandle>> {
+    fn candles(records: &[ArchiveRecord]) -> PlatformResult<Vec<&ClosedCandle>> {
         records
             .iter()
             .map(|record| match record {

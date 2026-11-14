@@ -10,7 +10,7 @@ use aws_credential_types::Credentials;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use hmac::{Hmac, KeyInit, Mac};
 use platform_config::S3_SIGNED_URL_EXPIRY_SECS;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use serde::Serialize;
 use serde_json::{Value, json};
 use sha2::Sha256;
@@ -68,9 +68,9 @@ impl PresignedPostSigner {
         extra_conditions: &[Value],
         now: SystemTime,
         expires_in: Duration,
-    ) -> BuildResult<PresignedPost> {
+    ) -> PlatformResult<PresignedPost> {
         let expires_at = now.checked_add(expires_in).ok_or_else(|| {
-            BuildError::config_invalid(
+            PlatformError::config_invalid(
                 S3_SIGNED_URL_EXPIRY_SECS,
                 "expiry overflows the system clock",
             )

@@ -1,4 +1,4 @@
-use platform_errors::{BuildError, BuildResult, ValidationError};
+use platform_errors::{PlatformError, PlatformResult, ValidationError};
 use rust_decimal::Decimal;
 use stock_trek_types::cex::{
     asset_id::AssetId, capability::CexCapability, order_request::OrderRequest, quantity::Quantity,
@@ -12,7 +12,7 @@ impl SemanticChecker {
         &self,
         order_request: &OrderRequest<AssetId, Decimal>,
         capabilities: &[CexCapability],
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         match order_request {
             OrderRequest::Limit {
                 quantity: Quantity::OfQuote(..),
@@ -25,9 +25,9 @@ impl SemanticChecker {
         &self,
         capabilities: &[CexCapability],
         required_capability: &CexCapability,
-    ) -> BuildResult<()> {
+    ) -> PlatformResult<()> {
         if !capabilities.contains(required_capability) {
-            Err(BuildError::Validation(ValidationError::Unsupported {
+            Err(PlatformError::Validation(ValidationError::Unsupported {
                 name: "CexCapability".into(),
                 value: (*required_capability).to_string(),
             }))

@@ -1,9 +1,9 @@
 use crate::{ApiToken, AuthService, OwnerIndex, OwnerIndexEntry, TokenScope};
 use chrono::{DateTime, Utc};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 
 impl AuthService {
-    pub async fn tokens_for_owner(&self, owner: &str) -> BuildResult<Vec<ApiToken>> {
+    pub async fn tokens_for_owner(&self, owner: &str) -> PlatformResult<Vec<ApiToken>> {
         let owner = ApiToken::validated_owner(owner)?;
         let Some(index) = self.store.owner_index(owner).await? else {
             return self.tokens_from_owner_scan(owner).await;
@@ -30,7 +30,7 @@ impl AuthService {
         &self,
         owner: &str,
         now: DateTime<Utc>,
-    ) -> BuildResult<Vec<ApiToken>> {
+    ) -> PlatformResult<Vec<ApiToken>> {
         Ok(self
             .tokens_for_owner(owner)
             .await?
@@ -39,7 +39,11 @@ impl AuthService {
             .collect())
     }
 
-    pub async fn token_for_owner(&self, owner: &str, now: DateTime<Utc>) -> BuildResult<ApiToken> {
+    pub async fn token_for_owner(
+        &self,
+        owner: &str,
+        now: DateTime<Utc>,
+    ) -> PlatformResult<ApiToken> {
         self.select_token_for_owner(owner, None, now).await
     }
 
@@ -48,7 +52,7 @@ impl AuthService {
         owner: &str,
         scope: TokenScope,
         now: DateTime<Utc>,
-    ) -> BuildResult<ApiToken> {
+    ) -> PlatformResult<ApiToken> {
         self.select_token_for_owner(owner, Some(scope), now).await
     }
 
@@ -57,7 +61,7 @@ impl AuthService {
         owner: &str,
         scope: Option<TokenScope>,
         now: DateTime<Utc>,
-    ) -> BuildResult<ApiToken> {
+    ) -> PlatformResult<ApiToken> {
         let owner = ApiToken::validated_owner(owner)?;
         let Some(index) = self.store.owner_index(owner).await? else {
             return self.select_token_from_scan(owner, scope, now).await;
@@ -102,7 +106,7 @@ impl AuthService {
         &self,
         owner: &str,
         index: &OwnerIndex,
-    ) -> BuildResult<Vec<ApiToken>> {
+    ) -> PlatformResult<Vec<ApiToken>> {
         let mut ids = Vec::with_capacity(index.tokens().len());
         for entry in index.tokens() {
             if entry.owner() != owner || ids.contains(&entry.id().to_string()) {

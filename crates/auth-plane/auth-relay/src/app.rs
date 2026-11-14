@@ -1,5 +1,5 @@
 use crate::{config::AuthRelayConfig, relay::AuthRelay, runner::AuthRelayRunner};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_runtime::Service;
 
 const SERVICE: Service = Service::new("platform-auth-relay");
@@ -7,7 +7,7 @@ const SERVICE: Service = Service::new("platform-auth-relay");
 pub struct AuthRelayApp;
 
 impl AuthRelayApp {
-    pub async fn run() -> BuildResult<()> {
+    pub async fn run() -> PlatformResult<()> {
         let config = AuthRelayConfig::from_env()?;
         SERVICE.init_logging(&config.log_filter)?;
         let _metrics = SERVICE.init_metrics("platform/auth-relay")?;

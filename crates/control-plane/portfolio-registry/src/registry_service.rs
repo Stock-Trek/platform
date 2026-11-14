@@ -1,7 +1,7 @@
 use crate::{AccountMapping, OwnershipCommand, OwnershipCommit, OwnershipStore};
 use chrono::{DateTime, Utc};
 use platform_auth_service::ApiToken;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_portfolio_ownership::{AccountKey, OwnershipAction};
 use std::sync::Arc;
 
@@ -20,7 +20,7 @@ impl RegistryService {
         cex: &str,
         account_id: &str,
         at: DateTime<Utc>,
-    ) -> BuildResult<AccountMapping> {
+    ) -> PlatformResult<AccountMapping> {
         self.commit(owner, cex, account_id, OwnershipAction::Add, at)
             .await
     }
@@ -31,12 +31,12 @@ impl RegistryService {
         cex: &str,
         account_id: &str,
         at: DateTime<Utc>,
-    ) -> BuildResult<AccountMapping> {
+    ) -> PlatformResult<AccountMapping> {
         self.commit(owner, cex, account_id, OwnershipAction::Remove, at)
             .await
     }
 
-    pub async fn accounts(&self, owner: &str) -> BuildResult<Vec<AccountMapping>> {
+    pub async fn accounts(&self, owner: &str) -> PlatformResult<Vec<AccountMapping>> {
         ApiToken::validated_owner(owner)?;
         self.store.owner_accounts(owner).await
     }
@@ -48,7 +48,7 @@ impl RegistryService {
         account_id: &str,
         action: OwnershipAction,
         at: DateTime<Utc>,
-    ) -> BuildResult<AccountMapping> {
+    ) -> PlatformResult<AccountMapping> {
         let owner = ApiToken::validated_owner(owner)?;
         let account = AccountKey::parse(cex, account_id)?;
         let command = OwnershipCommand::new(owner, account.clone(), action, at);
@@ -58,7 +58,9 @@ impl RegistryService {
                 .get(&account)
                 .await?
                 .map(|record| record.mapping())
-                .ok_or_else(|| BuildError::external(std::io::Error::other("mapping disappeared"))),
+                .ok_or_else(|| {
+                    PlatformError::external(std::io::Error::other("mapping disappeared"))
+                }),
         }
     }
 }

@@ -9,7 +9,7 @@ use crate::{
     request::{ETHttpRequest, ETRequest},
     signer::Signer,
 };
-use platform_errors::{BuildError, BuildResult, ExchangeError};
+use platform_errors::{ExchangeError, PlatformError, PlatformResult};
 use platform_types::{TimestampMilliseconds, UsageCount};
 use serde::{Deserialize, Serialize};
 
@@ -101,7 +101,7 @@ impl ETHttpRequest for BinanceListenKeyRequest {
         }
     }
 
-    fn try_into_http(self, signer: &Signer) -> BuildResult<HttpRequest> {
+    fn try_into_http(self, signer: &Signer) -> PlatformResult<HttpRequest> {
         let query = self.query_params(true);
         Ok(HttpRequest {
             method: self.http_method(),
@@ -120,18 +120,18 @@ pub struct BinanceListenKeyResponse {
 }
 
 impl BinanceResponse<BinanceListenKeyResponse> {
-    pub fn into_listen_key(self) -> BuildResult<String> {
+    pub fn into_listen_key(self) -> PlatformResult<String> {
         self.require_success()?.require_listen_key()
     }
 
-    pub fn ensure_success(self) -> BuildResult<()> {
+    pub fn ensure_success(self) -> PlatformResult<()> {
         self.require_success().map(|_| ())
     }
 
-    fn require_success(self) -> BuildResult<BinanceListenKeyResponse> {
+    fn require_success(self) -> PlatformResult<BinanceListenKeyResponse> {
         match self.payload {
             BinanceResponsePayload::Success(payload) => Ok(payload),
-            BinanceResponsePayload::Failure(error) => Err(BuildError::Exchange(
+            BinanceResponsePayload::Failure(error) => Err(PlatformError::Exchange(
                 ExchangeError::BadResponse(error.to_string()),
             )),
         }
@@ -139,11 +139,11 @@ impl BinanceResponse<BinanceListenKeyResponse> {
 }
 
 impl BinanceListenKeyResponse {
-    pub fn require_listen_key(self) -> BuildResult<String> {
+    pub fn require_listen_key(self) -> PlatformResult<String> {
         let listen_key = self
             .listen_key
             .filter(|listen_key| !listen_key.is_empty())
-            .ok_or_else(|| BuildError::bad_value("listen key", "", "is missing"))?;
+            .ok_or_else(|| PlatformError::bad_value("listen key", "", "is missing"))?;
         Ok(listen_key)
     }
 }

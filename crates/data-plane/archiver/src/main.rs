@@ -11,14 +11,14 @@ use crate::{
     source::NatsArchiveSource,
 };
 use platform_archive::IcebergCatalog;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_runtime::Service;
 use std::sync::Arc;
 
 const SERVICE: Service = Service::new("platform-archiver");
 
 #[tokio::main]
-async fn main() -> BuildResult<()> {
+async fn main() -> PlatformResult<()> {
     let config = ArchiverConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let _metrics = SERVICE.init_metrics("platform/archiver")?;

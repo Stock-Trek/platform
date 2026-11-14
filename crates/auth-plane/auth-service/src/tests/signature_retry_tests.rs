@@ -4,7 +4,7 @@ use crate::{TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenAuditRelay};
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -30,11 +30,14 @@ impl FailingSignatureVerifiedAuditLog {
 
 #[async_trait]
 impl TokenAuditLog for FailingSignatureVerifiedAuditLog {
-    async fn record(&self, event: TokenAuditEvent) -> BuildResult<()> {
+    async fn record(&self, event: TokenAuditEvent) -> PlatformResult<()> {
         if event.action == TokenAuditAction::SignatureVerified
             && !self.failed.swap(true, Ordering::SeqCst)
         {
-            return Err(BuildError::auth_invalid_field("audit", "queue unavailable"));
+            return Err(PlatformError::auth_invalid_field(
+                "audit",
+                "queue unavailable",
+            ));
         }
         self.events.lock().push(event);
         Ok(())

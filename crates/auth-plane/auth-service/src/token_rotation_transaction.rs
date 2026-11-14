@@ -1,6 +1,6 @@
 use crate::{ApiToken, TokenAuditEvent, token_rotation_identity::TokenRotationIdentity};
 use chrono::{DateTime, Utc};
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use serde_json::{Value, json};
 
 pub const ROTATION_TRANSACTION_FIELD: &str = "__rotation_transaction__";
@@ -26,9 +26,9 @@ impl TokenRotationTransaction {
         retired: ApiToken,
         replacement: ApiToken,
         mut events: Vec<TokenAuditEvent>,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         if events.len() != 2 {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "audit_events",
                 "a rotation transaction requires exactly two events",
             ));
@@ -37,7 +37,7 @@ impl TokenRotationTransaction {
             || retired.metadata().replaced_by() != Some(replacement.id())
             || replacement.metadata().rotated_from() != Some(original.id())
         {
-            return Err(BuildError::auth_invalid_field(
+            return Err(PlatformError::auth_invalid_field(
                 "rotation",
                 "does not describe a consistent token rotation",
             ));
@@ -113,7 +113,7 @@ impl TokenRotationTransaction {
         })
     }
 
-    pub fn from_value(value: &Value) -> BuildResult<Self> {
+    pub fn from_value(value: &Value) -> PlatformResult<Self> {
         if !value
             .get(ROTATION_TRANSACTION_FIELD)
             .and_then(Value::as_bool)
@@ -148,7 +148,7 @@ impl TokenRotationTransaction {
         })
     }
 
-    fn token(value: &Value, field: &'static str) -> BuildResult<ApiToken> {
+    fn token(value: &Value, field: &'static str) -> PlatformResult<ApiToken> {
         let token_value = value
             .get(field)
             .ok_or_else(|| Self::malformed("missing token value"))?;
@@ -160,7 +160,7 @@ impl TokenRotationTransaction {
             .map_err(|error| Self::malformed(error.to_string().as_str()))
     }
 
-    fn malformed(detail: &str) -> BuildError {
-        BuildError::auth_store("read", "rotation-transaction", false, detail.to_string())
+    fn malformed(detail: &str) -> PlatformError {
+        PlatformError::auth_store("read", "rotation-transaction", false, detail.to_string())
     }
 }

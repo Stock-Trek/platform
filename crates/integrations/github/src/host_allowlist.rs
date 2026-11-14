@@ -1,5 +1,5 @@
 use platform_config::GITHUB_ENTERPRISE_ALLOWED_HOSTS;
-use platform_errors::{BuildError, BuildResult, GitHubError};
+use platform_errors::{GitHubError, PlatformError, PlatformResult};
 use platform_types::UrlScheme;
 use std::{
     collections::HashMap,
@@ -59,7 +59,7 @@ impl HostAllowlist {
     ///
     /// [`DEFAULT_HOST`] is always included with the default HTTPS port, even if
     /// it is omitted from `hosts` or configured with another port.
-    pub fn from_hosts<I, S>(hosts: I) -> BuildResult<Self>
+    pub fn from_hosts<I, S>(hosts: I) -> PlatformResult<Self>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<str>,
@@ -77,9 +77,9 @@ impl HostAllowlist {
         self.validate(host).is_ok()
     }
 
-    pub fn validate(&self, host: &str) -> Result<String, BuildError> {
+    pub fn validate(&self, host: &str) -> Result<String, PlatformError> {
         let (name, port) = Self::parse(host.trim()).ok_or_else(|| {
-            BuildError::GitHub(GitHubError::HostInvalid {
+            PlatformError::GitHub(GitHubError::HostInvalid {
                 host: host.to_owned(),
             })
         })?;
@@ -100,24 +100,24 @@ impl HostAllowlist {
     /// allowlist entry. The returned host is rebuilt from the allowlist's
     /// policy, so callers must use it rather than any part of the original
     /// string.
-    pub fn validate_url(&self, url: &str) -> Result<String, BuildError> {
+    pub fn validate_url(&self, url: &str) -> Result<String, PlatformError> {
         let parsed = Url::parse(url).map_err(|_| {
-            BuildError::GitHub(GitHubError::HostInvalid {
+            PlatformError::GitHub(GitHubError::HostInvalid {
                 host: url.to_owned(),
             })
         })?;
         if !UrlScheme::from_url(&parsed).is_some_and(UrlScheme::is_https) {
-            return Err(BuildError::GitHub(GitHubError::HostInvalid {
+            return Err(PlatformError::GitHub(GitHubError::HostInvalid {
                 host: url.to_owned(),
             }));
         }
         if !parsed.username().is_empty() || parsed.password().is_some() {
-            return Err(BuildError::GitHub(GitHubError::HostInvalid {
+            return Err(PlatformError::GitHub(GitHubError::HostInvalid {
                 host: url.to_owned(),
             }));
         }
         let (name, port) = Self::host_from_url(&parsed).ok_or_else(|| {
-            BuildError::GitHub(GitHubError::HostInvalid {
+            PlatformError::GitHub(GitHubError::HostInvalid {
                 host: url.to_owned(),
             })
         })?;
@@ -128,14 +128,14 @@ impl HostAllowlist {
     /// [`HostAllowlist::validate_url`]. `name` is an already-normalized host
     /// and `port` is the port parsed from `input`; the returned host is rebuilt
     /// from the port owned by the allowlist entry.
-    fn check(&self, name: &str, port: Option<u16>, input: &str) -> Result<String, BuildError> {
+    fn check(&self, name: &str, port: Option<u16>, input: &str) -> Result<String, PlatformError> {
         let Some(policy) = self.hosts.get(name) else {
-            return Err(BuildError::GitHub(GitHubError::HostNotAllowed {
+            return Err(PlatformError::GitHub(GitHubError::HostNotAllowed {
                 host: input.to_owned(),
             }));
         };
         if !policy.allows(port) {
-            return Err(BuildError::GitHub(GitHubError::HostNotAllowed {
+            return Err(PlatformError::GitHub(GitHubError::HostNotAllowed {
                 host: input.to_owned(),
             }));
         }
@@ -151,9 +151,9 @@ impl HostAllowlist {
         Some((name, url.port()))
     }
 
-    fn validated(host: &str) -> BuildResult<(String, Option<u16>)> {
+    fn validated(host: &str) -> PlatformResult<(String, Option<u16>)> {
         Self::parse(host).ok_or_else(|| {
-            BuildError::config_invalid(
+            PlatformError::config_invalid(
                 GITHUB_ENTERPRISE_ALLOWED_HOSTS,
                 format!(
                     "{host:?} is not a hostname, IP address, or host:port (expected e.g. \"ghe.example.com\", \"ghe.example.com:8443\", or \"[2001:db8::1]:8443\")"

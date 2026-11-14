@@ -3,7 +3,7 @@ use crate::{
     OwnershipTransition,
 };
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_portfolio_ownership::{AccountKey, OwnershipEvent};
 use std::collections::BTreeMap;
 use tokio::sync::Mutex;
@@ -21,14 +21,14 @@ impl MemoryOwnershipStore {
 
 #[async_trait]
 impl OwnershipStore for MemoryOwnershipStore {
-    async fn commit(&self, command: OwnershipCommand) -> BuildResult<OwnershipCommit> {
+    async fn commit(&self, command: OwnershipCommand) -> PlatformResult<OwnershipCommit> {
         let mut records = self.records.lock().await;
         let existing = records.get(&command.account).cloned();
         match OwnershipTransition::apply(existing, &command)? {
             OwnershipTransition::Unchanged(record) => Ok(OwnershipCommit::Unchanged(record)),
             OwnershipTransition::Applied(record) => {
                 let event = record.pending_events.last().cloned().ok_or_else(|| {
-                    platform_errors::BuildError::external(std::io::Error::other(
+                    platform_errors::PlatformError::external(std::io::Error::other(
                         "missing outbox event",
                     ))
                 })?;
@@ -38,11 +38,11 @@ impl OwnershipStore for MemoryOwnershipStore {
         }
     }
 
-    async fn get(&self, account: &AccountKey) -> BuildResult<Option<OwnershipRecord>> {
+    async fn get(&self, account: &AccountKey) -> PlatformResult<Option<OwnershipRecord>> {
         Ok(self.records.lock().await.get(account).cloned())
     }
 
-    async fn owner_accounts(&self, owner: &str) -> BuildResult<Vec<AccountMapping>> {
+    async fn owner_accounts(&self, owner: &str) -> PlatformResult<Vec<AccountMapping>> {
         let records = self.records.lock().await;
         Ok(records
             .values()
@@ -51,7 +51,7 @@ impl OwnershipStore for MemoryOwnershipStore {
             .collect())
     }
 
-    async fn pending_events(&self, limit: usize) -> BuildResult<Vec<OwnershipEvent>> {
+    async fn pending_events(&self, limit: usize) -> PlatformResult<Vec<OwnershipEvent>> {
         let records = self.records.lock().await;
         Ok(records
             .values()
@@ -60,7 +60,7 @@ impl OwnershipStore for MemoryOwnershipStore {
             .collect())
     }
 
-    async fn acknowledge(&self, event: &OwnershipEvent) -> BuildResult<()> {
+    async fn acknowledge(&self, event: &OwnershipEvent) -> PlatformResult<()> {
         if let Some(record) = self.records.lock().await.get_mut(event.account()) {
             record
                 .pending_events

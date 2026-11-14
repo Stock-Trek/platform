@@ -1,5 +1,5 @@
 use async_trait::async_trait;
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_exchange_gateway::{ConnectorHealth, ConnectorHealthSink};
 use platform_nats::EventPublisher;
 use std::sync::Arc;
@@ -20,7 +20,7 @@ impl NatsConnectorHealthSink {
 
 #[async_trait]
 impl ConnectorHealthSink for NatsConnectorHealthSink {
-    async fn publish(&self, health: ConnectorHealth) -> BuildResult<()> {
+    async fn publish(&self, health: ConnectorHealth) -> PlatformResult<()> {
         self.publisher
             .publish(&self.subject, &health.to_bytes()?)
             .await

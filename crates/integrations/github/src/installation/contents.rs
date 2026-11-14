@@ -3,7 +3,7 @@ use crate::installation::{
     types::{GitHubBlob, GitHubTree, TreeParams},
 };
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
-use platform_errors::{BuildError, BuildResult, GitHubError};
+use platform_errors::{GitHubError, PlatformError, PlatformResult};
 use platform_git::GitFile;
 use std::path::Path;
 
@@ -13,7 +13,7 @@ impl GitHubInstallation {
         repo_id: u64,
         ref_name: &str,
         directory: &str,
-    ) -> BuildResult<Vec<GitFile>> {
+    ) -> PlatformResult<Vec<GitFile>> {
         let directory = directory.trim_matches('/');
         if !directory.is_empty() {
             Self::validate_relative_path(repo_id, directory, "")?;
@@ -24,7 +24,7 @@ impl GitHubInstallation {
         // had to truncate it), so use that for directory discovery instead.
         let tree = self.tree(repo_id, ref_name).await?;
         if tree.truncated {
-            return Err(BuildError::GitHub(GitHubError::TreeTruncated {
+            return Err(PlatformError::GitHub(GitHubError::TreeTruncated {
                 repo_id,
                 ref_name: ref_name.to_owned(),
             }));
@@ -36,7 +36,7 @@ impl GitHubInstallation {
                 .iter()
                 .any(|entry| entry.path == directory && entry.kind == "tree")
         {
-            return Err(BuildError::GitHub(GitHubError::DirectoryNotFound {
+            return Err(PlatformError::GitHub(GitHubError::DirectoryNotFound {
                 repo_id,
                 path: directory.to_owned(),
                 ref_name: ref_name.to_owned(),
@@ -60,7 +60,7 @@ impl GitHubInstallation {
 
             let depth = relative.matches('/').count();
             if depth > self.directory_limits.max_depth {
-                return Err(BuildError::GitHub(GitHubError::DirectoryDepthExceeded {
+                return Err(PlatformError::GitHub(GitHubError::DirectoryDepthExceeded {
                     repo_id,
                     path: entry.path,
                     max_depth: self.directory_limits.max_depth,
@@ -77,7 +77,7 @@ impl GitHubInstallation {
                         continue;
                     }
                     if files.len() >= self.directory_limits.max_files {
-                        return Err(BuildError::GitHub(GitHubError::TooManyFiles {
+                        return Err(PlatformError::GitHub(GitHubError::TooManyFiles {
                             repo_id,
                             directory: directory.to_owned(),
                             max_files: self.directory_limits.max_files,
@@ -86,7 +86,7 @@ impl GitHubInstallation {
                     if let Some(size) = entry.size
                         && total_bytes.saturating_add(size) > self.directory_limits.max_total_bytes
                     {
-                        return Err(BuildError::GitHub(GitHubError::DirectoryTooLarge {
+                        return Err(PlatformError::GitHub(GitHubError::DirectoryTooLarge {
                             repo_id,
                             directory: directory.to_owned(),
                             max_bytes: self.directory_limits.max_total_bytes,
@@ -95,7 +95,7 @@ impl GitHubInstallation {
                     let contents = self.blob(repo_id, &entry.sha).await?;
                     total_bytes = total_bytes.saturating_add(contents.len() as u64);
                     if total_bytes > self.directory_limits.max_total_bytes {
-                        return Err(BuildError::GitHub(GitHubError::DirectoryTooLarge {
+                        return Err(PlatformError::GitHub(GitHubError::DirectoryTooLarge {
                             repo_id,
                             directory: directory.to_owned(),
                             max_bytes: self.directory_limits.max_total_bytes,
@@ -108,7 +108,7 @@ impl GitHubInstallation {
                 }
                 "commit" => {}
                 kind => {
-                    return Err(BuildError::GitHub(GitHubError::UnsupportedContentType {
+                    return Err(PlatformError::GitHub(GitHubError::UnsupportedContentType {
                         repo_id,
                         path: entry.path,
                         content_type: kind.to_owned(),
@@ -120,7 +120,7 @@ impl GitHubInstallation {
         Ok(files)
     }
 
-    async fn tree(&self, repo_id: u64, ref_name: &str) -> BuildResult<GitHubTree> {
+    async fn tree(&self, repo_id: u64, ref_name: &str) -> PlatformResult<GitHubTree> {
         let params = TreeParams { recursive: 1 };
         self.client
             .get::<GitHubTree, _, _>(
@@ -132,7 +132,7 @@ impl GitHubInstallation {
             )
             .await
             .map_err(|source| {
-                BuildError::GitHub(GitHubError::GetTree {
+                PlatformError::GitHub(GitHubError::GetTree {
                     repo_id,
                     ref_name: ref_name.to_owned(),
                     source,
@@ -140,7 +140,7 @@ impl GitHubInstallation {
             })
     }
 
-    async fn blob(&self, repo_id: u64, sha: &str) -> BuildResult<Vec<u8>> {
+    async fn blob(&self, repo_id: u64, sha: &str) -> PlatformResult<Vec<u8>> {
         let blob = self
             .client
             .get::<GitHubBlob, _, _>(
@@ -149,7 +149,7 @@ impl GitHubInstallation {
             )
             .await
             .map_err(|source| {
-                BuildError::GitHub(GitHubError::GetBlob {
+                PlatformError::GitHub(GitHubError::GetBlob {
                     repo_id,
                     sha: sha.to_owned(),
                     source,
@@ -162,7 +162,7 @@ impl GitHubInstallation {
             blob.encoding.as_deref(),
         )?
         .ok_or_else(|| {
-            BuildError::GitHub(GitHubError::MissingContent {
+            PlatformError::GitHub(GitHubError::MissingContent {
                 repo_id,
                 path: sha.to_owned(),
             })
@@ -174,7 +174,7 @@ impl GitHubInstallation {
         path: &str,
         content: Option<&str>,
         encoding: Option<&str>,
-    ) -> BuildResult<Option<Vec<u8>>> {
+    ) -> PlatformResult<Option<Vec<u8>>> {
         let Some(content) = content else {
             return Ok(None);
         };
@@ -185,7 +185,7 @@ impl GitHubInstallation {
                     .filter(|character| !character.is_ascii_whitespace())
                     .collect::<String>();
                 BASE64.decode(compact).map(Some).map_err(|source| {
-                    BuildError::GitHub(GitHubError::DecodeContent {
+                    PlatformError::GitHub(GitHubError::DecodeContent {
                         repo_id,
                         path: path.to_owned(),
                         encoding: "base64",
@@ -195,7 +195,7 @@ impl GitHubInstallation {
             }
             Some("utf8") => Ok(Some(content.as_bytes().to_vec())),
             Some("none") | None if content.is_empty() => Ok(None),
-            Some(encoding) => Err(BuildError::GitHub(
+            Some(encoding) => Err(PlatformError::GitHub(
                 GitHubError::UnsupportedContentEncoding {
                     repo_id,
                     path: path.to_owned(),
@@ -224,7 +224,7 @@ impl GitHubInstallation {
             .join("/")
     }
 
-    fn validate_relative_path(repo_id: u64, path: &str, directory: &str) -> BuildResult<()> {
+    fn validate_relative_path(repo_id: u64, path: &str, directory: &str) -> PlatformResult<()> {
         let path = Path::new(path);
         if path.as_os_str().is_empty()
             || path.to_string_lossy().contains('\\')
@@ -232,7 +232,7 @@ impl GitHubInstallation {
                 .components()
                 .any(|component| !matches!(component, std::path::Component::Normal(_)))
         {
-            return Err(BuildError::GitHub(GitHubError::InvalidContentPath {
+            return Err(PlatformError::GitHub(GitHubError::InvalidContentPath {
                 repo_id,
                 path: path.display().to_string(),
                 directory: directory.to_owned(),

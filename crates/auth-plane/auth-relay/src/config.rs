@@ -1,6 +1,6 @@
 use platform_auth_service::{TokenUsageQueueConfig, VaultTokenStoreConfig};
 use platform_config::{AWS_CONNECT_TIMEOUT_SECS, AWS_OPERATION_TIMEOUT_SECS, EnvVars};
-use platform_errors::BuildResult;
+use platform_errors::PlatformResult;
 use platform_runtime::Config;
 use platform_time::Timeouts;
 use platform_types::UrlScheme;
@@ -30,11 +30,11 @@ pub struct AuthRelayConfig {
 }
 
 impl AuthRelayConfig {
-    pub fn from_env() -> BuildResult<Self> {
+    pub fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> BuildResult<Self> {
+    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let vault = VaultTokenStoreConfig::new(
             vars.required_url(AUTH_RELAY_VAULT_ADDRESS, &UrlScheme::HTTP)?,
             SecretString::from(vars.required(AUTH_RELAY_VAULT_TOKEN)?),

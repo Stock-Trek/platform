@@ -10,7 +10,7 @@ use crate::{
 use async_trait::async_trait;
 use base64::{Engine as _, engine::general_purpose::STANDARD};
 use platform_archive::{ArchivedMarketEvent, Bucket, ObjectKey};
-use platform_errors::{BuildError, BuildResult, Retryability};
+use platform_errors::{PlatformError, PlatformResult, Retryability};
 use platform_market_data::{AlignedWindow, MarketEvent, Trade};
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use rust_decimal::Decimal;
@@ -44,7 +44,7 @@ impl VecArchive {
 
 #[async_trait]
 impl ArchivedEventSource for VecArchive {
-    async fn next_event(&mut self) -> BuildResult<Option<ArchivedMarketEvent>> {
+    async fn next_event(&mut self) -> PlatformResult<Option<ArchivedMarketEvent>> {
         Ok(self.events.pop_front())
     }
 }
@@ -55,18 +55,18 @@ pub struct FailingStateStore {
 
 #[async_trait]
 impl StateStore for FailingStateStore {
-    async fn load(&self, _shard: ShardId) -> BuildResult<Option<CheckpointRecord>> {
+    async fn load(&self, _shard: ShardId) -> PlatformResult<Option<CheckpointRecord>> {
         Err(match self.retryability {
             Retryability::Retryable => {
-                BuildError::external(std::io::Error::other("transient checkpoint read failure"))
+                PlatformError::external(std::io::Error::other("transient checkpoint read failure"))
             }
             Retryability::Permanent => {
-                BuildError::config_invalid("checkpoint", "corrupt checkpoint payload")
+                PlatformError::config_invalid("checkpoint", "corrupt checkpoint payload")
             }
         })
     }
 
-    async fn save(&self, _checkpoint: &CheckpointRecord) -> BuildResult<()> {
+    async fn save(&self, _checkpoint: &CheckpointRecord) -> PlatformResult<()> {
         Ok(())
     }
 }
@@ -118,14 +118,14 @@ impl Fixtures {
 
     pub fn archive_source(
         archive: VecArchive,
-    ) -> impl FnOnce() -> std::future::Ready<BuildResult<Box<dyn ArchivedEventSource>>> {
+    ) -> impl FnOnce() -> std::future::Ready<PlatformResult<Box<dyn ArchivedEventSource>>> {
         || std::future::ready(Ok(Box::new(archive) as Box<dyn ArchivedEventSource>))
     }
 
     pub fn counting_archive(
         events: Vec<MarketEvent>,
         connects: Arc<AtomicUsize>,
-    ) -> impl FnOnce() -> std::future::Ready<BuildResult<Box<dyn ArchivedEventSource>>> {
+    ) -> impl FnOnce() -> std::future::Ready<PlatformResult<Box<dyn ArchivedEventSource>>> {
         move || {
             connects.fetch_add(1, Ordering::SeqCst);
             std::future::ready(Ok(

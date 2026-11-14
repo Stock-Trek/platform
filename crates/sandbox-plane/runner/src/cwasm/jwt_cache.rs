@@ -1,6 +1,6 @@
 use crate::cwasm::jwt_fetcher::{FetchedJwt, JwtFetcher};
 use parking_lot::Mutex;
-use platform_errors::{BuildError, BuildResult};
+use platform_errors::{PlatformError, PlatformResult};
 use platform_sigv4::SigV4Config;
 use platform_time::RetryPolicy;
 use std::{io, sync::Arc, time::Duration};
@@ -61,7 +61,7 @@ impl JwtCache {
         url: &str,
         owner: impl Into<String>,
         sigv4: &SigV4Config,
-    ) -> BuildResult<Self> {
+    ) -> PlatformResult<Self> {
         Ok(Self::from_fetcher(JwtFetcher::with_sigv4(
             url, owner, sigv4,
         )?))
@@ -76,13 +76,13 @@ impl JwtCache {
         }
     }
 
-    pub async fn token(&self) -> BuildResult<String> {
+    pub async fn token(&self) -> PlatformResult<String> {
         loop {
             let mut refreshed = self.refresh.subscribe();
             match self.action() {
                 Action::Return(token) => return Ok(token),
                 Action::Unavailable => {
-                    return Err(BuildError::external(io::Error::other(
+                    return Err(PlatformError::external(io::Error::other(
                         "JWT refresh is backing off after an earlier failure",
                     )));
                 }
