@@ -32,12 +32,18 @@ mod runtime_tests;
 #[cfg(test)]
 mod tests;
 
-pub use cwasm_artifact::*;
-pub use guest_actions::*;
+pub use cwasm_artifact::{
+    CWASM_FILE_NAME, Cwasm, CwasmIntegrity, CwasmLimits, DEFAULT_CWASM_DOWNLOAD_TIMEOUT,
+    DEFAULT_MAX_CWASM_BYTES, WASMTIME_VERSION,
+};
+pub use guest_actions::GuestActions;
 pub use guest_state::Emit;
-pub use invoker::*;
-pub use jwt_cache::*;
-pub use limits::*;
-pub use order_request_dispatcher::*;
-pub use runtime::*;
-pub use workspace::*;
+pub use invoker::InvokerConfig;
+pub use jwt_cache::JwtCache;
+pub use limits::{
+    DEFAULT_EXECUTION_TIMEOUT, DEFAULT_MAX_GUEST_MEMORY_BYTES, DEFAULT_MAX_TABLE_ELEMENTS,
+    ExecutionLimits,
+};
+pub use order_request_dispatcher::OrderRequestDispatcher;
+pub use runtime::WasmRunner;
+pub use workspace::{GuestWorkspace, PORTFOLIO_FILE_NAME, STRATEGY_CONTEXT_FILE_NAME};
