@@ -18,6 +18,20 @@ impl IcebergCatalog {
             .collect()
     }
 
+    pub fn batch_registered_in_metadata(table: &Table, files: &[IcebergDataFile]) -> bool {
+        if files.is_empty() {
+            return false;
+        }
+        let fingerprint = Self::batch_fingerprint(files);
+        table.metadata().snapshots().any(|snapshot| {
+            snapshot
+                .summary()
+                .additional_properties
+                .get(ARCHIVE_BATCH_SUMMARY_KEY)
+                .is_some_and(|value| value == &fingerprint)
+        })
+    }
+
     pub fn snapshot_properties(
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
