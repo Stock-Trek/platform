@@ -1,7 +1,6 @@
 use crate::tests::test_feed_tests::{Fixture, RecordingFeed};
 use crate::{
-    PortfolioService, PortfolioUpdate, PortfolioUpdateConsumer, PortfolioUpdateMessage,
-    PortfolioUpdateSource,
+    MessageSource, PortfolioService, PortfolioUpdate, PortfolioUpdateConsumer, SourceMessage,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -10,13 +9,13 @@ use std::{collections::VecDeque, sync::Arc, time::Duration};
 
 #[derive(Default)]
 struct FakeUpdateSource {
-    messages: Mutex<VecDeque<PortfolioUpdateMessage>>,
+    messages: Mutex<VecDeque<SourceMessage<PortfolioUpdate>>>,
     checkpoints: Mutex<Vec<u64>>,
     acknowledged: Mutex<usize>,
 }
 
 impl FakeUpdateSource {
-    fn with_messages(messages: Vec<PortfolioUpdateMessage>) -> Self {
+    fn with_messages(messages: Vec<SourceMessage<PortfolioUpdate>>) -> Self {
         Self {
             messages: Mutex::new(messages.into()),
             ..Self::default()
@@ -33,8 +32,8 @@ impl FakeUpdateSource {
 }
 
 #[async_trait]
-impl PortfolioUpdateSource for FakeUpdateSource {
-    async fn next(&self) -> PlatformResult<Option<PortfolioUpdateMessage>> {
+impl MessageSource<PortfolioUpdate> for FakeUpdateSource {
+    async fn next(&self) -> PlatformResult<Option<SourceMessage<PortfolioUpdate>>> {
         Ok(self.messages.lock().pop_front())
     }
 
@@ -43,13 +42,18 @@ impl PortfolioUpdateSource for FakeUpdateSource {
         Ok(())
     }
 
-    async fn acknowledge(&self, _message: &PortfolioUpdateMessage) -> PlatformResult<()> {
+    async fn acknowledge(&self, _message: &SourceMessage<PortfolioUpdate>) -> PlatformResult<()> {
         *self.acknowledged.lock() += 1;
         Ok(())
     }
 }
 
-fn message(account: &str, total: f64, version: u64, sequence: u64) -> PortfolioUpdateMessage {
+fn message(
+    account: &str,
+    total: f64,
+    version: u64,
+    sequence: u64,
+) -> SourceMessage<PortfolioUpdate> {
     let update = PortfolioUpdate::versioned(
         Fixture::account(account),
         None,
@@ -57,7 +61,7 @@ fn message(account: &str, total: f64, version: u64, sequence: u64) -> PortfolioU
         version,
         chrono::Utc::now(),
     );
-    PortfolioUpdateMessage::new(update, Some(sequence), None)
+    SourceMessage::new(update, Some(sequence), None)
 }
 
 fn service() -> (Arc<RecordingFeed>, Arc<PortfolioService>) {

@@ -1,7 +1,6 @@
 use crate::tests::test_feed_tests::Fixture;
 use crate::{
-    AccountKey, OwnershipApply, OwnershipConsumer, OwnershipEventSource, OwnershipMessage,
-    PortfolioService,
+    AccountKey, MessageSource, OwnershipApply, OwnershipConsumer, PortfolioService, SourceMessage,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -14,13 +13,13 @@ use stock_trek::types::CexId;
 
 #[derive(Default)]
 struct FakeSource {
-    messages: Mutex<VecDeque<OwnershipMessage>>,
+    messages: Mutex<VecDeque<SourceMessage<OwnershipEvent>>>,
     checkpoints: Mutex<Vec<u64>>,
     acknowledged: Mutex<usize>,
 }
 
 impl FakeSource {
-    fn with_messages(messages: Vec<OwnershipMessage>) -> Self {
+    fn with_messages(messages: Vec<SourceMessage<OwnershipEvent>>) -> Self {
         Self {
             messages: Mutex::new(messages.into()),
             ..Self::default()
@@ -37,8 +36,8 @@ impl FakeSource {
 }
 
 #[async_trait]
-impl OwnershipEventSource for FakeSource {
-    async fn next(&self) -> PlatformResult<Option<OwnershipMessage>> {
+impl MessageSource<OwnershipEvent> for FakeSource {
+    async fn next(&self) -> PlatformResult<Option<SourceMessage<OwnershipEvent>>> {
         Ok(self.messages.lock().pop_front())
     }
 
@@ -47,7 +46,7 @@ impl OwnershipEventSource for FakeSource {
         Ok(())
     }
 
-    async fn acknowledge(&self, _message: &OwnershipMessage) -> PlatformResult<()> {
+    async fn acknowledge(&self, _message: &SourceMessage<OwnershipEvent>) -> PlatformResult<()> {
         *self.acknowledged.lock() += 1;
         Ok(())
     }
@@ -64,8 +63,8 @@ fn event(owner: &str, account: &str, action: OwnershipAction, version: u64) -> O
     )
 }
 
-fn message(event: OwnershipEvent, sequence: u64) -> OwnershipMessage {
-    OwnershipMessage::new(event, Some(sequence), None)
+fn message(event: OwnershipEvent, sequence: u64) -> SourceMessage<OwnershipEvent> {
+    SourceMessage::new(event, Some(sequence), None)
 }
 
 #[tokio::test]

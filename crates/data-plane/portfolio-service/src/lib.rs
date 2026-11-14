@@ -11,16 +11,15 @@ mod order_request_error;
 mod order_request_server;
 mod ownership_consumer;
 mod ownership_registry;
-mod ownership_source;
 mod portfolio;
 mod portfolio_codec;
 mod publishing_sink;
 mod read_model;
 mod runner;
 mod service;
+mod source;
 mod state;
 mod update_consumer;
-mod update_source;
 
 #[cfg(test)]
 mod tests;
@@ -39,7 +38,6 @@ pub use order_request_error::OrderRequestError;
 pub use order_request_server::OrderRequestServer;
 pub use ownership_consumer::OwnershipConsumer;
 pub use ownership_registry::{OwnershipApply, OwnershipRegistry};
-pub use ownership_source::{OwnershipEventSource, OwnershipMessage};
 pub use platform_exchange_gateway::PortfolioUpdateOutcome;
 pub use platform_portfolio_ownership::AccountKey;
 pub use portfolio::{
@@ -49,6 +47,6 @@ pub use portfolio::{
 pub use publishing_sink::PublishingPortfolioUpdateSink;
 pub use runner::PortfolioRunner;
 pub use service::PortfolioService;
+pub use source::{MessageSource, SourceMessage};
 pub use state::{PortfolioState, PortfolioUpdateMetadata};
 pub use update_consumer::PortfolioUpdateConsumer;
-pub use update_source::{PortfolioUpdateMessage, PortfolioUpdateSource};

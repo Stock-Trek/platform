@@ -40,7 +40,6 @@ impl BinanceEventPageSource {
             .submit_http(request)
             .map_err(|error| PlatformError::exchange("submit Binance backfill request", error))?;
         match submission
-            .wait()
             .await
             .map_err(|error| PlatformError::exchange("await Binance backfill response", error))?
         {

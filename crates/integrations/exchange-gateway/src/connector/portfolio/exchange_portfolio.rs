@@ -77,7 +77,7 @@ where
     where
         Request: ETHttpRequest<Exchange = Exchange> + Send,
     {
-        match connector.submit_http(request)?.wait().await? {
+        match connector.submit_http(request)?.await? {
             SubmissionOutcome::Submitted(response) => Ok(response),
             SubmissionOutcome::Unknown { .. } => Err(PlatformError::Exchange(
                 ExchangeError::BadResponse("portfolio request outcome is unknown".to_string()),

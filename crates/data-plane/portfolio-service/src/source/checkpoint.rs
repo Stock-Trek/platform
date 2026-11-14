@@ -1,12 +1,12 @@
-use platform_errors::{PlatformError, PlatformResult};
+use platform_errors::PlatformResult;
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
-pub struct OwnershipCheckpoint {
+pub struct Checkpoint {
     sequence: u64,
 }
 
-impl OwnershipCheckpoint {
+impl Checkpoint {
     pub fn new(sequence: u64) -> Self {
         Self { sequence }
     }
@@ -20,6 +20,6 @@ impl OwnershipCheckpoint {
     }
 
     pub fn from_bytes(payload: &[u8]) -> PlatformResult<Self> {
-        serde_json::from_slice(payload).map_err(PlatformError::external)
+        Ok(serde_json::from_slice(payload)?)
     }
 }

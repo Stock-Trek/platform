@@ -1,7 +1,6 @@
 use crate::tests::test_feed_tests::Fixture;
 use crate::{
-    PortfolioService, PortfolioUpdate, PortfolioUpdateConsumer, PortfolioUpdateMessage,
-    PortfolioUpdateSource,
+    MessageSource, PortfolioService, PortfolioUpdate, PortfolioUpdateConsumer, SourceMessage,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
@@ -18,13 +17,13 @@ use stock_trek_types::cex::asset_id::AssetId;
 
 #[derive(Default)]
 struct RecordingUpdateSource {
-    messages: Mutex<VecDeque<PortfolioUpdateMessage>>,
+    messages: Mutex<VecDeque<SourceMessage<PortfolioUpdate>>>,
     checkpoints: Mutex<Vec<u64>>,
     acknowledged: AtomicUsize,
 }
 
 impl RecordingUpdateSource {
-    fn push(&self, message: PortfolioUpdateMessage) {
+    fn push(&self, message: SourceMessage<PortfolioUpdate>) {
         self.messages.lock().push_back(message);
     }
 
@@ -38,8 +37,8 @@ impl RecordingUpdateSource {
 }
 
 #[async_trait]
-impl PortfolioUpdateSource for RecordingUpdateSource {
-    async fn next(&self) -> PlatformResult<Option<PortfolioUpdateMessage>> {
+impl MessageSource<PortfolioUpdate> for RecordingUpdateSource {
+    async fn next(&self) -> PlatformResult<Option<SourceMessage<PortfolioUpdate>>> {
         Ok(self.messages.lock().pop_front())
     }
 
@@ -48,7 +47,7 @@ impl PortfolioUpdateSource for RecordingUpdateSource {
         Ok(())
     }
 
-    async fn acknowledge(&self, _message: &PortfolioUpdateMessage) -> PlatformResult<()> {
+    async fn acknowledge(&self, _message: &SourceMessage<PortfolioUpdate>) -> PlatformResult<()> {
         self.acknowledged.fetch_add(1, Ordering::SeqCst);
         Ok(())
     }
@@ -89,7 +88,7 @@ async fn event_flood_is_applied_and_checkpointed_in_order() {
     let (service, account) = Harness::service().await;
     let source = Arc::new(RecordingUpdateSource::default());
     for version in 1..=UPDATES {
-        source.push(PortfolioUpdateMessage::new(
+        source.push(SourceMessage::new(
             Harness::update("flood", version as f64, version),
             Some(version),
             None,
@@ -117,12 +116,12 @@ async fn event_flood_is_applied_and_checkpointed_in_order() {
 async fn duplicate_versions_are_stale_and_do_not_overwrite_state() {
     let (service, account) = Harness::service().await;
     let source = Arc::new(RecordingUpdateSource::default());
-    source.push(PortfolioUpdateMessage::new(
+    source.push(SourceMessage::new(
         Harness::update("flood", 1.0, 7),
         Some(1),
         None,
     ));
-    source.push(PortfolioUpdateMessage::new(
+    source.push(SourceMessage::new(
         Harness::update("flood", 99.0, 7),
         Some(2),
         None,

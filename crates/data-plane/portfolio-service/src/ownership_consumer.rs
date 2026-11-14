@@ -1,15 +1,16 @@
 use crate::{
-    AccountKey, OwnershipApply, OwnershipEventSource, PortfolioService,
+    AccountKey, MessageSource, OwnershipApply, PortfolioService, SourceMessage,
     read_model::PortfolioReadModelStore,
 };
 use platform_errors::PlatformResult;
 use platform_metrics::PortfolioMetrics;
+use platform_portfolio_ownership::OwnershipEvent;
 use platform_time::RetryBackoff;
 use std::{future::Future, sync::Arc, time::Duration};
 
 pub struct OwnershipConsumer {
     service: Arc<PortfolioService>,
-    source: Arc<dyn OwnershipEventSource>,
+    source: Arc<dyn MessageSource<OwnershipEvent>>,
     retry_backoff: Duration,
     store: Option<Arc<PortfolioReadModelStore>>,
 }
@@ -17,7 +18,7 @@ pub struct OwnershipConsumer {
 impl OwnershipConsumer {
     pub fn new(
         service: Arc<PortfolioService>,
-        source: Arc<dyn OwnershipEventSource>,
+        source: Arc<dyn MessageSource<OwnershipEvent>>,
         retry_backoff: Duration,
     ) -> Self {
         Self {
@@ -36,9 +37,9 @@ impl OwnershipConsumer {
     pub async fn run_once(&self) -> PlatformResult<usize> {
         let mut processed = 0;
         while let Some(message) = self.next().await? {
-            let lag = chrono::Utc::now().signed_duration_since(message.event().occurred_at());
+            let lag = chrono::Utc::now().signed_duration_since(message.value().occurred_at());
             PortfolioMetrics::record_ownership_lag(lag.to_std().unwrap_or_default());
-            let outcome = match self.service.apply_ownership_event(message.event()).await {
+            let outcome = match self.service.apply_ownership_event(message.value()).await {
                 Ok(outcome) => outcome,
                 Err(error) => {
                     PortfolioMetrics::record_apply_failure("ownership", "apply");
@@ -49,29 +50,29 @@ impl OwnershipConsumer {
                 OwnershipApply::Applied { .. } => {
                     PortfolioMetrics::record_ownership_outcome("applied");
                     tracing::debug!(
-                        account = %message.event().account().storage_key(),
-                        version = message.event().version(),
+                        account = %message.value().account().storage_key(),
+                        version = message.value().version(),
                         "applied ownership event"
                     );
                 }
                 OwnershipApply::IgnoredStale => {
                     PortfolioMetrics::record_ownership_outcome("stale");
                     tracing::debug!(
-                        account = %message.event().account().storage_key(),
-                        version = message.event().version(),
+                        account = %message.value().account().storage_key(),
+                        version = message.value().version(),
                         "ignored stale ownership event"
                     );
                 }
                 OwnershipApply::IgnoredConflict => {
                     PortfolioMetrics::record_ownership_outcome("conflict");
                     tracing::warn!(
-                        account = %message.event().account().storage_key(),
-                        version = message.event().version(),
+                        account = %message.value().account().storage_key(),
+                        version = message.value().version(),
                         "ignored conflicting ownership event"
                     );
                 }
             }
-            if let Err(error) = self.persist(message.event().account()).await {
+            if let Err(error) = self.persist(message.value().account()).await {
                 PortfolioMetrics::record_apply_failure("ownership", "persist");
                 return Err(error);
             }
@@ -90,7 +91,7 @@ impl OwnershipConsumer {
         Ok(processed)
     }
 
-    async fn next(&self) -> PlatformResult<Option<crate::OwnershipMessage>> {
+    async fn next(&self) -> PlatformResult<Option<SourceMessage<OwnershipEvent>>> {
         self.source.next().await.inspect_err(|_| {
             PortfolioMetrics::record_apply_failure("ownership", "fetch");
         })

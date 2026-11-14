@@ -1,7 +1,7 @@
 use crate::connector::Connector;
 use crate::{
     rate_limit::limiter_registry::RateLimitGuard,
-    submission::{Submission, SubmissionOutcome},
+    submission::{SubmissionFuture, SubmissionOutcome},
 };
 use futures_timer::Delay;
 use platform_errors::{ConnectorError, PlatformError, PlatformResult, SendFailure, TimeoutError};
@@ -12,12 +12,7 @@ use platform_exchange_types::{
     response::ETWebsocketResponse, server_time::ServerTimeResponse, websocket_id::ETWebsocketId,
 };
 use platform_types::UsageCount;
-use std::{
-    future::{Future, poll_fn},
-    sync::Arc,
-    task::Poll,
-    time::Instant,
-};
+use std::{future::poll_fn, sync::Arc, task::Poll, time::Instant};
 use tracing::{debug, warn};
 
 impl<Exchange, Client> Connector<Exchange, Client>
@@ -80,19 +75,18 @@ where
         &'connector self,
         request: Request,
     ) -> PlatformResult<
-        Submission<'connector, Request, Request::Response, Request::VerificationRequest>,
+        SubmissionFuture<'connector, Request, Request::Response, Request::VerificationRequest>,
     >
     where
         Request: ETWebsocketRequest<Exchange = Exchange> + Send + 'connector,
         Exchange: Sync,
     {
-        let future = async move {
+        Ok(Box::pin(async move {
             let costs = self
                 .validate_rate_limits(&request)
                 .map_err(PlatformError::send_not_sent)?;
             self.send_websocket(request, costs).await
-        };
-        Ok(Submission::new(future))
+        }))
     }
     async fn send_websocket<Request>(
         &self,
