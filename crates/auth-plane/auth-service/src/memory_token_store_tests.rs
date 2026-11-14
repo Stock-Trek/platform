@@ -1,6 +1,7 @@
 use crate::{
-    ApiToken, OwnerIndex, OwnerIndexEntry, TokenAuditEvent, TokenMutation,
-    TokenRotationTransaction, TokenStore, token_audit_outbox::TokenAuditOutbox,
+    ApiToken, TokenAuditEvent, TokenStore, owner_index::OwnerIndex, owner_index::OwnerIndexEntry,
+    token_audit_outbox::TokenAuditOutbox, token_rotation_transaction::TokenRotationTransaction,
+    token_store::TokenMutation,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;

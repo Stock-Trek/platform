@@ -1,7 +1,8 @@
 use crate::tests::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{
-    ApiToken, AuthService, MemoryTokenStore, RevocationReason, RevokedBy, TokenAuditEvent,
-    TokenMutation, TokenRotationTransaction, TokenStore,
+    ApiToken, AuthService, MemoryTokenStore, TokenAuditEvent, TokenStore,
+    revocation_reason::RevocationReason, revoked_by::RevokedBy,
+    token_rotation_transaction::TokenRotationTransaction, token_store::TokenMutation,
 };
 use async_trait::async_trait;
 use chrono::Utc;

@@ -1,5 +1,8 @@
 use crate::tests::support_tests::TestFixture;
-use crate::{ApiToken, AuthService, TokenExpiry, TokenMetadata, TokenOptions, TokenScope};
+use crate::{
+    ApiToken, AuthService, TokenMetadata, TokenScope, token_options::TokenExpiry,
+    token_options::TokenOptions,
+};
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, PlatformError};
 

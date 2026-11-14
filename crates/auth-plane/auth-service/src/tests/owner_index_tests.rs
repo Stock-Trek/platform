@@ -3,9 +3,11 @@ use crate::tests::{
     vault_kv_server_tests::MockVault,
 };
 use crate::{
-    ApiToken, AuthService, MemoryTokenStore, OwnerIndex, OwnerIndexEntry, RevocationReason,
-    RevokedBy, TokenAuditEvent, TokenMutation, TokenRotationTransaction, TokenStore,
-    VaultTokenStore, VaultTokenStoreConfig, vault_client::VaultClient,
+    ApiToken, AuthService, MemoryTokenStore, TokenAuditEvent, TokenStore, VaultTokenStore,
+    VaultTokenStoreConfig, owner_index::OwnerIndex, owner_index::OwnerIndexEntry,
+    revocation_reason::RevocationReason, revoked_by::RevokedBy,
+    token_rotation_transaction::TokenRotationTransaction, token_store::TokenMutation,
+    vault_client::VaultClient,
 };
 use async_trait::async_trait;
 use chrono::Utc;

@@ -1,6 +1,6 @@
 use crate::{
-    AuthService, AuthServiceConfig, CachedTokenStore, JwtServer, JwtServerConfig,
-    ValkeyReplayStore, ValkeyTokenUsageQueue, VaultTokenStore,
+    AuthService, AuthServiceConfig, CachedTokenStore, ValkeyReplayStore, ValkeyTokenUsageQueue,
+    VaultTokenStore, jwt_server::JwtServer, jwt_server_config::JwtServerConfig,
 };
 use chrono::Duration;
 use platform_errors::PlatformResult;

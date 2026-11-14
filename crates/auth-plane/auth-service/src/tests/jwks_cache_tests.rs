@@ -1,4 +1,4 @@
-use crate::{JwksCache, JwtSigningKey, OrderJwtClaims};
+use crate::{JwksCache, OrderJwtClaims, jwt_signing_key::JwtSigningKey};
 use chrono::{DateTime, Duration, Utc};
 use jsonwebtoken::jwk::JwkSet;
 use parking_lot::RwLock;

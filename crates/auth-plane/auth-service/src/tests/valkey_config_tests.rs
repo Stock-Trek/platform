@@ -1,4 +1,4 @@
-use crate::{DEFAULT_VALKEY_REPLAY_PREFIX, ValkeyReplayStoreConfig};
+use crate::{ValkeyReplayStoreConfig, valkey_config::DEFAULT_VALKEY_REPLAY_PREFIX};
 use std::time::Duration;
 
 struct ValkeyConfigFixture;

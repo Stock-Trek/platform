@@ -1,6 +1,7 @@
 use crate::{
-    JwtSigningKey, JwtVerifier, ReplayStore, TokenAuditEvent, TokenMutation,
-    TokenRotationTransaction, TokenUsageQueue, jwt_signing_key::DEFAULT_JWT_KEY_ID,
+    TokenAuditEvent, TokenUsageQueue, jwt_signing_key::DEFAULT_JWT_KEY_ID,
+    jwt_signing_key::JwtSigningKey, jwt_verifier::JwtVerifier, replay_store::ReplayStore,
+    token_rotation_transaction::TokenRotationTransaction, token_store::TokenMutation,
     token_store::TokenStore,
 };
 use chrono::Duration;
@@ -114,7 +115,10 @@ impl AuthService {
     }
 
     pub async fn record_audit_failure(&self, event: TokenAuditEvent) {
-        if let Err(error) = self.enqueue_usage(crate::TokenUsage::audit(event)).await {
+        if let Err(error) = self
+            .enqueue_usage(crate::token_usage::TokenUsage::audit(event))
+            .await
+        {
             tracing::error!(%error, "failed to enqueue token audit event");
         }
     }

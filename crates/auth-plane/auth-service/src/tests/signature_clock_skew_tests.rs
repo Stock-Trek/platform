@@ -1,7 +1,7 @@
 use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{
-    OrderRequestContext, OrderRequestSigner, SignedOrderRequest, TokenExpiry, TokenOptions,
-    TokenScope,
+    SignedOrderRequest, TokenScope, order_request_context::OrderRequestContext,
+    order_signature::OrderRequestSigner, token_options::TokenExpiry, token_options::TokenOptions,
 };
 use chrono::{DateTime, Duration, Utc};
 

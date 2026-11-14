@@ -1,7 +1,7 @@
 use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{
-    ApiToken, AuthService, MemoryTokenStore, TokenAuditEvent, TokenMetadata, TokenMutation,
-    TokenRotationTransaction, TokenScope, TokenStore,
+    ApiToken, AuthService, MemoryTokenStore, TokenAuditEvent, TokenMetadata, TokenScope,
+    TokenStore, token_rotation_transaction::TokenRotationTransaction, token_store::TokenMutation,
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};

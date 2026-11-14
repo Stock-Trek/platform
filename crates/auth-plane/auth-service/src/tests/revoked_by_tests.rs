@@ -1,4 +1,4 @@
-use crate::RevokedBy;
+use crate::revoked_by::RevokedBy;
 
 struct RevokedByFixture;
 

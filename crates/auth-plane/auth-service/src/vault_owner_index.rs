@@ -1,7 +1,9 @@
 use crate::{
-    ApiToken, OwnerIndex, OwnerIndexEntry,
+    ApiToken,
     auth_service::MAX_UPDATE_ATTEMPTS,
     owner_index::OWNER_INDEX_PREFIX,
+    owner_index::OwnerIndex,
+    owner_index::OwnerIndexEntry,
     vault_client::{VaultClient, WriteCondition},
 };
 use platform_errors::{AuthError, PlatformError, PlatformResult};

@@ -1,4 +1,4 @@
-use crate::ReplayStoreError;
+use crate::replay_store_error::ReplayStoreError;
 use platform_errors::{PlatformError, PlatformResult};
 use redis::{ErrorKind, RedisError};
 

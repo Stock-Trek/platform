@@ -1,4 +1,6 @@
-use crate::{ApiToken, AuthService, OwnerIndex, OwnerIndexEntry, TokenScope};
+use crate::{
+    ApiToken, AuthService, TokenScope, owner_index::OwnerIndex, owner_index::OwnerIndexEntry,
+};
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 

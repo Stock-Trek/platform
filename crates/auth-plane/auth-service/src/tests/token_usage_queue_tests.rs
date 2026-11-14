@@ -1,6 +1,7 @@
 use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
 use crate::{
-    MemoryTokenUsageQueue, TokenAuditAction, TokenUsage, TokenUsageQueue, TokenUsageWorker,
+    MemoryTokenUsageQueue, TokenAuditAction, TokenUsageQueue, TokenUsageWorker,
+    token_usage::TokenUsage,
 };
 use chrono::{Duration, Utc};
 use std::sync::Arc;

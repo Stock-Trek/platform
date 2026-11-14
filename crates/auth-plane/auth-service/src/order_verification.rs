@@ -1,5 +1,7 @@
 use crate::{
-    AuthService, InvalidOrderRequest, OrderRequestSigner, OrderRequestVerification, TokenScope,
+    AuthService, TokenScope, order_signature::OrderRequestSigner,
+    order_verification_outcome::InvalidOrderRequest,
+    order_verification_outcome::OrderRequestVerification,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::PlatformResult;

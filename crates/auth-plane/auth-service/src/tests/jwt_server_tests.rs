@@ -1,4 +1,4 @@
-use crate::JwtServer;
+use crate::jwt_server::JwtServer;
 use crate::tests::support_tests::{OWNER, TestFixture};
 use platform_sigv4::{SigV4Config, SigV4Registry};
 use platform_time::RetryBackoff;

@@ -1,5 +1,6 @@
 use crate::{
-    TokenUsage, TokenUsageQueue, TokenUsageQueueConfig, TokenUsageReservation,
+    TokenUsageQueue, TokenUsageQueueConfig, token_usage::TokenUsage,
+    token_usage_reservation::TokenUsageReservation,
     valkey_token_usage_reply::ValkeyTokenUsageReply,
 };
 use async_trait::async_trait;

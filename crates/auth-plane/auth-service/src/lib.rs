@@ -22,7 +22,6 @@ mod jwt_server_error;
 mod jwt_server_request;
 mod jwt_signing_key;
 mod jwt_verifier;
-mod memory_token_audit_log;
 mod order_jwt_claims;
 mod order_jwt_issuance;
 mod order_jwt_verification;
@@ -98,6 +97,8 @@ mod vault_write;
 
 #[cfg(any(test, feature = "test-utils"))]
 mod memory_replay_store_tests;
+#[cfg(test)]
+mod memory_token_audit_log_tests;
 #[cfg(any(test, feature = "test-utils"))]
 mod memory_token_store_tests;
 #[cfg(any(test, feature = "test-utils"))]
@@ -107,58 +108,30 @@ mod tests;
 
 pub use api_token::ApiToken;
 pub use auth_service::{AuthService, AuthServiceConfig};
-pub use auth_service_runner::AuthServiceRunner;
-pub use breaker_state::BreakerState;
 pub use cached_token_store::CachedTokenStore;
-pub use consume_result::ConsumeResult;
 pub use entry::Entry;
 pub use jwks_cache::JwksCache;
-pub use jwt_server::JwtServer;
-pub use jwt_server_config::JwtServerConfig;
-pub use jwt_signing_key::{DEFAULT_JWT_KEY_ID, JWT_SIGNING_ALGORITHM, JwtSigningKey};
-pub use jwt_verifier::JwtVerifier;
 #[cfg(any(test, feature = "test-utils"))]
 pub use memory_replay_store_tests::{DEFAULT_REPLAY_CAPACITY, MemoryReplayStore};
-pub use memory_token_audit_log::MemoryTokenAuditLog;
 #[cfg(any(test, feature = "test-utils"))]
 pub use memory_token_store_tests::MemoryTokenStore;
 #[cfg(any(test, feature = "test-utils"))]
 pub use memory_token_usage_queue_tests::MemoryTokenUsageQueue;
-pub use order_jwt_claims::{IssuedJwt, OrderJwtClaims};
-pub use order_request_context::OrderRequestContext;
-pub use order_signature::OrderRequestSigner;
-pub use order_verification_outcome::{InvalidOrderRequest, OrderRequestVerification};
-pub use owner_index::{OWNER_INDEX_PREFIX, OwnerIndex, OwnerIndexEntry};
-pub use replay_key::ReplayKey;
-pub use replay_reservation::ReplayReservation;
-pub use replay_store::ReplayStore;
-pub use replay_store_error::ReplayStoreError;
-pub use revocation_reason::RevocationReason;
-pub use revoked_by::RevokedBy;
-pub use secret_input::SecretInput;
+pub use order_jwt_claims::OrderJwtClaims;
 pub use signed_order_request::SignedOrderRequest;
 pub use sqs_token_audit_log::SqsTokenAuditLog;
-pub use token_administration::{TokenAdministrator, TokenReader};
 pub use token_audit_action::TokenAuditAction;
 pub use token_audit_event::TokenAuditEvent;
 pub use token_audit_log::TokenAuditLog;
 pub use token_audit_relay::TokenAuditRelay;
 pub use token_cache_config::TokenCacheConfig;
 pub use token_metadata::TokenMetadata;
-pub use token_options::{TokenExpiry, TokenOptions};
-pub use token_rotation_transaction::TokenRotationTransaction;
 pub use token_scope::TokenScope;
-pub use token_store::{TokenMutation, TokenStore};
-pub use token_usage::TokenUsage;
+pub use token_store::TokenStore;
 pub use token_usage_queue::TokenUsageQueue;
-pub use token_usage_queue_config::{
-    DEFAULT_TOKEN_USAGE_QUEUE_BATCH_SIZE, DEFAULT_TOKEN_USAGE_QUEUE_CAPACITY,
-    DEFAULT_TOKEN_USAGE_QUEUE_PREFIX, TokenUsageQueueConfig,
-};
-pub use token_usage_reservation::TokenUsageReservation;
+pub use token_usage_queue_config::TokenUsageQueueConfig;
 pub use token_usage_worker::TokenUsageWorker;
-pub use token_view::TokenView;
-pub use valkey_config::{DEFAULT_VALKEY_REPLAY_PREFIX, ValkeyReplayStoreConfig};
+pub use valkey_config::ValkeyReplayStoreConfig;
 pub use valkey_replay_store::ValkeyReplayStore;
 pub use valkey_token_usage_queue::ValkeyTokenUsageQueue;
 pub use vault_config::VaultTokenStoreConfig;

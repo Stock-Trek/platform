@@ -1,4 +1,4 @@
-use crate::JwtVerifier;
+use crate::jwt_verifier::JwtVerifier;
 use jsonwebtoken::jwk::JwkSet;
 use platform_errors::{PlatformError, PlatformResult};
 use std::{io, time::Duration};

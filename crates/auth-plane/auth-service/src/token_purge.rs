@@ -1,4 +1,4 @@
-use crate::{AuthService, TokenAuditAction, TokenAuditEvent, TokenMutation};
+use crate::{AuthService, TokenAuditAction, TokenAuditEvent, token_store::TokenMutation};
 use chrono::{DateTime, Utc};
 use platform_errors::PlatformResult;
 

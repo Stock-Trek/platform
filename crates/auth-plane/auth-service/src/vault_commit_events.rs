@@ -1,6 +1,7 @@
 use crate::{
-    ApiToken, TokenAuditEvent, TokenMutation,
+    ApiToken, TokenAuditEvent,
     token_audit_outbox::TokenAuditOutbox,
+    token_store::TokenMutation,
     vault_client::{VaultClient, WriteCondition},
 };
 use platform_errors::{PlatformError, PlatformResult};

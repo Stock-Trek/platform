@@ -1,4 +1,4 @@
-use crate::{ApiToken, CachedTokenStore, TokenMutation};
+use crate::{ApiToken, CachedTokenStore, token_store::TokenMutation};
 use tokio::time::Instant;
 
 impl CachedTokenStore {

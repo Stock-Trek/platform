@@ -1,4 +1,4 @@
-use crate::OrderRequestSigner;
+use crate::order_signature::OrderRequestSigner;
 use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, PlatformError};

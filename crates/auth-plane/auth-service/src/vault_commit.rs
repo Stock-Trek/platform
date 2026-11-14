@@ -1,7 +1,9 @@
 use crate::{
-    ApiToken, TokenAuditEvent, TokenMutation, TokenRotationTransaction,
+    ApiToken, TokenAuditEvent,
     auth_service::MAX_UPDATE_ATTEMPTS,
     token_audit_outbox::TokenAuditOutbox,
+    token_rotation_transaction::TokenRotationTransaction,
+    token_store::TokenMutation,
     vault_client::{VaultClient, WriteCondition},
 };
 use platform_errors::{PlatformError, PlatformResult};

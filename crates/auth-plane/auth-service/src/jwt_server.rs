@@ -24,10 +24,6 @@ pub struct JwtServer {
 }
 
 impl JwtServer {
-    pub async fn bind(address: SocketAddr, service: AuthService) -> PlatformResult<Self> {
-        Self::bind_with_sigv4(address, service, SigV4Config::from_env()?).await
-    }
-
     pub async fn bind_with_sigv4(
         address: SocketAddr,
         service: AuthService,
@@ -110,6 +106,7 @@ impl JwtServer {
         result
     }
 
+    #[cfg(test)]
     pub fn local_addr(&self) -> PlatformResult<SocketAddr> {
         self.listener.local_addr().map_err(PlatformError::external)
     }

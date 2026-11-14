@@ -1,5 +1,8 @@
 use crate::tests::support_tests::TestFixture;
-use crate::{RevocationReason, RevokedBy, TokenExpiry, TokenOptions, TokenScope};
+use crate::{
+    TokenScope, revocation_reason::RevocationReason, revoked_by::RevokedBy,
+    token_options::TokenExpiry, token_options::TokenOptions,
+};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, PlatformError};
 
