@@ -10,6 +10,8 @@ mod slots;
 mod spec;
 
 #[cfg(test)]
+mod publish_tests;
+#[cfg(test)]
 mod tests;
 
 pub use run::BackTest;

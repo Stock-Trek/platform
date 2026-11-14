@@ -81,7 +81,12 @@ impl BackTest {
                 eprintln!("cwasm-invoker: failed to start tokio runtime: {error}");
                 ExitCode::ServerRunnerRuntimeStartFailed.code()
             })?;
-        runtime.block_on(ResultPublisher::publish(spec, &result));
+        runtime
+            .block_on(ResultPublisher::publish(spec, &result))
+            .map_err(|error| {
+                eprintln!("cwasm-invoker: failed to publish simulation result: {error}");
+                ExitCode::ServerRunnerResultPublishFailed.code()
+            })?;
         Ok(())
     }
 }
