@@ -20,7 +20,6 @@ use platform_exchange_types::binance::{
         BinanceTimeInForce,
     },
 };
-use platform_exchange_types::ticker::Ticker;
 use platform_types::DurationMilliseconds;
 use std::collections::HashMap;
 use std::sync::LazyLock;
@@ -233,7 +232,7 @@ impl Converter for BinanceConverter {
         for asset_filter in payload.assetFilters {
             match asset_filter {
                 BinanceAssetFilter::MAX_ASSET { asset, limit } => {
-                    if let Some(asset_id) = self.asset_id(&asset) {
+                    if let Some(asset_id) = self.ticker_mapping().asset_id(&asset) {
                         asset_limits.insert(*asset_id, limit);
                     }
                 }
@@ -260,8 +259,8 @@ impl Converter for BinanceConverter {
                 quoteAsset,
                 ..
             } = symbol;
-            let base_option = self.asset_id(&baseAsset);
-            let quote_option = self.asset_id(&quoteAsset);
+            let base_option = self.ticker_mapping().asset_id(&baseAsset);
+            let quote_option = self.ticker_mapping().asset_id(&quoteAsset);
             if let Some(base) = base_option
                 && let Some(quote) = quote_option
             {
@@ -318,10 +317,6 @@ impl Converter for BinanceConverter {
 }
 
 impl BinanceConverter {
-    fn asset_id(&self, ticker: &Ticker) -> Option<&AssetId> {
-        self.ticker_mapping().asset_id(ticker)
-    }
-
     fn success_payload<R>(response: BinanceResponse<R>) -> PlatformResult<R> {
         match response.payload {
             BinanceResponsePayload::Success(payload) => Ok(payload),
