@@ -1,4 +1,7 @@
-use crate::dto::github::github_types::{GitHubInstallation, GitHubRefType, GitHubRepository};
+use crate::dto::github::{
+    github_installation::GitHubInstallation, github_ref_type::GitHubRefType,
+    github_repository::GitHubRepository,
+};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]

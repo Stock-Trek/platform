@@ -1,6 +1,6 @@
 use crate::{
-    ArchiveBatch, ArchiveParquet, ArchiveParquetWriter,
-    archive_record::{ArchiveKind, ArchiveRecord, ArchivedMarketEvent},
+    ArchiveBatch, ArchiveKind, ArchiveParquet, ArchiveParquetWriter, ArchiveRecord,
+    ArchivedMarketEvent,
 };
 use bytes::Bytes;
 use platform_market_data::MarketEvent;

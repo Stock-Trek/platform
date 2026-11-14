@@ -11,7 +11,7 @@ use crate::{
         github_event_push::GitHubEventPush,
         github_event_ref::GitHubEventRef,
         github_event_repository::{GitHubEventRepository, GitHubEventRepositoryAction},
-        github_types::GitHubRepositorySelection,
+        github_repository_selection::GitHubRepositorySelection,
     },
     event_response::EventResponse,
 };

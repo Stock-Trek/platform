@@ -1,5 +1,5 @@
 use crate::{
-    ApiToken, CachedTokenStore, circuit_breaker::BreakerDecision, flight_gates::FlightOutcome,
+    ApiToken, CachedTokenStore, breaker_decision::BreakerDecision, flight_outcome::FlightOutcome,
     token_cache::CacheLookup,
 };
 use platform_errors::{AuthError, ErrorType, PlatformError, PlatformResult};

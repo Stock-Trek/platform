@@ -1,12 +1,18 @@
 mod api_token;
-mod audit;
 mod auth_service;
 mod auth_service_runner;
+mod breaker_decision;
+mod breaker_permit;
+mod breaker_state;
 mod cached_token_store;
 mod cached_token_store_mutations;
 mod circuit_breaker;
+mod consume_result;
 mod entry;
+mod flight_gate;
 mod flight_gates;
+mod flight_guard;
+mod flight_outcome;
 mod jwks_cache;
 mod jwks_fetcher;
 mod jwt_server;
@@ -16,6 +22,7 @@ mod jwt_server_error;
 mod jwt_server_request;
 mod jwt_signing_key;
 mod jwt_verifier;
+mod memory_token_audit_log;
 mod order_jwt_claims;
 mod order_jwt_issuance;
 mod order_jwt_verification;
@@ -29,13 +36,19 @@ mod order_verification_outcome;
 mod owner_index;
 mod owner_index_reconciliation;
 mod random_string;
+mod replay_key;
+mod replay_reservation;
 mod replay_store;
+mod replay_store_error;
 mod revocation_reason;
 mod revoked_by;
 mod secret_input;
 mod signed_order_request;
 mod sqs_token_audit_log;
 mod token_administration;
+mod token_audit_action;
+mod token_audit_event;
+mod token_audit_log;
 mod token_audit_outbox;
 mod token_audit_relay;
 mod token_authentication;
@@ -60,7 +73,9 @@ mod token_scope;
 mod token_store;
 mod token_temporal;
 mod token_usage;
+mod token_usage_queue;
 mod token_usage_queue_config;
+mod token_usage_reservation;
 mod token_usage_worker;
 mod token_value;
 mod token_view;
@@ -91,11 +106,11 @@ mod memory_token_usage_queue_tests;
 mod tests;
 
 pub use api_token::ApiToken;
-pub use audit::{MemoryTokenAuditLog, TokenAuditAction, TokenAuditEvent, TokenAuditLog};
 pub use auth_service::{AuthService, AuthServiceConfig};
 pub use auth_service_runner::AuthServiceRunner;
+pub use breaker_state::BreakerState;
 pub use cached_token_store::CachedTokenStore;
-pub use circuit_breaker::BreakerState;
+pub use consume_result::ConsumeResult;
 pub use entry::Entry;
 pub use jwks_cache::JwksCache;
 pub use jwt_server::JwtServer;
@@ -104,6 +119,7 @@ pub use jwt_signing_key::{DEFAULT_JWT_KEY_ID, JWT_SIGNING_ALGORITHM, JwtSigningK
 pub use jwt_verifier::JwtVerifier;
 #[cfg(any(test, feature = "test-utils"))]
 pub use memory_replay_store_tests::{DEFAULT_REPLAY_CAPACITY, MemoryReplayStore};
+pub use memory_token_audit_log::MemoryTokenAuditLog;
 #[cfg(any(test, feature = "test-utils"))]
 pub use memory_token_store_tests::MemoryTokenStore;
 #[cfg(any(test, feature = "test-utils"))]
@@ -113,15 +129,19 @@ pub use order_request_context::OrderRequestContext;
 pub use order_signature::OrderRequestSigner;
 pub use order_verification_outcome::{InvalidOrderRequest, OrderRequestVerification};
 pub use owner_index::{OWNER_INDEX_PREFIX, OwnerIndex, OwnerIndexEntry};
-pub use replay_store::{
-    ConsumeResult, ReplayKey, ReplayReservation, ReplayStore, ReplayStoreError,
-};
+pub use replay_key::ReplayKey;
+pub use replay_reservation::ReplayReservation;
+pub use replay_store::ReplayStore;
+pub use replay_store_error::ReplayStoreError;
 pub use revocation_reason::RevocationReason;
 pub use revoked_by::RevokedBy;
 pub use secret_input::SecretInput;
 pub use signed_order_request::SignedOrderRequest;
 pub use sqs_token_audit_log::SqsTokenAuditLog;
 pub use token_administration::{TokenAdministrator, TokenReader};
+pub use token_audit_action::TokenAuditAction;
+pub use token_audit_event::TokenAuditEvent;
+pub use token_audit_log::TokenAuditLog;
 pub use token_audit_relay::TokenAuditRelay;
 pub use token_cache_config::TokenCacheConfig;
 pub use token_metadata::TokenMetadata;
@@ -129,11 +149,13 @@ pub use token_options::{TokenExpiry, TokenOptions};
 pub use token_rotation_transaction::TokenRotationTransaction;
 pub use token_scope::TokenScope;
 pub use token_store::{TokenMutation, TokenStore};
-pub use token_usage::{TokenUsage, TokenUsageQueue, TokenUsageReservation};
+pub use token_usage::TokenUsage;
+pub use token_usage_queue::TokenUsageQueue;
 pub use token_usage_queue_config::{
     DEFAULT_TOKEN_USAGE_QUEUE_BATCH_SIZE, DEFAULT_TOKEN_USAGE_QUEUE_CAPACITY,
     DEFAULT_TOKEN_USAGE_QUEUE_PREFIX, TokenUsageQueueConfig,
 };
+pub use token_usage_reservation::TokenUsageReservation;
 pub use token_usage_worker::TokenUsageWorker;
 pub use token_view::TokenView;
 pub use valkey_config::{DEFAULT_VALKEY_REPLAY_PREFIX, ValkeyReplayStoreConfig};

@@ -5,4 +5,7 @@ pub mod github_event_push;
 pub mod github_event_ref;
 pub mod github_event_repository;
 pub mod github_event_type;
-pub mod github_types;
+pub mod github_installation;
+pub mod github_ref_type;
+pub mod github_repository;
+pub mod github_repository_selection;

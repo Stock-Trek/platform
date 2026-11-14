@@ -1,9 +1,9 @@
 use crate::runner::QuiesceSignal;
 use crate::{
+    MarketInput, MarketSource, SourceRecord,
     candle_sink::{ClosedCandlePublisher, OpenCandleStore},
     checkpoint_record::{CheckpointRecord, StateStore},
     config::AggregatorConfig,
-    market_source::{MarketInput, MarketSource, SourceRecord},
     processor::ProcessorUpdate,
     shard_id::ShardId,
     state::AggregatorState,

@@ -4,11 +4,7 @@
 //! keyed by `(exchange, trading pair)`. Downstream shard writers therefore
 //! see every event for a candle key in order, on exactly one shard.
 
-use crate::{
-    config::AggregatorConfig,
-    market_source::{MarketInput, MarketSource, SourceRecord},
-    shard_id::ShardId,
-};
+use crate::{MarketInput, MarketSource, SourceRecord, config::AggregatorConfig, shard_id::ShardId};
 use parking_lot::Mutex;
 use platform_errors::PlatformResult;
 use platform_market_data::{GapMarker, MarketEvent, SharedTradeDecoder, TradeDecoderFactory};

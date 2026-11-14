@@ -1,8 +1,4 @@
-use crate::{
-    HashRouter, NatsRouter,
-    market_source::{MarketInput, MarketSource, SourceRecord},
-    shard_id::ShardId,
-};
+use crate::{HashRouter, MarketInput, MarketSource, NatsRouter, SourceRecord, shard_id::ShardId};
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::PlatformResult;

@@ -2,10 +2,10 @@
 
 use crate::runner::{ProcessorRunner, output_writer::CandleOutputWriter, writer::Writer};
 use crate::{
+    MarketSource, SourceRecord,
     candle_sink::{ClosedCandlePublisher, OpenCandleStore},
     checkpoint_record::{CheckpointRecord, StateStore},
     config::AggregatorConfig,
-    market_source::{MarketSource, SourceRecord},
     processor::CandleProcessor,
     shard_id::ShardId,
     state::AggregatorState,

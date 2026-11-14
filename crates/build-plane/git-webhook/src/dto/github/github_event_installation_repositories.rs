@@ -1,4 +1,6 @@
-use crate::dto::github::github_types::{GitHubInstallation, GitHubRepository};
+use crate::dto::github::{
+    github_installation::GitHubInstallation, github_repository::GitHubRepository,
+};
 use serde::{Deserialize, Serialize};
 use strum::Display;
 

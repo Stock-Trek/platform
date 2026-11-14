@@ -5,10 +5,10 @@ use crate::runner::{
     writer::Writer,
 };
 use crate::{
+    MarketSource,
     candle_sink::{ClosedCandlePublisher, OpenCandleStore},
     checkpoint_record::StateStore,
     config::AggregatorConfig,
-    market_source::MarketSource,
     processor::CandleProcessor,
     shard_id::ShardId,
     state::AggregatorState,

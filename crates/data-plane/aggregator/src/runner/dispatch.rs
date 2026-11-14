@@ -1,10 +1,10 @@
 //! Source input dispatch, candle publishing and idle flushing.
 
 use crate::{
+    MarketInput, MarketSource,
     candle_sink::{ClosedCandlePublisher, OpenCandleStore},
     checkpoint_record::StateStore,
     config::AggregatorConfig,
-    market_source::{MarketInput, MarketSource},
     processor::{CandleProcessor, ProcessorUpdate},
     runner::{
         ProcessorRunner, QuiesceReceiver, commit::CommitState, output_writer::CandleOutputWriter,
