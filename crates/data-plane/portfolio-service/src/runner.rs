@@ -8,7 +8,7 @@ use platform_errors::PlatformResult;
 use platform_exchange_gateway::{CONNECTOR_HEALTH_STREAM_PREFIX, CONNECTOR_HEALTH_SUBJECT};
 use platform_nats::{EventPublisher, NatsPublisher};
 use platform_portfolio_ownership::OWNERSHIP_STREAM_PREFIX;
-use platform_runtime::{Runtime, Service};
+use platform_runtime::{HealthState, Runtime, Service};
 use std::sync::Arc;
 
 const SERVICE: Service = Service::new("platform-portfolio-service");
@@ -17,6 +17,13 @@ pub struct PortfolioRunner;
 
 impl PortfolioRunner {
     pub async fn run(config: PortfolioConfig) -> PlatformResult<()> {
+        Self::run_with_health(config, HealthState::ready()).await
+    }
+
+    pub async fn run_with_health(
+        config: PortfolioConfig,
+        health: HealthState,
+    ) -> PlatformResult<()> {
         SERVICE.init_logging(config.log_filter())?;
         let _metrics = SERVICE.init_metrics("platform/portfolio-service")?;
         let auth_service = PortfolioAuthService::connect(config.auth().clone()).await?;
@@ -72,6 +79,7 @@ impl PortfolioRunner {
         let server =
             OrderRequestServer::bind(config.order_request().bind_address(), service, delivery)
                 .await?;
+        health.mark_ready();
         tokio::try_join!(
             server.serve_with_shutdown(Runtime::shutdown_signal()),
             ownership_consumer.run(Runtime::shutdown_signal()),

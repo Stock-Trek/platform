@@ -23,7 +23,7 @@ use crate::{
 };
 use platform_errors::PlatformResult;
 use platform_nats::NatsPublisher;
-use platform_runtime::Service;
+use platform_runtime::{HealthRunner, Service};
 
 const SERVICE: Service = Service::new("platform-backfiller");
 const NATS_CLIENT_NAME: &str = "platform-backfiller-events";
@@ -32,6 +32,7 @@ async fn main() -> PlatformResult<()> {
     let config = BackfillerConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let _metrics = SERVICE.init_metrics("platform/backfiller")?;
+    let health = HealthRunner::from_service_env("BACKFILLER").await?;
     let credentials = config.exchange_credentials().await?;
     let source = NatsGapMarkerSource::connect(&config).await?;
     let mut fetchers = FetcherRegistry::default();
@@ -44,7 +45,8 @@ async fn main() -> PlatformResult<()> {
     publisher
         .ensure_stream(&config.event_subject_prefix)
         .await?;
-    BackfillerRunner::new(config, source, fetchers, publisher)
-        .run(retries)
+    health.mark_ready();
+    health
+        .run(BackfillerRunner::new(config, source, fetchers, publisher).run(retries))
         .await
 }

@@ -14,7 +14,7 @@ use crate::{
 };
 use platform_archive::IcebergCatalog;
 use platform_errors::PlatformResult;
-use platform_runtime::Service;
+use platform_runtime::{HealthRunner, Service};
 use std::sync::Arc;
 
 const SERVICE: Service = Service::new("platform-compactor");
@@ -24,8 +24,12 @@ async fn main() -> PlatformResult<()> {
     let config = CompactorConfig::from_env()?;
     SERVICE.init_logging(&config.log_filter)?;
     let _metrics = SERVICE.init_metrics("platform/compactor")?;
+    let health = HealthRunner::from_service_env("COMPACTOR").await?;
     let catalog = Arc::new(IcebergCatalog::connect(&config.iceberg).await?);
     let source = S3ArchiveSource::connect(&config, catalog.clone()).await?;
     let compactor = Compactor::connect(&config, catalog).await?;
-    CompactorRunner::new(config, source, compactor).run().await
+    health.mark_ready();
+    health
+        .run(CompactorRunner::new(config, source, compactor).run())
+        .await
 }

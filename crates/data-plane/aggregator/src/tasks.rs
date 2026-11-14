@@ -6,6 +6,7 @@ use platform_aggregator::{
 };
 use platform_errors::{PlatformError, PlatformResult};
 use platform_nats::NatsPublisher;
+use platform_runtime::HealthState;
 use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing::{error, info};
@@ -13,9 +14,10 @@ use tracing::{error, info};
 pub struct Tasks;
 
 impl Tasks {
-    pub async fn run(
+    pub async fn run_with_health(
         config: AggregatorConfig,
         archive_recovery: Option<Arc<S3ArchiveRecovery>>,
+        health: HealthState,
     ) -> PlatformResult<()> {
         let shards = config.shards();
         info!(
@@ -37,6 +39,7 @@ impl Tasks {
         let checkpoints: Arc<dyn StateStore> = Arc::new(NatsStateStore::connect(&config).await?);
         let leases: Arc<dyn LeaseStore> = Arc::new(NatsLeaseStore::connect(&config).await?);
         let sink = Arc::new(NatsCandleSink::connect(&config).await?);
+        health.mark_ready();
 
         let mut tasks = JoinSet::new();
         let router_config = config.clone();
