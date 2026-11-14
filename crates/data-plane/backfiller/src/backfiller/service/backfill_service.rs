@@ -28,11 +28,11 @@ impl BackfillOptions {
 /// Turns gap markers into reconstructed market events on the ingester's event
 /// subjects.
 pub struct BackfillService<S, F, P> {
-    pub(super) source: S,
-    pub(super) fetcher: F,
-    pub(super) publisher: P,
-    pub(super) options: BackfillOptions,
-    pub(super) retries: Arc<dyn GapRetryStore>,
+    pub source: S,
+    pub fetcher: F,
+    pub publisher: P,
+    pub options: BackfillOptions,
+    pub retries: Arc<dyn GapRetryStore>,
 }
 
 impl<S, F, P> BackfillService<S, F, P>
@@ -133,9 +133,7 @@ where
         pending.insert(gap.key(), gap);
     }
 
-    pub(in crate::backfiller) async fn load_pending(
-        &self,
-    ) -> BuildResult<BTreeMap<String, PendingGap>> {
+    pub async fn load_pending(&self) -> BuildResult<BTreeMap<String, PendingGap>> {
         let mut pending = BTreeMap::new();
         for gap in self.retries.load().await? {
             pending.insert(gap.key(), gap);
@@ -143,11 +141,7 @@ where
         Ok(pending)
     }
 
-    pub(in crate::backfiller) async fn accept(
-        &mut self,
-        gap: GapMarker,
-        pending: &mut BTreeMap<String, PendingGap>,
-    ) {
+    pub async fn accept(&mut self, gap: GapMarker, pending: &mut BTreeMap<String, PendingGap>) {
         if !self.fetcher.supports(gap.exchange) {
             let _ = self.source.ack(&gap).await;
             return;

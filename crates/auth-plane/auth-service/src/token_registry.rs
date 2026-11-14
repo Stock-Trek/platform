@@ -6,7 +6,7 @@ use chrono::{DateTime, Duration, Utc};
 use platform_errors::{BuildError, BuildResult};
 
 impl AuthService {
-    pub(crate) async fn add_token(
+    pub async fn add_token(
         &self,
         id: impl Into<String>,
         owner: impl Into<String>,
@@ -74,13 +74,13 @@ impl AuthService {
         }
     }
 
-    pub(crate) async fn token(&self, id: &str) -> BuildResult<ApiToken> {
+    pub async fn token(&self, id: &str) -> BuildResult<ApiToken> {
         self.stored_token(id)
             .await?
             .ok_or_else(|| BuildError::unknown_token(id))
     }
 
-    pub(crate) async fn stored_token(&self, id: &str) -> BuildResult<Option<ApiToken>> {
+    pub async fn stored_token(&self, id: &str) -> BuildResult<Option<ApiToken>> {
         ApiToken::validate_id(id)?;
         let token = self.store.get(id).await?;
         if let Some(token) = &token {

@@ -14,7 +14,7 @@ pub struct TokenView {
 }
 
 impl TokenView {
-    pub(crate) fn from_token(token: &ApiToken) -> Self {
+    pub fn from_token(token: &ApiToken) -> Self {
         Self {
             id: token.id().to_string(),
             owner: token.owner().to_string(),

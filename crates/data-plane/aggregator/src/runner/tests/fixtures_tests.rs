@@ -19,10 +19,10 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Default)]
-pub(super) struct FakeSource {
-    pub(super) records: Vec<SourceRecord>,
-    pub(super) fail: bool,
-    pub(super) acked: Arc<Mutex<usize>>,
+pub struct FakeSource {
+    pub records: Vec<SourceRecord>,
+    pub fail: bool,
+    pub acked: Arc<Mutex<usize>>,
 }
 
 #[async_trait]
@@ -45,23 +45,23 @@ impl MarketSource for FakeSource {
 }
 
 #[derive(Default, Clone)]
-pub(super) struct FakeSink {
-    pub(super) open_updates: Arc<Mutex<usize>>,
-    pub(super) closed_updates: Arc<Mutex<usize>>,
-    pub(super) deleted_open_updates: Arc<Mutex<usize>>,
-    pub(super) fail: bool,
+pub struct FakeSink {
+    pub open_updates: Arc<Mutex<usize>>,
+    pub closed_updates: Arc<Mutex<usize>>,
+    pub deleted_open_updates: Arc<Mutex<usize>>,
+    pub fail: bool,
 }
 
 impl FakeSink {
-    pub(super) fn open_updates(&self) -> usize {
+    pub fn open_updates(&self) -> usize {
         *self.open_updates.lock()
     }
 
-    pub(super) fn closed_updates(&self) -> usize {
+    pub fn closed_updates(&self) -> usize {
         *self.closed_updates.lock()
     }
 
-    pub(super) fn deleted_open_updates(&self) -> usize {
+    pub fn deleted_open_updates(&self) -> usize {
         *self.deleted_open_updates.lock()
     }
 }
@@ -96,7 +96,7 @@ impl ClosedCandlePublisher for FakeSink {
     }
 }
 
-pub(super) struct FailingCheckpointStore;
+pub struct FailingCheckpointStore;
 
 #[async_trait]
 impl StateStore for FailingCheckpointStore {
@@ -109,11 +109,11 @@ impl StateStore for FailingCheckpointStore {
     }
 }
 
-pub(super) struct SignalingSource {
-    pub(super) records: Vec<SourceRecord>,
-    pub(super) signal: QuiesceSignal,
-    pub(super) polls: Arc<AtomicUsize>,
-    pub(super) acked: Arc<Mutex<usize>>,
+pub struct SignalingSource {
+    pub records: Vec<SourceRecord>,
+    pub signal: QuiesceSignal,
+    pub polls: Arc<AtomicUsize>,
+    pub acked: Arc<Mutex<usize>>,
 }
 
 #[async_trait]
@@ -134,10 +134,10 @@ impl MarketSource for SignalingSource {
     }
 }
 
-pub(super) struct Fixtures;
+pub struct Fixtures;
 
 impl Fixtures {
-    pub(super) fn config() -> AggregatorConfig {
+    pub fn config() -> AggregatorConfig {
         AggregatorConfig {
             log_filter: "info".to_string(),
             nats_url: "nats://localhost:4222".to_string(),
@@ -167,7 +167,7 @@ impl Fixtures {
         }
     }
 
-    pub(super) fn trade_event(timestamp_ms: i64) -> MarketEvent {
+    pub fn trade_event(timestamp_ms: i64) -> MarketEvent {
         MarketEvent {
             exchange: CexId::Binance,
             stream: "btcusdt@trade".to_string(),
@@ -179,7 +179,7 @@ impl Fixtures {
         }
     }
 
-    pub(super) fn non_trade_event(timestamp_ms: i64) -> MarketEvent {
+    pub fn non_trade_event(timestamp_ms: i64) -> MarketEvent {
         MarketEvent {
             stream: "btcusdt@depth".to_string(),
             sequence: Some(2),
@@ -188,7 +188,7 @@ impl Fixtures {
         }
     }
 
-    pub(super) fn record(input: MarketInput, sequence: u64) -> SourceRecord {
+    pub fn record(input: MarketInput, sequence: u64) -> SourceRecord {
         SourceRecord::new(
             input,
             Message {
@@ -201,14 +201,11 @@ impl Fixtures {
         )
     }
 
-    pub(super) fn closed_open_keys(
-        update: &ProcessorUpdate,
-        state: &AggregatorState,
-    ) -> Vec<CandleKey> {
+    pub fn closed_open_keys(update: &ProcessorUpdate, state: &AggregatorState) -> Vec<CandleKey> {
         crate::runner::output_writer::CandleOutputWriter::closed_open_keys(update, state)
     }
 
-    pub(super) async fn wait_for_polls(polls: &Arc<AtomicUsize>, count: usize) {
+    pub async fn wait_for_polls(polls: &Arc<AtomicUsize>, count: usize) {
         tokio::time::timeout(std::time::Duration::from_secs(1), async {
             while polls.load(Ordering::SeqCst) < count {
                 tokio::task::yield_now().await;

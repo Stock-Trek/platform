@@ -14,14 +14,14 @@ use std::{collections::BTreeMap, time::SystemTime};
 use subtle::ConstantTimeEq;
 use time::OffsetDateTime;
 
-pub(crate) struct SigV4Verifier {
+pub struct SigV4Verifier {
     region: String,
     service: String,
     max_clock_skew_secs: i64,
 }
 
 impl SigV4Verifier {
-    pub(crate) fn new(
+    pub fn new(
         region: impl Into<String>,
         service: impl Into<String>,
         max_clock_skew_secs: i64,
@@ -33,7 +33,7 @@ impl SigV4Verifier {
         }
     }
 
-    pub(crate) fn verify(
+    pub fn verify(
         &self,
         registry: &SigV4Registry,
         request: &SigV4Request<'_>,

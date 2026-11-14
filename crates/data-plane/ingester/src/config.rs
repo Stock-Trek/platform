@@ -58,7 +58,7 @@ impl IngesterConfig {
     /// Rejects subscribing to both individual and aggregate trade streams for
     /// the same symbol. They carry the same economic trades with independent
     /// sequence numbers, so consuming both would double-count every trade.
-    pub(crate) fn validate_trade_streams(exchange: CexId, websocket_url: &str) -> BuildResult<()> {
+    pub fn validate_trade_streams(exchange: CexId, websocket_url: &str) -> BuildResult<()> {
         if exchange != CexId::Binance {
             return Ok(());
         }

@@ -26,14 +26,14 @@ use tracing::info;
 pub const FILE_FIELD: &str = "file";
 
 /// The form field holding the base64-encoded POST policy.
-pub(crate) const POLICY_FIELD: &str = "policy";
+pub const POLICY_FIELD: &str = "policy";
 
 /// A pre-signed POST target for uploading build artifacts.
 #[derive(Debug, Clone)]
 pub struct SignedPost {
     url: String,
     fields: BTreeMap<String, String>,
-    pub(crate) max_artifact_size_bytes: Option<NonZeroU64>,
+    pub max_artifact_size_bytes: Option<NonZeroU64>,
     client: reqwest::Client,
 }
 

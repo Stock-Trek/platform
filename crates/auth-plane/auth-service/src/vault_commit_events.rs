@@ -6,7 +6,7 @@ use crate::{
 use platform_errors::{BuildError, BuildResult};
 
 impl VaultClient {
-    pub(crate) async fn commit_events(
+    pub async fn commit_events(
         &self,
         mutation: TokenMutation,
         mut events: Vec<TokenAuditEvent>,

@@ -6,10 +6,10 @@ use rust_decimal::Decimal;
 use serde_json::Value;
 use std::collections::HashMap;
 
-pub(super) struct Portfolio;
+pub struct Portfolio;
 
 impl Portfolio {
-    pub(super) fn asset_totals(balances: &Balances) -> Value {
+    pub fn asset_totals(balances: &Balances) -> Value {
         serde_json::to_value(balances).unwrap_or(Value::Null)
     }
 
@@ -20,7 +20,7 @@ impl Portfolio {
         }
     }
 
-    pub(super) fn portfolio_dto(balances: &Balances) -> PortfolioDto {
+    pub fn portfolio_dto(balances: &Balances) -> PortfolioDto {
         PortfolioDto {
             cex_accounts_dto: balances
                 .iter()
@@ -60,7 +60,7 @@ impl Portfolio {
         Self::decimal_dto(decimal)
     }
 
-    pub(super) fn decimal_dto(decimal: Decimal) -> DecimalDto {
+    pub fn decimal_dto(decimal: Decimal) -> DecimalDto {
         let unpacked = decimal.unpack();
         DecimalDto {
             lo: unpacked.lo,

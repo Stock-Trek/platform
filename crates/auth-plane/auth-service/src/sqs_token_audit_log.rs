@@ -9,7 +9,7 @@ use std::{
 };
 
 #[async_trait]
-pub(crate) trait AuditQueue: Send + Sync {
+pub trait AuditQueue: Send + Sync {
     async fn deliver(&self, events: &[TokenAuditEvent], deadline: Deadline) -> BuildResult<()>;
 }
 
@@ -40,7 +40,7 @@ impl SqsTokenAuditLog {
     }
 
     #[cfg(test)]
-    pub(crate) fn with_queue(queue: Arc<dyn AuditQueue>, timeout: Duration) -> Self {
+    pub fn with_queue(queue: Arc<dyn AuditQueue>, timeout: Duration) -> Self {
         Self { queue, timeout }
     }
 

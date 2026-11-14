@@ -23,25 +23,21 @@ impl TradingPrecision {
             quote,
         }
     }
-    pub(crate) fn to_valid_base_limit(
+    pub fn to_valid_base_limit(
         self,
         base: f64,
         strategy: RoundingStrategy,
     ) -> BuildResult<Decimal> {
         Self::to_valid_decimal(base, self.base_limit, strategy)
     }
-    pub(crate) fn to_valid_base_market(
+    pub fn to_valid_base_market(
         self,
         base: f64,
         strategy: RoundingStrategy,
     ) -> BuildResult<Decimal> {
         Self::to_valid_decimal(base, self.base_market, strategy)
     }
-    pub(crate) fn to_valid_quote(
-        self,
-        quote: f64,
-        strategy: RoundingStrategy,
-    ) -> BuildResult<Decimal> {
+    pub fn to_valid_quote(self, quote: f64, strategy: RoundingStrategy) -> BuildResult<Decimal> {
         Self::to_valid_decimal(quote, self.quote, strategy)
     }
     fn to_valid_decimal(

@@ -13,8 +13,8 @@ use stock_trek_types::cex::cex_id::CexId;
 /// Pure keyed candle processor.
 #[derive(Debug)]
 pub struct CandleProcessor {
-    pub(super) config: ProcessorConfig,
-    pub(super) state: AggregatorState,
+    pub config: ProcessorConfig,
+    pub state: AggregatorState,
 }
 
 impl CandleProcessor {

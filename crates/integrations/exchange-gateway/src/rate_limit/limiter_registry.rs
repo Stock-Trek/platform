@@ -104,14 +104,14 @@ impl RateLimiters {
     }
 }
 
-pub(crate) struct RateLimitGuard<'a> {
+pub struct RateLimitGuard<'a> {
     rate_limiters: &'a RateLimiters,
     costs: Vec<(RateLimitRestriction, UsageCount)>,
     armed: bool,
 }
 
 impl<'a> RateLimitGuard<'a> {
-    pub(crate) fn new(
+    pub fn new(
         rate_limiters: &'a RateLimiters,
         costs: Vec<(RateLimitRestriction, UsageCount)>,
     ) -> Self {
@@ -121,7 +121,7 @@ impl<'a> RateLimitGuard<'a> {
             armed: true,
         }
     }
-    pub(crate) fn disarm(mut self) {
+    pub fn disarm(mut self) {
         self.armed = false;
     }
 }

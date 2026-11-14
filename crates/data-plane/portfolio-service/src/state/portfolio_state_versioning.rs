@@ -2,13 +2,13 @@ use crate::state::PortfolioState;
 use platform_portfolio_ownership::AccountKey;
 
 impl PortfolioState {
-    pub(super) fn accepts(&self, account: &AccountKey, version: u64) -> bool {
+    pub fn accepts(&self, account: &AccountKey, version: u64) -> bool {
         self.updates.get(account).is_none_or(|metadata| {
             version > metadata.version() || (version == 0 && metadata.version() == 0)
         })
     }
 
-    pub(super) fn prune(&mut self, account: &AccountKey) {
+    pub fn prune(&mut self, account: &AccountKey) {
         if self.is_tracked(account) {
             return;
         }

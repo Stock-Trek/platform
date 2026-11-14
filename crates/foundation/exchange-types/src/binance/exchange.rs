@@ -92,7 +92,7 @@ impl BinanceExchange {
         )
     }
 
-    pub(crate) fn success<R>(response: BinanceResponse<R>) -> BuildResult<R> {
+    pub fn success<R>(response: BinanceResponse<R>) -> BuildResult<R> {
         match response.payload {
             BinanceResponsePayload::Success(payload) => Ok(payload),
             BinanceResponsePayload::Failure(error) => Err(BuildError::Exchange(

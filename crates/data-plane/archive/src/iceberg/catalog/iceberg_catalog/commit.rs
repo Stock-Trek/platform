@@ -20,7 +20,7 @@ enum CommitOutcome {
 }
 
 impl IcebergCatalog {
-    pub(super) async fn commit_files(
+    pub async fn commit_files(
         &self,
         table: ArchiveIcebergTable,
         files: &[IcebergDataFile],

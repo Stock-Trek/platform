@@ -75,7 +75,7 @@ impl NatsCandleSink {
         })
     }
 
-    pub(super) fn publish_target(prefix: &str, closed: &ClosedCandle) -> (String, String) {
+    pub fn publish_target(prefix: &str, closed: &ClosedCandle) -> (String, String) {
         let subject = format!("{}.{}", prefix, closed.candle().key.subject_suffix());
         (subject, closed.message_id())
     }

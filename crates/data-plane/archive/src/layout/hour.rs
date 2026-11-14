@@ -3,10 +3,10 @@ use chrono::{DateTime, Datelike, TimeZone, Timelike, Utc};
 use platform_types::TimestampMilliseconds;
 use std::str::FromStr;
 
-pub(super) const YEAR_FIELD: &str = "year=";
-pub(super) const MONTH_FIELD: &str = "month=";
-pub(super) const DAY_FIELD: &str = "day=";
-pub(super) const HOUR_FIELD: &str = "hour=";
+pub const YEAR_FIELD: &str = "year=";
+pub const MONTH_FIELD: &str = "month=";
+pub const DAY_FIELD: &str = "day=";
+pub const HOUR_FIELD: &str = "hour=";
 
 /// The hourly folders shared by raw and compacted archive objects.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

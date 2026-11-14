@@ -6,7 +6,7 @@ use crate::{
 use platform_errors::{BuildError, BuildResult};
 
 impl VaultClient {
-    pub(crate) async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
+    pub async fn pending_audits(&self) -> BuildResult<Vec<TokenAuditEvent>> {
         let mut events = Vec::new();
         for key in self.keys_with_prefix(AUDIT_EVENT_PREFIX).await? {
             let Some((data, _)) = self.get_value_entry(&key).await? else {
@@ -30,7 +30,7 @@ impl VaultClient {
         Ok(events)
     }
 
-    pub(crate) async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
+    pub async fn acknowledge_audit(&self, event_id: &str) -> BuildResult<()> {
         self.delete_key(&TokenAuditOutbox::storage_key(event_id))
             .await
     }

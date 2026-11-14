@@ -3,9 +3,9 @@ use serde_json::Value;
 use tokio::sync::mpsc::UnboundedReceiver;
 
 pub struct WebsocketEventStream {
-    pub(super) id: u64,
-    pub(super) receiver: UnboundedReceiver<Value>,
-    pub(super) senders: Senders,
+    pub id: u64,
+    pub receiver: UnboundedReceiver<Value>,
+    pub senders: Senders,
 }
 
 impl WebsocketEventStream {

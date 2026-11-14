@@ -10,7 +10,7 @@ use platform_exchange_types::market_data::{
 use platform_types::TimestampMilliseconds;
 
 impl<S: SbeSchemaDefinition> SbeCodec<S> {
-    pub(super) fn decode_frame(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
+    pub fn decode_frame(&self, frame: &[u8]) -> Result<ParsedMessage, IngesterError> {
         let mut decoded = SbeFrame::decode::<S>(frame)?;
 
         match decoded.template().kind {
@@ -21,10 +21,7 @@ impl<S: SbeSchemaDefinition> SbeCodec<S> {
         }
     }
 
-    pub(super) fn trade_entries(
-        &self,
-        frame: &mut SbeFrame<'_>,
-    ) -> Result<Vec<S::Trade>, IngesterError> {
+    pub fn trade_entries(&self, frame: &mut SbeFrame<'_>) -> Result<Vec<S::Trade>, IngesterError> {
         let cursor = frame.cursor();
         let event_time_us = cursor.read_i64()?;
         let _transact_time_us = cursor.read_i64()?;
@@ -94,7 +91,7 @@ impl<S: SbeSchemaDefinition> SbeCodec<S> {
         ))
     }
 
-    pub(super) fn best_bid_ask_fields(
+    pub fn best_bid_ask_fields(
         &self,
         frame: &mut SbeFrame<'_>,
     ) -> Result<(u64, S::BestBidAsk), IngesterError> {

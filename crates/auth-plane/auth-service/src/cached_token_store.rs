@@ -10,10 +10,10 @@ use platform_errors::BuildResult;
 use std::sync::Arc;
 
 pub struct CachedTokenStore {
-    pub(crate) inner: Arc<dyn TokenStore>,
-    pub(crate) cache: TokenCache,
-    pub(crate) breaker: CircuitBreaker,
-    pub(crate) gates: FlightGates,
+    pub inner: Arc<dyn TokenStore>,
+    pub cache: TokenCache,
+    pub breaker: CircuitBreaker,
+    pub gates: FlightGates,
 }
 
 impl CachedTokenStore {

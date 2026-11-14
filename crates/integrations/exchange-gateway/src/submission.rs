@@ -25,7 +25,7 @@ type BoxedFuture<'connector, Request, Response, VerificationRequest> = Pin<
 impl<'connector, Request, Response, VerificationRequest>
     Submission<'connector, Request, Response, VerificationRequest>
 {
-    pub(crate) fn new(
+    pub fn new(
         future: impl Future<
             Output = BuildResult<SubmissionOutcome<Request, Response, VerificationRequest>>,
         > + Send

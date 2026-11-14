@@ -33,11 +33,11 @@ impl JwtVerifier {
         self.verify_with_header(&header, jwt, now)
     }
 
-    pub(crate) fn has_key_for_header(&self, header: &Header) -> bool {
+    pub fn has_key_for_header(&self, header: &Header) -> bool {
         self.resolve_key(header).is_some()
     }
 
-    pub(crate) fn verify_with_header(
+    pub fn verify_with_header(
         &self,
         header: &Header,
         jwt: &str,

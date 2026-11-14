@@ -11,12 +11,12 @@ use std::{
 
 const OUTPUT_BATCH_SIZE: usize = 8_192;
 
-pub(crate) struct PartitionOutput {
-    pub(crate) partition: String,
-    pub(crate) path: PathBuf,
-    pub(crate) records: usize,
-    pub(crate) content_id: u64,
-    pub(crate) length: u64,
+pub struct PartitionOutput {
+    pub partition: String,
+    pub path: PathBuf,
+    pub records: usize,
+    pub content_id: u64,
+    pub length: u64,
     content: ContentId,
 }
 
@@ -36,7 +36,7 @@ impl PartitionOutput {
         Ok(self)
     }
 
-    pub(crate) fn write_all(
+    pub fn write_all(
         kind: ArchiveKind,
         mut records: PartitionRecords,
         directory: &Path,

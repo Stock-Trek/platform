@@ -239,7 +239,7 @@ impl NatsStateStore {
     /// The lease check alone is not sufficient: a stalled writer can pass it,
     /// lose the lease, and then read the revision after a newer writer has
     /// committed. Comparing fencing tokens from that same read closes the gap.
-    pub(super) fn ensure_fence_allows(
+    pub fn ensure_fence_allows(
         existing: &CheckpointRecord,
         checkpoint: &CheckpointRecord,
     ) -> BuildResult<()> {

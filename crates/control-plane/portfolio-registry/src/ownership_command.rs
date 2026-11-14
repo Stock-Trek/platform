@@ -2,16 +2,16 @@ use chrono::{DateTime, Utc};
 use platform_portfolio_ownership::{AccountKey, OwnershipAction};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub(crate) struct OwnershipCommand {
-    pub(crate) audit_id: String,
-    pub(crate) owner: String,
-    pub(crate) account: AccountKey,
-    pub(crate) action: OwnershipAction,
-    pub(crate) occurred_at: DateTime<Utc>,
+pub struct OwnershipCommand {
+    pub audit_id: String,
+    pub owner: String,
+    pub account: AccountKey,
+    pub action: OwnershipAction,
+    pub occurred_at: DateTime<Utc>,
 }
 
 impl OwnershipCommand {
-    pub(crate) fn new(
+    pub fn new(
         owner: impl Into<String>,
         account: AccountKey,
         action: OwnershipAction,

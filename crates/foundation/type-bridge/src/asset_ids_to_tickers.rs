@@ -4,7 +4,7 @@ use platform_exchange_types::ticker::Ticker;
 use stock_trek_types::cex::{asset_id::AssetId, order_request::OrderRequest};
 
 #[derive(Debug, Clone)]
-pub(crate) struct AssetIdsToTickers;
+pub struct AssetIdsToTickers;
 
 impl AssetIdsToTickers {
     pub fn asset_ids_to_tickers<N>(

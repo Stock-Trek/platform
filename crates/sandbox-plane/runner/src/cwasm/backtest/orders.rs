@@ -10,10 +10,10 @@ use stock_trek::{
 
 use crate::cwasm::backtest::{Balances, PriceMap, order_events::OrderEvents};
 
-pub(super) struct OrderProcessor;
+pub struct OrderProcessor;
 
 impl OrderProcessor {
-    pub(super) fn handle_action(
+    pub fn handle_action(
         action: &ResolvedAction,
         balances: &mut Balances,
         prices: &PriceMap,

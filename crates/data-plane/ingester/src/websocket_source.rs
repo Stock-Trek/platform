@@ -135,7 +135,7 @@ impl WebsocketSource {
         Ok(config)
     }
 
-    pub(super) fn api_key_header(exchange: CexId) -> BuildResult<&'static str> {
+    pub fn api_key_header(exchange: CexId) -> BuildResult<&'static str> {
         match exchange {
             CexId::Binance => Ok(BINANCE_API_KEY_HEADER),
             exchange => Err(BuildError::Exchange(ExchangeError::UnsupportedExchange {

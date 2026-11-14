@@ -14,8 +14,8 @@ use std::{collections::HashMap, sync::Arc, time::Duration};
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::{debug, warn};
 
-pub(crate) type ClockSyncFailureCallback = Arc<dyn Fn(&BuildError) + Send + Sync>;
-pub(crate) type SharedClockSyncFailureCallback = Arc<Mutex<Option<ClockSyncFailureCallback>>>;
+pub type ClockSyncFailureCallback = Arc<dyn Fn(&BuildError) + Send + Sync>;
+pub type SharedClockSyncFailureCallback = Arc<Mutex<Option<ClockSyncFailureCallback>>>;
 
 pub struct AutoResyncConnector<Exchange, Client> {
     connector: Arc<Connector<Exchange, Client>>,
@@ -28,13 +28,13 @@ struct AutoResyncHandle {
     join: JoinHandle<()>,
 }
 
-pub(crate) enum ClockSyncCommand {
+pub enum ClockSyncCommand {
     SetFrequency(Duration),
     Stop,
 }
 
 impl<Exchange, Client> AutoResyncConnector<Exchange, Client> {
-    pub(crate) async fn clock_sync_loop<F, Fut>(
+    pub async fn clock_sync_loop<F, Fut>(
         frequency: Duration,
         first_sync_sender: tokio::sync::oneshot::Sender<BuildResult<()>>,
         receiver: tokio::sync::mpsc::UnboundedReceiver<ClockSyncCommand>,
@@ -112,7 +112,7 @@ where
     Exchange: ETExchange + Send + Sync + 'static,
     Client: Send + Sync + 'static,
 {
-    pub(crate) fn new(connector: Arc<Connector<Exchange, Client>>) -> Self {
+    pub fn new(connector: Arc<Connector<Exchange, Client>>) -> Self {
         Self {
             connector,
             resync_handle: Mutex::new(None),

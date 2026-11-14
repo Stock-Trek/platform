@@ -1,13 +1,13 @@
 use platform_errors::BuildResult;
 use std::path::Path;
 
-pub(crate) trait SpillReader {
+pub trait SpillReader {
     type Record;
 
     fn read(&mut self) -> BuildResult<Option<Self::Record>>;
 }
 
-pub(crate) trait SpillWriter {
+pub trait SpillWriter {
     type Record;
 
     fn write(&mut self, record: Self::Record) -> BuildResult<()>;
@@ -15,7 +15,7 @@ pub(crate) trait SpillWriter {
     fn finish(self) -> BuildResult<()>;
 }
 
-pub(crate) trait SpillCodec: Clone {
+pub trait SpillCodec: Clone {
     type Record;
     type Key: Ord;
     type Reader: SpillReader<Record = Self::Record>;

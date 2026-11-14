@@ -33,17 +33,17 @@ impl SigV4Credentials {
         &self.access_key_id
     }
 
-    pub(crate) fn secret_access_key(&self) -> &str {
+    pub fn secret_access_key(&self) -> &str {
         self.secret_access_key.expose_secret()
     }
 
-    pub(crate) fn session_token(&self) -> Option<&str> {
+    pub fn session_token(&self) -> Option<&str> {
         self.session_token
             .as_ref()
             .map(|token| token.expose_secret())
     }
 
-    pub(crate) fn identity(&self) -> Identity {
+    pub fn identity(&self) -> Identity {
         let credentials = Credentials::new(
             self.access_key_id.clone(),
             self.secret_access_key().to_string(),

@@ -3,16 +3,16 @@ use hyper::{Response, StatusCode, body::Bytes, header::RETRY_AFTER};
 use platform_errors::{AuthError, BuildError};
 use std::time::Duration;
 
-pub(super) type JwtServerResult<T> = Result<T, JwtServerError>;
+pub type JwtServerResult<T> = Result<T, JwtServerError>;
 
-pub(super) struct JwtServerError {
+pub struct JwtServerError {
     status: StatusCode,
     message: String,
     retry_after: Option<Duration>,
 }
 
 impl JwtServerError {
-    pub(super) fn new(status: StatusCode, message: impl Into<String>) -> Self {
+    pub fn new(status: StatusCode, message: impl Into<String>) -> Self {
         Self {
             status,
             message: message.into(),
@@ -20,7 +20,7 @@ impl JwtServerError {
         }
     }
 
-    pub(super) fn issuance(error: BuildError) -> Self {
+    pub fn issuance(error: BuildError) -> Self {
         let retry_after = match &error {
             BuildError::Auth(AuthError::Unavailable { retry_after }) => Some(*retry_after),
             _ => None,
@@ -37,11 +37,11 @@ impl JwtServerError {
         }
     }
 
-    pub(super) fn message(&self) -> &str {
+    pub fn message(&self) -> &str {
         &self.message
     }
 
-    pub(super) fn response(self) -> Response<Full<Bytes>> {
+    pub fn response(self) -> Response<Full<Bytes>> {
         let mut builder = Response::builder().status(self.status);
         if let Some(retry_after) = self.retry_after {
             builder = builder.header(RETRY_AFTER, retry_after.as_secs().max(1).to_string());

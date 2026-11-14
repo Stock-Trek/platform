@@ -4,7 +4,7 @@ use reqwest::Method;
 use serde_json::{Value, json};
 
 #[derive(Clone, Copy)]
-pub(crate) enum WriteCondition {
+pub enum WriteCondition {
     Create,
     Update(u64),
 }
@@ -26,13 +26,13 @@ impl WriteCondition {
 }
 
 impl VaultClient {
-    pub(crate) async fn put(&self, token: &ApiToken, condition: WriteCondition) -> BuildResult<()> {
+    pub async fn put(&self, token: &ApiToken, condition: WriteCondition) -> BuildResult<()> {
         token.validate()?;
         self.put_entry(token.id(), token.to_value(), condition)
             .await
     }
 
-    pub(crate) async fn put_entry(
+    pub async fn put_entry(
         &self,
         path: &str,
         data: Value,

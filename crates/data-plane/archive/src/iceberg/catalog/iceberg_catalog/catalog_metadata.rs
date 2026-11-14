@@ -7,9 +7,7 @@ const SOURCE_FILE_SUMMARY_PREFIX: &str = "source-file:";
 const ARCHIVE_BATCH_SUMMARY_KEY: &str = "archive-batch";
 
 impl IcebergCatalog {
-    pub(in crate::iceberg::catalog::iceberg_catalog) fn source_files_from_metadata(
-        table: &Table,
-    ) -> HashSet<String> {
+    pub fn source_files_from_metadata(table: &Table) -> HashSet<String> {
         table
             .metadata()
             .snapshots()
@@ -19,7 +17,7 @@ impl IcebergCatalog {
             .collect()
     }
 
-    pub(in crate::iceberg::catalog::iceberg_catalog) fn snapshot_properties(
+    pub fn snapshot_properties(
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
     ) -> HashMap<String, String> {
@@ -38,7 +36,7 @@ impl IcebergCatalog {
         properties
     }
 
-    pub(super) fn batch_fingerprint(files: &[IcebergDataFile]) -> String {
+    pub fn batch_fingerprint(files: &[IcebergDataFile]) -> String {
         let mut hash = 0xcbf2_9ce4_8422_2325_u64;
         for file in files {
             for byte in file.file_path.as_bytes().iter().chain(&[0]) {

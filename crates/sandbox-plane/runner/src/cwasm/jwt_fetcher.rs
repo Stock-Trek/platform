@@ -13,14 +13,14 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const READ_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
-pub(super) struct FetchedJwt {
+pub struct FetchedJwt {
     pub token: String,
     pub refresh_at: Instant,
     pub expires_at: Instant,
 }
 
 #[derive(Clone)]
-pub(super) struct JwtFetcher {
+pub struct JwtFetcher {
     url: reqwest::Url,
     owner: String,
     client: reqwest::Client,

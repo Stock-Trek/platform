@@ -2,17 +2,17 @@ use crate::headers::{ALGORITHM, AUTHORIZATION};
 use platform_errors::{BuildError, BuildResult};
 use std::collections::BTreeSet;
 
-pub(crate) struct ParsedAuthorization {
-    pub(crate) access_key_id: String,
-    pub(crate) date: String,
-    pub(crate) region: String,
-    pub(crate) service: String,
-    pub(crate) signed_headers: Vec<String>,
-    pub(crate) signature: String,
+pub struct ParsedAuthorization {
+    pub access_key_id: String,
+    pub date: String,
+    pub region: String,
+    pub service: String,
+    pub signed_headers: Vec<String>,
+    pub signature: String,
 }
 
 impl ParsedAuthorization {
-    pub(crate) fn parse(value: &str) -> BuildResult<Self> {
+    pub fn parse(value: &str) -> BuildResult<Self> {
         let rest = value
             .strip_prefix(ALGORITHM)
             .and_then(|value| value.strip_prefix(' '))
@@ -64,7 +64,7 @@ impl ParsedAuthorization {
         })
     }
 
-    pub(crate) fn invalid(message: impl Into<String>) -> BuildError {
+    pub fn invalid(message: impl Into<String>) -> BuildError {
         BuildError::auth_invalid_jwt(message)
     }
 

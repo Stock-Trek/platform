@@ -4,18 +4,18 @@ use platform_portfolio_ownership::{AccountKey, OwnershipEvent};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub(crate) struct OwnershipRecord {
-    pub(crate) account: AccountKey,
-    pub(crate) owner: String,
-    pub(crate) active: bool,
-    pub(crate) version: u64,
-    pub(crate) updated_at: DateTime<Utc>,
-    pub(crate) audit: Vec<OwnershipEvent>,
-    pub(crate) pending_events: Vec<OwnershipEvent>,
+pub struct OwnershipRecord {
+    pub account: AccountKey,
+    pub owner: String,
+    pub active: bool,
+    pub version: u64,
+    pub updated_at: DateTime<Utc>,
+    pub audit: Vec<OwnershipEvent>,
+    pub pending_events: Vec<OwnershipEvent>,
 }
 
 impl OwnershipRecord {
-    pub(crate) fn mapping(&self) -> AccountMapping {
+    pub fn mapping(&self) -> AccountMapping {
         AccountMapping::new(
             self.account.clone(),
             self.owner.clone(),

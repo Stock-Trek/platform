@@ -6,7 +6,7 @@ use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, BuildError, BuildResult};
 
 impl AuthService {
-    pub(crate) async fn signature_token(
+    pub async fn signature_token(
         &self,
         token_id: &str,
         now: DateTime<Utc>,
@@ -31,7 +31,7 @@ impl AuthService {
         }
     }
 
-    pub(crate) fn validate_order_signature(
+    pub fn validate_order_signature(
         &self,
         token_id: &str,
         signature: &str,
@@ -63,7 +63,7 @@ impl AuthService {
         Ok((signed, context))
     }
 
-    pub(crate) async fn reject_signature(
+    pub async fn reject_signature(
         &self,
         token_id: &str,
         token: Option<&ApiToken>,
@@ -75,7 +75,7 @@ impl AuthService {
         Ok(OrderRequestVerification::Invalid(reason))
     }
 
-    pub(crate) async fn reject_retryable(
+    pub async fn reject_retryable(
         &self,
         token_id: &str,
         token: Option<&ApiToken>,

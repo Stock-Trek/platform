@@ -9,9 +9,9 @@ const SQS_MAX_BATCH_ENTRIES: usize = 10;
 
 #[derive(Clone)]
 pub struct Sqs {
-    pub(super) client: SqsClient,
-    pub(super) config: SqsConfig,
-    pub(super) timeouts: Timeouts,
+    pub client: SqsClient,
+    pub config: SqsConfig,
+    pub timeouts: Timeouts,
 }
 
 impl Sqs {
@@ -25,7 +25,7 @@ impl Sqs {
 
     /// Splits the serialized message bodies into batches that respect both the
     /// entry count and the total payload size limits.
-    pub(super) fn batch_indices(bodies: &[String]) -> BuildResult<Vec<Vec<usize>>> {
+    pub fn batch_indices(bodies: &[String]) -> BuildResult<Vec<Vec<usize>>> {
         let mut batches = Vec::new();
         let mut current = Vec::new();
         let mut current_bytes = 0;

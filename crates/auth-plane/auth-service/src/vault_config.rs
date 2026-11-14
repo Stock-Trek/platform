@@ -6,9 +6,9 @@ use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct VaultTokenStoreConfig {
-    pub(crate) address: String,
-    pub(crate) token: SecretString,
-    pub(crate) mount: String,
+    pub address: String,
+    pub token: SecretString,
+    pub mount: String,
     timeout: Duration,
 }
 
@@ -101,7 +101,7 @@ impl VaultTokenStoreConfig {
         Ok(())
     }
 
-    pub(crate) fn url(&self, suffix: &[&str]) -> BuildResult<Url> {
+    pub fn url(&self, suffix: &[&str]) -> BuildResult<Url> {
         let address = self.address.trim();
         let mut url = Url::parse(address.trim_end_matches('/'))
             .map_err(|e| BuildError::config_invalid_source("vault_address", e))?;

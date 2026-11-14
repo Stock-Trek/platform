@@ -11,7 +11,7 @@ pub struct SbeFrame<'a> {
 }
 
 impl<'a> SbeFrame<'a> {
-    pub(super) fn decode<S: SbeSchemaDefinition>(frame: &'a [u8]) -> Result<Self, IngesterError> {
+    pub fn decode<S: SbeSchemaDefinition>(frame: &'a [u8]) -> Result<Self, IngesterError> {
         if frame.len() < HEADER_LENGTH {
             return Err(IngesterError::malformed_sbe(format!(
                 "SBE header requires {HEADER_LENGTH} bytes, got {}",
@@ -56,7 +56,7 @@ impl<'a> SbeFrame<'a> {
         Ok(Self { template, cursor })
     }
 
-    pub(super) fn is_schema<S: SbeSchemaDefinition>(frame: &[u8]) -> bool {
+    pub fn is_schema<S: SbeSchemaDefinition>(frame: &[u8]) -> bool {
         if frame.len() < HEADER_LENGTH {
             return false;
         }
@@ -70,11 +70,11 @@ impl<'a> SbeFrame<'a> {
                 .any(|template| template.template_id == template_id)
     }
 
-    pub(super) fn template(&self) -> SbeTemplate {
+    pub fn template(&self) -> SbeTemplate {
         self.template
     }
 
-    pub(super) fn cursor(&mut self) -> &mut BinaryCursor<'a> {
+    pub fn cursor(&mut self) -> &mut BinaryCursor<'a> {
         &mut self.cursor
     }
 }

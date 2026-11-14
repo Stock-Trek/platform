@@ -58,7 +58,7 @@ impl RunRecord {
         }
     }
 
-    pub(crate) fn to_item(&self) -> Item {
+    pub fn to_item(&self) -> Item {
         let mut item = HashMap::new();
         item.insert(
             ALGORITHM_ID.into(),
@@ -102,7 +102,7 @@ impl RunRecord {
         item
     }
 
-    pub(crate) fn from_item(item: &Item) -> BuildResult<Self> {
+    pub fn from_item(item: &Item) -> BuildResult<Self> {
         Ok(Self {
             algorithm_id: Self::string(item, ALGORITHM_ID)?,
             owner: Self::string(item, OWNER)?,
@@ -128,11 +128,11 @@ impl RunRecord {
         })
     }
 
-    pub(crate) fn format_timestamp(timestamp: DateTime<Utc>) -> String {
+    pub fn format_timestamp(timestamp: DateTime<Utc>) -> String {
         timestamp.to_rfc3339_opts(SecondsFormat::Millis, true)
     }
 
-    pub(crate) fn parse_timestamp(value: &str) -> BuildResult<DateTime<Utc>> {
+    pub fn parse_timestamp(value: &str) -> BuildResult<DateTime<Utc>> {
         DateTime::parse_from_rfc3339(value)
             .map(|timestamp| timestamp.with_timezone(&Utc))
             .map_err(|source| Self::invalid_attribute_source(SCHEDULED_AT, &source))

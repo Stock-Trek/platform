@@ -31,20 +31,20 @@ use std::sync::Arc;
 /// polling for new inputs, drains and checkpoints accepted records, and releases
 /// its lease before exiting so ownership can move to another writer.
 pub struct ProcessorRunner<S, K> {
-    pub(super) config: AggregatorConfig,
-    pub(super) source: S,
-    pub(super) sink: K,
-    pub(super) checkpoints: Arc<dyn StateStore>,
-    pub(super) leases: Arc<dyn LeaseStore>,
-    pub(super) shard: ShardId,
-    pub(super) state: AggregatorState,
+    pub config: AggregatorConfig,
+    pub source: S,
+    pub sink: K,
+    pub checkpoints: Arc<dyn StateStore>,
+    pub leases: Arc<dyn LeaseStore>,
+    pub shard: ShardId,
+    pub state: AggregatorState,
     /// When set, inputs at or before this watermark are already represented by
     /// state rebuilt from the archive and are only used to advance the source
     /// position.
-    pub(super) replay_watermark: Option<TimestampMilliseconds>,
-    pub(super) writer_id: Option<String>,
-    pub(super) initial_lease: Option<WriterLease>,
-    pub(super) quiesce: Option<QuiesceReceiver>,
+    pub replay_watermark: Option<TimestampMilliseconds>,
+    pub writer_id: Option<String>,
+    pub initial_lease: Option<WriterLease>,
+    pub quiesce: Option<QuiesceReceiver>,
 }
 
 impl<S, K> ProcessorRunner<S, K>

@@ -2,13 +2,13 @@ use crate::{OwnershipCommand, OwnershipRecord};
 use platform_errors::{BuildError, BuildResult};
 use platform_portfolio_ownership::OwnershipEvent;
 
-pub(crate) enum OwnershipTransition {
+pub enum OwnershipTransition {
     Applied(OwnershipRecord),
     Unchanged(OwnershipRecord),
 }
 
 impl OwnershipTransition {
-    pub(crate) fn apply(
+    pub fn apply(
         existing: Option<OwnershipRecord>,
         command: &OwnershipCommand,
     ) -> BuildResult<Self> {

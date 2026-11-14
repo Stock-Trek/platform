@@ -29,7 +29,7 @@ impl ApiToken {
         Value::Object(value)
     }
 
-    pub(crate) fn same_rotation_replacement(&self, other: &Self) -> bool {
+    pub fn same_rotation_replacement(&self, other: &Self) -> bool {
         let mut left = self.to_value();
         let mut right = other.to_value();
         if let (Some(left), Some(right)) = (left.as_object_mut(), right.as_object_mut()) {

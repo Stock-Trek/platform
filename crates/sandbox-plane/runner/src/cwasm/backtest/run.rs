@@ -13,8 +13,8 @@ use crate::cwasm::WasmRunner;
 
 use crate::cwasm::backtest::{publish::ResultPublisher, simulation::Simulation, spec::Spec};
 
-pub(super) type Balances = BTreeMap<CexId, BTreeMap<AccountId, BTreeMap<AssetId, f64>>>;
-pub(super) type PriceMap = BTreeMap<(CexId, AssetId, AssetId), f64>;
+pub type Balances = BTreeMap<CexId, BTreeMap<AccountId, BTreeMap<AssetId, f64>>>;
+pub type PriceMap = BTreeMap<(CexId, AssetId, AssetId), f64>;
 
 pub struct BackTest;
 
@@ -34,7 +34,7 @@ impl BackTest {
         .unwrap_or(ExitCode::Success.code())
     }
 
-    pub(super) fn run_simulations<F>(
+    pub fn run_simulations<F>(
         simulation_count: u32,
         max_concurrent: u32,
         simulate: F,

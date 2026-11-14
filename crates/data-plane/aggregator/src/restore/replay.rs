@@ -48,7 +48,7 @@ impl S3ArchivedEventSource {
         event.exchange_timestamp.unwrap_or(event.received_at)
     }
 
-    pub(crate) fn decoder_for(
+    pub fn decoder_for(
         decoders: &mut HashMap<CexId, SharedTradeDecoder>,
         exchange: CexId,
     ) -> BuildResult<SharedTradeDecoder> {
@@ -60,7 +60,7 @@ impl S3ArchivedEventSource {
         Ok(decoder)
     }
 
-    pub(crate) fn from_objects(
+    pub fn from_objects(
         transfer_client: TransferClient,
         shard: ShardId,
         shard_count: usize,

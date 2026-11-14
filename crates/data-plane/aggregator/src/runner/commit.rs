@@ -19,21 +19,21 @@ use std::time::Instant;
 use tracing::warn;
 
 #[derive(Debug, Clone)]
-pub(super) struct CheckpointPosition {
+pub struct CheckpointPosition {
     source_stream: String,
     next_sequence: u64,
 }
 
-pub(super) struct CommitState {
-    pub(super) pending: Vec<SourceRecord>,
-    pub(super) last_record: Option<SourceRecord>,
-    pub(super) dirty: bool,
-    pub(super) last_checkpoint_at: Instant,
-    pub(super) resume_position: Option<CheckpointPosition>,
+pub struct CommitState {
+    pub pending: Vec<SourceRecord>,
+    pub last_record: Option<SourceRecord>,
+    pub dirty: bool,
+    pub last_checkpoint_at: Instant,
+    pub resume_position: Option<CheckpointPosition>,
 }
 
 impl CommitState {
-    pub(super) fn new(resume_position: Option<CheckpointPosition>) -> Self {
+    pub fn new(resume_position: Option<CheckpointPosition>) -> Self {
         Self {
             pending: Vec::new(),
             last_record: None,
@@ -49,7 +49,7 @@ where
     S: MarketSource,
     K: OpenCandleStore + ClosedCandlePublisher + 'static,
 {
-    pub(super) async fn resume_position(
+    pub async fn resume_position(
         checkpoints: &Arc<dyn StateStore>,
         shard: ShardId,
         replay_watermark: Option<TimestampMilliseconds>,
@@ -85,7 +85,7 @@ where
     }
 
     #[allow(clippy::too_many_arguments)]
-    pub(super) async fn commit(
+    pub async fn commit(
         config: &AggregatorConfig,
         source: &mut S,
         checkpoints: &Arc<dyn StateStore>,

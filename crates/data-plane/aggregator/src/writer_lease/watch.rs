@@ -3,7 +3,7 @@ use async_trait::async_trait;
 use platform_errors::BuildResult;
 
 #[async_trait]
-pub(crate) trait LeaseWatchStream: Send {
+pub trait LeaseWatchStream: Send {
     async fn next(&mut self) -> BuildResult<Option<WriterLease>>;
 }
 
@@ -12,7 +12,7 @@ pub struct LeaseWatch {
 }
 
 impl LeaseWatch {
-    pub(crate) fn new(inner: impl LeaseWatchStream + 'static) -> Self {
+    pub fn new(inner: impl LeaseWatchStream + 'static) -> Self {
         Self {
             inner: Box::new(inner),
         }

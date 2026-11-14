@@ -16,7 +16,7 @@ use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 use tracing::warn;
 
 impl CandleProcessor {
-    pub(super) fn apply_trade_inner(
+    pub fn apply_trade_inner(
         &mut self,
         trade: &Trade,
         stream: Option<&str>,
@@ -205,13 +205,13 @@ impl CandleProcessor {
         Some((TimestampMilliseconds(start), TimestampMilliseconds(end)))
     }
 
-    pub(super) fn max_closed_candles(&self, interval: AlignedWindow) -> usize {
+    pub fn max_closed_candles(&self, interval: AlignedWindow) -> usize {
         self.config
             .max_closed_candles(interval)
             .unwrap_or(usize::MAX)
     }
 
-    pub(super) fn is_within_correction_contract(
+    pub fn is_within_correction_contract(
         &self,
         window_end: TimestampMilliseconds,
         watermark: Option<TimestampMilliseconds>,
@@ -261,7 +261,7 @@ impl CandleProcessor {
             .or_else(|| self.global_watermark_fallback())
     }
 
-    pub(super) fn global_watermark_fallback(&self) -> Option<TimestampMilliseconds> {
+    pub fn global_watermark_fallback(&self) -> Option<TimestampMilliseconds> {
         if self.state.streams.is_empty() {
             self.state.watermark
         } else {
@@ -269,7 +269,7 @@ impl CandleProcessor {
         }
     }
 
-    pub(super) fn watermark_for_pair(
+    pub fn watermark_for_pair(
         &self,
         exchange: CexId,
         trading_pair: TradingPair,

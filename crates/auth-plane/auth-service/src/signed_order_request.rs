@@ -4,7 +4,7 @@ use platform_errors::{BuildError, BuildResult};
 
 const ENVELOPE_VERSION: &str = "v1";
 const SIGNATURE_LENGTH: usize = 64;
-pub(crate) const MAX_ENVELOPE_LENGTH: usize = 1024;
+pub const MAX_ENVELOPE_LENGTH: usize = 1024;
 
 pub struct SignedOrderRequest {
     token_id: String,

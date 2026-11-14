@@ -3,10 +3,10 @@ use serde_json::Value;
 
 use crate::cwasm::backtest::spec::Spec;
 
-pub(super) struct ResultPublisher;
+pub struct ResultPublisher;
 
 impl ResultPublisher {
-    pub(super) async fn publish(spec: &Spec, result: &Value) {
+    pub async fn publish(spec: &Spec, result: &Value) {
         if let Err(error) = Self::stream_result(&spec.results_stream_url, result).await {
             eprintln!("cwasm-invoker: failed to stream simulation result: {error}");
         }

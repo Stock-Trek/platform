@@ -17,10 +17,10 @@ const PROGRAM_NAME: &str = "cwasm-invoker";
 
 type Emitted = Arc<Mutex<Vec<(String, Value)>>>;
 
-pub(super) struct Simulation;
+pub struct Simulation;
 
 impl Simulation {
-    pub(super) fn run(
+    pub fn run(
         runner: &WasmRunner,
         cwasm_path: &Path,
         spec: &Spec,

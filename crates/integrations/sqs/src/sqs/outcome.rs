@@ -6,7 +6,7 @@ use serde::Serialize;
 use crate::sqs::Sqs;
 
 impl Sqs {
-    pub(super) fn serialize<T: Serialize>(messages: &[T]) -> BuildResult<Vec<String>> {
+    pub fn serialize<T: Serialize>(messages: &[T]) -> BuildResult<Vec<String>> {
         messages
             .iter()
             .map(serde_json::to_string)
@@ -15,7 +15,7 @@ impl Sqs {
             .inspect_err(|_| SqsMetrics::record_messages_failed(messages.len()))
     }
 
-    pub(super) fn batch_failures(
+    pub fn batch_failures(
         sources: Option<&[SqsMessage]>,
         indices: &[usize],
         code: &str,
@@ -32,11 +32,11 @@ impl Sqs {
             .collect()
     }
 
-    pub(super) fn source(sources: Option<&[SqsMessage]>, index: usize) -> Option<SqsMessage> {
+    pub fn source(sources: Option<&[SqsMessage]>, index: usize) -> Option<SqsMessage> {
         sources.and_then(|sources| sources.get(index).cloned())
     }
 
-    pub(super) fn finish(message_count: usize, failures: Vec<SqsBatchFailure>) -> BuildResult<()> {
+    pub fn finish(message_count: usize, failures: Vec<SqsBatchFailure>) -> BuildResult<()> {
         if failures.is_empty() {
             SqsMetrics::record_messages_sent(message_count);
             Ok(())

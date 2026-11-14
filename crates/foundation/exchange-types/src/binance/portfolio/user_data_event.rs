@@ -9,7 +9,7 @@ pub struct BinanceAccountBalanceEvent {
 }
 
 impl BinanceAccountBalanceEvent {
-    pub(super) fn new(asset: String, free: String, locked: String) -> Self {
+    pub fn new(asset: String, free: String, locked: String) -> Self {
         Self {
             asset,
             free,

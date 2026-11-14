@@ -14,11 +14,11 @@ use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 use tracing::warn;
 
 impl CandleProcessor {
-    pub(super) fn close_expired(&mut self, update: &mut ProcessorUpdate) {
+    pub fn close_expired(&mut self, update: &mut ProcessorUpdate) {
         self.close_expired_at(None, update);
     }
 
-    pub(super) fn close_expired_at(
+    pub fn close_expired_at(
         &mut self,
         explicit_watermark: Option<TimestampMilliseconds>,
         update: &mut ProcessorUpdate,
@@ -86,12 +86,7 @@ impl CandleProcessor {
         }
     }
 
-    pub(super) fn resolve_gaps(
-        &mut self,
-        exchange: CexId,
-        stream: &str,
-        update: &mut ProcessorUpdate,
-    ) {
+    pub fn resolve_gaps(&mut self, exchange: CexId, stream: &str, update: &mut ProcessorUpdate) {
         let windows = self
             .state
             .take_resolved_incomplete_windows(exchange, stream);
@@ -163,7 +158,7 @@ impl CandleProcessor {
         }
     }
 
-    pub(super) fn mark_affected_windows(
+    pub fn mark_affected_windows(
         &mut self,
         gap: &GapMarker,
         trading_pair: Option<TradingPair>,

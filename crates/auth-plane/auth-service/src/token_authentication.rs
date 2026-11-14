@@ -24,7 +24,7 @@ impl AuthService {
         self.authenticate_loaded(token, candidate, scope, now).await
     }
 
-    pub(crate) async fn authenticate_loaded(
+    pub async fn authenticate_loaded(
         &self,
         mut token: ApiToken,
         candidate: &str,
@@ -63,7 +63,7 @@ impl AuthService {
         }
     }
 
-    pub(crate) fn ensure_active(token: &ApiToken, now: DateTime<Utc>) -> BuildResult<()> {
+    pub fn ensure_active(token: &ApiToken, now: DateTime<Utc>) -> BuildResult<()> {
         if token.metadata().is_revoked() {
             return Err(BuildError::auth_revoked(token.id()));
         }
@@ -82,7 +82,7 @@ impl AuthService {
         Ok(())
     }
 
-    pub(crate) fn ensure_scope(token: &ApiToken, required: TokenScope) -> BuildResult<()> {
+    pub fn ensure_scope(token: &ApiToken, required: TokenScope) -> BuildResult<()> {
         if token.metadata().has_scope(required) {
             Ok(())
         } else {
@@ -93,7 +93,7 @@ impl AuthService {
         }
     }
 
-    pub(crate) async fn record_authentication_failure(
+    pub async fn record_authentication_failure(
         &self,
         token_id: &str,
         token: Option<&ApiToken>,

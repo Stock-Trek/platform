@@ -9,8 +9,8 @@ use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct WebsocketListener {
-    pub(crate) handlers: Handlers,
-    pub(crate) events: EventSubscribers,
+    pub handlers: Handlers,
+    pub events: EventSubscribers,
 }
 
 impl WebsocketListener {

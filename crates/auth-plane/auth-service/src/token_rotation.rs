@@ -7,13 +7,13 @@ use platform_errors::{BuildError, BuildResult};
 use rand::{Rng, distributions::Alphanumeric};
 
 impl AuthService {
-    pub(crate) async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BuildResult<ApiToken> {
+    pub async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> BuildResult<ApiToken> {
         ApiToken::validate_id(id)?;
         let replacement_id = Self::rotated_token_id(id, now);
         self.rotate_token_to(id, replacement_id, now).await
     }
 
-    pub(crate) async fn rotate_token_to(
+    pub async fn rotate_token_to(
         &self,
         id: &str,
         replacement_id: impl Into<String>,
@@ -86,7 +86,7 @@ impl AuthService {
         format!("{prefix}{suffix}")
     }
 
-    pub(crate) async fn record_rotation_failure(
+    pub async fn record_rotation_failure(
         &self,
         token: &ApiToken,
         now: DateTime<Utc>,

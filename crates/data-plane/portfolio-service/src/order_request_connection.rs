@@ -18,10 +18,10 @@ const MAX_REQUEST_BYTES: usize = 1024 * 1024;
 const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(10);
 const BODY_READ_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub(super) struct OrderRequestConnection;
+pub struct OrderRequestConnection;
 
 impl OrderRequestConnection {
-    pub(super) async fn serve(
+    pub async fn serve(
         stream: TcpStream,
         service: Arc<OrderRequestService>,
         delivery: Arc<OrderRequestDelivery>,

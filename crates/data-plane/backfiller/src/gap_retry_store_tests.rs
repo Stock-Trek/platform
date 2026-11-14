@@ -6,7 +6,7 @@ use platform_types::TimestampMilliseconds;
 use stock_trek_types::cex::cex_id::CexId;
 
 impl InMemoryGapRetryStore {
-    pub(crate) async fn snapshot(&self) -> Vec<PendingGap> {
+    pub async fn snapshot(&self) -> Vec<PendingGap> {
         self.pending.lock().await.values().cloned().collect()
     }
 }

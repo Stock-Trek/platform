@@ -4,7 +4,7 @@ use platform_market_data::GapMarker;
 const FALLBACK_WINDOW_STEP: u64 = 1_000;
 
 impl PendingGap {
-    pub(super) fn missing_ranges(
+    pub fn missing_ranges(
         missing_from: u64,
         missing_to: u64,
         sequences: impl IntoIterator<Item = u64>,
@@ -39,7 +39,7 @@ impl PendingGap {
         ranges
     }
 
-    pub(super) fn widened_gap(gap: &GapMarker, attempts: u32) -> GapMarker {
+    pub fn widened_gap(gap: &GapMarker, attempts: u32) -> GapMarker {
         if attempts == 0 {
             return gap.clone();
         }

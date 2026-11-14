@@ -53,7 +53,7 @@ impl Sqs {
         Self::finish(bodies.len(), failures)
     }
 
-    pub(super) async fn retry_failed_individually(
+    pub async fn retry_failed_individually(
         &self,
         bodies: &[String],
         sources: Option<&[SqsMessage]>,

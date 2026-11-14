@@ -6,5 +6,5 @@ mod command_name_tests;
 #[cfg(test)]
 mod tests;
 
-pub(crate) use command_name::CommandName;
+pub use command_name::CommandName;
 pub use run_request::*;

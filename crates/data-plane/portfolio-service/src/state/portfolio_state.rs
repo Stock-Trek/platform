@@ -6,8 +6,8 @@ use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
 #[derive(Debug, Default)]
 pub struct PortfolioState {
-    pub(super) portfolios: AccountPortfolios,
-    pub(super) updates: BTreeMap<AccountKey, PortfolioUpdateMetadata>,
+    pub portfolios: AccountPortfolios,
+    pub updates: BTreeMap<AccountKey, PortfolioUpdateMetadata>,
     global_accounts: BTreeSet<AccountKey>,
     owner_accounts: BTreeMap<String, BTreeSet<AccountKey>>,
 }

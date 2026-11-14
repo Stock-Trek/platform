@@ -16,7 +16,7 @@ impl SpillUsage {
         self.largest_run_bytes = self.largest_run_bytes.max(other.largest_run_bytes);
     }
 
-    pub(crate) fn record(&mut self, path: &Path) -> BuildResult<()> {
+    pub fn record(&mut self, path: &Path) -> BuildResult<()> {
         let bytes = std::fs::metadata(path)
             .map_err(|error| {
                 BuildError::io(
@@ -32,14 +32,14 @@ impl SpillUsage {
     }
 }
 
-pub(crate) struct SpillMergeLimits;
+pub struct SpillMergeLimits;
 
 impl SpillMergeLimits {
-    pub(crate) fn fanin(limit: usize) -> usize {
+    pub fn fanin(limit: usize) -> usize {
         (limit / MERGE_BATCH_RECORDS).clamp(2, MAX_MERGE_FANIN)
     }
 
-    pub(crate) fn batch_records(limit: usize) -> usize {
+    pub fn batch_records(limit: usize) -> usize {
         (limit / Self::fanin(limit)).clamp(1, MERGE_BATCH_RECORDS)
     }
 }

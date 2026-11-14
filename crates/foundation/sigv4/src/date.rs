@@ -2,10 +2,10 @@ use platform_errors::{BuildError, BuildResult};
 use std::time::SystemTime;
 use time::{Date, Month, OffsetDateTime, Time};
 
-pub(crate) struct AmzDate;
+pub struct AmzDate;
 
 impl AmzDate {
-    pub(crate) fn format(now: SystemTime) -> (String, String) {
+    pub fn format(now: SystemTime) -> (String, String) {
         let date_time = OffsetDateTime::from(now);
         let date = format!(
             "{:04}{:02}{:02}",
@@ -22,7 +22,7 @@ impl AmzDate {
         (date, amz_date)
     }
 
-    pub(crate) fn parse(value: &str) -> BuildResult<SystemTime> {
+    pub fn parse(value: &str) -> BuildResult<SystemTime> {
         let bytes = value.as_bytes();
         if bytes.len() != 16 || bytes[8] != b'T' || bytes[15] != b'Z' {
             return Err(Self::invalid("x-amz-date has an invalid format"));

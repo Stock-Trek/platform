@@ -20,7 +20,7 @@ pub struct SequenceTracker {
     /// Stored as `u128` so the sequence immediately after `u64::MAX` is
     /// representable.
     #[serde(default, with = "next_sequence")]
-    pub(super) next: Option<u128>,
+    pub next: Option<u128>,
 }
 
 /// Durable storage for per-stream sequence progress.

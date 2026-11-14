@@ -12,11 +12,7 @@ use platform_metrics::{DROP_REASON_DUPLICATE, STAGE_AGGREGATOR};
 
 impl CandleProcessor {
     /// Records the event's sequence and returns whether it should be applied.
-    pub(super) fn accept_event(
-        &mut self,
-        event: &MarketEvent,
-        update: &mut ProcessorUpdate,
-    ) -> bool {
+    pub fn accept_event(&mut self, event: &MarketEvent, update: &mut ProcessorUpdate) -> bool {
         let Some(sequence) = event.sequence else {
             return true;
         };

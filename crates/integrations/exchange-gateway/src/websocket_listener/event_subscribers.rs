@@ -11,7 +11,7 @@ use std::{
 use tokio::sync::mpsc::unbounded_channel;
 
 #[derive(Clone)]
-pub(crate) struct EventSubscribers {
+pub struct EventSubscribers {
     senders: Senders,
     next_id: Arc<AtomicU64>,
 }

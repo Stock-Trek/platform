@@ -3,18 +3,18 @@ use parking_lot::Mutex;
 use std::{collections::HashMap, sync::Arc};
 use tokio::sync::{Mutex as AsyncMutex, MutexGuard as AsyncMutexGuard};
 
-pub(crate) struct FlightGates {
+pub struct FlightGates {
     gates: Mutex<HashMap<String, Arc<Gate>>>,
 }
 
 impl FlightGates {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             gates: Mutex::new(HashMap::new()),
         }
     }
 
-    pub(crate) fn gate(&self, id: &str) -> FlightGate<'_> {
+    pub fn gate(&self, id: &str) -> FlightGate<'_> {
         let mut gates = self.gates.lock();
         if let Some(gate) = gates.get(id) {
             return FlightGate::new(self, id, gate.clone());
@@ -40,12 +40,12 @@ impl Gate {
 }
 
 #[derive(Clone)]
-pub(crate) enum FlightOutcome {
+pub enum FlightOutcome {
     Found(Option<Arc<ApiToken>>),
     Failed,
 }
 
-pub(crate) struct FlightGate<'a> {
+pub struct FlightGate<'a> {
     owner: &'a FlightGates,
     id: String,
     gate: Arc<Gate>,
@@ -60,7 +60,7 @@ impl<'a> FlightGate<'a> {
         }
     }
 
-    pub(crate) async fn lock(&self) -> FlightGuard<'_> {
+    pub async fn lock(&self) -> FlightGuard<'_> {
         let guard = self.gate.lock.lock().await;
         FlightGuard {
             gate: &self.gate,
@@ -81,17 +81,17 @@ impl Drop for FlightGate<'_> {
     }
 }
 
-pub(crate) struct FlightGuard<'a> {
+pub struct FlightGuard<'a> {
     gate: &'a Gate,
     _guard: AsyncMutexGuard<'a, ()>,
 }
 
 impl FlightGuard<'_> {
-    pub(crate) fn outcome(&self) -> Option<FlightOutcome> {
+    pub fn outcome(&self) -> Option<FlightOutcome> {
         self.gate.outcome.lock().clone()
     }
 
-    pub(crate) fn complete(&self, outcome: FlightOutcome) {
+    pub fn complete(&self, outcome: FlightOutcome) {
         *self.gate.outcome.lock() = Some(outcome);
     }
 }

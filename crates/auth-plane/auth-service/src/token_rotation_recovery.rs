@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::{BuildError, BuildResult};
 
 impl AuthService {
-    pub(crate) async fn completed_rotation(
+    pub async fn completed_rotation(
         &self,
         original: &ApiToken,
         replacement_id: &str,
@@ -23,7 +23,7 @@ impl AuthService {
         Ok(replacement)
     }
 
-    pub(crate) fn ensure_replacement_usable(
+    pub fn ensure_replacement_usable(
         original: &ApiToken,
         replacement: &ApiToken,
         now: DateTime<Utc>,

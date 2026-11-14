@@ -34,7 +34,7 @@ impl ProcessorUpdate {
             && self.out_of_contract_gap_windows == 0
     }
 
-    pub(super) fn record_evictions(&mut self, evicted: &[Candle]) {
+    pub fn record_evictions(&mut self, evicted: &[Candle]) {
         self.closed_candle_evictions += evicted.len();
         for candle in evicted {
             *self

@@ -3,8 +3,8 @@ use chrono::{DateTime, Utc};
 use platform_errors::{BuildError, BuildResult};
 use serde_json::{Value, json};
 
-pub(crate) const ROTATION_TRANSACTION_FIELD: &str = "__rotation_transaction__";
-pub(crate) const ROTATION_TRANSACTION_PREFIX: &str = "rotation/transactions/";
+pub const ROTATION_TRANSACTION_FIELD: &str = "__rotation_transaction__";
+pub const ROTATION_TRANSACTION_PREFIX: &str = "rotation/transactions/";
 
 /// The durable intent to rotate a token.
 ///
@@ -59,7 +59,7 @@ impl TokenRotationTransaction {
         })
     }
 
-    pub(crate) fn has_same_rotation(&self, other: &Self) -> bool {
+    pub fn has_same_rotation(&self, other: &Self) -> bool {
         self.original.id() == other.original.id() && self.replacement.id() == other.replacement.id()
     }
 
@@ -87,22 +87,22 @@ impl TokenRotationTransaction {
         self.events[0].timestamp
     }
 
-    pub(crate) fn is_storage_key(id: &str) -> bool {
+    pub fn is_storage_key(id: &str) -> bool {
         id.starts_with(ROTATION_TRANSACTION_PREFIX)
     }
 
-    pub(crate) fn is_document(document: &Value) -> bool {
+    pub fn is_document(document: &Value) -> bool {
         document
             .get(ROTATION_TRANSACTION_FIELD)
             .and_then(Value::as_bool)
             .unwrap_or(false)
     }
 
-    pub(crate) fn storage_key(&self) -> String {
+    pub fn storage_key(&self) -> String {
         format!("{ROTATION_TRANSACTION_PREFIX}{}", self.transaction_id)
     }
 
-    pub(crate) fn to_value(&self) -> Value {
+    pub fn to_value(&self) -> Value {
         json!({
             ROTATION_TRANSACTION_FIELD: true,
             "transaction_id": self.transaction_id,
@@ -113,7 +113,7 @@ impl TokenRotationTransaction {
         })
     }
 
-    pub(crate) fn from_value(value: &Value) -> BuildResult<Self> {
+    pub fn from_value(value: &Value) -> BuildResult<Self> {
         if !value
             .get(ROTATION_TRANSACTION_FIELD)
             .and_then(Value::as_bool)

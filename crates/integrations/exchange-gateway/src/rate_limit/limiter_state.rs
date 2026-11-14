@@ -29,7 +29,7 @@ impl RateLimiterState {
             Arc::new(Instant::now),
         )
     }
-    pub(crate) fn with_clock(
+    pub fn with_clock(
         interval_nanos: DurationNanoseconds,
         capacity_per_interval: UsageCount,
         now: Arc<dyn Fn() -> Instant + Send + Sync>,
@@ -97,7 +97,7 @@ impl RateLimiterState {
         }
         self.set_throttle(until);
     }
-    pub(crate) fn throttle_after(&mut self, duration: Duration) {
+    pub fn throttle_after(&mut self, duration: Duration) {
         if duration.is_zero() {
             return;
         }
@@ -143,7 +143,7 @@ impl RateLimiterState {
     fn now(&self) -> Instant {
         (self.now)()
     }
-    pub(crate) fn is_throttled(&self) -> bool {
+    pub fn is_throttled(&self) -> bool {
         self.throttled_until
             .is_some_and(|throttled_until| self.now() < throttled_until)
     }

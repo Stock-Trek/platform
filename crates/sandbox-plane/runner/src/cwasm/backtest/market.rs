@@ -11,7 +11,7 @@ use stock_trek::markets::{AlignedWindow, TimestampMillis};
 use crate::cwasm::backtest::{PriceMap, market_data::Series, portfolio::Portfolio, spec::Spec};
 
 impl Spec {
-    pub(super) fn step_context(
+    pub fn step_context(
         &self,
         step: usize,
         rng: &mut StdRng,

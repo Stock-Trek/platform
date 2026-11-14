@@ -11,8 +11,8 @@ use stock_trek_types::cex::cex_id::CexId;
 use tokio::sync::Mutex;
 use tracing::warn;
 
-pub(crate) const RETRY_DELAY: Duration = Duration::from_secs(5);
-pub(crate) const MAX_RETRY_DELAY: Duration = Duration::from_secs(5 * 60);
+pub const RETRY_DELAY: Duration = Duration::from_secs(5);
+pub const MAX_RETRY_DELAY: Duration = Duration::from_secs(5 * 60);
 const RETRY_POLICY: RetryPolicy =
     RetryPolicy::exponential(usize::MAX, RETRY_DELAY, MAX_RETRY_DELAY).without_jitter();
 
@@ -108,7 +108,7 @@ pub trait GapRetryStore: Send + Sync {
 
 #[derive(Debug, Default)]
 pub struct InMemoryGapRetryStore {
-    pub(crate) pending: Mutex<HashMap<String, PendingGap>>,
+    pub pending: Mutex<HashMap<String, PendingGap>>,
 }
 
 #[async_trait]

@@ -23,11 +23,11 @@ use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
 
 /// Maximum number of updates waiting for the projection writer.
-pub(super) const DEFAULT_CHANNEL_CAPACITY: usize = 1_024;
+pub const DEFAULT_CHANNEL_CAPACITY: usize = 1_024;
 /// How long an open-candle write may wait for more updates to coalesce.
-pub(super) const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
+pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
 /// Maximum number of queued open mutations and closed candles before a flush.
-pub(super) const DEFAULT_MAX_PENDING: usize = 4_096;
+pub const DEFAULT_MAX_PENDING: usize = 4_096;
 
 #[derive(Debug)]
 enum OpenMutation {
@@ -59,13 +59,13 @@ enum OutputCommand {
 
 /// Handle used by the hot loop to submit outputs to the projection writer.
 #[derive(Debug)]
-pub(crate) struct CandleOutputWriter {
+pub struct CandleOutputWriter {
     sender: mpsc::Sender<OutputCommand>,
     task: JoinHandle<()>,
 }
 
 impl CandleOutputWriter {
-    pub(crate) fn start<K>(sink: K) -> Self
+    pub fn start<K>(sink: K) -> Self
     where
         K: OpenCandleStore + ClosedCandlePublisher + 'static,
     {
@@ -77,7 +77,7 @@ impl CandleOutputWriter {
         )
     }
 
-    pub(crate) fn start_with_limits<K>(
+    pub fn start_with_limits<K>(
         sink: K,
         channel_capacity: usize,
         flush_interval: Duration,
@@ -94,7 +94,7 @@ impl CandleOutputWriter {
 
     /// Queues one processor update without waiting for the open-candle write to
     /// complete. The writer task coalesces repeated writes for the same key.
-    pub(crate) async fn enqueue(
+    pub async fn enqueue(
         &self,
         update: ProcessorUpdate,
         state: &AggregatorState,
@@ -128,7 +128,7 @@ impl CandleOutputWriter {
     ///
     /// Pending open projections do not delay the barrier: they are derived
     /// data and may continue coalescing after the source checkpoint advances.
-    pub(crate) async fn barrier(&self) -> BuildResult<()> {
+    pub async fn barrier(&self) -> BuildResult<()> {
         let (reply, receiver) = oneshot::channel();
         self.send(OutputCommand::Barrier { reply }).await?;
         receiver.await.map_err(|_| Self::writer_stopped())?
@@ -138,7 +138,7 @@ impl CandleOutputWriter {
     ///
     /// This drains both closed candles and the open projection and is used
     /// before quiescing or releasing the shard lease.
-    pub(crate) async fn flush(&self) -> BuildResult<()> {
+    pub async fn flush(&self) -> BuildResult<()> {
         let (reply, receiver) = oneshot::channel();
         self.send(OutputCommand::Flush { reply }).await?;
         receiver.await.map_err(|_| Self::writer_stopped())?
@@ -147,7 +147,7 @@ impl CandleOutputWriter {
     /// Flushes the remaining outputs and waits for the writer task to stop.
     ///
     /// This must complete before the shard lease is released.
-    pub(crate) async fn shutdown(self) -> BuildResult<()> {
+    pub async fn shutdown(self) -> BuildResult<()> {
         let (reply, receiver) = oneshot::channel();
         let result = match self.sender.send(OutputCommand::Shutdown { reply }).await {
             Ok(()) => receiver.await.map_err(|_| Self::writer_stopped())?,
@@ -368,10 +368,7 @@ impl PendingWrites {
 
 /// Open-candle keys whose windows closed and that have no newer open window.
 impl CandleOutputWriter {
-    pub(crate) fn closed_open_keys(
-        update: &ProcessorUpdate,
-        state: &AggregatorState,
-    ) -> Vec<CandleKey> {
+    pub fn closed_open_keys(update: &ProcessorUpdate, state: &AggregatorState) -> Vec<CandleKey> {
         let mut keys = update
             .closed
             .iter()

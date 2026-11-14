@@ -50,7 +50,7 @@ impl OwnershipRegistry {
             .map(|entry| (entry.owner.as_str(), entry.version))
     }
 
-    pub(crate) fn restore(&mut self, account: &AccountKey, owner: &str, version: u64) {
+    pub fn restore(&mut self, account: &AccountKey, owner: &str, version: u64) {
         self.entries.insert(
             account.clone(),
             OwnershipEntry {

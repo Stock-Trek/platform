@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::{BuildError, BuildResult};
 use serde::{Deserialize, Serialize};
 
-pub(crate) const CLOCK_SKEW_SECONDS: i64 = 60;
+pub const CLOCK_SKEW_SECONDS: i64 = 60;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IssuedJwt {
@@ -85,12 +85,12 @@ impl OrderJwtClaims {
         self.expires_at <= now.timestamp()
     }
 
-    pub(crate) fn normalize_owner(&mut self) -> BuildResult<()> {
+    pub fn normalize_owner(&mut self) -> BuildResult<()> {
         self.owner = ApiToken::validated_owner(&self.owner)?.to_string();
         Ok(())
     }
 
-    pub(crate) fn validate_at(&self, now: DateTime<Utc>) -> BuildResult<()> {
+    pub fn validate_at(&self, now: DateTime<Utc>) -> BuildResult<()> {
         if self.expires_at <= self.issued_at {
             return Err(BuildError::auth_invalid_jwt(
                 "expires_at must be after issued_at",

@@ -56,7 +56,7 @@ where
         Self::with_batch_size(kind, reader, READ_BATCH_SIZE).await
     }
 
-    pub(super) async fn with_batch_size(
+    pub async fn with_batch_size(
         kind: ArchiveKind,
         reader: T,
         batch_size: usize,
@@ -185,7 +185,7 @@ impl ArchiveParquet {
         ArchiveBatch::new(kind, records)
     }
 
-    pub(crate) fn writer_properties() -> WriterProperties {
+    pub fn writer_properties() -> WriterProperties {
         WriterProperties::builder()
             .set_compression(Compression::ZSTD(Default::default()))
             .build()

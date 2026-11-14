@@ -21,18 +21,18 @@ use std::sync::{
 };
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
-pub(super) struct VecArchive {
+pub struct VecArchive {
     events: VecDeque<ArchivedMarketEvent>,
 }
 
 impl VecArchive {
-    pub(super) fn new(events: Vec<MarketEvent>) -> Self {
+    pub fn new(events: Vec<MarketEvent>) -> Self {
         Self {
             events: events.into_iter().map(ArchivedMarketEvent::from).collect(),
         }
     }
 
-    pub(super) fn with_epochs(events: Vec<(MarketEvent, u64)>) -> Self {
+    pub fn with_epochs(events: Vec<(MarketEvent, u64)>) -> Self {
         Self {
             events: events
                 .into_iter()
@@ -49,8 +49,8 @@ impl ArchivedEventSource for VecArchive {
     }
 }
 
-pub(super) struct FailingStateStore {
-    pub(super) retryability: Retryability,
+pub struct FailingStateStore {
+    pub retryability: Retryability,
 }
 
 #[async_trait]
@@ -71,14 +71,14 @@ impl StateStore for FailingStateStore {
     }
 }
 
-pub(super) struct Fixtures;
+pub struct Fixtures;
 
 impl Fixtures {
-    pub(super) fn pair() -> TradingPair {
+    pub fn pair() -> TradingPair {
         TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD)
     }
 
-    pub(super) fn trade(timestamp: i64) -> Trade {
+    pub fn trade(timestamp: i64) -> Trade {
         Trade {
             exchange: CexId::Binance,
             trading_pair: Self::pair(),
@@ -88,7 +88,7 @@ impl Fixtures {
         }
     }
 
-    pub(super) fn event(sequence: u64, timestamp: i64) -> MarketEvent {
+    pub fn event(sequence: u64, timestamp: i64) -> MarketEvent {
         MarketEvent {
             exchange: CexId::Binance,
             stream: "btcusdt@trade".to_string(),
@@ -101,7 +101,7 @@ impl Fixtures {
         }
     }
 
-    pub(super) fn non_trade_event(sequence: u64, timestamp: i64) -> MarketEvent {
+    pub fn non_trade_event(sequence: u64, timestamp: i64) -> MarketEvent {
         MarketEvent {
             stream: "btcusdt@depth".to_string(),
             payload: String::new(),
@@ -109,20 +109,20 @@ impl Fixtures {
         }
     }
 
-    pub(super) fn undecodable_event(sequence: u64, timestamp: i64) -> MarketEvent {
+    pub fn undecodable_event(sequence: u64, timestamp: i64) -> MarketEvent {
         MarketEvent {
             payload: STANDARD.encode("not a market event"),
             ..Self::event(sequence, timestamp)
         }
     }
 
-    pub(super) fn archive_source(
+    pub fn archive_source(
         archive: VecArchive,
     ) -> impl FnOnce() -> std::future::Ready<BuildResult<Box<dyn ArchivedEventSource>>> {
         || std::future::ready(Ok(Box::new(archive) as Box<dyn ArchivedEventSource>))
     }
 
-    pub(super) fn counting_archive(
+    pub fn counting_archive(
         events: Vec<MarketEvent>,
         connects: Arc<AtomicUsize>,
     ) -> impl FnOnce() -> std::future::Ready<BuildResult<Box<dyn ArchivedEventSource>>> {
@@ -134,11 +134,11 @@ impl Fixtures {
         }
     }
 
-    pub(super) fn interval() -> AlignedWindow {
+    pub fn interval() -> AlignedWindow {
         AlignedWindow::try_from("1m").unwrap()
     }
 
-    pub(super) fn options(shard: ShardId, shard_count: usize) -> RestoreOptions {
+    pub fn options(shard: ShardId, shard_count: usize) -> RestoreOptions {
         RestoreOptions {
             shard,
             source_stream: "aggregator-shards".to_string(),
@@ -152,7 +152,7 @@ impl Fixtures {
         }
     }
 
-    pub(super) fn archive_object(key: &str) -> ArchiveObject {
+    pub fn archive_object(key: &str) -> ArchiveObject {
         ArchiveObject {
             bucket: Bucket::new("market-data"),
             key: ObjectKey::new(key),

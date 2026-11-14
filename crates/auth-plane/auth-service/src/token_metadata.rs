@@ -5,15 +5,15 @@ use std::{borrow::Borrow, collections::HashSet};
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TokenMetadata {
-    pub(crate) expires_at: DateTime<Utc>,
-    pub(crate) scopes: Vec<TokenScope>,
-    pub(crate) revoked_at: Option<DateTime<Utc>>,
-    pub(crate) revocation_reason: Option<RevocationReason>,
-    pub(crate) revoked_by: Option<RevokedBy>,
-    pub(crate) last_used_at: Option<DateTime<Utc>>,
-    pub(crate) rotated_from: Option<String>,
-    pub(crate) replaced_by: Option<String>,
-    pub(crate) rotation_overlap_until: Option<DateTime<Utc>>,
+    pub expires_at: DateTime<Utc>,
+    pub scopes: Vec<TokenScope>,
+    pub revoked_at: Option<DateTime<Utc>>,
+    pub revocation_reason: Option<RevocationReason>,
+    pub revoked_by: Option<RevokedBy>,
+    pub last_used_at: Option<DateTime<Utc>>,
+    pub rotated_from: Option<String>,
+    pub replaced_by: Option<String>,
+    pub rotation_overlap_until: Option<DateTime<Utc>>,
 }
 
 impl TokenMetadata {
@@ -76,7 +76,7 @@ impl TokenMetadata {
         self.expires_at <= now
     }
 
-    pub(crate) fn is_rotation_overlap_ended(&self, now: DateTime<Utc>) -> bool {
+    pub fn is_rotation_overlap_ended(&self, now: DateTime<Utc>) -> bool {
         self.rotation_overlap_until
             .is_some_and(|overlap_until| overlap_until <= now)
     }
@@ -116,7 +116,7 @@ impl TokenMetadata {
         Ok(())
     }
 
-    pub(crate) fn validate(&self) -> BuildResult<()> {
+    pub fn validate(&self) -> BuildResult<()> {
         Self::validate_scopes(&self.scopes)?;
         if let Some(token_id) = &self.rotated_from {
             ApiToken::validate_id(token_id).map_err(|_| {
@@ -168,18 +168,13 @@ impl TokenMetadata {
         }
     }
 
-    pub(crate) fn revoke(
-        &mut self,
-        now: DateTime<Utc>,
-        reason: RevocationReason,
-        revoked_by: RevokedBy,
-    ) {
+    pub fn revoke(&mut self, now: DateTime<Utc>, reason: RevocationReason, revoked_by: RevokedBy) {
         self.revoked_at.get_or_insert(now);
         self.revocation_reason.get_or_insert(reason);
         self.revoked_by.get_or_insert(revoked_by);
     }
 
-    pub(crate) fn begin_rotation(
+    pub fn begin_rotation(
         &mut self,
         replacement_id: impl Into<String>,
         overlap_until: DateTime<Utc>,

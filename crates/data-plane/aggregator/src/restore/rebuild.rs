@@ -17,9 +17,9 @@ use platform_types::DurationMilliseconds;
 use std::collections::{BTreeMap, HashMap};
 use tracing::warn;
 
-pub(super) struct RebuiltArchiveState {
-    pub(super) state: AggregatorState,
-    pub(super) replayed_events: u64,
+pub struct RebuiltArchiveState {
+    pub state: AggregatorState,
+    pub replayed_events: u64,
 }
 
 impl AggregatorState {
@@ -48,7 +48,7 @@ impl AggregatorState {
 }
 
 impl RebuiltArchiveState {
-    pub(super) async fn rebuild(
+    pub async fn rebuild(
         archive: &mut dyn ArchivedEventSource,
         shard: ShardId,
         shard_count: usize,
