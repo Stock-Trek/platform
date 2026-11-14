@@ -18,7 +18,7 @@ pub const DEFAULT_MAX_CWASM_BYTES: NonZeroU64 =
 /// Keep this in sync with the pinned `wasmtime` version in the workspace
 /// `Cargo.toml`; the version check turns build-image/runner drift into a clear
 /// diagnostic instead of a runtime deserialization failure.
-pub const WASMTIME_VERSION: &str = "43.0.1";
+pub const WASMTIME_VERSION: &str = "50.0.1";
 
 /// Resource limits applied while downloading a compiled runner artifact.
 ///

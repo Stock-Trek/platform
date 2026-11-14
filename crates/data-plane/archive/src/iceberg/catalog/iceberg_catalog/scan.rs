@@ -46,8 +46,8 @@ impl IcebergCatalog {
         {
             files.push(IcebergDataFile::new(
                 task.data_file_path().to_string(),
-                i64::try_from(task.file_size_in_bytes).unwrap_or(i64::MAX),
-                i64::try_from(task.record_count.unwrap_or_default()).unwrap_or(i64::MAX),
+                i64::try_from(task.file_size_in_bytes()).unwrap_or(i64::MAX),
+                i64::try_from(task.record_count().unwrap_or_default()).unwrap_or(i64::MAX),
             ));
         }
         files.sort_by(|left, right| left.file_path.cmp(&right.file_path));

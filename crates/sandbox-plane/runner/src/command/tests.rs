@@ -32,7 +32,7 @@ fn deserialises_the_cwasm_url_alongside_the_command() {
                 "cwasmGetUrl": "https://example.com/runner.cwasm",
                 "cwasmSha256": "0000000000000000000000000000000000000000000000000000000000000000",
                 "cwasmSize": 8,
-                "wasmtimeVersion": "43.0.1",
+                "wasmtimeVersion": "50.0.1",
                 "orderRequestUrl": "https://orders.example.com/requests",
                 "authServiceUrl": "https://auth.example.com/jwt",
                 "owner": "demo-owner",
@@ -49,7 +49,7 @@ fn deserialises_the_cwasm_url_alongside_the_command() {
         "0000000000000000000000000000000000000000000000000000000000000000"
     );
     assert_eq!(request.cwasm_size, 8);
-    assert_eq!(request.wasmtime_version, "43.0.1");
+    assert_eq!(request.wasmtime_version, "50.0.1");
     assert_eq!(
         request.order_request_url,
         "https://orders.example.com/requests"
@@ -67,7 +67,7 @@ fn rejects_requests_without_an_order_request_url() {
                 "cwasmGetUrl": "https://example.com/runner.cwasm",
                 "cwasmSha256": "0000000000000000000000000000000000000000000000000000000000000000",
                 "cwasmSize": 8,
-                "wasmtimeVersion": "43.0.1",
+                "wasmtimeVersion": "50.0.1",
                 "strategyName": "AlgorithmStub"
             }"#,
     );
@@ -83,7 +83,7 @@ fn rejects_requests_without_an_owner() {
                 "cwasmGetUrl": "https://example.com/runner.cwasm",
                 "cwasmSha256": "0000000000000000000000000000000000000000000000000000000000000000",
                 "cwasmSize": 8,
-                "wasmtimeVersion": "43.0.1",
+                "wasmtimeVersion": "50.0.1",
                 "orderRequestUrl": "https://orders.example.com/requests",
                 "strategyName": "AlgorithmStub"
             }"#,
@@ -100,7 +100,7 @@ fn rejects_requests_without_an_auth_service_url() {
                 "cwasmGetUrl": "https://example.com/runner.cwasm",
                 "cwasmSha256": "0000000000000000000000000000000000000000000000000000000000000000",
                 "cwasmSize": 8,
-                "wasmtimeVersion": "43.0.1",
+                "wasmtimeVersion": "50.0.1",
                 "orderRequestUrl": "https://orders.example.com/requests",
                 "owner": "demo-owner",
                 "strategyName": "AlgorithmStub"
@@ -117,7 +117,7 @@ fn rejects_requests_without_a_cwasm_url() {
                 "command": "metadata",
                 "cwasmSha256": "0000000000000000000000000000000000000000000000000000000000000000",
                 "cwasmSize": 8,
-                "wasmtimeVersion": "43.0.1",
+                "wasmtimeVersion": "50.0.1",
                 "strategyName": "AlgorithmStub"
             }"#,
     );
