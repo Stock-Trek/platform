@@ -1,6 +1,6 @@
-use crate::config::stream::NatsStreamConfig;
 use platform_config::EnvVars;
 use platform_errors::PlatformResult;
+use platform_nats::{NatsStreamConfig, StreamDefaults};
 use platform_runtime::Config;
 use std::time::Duration;
 
@@ -8,6 +8,9 @@ const URL: &str = "PORTFOLIO_REGISTRY_NATS_URL";
 const CLIENT_NAME: &str = "PORTFOLIO_REGISTRY_NATS_CLIENT_NAME";
 const OUTBOX_INTERVAL_SECS: &str = "PORTFOLIO_REGISTRY_OUTBOX_INTERVAL_SECS";
 const STREAM_PREFIX: &str = "PORTFOLIO_OWNERSHIP_STREAM";
+const DEFAULT_MAX_AGE: Duration = Duration::from_secs(30 * 24 * 60 * 60);
+const DEFAULT_MAX_BYTES: i64 = 1024 * 1024 * 1024;
+const DEFAULT_MAX_MESSAGES: i64 = 10_000_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct RegistryNatsConfig {
@@ -23,7 +26,11 @@ impl RegistryNatsConfig {
             url: Config::required_nats_url(vars, URL)?,
             client_name: vars.required(CLIENT_NAME)?,
             outbox_interval: vars.required_positive_duration_secs(OUTBOX_INTERVAL_SECS)?,
-            stream: NatsStreamConfig::from_vars(vars, STREAM_PREFIX)?,
+            stream: NatsStreamConfig::from_vars(
+                vars,
+                STREAM_PREFIX,
+                StreamDefaults::new(DEFAULT_MAX_AGE, DEFAULT_MAX_BYTES, DEFAULT_MAX_MESSAGES),
+            )?,
         })
     }
 

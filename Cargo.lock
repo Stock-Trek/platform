@@ -5016,6 +5016,7 @@ dependencies = [
  "futures",
  "hex",
  "parking_lot",
+ "platform-config",
  "platform-errors",
  "platform-time",
  "platform-types",

@@ -11,6 +11,7 @@ async-trait = { workspace = true }
 futures = { workspace = true }
 hex = { workspace = true }
 parking_lot = { workspace = true }
+platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-time = { workspace = true }
 platform-types = { workspace = true }

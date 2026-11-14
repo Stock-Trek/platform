@@ -1,6 +1,6 @@
-use crate::config::{NatsStreamConfig, StreamDefaults};
 use platform_config::EnvVars;
 use platform_errors::PlatformResult;
+use platform_nats::{NatsStreamConfig, StreamDefaults};
 use platform_runtime::Config;
 use std::time::Duration;
 

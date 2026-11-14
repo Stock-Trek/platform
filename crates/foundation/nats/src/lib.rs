@@ -21,7 +21,7 @@ mod nats_message_tests;
 #[cfg(test)]
 mod nats_subject_tests;
 
-pub use jetstream::{ACK_WAIT, JetStream, StreamSpec};
+pub use jetstream::{ACK_WAIT, JetStream, NatsStreamConfig, StreamDefaults, StreamSpec};
 pub use jetstream_consumer::{ConsumerStart, JetStreamConsumer};
 pub use kv::KeyValue;
 pub use kv_watch::{KeyValueChange, KeyValueWatch};
