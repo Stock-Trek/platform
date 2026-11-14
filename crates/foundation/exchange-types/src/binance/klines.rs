@@ -16,7 +16,7 @@ use platform_errors::{PlatformError, PlatformResult};
 use platform_types::{TimestampMilliseconds, UsageCount};
 use query_params::QueryParams;
 use rust_decimal::Decimal;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize, de::IgnoredAny};
 use serde_with::skip_serializing_none;
 use strum::Display;
 
@@ -48,20 +48,20 @@ impl BinanceKlinesRequest {
 pub type BinanceKlinesResponse = Vec<BinanceKlineResponse>;
 
 #[derive(Debug, Clone, Deserialize)]
-pub struct BinanceKlineResponse(
-    TimestampMilliseconds,
-    String,
-    String,
-    String,
-    String,
-    String,
-    TimestampMilliseconds,
-    String,
-    u32,
-    String,
-    String,
-    #[allow(unused)] String,
-);
+pub struct BinanceKlineResponse {
+    open_time: TimestampMilliseconds,
+    open: String,
+    high: String,
+    low: String,
+    close: String,
+    volume: String,
+    close_time: TimestampMilliseconds,
+    quote_volume: String,
+    trades: u32,
+    taker_buy_base_volume: String,
+    taker_buy_quote_volume: String,
+    _ignored: IgnoredAny,
+}
 
 #[allow(non_camel_case_types)]
 #[derive(Serialize, Deserialize, Display, Debug, Clone, PartialEq, Eq, Hash)]
@@ -180,14 +180,14 @@ impl KlinesResponse for BinanceResponse<BinanceKlinesResponse> {
 impl TryFrom<&BinanceKlineResponse> for Kline {
     type Error = PlatformError;
     fn try_from(value: &BinanceKlineResponse) -> Result<Self, Self::Error> {
-        let open_time = value.0;
-        let close_time = value.6;
-        let open = BinanceKlineResponse::str_to_decimal("open", &value.1)?;
-        let high = BinanceKlineResponse::str_to_decimal("high", &value.2)?;
-        let low = BinanceKlineResponse::str_to_decimal("low", &value.3)?;
-        let close = BinanceKlineResponse::str_to_decimal("close", &value.4)?;
-        let volume = BinanceKlineResponse::str_to_decimal("volume", &value.5)?;
-        let trades = value.8;
+        let open_time = value.open_time;
+        let close_time = value.close_time;
+        let open = BinanceKlineResponse::str_to_decimal("open", &value.open)?;
+        let high = BinanceKlineResponse::str_to_decimal("high", &value.high)?;
+        let low = BinanceKlineResponse::str_to_decimal("low", &value.low)?;
+        let close = BinanceKlineResponse::str_to_decimal("close", &value.close)?;
+        let volume = BinanceKlineResponse::str_to_decimal("volume", &value.volume)?;
+        let trades = value.trades;
         Ok(Kline {
             open_time,
             close_time,
@@ -203,47 +203,47 @@ impl TryFrom<&BinanceKlineResponse> for Kline {
 
 impl BinanceKlineResponse {
     pub fn open_time(&self) -> TimestampMilliseconds {
-        self.0
+        self.open_time
     }
 
     pub fn close_time(&self) -> TimestampMilliseconds {
-        self.6
+        self.close_time
     }
 
     pub fn open(&self) -> &str {
-        &self.1
+        &self.open
     }
 
     pub fn high(&self) -> &str {
-        &self.2
+        &self.high
     }
 
     pub fn low(&self) -> &str {
-        &self.3
+        &self.low
     }
 
     pub fn close(&self) -> &str {
-        &self.4
+        &self.close
     }
 
     pub fn volume(&self) -> &str {
-        &self.5
+        &self.volume
     }
 
     pub fn trades(&self) -> u32 {
-        self.8
+        self.trades
     }
 
     pub fn quote_volume(&self) -> &str {
-        &self.7
+        &self.quote_volume
     }
 
     pub fn taker_buy_base_volume(&self) -> &str {
-        &self.9
+        &self.taker_buy_base_volume
     }
 
     pub fn taker_buy_quote_volume(&self) -> &str {
-        &self.10
+        &self.taker_buy_quote_volume
     }
 
     fn str_to_decimal(name: &str, value: &str) -> PlatformResult<Decimal> {
