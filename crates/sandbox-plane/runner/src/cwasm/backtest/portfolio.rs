@@ -1,5 +1,5 @@
 use crate::cwasm::backtest::Balances;
-use platform_runner::dto::{
+use crate::dto::{
     AssetCountDto, AssetIdDto, CexAccountPortfolioDto, CexAccountsDto, DecimalDto, PortfolioDto,
 };
 use rust_decimal::Decimal;

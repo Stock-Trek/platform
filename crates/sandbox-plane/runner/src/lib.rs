@@ -1,5 +1,7 @@
 mod command;
 mod convert;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod cwasm;
 mod entry;
 mod external;
 mod generated;

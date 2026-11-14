@@ -1,8 +1,8 @@
-use platform_exit_codes::ExitCode;
-use platform_runner::{
+use crate::{
     decimal::ToDecimal,
     dto::{DecimalDto, MarketCandleDto, MarketCandlesDto, StrategyContextDto},
 };
+use platform_exit_codes::ExitCode;
 use rand::{Rng, rngs::StdRng};
 use rust_decimal::Decimal;
 use std::collections::BTreeMap;

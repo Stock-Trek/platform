@@ -1,5 +1,5 @@
 use crate::cwasm::backtest::spec::Spec;
-use platform_runner::{
+use crate::{
     dto::{MarketCandleDto, MarketOhlcvDto, StrategyContextDto},
     string::JsonString,
 };

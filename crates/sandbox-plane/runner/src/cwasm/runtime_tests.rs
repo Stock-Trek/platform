@@ -1,10 +1,10 @@
+use crate::Command;
 use crate::cwasm::{
     DEFAULT_MAX_GUEST_MEMORY_BYTES, Emit, ExecutionLimits, GuestWorkspace, PORTFOLIO_FILE_NAME,
     STRATEGY_CONTEXT_FILE_NAME, WasmRunner,
 };
 use parking_lot::Mutex;
 use platform_exit_codes::ExitCode;
-use platform_runner::Command;
 use serde_json::{Value, json};
 use std::{path::Path, sync::Arc, time::Duration};
 use tempfile::NamedTempFile;
