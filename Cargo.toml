@@ -59,12 +59,12 @@ async-nats = "0.51"
 async-trait = "0.1"
 aws-config = "1"
 aws-credential-types = "1"
-aws_lambda_events = "1"
-aws-sdk-lambda = "1"
+aws_lambda_events = { version = "1", default-features = false }
+aws-sdk-lambda = { version = "1", default-features = false }
 aws-sdk-dynamodb = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sdk-s3 = { version = "1", default-features = false, features = ["behavior-version-latest", "default-https-client", "http-1x", "rt-tokio", "sigv4a"] }
 aws-sdk-s3-transfer-manager = "0.4"
-aws-sdk-sqs = "1"
+aws-sdk-sqs = { version = "1", default-features = false }
 aws-sdk-ssm = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sigv4 = "1"
 aws-smithy-runtime-api = "1"
@@ -88,7 +88,7 @@ iceberg = "0.11"
 iceberg-catalog-rest = "0.11"
 iceberg-storage-opendal = "0.11"
 iris = { version = "1", registry = "shipyard" }
-jsonwebtoken = "10"
+jsonwebtoken = { version = "10", default-features = false }
 lambda_http = "1"
 lambda_runtime = "1"
 lru = "0.18"
@@ -111,7 +111,7 @@ redis = { version = "0.32", default-features = false, features = [
     "tokio-comp",
     "tokio-rustls-comp",
 ] }
-reqwest = "0.13"
+reqwest = { version = "0.13", default-features = false }
 rsa = "0.10"
 rust_decimal = "1"
 secrecy = "0.10"
@@ -129,14 +129,14 @@ tempfile = "3"
 thiserror = "2"
 time = "0.3"
 tokio = "1"
-tokio-websockets = "0.13"
+tokio-websockets = { version = "0.13", default-features = false }
 tracing = "0.1"
 tracing-subscriber = "0.3"
 url = "2"
 uuid = "1"
 wasmtime = { version = "=50.0.1", default-features = false }
 wasmtime-wasi = { version = "=50.0.1", default-features = false }
-zip = "9"
+zip = { version = "9", default-features = false }
 
 [profile.release]
 lto = "thin"
