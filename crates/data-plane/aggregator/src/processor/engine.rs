@@ -45,7 +45,7 @@ impl CandleProcessor {
         }
         state.prune_stream_dedup();
         if let Some(watermark) = state.watermark {
-            let cutoff = watermark - config.allowed_lateness;
+            let cutoff = watermark.saturating_sub(config.allowed_lateness);
             state.prune_closed_windows(cutoff);
         }
         Ok(Self { config, state })

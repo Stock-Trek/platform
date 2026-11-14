@@ -95,11 +95,11 @@ impl WriterLease {
 
     pub fn expires_at(now: TimestampMilliseconds, ttl: Duration) -> TimestampMilliseconds {
         let millis = i64::try_from(ttl.as_millis()).unwrap_or(i64::MAX);
-        now + DurationMilliseconds(millis)
+        now.saturating_add(DurationMilliseconds(millis))
     }
 
     fn remaining(&self, now: TimestampMilliseconds) -> Duration {
-        let remaining = self.expires_at - now;
+        let remaining = self.expires_at.saturating_duration_since(now);
         let millis = u64::try_from(remaining.0.max(1)).unwrap_or(u64::MAX);
         Duration::from_millis(millis)
     }

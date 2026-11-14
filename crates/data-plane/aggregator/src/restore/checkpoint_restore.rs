@@ -108,7 +108,7 @@ impl RestoreOptions {
                         );
                     }
                     if let Some(watermark) = state.watermark {
-                        state.prune_closed_windows(watermark - self.allowed_lateness);
+                        state.prune_closed_windows(watermark.saturating_sub(self.allowed_lateness));
                     }
                     AggregatorMetrics::record_checkpoint_age(
                         shard.get(),
