@@ -132,8 +132,8 @@ async fn owner_portfolios_are_scoped_to_the_owner() {
         .track_user_account("bob", bob.clone())
         .await
         .expect("track");
-    service.apply_update(Fixture::update("alice-account", 1.0));
-    service.apply_update(Fixture::update("bob-account", 2.0));
+    service.apply_portfolio_update(Fixture::update("alice-account", 1.0));
+    service.apply_portfolio_update(Fixture::update("bob-account", 2.0));
 
     assert!(service.user_account_portfolio("alice", &alice).is_some());
     assert!(service.user_account_portfolio("alice", &bob).is_none());
@@ -144,7 +144,10 @@ async fn owner_portfolios_are_scoped_to_the_owner() {
 #[tokio::test]
 async fn updates_for_untracked_accounts_are_ignored() {
     let (_feed, service) = Fixture::service();
-    assert!(!service.apply_update(Fixture::update("unknown", 1.0)));
+    assert_eq!(
+        service.apply_portfolio_update(Fixture::update("unknown", 1.0)),
+        crate::PortfolioUpdateOutcome::IgnoredUntracked
+    );
     assert!(service.portfolios().is_empty());
 }
 
@@ -163,7 +166,7 @@ async fn account_portfolio_returns_the_latest_update() {
     let (_feed, service) = Fixture::service();
     let account = Fixture::account("first");
     service.track_account(account.clone()).await.expect("track");
-    service.apply_update(Fixture::update("first", 3.0));
+    service.apply_portfolio_update(Fixture::update("first", 3.0));
     let portfolio = service.account_portfolio(&account).expect("portfolio");
     assert_eq!(
         portfolio.asset_total(stock_trek_types::cex::asset_id::AssetId::Bitcoin),

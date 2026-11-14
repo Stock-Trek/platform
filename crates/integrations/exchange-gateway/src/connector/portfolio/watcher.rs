@@ -1,5 +1,5 @@
 use crate::connector::portfolio::{
-    ConnectorPortfolioUpdate, ConnectorState, PortfolioUpdateApply, PortfolioUpdateSink,
+    ConnectorPortfolioUpdate, ConnectorState, PortfolioUpdateOutcome, PortfolioUpdateSink,
     health_reporter::HealthReporter, session_state::SessionState,
 };
 use crate::connector::portfolio::{PortfolioExchange, PortfolioSession};
@@ -216,13 +216,13 @@ impl Watcher {
         )
         .with_optional_exchange_time(exchange_time);
         match self.sink.apply_update(update).await? {
-            PortfolioUpdateApply::Applied => {
+            PortfolioUpdateOutcome::Applied => {
                 PortfolioMetrics::record_update_outcome(self.cex_id.to_string(), "applied");
             }
-            PortfolioUpdateApply::IgnoredUntracked => {
+            PortfolioUpdateOutcome::IgnoredUntracked => {
                 PortfolioMetrics::record_update_outcome(self.cex_id.to_string(), "untracked");
             }
-            PortfolioUpdateApply::IgnoredStale => {
+            PortfolioUpdateOutcome::IgnoredStale => {
                 PortfolioMetrics::record_update_outcome(self.cex_id.to_string(), "stale");
             }
         }

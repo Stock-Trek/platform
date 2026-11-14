@@ -1,10 +1,7 @@
-#[cfg(test)]
-use crate::portfolio::CexAccountPortfolio;
 use crate::service::PortfolioService;
 use crate::{
-    freshness::PortfolioFreshness,
-    portfolio::PortfolioUpdate,
-    state::{PortfolioUpdateMetadata, PortfolioUpdateOutcome},
+    PortfolioUpdateOutcome, freshness::PortfolioFreshness, portfolio::PortfolioUpdate,
+    state::PortfolioUpdateMetadata,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::BuildResult;
@@ -12,12 +9,8 @@ use platform_metrics::PortfolioMetrics;
 use platform_portfolio_ownership::AccountKey;
 
 impl PortfolioService {
-    pub fn apply_update(&self, update: PortfolioUpdate) -> bool {
-        self.apply_portfolio_update(update) == PortfolioUpdateOutcome::Applied
-    }
-
     pub fn apply_portfolio_update(&self, update: PortfolioUpdate) -> PortfolioUpdateOutcome {
-        self.state.write().apply_update_with_outcome(update)
+        self.state.write().apply_update(update)
     }
 
     pub fn update_metadata(&self, account: &AccountKey) -> Option<PortfolioUpdateMetadata> {
@@ -57,10 +50,5 @@ impl PortfolioService {
                 Err(error)
             }
         }
-    }
-
-    #[cfg(test)]
-    pub fn apply_portfolio(&self, account: AccountKey, portfolio: CexAccountPortfolio) -> bool {
-        self.state.write().set_portfolio(account, portfolio)
     }
 }

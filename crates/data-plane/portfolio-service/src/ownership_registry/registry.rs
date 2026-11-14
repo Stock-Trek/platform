@@ -1,7 +1,5 @@
 use crate::AccountKey;
-use crate::ownership_registry::{
-    decision::Decision, ownership_apply::OwnershipApply, ownership_entry::OwnershipEntry,
-};
+use crate::ownership_registry::{ownership_apply::OwnershipApply, ownership_entry::OwnershipEntry};
 use platform_portfolio_ownership::OwnershipEvent;
 use std::collections::BTreeMap;
 
@@ -21,7 +19,7 @@ impl OwnershipRegistry {
 
     pub fn apply(&mut self, event: &OwnershipEvent) -> OwnershipApply {
         let existing = self.entries.get(event.account());
-        let decision = match Self::decision(event, existing) {
+        let (previous_owner, was_active) = match Self::decision(event, existing) {
             Ok(decision) => decision,
             Err(outcome) => return outcome,
         };
@@ -34,8 +32,8 @@ impl OwnershipRegistry {
             },
         );
         OwnershipApply::Applied {
-            previous_owner: decision.previous_owner,
-            was_active: decision.was_active,
+            previous_owner,
+            was_active,
         }
     }
 
@@ -64,10 +62,10 @@ impl OwnershipRegistry {
     fn decision(
         event: &OwnershipEvent,
         existing: Option<&OwnershipEntry>,
-    ) -> Result<Decision, OwnershipApply> {
+    ) -> Result<(Option<String>, bool), OwnershipApply> {
         let Some(existing) = existing else {
             return if event.action().is_add() {
-                Ok(Decision::new(None, false))
+                Ok((None, false))
             } else {
                 Err(OwnershipApply::IgnoredStale)
             };
@@ -81,6 +79,6 @@ impl OwnershipRegistry {
         if !event.action().is_add() && existing.owner != event.owner() {
             return Err(OwnershipApply::IgnoredConflict);
         }
-        Ok(Decision::new(Some(existing.owner.clone()), existing.active))
+        Ok((Some(existing.owner.clone()), existing.active))
     }
 }

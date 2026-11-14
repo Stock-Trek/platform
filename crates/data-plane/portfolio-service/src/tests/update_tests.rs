@@ -155,8 +155,14 @@ async fn state_ignores_unversioned_duplicates_but_accepts_latest_unversioned_val
         .track_account(Fixture::account("primary"))
         .await
         .expect("track");
-    assert!(service.apply_update(Fixture::update("primary", 1.0)));
-    assert!(service.apply_update(Fixture::update("primary", 2.0)));
+    assert_eq!(
+        service.apply_portfolio_update(Fixture::update("primary", 1.0)),
+        crate::PortfolioUpdateOutcome::Applied
+    );
+    assert_eq!(
+        service.apply_portfolio_update(Fixture::update("primary", 2.0)),
+        crate::PortfolioUpdateOutcome::Applied
+    );
     let portfolio = service
         .account_portfolio(&Fixture::account("primary"))
         .expect("portfolio");

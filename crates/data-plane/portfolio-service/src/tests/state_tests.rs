@@ -36,10 +36,16 @@ fn state_keeps_an_account_while_an_owner_still_tracks_it() {
 fn state_applies_updates_only_for_tracked_accounts() {
     let mut state = PortfolioState::new();
     let account = Fixture::account("primary");
-    assert!(!state.apply_update(Fixture::update("primary", 2.0)));
+    assert_eq!(
+        state.apply_update(Fixture::update("primary", 2.0)),
+        crate::PortfolioUpdateOutcome::IgnoredUntracked
+    );
 
     state.track(&account);
-    assert!(state.apply_update(Fixture::update("primary", 2.0)));
+    assert_eq!(
+        state.apply_update(Fixture::update("primary", 2.0)),
+        crate::PortfolioUpdateOutcome::Applied
+    );
     let portfolio = state.portfolio(&account).expect("portfolio");
     assert_eq!(portfolio.asset_total(AssetId::Bitcoin), 2.0);
 }
@@ -101,7 +107,7 @@ fn state_ignores_owner_scoped_updates_for_other_owners() {
     );
 
     assert_eq!(
-        state.apply_update_with_outcome(update),
+        state.apply_update(update),
         crate::PortfolioUpdateOutcome::IgnoredUntracked
     );
     assert!(state.portfolio(&account).is_none());
@@ -128,11 +134,11 @@ fn state_rejects_updates_that_are_not_newer_than_the_stored_version() {
     );
 
     assert_eq!(
-        state.apply_update_with_outcome(newer),
+        state.apply_update(newer),
         crate::PortfolioUpdateOutcome::Applied
     );
     assert_eq!(
-        state.apply_update_with_outcome(older),
+        state.apply_update(older),
         crate::PortfolioUpdateOutcome::IgnoredStale
     );
     assert_eq!(

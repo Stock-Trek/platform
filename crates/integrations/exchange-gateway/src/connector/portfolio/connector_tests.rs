@@ -1,7 +1,7 @@
 use crate::connector::portfolio::{
     ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
     PortfolioAccounts, PortfolioCredentialSource, PortfolioExchange, PortfolioFeed,
-    PortfolioUpdateApply, PortfolioUpdateSink,
+    PortfolioUpdateOutcome, PortfolioUpdateSink,
     portfolio_test_fakes_tests::{Fixture, TestTransport},
 };
 use async_trait::async_trait;
@@ -20,9 +20,9 @@ impl PortfolioUpdateSink for Sink {
     async fn apply_update(
         &self,
         update: ConnectorPortfolioUpdate,
-    ) -> BuildResult<PortfolioUpdateApply> {
+    ) -> BuildResult<PortfolioUpdateOutcome> {
         self.updates.send(update).expect("receiver");
-        Ok(PortfolioUpdateApply::Applied)
+        Ok(PortfolioUpdateOutcome::Applied)
     }
 }
 

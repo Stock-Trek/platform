@@ -98,9 +98,12 @@ async fn removal_clears_owner_state_feed_and_portfolio() {
         .apply_ownership_event(&event("alice", "first", OwnershipAction::Add, 1))
         .await
         .expect("add");
-    service.apply_portfolio(
-        account.clone(),
-        Fixture::portfolio(stock_trek_types::cex::asset_id::AssetId::Bitcoin, 10.0),
+    assert_eq!(
+        service.apply_portfolio_update(crate::PortfolioUpdate::new(
+            account.clone(),
+            Fixture::portfolio(stock_trek_types::cex::asset_id::AssetId::Bitcoin, 10.0),
+        )),
+        crate::PortfolioUpdateOutcome::Applied
     );
 
     let outcome = service
