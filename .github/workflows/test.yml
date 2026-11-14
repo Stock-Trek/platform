@@ -63,5 +63,5 @@ jobs:
           cargo fmt --check
           cargo clippy --all-targets --all-features -- -D warnings
           cargo test
-          RUSTUP_TOOLCHAIN=1.88.0 cargo check --workspace
+          cargo check --workspace
           RUSTDOCFLAGS="-D warnings" cargo doc --no-deps --all-features
