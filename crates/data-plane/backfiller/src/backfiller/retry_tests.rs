@@ -4,7 +4,8 @@ use super::test_support_tests::{
 };
 use crate::{
     backfiller::BackfillService,
-    gap_retry_store::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
+    gap_retry_store::{GapRetryStore, PendingGap},
+    gap_retry_store_tests::InMemoryGapRetryStore,
 };
 use parking_lot::Mutex;
 use platform_market_data::GapMarker;

@@ -1,7 +1,7 @@
 use super::test_support_tests::{
     ControlledStore, OnceFetcher, OneGapSource, RecordingPublisher, SavePolicy, TestFixtures,
 };
-use crate::{backfiller::BackfillService, gap_retry_store::InMemoryGapRetryStore};
+use crate::{backfiller::BackfillService, gap_retry_store_tests::InMemoryGapRetryStore};
 use parking_lot::Mutex;
 use platform_market_data::GapMarker;
 use std::{collections::BTreeMap, sync::Arc};

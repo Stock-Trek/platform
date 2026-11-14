@@ -1,13 +1,40 @@
-use crate::gap_retry_store::{
-    GapRetryStore, InMemoryGapRetryStore, MAX_RETRY_DELAY, PendingGap, RETRY_DELAY,
-};
+use crate::gap_retry_store::{GapRetryStore, MAX_RETRY_DELAY, PendingGap, RETRY_DELAY};
+use async_trait::async_trait;
+use platform_errors::PlatformResult;
 use platform_market_data::GapMarker;
 use platform_types::TimestampMilliseconds;
+use std::collections::HashMap;
 use stock_trek_types::cex::cex_id::CexId;
+use tokio::sync::Mutex;
+
+#[derive(Debug, Default)]
+pub struct InMemoryGapRetryStore {
+    pub pending: Mutex<HashMap<String, PendingGap>>,
+}
 
 impl InMemoryGapRetryStore {
     pub async fn snapshot(&self) -> Vec<PendingGap> {
         self.pending.lock().await.values().cloned().collect()
+    }
+}
+
+#[async_trait]
+impl GapRetryStore for InMemoryGapRetryStore {
+    async fn load(&self) -> PlatformResult<Vec<PendingGap>> {
+        Ok(self.pending.lock().await.values().cloned().collect())
+    }
+
+    async fn save(&self, pending: &PendingGap) -> PlatformResult<()> {
+        self.pending
+            .lock()
+            .await
+            .insert(pending.key(), pending.clone());
+        Ok(())
+    }
+
+    async fn remove(&self, key: &str) -> PlatformResult<()> {
+        self.pending.lock().await.remove(key);
+        Ok(())
     }
 }
 
