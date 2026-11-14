@@ -8,6 +8,7 @@ mod archive_record_key;
 mod archive_sort_key;
 mod archived_market_event;
 mod batch;
+mod content_hash;
 mod iceberg;
 mod layout;
 mod parquet_reader;
@@ -31,6 +32,8 @@ mod archive_parquet_tests;
 #[cfg(test)]
 mod archive_record_tests;
 #[cfg(test)]
+mod content_hash_tests;
+#[cfg(test)]
 mod quantization_tests;
 #[cfg(test)]
 mod routing_key_tests;
@@ -49,6 +52,7 @@ pub use archive_record_key::ArchiveRecordKey;
 pub use archive_sort_key::ArchiveSortKey;
 pub use archived_market_event::ArchivedMarketEvent;
 pub use batch::ArchiveBatch;
+pub use content_hash::{ContentHash, ContentHasher};
 pub use iceberg::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveTableLayer, ICEBERG_CATALOG_TOKEN,
     ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE, ICEBERG_NAMESPACE, IcebergCatalog,

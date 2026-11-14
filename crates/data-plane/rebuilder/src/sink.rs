@@ -2,22 +2,19 @@ use async_trait::async_trait;
 use aws_sdk_s3::primitives::ByteStream;
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveKind,
-    ArchiveParquetWriter, ArchivePartition, ArchiveRecord, ArchiveTableLayer, Bucket,
+    ArchiveParquetWriter, ArchivePartition, ArchiveRecord, ArchiveTableLayer, Bucket, ContentHash,
     IcebergDataFile, ObjectKey, RoutingBucket, S3,
 };
 use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::ClosedCandle;
 use std::{
     fs::File,
-    io::Read,
     path::{Path, PathBuf},
     sync::Arc,
 };
 use tracing::info;
 
 const OUTPUT_BATCH_SIZE: usize = 8_192;
-const CONTENT_ID_OFFSET_BASIS: u64 = 0xcbf2_9ce4_8422_2325;
-const CONTENT_ID_PRIME: u64 = 0x0000_0100_0000_01b3;
 
 /// Counts the archive objects produced by a rebuild.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -83,10 +80,10 @@ impl S3CandleSink {
         bucket: ArchiveBucket,
         partition: &ArchivePartition,
         routing_bucket: RoutingBucket,
-        content_id: u64,
+        content_hash: ContentHash,
         length: u64,
     ) -> PlatformResult<ObjectKey> {
-        let file_name = format!("{content_id}-{length:x}.parquet");
+        let file_name = format!("{content_hash}-{length:x}.parquet");
         let key = match self.layer {
             ArchiveTableLayer::Raw => bucket.raw_key(&self.prefix, routing_bucket, file_name),
             ArchiveTableLayer::Compacted => {
@@ -117,12 +114,18 @@ impl S3CandleSink {
             buffer.clear();
         }
         file.writer.close()?;
-        let (content_id, length) = Self::hash_file(&file.path)?;
+        let (content_hash, length) = ContentHash::from_file(&file.path).map_err(|error| {
+            PlatformError::io(
+                "read rebuilt candle file",
+                file.path.display().to_string(),
+                error,
+            )
+        })?;
         let key = self.object_key(
             file.bucket,
             &file.partition,
             file.routing_bucket,
-            content_id,
+            content_hash,
             length,
         )?;
         self.upload_partition(&key, &file.path).await?;
@@ -135,37 +138,6 @@ impl S3CandleSink {
             "wrote rebuilt candle object"
         );
         Ok(())
-    }
-
-    fn hash_file(path: &Path) -> PlatformResult<(u64, u64)> {
-        let mut file = File::open(path).map_err(|error| {
-            PlatformError::io(
-                "read rebuilt candle file",
-                path.display().to_string(),
-                error,
-            )
-        })?;
-        let mut hash = CONTENT_ID_OFFSET_BASIS;
-        let mut length = 0_u64;
-        let mut chunk = [0_u8; 64 * 1024];
-        loop {
-            let read = file.read(&mut chunk).map_err(|error| {
-                PlatformError::io(
-                    "read rebuilt candle file",
-                    path.display().to_string(),
-                    error,
-                )
-            })?;
-            if read == 0 {
-                break;
-            }
-            for byte in &chunk[..read] {
-                hash ^= u64::from(*byte);
-                hash = hash.wrapping_mul(CONTENT_ID_PRIME);
-            }
-            length += u64::try_from(read).unwrap_or(0);
-        }
-        Ok((hash, length))
     }
 
     async fn upload_partition(&self, key: &ObjectKey, path: &Path) -> PlatformResult<()> {

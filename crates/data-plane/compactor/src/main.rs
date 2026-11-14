@@ -1,15 +1,12 @@
 mod compactor;
 mod compactor_runner;
 mod config;
-mod content_hash;
 mod partition_output;
 mod source;
 mod spill;
 
 #[cfg(test)]
 mod compactor_runner_tests;
-#[cfg(test)]
-mod content_hash_tests;
 
 use crate::{
     compactor::Compactor, compactor_runner::CompactorRunner, config::CompactorConfig,

@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveParquet,
-    ArchivePath, ArchiveRecord, Bucket, IcebergDataFile, ObjectKey, ParquetReader, RoutingBucket,
-    S3,
+    ArchivePath, ArchiveRecord, Bucket, ContentHash, IcebergDataFile, ObjectKey, ParquetReader,
+    RoutingBucket, S3,
 };
 use platform_errors::PlatformResult;
 use platform_metrics::MarketDataMetrics;
@@ -64,7 +64,11 @@ impl S3ParquetSink {
             .raw_key(
                 &self.prefix,
                 routing_bucket,
-                format!("{}-{:x}.parquet", Self::content_id(bytes), bytes.len()),
+                format!(
+                    "{}-{:x}.parquet",
+                    ContentHash::from_bytes(bytes),
+                    bytes.len()
+                ),
             )
             .map(ObjectKey::new)
     }
@@ -218,16 +222,5 @@ impl ArchiveSink for S3ParquetSink {
             self.catalog.register_files(table, &files, None).await?;
         }
         Ok(())
-    }
-}
-
-impl S3ParquetSink {
-    fn content_id(bytes: &[u8]) -> u64 {
-        let mut hash = 0xcbf2_9ce4_8422_2325_u64;
-        for byte in bytes {
-            hash ^= u64::from(*byte);
-            hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
-        }
-        hash
     }
 }
