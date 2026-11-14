@@ -7,9 +7,7 @@ use stock_trek::{
     types::{AccountId, AssetId, CexId, Side},
 };
 
-use crate::cwasm::backtest::{
-    BacktestError, Balances, PlatformResult, PriceMap, order_events::OrderEvents,
-};
+use crate::cwasm::backtest::{BacktestError, Balances, PriceMap, order_events::OrderEvents};
 
 pub struct OrderProcessor;
 
@@ -20,7 +18,7 @@ impl OrderProcessor {
         prices: &PriceMap,
         rng: &mut StdRng,
         parameters: &SimulationParameters,
-    ) -> PlatformResult<Value> {
+    ) -> Result<Value, BacktestError> {
         match action {
             ResolvedAction::PlaceOrder {
                 cex_id,
@@ -54,7 +52,7 @@ impl OrderProcessor {
                 account_id,
                 tag,
             } => Ok(OrderEvents::cancelled(Some(cex_id), Some(account_id), tag)),
-            _ => Err(BacktestError::UnsupportedAction.into()),
+            _ => Err(BacktestError::UnsupportedAction),
         }
     }
 
@@ -86,7 +84,7 @@ impl OrderProcessor {
         side: Option<&Side>,
         rng: &mut StdRng,
         parameters: &SimulationParameters,
-    ) -> PlatformResult<(f64, bool)> {
+    ) -> Result<(f64, bool), BacktestError> {
         let market_price =
             *prices
                 .get(&(cex_id, *base, *quote))

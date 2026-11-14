@@ -11,7 +11,7 @@ use stock_trek::types::{AccountId, AssetId, CexId};
 use crate::cwasm::WasmRunner;
 
 use crate::cwasm::backtest::{
-    BacktestError, PlatformResult, publish::ResultPublisher, simulation::Simulation, spec::Spec,
+    BacktestError, publish::ResultPublisher, simulation::Simulation, spec::Spec,
 };
 
 pub type Balances = BTreeMap<CexId, BTreeMap<AccountId, BTreeMap<AssetId, f64>>>;
@@ -20,7 +20,11 @@ pub type PriceMap = BTreeMap<(CexId, AssetId, AssetId), f64>;
 pub struct BackTest;
 
 impl BackTest {
-    pub fn run(runner: &WasmRunner, cwasm_path: &Path, command: &Command) -> PlatformResult<()> {
+    pub fn run(
+        runner: &WasmRunner,
+        cwasm_path: &Path,
+        command: &Command,
+    ) -> Result<(), BacktestError> {
         let spec = Spec::new(command)?;
         match Self::run_simulations(
             spec.simulation_count,
@@ -39,9 +43,9 @@ impl BackTest {
         simulation_count: u32,
         max_concurrent: u32,
         simulate: F,
-    ) -> Vec<PlatformResult<()>>
+    ) -> Vec<Result<(), BacktestError>>
     where
-        F: Fn(u32) -> PlatformResult<()> + Sync,
+        F: Fn(u32) -> Result<(), BacktestError> + Sync,
     {
         let worker_count = simulation_count.min(max_concurrent) as usize;
         let next = AtomicU32::new(0);
@@ -56,7 +60,7 @@ impl BackTest {
                             break;
                         }
                         let result = catch_unwind(AssertUnwindSafe(|| simulate(index)))
-                            .unwrap_or_else(|_| Err(BacktestError::Panic.into()));
+                            .unwrap_or(Err(BacktestError::Panic));
                         worker_results.push((index, result));
                     }
                     results.lock().extend(worker_results);
@@ -73,7 +77,7 @@ impl BackTest {
         cwasm_path: &Path,
         spec: &Spec,
         index: u32,
-    ) -> PlatformResult<()> {
+    ) -> Result<(), BacktestError> {
         let result = Simulation::run(runner, cwasm_path, spec, index)?;
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()

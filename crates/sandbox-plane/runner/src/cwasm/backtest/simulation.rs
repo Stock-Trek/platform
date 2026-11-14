@@ -9,8 +9,7 @@ use stock_trek::actions::ResolvedAction;
 use crate::cwasm::{Emit, PORTFOLIO_FILE_NAME, STRATEGY_CONTEXT_FILE_NAME, WasmRunner};
 
 use crate::cwasm::backtest::{
-    BacktestError, Balances, PlatformResult, PriceMap, orders::OrderProcessor,
-    portfolio::Portfolio, spec::Spec,
+    BacktestError, Balances, PriceMap, orders::OrderProcessor, portfolio::Portfolio, spec::Spec,
 };
 
 const GUEST_ROOT: &str = "/";
@@ -26,7 +25,7 @@ impl Simulation {
         cwasm_path: &Path,
         spec: &Spec,
         index: u32,
-    ) -> PlatformResult<Value> {
+    ) -> Result<Value, BacktestError> {
         let mut rng = StdRng::seed_from_u64(spec.random_seed.wrapping_add(u64::from(index)));
         let mut balances = spec.initial_balances.clone();
         let directory = tempfile::Builder::new()
@@ -69,10 +68,10 @@ impl Simulation {
         directory: &Path,
         name: &str,
         message: &T,
-    ) -> PlatformResult<()> {
+    ) -> Result<(), BacktestError> {
         let path = directory.join(name);
-        Ok(fs::write(&path, message.encode_to_vec())
-            .map_err(|source| BacktestError::WriteGuestInput { path, source })?)
+        fs::write(&path, message.encode_to_vec())
+            .map_err(|source| BacktestError::WriteGuestInput { path, source })
     }
 
     fn execute_step(
@@ -83,7 +82,7 @@ impl Simulation {
         balances: &mut Balances,
         prices: &PriceMap,
         rng: &mut StdRng,
-    ) -> PlatformResult<Vec<Value>> {
+    ) -> Result<Vec<Value>, BacktestError> {
         let (emit, collected) = Self::collector();
         let arguments = [
             PROGRAM_NAME,
@@ -94,7 +93,7 @@ impl Simulation {
         ];
         let code = runner.execute_arguments(cwasm_path, &arguments, directory, &emit);
         if code != ExitCode::Success.code() {
-            return Err(BacktestError::GuestStepFailed(code).into());
+            return Err(BacktestError::GuestStepFailed(code));
         }
         let lines = std::mem::take(&mut *collected.lock());
         let mut events = Vec::new();
@@ -103,7 +102,7 @@ impl Simulation {
                 continue;
             }
             let Some(action_json) = payload.get("action").and_then(Value::as_str) else {
-                return Err(BacktestError::MissingAction.into());
+                return Err(BacktestError::MissingAction);
             };
             let action: ResolvedAction =
                 serde_json::from_str(action_json).map_err(BacktestError::InvalidAction)?;

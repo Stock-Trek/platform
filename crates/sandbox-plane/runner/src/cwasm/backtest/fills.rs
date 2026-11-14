@@ -4,7 +4,7 @@ use serde_json::{Value, json};
 use stock_trek::types::{AccountId, AssetId, CexId, OrderRequest, Quantity, Side};
 
 use crate::cwasm::backtest::{
-    Balances, PlatformResult, PriceMap, order_events::OrderEvents, orders::OrderProcessor,
+    BacktestError, Balances, PriceMap, order_events::OrderEvents, orders::OrderProcessor,
 };
 
 impl OrderProcessor {
@@ -16,7 +16,7 @@ impl OrderProcessor {
         prices: &PriceMap,
         rng: &mut StdRng,
         parameters: &SimulationParameters,
-    ) -> PlatformResult<Value> {
+    ) -> Result<Value, BacktestError> {
         let assets = Self::account_balances(balances, *cex_id, account_id);
         match order_request {
             OrderRequest::MarketBuy {

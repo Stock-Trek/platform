@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use stock_trek::markets::{AlignedWindow, TimestampMillis};
 
 use crate::cwasm::backtest::{
-    BacktestError, PlatformResult, PriceMap, market_data::Series, portfolio::Portfolio, spec::Spec,
+    BacktestError, PriceMap, market_data::Series, portfolio::Portfolio, spec::Spec,
 };
 
 impl Spec {
@@ -16,7 +16,7 @@ impl Spec {
         &self,
         step: usize,
         rng: &mut StdRng,
-    ) -> PlatformResult<(StrategyContextDto, PriceMap, u64)> {
+    ) -> Result<(StrategyContextDto, PriceMap, u64), BacktestError> {
         let mut context = self.strategy_context.clone();
         let mut prices: PriceMap = BTreeMap::new();
         let mut timestamp = u64::MAX;
@@ -41,16 +41,14 @@ impl Spec {
                 return Err(BacktestError::invalid_argument(format!(
                     "strategy context has no {} markets",
                     slot.cex_key
-                ))
-                .into());
+                )));
             };
             let Some(market_by_base) = asset_markets.markets_by_base_dto.get_mut(slot.base_index)
             else {
                 return Err(BacktestError::invalid_argument(format!(
                     "strategy context has no base market index {}",
                     slot.base_index
-                ))
-                .into());
+                )));
             };
             let Some(market_by_quote) = market_by_base
                 .markets_by_quote_dto
@@ -59,15 +57,13 @@ impl Spec {
                 return Err(BacktestError::invalid_argument(format!(
                     "strategy context has no quote market index {}",
                     slot.quote_index
-                ))
-                .into());
+                )));
             };
             let Some(market) = market_by_quote.market_dto.as_mut() else {
                 return Err(BacktestError::invalid_argument(format!(
                     "strategy context has no market for {} {}/{}",
                     slot.cex_key, slot.pair.0, slot.pair.1
-                ))
-                .into());
+                )));
             };
             let mut aligned = std::mem::take(&mut market.aligned_dto);
             for (number, window) in &self.windows {
@@ -96,7 +92,7 @@ impl Series {
         now: u64,
         spec: &Spec,
         rng: &mut StdRng,
-    ) -> PlatformResult<MarketCandlesDto> {
+    ) -> Result<MarketCandlesDto, BacktestError> {
         let closed_count = self.ends.partition_point(|&end| end <= now);
         let start = closed_count.saturating_sub(spec.historical_candle_count);
         let mut candles = self.candles[start..closed_count].to_vec();
@@ -113,7 +109,11 @@ impl Series {
         })
     }
 
-    fn open_candle_start(&self, window: AlignedWindow, now: u64) -> PlatformResult<Option<u64>> {
+    fn open_candle_start(
+        &self,
+        window: AlignedWindow,
+        now: u64,
+    ) -> Result<Option<u64>, BacktestError> {
         let bounds = window
             .bounds_for(TimestampMillis::new(now))
             .map_err(|error| {
@@ -134,7 +134,7 @@ impl Series {
         start: u64,
         now: u64,
         window: AlignedWindow,
-    ) -> PlatformResult<Option<MarketCandleDto>> {
+    ) -> Result<Option<MarketCandleDto>, BacktestError> {
         let index = self
             .candles
             .binary_search_by_key(&start, |candle| candle.start_time_millis_inc)

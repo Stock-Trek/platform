@@ -1,4 +1,4 @@
-use crate::cwasm::backtest::{BacktestError, PlatformResult};
+use crate::cwasm::backtest::BacktestError;
 use crate::{
     dto::{MarketCandleDto, MarketOhlcvDto, StrategyContextDto},
     string::JsonString,
@@ -22,7 +22,7 @@ impl Series {
         market_data: &StrategyContextDto,
         pairs: &[(AssetId, AssetId)],
         window_numbers: &[u32],
-    ) -> PlatformResult<MarketData> {
+    ) -> Result<MarketData, BacktestError> {
         let mut data: MarketData = BTreeMap::new();
         for (cex_name, asset_markets) in &market_data.exchange_asset_markets_dto {
             let cex: CexId = JsonString::deserialize(cex_name).map_err(|error| {
@@ -56,7 +56,7 @@ impl Series {
                         continue;
                     }
                     let Some(market) = market_by_quote.market_dto.as_ref() else {
-                        return Err(BacktestError::invalid_market_data("market is missing").into());
+                        return Err(BacktestError::invalid_market_data("market is missing"));
                     };
                     for (number, candles_dto) in &market.aligned_dto {
                         if !window_numbers.contains(number) {
@@ -75,7 +75,7 @@ impl Series {
                         let ends = candles
                             .iter()
                             .map(|candle| Self::candle_end(candle, window))
-                            .collect::<PlatformResult<Vec<u64>>>()?;
+                            .collect::<Result<Vec<u64>, BacktestError>>()?;
                         data.entry(cex)
                             .or_default()
                             .entry((base, quote))
@@ -90,8 +90,7 @@ impl Series {
                 if !data[&cex].contains_key(pair) {
                     return Err(BacktestError::invalid_argument(format!(
                         "market data has no {pair:?} series for {cex}"
-                    ))
-                    .into());
+                    )));
                 }
             }
             for ((base, quote), series) in &data[&cex] {
@@ -99,8 +98,7 @@ impl Series {
                     if !series.contains_key(number) {
                         return Err(BacktestError::invalid_argument(format!(
                             "market data has no window {number} series for {cex} {base}/{quote}"
-                        ))
-                        .into());
+                        )));
                     }
                 }
             }
@@ -108,16 +106,16 @@ impl Series {
         Ok(data)
     }
 
-    fn candle_end(candle: &MarketCandleDto, window: AlignedWindow) -> PlatformResult<u64> {
-        Ok(window
+    fn candle_end(candle: &MarketCandleDto, window: AlignedWindow) -> Result<u64, BacktestError> {
+        window
             .bounds_for(TimestampMillis::new(candle.start_time_millis_inc))
             .map(|bounds| bounds.upper().as_millis())
             .map_err(|error| {
                 BacktestError::invalid_market_data(format!("candle bounds are invalid: {error}"))
-            })?)
+            })
     }
 
-    fn validate(candles: &[MarketCandleDto]) -> PlatformResult<()> {
+    fn validate(candles: &[MarketCandleDto]) -> Result<(), BacktestError> {
         for candle in candles {
             let ohlcv: &MarketOhlcvDto = candle
                 .ohlcv_dto
@@ -134,8 +132,7 @@ impl Series {
                 if value.is_none() {
                     return Err(BacktestError::invalid_market_data(format!(
                         "candle {name} is missing"
-                    ))
-                    .into());
+                    )));
                 }
             }
         }

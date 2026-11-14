@@ -5,7 +5,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-use crate::cwasm::backtest::{BackTest, BacktestError};
+use crate::cwasm::backtest::BackTest;
 
 #[test]
 fn simulations_respect_the_concurrency_limit() {
@@ -39,7 +39,7 @@ fn a_panicking_simulation_is_reported_without_stopping_the_others() {
     });
     assert_eq!(results.iter().filter(|result| result.is_err()).count(), 1);
     assert_eq!(
-        BacktestError::resolve_exit_code(results[2].as_ref().unwrap_err()),
+        results[2].as_ref().unwrap_err().exit_code(),
         ExitCode::BotErrorPanic.code()
     );
 }
