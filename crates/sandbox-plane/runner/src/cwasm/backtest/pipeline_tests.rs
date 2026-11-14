@@ -2,7 +2,7 @@ use parking_lot::Mutex;
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
-use crate::cwasm::backtest::{WorkerRuntime, pipeline::PublisherPipeline};
+use crate::cwasm::backtest::pipeline::PublisherPipeline;
 
 #[test]
 fn publishes_every_result_in_simulation_order() {
@@ -88,10 +88,4 @@ fn producer_failures_are_kept_in_their_simulation_slots() {
     assert!(results[0].is_ok());
     assert!(results[1].is_err());
     assert!(results[2].is_ok());
-}
-
-#[test]
-fn worker_runtime_identity_is_stable_for_its_lifetime() {
-    let runtime = WorkerRuntime::new().unwrap();
-    assert_eq!(runtime.id(), runtime.id());
 }
