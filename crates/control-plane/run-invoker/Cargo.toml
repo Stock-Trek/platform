@@ -2,6 +2,7 @@
 name = "platform-run-invoker"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 aws-credential-types = { workspace = true }

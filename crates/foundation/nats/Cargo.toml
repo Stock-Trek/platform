@@ -2,6 +2,7 @@
 name = "platform-nats"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 async-nats = { workspace = true }

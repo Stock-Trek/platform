@@ -2,6 +2,7 @@
 name = "platform-type-bridge"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 bimap = { workspace = true }
