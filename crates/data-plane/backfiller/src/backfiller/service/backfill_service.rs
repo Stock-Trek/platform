@@ -1,6 +1,6 @@
 use crate::{
     event_fetcher::MissingEventFetcher,
-    gap_retry_store::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
+    gap_retry_store::{GapRetryStore, PendingGap},
     nats_gap_marker_source::GapMarkerSource,
 };
 use platform_errors::{PlatformError, PlatformResult};
@@ -41,19 +41,20 @@ where
     F: MissingEventFetcher,
     P: EventPublisher,
 {
-    pub fn new(source: S, fetcher: F, publisher: P, options: BackfillOptions) -> Self {
+    pub fn new(
+        source: S,
+        fetcher: F,
+        publisher: P,
+        options: BackfillOptions,
+        retries: Arc<dyn GapRetryStore>,
+    ) -> Self {
         Self {
             source,
             fetcher,
             publisher,
             options,
-            retries: Arc::new(InMemoryGapRetryStore::default()),
+            retries,
         }
-    }
-
-    pub fn with_retry_store_arc(mut self, retries: Arc<dyn GapRetryStore>) -> Self {
-        self.retries = retries;
-        self
     }
 
     pub async fn run(self) -> PlatformResult<()> {

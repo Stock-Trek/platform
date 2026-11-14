@@ -53,8 +53,7 @@ where
             event_subject_prefix = %config.event_subject_prefix,
             "backfiller started"
         );
-        BackfillService::new(source, fetcher, publisher, options)
-            .with_retry_store_arc(retries)
+        BackfillService::new(source, fetcher, publisher, options, retries)
             .run()
             .await
     }

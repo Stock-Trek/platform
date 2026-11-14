@@ -6,8 +6,11 @@ use platform_nats::{JetStream, KeyValue, NatsSubject};
 use platform_time::RetryPolicy;
 use platform_types::TimestampMilliseconds;
 use serde::{Deserialize, Serialize};
-use std::{collections::HashMap, time::Duration};
+#[cfg(test)]
+use std::collections::HashMap;
+use std::time::Duration;
 use stock_trek_types::cex::cex_id::CexId;
+#[cfg(test)]
 use tokio::sync::Mutex;
 use tracing::warn;
 
@@ -106,11 +109,13 @@ pub trait GapRetryStore: Send + Sync {
     async fn remove(&self, key: &str) -> PlatformResult<()>;
 }
 
+#[cfg(test)]
 #[derive(Debug, Default)]
 pub struct InMemoryGapRetryStore {
     pub pending: Mutex<HashMap<String, PendingGap>>,
 }
 
+#[cfg(test)]
 #[async_trait]
 impl GapRetryStore for InMemoryGapRetryStore {
     async fn load(&self) -> PlatformResult<Vec<PendingGap>> {
