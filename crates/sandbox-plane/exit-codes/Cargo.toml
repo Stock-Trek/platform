@@ -2,6 +2,7 @@
 name = "platform-exit-codes"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 strum = { workspace = true, features = ["derive"] }

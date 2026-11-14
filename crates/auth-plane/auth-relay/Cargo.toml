@@ -2,6 +2,7 @@
 name = "platform-auth-relay"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 aws-sdk-sqs = { workspace = true }

@@ -2,6 +2,7 @@
 name = "platform-run-store"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 aws-sdk-dynamodb = { workspace = true }

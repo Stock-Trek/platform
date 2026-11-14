@@ -2,6 +2,7 @@
 name = "platform-git-webhook"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 platform-aws = { workspace = true }

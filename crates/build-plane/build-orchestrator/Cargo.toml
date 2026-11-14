@@ -2,6 +2,7 @@
 name = "platform-build-orchestrator"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 platform-aws = { workspace = true }

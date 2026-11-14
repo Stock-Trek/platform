@@ -2,6 +2,7 @@
 name = "platform-sqs"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 
 [dependencies]
 aws-sdk-sqs = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }
