@@ -57,21 +57,6 @@ impl EnvVars {
         Ok(value)
     }
 
-    /// Reads a required variable even when its value is not valid UTF-8.
-    ///
-    /// This is only useful for diagnostics: the value is converted lossily and
-    /// must not be used as configuration.
-    pub fn required_lossy(&self, name: &str) -> PlatformResult<String> {
-        let value = self
-            .vars
-            .get(OsStr::new(name))
-            .ok_or_else(|| PlatformError::config_missing(name))?;
-        if value.is_empty() {
-            return Err(PlatformError::config_empty(name));
-        }
-        Ok(value.to_string_lossy().into_owned())
-    }
-
     /// Reads an optional UTF-8 variable. Missing and empty values yield `None`.
     pub fn optional(&self, name: &str) -> PlatformResult<Option<String>> {
         let Some(value) = self.vars.get(OsStr::new(name)) else {
