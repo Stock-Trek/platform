@@ -1,4 +1,4 @@
-use platform_runner::SimulationParameters;
+use crate::SimulationParameters;
 use rand::{Rng, rngs::StdRng};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;

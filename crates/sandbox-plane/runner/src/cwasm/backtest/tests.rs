@@ -1,5 +1,4 @@
 use crate::SimulationParameters;
-use parking_lot::Mutex;
 use rand::{SeedableRng, rngs::StdRng};
 use serde_json::Value;
 use std::collections::BTreeMap;

@@ -1,4 +1,4 @@
-use platform_runner::{
+use crate::{
     decimal::ToDecimal,
     dto::{DecimalDto, MarketCandleDto, MarketCandlesDto, StrategyContextDto},
 };

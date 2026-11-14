@@ -1,5 +1,5 @@
 use crate::cwasm::backtest::{BacktestError, PlatformResult};
-use platform_runner::{
+use crate::{
     dto::{MarketCandleDto, MarketOhlcvDto, StrategyContextDto},
     string::JsonString,
 };

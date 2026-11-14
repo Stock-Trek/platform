@@ -1,5 +1,5 @@
+use crate::Command;
 use parking_lot::Mutex;
-use platform_runner::Command;
 use std::{
     collections::BTreeMap,
     panic::{AssertUnwindSafe, catch_unwind},
