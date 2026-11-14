@@ -1,10 +1,3 @@
-mod catalog_metadata;
-mod commit;
-
-#[cfg(test)]
-mod catalog_metadata_tests;
-mod scan;
-
 use crate::iceberg::catalog::{ArchiveCatalog, IcebergDataFile};
 use crate::iceberg::{ArchiveIcebergTable, IcebergConfig};
 use async_trait::async_trait;
@@ -23,7 +16,7 @@ use std::{
 };
 
 pub struct IcebergCatalog {
-    catalog: iceberg_catalog_rest::RestCatalog,
+    pub(super) catalog: iceberg_catalog_rest::RestCatalog,
     namespace: NamespaceIdent,
     warehouse: String,
     namespace_name: String,
@@ -94,7 +87,7 @@ impl IcebergCatalog {
         }
     }
 
-    async fn ensure_table(&self, table: ArchiveIcebergTable) -> BuildResult<Table> {
+    pub(super) async fn ensure_table(&self, table: ArchiveIcebergTable) -> BuildResult<Table> {
         let ident = self.table_ident(table);
         match self.catalog.load_table(&ident).await {
             Ok(table) => return Ok(table),
@@ -122,7 +115,7 @@ impl IcebergCatalog {
         }
     }
 
-    fn catalog_error(operation: &'static str, error: iceberg::Error) -> BuildError {
+    pub(super) fn catalog_error(operation: &'static str, error: iceberg::Error) -> BuildError {
         BuildError::external(std::io::Error::other(format!("{operation}: {error}")))
     }
 }
