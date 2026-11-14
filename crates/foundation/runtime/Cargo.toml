@@ -6,11 +6,14 @@ rust-version.workspace = true
 publish = false
 
 [dependencies]
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
 metrics_cloudwatch_embedded = { workspace = true, features = ["lambda"] }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-metrics = { workspace = true }
 platform-nats = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
-tokio = { workspace = true, features = ["macros", "signal"] }
+tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "signal", "sync", "time"] }
 tracing = { workspace = true }

@@ -48,7 +48,10 @@ required in some configurations, the condition is stated in its description.
 
 | Variable | Used by | Description |
 | --- | --- | --- |
+| `HEALTH_BIND_ADDR` | Auth service, Portfolio service, Ingester, Backfiller, Aggregator, Archiver, Compactor, Rebuilder | Socket address for the HTTP health listener. When unset or empty, no health listener is started. `HEALTH_BIND_ADDRESS` is accepted as an alias. Each listed service also accepts `<SERVICE>_HEALTH_BIND_ADDR` (for example `AGGREGATOR_HEALTH_BIND_ADDR`), which takes precedence over this shared value. |
 | `ICEBERG_CATALOG_TOKEN` | Archiver, Compactor, Rebuilder, Aggregator | Bearer token used to authenticate with the Iceberg REST catalog. When unset or empty, no token is sent. |
+
+See [Health checks](health-checks.md) for the probe contract and per-service health variable names.
 
 ## Data plane
 

@@ -4761,6 +4761,9 @@ dependencies = [
 name = "platform-runtime"
 version = "0.2.0"
 dependencies = [
+ "http-body-util",
+ "hyper",
+ "hyper-util",
  "metrics_cloudwatch_embedded",
  "platform-config",
  "platform-errors",
