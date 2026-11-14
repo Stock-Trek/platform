@@ -4818,7 +4818,6 @@ dependencies = [
  "strum 0.28.0",
  "tokio",
  "tracing",
- "url",
  "uuid",
 ]
 
@@ -5089,7 +5088,6 @@ dependencies = [
  "aws-sdk-s3",
  "aws-sdk-s3-transfer-manager",
  "base64 0.23.1",
- "bytes",
  "platform-aggregator",
  "platform-archive",
  "platform-config",
@@ -5111,7 +5109,6 @@ name = "platform-run-invoker"
 version = "0.2.0"
 dependencies = [
  "aws-credential-types",
- "aws-sdk-dynamodb",
  "aws-sdk-lambda",
  "aws-sdk-s3",
  "chrono",
@@ -5234,10 +5231,8 @@ dependencies = [
  "platform-exchange-types",
  "platform-types",
  "rust_decimal",
- "serde",
  "stock-trek-types",
  "tracing",
- "uuid",
 ]
 
 [[package]]
