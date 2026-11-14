@@ -15,10 +15,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v5
+        uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
 
       - name: Infisical
-        uses: Infisical/secrets-action@v1.0.16
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
           identity-id: "2aecd8e8-fa70-41c3-bf79-a124b5675a46"
@@ -37,15 +37,15 @@ jobs:
           ssh -T git@ssh.shipyard.rs
 
       - name: Cache Rust build
-        uses: Swatinem/rust-cache@v2
+        uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # v2.9.3
 
       - name: Install Rust
-        uses: actions-rust-lang/setup-rust-toolchain@v2
+        uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
         with:
           toolchain: 1.99.0
 
       - name: Run cargo-deny
-        uses: EmbarkStudios/cargo-deny-action@v2
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         env:
           SHIPYARD_SSH_PRIVATE_KEY_READONLY: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
           SHIPYARD_KNOWN_HOST: ${{ env.SHIPYARD_KNOWN_HOST }}
@@ -54,7 +54,7 @@ jobs:
           ssh-known-hosts: ${{ env.SHIPYARD_KNOWN_HOST }}
 
       - name: Run cargo-audit
-        uses: rustsec/audit-check@v2
+        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
