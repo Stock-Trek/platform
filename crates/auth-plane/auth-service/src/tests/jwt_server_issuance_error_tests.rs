@@ -163,13 +163,3 @@ fn jwt_error_conversion_preserves_the_message() {
         "requested owner does not match the authenticated caller"
     );
 }
-
-#[test]
-fn issuance_preserves_an_existing_jwt_response() {
-    let error = JwtServerError::issuance(PlatformError::from(JwtServerError::new(
-        StatusCode::FORBIDDEN,
-        "requested owner does not match the authenticated caller",
-    )));
-
-    assert_eq!(error.response().status(), StatusCode::FORBIDDEN);
-}

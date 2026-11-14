@@ -1,6 +1,6 @@
 use http_body_util::Full;
 use hyper::{Response, StatusCode, body::Bytes, header::RETRY_AFTER};
-use platform_errors::{AuthError, PlatformError, SystemError};
+use platform_errors::{AuthError, PlatformError};
 use std::time::Duration;
 
 #[derive(Debug, thiserror::Error)]
@@ -21,14 +21,6 @@ impl JwtServerError {
     }
 
     pub fn issuance(error: PlatformError) -> Self {
-        let error = match error {
-            PlatformError::System(SystemError::External(source)) => match source.downcast::<Self>()
-            {
-                Ok(error) => return *error,
-                Err(source) => PlatformError::System(SystemError::External(source)),
-            },
-            error => error,
-        };
         let retry_after = match &error {
             PlatformError::Auth(AuthError::Unavailable { retry_after }) => Some(*retry_after),
             _ => None,
