@@ -19,7 +19,7 @@ fn parses_each_command_name() {
 
 #[test]
 fn rejects_unknown_command_names() {
-    for value in ["", "algorithm", "BackTest", "ExecuteNow"] {
+    for value in ["", "algorithm", "Backtest", "ExecuteNow"] {
         assert_eq!(CommandName::parse(value), None);
     }
 }

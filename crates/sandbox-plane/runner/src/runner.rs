@@ -17,7 +17,7 @@ impl Runner {
         let result =
             Self::select_algorithm(command.strategy_name()).and_then(|algorithm| match &command {
                 Command::Algorithm { .. } => Self::cmd_algorithm(algorithm.as_ref()),
-                Command::BackTest { .. } => Err(ExitCode::ServerEntryFailedToParseRequest),
+                Command::Backtest { .. } => Err(ExitCode::ServerEntryFailedToParseRequest),
                 Command::Execute {
                     strategy_context_path,
                     portfolio_path,

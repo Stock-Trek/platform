@@ -17,9 +17,9 @@ use crate::cwasm::backtest::{
 pub type Balances = BTreeMap<CexId, BTreeMap<AccountId, BTreeMap<AssetId, f64>>>;
 pub type PriceMap = BTreeMap<(CexId, AssetId, AssetId), f64>;
 
-pub struct BackTest;
+pub struct Backtest;
 
-impl BackTest {
+impl Backtest {
     pub fn run(
         runner: &WasmRunner,
         cwasm_path: &Path,
