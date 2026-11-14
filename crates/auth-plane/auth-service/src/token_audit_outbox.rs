@@ -1,7 +1,6 @@
-use crate::TokenAuditEvent;
+use crate::{TokenAuditEvent, random_string::RandomString};
 use chrono::Utc;
 use platform_errors::{PlatformError, PlatformResult};
-use rand::{Rng, distributions::Alphanumeric};
 use serde_json::{Map, Value};
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -20,11 +19,7 @@ impl TokenAuditOutbox {
     }
 
     fn generate_event_id() -> String {
-        let random: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(16)
-            .map(char::from)
-            .collect();
+        let random = RandomString::generate(16);
         let sequence = EVENT_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         format!(
             "{:020}-{sequence:020}-{random}",

@@ -1,7 +1,6 @@
-use crate::ApiToken;
+use crate::{ApiToken, random_string::RandomString};
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{PlatformError, PlatformResult};
-use rand::{Rng, distributions::Alphanumeric};
 
 const NONCE_LENGTH: usize = 32;
 pub const MAX_NONCE_LENGTH: usize = 128;
@@ -60,11 +59,7 @@ impl OrderRequestContext {
         issued_at: DateTime<Utc>,
         validity: Duration,
     ) -> PlatformResult<Self> {
-        let nonce: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(NONCE_LENGTH)
-            .map(char::from)
-            .collect();
+        let nonce = RandomString::generate(NONCE_LENGTH);
         let issued_at = Self::whole_seconds(issued_at);
         let expires_at = issued_at.checked_add_signed(validity).ok_or_else(|| {
             PlatformError::auth_invalid_field("expires_at", "is outside the supported range")
