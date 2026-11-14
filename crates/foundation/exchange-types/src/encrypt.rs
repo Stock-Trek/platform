@@ -3,12 +3,11 @@ use hmac::{Hmac, KeyInit, Mac};
 use p256::ecdsa::signature::Signer as SignerTrait;
 use platform_errors::{ExchangeError, PlatformError, PlatformResult};
 use rsa::{
-    RsaPrivateKey, pkcs1::DecodeRsaPrivateKey, pkcs1v15::SigningKey as RsaPkcs1v15SigningKey,
+    PrivateKey, pkcs1::DecodeRsaPrivateKey, pkcs1v15::SigningKey as RsaPkcs1v15SigningKey,
     pkcs8::DecodePrivateKey, sha2::Sha256,
 };
 use secrecy::{ExposeSecret, SecretSlice};
 use sha2::Sha512;
-use signature::Signer as RsaSignerTrait;
 use strum::{Display, EnumString};
 
 #[derive(Debug, Display, EnumString, Clone, Copy, PartialEq, Eq, Hash)]
@@ -109,16 +108,16 @@ impl EncryptionAlgorithm {
         let secret = secret.trim();
         let private_key = if secret.starts_with("-----BEGIN") {
             if secret.contains("RSA PRIVATE KEY") {
-                RsaPrivateKey::from_pkcs1_pem(secret)
+                PrivateKey::from_pkcs1_pem(secret)
                     .map_err(|e| format!("invalid PKCS#1 PEM: {e}"))?
             } else {
-                RsaPrivateKey::from_pkcs8_pem(secret)
+                PrivateKey::from_pkcs8_pem(secret)
                     .map_err(|e| format!("invalid PKCS#8 PEM: {e}"))?
             }
         } else {
             let bytes = secret.as_bytes();
-            RsaPrivateKey::from_pkcs8_der(bytes)
-                .or_else(|_| RsaPrivateKey::from_pkcs1_der(bytes))
+            PrivateKey::from_pkcs8_der(bytes)
+                .or_else(|_| PrivateKey::from_pkcs1_der(bytes))
                 .map_err(|e| format!("invalid PKCS#8 or PKCS#1 DER: {e}"))?
         };
         Ok(RsaPkcs1v15SigningKey::<Sha256>::new(private_key))

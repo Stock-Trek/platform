@@ -9,7 +9,7 @@
 //!   "cwasmGetUrl": "<presigned S3 GET url>",
 //!   "cwasmSha256": "<artifact sha256>",
 //!   "cwasmSize": 123456,
-//!   "wasmtimeVersion": "43.0.1",
+//!   "wasmtimeVersion": "50.0.1",
 //!   "orderRequestUrl": "<order request service url>",
 //!   "owner": "<algorithm owner>",
 //!   "command": "metadata",

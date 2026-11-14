@@ -6,7 +6,7 @@ use platform_exchange_types::{
     encrypt::EncryptionAlgorithm, signer::Signer,
 };
 use rsa::{
-    RsaPrivateKey,
+    PrivateKey,
     pkcs1v15::{Signature as RsaSignature, VerifyingKey as RsaVerifyingKey},
     pkcs8::{EncodePrivateKey, LineEnding},
     sha2::Sha256 as RsaSha256,
@@ -101,8 +101,8 @@ fn ecdsa_p384_signature_verifies_with_the_verifying_key() {
 
 #[test]
 fn rsa_sha256_signature_verifies_with_the_public_key() {
-    let mut rng = rand::thread_rng();
-    let private_key = RsaPrivateKey::new(&mut rng, 1024).unwrap();
+    let mut rng = getrandom::SysRng;
+    let private_key = PrivateKey::new(&mut rng, 1024).unwrap();
     let pem = private_key.to_pkcs8_pem(LineEnding::LF).unwrap();
     let signer = BinanceExchange::signer_rsa_sha256(credentials("api-key", pem.as_str())).unwrap();
     let message = b"payload";

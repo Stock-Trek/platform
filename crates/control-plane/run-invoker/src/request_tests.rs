@@ -15,7 +15,7 @@ fn record() -> RunRecord {
             "artifact/github.com/example/repo/heads/main/abc123/runner.cwasm",
             "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
             123456,
-            "43.0.1",
+            "50.0.1",
         ),
         "MyStrategy",
     )
@@ -54,7 +54,7 @@ fn serialises_the_runner_contract() {
         "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0"
     );
     assert_eq!(request.cwasm_size, 123456);
-    assert_eq!(request.wasmtime_version, "43.0.1");
+    assert_eq!(request.wasmtime_version, "50.0.1");
     assert_eq!(request.order_request_url, "https://orders.example/requests");
     assert_eq!(request.auth_service_url, "https://auth.example/jwt");
     assert_eq!(request.owner, "demo-owner");

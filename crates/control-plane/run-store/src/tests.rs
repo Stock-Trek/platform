@@ -18,7 +18,7 @@ fn record() -> RunRecord {
             "artifact/github.com/example/repo/heads/main/abc123/runner.cwasm",
             "0f1e2d3c4b5a69788796a5b4c3d2e1f00f1e2d3c4b5a69788796a5b4c3d2e1f0",
             123456,
-            "43.0.1",
+            "50.0.1",
         ),
         "MyStrategy",
     )

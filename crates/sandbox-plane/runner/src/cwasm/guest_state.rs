@@ -7,7 +7,7 @@ use std::{
     },
 };
 use wasmtime::{Caller, Memory, ResourceLimiter, StoreLimits, StoreLimitsBuilder};
-use wasmtime_wasi::{DirPerms, FilePerms, WasiCtxBuilder, p1::WasiP1Ctx};
+use wasmtime_wasi::{FsPerms, WasiCtxBuilder, p1::WasiP1Ctx};
 
 pub type Emit = Arc<dyn Fn(&str, Value) + Send + Sync>;
 
@@ -107,7 +107,7 @@ impl GuestState {
         builder.stdin(std::io::empty());
         builder.stdout(std::io::stderr());
         builder.stderr(std::io::stderr());
-        builder.preopened_dir(working_directory, "/", DirPerms::READ, FilePerms::READ)?;
+        builder.preopened_dir(working_directory, "/", FsPerms::ReadOnly)?;
         Ok(Self {
             wasi: builder.build_p1(),
             emit,

@@ -21,10 +21,10 @@ RUN case "${TARGETARCH}" in \
       arm64) wasmtime_arch="aarch64" ;; \
       *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
- && curl -LO "https://github.com/bytecodealliance/wasmtime/releases/download/v43.0.1/wasmtime-v43.0.1-${wasmtime_arch}-linux.tar.xz" \
- && tar -xf "wasmtime-v43.0.1-${wasmtime_arch}-linux.tar.xz" \
- && mv "wasmtime-v43.0.1-${wasmtime_arch}-linux/wasmtime" /usr/local/bin/ \
- && rm -rf "wasmtime-v43.0.1-${wasmtime_arch}-linux"*
+ && curl -LO "https://github.com/bytecodealliance/wasmtime/releases/download/v50.0.1/wasmtime-v50.0.1-${wasmtime_arch}-linux.tar.xz" \
+ && tar -xf "wasmtime-v50.0.1-${wasmtime_arch}-linux.tar.xz" \
+ && mv "wasmtime-v50.0.1-${wasmtime_arch}-linux/wasmtime" /usr/local/bin/ \
+ && rm -rf "wasmtime-v50.0.1-${wasmtime_arch}-linux"*
 # cargo lambda
 RUN case "${TARGETARCH}" in \
       amd64) cargo_lambda_arch="x86_64-unknown-linux-musl" ;; \
