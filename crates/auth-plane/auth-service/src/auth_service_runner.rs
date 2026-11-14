@@ -4,7 +4,7 @@ use crate::{
 };
 use chrono::Duration;
 use platform_errors::PlatformResult;
-use platform_runtime::Service;
+use platform_runtime::{HealthRunner, Service};
 use std::sync::Arc;
 
 const SERVICE: Service = Service::new("platform-auth-service");
@@ -33,6 +33,8 @@ impl AuthServiceRunner {
         let server =
             JwtServer::bind_with_sigv4(config.bind_address(), service, config.sigv4().clone())
                 .await?;
-        server.serve().await
+        let health = HealthRunner::from_service_env("AUTH_SERVICE").await?;
+        health.mark_ready();
+        health.run(server.serve()).await
     }
 }

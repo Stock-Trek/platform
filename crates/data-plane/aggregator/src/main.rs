@@ -5,7 +5,7 @@ mod tasks;
 use platform_aggregator::{AggregatorConfig, ArchiveRecoveryConfig, S3ArchiveRecovery};
 use platform_config::EnvVars;
 use platform_errors::PlatformResult;
-use platform_runtime::Service;
+use platform_runtime::{HealthRunner, Service};
 use std::sync::Arc;
 use tasks::Tasks;
 
@@ -21,5 +21,9 @@ async fn main() -> PlatformResult<()> {
             .map(Arc::new);
     SERVICE.init_logging(&config.log_filter)?;
     let _metrics = SERVICE.init_metrics("platform/aggregator")?;
-    Tasks::run(config, archive_recovery).await
+    let health = HealthRunner::from_service_env("AGGREGATOR").await?;
+    let state = health.state().clone();
+    health
+        .run(Tasks::run_with_health(config, archive_recovery, state))
+        .await
 }

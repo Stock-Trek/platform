@@ -37,7 +37,7 @@ impl AdminApi {
         &self,
         request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, ApiError> {
-        if request.uri().path() == "/healthz" {
+        if matches!(request.uri().path(), "/healthz" | "/readyz") {
             return if request.method() == Method::GET {
                 Ok(empty_response(StatusCode::NO_CONTENT))
             } else {
