@@ -1,13 +1,11 @@
-use iris::{Client, Listener};
+use iris::Listener;
 use platform_errors::PlatformResult;
 use platform_exchange_types::{
     exchange_account_snapshot::{AccountSnapshotContext, ETExchangeAccountSnapshot},
-    portfolio::AccountEvent,
+    portfolio::{AccountEvent, PortfolioIrisClient},
 };
 use std::{marker::PhantomData, sync::Arc};
 use tokio::sync::mpsc;
-
-pub type PortfolioClient = Client<serde_json::Value, serde_json::Value>;
 
 pub enum PortfolioEvent {
     Account(AccountEvent),
@@ -16,16 +14,19 @@ pub enum PortfolioEvent {
 }
 
 pub struct PortfolioStream {
-    client: PortfolioClient,
+    client: PortfolioIrisClient,
     events: mpsc::UnboundedReceiver<PortfolioEvent>,
 }
 
 impl PortfolioStream {
-    pub fn new(client: PortfolioClient, events: mpsc::UnboundedReceiver<PortfolioEvent>) -> Self {
+    pub fn new(
+        client: PortfolioIrisClient,
+        events: mpsc::UnboundedReceiver<PortfolioEvent>,
+    ) -> Self {
         Self { client, events }
     }
 
-    pub fn client(&self) -> &PortfolioClient {
+    pub fn client(&self) -> &PortfolioIrisClient {
         &self.client
     }
 
