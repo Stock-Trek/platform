@@ -1,4 +1,4 @@
-use crate::iceberg::catalog::iceberg_catalog::{IcebergCatalog, IcebergDataFile};
+use crate::iceberg::catalog::{IcebergCatalog, IcebergDataFile};
 
 #[test]
 fn batch_fingerprints_are_stable_and_order_sensitive() {

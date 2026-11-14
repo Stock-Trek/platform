@@ -1,9 +1,3 @@
-mod admin;
-mod nats;
-mod read;
-mod store;
-mod stream;
-
 use crate::config::{
     admin::AdminConfig, nats::RegistryNatsConfig, read::ReadConfig, store::RegistryStoreConfig,
 };

@@ -1,6 +1,3 @@
-mod attempt;
-mod outcome;
-
 use crate::{
     event_fetcher::MissingEventFetcher,
     gap_retry_store::{GapRetryStore, InMemoryGapRetryStore, PendingGap},
@@ -31,11 +28,11 @@ impl BackfillOptions {
 /// Turns gap markers into reconstructed market events on the ingester's event
 /// subjects.
 pub struct BackfillService<S, F, P> {
-    source: S,
-    fetcher: F,
-    publisher: P,
-    options: BackfillOptions,
-    retries: Arc<dyn GapRetryStore>,
+    pub(super) source: S,
+    pub(super) fetcher: F,
+    pub(super) publisher: P,
+    pub(super) options: BackfillOptions,
+    pub(super) retries: Arc<dyn GapRetryStore>,
 }
 
 impl<S, F, P> BackfillService<S, F, P>
@@ -136,7 +133,9 @@ where
         pending.insert(gap.key(), gap);
     }
 
-    pub(super) async fn load_pending(&self) -> BuildResult<BTreeMap<String, PendingGap>> {
+    pub(in crate::backfiller) async fn load_pending(
+        &self,
+    ) -> BuildResult<BTreeMap<String, PendingGap>> {
         let mut pending = BTreeMap::new();
         for gap in self.retries.load().await? {
             pending.insert(gap.key(), gap);
@@ -144,7 +143,7 @@ where
         Ok(pending)
     }
 
-    pub(super) async fn accept(
+    pub(in crate::backfiller) async fn accept(
         &mut self,
         gap: GapMarker,
         pending: &mut BTreeMap<String, PendingGap>,
