@@ -1,6 +1,5 @@
 use crate::{
-    context::{Converters, RsWebhookContext},
-    event_response::EventResponse,
+    context::RsWebhookContext, dto::event_converter::EventConverter, event_response::EventResponse,
     responses::Responses,
 };
 use http::{Response, StatusCode};
@@ -11,6 +10,7 @@ use platform_errors::{
 use platform_messages::SqsMessage;
 use platform_metrics::{EventMetrics, RouteMetrics};
 use platform_time::{Deadline, RequestContext};
+use std::sync::Arc;
 
 const WEBHOOK_ROUTE: &str = "webhook";
 const ERROR_TYPE_HTTP: &str = "http";
@@ -142,7 +142,7 @@ impl WebhookHandler {
     async fn convert(
         &self,
         request_context: &RequestContext<&RsWebhookContext>,
-        converters: &Converters,
+        converters: &Arc<Vec<Box<dyn EventConverter>>>,
         event: &Request,
     ) -> PlatformResult<EventResponse> {
         let mut ignored = false;

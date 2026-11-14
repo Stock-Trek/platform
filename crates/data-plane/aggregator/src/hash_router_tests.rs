@@ -133,11 +133,10 @@ impl MarketSource for FakeSource {
     }
 }
 
-type PublishedMessages = Arc<Mutex<Vec<(String, Vec<u8>)>>>;
-
 #[derive(Default, Clone)]
 struct FakePublisher {
-    published: PublishedMessages,
+    #[allow(clippy::type_complexity)]
+    published: Arc<Mutex<Vec<(String, Vec<u8>)>>>,
 }
 
 #[async_trait]

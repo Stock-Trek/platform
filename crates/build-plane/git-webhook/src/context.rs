@@ -16,8 +16,6 @@ use std::{
 };
 use tokio::sync::{Mutex, MutexGuard, RwLock};
 
-pub type Converters = Arc<Vec<Box<dyn EventConverter>>>;
-
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum LoadReason {
     CacheMiss,
@@ -28,7 +26,8 @@ pub struct RsWebhookContext {
     pub sqs: Sqs,
     sdk_config: SdkConfig,
     timeouts: Timeouts,
-    converters: RwLock<Option<Converters>>,
+    #[allow(clippy::type_complexity)]
+    converters: RwLock<Option<Arc<Vec<Box<dyn EventConverter>>>>>,
     dedup: DeliveryDedup,
     load: Mutex<()>,
     refreshed_at: Mutex<Option<Instant>>,
@@ -93,7 +92,10 @@ impl RsWebhookContext {
     /// Returns the current converters, loading secrets on first use. Failed
     /// loads are throttled by a jittered backoff so a flood of unauthenticated
     /// webhooks cannot amplify into unbounded SSM traffic.
-    pub async fn converters(&self, deadline: Deadline) -> PlatformResult<Converters> {
+    pub async fn converters(
+        &self,
+        deadline: Deadline,
+    ) -> PlatformResult<Arc<Vec<Box<dyn EventConverter>>>> {
         if let Some(converters) = self.converters.read().await.clone() {
             return Ok(converters);
         }
@@ -109,7 +111,7 @@ impl RsWebhookContext {
     pub async fn refresh_converters(
         &self,
         deadline: Deadline,
-    ) -> PlatformResult<Option<Converters>> {
+    ) -> PlatformResult<Option<Arc<Vec<Box<dyn EventConverter>>>>> {
         match self
             .load_converters(deadline, LoadReason::SignatureRefresh)
             .await
@@ -124,7 +126,7 @@ impl RsWebhookContext {
         &self,
         deadline: Deadline,
         reason: LoadReason,
-    ) -> PlatformResult<Converters> {
+    ) -> PlatformResult<Arc<Vec<Box<dyn EventConverter>>>> {
         let _guard = self.acquire_load_lock().await;
 
         if reason == LoadReason::CacheMiss {
@@ -166,7 +168,10 @@ impl RsWebhookContext {
         }
     }
 
-    async fn try_load(&self, deadline: Deadline) -> PlatformResult<Converters> {
+    async fn try_load(
+        &self,
+        deadline: Deadline,
+    ) -> PlatformResult<Arc<Vec<Box<dyn EventConverter>>>> {
         let secrets =
             SsmSecrets::load(&self.sdk_config, self.timeouts, deadline, &self.ssm).await?;
         Ok(Arc::new(EventConverters::all(

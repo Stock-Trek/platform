@@ -13,14 +13,13 @@ use platform_time::Timeouts;
 use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};
 
 const ENTERPRISE_API_PATH: &str = "api/v3";
-type InstallationKey = (String, u64);
 
 #[derive(Clone)]
 pub struct GitHubAuth {
     app_id: u64,
     key: EncodingKey,
     apps: Arc<Mutex<HashMap<String, Arc<Octocrab>>>>,
-    installations: Arc<Mutex<LruCache<InstallationKey, GitHubInstallation>>>,
+    installations: Arc<Mutex<LruCache<(String, u64), GitHubInstallation>>>,
     allowed_hosts: HostAllowlist,
     timeouts: Timeouts,
     directory_limits: DirectoryLimits,
