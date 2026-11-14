@@ -1,6 +1,7 @@
 use crate::{
-    AuthService, TokenMutation, TokenUsage, TokenUsageQueue, TokenUsageReservation,
-    auth_service::MAX_UPDATE_ATTEMPTS, token_store::TokenStore,
+    AuthService, TokenUsageQueue, auth_service::MAX_UPDATE_ATTEMPTS, token_store::TokenMutation,
+    token_store::TokenStore, token_usage::TokenUsage,
+    token_usage_reservation::TokenUsageReservation,
 };
 use platform_errors::{ErrorType, PlatformError, PlatformResult};
 use platform_metrics::AuthUsageQueueMetrics;

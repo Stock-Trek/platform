@@ -1,5 +1,8 @@
 use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
-use crate::{AuthService, MemoryTokenAuditLog, RevocationReason, RevokedBy, TokenAuditAction};
+use crate::{
+    AuthService, TokenAuditAction, memory_token_audit_log_tests::MemoryTokenAuditLog,
+    revocation_reason::RevocationReason, revoked_by::RevokedBy,
+};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, PlatformError};
 use std::sync::Arc;

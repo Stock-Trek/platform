@@ -1,6 +1,7 @@
 use crate::{
-    JwtVerifier, OrderJwtClaims,
+    OrderJwtClaims,
     jwks_fetcher::{JwksFetcher, Source},
+    jwt_verifier::JwtVerifier,
 };
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{Header, decode_header, jwk::JwkSet};

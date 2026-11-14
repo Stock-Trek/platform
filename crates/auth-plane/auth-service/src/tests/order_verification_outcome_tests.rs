@@ -1,5 +1,8 @@
 use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::{InvalidOrderRequest, OrderRequestVerification};
+use crate::{
+    order_verification_outcome::InvalidOrderRequest,
+    order_verification_outcome::OrderRequestVerification,
+};
 use chrono::Utc;
 
 #[tokio::test]

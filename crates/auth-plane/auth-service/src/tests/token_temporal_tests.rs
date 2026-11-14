@@ -1,4 +1,6 @@
-use crate::{ApiToken, RevocationReason, RevokedBy, TokenMetadata, TokenScope};
+use crate::{
+    ApiToken, TokenMetadata, TokenScope, revocation_reason::RevocationReason, revoked_by::RevokedBy,
+};
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, PlatformError, PlatformResult};
 use secrecy::SecretString;

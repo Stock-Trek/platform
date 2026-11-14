@@ -1,6 +1,7 @@
 use crate::tests::support_tests::{OWNER, TestFixture};
 use crate::{
-    JWT_SIGNING_ALGORITHM, JwksCache, JwtServer, JwtSigningKey, JwtVerifier, OrderJwtClaims,
+    JwksCache, OrderJwtClaims, jwt_server::JwtServer, jwt_signing_key::JWT_SIGNING_ALGORITHM,
+    jwt_signing_key::JwtSigningKey, jwt_verifier::JwtVerifier,
 };
 use chrono::{Duration, Utc};
 use jsonwebtoken::{Algorithm, decode_header, jwk::JwkSet};
@@ -41,7 +42,10 @@ async fn signs_tokens_with_eddsa_and_a_key_id() {
     let header = decode_header(&token).unwrap();
 
     assert_eq!(header.alg, Algorithm::EdDSA);
-    assert_eq!(header.kid.as_deref(), Some(crate::DEFAULT_JWT_KEY_ID));
+    assert_eq!(
+        header.kid.as_deref(),
+        Some(crate::jwt_signing_key::DEFAULT_JWT_KEY_ID)
+    );
 }
 
 #[tokio::test]

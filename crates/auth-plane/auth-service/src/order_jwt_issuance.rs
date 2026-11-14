@@ -1,4 +1,4 @@
-use crate::{ApiToken, AuthService, IssuedJwt, OrderJwtClaims, TokenScope};
+use crate::{ApiToken, AuthService, OrderJwtClaims, TokenScope, order_jwt_claims::IssuedJwt};
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 

@@ -3,9 +3,9 @@ use crate::tests::{
     vault_kv_state_tests::CapturedRequest,
 };
 use crate::{
-    TokenAuditAction, TokenAuditEvent, TokenMutation, TokenStore, VaultTokenStore,
-    VaultTokenStoreConfig,
+    TokenAuditAction, TokenAuditEvent, TokenStore, VaultTokenStore, VaultTokenStoreConfig,
     token_audit_outbox::TokenAuditOutbox,
+    token_store::TokenMutation,
     vault_client::{VaultClient, WriteCondition},
 };
 use chrono::Utc;

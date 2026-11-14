@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, TokenRotationTransaction,
-    api_token::MAX_TOKEN_ID_LENGTH, random_string::RandomString,
+    ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, api_token::MAX_TOKEN_ID_LENGTH,
+    random_string::RandomString, token_rotation_transaction::TokenRotationTransaction,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};

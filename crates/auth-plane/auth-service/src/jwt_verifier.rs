@@ -1,4 +1,7 @@
-use crate::{ApiToken, JwtSigningKey, OrderJwtClaims, jwt_signing_key::JWT_SIGNING_ALGORITHM};
+use crate::{
+    ApiToken, OrderJwtClaims, jwt_signing_key::JWT_SIGNING_ALGORITHM,
+    jwt_signing_key::JwtSigningKey,
+};
 use chrono::{DateTime, Utc};
 use jsonwebtoken::{
     DecodingKey, Header, TokenData, Validation, decode, decode_header,

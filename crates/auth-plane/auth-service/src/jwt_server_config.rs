@@ -1,6 +1,6 @@
 use crate::{
-    JwtSigningKey, TokenCacheConfig, TokenUsageQueueConfig, ValkeyReplayStoreConfig,
-    VaultTokenStoreConfig,
+    TokenCacheConfig, TokenUsageQueueConfig, ValkeyReplayStoreConfig, VaultTokenStoreConfig,
+    jwt_signing_key::JwtSigningKey,
 };
 use platform_config::{EnvVars, RUST_LOG};
 use platform_errors::PlatformResult;
@@ -124,6 +124,7 @@ impl JwtServerConfig {
         &self.sigv4
     }
 
+    #[cfg(test)]
     pub fn jwt_key_id(&self) -> &str {
         &self.jwt_key_id
     }

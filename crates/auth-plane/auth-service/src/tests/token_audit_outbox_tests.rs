@@ -1,5 +1,8 @@
 use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
-use crate::{SecretInput, TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenMutation};
+use crate::{
+    TokenAuditAction, TokenAuditEvent, TokenAuditLog, secret_input::SecretInput,
+    token_store::TokenMutation,
+};
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;

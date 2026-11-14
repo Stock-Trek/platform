@@ -10,7 +10,7 @@ pub enum TokenScope {
     OrdersWrite,
     #[strum(to_string = "orders:*")]
     OrdersAll,
-    /// Allows reading token metadata through a redacted [`crate::TokenView`].
+    /// Allows reading token metadata through a redacted [`crate::token_view::TokenView`].
     #[strum(to_string = "tokens:read")]
     TokensRead,
     /// Allows administering tokens.

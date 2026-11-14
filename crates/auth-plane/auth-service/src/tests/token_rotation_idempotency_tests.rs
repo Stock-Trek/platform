@@ -1,7 +1,7 @@
 use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{
-    ApiToken, AuthService, MemoryTokenStore, TokenAuditAction, TokenAuditEvent,
-    TokenRotationTransaction, TokenStore,
+    ApiToken, AuthService, MemoryTokenStore, TokenAuditAction, TokenAuditEvent, TokenStore,
+    token_rotation_transaction::TokenRotationTransaction,
 };
 use chrono::{DateTime, Duration, Utc};
 use platform_errors::{AuthError, PlatformError};

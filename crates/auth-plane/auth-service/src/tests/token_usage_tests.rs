@@ -1,5 +1,5 @@
 use crate::tests::support_tests::{ORDER_REQUEST, TestFixture};
-use crate::{RevocationReason, RevokedBy};
+use crate::{revocation_reason::RevocationReason, revoked_by::RevokedBy};
 use chrono::{Duration, Utc};
 use secrecy::ExposeSecret;
 

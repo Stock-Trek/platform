@@ -1,5 +1,6 @@
 use crate::{
-    ApiToken, AuthService, SecretInput, TokenAuditAction, TokenAuditEvent, TokenScope, TokenUsage,
+    ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, TokenScope,
+    secret_input::SecretInput, token_usage::TokenUsage,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};

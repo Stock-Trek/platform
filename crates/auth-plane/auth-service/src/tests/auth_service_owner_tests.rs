@@ -1,5 +1,5 @@
 use crate::tests::support_tests::TestFixture;
-use crate::{ApiToken, TokenExpiry, TokenOptions, TokenScope};
+use crate::{ApiToken, TokenScope, token_options::TokenExpiry, token_options::TokenOptions};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, PlatformError};
 use secrecy::SecretString;

@@ -1,7 +1,7 @@
 use crate::tests::support_tests::TEST_SIGNATURE;
 use crate::{
-    OrderRequestContext, SignedOrderRequest, order_request_context::MAX_NONCE_LENGTH,
-    signed_order_request::MAX_ENVELOPE_LENGTH,
+    SignedOrderRequest, order_request_context::MAX_NONCE_LENGTH,
+    order_request_context::OrderRequestContext, signed_order_request::MAX_ENVELOPE_LENGTH,
 };
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, PlatformError};

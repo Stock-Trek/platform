@@ -1,7 +1,8 @@
 use crate::tests::support_tests::{AuthServiceBuilder, OWNER};
 use crate::{
-    ApiToken, JwtServer, OwnerIndex, TokenAuditEvent, TokenMutation, TokenRotationTransaction,
-    TokenStore, jwt_server_error::JwtServerError,
+    ApiToken, TokenAuditEvent, TokenStore, jwt_server::JwtServer, jwt_server_error::JwtServerError,
+    owner_index::OwnerIndex, token_rotation_transaction::TokenRotationTransaction,
+    token_store::TokenMutation,
 };
 use async_trait::async_trait;
 use platform_errors::{AuthError, PlatformError, PlatformResult};

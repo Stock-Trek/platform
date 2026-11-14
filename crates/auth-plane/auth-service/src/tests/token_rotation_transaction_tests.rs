@@ -1,7 +1,7 @@
 use crate::tests::support_tests::{AuthServiceBuilder, TestFixture};
 use crate::{
-    ApiToken, MemoryTokenStore, TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenMutation,
-    TokenRotationTransaction, TokenStore,
+    ApiToken, MemoryTokenStore, TokenAuditAction, TokenAuditEvent, TokenAuditLog, TokenStore,
+    token_rotation_transaction::TokenRotationTransaction, token_store::TokenMutation,
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
@@ -198,8 +198,13 @@ async fn rotation_transactions_assign_event_ids() {
         TokenAuditEvent::new(TokenAuditAction::Issued, now),
     ];
 
-    let transaction =
-        crate::TokenRotationTransaction::new(original, retired, replacement, events).unwrap();
+    let transaction = crate::token_rotation_transaction::TokenRotationTransaction::new(
+        original,
+        retired,
+        replacement,
+        events,
+    )
+    .unwrap();
 
     assert!(
         transaction

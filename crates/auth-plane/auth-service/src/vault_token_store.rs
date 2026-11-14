@@ -1,6 +1,8 @@
 use crate::{
-    ApiToken, OwnerIndex, TokenAuditEvent, TokenMutation, TokenRotationTransaction,
-    VaultTokenStoreConfig,
+    ApiToken, TokenAuditEvent, VaultTokenStoreConfig,
+    owner_index::OwnerIndex,
+    token_rotation_transaction::TokenRotationTransaction,
+    token_store::TokenMutation,
     token_store::TokenStore,
     vault_client::{VaultClient, WriteCondition},
 };

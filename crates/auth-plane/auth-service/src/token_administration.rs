@@ -1,6 +1,6 @@
 use crate::{
-    ApiToken, AuthService, RevocationReason, RevokedBy, SecretInput, TokenOptions, TokenScope,
-    TokenView,
+    ApiToken, AuthService, TokenScope, revocation_reason::RevocationReason, revoked_by::RevokedBy,
+    secret_input::SecretInput, token_options::TokenOptions, token_view::TokenView,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::PlatformResult;

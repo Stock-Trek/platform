@@ -1,5 +1,5 @@
 use crate::tests::support_tests::TEST_SIGNATURE;
-use crate::{OrderRequestContext, SignedOrderRequest};
+use crate::{SignedOrderRequest, order_request_context::OrderRequestContext};
 use chrono::{DateTime, Duration, Timelike};
 use platform_errors::{AuthError, PlatformError};
 

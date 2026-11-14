@@ -1,4 +1,4 @@
-use crate::{AuthServiceRunner, JwtServerConfig};
+use crate::{auth_service_runner::AuthServiceRunner, jwt_server_config::JwtServerConfig};
 use platform_errors::PlatformResult;
 
 pub struct Entry;

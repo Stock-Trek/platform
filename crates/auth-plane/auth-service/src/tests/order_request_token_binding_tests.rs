@@ -46,8 +46,8 @@ async fn rejects_an_authenticated_token_without_order_write_scope() {
         "token-a",
         "owner-a",
         now,
-        crate::TokenOptions::new(
-            crate::TokenExpiry::After(Duration::days(30)),
+        crate::token_options::TokenOptions::new(
+            crate::token_options::TokenExpiry::After(Duration::days(30)),
             [crate::TokenScope::OrdersRead],
         ),
     )

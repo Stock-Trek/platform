@@ -1,7 +1,8 @@
 use crate::tests::support_tests::{AuthServiceBuilder, ORDER_REQUEST, TestFixture};
 use crate::{
-    AuthService, ConsumeResult, MemoryReplayStore, MemoryTokenStore, ReplayReservation,
-    ReplayStore, ReplayStoreError,
+    AuthService, MemoryReplayStore, MemoryTokenStore, consume_result::ConsumeResult,
+    replay_reservation::ReplayReservation, replay_store::ReplayStore,
+    replay_store_error::ReplayStoreError,
 };
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
@@ -38,7 +39,7 @@ struct UnavailableReplayStore;
 impl ReplayStore for UnavailableReplayStore {
     async fn consume(
         &self,
-        _key: crate::ReplayKey,
+        _key: crate::replay_key::ReplayKey,
         _expires_at: DateTime<Utc>,
         _now: DateTime<Utc>,
     ) -> Result<ConsumeResult, ReplayStoreError> {

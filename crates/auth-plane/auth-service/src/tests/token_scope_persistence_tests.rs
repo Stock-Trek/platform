@@ -1,5 +1,7 @@
 use crate::tests::support_tests::TestFixture;
-use crate::{ApiToken, AuthService, TokenExpiry, TokenOptions, TokenScope};
+use crate::{
+    ApiToken, AuthService, TokenScope, token_options::TokenExpiry, token_options::TokenOptions,
+};
 use chrono::{Duration, Utc};
 use platform_errors::{AuthError, PlatformError};
 use serde_json::json;
