@@ -1,10 +1,9 @@
 use crate::{
     ApiToken, AuthService, TokenAuditAction, TokenAuditEvent, TokenRotationTransaction,
-    api_token::MAX_TOKEN_ID_LENGTH,
+    api_token::MAX_TOKEN_ID_LENGTH, random_string::RandomString,
 };
 use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
-use rand::{Rng, distributions::Alphanumeric};
 
 impl AuthService {
     pub async fn rotate_token(&self, id: &str, now: DateTime<Utc>) -> PlatformResult<ApiToken> {
@@ -75,11 +74,7 @@ impl AuthService {
     }
 
     fn rotated_token_id(id: &str, now: DateTime<Utc>) -> String {
-        let random: String = rand::thread_rng()
-            .sample_iter(&Alphanumeric)
-            .take(8)
-            .map(char::from)
-            .collect();
+        let random = RandomString::generate(8);
         let suffix = format!("-{}-{random}", now.timestamp_millis().unsigned_abs());
         let prefix_length = MAX_TOKEN_ID_LENGTH.saturating_sub(suffix.len());
         let prefix = &id[..id.len().min(prefix_length)];

@@ -28,6 +28,7 @@ mod order_verification_commit;
 mod order_verification_outcome;
 mod owner_index;
 mod owner_index_reconciliation;
+mod random_string;
 mod replay_store;
 mod revocation_reason;
 mod revoked_by;

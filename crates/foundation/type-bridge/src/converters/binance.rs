@@ -30,18 +30,9 @@ use stock_trek_types::cex::{
     trading_pair::TradingPair, trigger_direction::TriggerDirection,
 };
 
+#[derive(Default)]
 pub struct BinanceConverter {
     capabilities: Vec<CexCapability>,
-    ticker_mapping: &'static TickerMapping,
-}
-
-impl Default for BinanceConverter {
-    fn default() -> Self {
-        Self {
-            capabilities: vec![],
-            ticker_mapping: Self::ticker_mapping_static(),
-        }
-    }
 }
 
 impl Converter for BinanceConverter {
@@ -57,7 +48,7 @@ impl Converter for BinanceConverter {
         &self.capabilities
     }
     fn ticker_mapping(&self) -> &TickerMapping {
-        self.ticker_mapping
+        Self::ticker_mapping_static()
     }
     fn asset_limits_request(
         &self,
@@ -237,12 +228,11 @@ impl Converter for BinanceConverter {
         response: BinanceResponse<BinanceAssetLimitsResponse>,
     ) -> PlatformResult<TBAssetLimits> {
         let payload = Self::success_payload(response)?;
-        let ticker_mapping = self.ticker_mapping();
         let mut asset_limits = HashMap::new();
         for asset_filter in payload.assetFilters {
             match asset_filter {
                 BinanceAssetFilter::MAX_ASSET { asset, limit } => {
-                    if let Some(asset_id) = ticker_mapping.asset_id(&asset) {
+                    if let Some(asset_id) = self.ticker_mapping().asset_id(&asset) {
                         asset_limits.insert(*asset_id, limit);
                     }
                 }
@@ -261,7 +251,6 @@ impl Converter for BinanceConverter {
         response: Self::ExchangeInfoResponse,
     ) -> PlatformResult<TBExchangeInfo> {
         let payload = Self::success_payload(response)?;
-        let asset_tickers = self.ticker_mapping();
         let mut trading_precisions = HashMap::new();
         for symbol in payload.symbols {
             let BinanceExchangeInfoSymbol {
@@ -270,8 +259,8 @@ impl Converter for BinanceConverter {
                 quoteAsset,
                 ..
             } = symbol;
-            let base_option = asset_tickers.asset_id(&baseAsset);
-            let quote_option = asset_tickers.asset_id(&quoteAsset);
+            let base_option = self.ticker_mapping().asset_id(&baseAsset);
+            let quote_option = self.ticker_mapping().asset_id(&quoteAsset);
             if let Some(base) = base_option
                 && let Some(quote) = quote_option
             {

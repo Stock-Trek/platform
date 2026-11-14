@@ -17,6 +17,7 @@ mod order_request_token_binding_tests;
 mod order_verification_outcome_tests;
 mod owner_index_tests;
 mod owner_revocation_tests;
+mod random_string_tests;
 mod replay_store_tests;
 mod revocation_reason_tests;
 mod revocation_tests;
