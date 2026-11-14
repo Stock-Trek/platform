@@ -145,17 +145,11 @@ impl Spec {
             .map(|(number, _)| *number)
             .collect::<Vec<_>>();
         let data = Series::load(&market_data, &pairs, &window_numbers)?;
-        let driving_window = *parsed_windows
+        let (driving_number, driving_window) = *parsed_windows
             .iter()
-            .map(|(_, window)| window)
-            .min()
+            .min_by_key(|(_, window)| *window)
             .ok_or(ExitCode::ServerEntryInvalidArgument.code())?;
         let market_slots = MarketSlot::build_all(&strategy_context, &data, &pairs)?;
-        let driving_number = parsed_windows
-            .iter()
-            .find(|(_, window)| *window == driving_window)
-            .map(|(number, _)| *number)
-            .unwrap_or_default();
 
         let steps = market_slots
             .iter()
