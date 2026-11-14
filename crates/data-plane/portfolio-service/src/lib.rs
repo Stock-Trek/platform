@@ -40,6 +40,7 @@ pub use order_request_server::OrderRequestServer;
 pub use ownership_consumer::OwnershipConsumer;
 pub use ownership_registry::{OwnershipApply, OwnershipRegistry};
 pub use ownership_source::{OwnershipEventSource, OwnershipMessage};
+pub use platform_exchange_gateway::PortfolioUpdateOutcome;
 pub use platform_portfolio_ownership::AccountKey;
 pub use portfolio::{
     AccountPortfolios, CexAccountPortfolio, PORTFOLIO_UPDATE_SCHEMA_VERSION,
@@ -48,6 +49,6 @@ pub use portfolio::{
 pub use publishing_sink::PublishingPortfolioUpdateSink;
 pub use runner::PortfolioRunner;
 pub use service::PortfolioService;
-pub use state::{PortfolioState, PortfolioUpdateMetadata, PortfolioUpdateOutcome};
+pub use state::{PortfolioState, PortfolioUpdateMetadata};
 pub use update_consumer::PortfolioUpdateConsumer;
 pub use update_source::{PortfolioUpdateMessage, PortfolioUpdateSource};

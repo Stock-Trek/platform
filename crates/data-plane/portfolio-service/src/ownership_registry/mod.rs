@@ -1,4 +1,3 @@
-mod decision;
 mod ownership_apply;
 mod ownership_entry;
 mod registry;

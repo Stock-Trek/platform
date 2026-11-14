@@ -1,14 +1,11 @@
-use crate::portfolio::{CexAccountPortfolio, PortfolioUpdate};
-use crate::state::{PortfolioState, PortfolioUpdateMetadata, PortfolioUpdateOutcome};
+use crate::portfolio::PortfolioUpdate;
+use crate::state::{PortfolioState, PortfolioUpdateMetadata};
 use chrono::{DateTime, Utc};
+use platform_exchange_gateway::PortfolioUpdateOutcome;
 use platform_portfolio_ownership::AccountKey;
 
 impl PortfolioState {
-    pub fn apply_update(&mut self, update: PortfolioUpdate) -> bool {
-        self.apply_update_with_outcome(update) == PortfolioUpdateOutcome::Applied
-    }
-
-    pub fn apply_update_with_outcome(&mut self, update: PortfolioUpdate) -> PortfolioUpdateOutcome {
+    pub fn apply_update(&mut self, update: PortfolioUpdate) -> PortfolioUpdateOutcome {
         let account = update.account().clone();
         let tracked = match update.owner() {
             Some(owner) => self.is_tracked_for_owner(owner, &account),
@@ -35,11 +32,10 @@ impl PortfolioState {
         PortfolioUpdateOutcome::Applied
     }
 
-    pub fn set_portfolio(&mut self, account: AccountKey, portfolio: CexAccountPortfolio) -> bool {
-        self.apply_update(PortfolioUpdate::new(account, portfolio))
-    }
-
-    pub fn portfolio(&self, account: &AccountKey) -> Option<&CexAccountPortfolio> {
+    pub fn portfolio(
+        &self,
+        account: &AccountKey,
+    ) -> Option<&crate::portfolio::CexAccountPortfolio> {
         self.portfolios
             .get(&account.cex_id())
             .and_then(|accounts| accounts.get(account.account_id()))

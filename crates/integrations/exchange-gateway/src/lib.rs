@@ -23,7 +23,7 @@ pub use connector::{
     ExchangePortfolioConnector, ExchangePortfolioFeed, NoopConnectorHealthSink, NoopPortfolioFeed,
     PortfolioAccounts, PortfolioConnection, PortfolioConnector, PortfolioConnectorConfig,
     PortfolioCredentialSource, PortfolioEvent, PortfolioExchange, PortfolioExchangeConfig,
-    PortfolioFeed, PortfolioSession, PortfolioStream, PortfolioUpdateApply, PortfolioUpdateSink,
+    PortfolioFeed, PortfolioSession, PortfolioStream, PortfolioUpdateOutcome, PortfolioUpdateSink,
 };
 pub use iris;
 pub use resync_connector::AutoResyncConnector;

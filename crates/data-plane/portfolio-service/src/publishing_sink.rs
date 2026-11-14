@@ -1,8 +1,8 @@
-use crate::{PORTFOLIO_UPDATE_SUBJECT, PortfolioService, PortfolioUpdate, PortfolioUpdateOutcome};
+use crate::{PORTFOLIO_UPDATE_SUBJECT, PortfolioService, PortfolioUpdate};
 use async_trait::async_trait;
 use platform_errors::BuildResult;
 use platform_exchange_gateway::{
-    ConnectorPortfolioUpdate, PortfolioUpdateApply, PortfolioUpdateSink,
+    ConnectorPortfolioUpdate, PortfolioUpdateOutcome, PortfolioUpdateSink,
 };
 use platform_nats::EventPublisher;
 use std::sync::Arc;
@@ -37,14 +37,6 @@ impl PublishingPortfolioUpdateSink {
     pub fn subject(&self) -> &str {
         &self.subject
     }
-
-    fn apply_outcome(outcome: PortfolioUpdateOutcome) -> PortfolioUpdateApply {
-        match outcome {
-            PortfolioUpdateOutcome::Applied => PortfolioUpdateApply::Applied,
-            PortfolioUpdateOutcome::IgnoredUntracked => PortfolioUpdateApply::IgnoredUntracked,
-            PortfolioUpdateOutcome::IgnoredStale => PortfolioUpdateApply::IgnoredStale,
-        }
-    }
 }
 
 #[async_trait]
@@ -52,13 +44,11 @@ impl PortfolioUpdateSink for PublishingPortfolioUpdateSink {
     async fn apply_update(
         &self,
         update: ConnectorPortfolioUpdate,
-    ) -> BuildResult<PortfolioUpdateApply> {
+    ) -> BuildResult<PortfolioUpdateOutcome> {
         let update = PortfolioUpdate::try_from(update)?;
         self.publisher
             .publish(&self.subject, &update.to_bytes()?)
             .await?;
-        Ok(Self::apply_outcome(
-            self.service.apply_portfolio_update(update),
-        ))
+        Ok(self.service.apply_portfolio_update(update))
     }
 }

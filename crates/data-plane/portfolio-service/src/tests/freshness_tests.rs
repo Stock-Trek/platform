@@ -83,7 +83,10 @@ async fn order_authorization_uses_the_configured_staleness_policy() {
         .track_user_account("owner", account.clone())
         .await
         .expect("track");
-    assert!(reject.apply_portfolio_update(stale.clone()) == crate::PortfolioUpdateOutcome::Applied);
+    assert_eq!(
+        reject.apply_portfolio_update(stale.clone()),
+        crate::PortfolioUpdateOutcome::Applied
+    );
     assert!(
         reject
             .authorize_order("owner", &account, chrono::Utc::now())
@@ -98,7 +101,10 @@ async fn order_authorization_uses_the_configured_staleness_policy() {
         .track_user_account("owner", account.clone())
         .await
         .expect("track");
-    assert!(degrade.apply_portfolio_update(stale) == crate::PortfolioUpdateOutcome::Applied);
+    assert_eq!(
+        degrade.apply_portfolio_update(stale),
+        crate::PortfolioUpdateOutcome::Applied
+    );
     assert_eq!(
         degrade
             .authorize_order("owner", &account, chrono::Utc::now())

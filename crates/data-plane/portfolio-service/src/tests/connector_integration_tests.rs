@@ -8,7 +8,7 @@ use platform_errors::BuildResult;
 use platform_exchange_gateway::{
     ConnectorPortfolioUpdate, ExchangePortfolioConnector, NoopConnectorHealthSink,
     NoopPortfolioFeed, PortfolioCredentialSource, PortfolioEvent, PortfolioExchange, PortfolioFeed,
-    PortfolioStream, PortfolioUpdateApply, PortfolioUpdateSink, iris,
+    PortfolioStream, PortfolioUpdateOutcome, PortfolioUpdateSink, iris,
 };
 use platform_exchange_types::{
     api_key_credential::ApiKeyCredentials,
@@ -173,18 +173,12 @@ impl PortfolioUpdateSink for ServiceSink {
     async fn apply_update(
         &self,
         update: ConnectorPortfolioUpdate,
-    ) -> BuildResult<PortfolioUpdateApply> {
+    ) -> BuildResult<PortfolioUpdateOutcome> {
         let update = PortfolioUpdate::try_from(update)?;
         let outcome = self.service.apply_portfolio_update(update.clone());
         self.updates.lock().push(update);
         self.applied.notify_one();
-        Ok(match outcome {
-            crate::PortfolioUpdateOutcome::Applied => PortfolioUpdateApply::Applied,
-            crate::PortfolioUpdateOutcome::IgnoredUntracked => {
-                PortfolioUpdateApply::IgnoredUntracked
-            }
-            crate::PortfolioUpdateOutcome::IgnoredStale => PortfolioUpdateApply::IgnoredStale,
-        })
+        Ok(outcome)
     }
 }
 
