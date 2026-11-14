@@ -1,8 +1,5 @@
-use crate::{
-    content_hash::ContentId,
-    spill::{PartitionItem, PartitionRecords},
-};
-use platform_archive::{ArchiveBatch, ArchiveKind, ArchiveParquetWriter};
+use crate::spill::{PartitionItem, PartitionRecords};
+use platform_archive::{ArchiveBatch, ArchiveKind, ArchiveParquetWriter, ContentHash};
 use platform_errors::{PlatformError, PlatformResult};
 use std::{
     fs::File,
@@ -15,24 +12,22 @@ pub struct PartitionOutput {
     pub partition: String,
     pub path: PathBuf,
     pub records: usize,
-    pub content_id: u64,
+    pub content_hash: ContentHash,
     pub length: u64,
-    content: ContentId,
 }
 
 impl PartitionOutput {
     fn finish(mut self, writer: ArchiveParquetWriter<File>) -> PlatformResult<Self> {
         writer.close()?;
-        self.content_id = self.content.value();
-        self.length = std::fs::metadata(&self.path)
-            .map_err(|error| {
-                PlatformError::io(
-                    "read compacted parquet file size",
-                    self.path.display().to_string(),
-                    error,
-                )
-            })?
-            .len();
+        let (content_hash, length) = ContentHash::from_file(&self.path).map_err(|error| {
+            PlatformError::io(
+                "read compacted parquet file",
+                self.path.display().to_string(),
+                error,
+            )
+        })?;
+        self.content_hash = content_hash;
+        self.length = length;
         Ok(self)
     }
 
@@ -74,16 +69,14 @@ impl PartitionOutput {
                         partition,
                         path,
                         records: 0,
-                        content_id: 0,
+                        content_hash: ContentHash::from_bytes([]),
                         length: 0,
-                        content: ContentId::new(),
                     },
                     ArchiveParquetWriter::try_new(kind, file)?,
                 ));
             }
 
             if let Some((output, writer)) = current.as_mut() {
-                output.content.update(&record)?;
                 output.records += 1;
                 buffer.push(record)?;
                 if buffer.len() >= OUTPUT_BATCH_SIZE {

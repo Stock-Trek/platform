@@ -6,8 +6,8 @@ use crate::{
 use async_trait::async_trait;
 use aws_sdk_s3::{Client as S3Client, primitives::ByteStream};
 use platform_archive::{
-    ArchiveCatalog, ArchiveHour, ArchiveIcebergTable, ArchiveParquet, ArchivePath, IcebergDataFile,
-    S3, SourceBatch,
+    ArchiveCatalog, ArchiveHour, ArchiveIcebergTable, ArchiveParquet, ArchivePath, ContentHash,
+    IcebergDataFile, S3, SourceBatch,
 };
 use platform_errors::{DataError, PlatformError, PlatformResult};
 use std::{fs::File, path::Path, sync::Arc};
@@ -121,7 +121,7 @@ impl Compactor {
         let mut data_files = Vec::with_capacity(outputs.len());
         for output in outputs {
             let key =
-                self.output_key(batch, &output.partition, output.content_id, output.length)?;
+                self.output_key(batch, &output.partition, output.content_hash, output.length)?;
             self.write_object_from_path(&key, &output.path).await?;
             data_files.push(IcebergDataFile::new(
                 format!("s3://{}/{key}", self.bucket),
@@ -205,7 +205,7 @@ impl Compactor {
         &self,
         batch: &SourceBatch,
         partition: &str,
-        content_id: u64,
+        content_hash: ContentHash,
         length: u64,
     ) -> PlatformResult<String> {
         let hour = ArchiveHour::from_timestamp(batch.bucket_start).ok_or(PlatformError::Data(
@@ -217,7 +217,7 @@ impl Compactor {
             &self.output_prefix,
             &format!(
                 "{partition}/{}",
-                hour.file_path(format!("{content_id:016x}-{length:x}.parquet"))
+                hour.file_path(format!("{content_hash}-{length:x}.parquet"))
             ),
         ))
     }
