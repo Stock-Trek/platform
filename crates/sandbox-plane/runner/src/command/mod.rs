@@ -7,4 +7,4 @@ mod command_name_tests;
 mod tests;
 
 pub use command_name::CommandName;
-pub use run_request::{Command, RunRequest, SimulationParameters, TradingPair};
+pub use run_request::{Command, RunRequest, SimulationParameters};
