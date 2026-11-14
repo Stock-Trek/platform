@@ -9,7 +9,7 @@ use stock_trek::actions::ResolvedAction;
 use crate::cwasm::{Emit, PORTFOLIO_FILE_NAME, STRATEGY_CONTEXT_FILE_NAME, WasmRunner};
 
 use crate::cwasm::backtest::{
-    Balances, PriceMap, orders::OrderProcessor, portfolio::Portfolio, spec::Spec,
+    BacktestError, Balances, PriceMap, orders::OrderProcessor, portfolio::Portfolio, spec::Spec,
 };
 
 const GUEST_ROOT: &str = "/";
@@ -25,16 +25,13 @@ impl Simulation {
         cwasm_path: &Path,
         spec: &Spec,
         index: u32,
-    ) -> Result<Value, i32> {
+    ) -> Result<Value, BacktestError> {
         let mut rng = StdRng::seed_from_u64(spec.random_seed.wrapping_add(u64::from(index)));
         let mut balances = spec.initial_balances.clone();
         let directory = tempfile::Builder::new()
             .prefix("platform-backtest-")
             .tempdir()
-            .map_err(|error| {
-                eprintln!("cwasm-invoker: failed to create scratch pad: {error}");
-                ExitCode::BotErrorCreatingScratchPad.code()
-            })?;
+            .map_err(BacktestError::ScratchPad)?;
         let mut steps = Vec::new();
         for step in 0..spec.steps {
             let (context, prices, timestamp) = spec.step_context(step, &mut rng)?;
@@ -67,12 +64,14 @@ impl Simulation {
         }))
     }
 
-    fn write_guest_input<T: Message>(directory: &Path, name: &str, message: &T) -> Result<(), i32> {
+    fn write_guest_input<T: Message>(
+        directory: &Path,
+        name: &str,
+        message: &T,
+    ) -> Result<(), BacktestError> {
         let path = directory.join(name);
-        fs::write(&path, message.encode_to_vec()).map_err(|error| {
-            eprintln!("cwasm-invoker: failed to write guest input {path:?}: {error}");
-            ExitCode::BotErrorCreatingScratchPad.code()
-        })
+        fs::write(&path, message.encode_to_vec())
+            .map_err(|source| BacktestError::WriteGuestInput { path, source })
     }
 
     fn execute_step(
@@ -83,7 +82,7 @@ impl Simulation {
         balances: &mut Balances,
         prices: &PriceMap,
         rng: &mut StdRng,
-    ) -> Result<Vec<Value>, i32> {
+    ) -> Result<Vec<Value>, BacktestError> {
         let (emit, collected) = Self::collector();
         let arguments = [
             PROGRAM_NAME,
@@ -94,8 +93,7 @@ impl Simulation {
         ];
         let code = runner.execute_arguments(cwasm_path, &arguments, directory, &emit);
         if code != ExitCode::Success.code() {
-            eprintln!("cwasm-invoker: guest step failed with exit code {code}");
-            return Err(code);
+            return Err(BacktestError::GuestStepFailed(code));
         }
         let lines = std::mem::take(&mut *collected.lock());
         let mut events = Vec::new();
@@ -104,13 +102,10 @@ impl Simulation {
                 continue;
             }
             let Some(action_json) = payload.get("action").and_then(Value::as_str) else {
-                eprintln!("cwasm-invoker: action event is missing its action field");
-                return Err(ExitCode::BotErrorResolvingAction.code());
+                return Err(BacktestError::MissingAction);
             };
-            let action: ResolvedAction = serde_json::from_str(action_json).map_err(|error| {
-                eprintln!("cwasm-invoker: action could not be decoded: {error}");
-                ExitCode::BotErrorResolvingAction.code()
-            })?;
+            let action: ResolvedAction =
+                serde_json::from_str(action_json).map_err(BacktestError::InvalidAction)?;
             events.push(OrderProcessor::handle_action(
                 &action,
                 balances,

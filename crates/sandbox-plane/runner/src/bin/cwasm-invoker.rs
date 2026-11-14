@@ -119,7 +119,13 @@ impl CwasmInvoker {
         };
 
         if matches!(request.command, Command::BackTest { .. }) {
-            return backtest::BackTest::run(&runner, cwasm.path(), &request.command);
+            return match backtest::BackTest::run(&runner, cwasm.path(), &request.command) {
+                Ok(()) => ExitCode::Success.code(),
+                Err(error) => {
+                    eprintln!("cwasm-invoker: {error}");
+                    error.exit_code()
+                }
+            };
         }
 
         let actions = GuestActions::new();
