@@ -19,7 +19,7 @@ iceberg-storage-opendal = { workspace = true }
 parquet = { workspace = true, features = ["async"] }
 platform-aws = { workspace = true }
 platform-config = { workspace = true }
-platform-errors = { workspace = true, features = ["http", "storage"] }
+platform-errors = { workspace = true, features = ["archive", "http", "storage"] }
 platform-market-data = { workspace = true }
 platform-time = { workspace = true }
 platform-types = { workspace = true }
