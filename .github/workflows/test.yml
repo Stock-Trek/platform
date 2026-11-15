@@ -42,6 +42,9 @@ jobs:
           save-if: false
           shared-key: linux-rust
 
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked --version 0.23.0
+
       # Only a read-only Shipyard deploy key enters this job, fetched by name
       # from the non-production identity. No AWS, publish or App credentials.
       - name: Fetch Shipyard known host
