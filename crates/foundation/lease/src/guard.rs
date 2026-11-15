@@ -1,11 +1,12 @@
 use crate::{Lease, LeaseRequest, LeaseStore};
 use platform_errors::{PlatformError, PlatformResult};
+use platform_metrics::MarketDataMetrics;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
-use tracing::{debug, warn};
+use tracing::{debug, info, warn};
 
 pub struct LeaseGuard {
     store: Arc<dyn LeaseStore>,
@@ -32,8 +33,22 @@ impl LeaseGuard {
         }
         let interval = LeaseRequest::renewal_interval(request.ttl)?;
         let Some(lease) = store.acquire(&request).await? else {
+            MarketDataMetrics::record_lease_contention(request.scope.as_str());
+            info!(
+                scope = %request.scope.as_str(),
+                owner = %request.owner_id,
+                "lease contention"
+            );
             return Ok(None);
         };
+        MarketDataMetrics::record_lease_acquisition(lease.scope.as_str());
+        info!(
+            scope = %lease.scope.as_str(),
+            owner = %lease.owner_id,
+            token = lease.fencing_token,
+            expires_at = lease.expires_at.0,
+            "lease acquired"
+        );
         let lost = Arc::new(AtomicBool::new(false));
         let renewal_lock = Arc::new(Mutex::new(()));
         let renewal = Self::spawn_renewal(
@@ -75,12 +90,14 @@ impl LeaseGuard {
                     Ok(Some(_)) => {}
                     Ok(None) => {
                         lost.store(true, Ordering::SeqCst);
+                        MarketDataMetrics::record_lease_lost(lease.scope.as_str(), "renewal");
                         warn!(scope = %lease.scope.as_str(), owner = %lease.owner_id, token = lease.fencing_token, "lease lost");
                         return;
                     }
                     Err(error) => {
                         lost.store(true, Ordering::SeqCst);
-                        warn!(%error, scope = %lease.scope.as_str(), owner = %lease.owner_id, "lease renewal failed");
+                        MarketDataMetrics::record_lease_lost(lease.scope.as_str(), "renewal_error");
+                        warn!(%error, scope = %lease.scope.as_str(), owner = %lease.owner_id, token = lease.fencing_token, "lease renewal failed");
                         return;
                     }
                 }
@@ -99,14 +116,20 @@ impl LeaseGuard {
     pub async fn ensure_writable(&mut self) -> PlatformResult<()> {
         let _guard = self.renewal_lock.lock().await;
         if self.lost() {
+            MarketDataMetrics::record_lease_lost(self.lease.scope.as_str(), "deadline");
+            warn!(scope = %self.lease.scope.as_str(), owner = %self.lease.owner_id, token = self.lease.fencing_token, "lease is no longer writable");
             return Err(Self::not_writable(&self.lease));
         }
         let Some(renewed) = self.store.renew(&self.lease, self.ttl).await? else {
             self.lost.store(true, Ordering::SeqCst);
+            MarketDataMetrics::record_lease_lost(self.lease.scope.as_str(), "expired");
+            warn!(scope = %self.lease.scope.as_str(), owner = %self.lease.owner_id, token = self.lease.fencing_token, "lease lost before commit");
             return Err(Self::not_writable(&self.lease));
         };
         if !renewed.is_held_by(&self.lease.owner_id, self.lease.fencing_token) {
             self.lost.store(true, Ordering::SeqCst);
+            MarketDataMetrics::record_lease_lost(self.lease.scope.as_str(), "token_changed");
+            warn!(scope = %self.lease.scope.as_str(), owner = %self.lease.owner_id, token = self.lease.fencing_token, "lease token changed before commit");
             return Err(Self::not_writable(&self.lease));
         }
         self.lease = renewed;

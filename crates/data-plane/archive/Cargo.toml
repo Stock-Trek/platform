@@ -21,6 +21,7 @@ platform-aws = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["archive", "http", "storage"] }
 platform-market-data = { workspace = true }
+platform-metrics = { workspace = true }
 platform-time = { workspace = true }
 platform-types = { workspace = true }
 reqwest = { workspace = true, features = ["json", "rustls"] }

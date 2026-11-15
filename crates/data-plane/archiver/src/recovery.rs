@@ -5,6 +5,7 @@ use platform_archive::{
 };
 use platform_errors::PlatformResult;
 use platform_lease::{Lease, LeaseGuard, LeaseRequest, LeaseScope};
+use platform_metrics::MarketDataMetrics;
 use tracing::{info, warn};
 
 const RECOVERY_MAX_ATTEMPTS: usize = 4;
@@ -68,6 +69,9 @@ impl S3ParquetSink {
         guard: &mut LeaseGuard,
     ) -> PlatformResult<()> {
         let registered = self.catalog.registered_data_files(table).await?;
+        let mut already_registered = 0_u64;
+        let mut duplicates = 0_u64;
+        let mut unreadable = 0_u64;
         let mut pending: Vec<IcebergDataFile> = Vec::new();
         for object in objects {
             let key = object.key.as_str();
@@ -86,12 +90,16 @@ impl S3ParquetSink {
                 continue;
             }
             let location = format!("s3://{}/{}", self.bucket, key);
-            if registered.contains(&location)
-                || pending.iter().any(|file| file.file_path == location)
-            {
+            if registered.contains(&location) {
+                already_registered += 1;
+                continue;
+            }
+            if pending.iter().any(|file| file.file_path == location) {
+                duplicates += 1;
                 continue;
             }
             let Ok(file_size) = u64::try_from(object.size) else {
+                unreadable += 1;
                 warn!(
                     key,
                     size = object.size,
@@ -103,12 +111,17 @@ impl S3ParquetSink {
             let record_count = match reader.row_count().await {
                 Ok(record_count) => record_count,
                 Err(error) => {
+                    unreadable += 1;
                     warn!(%error, key, "skipping unreadable uncommitted archive object");
                     continue;
                 }
             };
             pending.push(IcebergDataFile::new(location, object.size, record_count));
         }
+        MarketDataMetrics::record_archive_recovery(table.name(), "registered", already_registered);
+        MarketDataMetrics::record_archive_recovery(table.name(), "duplicate", duplicates);
+        MarketDataMetrics::record_archive_recovery(table.name(), "unreadable", unreadable);
+        MarketDataMetrics::record_archive_recovery(table.name(), "pending", pending.len() as u64);
 
         for attempt in 1..=RECOVERY_MAX_ATTEMPTS {
             if pending.is_empty() {
@@ -117,7 +130,25 @@ impl S3ParquetSink {
             guard.ensure_writable().await?;
             let registration = ArchiveRegistration::new(pending.clone(), None::<Vec<String>>)?;
             match self.catalog.register_files(table, &registration).await? {
-                RegisterOutcome::Applied | RegisterOutcome::AlreadyApplied => {
+                RegisterOutcome::Applied => {
+                    MarketDataMetrics::record_archive_recovery(
+                        table.name(),
+                        "uploaded",
+                        pending.len() as u64,
+                    );
+                    info!(
+                        table = table.name(),
+                        files = pending.len(),
+                        "recovered uncommitted archive files"
+                    );
+                    return Ok(());
+                }
+                RegisterOutcome::AlreadyApplied => {
+                    MarketDataMetrics::record_archive_recovery(
+                        table.name(),
+                        "reused",
+                        pending.len() as u64,
+                    );
                     info!(
                         table = table.name(),
                         files = pending.len(),
@@ -126,6 +157,11 @@ impl S3ParquetSink {
                     return Ok(());
                 }
                 RegisterOutcome::Conflict(conflict) => {
+                    MarketDataMetrics::record_archive_recovery(
+                        table.name(),
+                        "conflict",
+                        pending.len() as u64,
+                    );
                     warn!(
                         table = table.name(),
                         attempt,
@@ -140,6 +176,11 @@ impl S3ParquetSink {
         if pending.is_empty() {
             Ok(())
         } else {
+            MarketDataMetrics::record_archive_recovery(
+                table.name(),
+                "unresolved",
+                pending.len() as u64,
+            );
             Err(platform_errors::PlatformError::external(
                 std::io::Error::other(format!(
                     "archive recovery left {} unregistered files",

@@ -16,7 +16,7 @@ use std::{
 };
 
 pub struct IcebergCatalog {
-    pub catalog: iceberg_catalog_rest::RestCatalog,
+    pub(super) catalog: iceberg_catalog_rest::RestCatalog,
     pub(super) namespace: NamespaceIdent,
     warehouse: String,
     namespace_name: String,

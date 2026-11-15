@@ -3,6 +3,7 @@ use crate::iceberg::catalog::iceberg_catalog::snapshot::SnapshotCommit;
 use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, ConflictDetails, RegisterOutcome};
 use iceberg::table::Table;
 use platform_errors::{PlatformError, PlatformResult};
+use platform_metrics::MarketDataMetrics;
 use platform_time::RetryBackoff;
 use std::collections::HashSet;
 use std::time::Duration;
@@ -31,6 +32,7 @@ impl IcebergCatalog {
             match self.evaluate(&current, registration).await? {
                 Evaluation::Apply => {}
                 Evaluation::AlreadyApplied => {
+                    MarketDataMetrics::record_archive_commit(table.name(), "already_applied");
                     info!(
                         table = table.name(),
                         "archive registration was already applied"
@@ -38,6 +40,7 @@ impl IcebergCatalog {
                     return Ok(RegisterOutcome::AlreadyApplied);
                 }
                 Evaluation::Conflict(conflict) => {
+                    MarketDataMetrics::record_archive_commit(table.name(), "conflict");
                     return Ok(RegisterOutcome::Conflict(conflict));
                 }
             }
@@ -51,6 +54,7 @@ impl IcebergCatalog {
             let request = commit.to_request(&self.table_ident(table));
             match self.send_commit(table, &request).await {
                 Ok(()) => {
+                    MarketDataMetrics::record_archive_commit(table.name(), "applied");
                     info!(
                         table = table.name(),
                         files = registration.files().len(),
@@ -66,8 +70,12 @@ impl IcebergCatalog {
 
             let reloaded = self.ensure_table(table).await?;
             match self.evaluate(&reloaded, registration).await? {
-                Evaluation::AlreadyApplied => return Ok(RegisterOutcome::AlreadyApplied),
+                Evaluation::AlreadyApplied => {
+                    MarketDataMetrics::record_archive_commit(table.name(), "already_applied");
+                    return Ok(RegisterOutcome::AlreadyApplied);
+                }
                 Evaluation::Conflict(conflict) => {
+                    MarketDataMetrics::record_archive_commit(table.name(), "conflict");
                     return Ok(RegisterOutcome::Conflict(conflict));
                 }
                 Evaluation::Apply => {
@@ -77,6 +85,7 @@ impl IcebergCatalog {
                 }
             }
         }
+        MarketDataMetrics::record_archive_commit(table.name(), "error");
         Err(last_error.unwrap_or_else(|| {
             PlatformError::external(std::io::Error::other(
                 "conditional Iceberg commit remained ambiguous",

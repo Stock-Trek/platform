@@ -23,6 +23,7 @@ pub const MARKET_DATA_JOB_DURATION_SECONDS: &str = "market_data_job_duration_sec
 pub const MARKET_DATA_LOCK_CONTENTIONS_TOTAL: &str = "market_data_lock_contentions_total";
 pub const MARKET_DATA_LOCK_SKIPS_TOTAL: &str = "market_data_lock_skips_total";
 pub const MARKET_DATA_LOCK_LOST_TOTAL: &str = "market_data_lock_lost_total";
+pub const MARKET_DATA_LEASE_ACQUISITIONS_TOTAL: &str = "market_data_lease_acquisitions_total";
 pub const MARKET_DATA_INGEST_WINDOWS_TOTAL: &str = "market_data_ingest_windows_total";
 pub const MARKET_DATA_INGEST_GAPS_TOTAL: &str = "market_data_ingest_gaps_total";
 pub const MARKET_DATA_INGEST_MISSING_CANDLES_TOTAL: &str =
@@ -43,6 +44,10 @@ pub const MARKET_DATA_ARCHIVE_FLUSHES_TOTAL: &str = "market_data_archive_flushes
 pub const MARKET_DATA_ARCHIVE_FLUSH_RECORDS_TOTAL: &str = "market_data_archive_flush_records_total";
 pub const MARKET_DATA_ARCHIVE_FLUSH_DURATION_SECONDS: &str =
     "market_data_archive_flush_duration_seconds";
+pub const MARKET_DATA_ARCHIVE_COMMIT_OUTCOMES_TOTAL: &str =
+    "market_data_archive_commit_outcomes_total";
+pub const MARKET_DATA_ARCHIVE_RECOVERY_OBJECTS_TOTAL: &str =
+    "market_data_archive_recovery_objects_total";
 pub const MARKET_DATA_S3_RETRIES_TOTAL: &str = "market_data_s3_retries_total";
 pub const MARKET_DATA_AGGREGATOR_CHECKPOINT_AGE_SECONDS: &str =
     "market_data_aggregator_checkpoint_age_seconds";
@@ -247,6 +252,10 @@ impl DescriptionsMetrics {
             "Total number of market data locks lost to another invocation"
         );
         describe_counter!(
+            MARKET_DATA_LEASE_ACQUISITIONS_TOTAL,
+            "Total number of archive writer leases acquired, labelled by scope"
+        );
+        describe_counter!(
             MARKET_DATA_INGEST_WINDOWS_TOTAL,
             "Total number of market data ingest windows, labelled by outcome"
         );
@@ -264,7 +273,7 @@ impl DescriptionsMetrics {
         );
         describe_counter!(
             MARKET_DATA_COMPACTION_OUTCOMES_TOTAL,
-            "Total number of market data compaction targets, labelled by status"
+            "Total number of market data compaction targets, labelled by kind and status"
         );
         describe_histogram!(
             MARKET_DATA_COMPACTION_DURATION_SECONDS,
@@ -305,6 +314,14 @@ impl DescriptionsMetrics {
         describe_histogram!(
             MARKET_DATA_ARCHIVE_FLUSH_DURATION_SECONDS,
             "Duration of archive flushes in seconds, labelled by trigger reason and status"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_COMMIT_OUTCOMES_TOTAL,
+            "Total number of conditional archive commits, labelled by table and outcome"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_RECOVERY_OBJECTS_TOTAL,
+            "Total number of archive recovery objects, labelled by table and outcome"
         );
         describe_counter!(
             MARKET_DATA_S3_RETRIES_TOTAL,

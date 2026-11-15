@@ -13,6 +13,7 @@ use platform_archive::{
 };
 use platform_errors::{PlatformError, PlatformResult};
 use platform_lease::{Lease, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
+use platform_metrics::MarketDataMetrics;
 use std::{fs::File, sync::Arc};
 use tracing::{info, warn};
 
@@ -88,6 +89,8 @@ impl Compactor {
         let Some(mut guard) =
             LeaseGuard::acquire(self.leases.clone(), request, self.max_work).await?
         else {
+            MarketDataMetrics::record_lease_skip("compactor");
+            MarketDataMetrics::record_compaction_outcome(batch.kind.label(), "lease_held");
             info!(
                 prefix = batch.prefix,
                 "compaction skipped because another compactor holds the lease"
@@ -120,6 +123,8 @@ impl Compactor {
                 "compaction skipped because the source set is already claimed"
             );
             guard.release().await?;
+            MarketDataMetrics::record_lease_skip("compactor");
+            MarketDataMetrics::record_compaction_outcome(batch.kind.label(), "already_claimed");
             return Ok(CompactionStats {
                 source_files: batch.files.len(),
                 skipped: true,
@@ -130,6 +135,12 @@ impl Compactor {
         if let Err(error) = guard.release().await {
             warn!(%error, prefix = batch.prefix, "failed to release compaction lease");
         }
+        let status = match &result {
+            Ok(stats) if stats.skipped => "conflict",
+            Ok(_) => "success",
+            Err(_) => "error",
+        };
+        MarketDataMetrics::record_compaction_outcome(batch.kind.label(), status);
         result
     }
 

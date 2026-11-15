@@ -4,7 +4,6 @@ use parking_lot::Mutex;
 use platform_errors::PlatformResult;
 use platform_types::TimestampMilliseconds;
 use std::collections::HashMap;
-use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::{Notify, watch};
 
@@ -155,6 +154,3 @@ impl Clone for InMemoryLeaseStore {
         }
     }
 }
-
-#[allow(dead_code)]
-fn assert_send_sync(_: Arc<dyn LeaseStore>) {}
