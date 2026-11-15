@@ -49,3 +49,14 @@ fn digest_uses_generated_source_digests() {
         ])
     );
 }
+
+#[test]
+fn prefix_digest_is_plain_sha256_of_the_prefix() {
+    let digest = SourceBatch::prefix_digest("raw/events/hour=1");
+
+    assert_eq!(digest.len(), 64);
+    assert_eq!(
+        digest,
+        "65ae433e487e91464cdb2398a373dc6c1876779fd4db5819f94d3330c4d3591f"
+    );
+}

@@ -245,7 +245,7 @@ impl Compactor {
         format!(
             "compact:{}:{}",
             batch.kind.label(),
-            SourceBatch::digest_files(std::slice::from_ref(&batch.prefix))
+            SourceBatch::prefix_digest(&batch.prefix)
         )
     }
 }

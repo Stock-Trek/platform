@@ -34,6 +34,7 @@ impl IcebergCatalog {
         let mut props = HashMap::from([
             (REST_CATALOG_PROP_URI.to_string(), catalog_uri.clone()),
             (REST_CATALOG_PROP_WAREHOUSE.to_string(), warehouse.clone()),
+            ("commit.retry.num-retries".to_string(), "0".to_string()),
         ]);
         if let Some(token) = &config.token {
             props.insert("token".to_string(), token.clone());

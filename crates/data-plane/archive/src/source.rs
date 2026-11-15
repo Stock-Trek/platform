@@ -25,9 +25,19 @@ impl SourceBatch {
             hasher.update(file.as_bytes());
             hasher.update([0_u8]);
         }
+        Self::hex_digest(hasher.finalize().into())
+    }
+
+    pub fn prefix_digest(prefix: &str) -> String {
+        let mut hasher = Sha256::new();
+        hasher.update(prefix.as_bytes());
+        Self::hex_digest(hasher.finalize().into())
+    }
+
+    fn hex_digest(bytes: [u8; 32]) -> String {
         const HEX: &[u8; 16] = b"0123456789abcdef";
         let mut digest = String::with_capacity(64);
-        for byte in hasher.finalize() {
+        for byte in bytes {
             digest.push(HEX[(byte >> 4) as usize] as char);
             digest.push(HEX[(byte & 0x0f) as usize] as char);
         }
