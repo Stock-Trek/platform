@@ -57,12 +57,12 @@ arrow-array = "58"
 arrow-schema = "58"
 async-nats = "0.51"
 async-trait = "0.1"
-aws-config = "1"
+aws-config = { version = "1", default-features = false, features = ["behavior-version-latest", "default-https-client", "rt-tokio"] }
 aws-credential-types = "1"
 aws_lambda_events = { version = "1", default-features = false }
 aws-sdk-lambda = { version = "1", default-features = false }
 aws-sdk-dynamodb = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
-aws-sdk-s3 = { version = "1", default-features = false, features = ["behavior-version-latest", "default-https-client", "http-1x", "rt-tokio", "sigv4a"] }
+aws-sdk-s3 = { version = "1", default-features = false, features = ["behavior-version-latest", "default-https-client", "http-1x", "rt-tokio"] }
 aws-sdk-sqs = { version = "1", default-features = false }
 aws-sdk-ssm = { version = "1", default-features = false, features = ["default-https-client", "rt-tokio"] }
 aws-sigv4 = "1"
@@ -85,7 +85,7 @@ http-body-util = "0.1"
 httpdate = "1"
 iceberg = "0.11"
 iceberg-catalog-rest = "0.11"
-iceberg-storage-opendal = "0.11"
+iceberg-storage-opendal = { version = "0.11", default-features = false, features = ["opendal-s3"] }
 iris = { version = "1", registry = "shipyard" }
 jsonwebtoken = { version = "10", default-features = false }
 lambda_http = "1"
@@ -146,4 +146,3 @@ debug = "line-tables-only"
 
 [profile.dev.package."*"]
 debug = false
-opt-level = 3
