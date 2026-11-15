@@ -195,7 +195,7 @@ impl PlatformError {
         })
     }
 
-    #[cfg(feature = "http")]
+    #[cfg(feature = "http-client")]
     pub fn http_request(
         operation: &'static str,
         target: impl Into<String>,

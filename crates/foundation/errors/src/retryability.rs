@@ -167,7 +167,7 @@ impl Retryability {
         }
     }
 
-    #[cfg(feature = "http")]
+    #[cfg(feature = "http-client")]
     pub fn from_reqwest(error: &reqwest::Error) -> Retryability {
         match error.status().map(|status| status.as_u16()) {
             Some(status) => Self::from_http_status(status),

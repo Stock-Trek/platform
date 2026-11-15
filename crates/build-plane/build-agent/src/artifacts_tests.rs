@@ -1,7 +1,7 @@
 use crate::{
     artifacts::{
         Artifacts, COMPILE_OUTPUT_FILE, CWASM_ARTIFACT_FILE, SOURCE_TARGET_DIR,
-        USER_GENERATED_ARCHIVE, USER_GENERATED_DIR, WASM_ARTIFACT_FILE, WASM_TARGET,
+        USER_GENERATED_ARCHIVE, USER_GENERATED_DIR, WASM_ARTIFACT_FILE, WASM_PROFILE, WASM_TARGET,
     },
     signed_post::SignedPost,
 };
@@ -162,7 +162,7 @@ async fn target_dir_starts_from_the_prebuilt_cache_for_each_invocation() {
         .path()
         .join(SOURCE_TARGET_DIR)
         .join(WASM_TARGET)
-        .join("release");
+        .join(WASM_PROFILE);
     std_fs::create_dir_all(&prebuilt).unwrap();
     std_fs::write(prebuilt.join(WASM_ARTIFACT_FILE), b"prebuilt").unwrap();
 
@@ -171,7 +171,7 @@ async fn target_dir_starts_from_the_prebuilt_cache_for_each_invocation() {
     let artifact = first
         .path()
         .join(WASM_TARGET)
-        .join("release")
+        .join(WASM_PROFILE)
         .join(WASM_ARTIFACT_FILE);
     assert_eq!(std_fs::read(&artifact).unwrap(), b"prebuilt");
 
@@ -183,7 +183,7 @@ async fn target_dir_starts_from_the_prebuilt_cache_for_each_invocation() {
     let artifact = second
         .path()
         .join(WASM_TARGET)
-        .join("release")
+        .join(WASM_PROFILE)
         .join(WASM_ARTIFACT_FILE);
     assert_eq!(std_fs::read(artifact).unwrap(), b"prebuilt");
     assert!(!second.path().join("user-output").exists());

@@ -14,7 +14,7 @@ hyper-util = { workspace = true }
 parking_lot = { workspace = true }
 platform-auth-service = { workspace = true }
 platform-config = { workspace = true }
-platform-errors = { workspace = true, features = ["http"] }
+platform-errors = { workspace = true, features = ["http-client"] }
 platform-exchange-gateway = { workspace = true }
 platform-exchange-types = { workspace = true }
 platform-metrics = { workspace = true }

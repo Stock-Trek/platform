@@ -1,7 +1,7 @@
 use crate::{
     artifacts::{
         Artifacts, CARGO, CWASM_ARTIFACT_FILE, SOURCE_TARGET_DIR, WASM_ARTIFACT_FILE,
-        WASM_MANIFEST, WASM_TARGET, WASMTIME, WORKSPACE_ENTRIES,
+        WASM_MANIFEST, WASM_PROFILE, WASM_TARGET, WASMTIME, WORKSPACE_ENTRIES,
     },
     source_archive::Source,
 };
@@ -74,7 +74,7 @@ impl Artifacts {
         let manifest = workspace.join(WASM_MANIFEST);
         let module = target_dir
             .join(WASM_TARGET)
-            .join("release")
+            .join(WASM_PROFILE)
             .join(WASM_ARTIFACT_FILE);
         let output = Command::new(CARGO)
             .arg("build")
@@ -84,7 +84,8 @@ impl Artifacts {
             .arg(WASM_TARGET)
             .arg("--target-dir")
             .arg(target_dir)
-            .arg("--release")
+            .arg("--profile")
+            .arg(WASM_PROFILE)
             .arg("--lib")
             .arg("--locked")
             .arg("--offline")

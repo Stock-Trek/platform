@@ -56,9 +56,9 @@ platform-runner = { path = "crates/sandbox-plane/runner" }
 arrow-array = "58"
 arrow-schema = "58"
 async-nats = { version = "0.51", default-features = false, features = [
+    "aws-lc-rs",
     "jetstream",
     "kv",
-    "ring",
     "server_2_10",
     "server_2_11",
     "server_2_12",
@@ -158,8 +158,15 @@ zip = { version = "9", default-features = false }
 lto = "thin"
 codegen-units = 16
 
+[profile.agent]
+inherits = "release"
+lto = false
+
 [profile.dev]
 debug = "line-tables-only"
 
 [profile.dev.package."*"]
+debug = false
+
+[profile.test]
 debug = false
