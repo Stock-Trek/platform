@@ -79,7 +79,7 @@ A ledger entry is never written before its compacted files are visible.
 Compaction ids make retries idempotent without relying on snapshot summaries or batch fingerprint reconstruction.
 
 After a grace period, maintenance deletes processed raw objects and removes their entries from the raw table with a rewrite, or replaces in-place removal with a periodic rebuild from the unprocessed tail.
-Raw-table cleanup is a separate, observable stage with its own metrics, throughput limits, and back-pressure.
+Raw-table cleanup is a first-class part of the raw-deletion stage, with its own metrics, throughput limits, and back-pressure.
 It is not allowed to lag silently behind raw object deletion.
 
 Maintenance is a dedicated runner with four independent stages:
@@ -156,7 +156,7 @@ Choose Option 3 before building extensive ledger-specific tooling if a single-ta
    Keep it out of ingestion and compaction.
 6. Add partition-level coordination between compaction and compacted-file rewriting.
    Prove with concurrency tests that maintenance and compaction cannot race on the same partition.
-7. Add raw-table entry removal or periodic rebuild as a first-class stage with its own metrics, limits, and back-pressure.
+7. Add raw-table entry removal or periodic rebuild as a first-class part of raw cleanup with its own metrics, limits, and back-pressure.
    Only then enable raw object deletion and an S3 lifecycle backstop.
 8. Add compacted-file rewriting and test that replacement, expiry, and orphan removal preserve exactly one copy of every archived record.
 9. Test crash points, expired snapshots, orphan grace periods, lease expiry, concurrent maintenance, and recovery after raw objects are gone.
