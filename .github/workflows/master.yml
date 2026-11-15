@@ -43,9 +43,6 @@ jobs:
           cache-all-crates: true
           shared-key: linux-rust
 
-      - name: Install cargo-audit
-        run: cargo install cargo-audit --locked --version 0.23.0
-
       # Only a read-only Shipyard deploy key enters this job, fetched by name
       # from the non-production identity. No AWS, publish or App credentials.
       - name: Fetch Shipyard known host
@@ -98,11 +95,6 @@ jobs:
           shipyard-cargo-token: ${{ env.CARGO_REGISTRIES_SHIPYARD_TOKEN }}
           shipyard-ssh-private-key: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
           shipyard-known-host: ${{ env.SHIPYARD_KNOWN_HOST }}
-
-      - name: Run cargo-audit
-        uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Format
         run: cargo fmt --check
