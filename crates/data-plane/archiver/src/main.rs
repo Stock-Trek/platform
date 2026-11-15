@@ -1,5 +1,6 @@
 mod archiver_runner;
 mod config;
+mod recovery;
 mod sink;
 mod source;
 
@@ -12,6 +13,7 @@ use crate::{
 };
 use platform_archive::IcebergCatalog;
 use platform_errors::PlatformResult;
+use platform_lease::NatsLeaseStore;
 use platform_runtime::{HealthRunner, Service};
 use std::sync::Arc;
 
@@ -25,7 +27,11 @@ async fn main() -> PlatformResult<()> {
     let health = HealthRunner::from_service_env("ARCHIVER").await?;
     let source = NatsArchiveSource::connect(&config).await?;
     let catalog = Arc::new(IcebergCatalog::connect(&config.iceberg).await?);
-    let sink = S3ParquetSink::connect(&config, catalog).await?;
+    let leases = Arc::new(
+        NatsLeaseStore::connect(&config.nats_url, "platform-archiver", &config.lease_bucket)
+            .await?,
+    );
+    let sink = S3ParquetSink::connect(&config, catalog, leases).await?;
     sink.recover_uncommitted().await?;
     health.mark_ready();
     health

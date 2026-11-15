@@ -39,6 +39,8 @@ mod quantization_tests;
 mod routing_key_tests;
 #[cfg(test)]
 mod s3_object_tests;
+#[cfg(test)]
+mod source_tests;
 
 pub use archive_buffer::ArchiveBuffer;
 pub use archive_handoff::ArchiveHandoff;
@@ -54,9 +56,9 @@ pub use archived_market_event::ArchivedMarketEvent;
 pub use batch::ArchiveBatch;
 pub use content_hash::{ContentHash, ContentHasher};
 pub use iceberg::{
-    ArchiveCatalog, ArchiveIcebergTable, ArchiveTableLayer, ICEBERG_CATALOG_TOKEN,
-    ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE, ICEBERG_NAMESPACE, IcebergCatalog,
-    IcebergConfig, IcebergDataFile,
+    ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, ArchiveTableLayer,
+    ICEBERG_CATALOG_TOKEN, ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE, ICEBERG_NAMESPACE,
+    IcebergCatalog, IcebergConfig, IcebergDataFile, RegisterConflict, RegisterOutcome,
 };
 pub use layout::{ArchiveBucket, ArchiveHour, ArchivePath};
 pub use parquet_reader::ParquetReader;

@@ -2,8 +2,8 @@ use async_trait::async_trait;
 use aws_sdk_s3::primitives::ByteStream;
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveKind,
-    ArchiveParquetWriter, ArchivePartition, ArchiveRecord, ArchiveTableLayer, Bucket, ContentHash,
-    IcebergDataFile, ObjectKey, RoutingBucket, S3,
+    ArchiveParquetWriter, ArchivePartition, ArchiveRecord, ArchiveRegistration, ArchiveTableLayer,
+    Bucket, ContentHash, IcebergDataFile, ObjectKey, RegisterOutcome, RoutingBucket, S3,
 };
 use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::ClosedCandle;
@@ -223,13 +223,19 @@ impl CandleSink for S3CandleSink {
         }
 
         if !data_files.is_empty() {
-            self.catalog
+            let registration = ArchiveRegistration::new(data_files, None::<Vec<String>>)?;
+            let outcome = self
+                .catalog
                 .register_files(
                     ArchiveIcebergTable::new(self.layer, ArchiveKind::Candles),
-                    &data_files,
-                    None,
+                    &registration,
                 )
                 .await?;
+            if let RegisterOutcome::Conflict(conflict) = outcome {
+                return Err(PlatformError::external(std::io::Error::other(format!(
+                    "rebuilt archive registration conflicted: {conflict:?}"
+                ))));
+            }
         }
         info!(
             layer = self.layer.label(),

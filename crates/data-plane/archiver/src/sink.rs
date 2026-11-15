@@ -3,17 +3,18 @@ use async_trait::async_trait;
 use aws_sdk_s3::Client as S3Client;
 use bytes::Bytes;
 use platform_archive::{
-    ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveParquet,
-    ArchivePath, ArchiveRecord, Bucket, ContentHash, IcebergDataFile, ObjectKey, ParquetReader,
-    RoutingBucket, S3,
+    ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveParquet,
+    ArchiveRecord, ArchiveRegistration, Bucket, ContentHash, IcebergDataFile, ObjectKey,
+    RegisterOutcome, RoutingBucket, S3,
 };
 use platform_errors::PlatformResult;
+use platform_lease::LeaseStore;
 use platform_metrics::MarketDataMetrics;
 use platform_metrics::S3_OPERATION_ARCHIVE_UPLOAD;
 use platform_time::RetryPolicy;
 use std::{sync::Arc, time::Duration};
 use tokio::time::sleep;
-use tracing::{info, warn};
+use tracing::warn;
 
 const UPLOAD_MAX_ATTEMPTS: usize = 3;
 const UPLOAD_RETRY_BACKOFF: Duration = Duration::from_millis(500);
@@ -34,24 +35,33 @@ pub trait ArchiveSink: Send + Sync {
 /// and commits the same data file instead of creating a duplicate. Objects left
 /// uncommitted by an earlier run are registered during startup.
 pub struct S3ParquetSink {
-    s3_client: S3Client,
-    catalog: Arc<dyn ArchiveCatalog>,
-    bucket: Bucket,
-    prefix: String,
-    bucket_millis: i64,
+    pub(crate) s3_client: S3Client,
+    pub(crate) catalog: Arc<dyn ArchiveCatalog>,
+    pub(crate) leases: Arc<dyn LeaseStore>,
+    pub(crate) bucket: Bucket,
+    pub(crate) prefix: String,
+    pub(crate) bucket_millis: i64,
+    pub(crate) lease_ttl: Duration,
+    pub(crate) max_work: Duration,
+    pub(crate) lease_initial_token: u64,
 }
 
 impl S3ParquetSink {
     pub async fn connect(
         config: &ArchiverConfig,
         catalog: Arc<dyn ArchiveCatalog>,
+        leases: Arc<dyn LeaseStore>,
     ) -> PlatformResult<Self> {
         Ok(Self {
             s3_client: S3::s3_client().await,
             catalog,
+            leases,
             bucket: Bucket::new(config.s3_bucket.clone()),
             prefix: config.s3_prefix.clone(),
             bucket_millis: config.bucket_millis,
+            lease_ttl: config.lease_ttl,
+            max_work: config.max_work,
+            lease_initial_token: config.lease_initial_token,
         })
     }
 
@@ -105,77 +115,6 @@ impl S3ParquetSink {
             i64::try_from(records).unwrap_or(i64::MAX),
         )
     }
-
-    pub async fn recover_uncommitted(&self) -> PlatformResult<()> {
-        let prefix = self.prefix.trim_matches('/');
-        let list_prefix = if prefix.is_empty() {
-            String::new()
-        } else {
-            format!("{prefix}/")
-        };
-        let s3_client = S3::s3_client().await;
-        let objects = S3::list_objects(
-            &s3_client,
-            &self.bucket,
-            &ObjectKey::new(list_prefix.clone()),
-        )
-        .await?;
-
-        for kind in [ArchiveKind::Events, ArchiveKind::Candles] {
-            let table = ArchiveIcebergTable::raw(kind);
-            let registered = self.catalog.registered_data_files(table).await?;
-            let mut files = Vec::new();
-            for object in &objects {
-                let key = object.key.as_str();
-                if !key.ends_with(".parquet") {
-                    continue;
-                }
-                let Some(relative) = ArchivePath::relative_key(key, &list_prefix) else {
-                    continue;
-                };
-                let Some((kind_segment, _)) = relative.split_once('/') else {
-                    continue;
-                };
-                if kind_segment != kind.label()
-                    || ArchivePath::bucket_start_from_key(relative).is_none()
-                {
-                    continue;
-                }
-                let location = format!("s3://{}/{}", self.bucket, key);
-                if registered.contains(&location) {
-                    continue;
-                }
-                let Ok(file_size) = u64::try_from(object.size) else {
-                    warn!(
-                        key,
-                        size = object.size,
-                        "skipping uncommitted archive object"
-                    );
-                    continue;
-                };
-                let reader =
-                    ParquetReader::new(&self.s3_client, &self.bucket, &object.key, file_size);
-                let record_count = match reader.row_count().await {
-                    Ok(record_count) => record_count,
-                    Err(error) => {
-                        warn!(%error, key, "skipping unreadable uncommitted archive object");
-                        continue;
-                    }
-                };
-                files.push(IcebergDataFile::new(location, object.size, record_count));
-            }
-            if files.is_empty() {
-                continue;
-            }
-            info!(
-                table = table.name(),
-                files = files.len(),
-                "recovering uncommitted archive files"
-            );
-            self.catalog.register_files(table, &files, None).await?;
-        }
-        Ok(())
-    }
 }
 
 #[async_trait]
@@ -220,7 +159,15 @@ impl ArchiveSink for S3ParquetSink {
         }
 
         for (table, files) in pending {
-            self.catalog.register_files(table, &files, None).await?;
+            let registration = ArchiveRegistration::new(files, None::<Vec<String>>)?;
+            let outcome = self.catalog.register_files(table, &registration).await?;
+            if let RegisterOutcome::Conflict(conflict) = outcome {
+                return Err(platform_errors::PlatformError::external(
+                    std::io::Error::other(format!(
+                        "archive flush registration conflicted: {conflict:?}"
+                    )),
+                ));
+            }
         }
         Ok(())
     }

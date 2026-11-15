@@ -70,6 +70,10 @@ fn config() -> ArchiverConfig {
         bucket_millis: 3_600_000,
         max_records: 100,
         dedupe_capacity: 100,
+        lease_bucket: "leases".to_string(),
+        lease_ttl: std::time::Duration::from_secs(30),
+        max_work: std::time::Duration::from_secs(20),
+        lease_initial_token: 1,
         iceberg: platform_archive::IcebergConfig {
             catalog_uri: "http://localhost:8181".to_string(),
             warehouse: "s3://archive/iceberg".to_string(),

@@ -14,6 +14,10 @@ const ARCHIVER_FLUSH_INTERVAL_SECS: &str = "ARCHIVER_FLUSH_INTERVAL_SECS";
 const ARCHIVER_BUCKET_SECS: &str = "ARCHIVER_BUCKET_SECS";
 const ARCHIVER_MAX_RECORDS: &str = "ARCHIVER_MAX_RECORDS";
 const ARCHIVER_DEDUPE_CAPACITY: &str = "ARCHIVER_DEDUPE_CAPACITY";
+const ARCHIVER_LEASE_BUCKET: &str = "ARCHIVER_LEASE_BUCKET";
+const ARCHIVER_LEASE_TTL_SECS: &str = "ARCHIVER_LEASE_TTL_SECS";
+const ARCHIVER_MAX_WORK_SECS: &str = "ARCHIVER_MAX_WORK_SECS";
+const ARCHIVER_LEASE_INITIAL_TOKEN: &str = "ARCHIVER_LEASE_INITIAL_TOKEN";
 
 #[derive(Debug, Clone)]
 pub struct ArchiverConfig {
@@ -27,6 +31,10 @@ pub struct ArchiverConfig {
     pub bucket_millis: i64,
     pub max_records: usize,
     pub dedupe_capacity: usize,
+    pub lease_bucket: String,
+    pub lease_ttl: Duration,
+    pub max_work: Duration,
+    pub lease_initial_token: u64,
     pub iceberg: IcebergConfig,
 }
 
@@ -53,6 +61,27 @@ impl ArchiverConfig {
 
         let max_records = Config::required_positive_usize(vars, ARCHIVER_MAX_RECORDS)?;
         let dedupe_capacity = Config::required_positive_usize(vars, ARCHIVER_DEDUPE_CAPACITY)?;
+        let lease_bucket = vars.required(ARCHIVER_LEASE_BUCKET)?;
+        let lease_ttl = Config::required_positive_duration_secs(vars, ARCHIVER_LEASE_TTL_SECS)?;
+        let max_work = Config::required_positive_duration_secs(vars, ARCHIVER_MAX_WORK_SECS)?;
+        if max_work >= lease_ttl {
+            return Err(PlatformError::config_invalid(
+                ARCHIVER_MAX_WORK_SECS,
+                "must be shorter than ARCHIVER_LEASE_TTL_SECS",
+            ));
+        }
+        platform_lease::LeaseRequest::renewal_interval(lease_ttl)?;
+        let initial_token = vars
+            .optional(ARCHIVER_LEASE_INITIAL_TOKEN)?
+            .map(|value| {
+                value.parse::<i64>().map_err(|error| {
+                    PlatformError::config_invalid_source(ARCHIVER_LEASE_INITIAL_TOKEN, error)
+                })
+            })
+            .transpose()?
+            .unwrap_or(1);
+        let lease_initial_token =
+            platform_lease::LeaseRequest::validate_initial_token(initial_token)?;
         let iceberg = IcebergConfig::from_vars(vars)?;
 
         Ok(Self {
@@ -66,6 +95,10 @@ impl ArchiverConfig {
             bucket_millis,
             max_records,
             dedupe_capacity,
+            lease_bucket,
+            lease_ttl,
+            max_work,
+            lease_initial_token,
             iceberg,
         })
     }

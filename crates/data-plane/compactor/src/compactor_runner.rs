@@ -67,6 +67,7 @@ where
                 records_read = stats.records_read,
                 records_written = stats.records_written,
                 output_files = stats.output_files,
+                skipped = stats.skipped,
                 "compacted archive batch"
             );
         }

@@ -22,5 +22,5 @@ pub trait LeaseStore: Send + Sync {
 
     async fn current(&self, shard: ShardId) -> PlatformResult<Option<WriterLease>>;
 
-    fn watch(&self, shard: ShardId) -> PlatformResult<super::LeaseWatch>;
+    fn platform_store(&self) -> &dyn platform_lease::LeaseStore;
 }

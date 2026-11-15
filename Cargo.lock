@@ -3896,6 +3896,7 @@ dependencies = [
  "platform-archive",
  "platform-config",
  "platform-errors",
+ "platform-lease",
  "platform-market-data",
  "platform-metrics",
  "platform-nats",
@@ -3933,11 +3934,14 @@ dependencies = [
  "platform-market-data",
  "platform-time",
  "platform-types",
+ "reqwest 0.13.5",
  "serde",
+ "serde_json",
  "sha2 0.11.1",
  "stock-trek-types",
  "tokio",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -3951,6 +3955,7 @@ dependencies = [
  "platform-archive",
  "platform-config",
  "platform-errors",
+ "platform-lease",
  "platform-market-data",
  "platform-metrics",
  "platform-nats",
@@ -4134,6 +4139,7 @@ dependencies = [
  "platform-archive",
  "platform-config",
  "platform-errors",
+ "platform-lease",
  "platform-market-data",
  "platform-runtime",
  "platform-types",
@@ -4325,6 +4331,24 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+]
+
+[[package]]
+name = "platform-lease"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "parking_lot",
+ "platform-errors",
+ "platform-metrics",
+ "platform-nats",
+ "platform-time",
+ "platform-types",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tokio",
+ "tracing",
 ]
 
 [[package]]

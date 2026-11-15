@@ -1,5 +1,5 @@
 use crate::iceberg::catalog::{ArchiveCatalog, IcebergDataFile};
-use crate::iceberg::{ArchiveIcebergTable, IcebergConfig};
+use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, IcebergConfig, RegisterOutcome};
 use async_trait::async_trait;
 use iceberg::{
     Catalog, CatalogBuilder, ErrorKind, NamespaceIdent, TableCreation, TableIdent,
@@ -17,9 +17,11 @@ use std::{
 
 pub struct IcebergCatalog {
     pub catalog: iceberg_catalog_rest::RestCatalog,
-    namespace: NamespaceIdent,
+    pub(super) namespace: NamespaceIdent,
     warehouse: String,
     namespace_name: String,
+    pub(super) catalog_uri: String,
+    pub(super) token: Option<String>,
 }
 
 impl IcebergCatalog {
@@ -50,10 +52,12 @@ impl IcebergCatalog {
             namespace,
             warehouse,
             namespace_name: config.namespace.clone(),
+            catalog_uri: config.catalog_uri.clone(),
+            token: config.token.clone(),
         })
     }
 
-    fn table_ident(&self, table: ArchiveIcebergTable) -> TableIdent {
+    pub(super) fn table_ident(&self, table: ArchiveIcebergTable) -> TableIdent {
         TableIdent::new(self.namespace.clone(), table.name().to_string())
     }
 
@@ -100,7 +104,10 @@ impl IcebergCatalog {
             .name(table.name().to_string())
             .location(self.table_location(table))
             .schema(ArchiveIcebergTable::schema(table.kind())?)
-            .properties(HashMap::<String, String>::new())
+            .properties(HashMap::from([(
+                "commit.retry.num-retries".to_string(),
+                "0".to_string(),
+            )]))
             .format_version(FormatVersion::V2)
             .build();
 
@@ -125,10 +132,9 @@ impl ArchiveCatalog for IcebergCatalog {
     async fn register_files(
         &self,
         table: ArchiveIcebergTable,
-        files: &[IcebergDataFile],
-        source_files: Option<&[String]>,
-    ) -> PlatformResult<()> {
-        self.commit_files(table, files, source_files).await
+        registration: &ArchiveRegistration,
+    ) -> PlatformResult<RegisterOutcome> {
+        self.commit_files(table, registration).await
     }
 
     async fn registered_data_files(

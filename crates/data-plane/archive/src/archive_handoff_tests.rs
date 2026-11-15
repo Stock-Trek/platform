@@ -1,4 +1,7 @@
-use crate::{ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind, IcebergDataFile};
+use crate::{
+    ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind, ArchiveRegistration,
+    IcebergDataFile, RegisterOutcome,
+};
 use async_trait::async_trait;
 use platform_errors::PlatformResult;
 use std::collections::HashSet;
@@ -15,10 +18,9 @@ impl ArchiveCatalog for FakeCatalog {
     async fn register_files(
         &self,
         _table: ArchiveIcebergTable,
-        _files: &[IcebergDataFile],
-        _source_files: Option<&[String]>,
-    ) -> PlatformResult<()> {
-        Ok(())
+        _registration: &ArchiveRegistration,
+    ) -> PlatformResult<RegisterOutcome> {
+        Ok(RegisterOutcome::Applied)
     }
 
     async fn registered_data_files(

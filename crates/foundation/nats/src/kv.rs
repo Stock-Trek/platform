@@ -57,8 +57,35 @@ impl KeyValue {
         })
     }
 
+    pub async fn connect_existing(url: &str, name: &str, bucket: &str) -> PlatformResult<Self> {
+        Self::validate_bucket(bucket)?;
+        let address = NatsAddress::parse(url)?;
+        let client = address.connect(name).await?;
+        let context = jetstream::new(client);
+        let store = context
+            .get_key_value(bucket)
+            .await
+            .map_err(|error| JetStream::protocol_error("failed to open KV bucket", error))?;
+        Ok(Self {
+            bucket: bucket.to_string(),
+            context,
+            store,
+        })
+    }
+
     pub fn bucket(&self) -> &str {
         &self.bucket
+    }
+
+    /// Returns the configured per-key history depth without creating the
+    /// bucket when it is missing.
+    pub async fn history(&self) -> PlatformResult<i64> {
+        let status = self
+            .store
+            .status()
+            .await
+            .map_err(|error| JetStream::protocol_error("failed to read KV status", error))?;
+        Ok(status.history())
     }
 
     /// Stores `value` under `key` and returns the KV revision assigned by the

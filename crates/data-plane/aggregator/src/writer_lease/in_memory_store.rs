@@ -1,53 +1,31 @@
 use crate::{
-    LeaseStore, LeaseWatch,
     shard_id::ShardId,
-    writer_lease::{WriterLease, watch::LeaseWatchStream},
+    writer_lease::{LeaseStore, WriterLease},
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::PlatformResult;
-use platform_types::TimestampMilliseconds;
+use platform_lease::{
+    InMemoryLeaseStore as PlatformMemory, LeaseScope, LeaseStore as PlatformLeaseStore,
+};
 use std::{
-    collections::HashMap,
     sync::atomic::{AtomicUsize, Ordering},
     time::Duration,
 };
-use tokio::sync::{
-    Notify,
-    watch::{Receiver, Sender, channel},
-};
 
-#[derive(Debug)]
 pub struct InMemoryLeaseStore {
-    leases: Mutex<HashMap<ShardId, WriterLease>>,
-    acquire_attempts: Notify,
+    inner: PlatformMemory,
     acquire_attempt_count: AtomicUsize,
-    changes: Sender<Option<WriterLease>>,
+    last_scope: Mutex<Option<LeaseScope>>,
 }
 
 impl Default for InMemoryLeaseStore {
     fn default() -> Self {
-        let (changes, _receiver) = channel(None);
         Self {
-            leases: Mutex::new(HashMap::new()),
-            acquire_attempts: Notify::new(),
+            inner: PlatformMemory::new(),
             acquire_attempt_count: AtomicUsize::new(0),
-            changes,
+            last_scope: Mutex::new(None),
         }
-    }
-}
-
-struct MemoryLeaseWatch {
-    changes: Receiver<Option<WriterLease>>,
-}
-
-#[async_trait]
-impl LeaseWatchStream for MemoryLeaseWatch {
-    async fn next(&mut self) -> PlatformResult<Option<WriterLease>> {
-        if self.changes.changed().await.is_err() {
-            return Ok(None);
-        }
-        Ok(self.changes.borrow_and_update().clone())
     }
 }
 
@@ -57,15 +35,20 @@ impl InMemoryLeaseStore {
     }
 
     pub async fn wait_for_acquire_attempt(&self) {
-        self.acquire_attempts.notified().await;
+        let scope = self.last_scope.lock().clone();
+        let Some(scope) = scope else {
+            return;
+        };
+        let count = u64::try_from(self.acquire_attempt_count()).unwrap_or(u64::MAX);
+        self.inner.wait_for_acquire_attempt(&scope, count).await;
     }
 
     pub fn acquire_attempt_count(&self) -> usize {
         self.acquire_attempt_count.load(Ordering::Relaxed)
     }
 
-    fn publish(&self, lease: Option<WriterLease>) {
-        self.changes.send_replace(lease);
+    fn remember(&self, shard: ShardId) {
+        *self.last_scope.lock() = Some(WriterLease::scope(shard));
     }
 }
 
@@ -77,34 +60,13 @@ impl LeaseStore for InMemoryLeaseStore {
         owner_id: &str,
         ttl: Duration,
     ) -> PlatformResult<Option<WriterLease>> {
-        self.acquire_attempts.notify_one();
         self.acquire_attempt_count.fetch_add(1, Ordering::Relaxed);
-        let now = TimestampMilliseconds::now();
-        let mut leases = self.leases.lock();
-        let lease = match leases.get(&shard) {
-            Some(existing) if existing.owner_id == owner_id => {
-                let mut renewed = existing.clone();
-                renewed.expires_at = WriterLease::expires_at(now, ttl);
-                renewed
-            }
-            Some(existing) if !existing.is_expired(now) => return Ok(None),
-            Some(existing) => WriterLease {
-                shard,
-                owner_id: owner_id.to_string(),
-                fencing_token: existing.fencing_token.saturating_add(1),
-                expires_at: WriterLease::expires_at(now, ttl),
-            },
-            None => WriterLease {
-                shard,
-                owner_id: owner_id.to_string(),
-                fencing_token: 1,
-                expires_at: WriterLease::expires_at(now, ttl),
-            },
-        };
-        leases.insert(shard, lease.clone());
-        drop(leases);
-        self.publish(Some(lease.clone()));
-        Ok(Some(lease))
+        self.remember(shard);
+        let lease = self
+            .inner
+            .acquire(&WriterLease::request(shard, owner_id, ttl))
+            .await?;
+        Ok(lease.map(|lease| WriterLease::from_lease(shard, lease)))
     }
 
     async fn renew(
@@ -112,43 +74,21 @@ impl LeaseStore for InMemoryLeaseStore {
         lease: &WriterLease,
         ttl: Duration,
     ) -> PlatformResult<Option<WriterLease>> {
-        let now = TimestampMilliseconds::now();
-        let mut leases = self.leases.lock();
-        let Some(current) = leases.get_mut(&lease.shard) else {
-            return Ok(None);
-        };
-        if !current.is_held_by(&lease.owner_id, lease.fencing_token) || current.is_expired(now) {
-            return Ok(None);
-        }
-        current.expires_at = WriterLease::expires_at(now, ttl);
-        let renewed = current.clone();
-        drop(leases);
-        self.publish(Some(renewed.clone()));
-        Ok(Some(renewed))
+        let renewed = self.inner.renew(&lease.to_lease(), ttl).await?;
+        Ok(renewed.map(|renewed| WriterLease::from_lease(lease.shard, renewed)))
     }
 
     async fn release(&self, lease: &WriterLease) -> PlatformResult<()> {
-        let mut leases = self.leases.lock();
-        if let Some(current) = leases.get_mut(&lease.shard)
-            && current.is_held_by(&lease.owner_id, lease.fencing_token)
-        {
-            current.expires_at = TimestampMilliseconds::now();
-        }
-        let current = leases.get(&lease.shard).cloned();
-        drop(leases);
-        if current.is_some() {
-            self.publish(current);
-        }
+        self.inner.release(&lease.to_lease()).await?;
         Ok(())
     }
 
     async fn current(&self, shard: ShardId) -> PlatformResult<Option<WriterLease>> {
-        Ok(self.leases.lock().get(&shard).cloned())
+        let lease = self.inner.current(&WriterLease::scope(shard)).await?;
+        Ok(lease.map(|lease| WriterLease::from_lease(shard, lease)))
     }
 
-    fn watch(&self, _shard: ShardId) -> PlatformResult<LeaseWatch> {
-        Ok(LeaseWatch::new(MemoryLeaseWatch {
-            changes: self.changes.subscribe(),
-        }))
+    fn platform_store(&self) -> &dyn platform_lease::LeaseStore {
+        &self.inner
     }
 }

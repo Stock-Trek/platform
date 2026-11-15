@@ -9,3 +9,17 @@ pub struct SourceBatch {
     pub bucket_start: TimestampMilliseconds,
     pub files: Vec<String>,
 }
+
+impl SourceBatch {
+    pub fn digest(&self) -> String {
+        let mut files = self.files.clone();
+        files.sort();
+        files.dedup();
+        let mut hasher = crate::ContentHasher::new();
+        for file in files {
+            hasher.update(file.as_bytes());
+            hasher.update([0_u8]);
+        }
+        hasher.finish().to_string()
+    }
+}

@@ -23,8 +23,11 @@ platform-errors = { workspace = true, features = ["archive", "http", "storage"] 
 platform-market-data = { workspace = true }
 platform-time = { workspace = true }
 platform-types = { workspace = true }
+reqwest = { workspace = true, features = ["json", "rustls"] }
 serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
 sha2 = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["fs", "macros", "rt", "rt-multi-thread", "sync", "time"] }
 tracing = { workspace = true }
+uuid = { workspace = true }

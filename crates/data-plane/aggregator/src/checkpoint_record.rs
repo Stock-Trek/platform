@@ -10,6 +10,7 @@ use crate::state::AggregatorState;
 use crate::{WriterLease, config::AggregatorConfig};
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};
+use platform_lease::Lease;
 use platform_nats::{JetStream, KeyValue, Message};
 use platform_types::{DurationMilliseconds, TimestampMilliseconds};
 use serde::{Deserialize, Serialize};
@@ -218,7 +219,7 @@ impl NatsStateStore {
                 "no active writer lease",
             ));
         };
-        let lease: WriterLease = serde_json::from_slice(&payload)?;
+        let lease: Lease = serde_json::from_slice(&payload)?;
         if !lease.is_held_by(&checkpoint.writer_id, checkpoint.fencing_token)
             || lease.is_expired(TimestampMilliseconds::now())
         {

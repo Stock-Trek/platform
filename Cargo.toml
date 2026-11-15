@@ -36,6 +36,7 @@ platform-exchange-types = { path = "crates/foundation/exchange-types" }
 platform-market-data = { path = "crates/foundation/market-data" }
 platform-messages = { path = "crates/foundation/messages" }
 platform-metrics = { path = "crates/foundation/metrics" }
+platform-lease = { path = "crates/foundation/lease" }
 platform-nats = { path = "crates/foundation/nats" }
 platform-portfolio-ownership = { path = "crates/foundation/portfolio-ownership" }
 platform-proto-gen = { path = "crates/foundation/proto-gen" }

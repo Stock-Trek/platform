@@ -1,0 +1,20 @@
+[package]
+name = "platform-lease"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+async-trait = { workspace = true }
+parking_lot = { workspace = true }
+platform-errors = { workspace = true }
+platform-metrics = { workspace = true }
+platform-nats = { workspace = true }
+platform-time = { workspace = true }
+platform-types = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tracing = { workspace = true }
