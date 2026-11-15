@@ -25,7 +25,7 @@ pub enum IoError {
     #[cfg(feature = "archive")]
     #[error("Parquet error: {0}")]
     Parquet(#[from] parquet::errors::ParquetError),
-    #[cfg(feature = "archive")]
+    #[cfg(feature = "zip")]
     #[error("Zip error: {0}")]
     Zip(#[from] zip::result::ZipError),
 }
@@ -38,7 +38,7 @@ impl IoError {
             Self::CommandFailed { status, .. } => Retryability::from_exit_status(status),
             Self::Io { source, .. } => Retryability::from_io_source(source.as_ref()),
             Self::IoError(error) => Retryability::from_io_error(error),
-            #[cfg(feature = "archive")]
+            #[cfg(feature = "zip")]
             Self::Zip(_) => Retryability::Permanent,
         }
     }

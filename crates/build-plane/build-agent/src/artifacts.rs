@@ -6,7 +6,8 @@ use tempfile::TempDir;
 
 pub const WASM_MANIFEST: &str = "crates/sandbox-plane/runner/Cargo.toml";
 pub const WASM_TARGET: &str = "wasm32-wasip1";
-pub const WASM_ARTIFACT_FILE: &str = "runner.wasm";
+pub const WASM_PROFILE: &str = "agent";
+pub const WASM_ARTIFACT_FILE: &str = "platform_runner.wasm";
 pub const CWASM_ARTIFACT_FILE: &str = "runner.cwasm";
 pub const SOURCE_TARGET_DIR: &str = "target";
 pub const USER_GENERATED_DIR: &str = "crates/sandbox-plane/runner/src/user_generated";

@@ -108,7 +108,7 @@ RUN cargo build \
 RUN cargo build \
       --manifest-path ./crates/sandbox-plane/runner/Cargo.toml \
       --target wasm32-wasip1 \
-      --release \
+      --profile agent \
       --lib \
       --locked \
       --offline

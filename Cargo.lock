@@ -330,6 +330,7 @@ version = "0.51.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a4f92759f418774b78c36ef07885849150ce950c67d9bcdeff8a9c253f57d9a1"
 dependencies = [
+ "aws-lc-rs",
  "base64 0.22.1",
  "bytes",
  "futures-util",
@@ -338,7 +339,6 @@ dependencies = [
  "portable-atomic",
  "rand 0.10.3",
  "regex",
- "ring",
  "rustls-native-certs",
  "rustls-pki-types",
  "rustls-webpki",
@@ -4162,7 +4162,6 @@ dependencies = [
  "arrow-schema",
  "aws-credential-types",
  "aws-sdk-lambda",
- "aws-sigv4",
  "base64 0.23.1",
  "chrono",
  "http",

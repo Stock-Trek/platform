@@ -1,7 +1,4 @@
 use crate::retryability::Retryability;
-use aws_sigv4::{
-    http_request::SigningError, sign::v4::signing_params::BuildError as SigningParamsError,
-};
 use http::header::{InvalidHeaderName, InvalidHeaderValue, ToStrError};
 
 #[derive(Debug, thiserror::Error, strum::IntoStaticStr)]
@@ -22,6 +19,7 @@ pub enum HttpError {
         status: u16,
         body: String,
     },
+    #[cfg(feature = "http-client")]
     #[error("{operation} request failed for {target}: {source}")]
     Request {
         operation: &'static str,
@@ -29,29 +27,26 @@ pub enum HttpError {
         #[source]
         source: reqwest::Error,
     },
+    #[cfg(feature = "http-client")]
     #[error("Reqwest error: {0}")]
     Reqwest(#[from] reqwest::Error),
     #[error("Serde error: {0}")]
     Serde(#[from] serde_json::Error),
-    #[error("Signing error: {0}")]
-    Signing(#[from] SigningError),
-    #[error("Signing params error: {0}")]
-    SigningParams(#[from] SigningParamsError),
 }
 
 impl HttpError {
     pub fn retryability(&self) -> Retryability {
         match self {
+            #[cfg(feature = "http-client")]
             Self::Reqwest(error) => Retryability::from_reqwest(error),
+            #[cfg(feature = "http-client")]
             Self::Request { source, .. } => Retryability::from_reqwest(source),
             Self::Rejected { status, .. } => Retryability::from_http_status(*status),
             Self::Http(_)
             | Self::InvalidHeaderName(_)
             | Self::InvalidHeaderValue(_)
             | Self::InvalidHeaderValueStr(_)
-            | Self::Serde(_)
-            | Self::SigningParams(_)
-            | Self::Signing(_) => Retryability::Permanent,
+            | Self::Serde(_) => Retryability::Permanent,
         }
     }
 }

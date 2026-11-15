@@ -37,7 +37,7 @@ impl From<std::io::Error> for PlatformError {
     }
 }
 
-#[cfg(feature = "archive")]
+#[cfg(feature = "zip")]
 impl From<zip::result::ZipError> for PlatformError {
     fn from(error: zip::result::ZipError) -> Self {
         Self::Io(IoError::from(error))
@@ -85,7 +85,7 @@ impl From<http::Error> for PlatformError {
     }
 }
 
-#[cfg(feature = "http")]
+#[cfg(feature = "http-client")]
 impl From<reqwest::Error> for PlatformError {
     fn from(error: reqwest::Error) -> Self {
         Self::Http(HttpError::from(error))

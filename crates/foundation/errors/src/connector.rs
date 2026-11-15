@@ -1,4 +1,4 @@
-#[cfg(feature = "http")]
+#[cfg(feature = "http-client")]
 use crate::http::HttpError;
 use crate::{
     platform::PlatformError, retryability::Retryability, system::SystemError, timeout::TimeoutError,
@@ -113,7 +113,7 @@ impl ConnectorError {
                 PlatformError::Connector(Self::GatewayHttpStatus { status }) => {
                     Retryability::from_http_status(*status)
                 }
-                #[cfg(feature = "http")]
+                #[cfg(feature = "http-client")]
                 PlatformError::Http(HttpError::Request { source, .. }) => {
                     Retryability::from_reqwest(source)
                 }

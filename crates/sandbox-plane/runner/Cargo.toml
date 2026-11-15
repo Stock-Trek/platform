@@ -22,7 +22,7 @@ futures = { workspace = true }
 hex = { workspace = true }
 parking_lot = { workspace = true }
 platform-config = { workspace = true }
-platform-errors = { workspace = true, features = ["http", "storage"] }
+platform-errors = { workspace = true, features = ["http-client", "storage"] }
 platform-messages = { workspace = true }
 platform-sigv4 = { workspace = true }
 platform-time = { workspace = true }
