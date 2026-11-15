@@ -48,7 +48,7 @@ jobs:
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
-          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          identity-id: "2aecd8e8-fa70-41c3-bf79-a124b5675a46"
           project-slug: "agents"
           env-slug: "dev"
           secret-name: "SHIPYARD_KNOWN_HOST"
@@ -57,14 +57,24 @@ jobs:
         uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
           method: "oidc"
-          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          identity-id: "2aecd8e8-fa70-41c3-bf79-a124b5675a46"
           project-slug: "agents"
           env-slug: "dev"
           secret-name: "SHIPYARD_SSH_PRIVATE_KEY_READONLY"
 
+      - name: Fetch cargo registries token
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "2aecd8e8-fa70-41c3-bf79-a124b5675a46"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "CARGO_REGISTRIES_SHIPYARD_TOKEN"
+
       - name: Run cargo-deny
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
         env:
+          CARGO_REGISTRIES_SHIPYARD_TOKEN: ${{ env.CARGO_REGISTRIES_SHIPYARD_TOKEN }}
           SHIPYARD_SSH_PRIVATE_KEY_READONLY: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
           SHIPYARD_KNOWN_HOST: ${{ env.SHIPYARD_KNOWN_HOST }}
         with:
@@ -77,9 +87,11 @@ jobs:
       - name: Prefetch cargo dependencies
         uses: ./.github/actions/prefetch-cargo-deps
         env:
+          CARGO_REGISTRIES_SHIPYARD_TOKEN: ${{ env.CARGO_REGISTRIES_SHIPYARD_TOKEN }}
           SHIPYARD_SSH_PRIVATE_KEY_READONLY: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
           SHIPYARD_KNOWN_HOST: ${{ env.SHIPYARD_KNOWN_HOST }}
         with:
+          shipyard-cargo-token: ${{ env.CARGO_REGISTRIES_SHIPYARD_TOKEN }}
           shipyard-ssh-private-key: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
           shipyard-known-host: ${{ env.SHIPYARD_KNOWN_HOST }}
 
