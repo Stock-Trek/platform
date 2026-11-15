@@ -5,39 +5,29 @@ on:
     branches-ignore:
       - master
 
+concurrency:
+  group: ${{ github.event.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
-  id-token: write
 
 env:
   CARGO_INCREMENTAL: 0
 
 jobs:
-  test:
-    name: Test
+  checks:
+    name: Checks
     runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
-
-      - name: Infisical
-        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
         with:
-          method: "oidc"
-          identity-id: "2aecd8e8-fa70-41c3-bf79-a124b5675a46"
-          project-slug: "agents"
-          env-slug: "dev"
-
-      - name: Set up shipyard ssh auth
-        env:
-          SHIPYARD_KNOWN_HOST: ${{ env.SHIPYARD_KNOWN_HOST }}
-          SHIPYARD_SSH_PRIVATE_KEY_READONLY: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
-        run: |
-          mkdir -p ~/.ssh
-          printf '%s\n' "${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}" > ~/.ssh/id_ed25519
-          chmod 600 ~/.ssh/id_ed25519
-          echo "${{ env.SHIPYARD_KNOWN_HOST }}" >> ~/.ssh/known_hosts
-          ssh -T git@ssh.shipyard.rs
+          persist-credentials: false
 
       - name: Install Rust
         uses: actions-rust-lang/setup-rust-toolchain@a188e68d0fd2bd36ad51dccb2b07ba6e75105f30 # v2.0.1
@@ -49,8 +39,28 @@ jobs:
         uses: Swatinem/rust-cache@eedcf2fb1c22f010a0eb66b92f378c110977f266 # v2.9.3
         with:
           cache-all-crates: true
-          save-if: ${{ github.ref == 'refs/heads/master' }}
+          save-if: false
           shared-key: linux-rust
+
+      # Only a read-only Shipyard deploy key enters this job, fetched by name
+      # from the non-production identity. No AWS, publish or App credentials.
+      - name: Fetch Shipyard known host
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "SHIPYARD_KNOWN_HOST"
+
+      - name: Fetch Shipyard read-only deploy key
+        uses: Infisical/secrets-action@d2e351f16c6ca20d17c85e6c992e04bdeb64e87d # v1.0.18
+        with:
+          method: "oidc"
+          identity-id: "fafecebc-b41d-496d-915f-5ce536a6644b"
+          project-slug: "agents"
+          env-slug: "dev"
+          secret-name: "SHIPYARD_SSH_PRIVATE_KEY_READONLY"
 
       - name: Run cargo-deny
         uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2.1.1
@@ -60,6 +70,18 @@ jobs:
         with:
           ssh-key: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
           ssh-known-hosts: ${{ env.SHIPYARD_KNOWN_HOST }}
+
+      # Fetches every locked dependency while the key is available, then clears
+      # the Shipyard variables from the job environment and sets
+      # CARGO_NET_OFFLINE=true for the remaining steps.
+      - name: Prefetch cargo dependencies
+        uses: ./.github/actions/prefetch-cargo-deps
+        env:
+          SHIPYARD_SSH_PRIVATE_KEY_READONLY: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
+          SHIPYARD_KNOWN_HOST: ${{ env.SHIPYARD_KNOWN_HOST }}
+        with:
+          shipyard-ssh-private-key: ${{ env.SHIPYARD_SSH_PRIVATE_KEY_READONLY }}
+          shipyard-known-host: ${{ env.SHIPYARD_KNOWN_HOST }}
 
       - name: Run cargo-audit
         uses: rustsec/audit-check@69366f33c96575abad1ee0dba8212993eecbe998 # v2.0.0
