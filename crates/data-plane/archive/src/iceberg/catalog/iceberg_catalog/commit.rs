@@ -1,6 +1,6 @@
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use crate::iceberg::catalog::iceberg_catalog::snapshot::SnapshotCommit;
-use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, RegisterConflict, RegisterOutcome};
+use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, ConflictDetails, RegisterOutcome};
 use iceberg::table::Table;
 use platform_errors::{PlatformError, PlatformResult};
 use platform_time::RetryBackoff;
@@ -15,7 +15,7 @@ const COMMIT_MAX_BACKOFF: Duration = Duration::from_secs(1);
 enum Evaluation {
     Apply,
     AlreadyApplied,
-    Conflict(RegisterConflict),
+    Conflict(ConflictDetails),
 }
 
 impl IcebergCatalog {
@@ -105,7 +105,7 @@ impl IcebergCatalog {
             if all_outputs_present {
                 return Ok(Evaluation::AlreadyApplied);
             }
-            return Ok(Evaluation::Conflict(RegisterConflict {
+            return Ok(Evaluation::Conflict(ConflictDetails {
                 claimed_sources: Vec::new(),
                 live_outputs: present_outputs,
             }));
@@ -125,7 +125,7 @@ impl IcebergCatalog {
             return Ok(Evaluation::AlreadyApplied);
         }
         if !claimed_sources.is_empty() || !present_outputs.is_empty() {
-            return Ok(Evaluation::Conflict(RegisterConflict {
+            return Ok(Evaluation::Conflict(ConflictDetails {
                 claimed_sources,
                 live_outputs: present_outputs,
             }));
@@ -139,8 +139,13 @@ impl IcebergCatalog {
         request: &serde_json::Value,
     ) -> PlatformResult<()> {
         let namespace = self.namespace.as_ref().join("\u{1f}");
+        let prefix = self
+            .prefix
+            .as_ref()
+            .map(|prefix| format!("/{prefix}"))
+            .unwrap_or_default();
         let url = format!(
-            "{}/v1/namespaces/{namespace}/tables/{}",
+            "{}/v1{prefix}/namespaces/{namespace}/tables/{}",
             self.catalog_uri.trim_end_matches('/'),
             table.name()
         );

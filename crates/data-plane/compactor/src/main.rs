@@ -6,6 +6,9 @@ mod source;
 mod spill;
 
 #[cfg(test)]
+mod config_tests;
+
+#[cfg(test)]
 mod compactor_runner_tests;
 
 use crate::{

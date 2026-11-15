@@ -1,1 +1,6 @@
 large-error-threshold = 256
+
+disallowed-methods = [
+    { path = "iceberg::transaction::Transaction::fast_append", reason = "archive appends must use the conditional commit" },
+    { path = "iceberg::transaction::Transaction::commit", reason = "archive appends must use the conditional commit" },
+]

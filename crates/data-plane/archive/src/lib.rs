@@ -56,9 +56,9 @@ pub use archived_market_event::ArchivedMarketEvent;
 pub use batch::ArchiveBatch;
 pub use content_hash::{ContentHash, ContentHasher};
 pub use iceberg::{
-    ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, ArchiveTableLayer,
+    ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, ArchiveTableLayer, ConflictDetails,
     ICEBERG_CATALOG_TOKEN, ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE, ICEBERG_NAMESPACE,
-    IcebergCatalog, IcebergConfig, IcebergDataFile, RegisterConflict, RegisterOutcome,
+    IcebergCatalog, IcebergConfig, IcebergDataFile, RegisterOutcome,
 };
 pub use layout::{ArchiveBucket, ArchiveHour, ArchivePath};
 pub use parquet_reader::ParquetReader;

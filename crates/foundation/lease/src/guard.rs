@@ -3,6 +3,7 @@ use platform_errors::{PlatformError, PlatformResult};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Duration, Instant};
+use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
 use tracing::{debug, warn};
 
@@ -13,6 +14,7 @@ pub struct LeaseGuard {
     deadline: Instant,
     lost: Arc<AtomicBool>,
     renewal: JoinHandle<()>,
+    renewal_lock: Arc<Mutex<()>>,
     released: bool,
 }
 
@@ -33,12 +35,14 @@ impl LeaseGuard {
             return Ok(None);
         };
         let lost = Arc::new(AtomicBool::new(false));
+        let renewal_lock = Arc::new(Mutex::new(()));
         let renewal = Self::spawn_renewal(
             store.clone(),
             lease.clone(),
             request.ttl,
             interval,
             lost.clone(),
+            renewal_lock.clone(),
         );
         Ok(Some(Self {
             store,
@@ -47,6 +51,7 @@ impl LeaseGuard {
             deadline: Instant::now() + max_work,
             lost,
             renewal,
+            renewal_lock,
             released: false,
         }))
     }
@@ -57,6 +62,7 @@ impl LeaseGuard {
         ttl: Duration,
         interval: Duration,
         lost: Arc<AtomicBool>,
+        renewal_lock: Arc<Mutex<()>>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
@@ -64,6 +70,7 @@ impl LeaseGuard {
             ticker.tick().await;
             loop {
                 ticker.tick().await;
+                let _guard = renewal_lock.lock().await;
                 match store.renew(&lease, ttl).await {
                     Ok(Some(_)) => {}
                     Ok(None) => {
@@ -90,6 +97,7 @@ impl LeaseGuard {
     }
 
     pub async fn ensure_writable(&mut self) -> PlatformResult<()> {
+        let _guard = self.renewal_lock.lock().await;
         if self.lost() {
             return Err(Self::not_writable(&self.lease));
         }
@@ -107,6 +115,7 @@ impl LeaseGuard {
 
     pub async fn release(mut self) -> PlatformResult<bool> {
         self.renewal.abort();
+        let _ = (&mut self.renewal).await;
         self.released = true;
         self.store.release(&self.lease).await
     }

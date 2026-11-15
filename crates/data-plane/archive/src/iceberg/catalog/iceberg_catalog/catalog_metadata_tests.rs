@@ -1,3 +1,4 @@
+use super::snapshot::SnapshotCommit;
 use crate::iceberg::catalog::{IcebergCatalog, IcebergDataFile};
 use iceberg::{
     Runtime, TableIdent,
@@ -50,6 +51,7 @@ impl MetadataTable {
 
         Table::builder()
             .file_io(FileIO::new_with_memory())
+            .metadata_location("s3://archive/table/metadata/v1.json")
             .metadata(builder.build().unwrap().metadata)
             .identifier(TableIdent::from_strs(["ns", "table"]).unwrap())
             .runtime(Runtime::current())
@@ -104,4 +106,31 @@ fn snapshot_properties_record_source_files_alongside_the_batch_fingerprint() {
         properties.get("source-file:s3://archive/raw/source.parquet"),
         Some(&"1".to_string())
     );
+}
+
+#[test]
+fn source_batch_digests_are_full_sha256_and_reject_empty_sets() {
+    let sources = vec!["s3://archive/raw/source.parquet".to_string()];
+
+    assert_eq!(
+        IcebergCatalog::source_batch_digest(&sources).unwrap().len(),
+        64
+    );
+    assert!(IcebergCatalog::source_batch_digest(&[]).is_err());
+}
+
+#[tokio::test]
+async fn snapshot_commit_requests_are_conditional_on_uuid_and_main() {
+    let table = MetadataTable::with_batches(&[]);
+    let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
+    let commit = SnapshotCommit::build(&table, &files, HashMap::new())
+        .await
+        .unwrap();
+    let request = commit.to_request(&TableIdent::from_strs(["ns", "table"]).unwrap());
+
+    assert_eq!(request["requirements"][0]["type"], "assert-table-uuid");
+    assert_eq!(request["requirements"][1]["type"], "assert-ref-snapshot-id");
+    assert_eq!(request["requirements"][1]["ref"], "main");
+    assert_eq!(request["updates"][0]["action"], "add-snapshot");
+    assert_eq!(request["updates"][1]["action"], "set-snapshot-ref");
 }

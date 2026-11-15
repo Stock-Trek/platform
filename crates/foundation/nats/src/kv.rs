@@ -178,6 +178,18 @@ impl KeyValue {
             .map_err(|error| JetStream::protocol_error("failed to delete KV value", error))
     }
 
+    pub async fn delete_with_revision(
+        &self,
+        key: &str,
+        expected_revision: u64,
+    ) -> PlatformResult<()> {
+        NatsSubject::validate_named("KV key", key)?;
+        self.store
+            .delete_expect_revision(key, Some(expected_revision))
+            .await
+            .map_err(|error| JetStream::protocol_error("failed to delete KV value", error))
+    }
+
     pub fn watch(&self, key: &str) -> PlatformResult<KeyValueWatch> {
         NatsSubject::validate_named("KV key", key)?;
         Ok(KeyValueWatch::new(self.store.clone(), key))

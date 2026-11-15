@@ -20,15 +20,20 @@ impl S3ParquetSink {
         for kind in [ArchiveKind::Events, ArchiveKind::Candles] {
             let table = ArchiveIcebergTable::raw(kind);
             let mut guard = self.acquire_recovery_guard(table).await?;
-            let objects = S3::list_objects(
-                &self.s3_client,
-                &self.bucket,
-                &ObjectKey::new(list_prefix.clone()),
-            )
-            .await?;
-            self.recover_table(table, &list_prefix, &objects, &mut guard)
+            let recovery = async {
+                let objects = S3::list_objects(
+                    &self.s3_client,
+                    &self.bucket,
+                    &ObjectKey::new(list_prefix.clone()),
+                )
                 .await?;
-            guard.release().await?;
+                self.recover_table(table, &list_prefix, &objects, &mut guard)
+                    .await
+            }
+            .await;
+            let release = guard.release().await;
+            recovery?;
+            release?;
         }
         Ok(())
     }
@@ -37,11 +42,7 @@ impl S3ParquetSink {
         &self,
         table: ArchiveIcebergTable,
     ) -> PlatformResult<LeaseGuard> {
-        let scope = LeaseScope::new(format!(
-            "archive-recovery:{}:{}",
-            table.kind().label(),
-            self.prefix
-        ));
+        let scope = LeaseScope::new(format!("archive-recovery:{}", table.name()));
         let owner_id = Lease::new_owner_id();
         let request = LeaseRequest::new(scope, &owner_id, self.lease_ttl)
             .with_initial_token(i64::try_from(self.lease_initial_token).unwrap_or(i64::MAX))?;
@@ -67,7 +68,7 @@ impl S3ParquetSink {
         guard: &mut LeaseGuard,
     ) -> PlatformResult<()> {
         let registered = self.catalog.registered_data_files(table).await?;
-        let mut pending = Vec::new();
+        let mut pending: Vec<IcebergDataFile> = Vec::new();
         for object in objects {
             let key = object.key.as_str();
             if !key.ends_with(".parquet") {
@@ -85,7 +86,9 @@ impl S3ParquetSink {
                 continue;
             }
             let location = format!("s3://{}/{}", self.bucket, key);
-            if registered.contains(&location) {
+            if registered.contains(&location)
+                || pending.iter().any(|file| file.file_path == location)
+            {
                 continue;
             }
             let Ok(file_size) = u64::try_from(object.size) else {

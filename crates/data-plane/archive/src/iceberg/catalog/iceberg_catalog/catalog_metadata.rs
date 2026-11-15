@@ -1,6 +1,6 @@
-use crate::ContentHasher;
 use crate::iceberg::catalog::IcebergDataFile;
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
+use crate::{ContentHasher, SourceBatch};
 use iceberg::table::Table;
 use std::collections::{HashMap, HashSet};
 
@@ -74,14 +74,6 @@ impl IcebergCatalog {
                 "must contain at least one source object",
             ));
         }
-        let mut sources = source_files.to_vec();
-        sources.sort();
-        sources.dedup();
-        let mut hasher = ContentHasher::new();
-        for source in sources {
-            hasher.update(source.as_bytes());
-            hasher.update([0_u8]);
-        }
-        Ok(hasher.finish().to_string())
+        Ok(SourceBatch::digest_files(source_files))
     }
 }

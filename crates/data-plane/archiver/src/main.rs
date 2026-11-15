@@ -5,6 +5,9 @@ mod sink;
 mod source;
 
 #[cfg(test)]
+mod config_tests;
+
+#[cfg(test)]
 mod archiver_runner_tests;
 
 use crate::{

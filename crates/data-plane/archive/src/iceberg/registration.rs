@@ -11,11 +11,10 @@ pub struct ArchiveRegistration {
 impl ArchiveRegistration {
     pub fn new(
         files: impl IntoIterator<Item = IcebergDataFile>,
-        source_files: Option<impl IntoIterator<Item = String>>,
+        source_files: Option<Vec<String>>,
     ) -> PlatformResult<Self> {
         let source_files = source_files
-            .map(|sources| {
-                let mut sources = sources.into_iter().collect::<Vec<_>>();
+            .map(|mut sources| {
                 if sources.is_empty() {
                     return Err(PlatformError::config_invalid(
                         "archive source batch",
@@ -62,7 +61,7 @@ impl ArchiveRegistration {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RegisterConflict {
+pub struct ConflictDetails {
     pub claimed_sources: Vec<String>,
     pub live_outputs: Vec<String>,
 }
@@ -71,7 +70,7 @@ pub struct RegisterConflict {
 pub enum RegisterOutcome {
     Applied,
     AlreadyApplied,
-    Conflict(RegisterConflict),
+    Conflict(ConflictDetails),
 }
 
 impl RegisterOutcome {
