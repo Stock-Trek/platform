@@ -12,7 +12,7 @@ aws = ["dep:aws-credential-types"]
 github = ["dep:base64", "dep:octocrab"]
 http = ["dep:aws-sigv4", "dep:http", "dep:reqwest"]
 lambda = ["aws", "dep:aws-sdk-lambda", "dep:lambda_runtime"]
-storage = ["aws", "archive", "dep:url"]
+storage = ["aws", "dep:url"]
 
 [dependencies]
 arrow-schema = { workspace = true, optional = true }

@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 parking_lot = { workspace = true }
 platform-config = { workspace = true }
-platform-errors = { workspace = true, features = ["http", "lambda", "storage"] }
+platform-errors = { workspace = true, features = ["archive", "http", "lambda", "storage"] }
 platform-messages = { workspace = true }
 platform-metrics = { workspace = true }
 platform-runtime = { workspace = true }

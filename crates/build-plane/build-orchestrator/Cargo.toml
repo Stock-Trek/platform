@@ -8,7 +8,7 @@ publish = false
 [dependencies]
 platform-aws = { workspace = true }
 platform-config = { workspace = true }
-platform-errors = { workspace = true, features = ["http", "lambda", "storage"] }
+platform-errors = { workspace = true, features = ["archive", "http", "lambda", "storage"] }
 platform-github = { workspace = true }
 platform-git = { workspace = true }
 platform-messages = { workspace = true }
