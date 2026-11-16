@@ -109,7 +109,7 @@ Archiver is a durable Jetstream consumer that periodically flushes de-duplicated
 
 Compactor runs regularly, converting the raw archived S3 files into clean and tidy files, partitioning by symbol and routing bucket and sorting by timestamp.
 
-Each compacted Iceberg snapshot records the raw source object URIs it represents in the same commit as the compacted data files. That snapshot is the explicit compacted/raw handoff: recovery readers replay all live compacted files plus only the raw objects that are absent from the source-object set. A raw object is therefore either fully represented by compacted files or still in the raw tail, never both. Because the compacted files and source-object set are read from one snapshot, a concurrent compaction commit cannot create a gap or a duplicate. The coordination contract and acceptance criteria are in [archive-writer-coordination.md](archive-writer-coordination.md).
+Each compacted Iceberg snapshot records the raw source object URIs it represents in the same commit as the compacted data files. That snapshot is the explicit compacted/raw handoff: recovery readers replay all live compacted files plus only the raw objects that are absent from the source-object set. A raw object is therefore either fully represented by compacted files or still in the raw tail, never both. Because the compacted files and source-object set are read from one snapshot, a concurrent compaction commit cannot create a gap or a duplicate.
 
 ## Rebuilder
 
