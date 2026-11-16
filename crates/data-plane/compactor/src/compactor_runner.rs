@@ -56,6 +56,7 @@ where
     }
 
     pub async fn run_cycle(source: &S, compactor: &C) -> PlatformResult<()> {
+        let started = std::time::Instant::now();
         let batches = source.pending_batches().await?;
         info!(batches = batches.len(), "scanning archive for compaction");
         for batch in batches {
@@ -71,6 +72,10 @@ where
                 "compacted archive batch"
             );
         }
+        if let Err(error) = compactor.maintain().await {
+            warn!(%error, "archive claim-index maintenance failed");
+        }
+        platform_metrics::MarketDataMetrics::record_compactor_poll(started.elapsed());
         Ok(())
     }
 }

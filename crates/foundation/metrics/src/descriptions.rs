@@ -56,6 +56,24 @@ pub const MARKET_DATA_ARCHIVE_RECOVERY_REMAINING_OBJECTS: &str =
     "market_data_archive_recovery_remaining_objects";
 pub const MARKET_DATA_COMPACTOR_INVENTORY_OBJECTS: &str = "market_data_compactor_inventory_objects";
 pub const MARKET_DATA_COMPACTOR_PENDING_OBJECTS: &str = "market_data_compactor_pending_objects";
+pub const MARKET_DATA_ARCHIVE_LISTING_PAGES_TOTAL: &str = "market_data_archive_listing_pages_total";
+pub const MARKET_DATA_ARCHIVE_LISTING_OBJECTS_TOTAL: &str =
+    "market_data_archive_listing_objects_total";
+pub const MARKET_DATA_ARCHIVE_INDEX_PAGES_READ_TOTAL: &str =
+    "market_data_archive_index_pages_read_total";
+pub const MARKET_DATA_ARCHIVE_INDEX_BLOCKS_READ_TOTAL: &str =
+    "market_data_archive_index_blocks_read_total";
+pub const MARKET_DATA_ARCHIVE_INDEX_CACHE_HITS_TOTAL: &str =
+    "market_data_archive_index_cache_hits_total";
+pub const MARKET_DATA_ARCHIVE_INDEX_CACHE_MISSES_TOTAL: &str =
+    "market_data_archive_index_cache_misses_total";
+pub const MARKET_DATA_ARCHIVE_INDEX_FALLBACK_SCANS_TOTAL: &str =
+    "market_data_archive_index_fallback_scans_total";
+pub const MARKET_DATA_COMPACTOR_POLL_DURATION_SECONDS: &str =
+    "market_data_compactor_poll_duration_seconds";
+pub const MARKET_DATA_COMPACTOR_BACKLOG_AGE_SECONDS: &str =
+    "market_data_compactor_backlog_age_seconds";
+pub const MARKET_DATA_COMPACTOR_BACKLOG_GROWTH: &str = "market_data_compactor_backlog_growth";
 pub const MARKET_DATA_S3_RETRIES_TOTAL: &str = "market_data_s3_retries_total";
 pub const MARKET_DATA_AGGREGATOR_CHECKPOINT_AGE_SECONDS: &str =
     "market_data_aggregator_checkpoint_age_seconds";
@@ -350,6 +368,46 @@ impl DescriptionsMetrics {
         describe_gauge!(
             MARKET_DATA_COMPACTOR_PENDING_OBJECTS,
             "Number of raw archive objects awaiting registration or compaction"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_LISTING_PAGES_TOTAL,
+            "Number of object listing pages read, labelled by source"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_LISTING_OBJECTS_TOTAL,
+            "Number of objects returned by listings, labelled by source"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_INDEX_PAGES_READ_TOTAL,
+            "Number of claim index pages read from storage"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_INDEX_BLOCKS_READ_TOTAL,
+            "Number of claim index blocks read from storage"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_INDEX_CACHE_HITS_TOTAL,
+            "Number of claim index cache hits, labelled by entry kind"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_INDEX_CACHE_MISSES_TOTAL,
+            "Number of claim index cache misses, labelled by entry kind"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_INDEX_FALLBACK_SCANS_TOTAL,
+            "Number of full table scans used because a claim index was unavailable, labelled by table"
+        );
+        describe_histogram!(
+            MARKET_DATA_COMPACTOR_POLL_DURATION_SECONDS,
+            "Duration of a compactor inventory and compaction cycle in seconds"
+        );
+        describe_gauge!(
+            MARKET_DATA_COMPACTOR_BACKLOG_AGE_SECONDS,
+            "Age in seconds of the oldest pending compaction candidate"
+        );
+        describe_gauge!(
+            MARKET_DATA_COMPACTOR_BACKLOG_GROWTH,
+            "Change in pending compaction candidates since the previous poll"
         );
         describe_counter!(
             MARKET_DATA_S3_RETRIES_TOTAL,

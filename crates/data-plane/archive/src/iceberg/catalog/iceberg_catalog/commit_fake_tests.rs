@@ -123,7 +123,7 @@ impl ConditionalCommitTarget for FakeTarget {
         ArchiveIcebergTable::CompactedEvents
     }
 
-    async fn load(&self) -> PlatformResult<Self::State> {
+    async fn load(&self, _context: &CommitContext) -> PlatformResult<Self::State> {
         Ok(self.backend.state())
     }
 

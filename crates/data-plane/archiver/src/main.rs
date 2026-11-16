@@ -34,6 +34,7 @@ async fn main() -> PlatformResult<()> {
     let health = HealthRunner::from_service_env("ARCHIVER").await?;
     let source = NatsArchiveSource::connect(&config).await?;
     let catalog = Arc::new(IcebergCatalog::connect(&config.iceberg).await?);
+    catalog.validate_contract().await?;
     let leases = Arc::new(
         NatsLeaseStore::connect(&config.nats_url, "platform-archiver", &config.lease_bucket)
             .await?,

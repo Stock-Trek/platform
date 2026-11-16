@@ -38,10 +38,12 @@ impl InMemoryLeaseStore {
             .clone()
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     pub fn acquire_attempt_count(&self, scope: &LeaseScope) -> u64 {
         self.attempts.lock().get(scope).copied().unwrap_or(0)
     }
 
+    #[cfg(any(test, feature = "test-support"))]
     pub async fn wait_for_acquire_attempt(&self, scope: &LeaseScope, count: u64) {
         loop {
             let notified = self.attempt_notify.notified();

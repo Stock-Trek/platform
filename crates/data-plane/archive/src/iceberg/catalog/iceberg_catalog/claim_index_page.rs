@@ -4,11 +4,12 @@ use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use bytes::Bytes;
 use iceberg::table::Table;
 use platform_errors::{PlatformError, PlatformResult};
+use platform_metrics::MarketDataMetrics;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 
-pub(super) const INDEX_FORMAT_VERSION: u32 = 2;
+pub(super) const INDEX_FORMAT_VERSION: u32 = 3;
 const INDEX_PAGE_MAX_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,7 +25,6 @@ pub(super) struct ClaimIndexPage {
     pub(super) sources: Vec<String>,
     pub(super) outputs: Vec<String>,
     pub(super) blocks: Vec<IndexBlockRef>,
-    pub(super) archive_batch: String,
 }
 
 impl ClaimIndexPage {
@@ -61,8 +61,10 @@ impl ClaimIndexPage {
         cache: Option<&ClaimIndexCache>,
     ) -> PlatformResult<Self> {
         if let Some(page) = cache.and_then(|cache| cache.get_page(&parent.digest)) {
+            MarketDataMetrics::record_index_cache_hit("page");
             return Ok((*page).clone());
         }
+        MarketDataMetrics::record_index_cache_miss("page");
         let bytes = table
             .file_io()
             .new_input(&parent.location)
@@ -79,6 +81,7 @@ impl ClaimIndexPage {
         let page: Self = serde_json::from_slice(&bytes)
             .map_err(|error| Self::error(format!("could not decode index page: {error}")))?;
         page.validate()?;
+        MarketDataMetrics::record_index_page_read();
         if let Some(cache) = cache {
             cache.insert_page(parent.digest.clone(), page.clone());
         }
@@ -135,20 +138,12 @@ impl ClaimIndexPage {
         outputs: Vec<String>,
         blocks: Vec<IndexBlockRef>,
     ) -> Self {
-        let archive_batch = Self::paths_fingerprint(
-            outputs
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
         Self {
             format_version: INDEX_FORMAT_VERSION,
             parent,
             sources,
             outputs,
             blocks,
-            archive_batch,
         }
     }
 
@@ -158,17 +153,6 @@ impl ClaimIndexPage {
         }
         if !Self::is_sorted(&self.sources) || !Self::is_sorted(&self.outputs) {
             return Err(Self::error("index page entries are not sorted"));
-        }
-        if self.archive_batch
-            != Self::paths_fingerprint(
-                self.outputs
-                    .iter()
-                    .map(String::as_str)
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            )
-        {
-            return Err(Self::error("index page output fingerprint does not match"));
         }
         Ok(())
     }
@@ -194,17 +178,6 @@ impl ClaimIndexPage {
             return Ok(parent.to_string());
         }
         Ok(location.to_string())
-    }
-
-    fn paths_fingerprint(paths: &[&str]) -> String {
-        let mut paths = paths.to_vec();
-        paths.sort();
-        let mut hasher = Sha256::new();
-        for path in paths {
-            hasher.update(path.as_bytes());
-            hasher.update([0_u8]);
-        }
-        Self::hex(hasher.finalize().as_slice())
     }
 
     fn digest(bytes: &[u8]) -> String {

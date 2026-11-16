@@ -88,6 +88,14 @@ impl KeyValue {
         Ok(self.status().await?.max_age())
     }
 
+    pub async fn max_messages(&self) -> PlatformResult<i64> {
+        Ok(self.status().await?.info.config.max_messages)
+    }
+
+    pub async fn max_bytes(&self) -> PlatformResult<i64> {
+        Ok(self.status().await?.info.config.max_bytes)
+    }
+
     async fn status(&self) -> PlatformResult<async_nats::jetstream::kv::bucket::Status> {
         self.store
             .status()

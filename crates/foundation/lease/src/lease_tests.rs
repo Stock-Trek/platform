@@ -262,6 +262,12 @@ fn lease_buckets_must_retain_history() {
     assert!(NatsLeaseStore::validate_history(-1).is_err());
     assert!(NatsLeaseStore::validate_max_age(Duration::ZERO).is_ok());
     assert!(NatsLeaseStore::validate_max_age(Duration::from_secs(1)).is_err());
+    assert!(NatsLeaseStore::validate_max_messages(0).is_ok());
+    assert!(NatsLeaseStore::validate_max_messages(-1).is_ok());
+    assert!(NatsLeaseStore::validate_max_messages(1).is_err());
+    assert!(NatsLeaseStore::validate_max_bytes(0).is_ok());
+    assert!(NatsLeaseStore::validate_max_bytes(-1).is_ok());
+    assert!(NatsLeaseStore::validate_max_bytes(1).is_err());
 }
 
 #[test]
@@ -353,4 +359,16 @@ async fn a_nats_store_serializes_owners_and_advances_fencing_tokens() {
     assert!(!store.release(&first).await.unwrap());
     assert!(store.release(&second).await.unwrap());
     assert!(store.current(&scope).await.unwrap().is_none());
+
+    let third = store
+        .acquire(&LeaseRequest::new(
+            scope.clone(),
+            "owner-c",
+            Duration::from_secs(30),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(third.fencing_token, second.fencing_token + 1);
+    assert!(store.release(&third).await.unwrap());
 }

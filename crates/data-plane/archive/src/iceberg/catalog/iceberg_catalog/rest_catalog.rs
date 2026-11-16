@@ -23,10 +23,18 @@ pub struct IcebergCatalog {
 
 impl IcebergCatalog {
     pub async fn ensure_table(&self, archive_table: ArchiveIcebergTable) -> PlatformResult<Table> {
+        self.ensure_table_with_context(archive_table, None).await
+    }
+
+    pub(super) async fn ensure_table_with_context(
+        &self,
+        archive_table: ArchiveIcebergTable,
+        context: Option<&CommitContext>,
+    ) -> PlatformResult<Table> {
         let ident = self.table_ident(archive_table);
         match self.catalog.load_table(&ident).await {
             Ok(table) => {
-                let table = self.ensure_required_properties(table).await?;
+                let table = self.converge_properties(table, context).await?;
                 Self::validate_table(&table, archive_table.kind())?;
                 return Ok(table);
             }
@@ -55,11 +63,22 @@ impl IcebergCatalog {
                     .load_table(&ident)
                     .await
                     .map_err(|error| Self::catalog_error("reload Iceberg table", error))?;
-                let table = self.ensure_required_properties(table).await?;
+                let table = self.converge_properties(table, context).await?;
                 Self::validate_table(&table, archive_table.kind())?;
                 Ok(table)
             }
             Err(error) => Err(Self::catalog_error("create Iceberg table", error)),
+        }
+    }
+
+    async fn converge_properties(
+        &self,
+        table: Table,
+        context: Option<&CommitContext>,
+    ) -> PlatformResult<Table> {
+        match context {
+            Some(context) => self.ensure_required_properties(table, context).await,
+            None => Ok(table),
         }
     }
 
@@ -116,6 +135,14 @@ impl ArchiveCatalog for IcebergCatalog {
     ) -> PlatformResult<HashSet<String>> {
         let table = self.ensure_table(table).await?;
         Ok(self.claim_matches(&table, &[], outputs).await?.outputs)
+    }
+
+    async fn consolidate_claim_index(
+        &self,
+        table: ArchiveIcebergTable,
+        context: &CommitContext,
+    ) -> PlatformResult<()> {
+        IcebergCatalog::consolidate_claim_index(self, table, context).await
     }
 
     async fn compacted_snapshot(

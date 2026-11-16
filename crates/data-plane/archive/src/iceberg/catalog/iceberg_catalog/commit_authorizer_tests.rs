@@ -73,3 +73,18 @@ async fn a_failed_authorization_prevents_every_submit() {
     assert!(commit.run(&registration, &context).await.is_err());
     assert_eq!(backend.commits.load(Ordering::SeqCst), 0);
 }
+
+#[tokio::test]
+async fn a_lease_lost_during_backoff_prevents_the_next_submit() {
+    let backend = Arc::new(FakeBackend::default());
+    backend.fail_before_apply.store(true, Ordering::SeqCst);
+    let target = FakeTarget::new(backend.clone());
+    let authorizer = Arc::new(CountingAuthorizer::new(Some(1)));
+    let context = CommitContext::default().with_authorizer(authorizer.clone());
+    let registration = FakeTarget::registration(None, &["s3://archive/out/a.parquet"]);
+    let commit = ConditionalCommit::new(target, FakeTarget::retry());
+
+    assert!(commit.run(&registration, &context).await.is_err());
+    assert_eq!(authorizer.calls.load(Ordering::SeqCst), 2);
+    assert_eq!(backend.commits.load(Ordering::SeqCst), 0);
+}

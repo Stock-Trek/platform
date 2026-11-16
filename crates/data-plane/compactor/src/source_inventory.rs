@@ -11,6 +11,7 @@ pub(super) struct RawInventory {
     pub(super) candidate_keys: HashSet<String>,
     pub(super) last_key: Option<String>,
     pub(super) polls: u64,
+    pub(super) previous_pending: usize,
 }
 
 impl S3ArchiveSource {
@@ -41,6 +42,10 @@ impl S3ArchiveSource {
                 1_000,
             )
             .await?;
+            platform_metrics::MarketDataMetrics::record_archive_listing_page(
+                "compactor-inventory",
+                u64::try_from(page.objects.len()).unwrap_or(u64::MAX),
+            );
             for object in page.objects {
                 let key = object.key.as_str().to_string();
                 if inventory
@@ -69,9 +74,26 @@ impl S3ArchiveSource {
         candidate_keys.retain(|key| objects.contains_key(key));
         let examined = inventory.candidate_keys.len();
         let total = inventory.objects.len();
+        let growth = examined as i64 - inventory.previous_pending as i64;
+        let oldest = inventory
+            .candidate_keys
+            .iter()
+            .filter_map(|key| inventory.objects.get(key))
+            .map(|object| object.last_modified_millis().unwrap_or_default())
+            .min()
+            .unwrap_or_else(|| platform_types::TimestampMilliseconds::now().0);
+        let age = platform_types::TimestampMilliseconds::now()
+            .0
+            .saturating_sub(oldest)
+            .max(0) as u64;
+        inventory.previous_pending = examined;
         inventory.polls = inventory.polls.wrapping_add(1);
         drop(inventory);
         platform_metrics::MarketDataMetrics::record_compactor_inventory(examined, total);
+        platform_metrics::MarketDataMetrics::record_compactor_backlog(
+            std::time::Duration::from_millis(age),
+            growth,
+        );
         Ok(())
     }
 }

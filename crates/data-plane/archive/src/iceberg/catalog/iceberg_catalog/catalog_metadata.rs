@@ -6,8 +6,8 @@ use platform_errors::{PlatformError, PlatformResult};
 use std::collections::{HashMap, HashSet};
 
 const SOURCE_FILE_SUMMARY_PREFIX: &str = "source-file:";
-const ARCHIVE_BATCH_SUMMARY_KEY: &str = "archive-batch";
-const SOURCE_BATCH_SUMMARY_KEY: &str = "source-batch";
+const ARCHIVE_BATCH_SUMMARY_PREFIX: &str = "archive-batch:";
+const SOURCE_BATCH_SUMMARY_PREFIX: &str = "source-batch:";
 const SOURCE_CLAIM_COUNT_KEY: &str = "source-claim-count";
 const CLAIM_VERSION_KEY: &str = "archive-claim-version";
 const CLAIM_VERSION: &str = "1";
@@ -22,8 +22,10 @@ impl IcebergCatalog {
             let properties = &snapshot.summary().additional_properties;
             let source_files = Self::snapshot_source_files(properties);
             let has_claim = properties.contains_key(CLAIM_VERSION_KEY)
-                || properties.contains_key(SOURCE_BATCH_SUMMARY_KEY)
                 || properties.contains_key(SOURCE_CLAIM_COUNT_KEY)
+                || properties
+                    .keys()
+                    .any(|key| key.starts_with(SOURCE_BATCH_SUMMARY_PREFIX))
                 || !source_files.is_empty();
             if !has_claim {
                 if require_claims {
@@ -41,9 +43,10 @@ impl IcebergCatalog {
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
     ) -> PlatformResult<HashMap<String, String>> {
+        let batch_fingerprint = Self::batch_fingerprint(files);
         let mut properties = HashMap::from([(
-            ARCHIVE_BATCH_SUMMARY_KEY.to_string(),
-            Self::batch_fingerprint(files),
+            format!("{ARCHIVE_BATCH_SUMMARY_PREFIX}{batch_fingerprint}"),
+            "1".to_string(),
         )]);
         let Some(source_files) = source_files else {
             return Ok(properties);
@@ -59,8 +62,11 @@ impl IcebergCatalog {
         sources.dedup();
         properties.insert(CLAIM_VERSION_KEY.to_string(), CLAIM_VERSION.to_string());
         properties.insert(
-            SOURCE_BATCH_SUMMARY_KEY.to_string(),
-            Self::source_batch_digest(&sources)?,
+            format!(
+                "{SOURCE_BATCH_SUMMARY_PREFIX}{}",
+                Self::source_batch_digest(&sources)?
+            ),
+            "1".to_string(),
         );
         properties.insert(
             SOURCE_CLAIM_COUNT_KEY.to_string(),
@@ -116,8 +122,7 @@ impl IcebergCatalog {
                 "uses unsupported claim version {version}"
             )));
         }
-        let source_batch = properties
-            .get(SOURCE_BATCH_SUMMARY_KEY)
+        let source_batch = Self::claim_digest(properties, SOURCE_BATCH_SUMMARY_PREFIX)?
             .ok_or_else(|| Self::claim_error("is missing a source batch digest"))?;
         let count = properties
             .get(SOURCE_CLAIM_COUNT_KEY)
@@ -130,15 +135,32 @@ impl IcebergCatalog {
                 source_files.len()
             )));
         }
-        if source_batch != &Self::source_batch_digest(source_files)? {
+        if source_batch != Self::source_batch_digest(source_files)? {
             return Err(Self::claim_error(
                 "has a source batch digest that does not match its source files",
             ));
         }
-        if properties.get(ARCHIVE_BATCH_SUMMARY_KEY).is_none() {
+        if Self::claim_digest(properties, ARCHIVE_BATCH_SUMMARY_PREFIX)?.is_none() {
             return Err(Self::claim_error("is missing an output fingerprint"));
         }
         Ok(())
+    }
+
+    fn claim_digest(
+        properties: &HashMap<String, String>,
+        prefix: &str,
+    ) -> PlatformResult<Option<String>> {
+        let mut digests = properties
+            .keys()
+            .filter_map(|key| key.strip_prefix(prefix))
+            .filter(|digest| !digest.is_empty());
+        let Some(digest) = digests.next() else {
+            return Ok(None);
+        };
+        if digests.next().is_some() {
+            return Err(Self::claim_error("carries multiple batch digests"));
+        }
+        Ok(Some(digest.to_string()))
     }
 
     fn claim_error(reason: impl std::fmt::Display) -> PlatformError {

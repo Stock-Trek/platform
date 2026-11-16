@@ -4,6 +4,7 @@ use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use bytes::Bytes;
 use iceberg::table::Table;
 use platform_errors::{PlatformError, PlatformResult};
+use platform_metrics::MarketDataMetrics;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -71,8 +72,10 @@ impl ClaimIndexBlock {
         cache: Option<&ClaimIndexCache>,
     ) -> PlatformResult<Self> {
         if let Some(block) = cache.and_then(|cache| cache.get_block(&reference.digest)) {
+            MarketDataMetrics::record_index_cache_hit("block");
             return Ok((*block).clone());
         }
+        MarketDataMetrics::record_index_cache_miss("block");
         let bytes = table
             .file_io()
             .new_input(&reference.location)
@@ -98,6 +101,7 @@ impl ClaimIndexBlock {
         if !Self::sorted(&block.sources) || !Self::sorted(&block.outputs) {
             return Err(Self::error("index block entries are not sorted"));
         }
+        MarketDataMetrics::record_index_block_read();
         if let Some(cache) = cache {
             cache.insert_block(reference.digest.clone(), block.clone());
         }

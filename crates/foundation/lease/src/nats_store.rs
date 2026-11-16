@@ -14,6 +14,8 @@ impl NatsLeaseStore {
         let kv = KeyValue::connect_existing(url, name, bucket).await?;
         Self::validate_history(kv.history().await?)?;
         Self::validate_max_age(kv.max_age().await?)?;
+        Self::validate_max_messages(kv.max_messages().await?)?;
+        Self::validate_max_bytes(kv.max_bytes().await?)?;
         Ok(Self { kv })
     }
 
@@ -32,6 +34,26 @@ impl NatsLeaseStore {
             return Err(platform_errors::PlatformError::config_invalid(
                 "lease KV bucket",
                 "must not expire keys by age",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn validate_max_messages(max_messages: i64) -> PlatformResult<()> {
+        if max_messages > 0 {
+            return Err(platform_errors::PlatformError::config_invalid(
+                "lease KV bucket",
+                "must not evict keys by message count",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn validate_max_bytes(max_bytes: i64) -> PlatformResult<()> {
+        if max_bytes > 0 {
+            return Err(platform_errors::PlatformError::config_invalid(
+                "lease KV bucket",
+                "must not evict keys by byte count",
             ));
         }
         Ok(())

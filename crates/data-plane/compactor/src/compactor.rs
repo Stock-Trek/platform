@@ -33,6 +33,10 @@ pub struct CompactionStats {
 #[async_trait]
 pub trait BatchCompactor: Send + Sync {
     async fn compact(&self, batch: &SourceBatch) -> PlatformResult<CompactionStats>;
+
+    async fn maintain(&self) -> PlatformResult<()> {
+        Ok(())
+    }
 }
 
 /// Reads raw archive files, de-duplicates and sorts their rows, then writes one
@@ -305,6 +309,61 @@ impl Compactor {
         }
     }
 
+    async fn maintain_claim_index(&self) -> PlatformResult<()> {
+        for kind in [
+            platform_archive::ArchiveKind::Events,
+            platform_archive::ArchiveKind::Candles,
+        ] {
+            self.consolidate_claim_index(kind).await?;
+        }
+        Ok(())
+    }
+
+    async fn consolidate_claim_index(
+        &self,
+        kind: platform_archive::ArchiveKind,
+    ) -> PlatformResult<()> {
+        let table = ArchiveIcebergTable::compacted(kind);
+        let scope = LeaseScope::new(format!(
+            "compact:{}:{}:{}:claim-index",
+            self.bucket,
+            self.output_prefix,
+            kind.label()
+        ));
+        let owner_id = Lease::new_owner_id();
+        let initial_token = i64::try_from(self.lease_initial_token).unwrap_or(i64::MAX);
+        let lease_ttl = match kind {
+            platform_archive::ArchiveKind::Events => self.lease_ttl_events,
+            platform_archive::ArchiveKind::Candles => self.lease_ttl_candles,
+        };
+        let request = LeaseRequest::new(scope, &owner_id, lease_ttl)
+            .with_initial_token(initial_token)?
+            .with_clock_skew(self.lease_clock_skew)
+            .with_context(table.name(), "claim-index");
+        let Some(mut guard) =
+            LeaseGuard::acquire(self.leases.clone(), request, self.max_work).await?
+        else {
+            MarketDataMetrics::record_lease_skip("compactor-maintenance");
+            return Ok(());
+        };
+        let result = async {
+            guard.ensure_writable().await?;
+            let context = CommitContext::default()
+                .with_lease(
+                    guard.lease().scope.as_str(),
+                    &guard.lease().owner_id,
+                    guard.lease().fencing_token,
+                )
+                .with_authorizer(guard.authorizer());
+            self.catalog.consolidate_claim_index(table, &context).await
+        }
+        .await;
+        if let Err(error) = guard.release().await {
+            warn!(%error, table = table.name(), "failed to release claim-index maintenance lease");
+        }
+        result
+    }
+
     fn lease_scope(&self, batch: &SourceBatch) -> String {
         format!(
             "compact:{}:{}:{}:{}",
@@ -320,5 +379,9 @@ impl Compactor {
 impl BatchCompactor for Compactor {
     async fn compact(&self, batch: &SourceBatch) -> PlatformResult<CompactionStats> {
         Compactor::compact(self, batch).await
+    }
+
+    async fn maintain(&self) -> PlatformResult<()> {
+        self.maintain_claim_index().await
     }
 }

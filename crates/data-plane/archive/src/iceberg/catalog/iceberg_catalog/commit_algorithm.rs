@@ -71,7 +71,7 @@ pub(super) trait ConditionalCommitTarget {
 
     fn table(&self) -> ArchiveIcebergTable;
 
-    async fn load(&self) -> PlatformResult<Self::State>;
+    async fn load(&self, context: &CommitContext) -> PlatformResult<Self::State>;
 
     async fn evaluate(
         &self,
@@ -128,7 +128,7 @@ where
         let mut last_error = None;
 
         for attempt in 1..=self.retry.max_attempts {
-            let current = self.target.load().await?;
+            let current = self.target.load(context).await?;
             match self.target.evaluate(&current, registration).await? {
                 Evaluation::Apply => {}
                 Evaluation::AlreadyApplied => {
@@ -169,7 +169,7 @@ where
                 }
             }
 
-            let reloaded = self.target.load().await?;
+            let reloaded = self.target.load(context).await?;
             match self.target.evaluate(&reloaded, registration).await? {
                 Evaluation::AlreadyApplied => {
                     return Ok(Self::already_applied(table, &digest, context));

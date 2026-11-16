@@ -2,6 +2,7 @@ use super::claim_index::{ClaimIndex, INDEX_HEAD_DIGEST_KEY, INDEX_HEAD_KEY};
 use super::claim_index_page::{ClaimIndexPage, IndexParent};
 use super::snapshot::SnapshotCommit;
 use crate::ArchiveKind;
+use crate::iceberg::CommitContext;
 use crate::iceberg::catalog::{IcebergCatalog, IcebergDataFile};
 use iceberg::{
     Runtime, TableIdent,
@@ -36,6 +37,27 @@ impl MetadataTable {
         batches: &[&[IcebergDataFile]],
         properties: HashMap<String, String>,
     ) -> Table {
+        let summaries = batches
+            .iter()
+            .map(|files| {
+                (
+                    *files,
+                    IcebergCatalog::snapshot_properties(files, None).unwrap(),
+                )
+            })
+            .collect::<Vec<_>>();
+        Self::with_summaries_on(file_io, &summaries, properties)
+    }
+
+    fn with_summaries(batches: &[(&[IcebergDataFile], HashMap<String, String>)]) -> Table {
+        Self::with_summaries_on(FileIO::new_with_memory(), batches, HashMap::new())
+    }
+
+    fn with_summaries_on(
+        file_io: FileIO,
+        batches: &[(&[IcebergDataFile], HashMap<String, String>)],
+        properties: HashMap<String, String>,
+    ) -> Table {
         let schema = Schema::builder()
             .with_schema_id(0)
             .with_fields([Arc::new(NestedField::required(
@@ -55,7 +77,7 @@ impl MetadataTable {
         )
         .unwrap();
 
-        for (index, files) in batches.iter().enumerate() {
+        for (index, (_, summary)) in batches.iter().enumerate() {
             let index = i64::try_from(index).unwrap();
             let snapshot = Snapshot::builder()
                 .with_snapshot_id(index + 1)
@@ -64,8 +86,7 @@ impl MetadataTable {
                 .with_manifest_list(format!("s3://archive/table/metadata/snap-{index}.avro"))
                 .with_summary(Summary {
                     operation: Operation::Append,
-                    additional_properties: IcebergCatalog::snapshot_properties(files, None)
-                        .unwrap(),
+                    additional_properties: summary.clone(),
                 })
                 .build();
             builder = builder.add_snapshot(snapshot).unwrap();
@@ -124,8 +145,11 @@ fn snapshot_properties_record_source_files_alongside_the_batch_fingerprint() {
     let properties = IcebergCatalog::snapshot_properties(&files, Some(&source_files)).unwrap();
 
     assert_eq!(
-        properties.get("archive-batch"),
-        Some(&IcebergCatalog::batch_fingerprint(&files))
+        properties.get(&format!(
+            "archive-batch:{}",
+            IcebergCatalog::batch_fingerprint(&files)
+        )),
+        Some(&"1".to_string())
     );
     assert_eq!(
         properties.get("source-file:s3://archive/raw/source.parquet"),
@@ -302,8 +326,11 @@ async fn snapshot_commits_serialize_claim_properties_in_the_snapshot_summary() {
     let summary = &request["updates"][0]["snapshot"]["summary"];
 
     assert_eq!(
-        summary["archive-batch"],
-        IcebergCatalog::batch_fingerprint(&files)
+        summary[&format!(
+            "archive-batch:{}",
+            IcebergCatalog::batch_fingerprint(&files)
+        )],
+        "1"
     );
     assert_eq!(summary["source-file:s3://archive/raw/source.parquet"], "1");
     assert_eq!(summary["source-claim-count"], "1");
@@ -446,4 +473,148 @@ async fn claim_index_validation_rejects_unsupported_versions_and_partial_heads()
         HashMap::from([(INDEX_HEAD_KEY.to_string(), "s3://archive/head".to_string())]),
     );
     assert!(IcebergCatalog::validate_claim_index(&partial).is_err());
+}
+
+struct DeniedAuthorizer;
+
+#[async_trait::async_trait]
+impl platform_lease::CommitAuthorizer for DeniedAuthorizer {
+    async fn authorize(&self) -> platform_errors::PlatformResult<()> {
+        Err(platform_errors::PlatformError::external(
+            "lease was lost before property commit",
+        ))
+    }
+}
+
+fn catalog_config_server() -> (
+    String,
+    std::sync::mpsc::Receiver<()>,
+    std::thread::JoinHandle<()>,
+) {
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::time::Duration;
+
+    let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+    let address = format!("http://{}", listener.local_addr().unwrap());
+    let (sender, receiver) = std::sync::mpsc::channel();
+    let handle = std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut buffer = [0_u8; 4096];
+        let _ = stream.read(&mut buffer);
+        let body = r#"{"defaults":{},"overrides":{}}"#;
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        for _ in 0..20 {
+            match listener.accept() {
+                Ok((mut stream, _)) => {
+                    let _ = stream.read(&mut buffer);
+                    sender.send(()).unwrap();
+                    return;
+                }
+                Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => {
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                Err(_) => return,
+            }
+        }
+    });
+    (address, receiver, handle)
+}
+
+#[tokio::test]
+async fn a_lost_lease_blocks_property_updates_before_they_are_submitted() {
+    let (address, submitted, server) = catalog_config_server();
+    let catalog = IcebergCatalog::connect(&crate::iceberg::IcebergConfig {
+        catalog_uri: address,
+        warehouse: "s3://archive/warehouse".to_string(),
+        token: None,
+        namespace: "ns".to_string(),
+    })
+    .await
+    .unwrap();
+    let table = MetadataTable::with_batches(&[]);
+    let context = CommitContext::default()
+        .with_lease("compact:events:prefix", "owner-a", 7)
+        .with_authorizer(std::sync::Arc::new(DeniedAuthorizer));
+
+    assert!(
+        catalog
+            .ensure_required_properties(table, &context)
+            .await
+            .is_err()
+    );
+    assert!(
+        submitted
+            .recv_timeout(std::time::Duration::from_millis(300))
+            .is_err()
+    );
+    server.join().unwrap();
+}
+
+#[tokio::test]
+async fn claim_index_consolidation_starts_at_the_depth_threshold() {
+    let mut properties = HashMap::from([
+        (
+            INDEX_HEAD_KEY.to_string(),
+            "s3://archive/table/metadata/head.json".to_string(),
+        ),
+        (INDEX_HEAD_DIGEST_KEY.to_string(), "digest".to_string()),
+        (
+            super::claim_index::INDEX_FORMAT_VERSION_KEY.to_string(),
+            ClaimIndexPage::format_version().to_string(),
+        ),
+        (
+            super::claim_index::INDEX_DEPTH_KEY.to_string(),
+            "63".to_string(),
+        ),
+    ]);
+    let shallow = MetadataTable::with_properties(&[], properties.clone());
+    assert!(!ClaimIndex::needs_consolidation(&shallow));
+
+    properties.insert(
+        super::claim_index::INDEX_DEPTH_KEY.to_string(),
+        "64".to_string(),
+    );
+    let deep = MetadataTable::with_properties(&[], properties);
+    assert!(ClaimIndex::needs_consolidation(&deep));
+}
+
+#[tokio::test]
+async fn compacted_metadata_round_trips_source_claims() {
+    let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
+    let sources = vec!["s3://archive/raw/source.parquet".to_string()];
+    let properties = IcebergCatalog::snapshot_properties(&files, Some(&sources)).unwrap();
+    let table = MetadataTable::with_summaries(&[(&files, properties)]);
+
+    assert_eq!(
+        IcebergCatalog::source_files_from_metadata(&table, true).unwrap(),
+        HashSet::from_iter(sources)
+    );
+}
+
+#[tokio::test]
+async fn damaged_source_claims_fail_metadata_loading() {
+    let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
+    let sources = vec!["s3://archive/raw/source.parquet".to_string()];
+    let properties = IcebergCatalog::snapshot_properties(&files, Some(&sources)).unwrap();
+
+    let mut missing_source = properties.clone();
+    missing_source.remove("source-file:s3://archive/raw/source.parquet");
+    let missing_source = MetadataTable::with_summaries(&[(&files, missing_source)]);
+    assert!(IcebergCatalog::source_files_from_metadata(&missing_source, true).is_err());
+
+    let mut wrong_count = properties.clone();
+    wrong_count.insert("source-claim-count".to_string(), "2".to_string());
+    let wrong_count = MetadataTable::with_summaries(&[(&files, wrong_count)]);
+    assert!(IcebergCatalog::source_files_from_metadata(&wrong_count, true).is_err());
+
+    let mut wrong_version = properties;
+    wrong_version.insert("archive-claim-version".to_string(), "2".to_string());
+    let wrong_version = MetadataTable::with_summaries(&[(&files, wrong_version)]);
+    assert!(IcebergCatalog::source_files_from_metadata(&wrong_version, true).is_err());
 }

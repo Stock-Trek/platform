@@ -155,6 +155,62 @@ impl MarketDataMetrics {
         gauge!(MARKET_DATA_COMPACTOR_PENDING_OBJECTS).set(pending as f64);
     }
 
+    pub fn record_archive_listing_page(source: &'static str, objects: u64) {
+        counter!(
+            MARKET_DATA_ARCHIVE_LISTING_PAGES_TOTAL,
+            "source" => source,
+        )
+        .increment(1);
+        if objects > 0 {
+            counter!(
+                MARKET_DATA_ARCHIVE_LISTING_OBJECTS_TOTAL,
+                "source" => source,
+            )
+            .increment(objects);
+        }
+    }
+
+    pub fn record_index_page_read() {
+        counter!(MARKET_DATA_ARCHIVE_INDEX_PAGES_READ_TOTAL).increment(1);
+    }
+
+    pub fn record_index_block_read() {
+        counter!(MARKET_DATA_ARCHIVE_INDEX_BLOCKS_READ_TOTAL).increment(1);
+    }
+
+    pub fn record_index_cache_hit(kind: &'static str) {
+        counter!(
+            MARKET_DATA_ARCHIVE_INDEX_CACHE_HITS_TOTAL,
+            "kind" => kind,
+        )
+        .increment(1);
+    }
+
+    pub fn record_index_cache_miss(kind: &'static str) {
+        counter!(
+            MARKET_DATA_ARCHIVE_INDEX_CACHE_MISSES_TOTAL,
+            "kind" => kind,
+        )
+        .increment(1);
+    }
+
+    pub fn record_index_fallback_scan(table: &'static str) {
+        counter!(
+            MARKET_DATA_ARCHIVE_INDEX_FALLBACK_SCANS_TOTAL,
+            "table" => table,
+        )
+        .increment(1);
+    }
+
+    pub fn record_compactor_poll(duration: Duration) {
+        histogram!(MARKET_DATA_COMPACTOR_POLL_DURATION_SECONDS).record(duration.as_secs_f64());
+    }
+
+    pub fn record_compactor_backlog(age: Duration, growth: i64) {
+        gauge!(MARKET_DATA_COMPACTOR_BACKLOG_AGE_SECONDS).set(age.as_secs_f64());
+        gauge!(MARKET_DATA_COMPACTOR_BACKLOG_GROWTH).set(growth as f64);
+    }
+
     pub fn record_compaction_outcome(kind: &'static str, status: &'static str) {
         counter!(
             MARKET_DATA_COMPACTION_OUTCOMES_TOTAL,

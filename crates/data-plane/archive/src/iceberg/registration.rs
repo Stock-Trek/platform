@@ -66,6 +66,16 @@ impl CommitContext {
         self
     }
 
+    pub fn require_authorizer(&self) -> PlatformResult<()> {
+        if self.authorizer.is_none() {
+            return Err(PlatformError::config_invalid(
+                "commit context",
+                "must include a lease authorizer",
+            ));
+        }
+        Ok(())
+    }
+
     pub async fn authorize(&self) -> PlatformResult<()> {
         match &self.authorizer {
             Some(authorizer) => authorizer.authorize().await,

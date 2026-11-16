@@ -31,6 +31,7 @@ async fn main() -> PlatformResult<()> {
     let _metrics = SERVICE.init_metrics("platform/compactor")?;
     let health = HealthRunner::from_service_env("COMPACTOR").await?;
     let catalog = Arc::new(IcebergCatalog::connect(&config.iceberg).await?);
+    catalog.validate_contract().await?;
     let source = S3ArchiveSource::connect(&config, catalog.clone()).await?;
     let leases = Arc::new(
         NatsLeaseStore::connect(&config.nats_url, "platform-compactor", &config.lease_bucket)
