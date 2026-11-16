@@ -218,9 +218,6 @@ Lease loss and source-claim overlap are warnings, not silent retries.
 
 This plan closes every finding from the production-readiness review. It is ordered by risk. P0 items block deployment; P1 items block production scale and graceful handover; P2 items are required hardening and cleanup. A workstream is complete only when its verification gates pass.
 
-The remaining work after the current implementation is tracked in
-[archive-writer-coordination-cleanup.md](../../docs/archive-writer-coordination-cleanup.md).
-
 | Priority | Workstream | Closure condition |
 | --- | --- | --- |
 | P0 | Serialized source claims | A source-bearing compacted commit round-trips through the real catalog with every claim visible after reload. |
