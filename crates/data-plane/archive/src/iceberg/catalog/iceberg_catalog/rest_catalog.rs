@@ -16,7 +16,10 @@ use platform_errors::{PlatformError, PlatformResult};
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
+    time::Duration,
 };
+
+const CATALOG_HTTP_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct IcebergCatalog {
     pub(super) catalog: iceberg_catalog_rest::RestCatalog,
@@ -26,6 +29,7 @@ pub struct IcebergCatalog {
     pub(super) catalog_uri: String,
     pub(super) prefix: Option<String>,
     pub(super) token: Option<String>,
+    pub(super) client: reqwest::Client,
 }
 
 impl IcebergCatalog {
@@ -37,7 +41,6 @@ impl IcebergCatalog {
         let mut props = HashMap::from([
             (REST_CATALOG_PROP_URI.to_string(), catalog_uri.clone()),
             (REST_CATALOG_PROP_WAREHOUSE.to_string(), warehouse.clone()),
-            ("commit.retry.num-retries".to_string(), "0".to_string()),
         ]);
         if let Some(token) = &config.token {
             props.insert("token".to_string(), token.clone());
@@ -59,7 +62,15 @@ impl IcebergCatalog {
             catalog_uri,
             prefix,
             token: config.token.clone(),
+            client: Self::http_client(),
         })
+    }
+
+    pub(super) fn http_client() -> reqwest::Client {
+        reqwest::Client::builder()
+            .timeout(CATALOG_HTTP_TIMEOUT)
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new())
     }
 
     async fn resolve_endpoint(
@@ -67,7 +78,7 @@ impl IcebergCatalog {
         token: Option<&str>,
     ) -> PlatformResult<(String, Option<String>)> {
         let url = format!("{}/v1/config", catalog_uri.trim_end_matches('/'));
-        let mut request = reqwest::Client::new().get(&url);
+        let mut request = Self::http_client().get(&url);
         if let Some(token) = token {
             request = request.bearer_auth(token);
         }
@@ -140,14 +151,13 @@ impl IcebergCatalog {
     pub async fn ensure_table(&self, table: ArchiveIcebergTable) -> PlatformResult<Table> {
         let ident = self.table_ident(table);
         match self.catalog.load_table(&ident).await {
-            Ok(table) => return Ok(table),
+            Ok(table) => return self.ensure_required_properties(table).await,
             Err(error) if error.kind() == ErrorKind::TableNotFound => {}
             Err(error) => return Err(Self::catalog_error("load Iceberg table", error)),
         }
 
         self.ensure_namespace().await?;
-        let mut properties = ClaimRetention::properties();
-        properties.insert("commit.retry.num-retries".to_string(), "0".to_string());
+        let properties = ClaimRetention::properties();
         let creation = TableCreation::builder()
             .name(table.name().to_string())
             .location(self.table_location(table))
@@ -158,11 +168,14 @@ impl IcebergCatalog {
 
         match self.catalog.create_table(&self.namespace, creation).await {
             Ok(table) => Ok(table),
-            Err(error) if error.kind() == ErrorKind::TableAlreadyExists => self
-                .catalog
-                .load_table(&ident)
-                .await
-                .map_err(|error| Self::catalog_error("reload Iceberg table", error)),
+            Err(error) if error.kind() == ErrorKind::TableAlreadyExists => {
+                let table = self
+                    .catalog
+                    .load_table(&ident)
+                    .await
+                    .map_err(|error| Self::catalog_error("reload Iceberg table", error))?;
+                self.ensure_required_properties(table).await
+            }
             Err(error) => Err(Self::catalog_error("create Iceberg table", error)),
         }
     }

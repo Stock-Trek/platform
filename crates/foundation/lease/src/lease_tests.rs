@@ -1,6 +1,8 @@
-use crate::{InMemoryLeaseStore, Lease, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
+use crate::{
+    InMemoryLeaseStore, Lease, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore, NatsLeaseStore,
+};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 fn scope(name: &str) -> LeaseScope {
     LeaseScope::new(format!("test:{name}"))
@@ -256,4 +258,59 @@ fn lease_buckets_must_retain_history() {
     assert!(NatsLeaseStore::validate_history(10).is_ok());
     assert!(NatsLeaseStore::validate_history(0).is_err());
     assert!(NatsLeaseStore::validate_history(-1).is_err());
+}
+
+#[tokio::test]
+async fn a_nats_store_serializes_owners_and_advances_fencing_tokens() {
+    let Ok(url) = std::env::var("PLATFORM_TEST_NATS_URL") else {
+        return;
+    };
+    let nonce = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let bucket = format!("lease-test-{}-{nonce}", std::process::id());
+    let kv = platform_nats::KeyValue::connect(&url, "platform-lease-tests", &bucket)
+        .await
+        .unwrap();
+    assert_eq!(kv.history().await.unwrap(), 1);
+    let store = NatsLeaseStore::connect(&url, "platform-lease-tests", &bucket)
+        .await
+        .unwrap();
+    let scope = scope("nats-owned");
+    let first = store
+        .acquire(&LeaseRequest::new(
+            scope.clone(),
+            "owner-a",
+            Duration::from_millis(50),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+    let blocked = store
+        .acquire(&LeaseRequest::new(
+            scope.clone(),
+            "owner-b",
+            Duration::from_secs(30),
+        ))
+        .await
+        .unwrap();
+
+    assert_eq!(first.fencing_token, 1);
+    assert!(blocked.is_none());
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let second = store
+        .acquire(&LeaseRequest::new(
+            scope.clone(),
+            "owner-b",
+            Duration::from_secs(30),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(second.fencing_token, first.fencing_token + 1);
+    assert!(!store.release(&first).await.unwrap());
+    assert!(store.release(&second).await.unwrap());
+    assert!(store.current(&scope).await.unwrap().is_none());
 }

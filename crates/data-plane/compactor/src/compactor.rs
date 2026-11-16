@@ -83,7 +83,7 @@ impl Compactor {
     pub async fn compact(&self, batch: &SourceBatch) -> PlatformResult<CompactionStats> {
         let table = ArchiveIcebergTable::compacted(batch.kind);
         let digest = batch.digest();
-        let scope = LeaseScope::new(Self::lease_scope(batch));
+        let scope = LeaseScope::new(self.lease_scope(batch));
         let scope_name = scope.as_str().to_string();
         let owner_id = Lease::new_owner_id();
         let initial_token = i64::try_from(self.lease_initial_token).unwrap_or(i64::MAX);
@@ -255,12 +255,27 @@ impl Compactor {
             guard.lease().fencing_token,
         );
         let registration = ArchiveRegistration::new(data_files, Some(source_files))?;
+        stats.skipped = self
+            .register_compaction(batch, table, &registration, &context, guard)
+            .await?;
+
+        Ok(stats)
+    }
+
+    async fn register_compaction(
+        &self,
+        batch: &SourceBatch,
+        table: ArchiveIcebergTable,
+        registration: &ArchiveRegistration,
+        context: &CommitContext,
+        guard: &LeaseGuard,
+    ) -> PlatformResult<bool> {
         match self
             .catalog
-            .register_files(table, &registration, &context)
+            .register_files(table, registration, context)
             .await?
         {
-            RegisterOutcome::Applied | RegisterOutcome::AlreadyApplied => {}
+            RegisterOutcome::Applied | RegisterOutcome::AlreadyApplied => Ok(false),
             RegisterOutcome::Conflict(conflict) => {
                 warn!(
                     table = table.name(),
@@ -274,16 +289,16 @@ impl Compactor {
                     live_outputs = ?conflict.live_outputs,
                     "compaction registration conflicted"
                 );
-                stats.skipped = true;
+                Ok(true)
             }
         }
-
-        Ok(stats)
     }
 
-    fn lease_scope(batch: &SourceBatch) -> String {
+    fn lease_scope(&self, batch: &SourceBatch) -> String {
         format!(
-            "compact:{}:{}",
+            "compact:{}:{}:{}:{}",
+            self.bucket,
+            self.output_prefix,
             batch.kind.label(),
             SourceBatch::prefix_digest(&batch.prefix)
         )

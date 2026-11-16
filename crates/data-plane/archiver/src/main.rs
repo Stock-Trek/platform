@@ -2,6 +2,7 @@ mod archiver_runner;
 mod config;
 mod recovery;
 mod sink;
+mod sink_registration;
 mod source;
 
 #[cfg(test)]
@@ -9,6 +10,9 @@ mod config_tests;
 
 #[cfg(test)]
 mod archiver_runner_tests;
+
+#[cfg(test)]
+mod sink_registration_tests;
 
 use crate::{
     archiver_runner::ArchiverRunner, config::ArchiverConfig, sink::S3ParquetSink,
