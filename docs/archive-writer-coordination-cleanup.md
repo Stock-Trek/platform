@@ -1,9 +1,8 @@
 # Archive writer coordination cleanup
 
 Status: implementation complete, real-infrastructure verification remaining.
-This document records the gaps between the plan in
-[archive-writer-coordination.md](../crates/data-plane/archive-writer-coordination.md)
-and the current code. It does not replace the plan or re-open completed work.
+This document records the remaining verification gaps. It does not re-open
+completed work.
 
 The coordination primitives, claim-index maintenance, lease authorization,
 polling instrumentation, and metadata cleanup are implemented. The remaining
