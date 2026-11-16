@@ -78,7 +78,16 @@ impl IcebergCatalog {
         table: ArchiveIcebergTable,
         request: &serde_json::Value,
     ) -> PlatformResult<()> {
-        let namespace = self.namespace.as_ref().join("\u{1f}");
+        self.send_table_commit(&self.table_ident(table), request)
+            .await
+    }
+
+    pub(super) async fn send_table_commit(
+        &self,
+        ident: &iceberg::TableIdent,
+        request: &serde_json::Value,
+    ) -> PlatformResult<()> {
+        let namespace = ident.namespace().as_ref().join("\u{1f}");
         let prefix = self
             .prefix
             .as_ref()
@@ -87,9 +96,9 @@ impl IcebergCatalog {
         let url = format!(
             "{}/v1{prefix}/namespaces/{namespace}/tables/{}",
             self.catalog_uri.trim_end_matches('/'),
-            table.name()
+            ident.name()
         );
-        let mut request_builder = reqwest::Client::new().post(url.clone()).json(request);
+        let mut request_builder = self.client.post(url.clone()).json(request);
         if let Some(token) = &self.token {
             request_builder = request_builder.bearer_auth(token);
         }

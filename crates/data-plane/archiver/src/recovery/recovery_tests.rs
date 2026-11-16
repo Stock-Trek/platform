@@ -227,3 +227,24 @@ async fn recovery_aborts_before_registering_after_its_soft_deadline() {
     assert!(result.is_err());
     assert_eq!(catalog.calls.load(Ordering::SeqCst), 0);
 }
+
+#[test]
+fn recovery_scopes_include_the_bucket_and_prefix_identity() {
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let mut sink = RecoveryFixture::sink(Arc::new(FakeCatalog::with_outcomes([])), leases);
+    let original = sink.recovery_scope(ArchiveIcebergTable::RawEvents);
+    sink.bucket = Bucket::new("other-archive".to_string());
+
+    assert_ne!(
+        original.as_str(),
+        sink.recovery_scope(ArchiveIcebergTable::RawEvents).as_str()
+    );
+
+    let bucket_scope = sink.recovery_scope(ArchiveIcebergTable::RawEvents);
+    sink.prefix = "other-raw".to_string();
+
+    assert_ne!(
+        bucket_scope.as_str(),
+        sink.recovery_scope(ArchiveIcebergTable::RawEvents).as_str()
+    );
+}

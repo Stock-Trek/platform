@@ -4,17 +4,19 @@ use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::config::{Credentials, Region};
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveRegistration, CommitContext,
-    RegisterOutcome, SourceBatch,
+    ConflictDetails, IcebergDataFile, RegisterOutcome, SourceBatch,
 };
 use platform_errors::PlatformResult;
-use platform_lease::{InMemoryLeaseStore, LeaseRequest, LeaseScope, LeaseStore};
+use platform_lease::{InMemoryLeaseStore, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
 use platform_types::TimestampMilliseconds;
 use std::collections::HashSet;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 struct FakeCatalog {
     claimed: HashSet<String>,
+    outcome: Option<RegisterOutcome>,
+    registrations: Mutex<Vec<ArchiveRegistration>>,
 }
 
 #[async_trait]
@@ -22,10 +24,17 @@ impl ArchiveCatalog for FakeCatalog {
     async fn register_files(
         &self,
         _table: ArchiveIcebergTable,
-        _registration: &ArchiveRegistration,
+        registration: &ArchiveRegistration,
         _context: &CommitContext,
     ) -> PlatformResult<RegisterOutcome> {
-        panic!("registration must not be attempted in this coordination test")
+        let Some(outcome) = &self.outcome else {
+            panic!("registration must not be attempted in this coordination test")
+        };
+        self.registrations
+            .lock()
+            .unwrap()
+            .push(registration.clone());
+        Ok(outcome.clone())
     }
 
     async fn registered_data_files(
@@ -87,6 +96,16 @@ impl FakeCatalog {
                 .iter()
                 .map(|file| format!("s3://archive/{file}"))
                 .collect(),
+            outcome: None,
+            registrations: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn with_outcome(outcome: RegisterOutcome) -> Self {
+        Self {
+            claimed: HashSet::new(),
+            outcome: Some(outcome),
+            registrations: Mutex::new(Vec::new()),
         }
     }
 }
@@ -95,21 +114,23 @@ impl FakeCatalog {
 async fn another_compactor_holding_the_scope_makes_this_compactor_skip() {
     let batch = FakeCatalog::batch();
     let leases = Arc::new(InMemoryLeaseStore::new());
+    let compactor = Compactor::for_coordination(
+        Arc::new(FakeCatalog {
+            claimed: HashSet::new(),
+            outcome: None,
+            registrations: Mutex::new(Vec::new()),
+        }),
+        leases.clone(),
+    );
     let held = leases
         .acquire(&LeaseRequest::new(
-            LeaseScope::new(Compactor::lease_scope(&batch)),
+            LeaseScope::new(compactor.lease_scope(&batch)),
             "another-compactor",
             Duration::from_secs(30),
         ))
         .await
         .unwrap()
         .unwrap();
-    let compactor = Compactor::for_coordination(
-        Arc::new(FakeCatalog {
-            claimed: HashSet::new(),
-        }),
-        leases.clone(),
-    );
 
     let stats = compactor.compact(&batch).await.unwrap();
 
@@ -123,7 +144,7 @@ async fn a_compactor_releases_the_scope_after_an_already_claimed_skip() {
     let leases = Arc::new(InMemoryLeaseStore::new());
     let compactor =
         Compactor::for_coordination(Arc::new(FakeCatalog::with_claimed(&batch)), leases.clone());
-    let scope = LeaseScope::new(Compactor::lease_scope(&batch));
+    let scope = LeaseScope::new(compactor.lease_scope(&batch));
 
     let stats = compactor.compact(&batch).await.unwrap();
 
@@ -166,7 +187,7 @@ async fn a_compactor_aborts_and_releases_the_scope_after_its_soft_deadline() {
     let leases = Arc::new(InMemoryLeaseStore::new());
     let mut compactor = Compactor::for_coordination(Arc::new(SlowCatalog), leases.clone());
     compactor.max_work = Duration::from_millis(20);
-    let scope = LeaseScope::new(Compactor::lease_scope(&batch));
+    let scope = LeaseScope::new(compactor.lease_scope(&batch));
 
     let result = compactor.compact(&batch).await;
 
@@ -181,12 +202,141 @@ fn concurrent_hourly_prefixes_use_distinct_compaction_scopes() {
     second.prefix = "raw/kind=events/hour=2024-01-01T00".to_string();
     first.prefix = "raw/kind=events/hour=2024-01-01T01".to_string();
 
+    let compactor = Compactor::for_coordination(
+        Arc::new(FakeCatalog::with_claimed(&first)),
+        Arc::new(InMemoryLeaseStore::new()),
+    );
+
     assert_eq!(
-        Compactor::lease_scope(&first),
-        Compactor::lease_scope(&first.clone())
+        compactor.lease_scope(&first),
+        compactor.lease_scope(&first.clone())
     );
     assert_ne!(
-        Compactor::lease_scope(&first),
-        Compactor::lease_scope(&second)
+        compactor.lease_scope(&first),
+        compactor.lease_scope(&second)
     );
+}
+
+#[tokio::test]
+async fn a_compaction_conflict_defers_the_source_claim_without_failing() {
+    let batch = FakeCatalog::batch();
+    let catalog = Arc::new(FakeCatalog::with_outcome(RegisterOutcome::Conflict(
+        ConflictDetails {
+            claimed_sources: Vec::new(),
+            live_outputs: Vec::new(),
+        },
+    )));
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let compactor = Compactor::for_coordination(catalog.clone(), leases.clone());
+    let guard = LeaseGuard::acquire(
+        leases.clone(),
+        LeaseRequest::new(
+            LeaseScope::new(compactor.lease_scope(&batch)),
+            "test-compactor",
+            Duration::from_secs(30),
+        ),
+        Duration::from_secs(20),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let registration = ArchiveRegistration::new(
+        vec![IcebergDataFile::new(
+            "s3://archive/compacted/kind=events/part.parquet",
+            10,
+            1,
+        )],
+        Some(batch.files.clone()),
+    )
+    .unwrap();
+    let context = CommitContext::default().with_lease(
+        guard.lease().scope.as_str(),
+        &guard.lease().owner_id,
+        guard.lease().fencing_token,
+    );
+
+    let skipped = compactor
+        .register_compaction(
+            &batch,
+            ArchiveIcebergTable::compacted(batch.kind),
+            &registration,
+            &context,
+            &guard,
+        )
+        .await
+        .unwrap();
+
+    assert!(skipped);
+    {
+        let registrations = catalog.registrations.lock().unwrap();
+        assert_eq!(registrations.len(), 1);
+        assert_eq!(
+            registrations[0].source_files().unwrap(),
+            batch.files.as_slice()
+        );
+    }
+    guard.release().await.unwrap();
+}
+
+#[tokio::test]
+async fn a_successful_compaction_registration_is_not_reported_as_skipped() {
+    let batch = FakeCatalog::batch();
+    let catalog = Arc::new(FakeCatalog::with_outcome(RegisterOutcome::Applied));
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let compactor = Compactor::for_coordination(catalog.clone(), leases.clone());
+    let guard = LeaseGuard::acquire(
+        leases.clone(),
+        LeaseRequest::new(
+            LeaseScope::new(compactor.lease_scope(&batch)),
+            "test-compactor",
+            Duration::from_secs(30),
+        ),
+        Duration::from_secs(20),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let registration = ArchiveRegistration::new(
+        vec![IcebergDataFile::new(
+            "s3://archive/compacted/kind=events/part.parquet",
+            10,
+            1,
+        )],
+        Some(batch.files.clone()),
+    )
+    .unwrap();
+    let context = CommitContext::default();
+
+    let skipped = compactor
+        .register_compaction(
+            &batch,
+            ArchiveIcebergTable::compacted(batch.kind),
+            &registration,
+            &context,
+            &guard,
+        )
+        .await
+        .unwrap();
+
+    assert!(!skipped);
+    assert_eq!(catalog.registrations.lock().unwrap().len(), 1);
+    guard.release().await.unwrap();
+}
+
+#[test]
+fn compaction_scopes_include_the_bucket_and_output_prefix_identity() {
+    let batch = FakeCatalog::batch();
+    let mut compactor = Compactor::for_coordination(
+        Arc::new(FakeCatalog::with_claimed(&batch)),
+        Arc::new(InMemoryLeaseStore::new()),
+    );
+    let original = compactor.lease_scope(&batch);
+    compactor.bucket = "other-archive".to_string();
+
+    assert_ne!(original, compactor.lease_scope(&batch));
+
+    let bucket_scope = compactor.lease_scope(&batch);
+    compactor.output_prefix = "other-compacted".to_string();
+
+    assert_ne!(bucket_scope, compactor.lease_scope(&batch));
 }

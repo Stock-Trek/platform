@@ -39,11 +39,20 @@ impl S3ParquetSink {
         Ok(())
     }
 
+    fn recovery_scope(&self, table: ArchiveIcebergTable) -> LeaseScope {
+        LeaseScope::new(format!(
+            "archive-recovery:{}:{}:{}",
+            self.bucket,
+            self.prefix.trim_matches('/'),
+            table.name()
+        ))
+    }
+
     async fn acquire_recovery_guard(
         &self,
         table: ArchiveIcebergTable,
     ) -> PlatformResult<LeaseGuard> {
-        let scope = LeaseScope::new(format!("archive-recovery:{}", table.name()));
+        let scope = self.recovery_scope(table);
         let owner_id = Lease::new_owner_id();
         let request = LeaseRequest::new(scope, &owner_id, self.lease_ttl)
             .with_initial_token(i64::try_from(self.lease_initial_token).unwrap_or(i64::MAX))?
@@ -109,10 +118,14 @@ impl S3ParquetSink {
             };
             pending.push(IcebergDataFile::new(location, object.size, record_count));
         }
-        MarketDataMetrics::record_archive_recovery(table.name(), "registered", already_registered);
+        MarketDataMetrics::record_archive_recovery(
+            table.name(),
+            "already_live",
+            already_registered,
+        );
         MarketDataMetrics::record_archive_recovery(table.name(), "duplicate", duplicates);
         MarketDataMetrics::record_archive_recovery(table.name(), "unreadable", unreadable);
-        MarketDataMetrics::record_archive_recovery(table.name(), "pending", pending.len() as u64);
+        MarketDataMetrics::record_archive_recovery(table.name(), "candidate", pending.len() as u64);
 
         self.register_pending(table, pending, guard).await
     }
@@ -143,7 +156,7 @@ impl S3ParquetSink {
                 RegisterOutcome::Applied => {
                     MarketDataMetrics::record_archive_recovery(
                         table.name(),
-                        "uploaded",
+                        "registered",
                         pending.len() as u64,
                     );
                     info!(
@@ -156,7 +169,7 @@ impl S3ParquetSink {
                 RegisterOutcome::AlreadyApplied => {
                     MarketDataMetrics::record_archive_recovery(
                         table.name(),
-                        "reused",
+                        "already_live",
                         pending.len() as u64,
                     );
                     info!(
@@ -167,11 +180,6 @@ impl S3ParquetSink {
                     return Ok(());
                 }
                 RegisterOutcome::Conflict(conflict) => {
-                    MarketDataMetrics::record_archive_recovery(
-                        table.name(),
-                        "conflict",
-                        pending.len() as u64,
-                    );
                     warn!(
                         table = table.name(),
                         attempt,
@@ -185,6 +193,11 @@ impl S3ParquetSink {
                     );
                     let live = self.catalog.registered_data_files(table).await?;
                     pending.retain(|file| !live.contains(&file.file_path));
+                    MarketDataMetrics::record_archive_recovery(
+                        table.name(),
+                        "deferred_by_conflict",
+                        pending.len() as u64,
+                    );
                 }
             }
         }

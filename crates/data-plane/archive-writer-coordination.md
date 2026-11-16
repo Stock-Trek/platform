@@ -100,12 +100,14 @@ The NATS KV key is derived from a SHA-256 digest of the scope, not from a raw S3
 
 Acquire creates a missing key at token `1` or replaces an expired key at token `previous + 1` using the observed revision. Renew succeeds only for the current owner and token and only before expiry. Release deletes only for the current owner, token, and revision, so a stale worker cannot release its successor's lease. A revision race is retried by re-reading the key, never by overwriting it unconditionally.
 
+Lease scopes include the archive deployment identity (bucket and archive prefix) as well as the table or raw hourly prefix. Deployments that share a lease bucket therefore do not contend for each other's work.
+
 The lease TTL is configurable per archive kind. Each kind also has a soft work deadline that is shorter than the TTL, so a large compaction cannot renew forever and still commit after the deployment has moved on. A worker renews at one third of the TTL. A failed renewal or an expired soft deadline marks the lease as lost: the worker stops adding new work and must not commit. Immediately before the conditional commit, the worker renews and verifies the token again. If the process stalls after that check, the Iceberg CAS still prevents duplicate claims.
 
 ## Compactor flow
 
 1. `pending_batches()` produces candidates only. It may use a stale view because it is not a correctness boundary.
-2. For each candidate, acquire a lease scoped to `compact:{kind}:{sha256(raw-hour-prefix)}`. If the lease is held elsewhere, skip the candidate and continue with the next one. A lease per raw hourly prefix allows different hours and archive kinds to be compacted in parallel while serializing the work that would otherwise collide.
+2. For each candidate, acquire a lease scoped to `compact:{bucket}:{output-prefix}:{kind}:{sha256(raw-hour-prefix)}`. If the lease is held elsewhere, skip the candidate and continue with the next one. A lease per raw hourly prefix allows different hours and archive kinds to be compacted in parallel while serializing the work that would otherwise collide.
 3. Under the lease, reload the compacted table and its processed-source set. If any source in the candidate is now claimed, release the lease and abandon the whole candidate. The next poll will select a fresh set.
 4. Compact, write all output objects, and keep the lease renewed throughout the work. Renew and verify the lease immediately before registration; abort before registration if the soft work deadline expires or renewal fails.
 5. Register the output files and source list through the conditional commit. Treat `Applied` and `AlreadyApplied` as success. Treat `Conflict` as a skipped batch, log the overlapping sources and paths, and do not retry that source set in the same attempt.
@@ -117,7 +119,7 @@ The lease TTL is configurable per archive kind. Each kind also has a soft work d
 
 **Startup recovery.**
 
-1. Before listing recovery objects, acquire a lease scoped to `archive-recovery:{raw-table}`. If another process holds the lease, wait for it to release or expire, then retry the recovery scan.
+1. Before listing recovery objects, acquire a lease scoped to `archive-recovery:{bucket}:{raw-prefix}:{raw-table}`. If another process holds the lease, wait for it to release or expire, then retry the recovery scan.
 2. Under the lease, list the configured raw prefix and reload the raw table's live data-file paths.
 3. Discard every object whose path is already live and deduplicate the remaining paths.
 4. Read row counts and sizes for the remaining objects, then register the whole set through the conditional commit.

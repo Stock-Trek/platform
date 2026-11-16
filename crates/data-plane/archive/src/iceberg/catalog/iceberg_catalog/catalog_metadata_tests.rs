@@ -15,6 +15,13 @@ struct MetadataTable;
 
 impl MetadataTable {
     fn with_batches(batches: &[&[IcebergDataFile]]) -> Table {
+        Self::with_properties(batches, HashMap::new())
+    }
+
+    fn with_properties(
+        batches: &[&[IcebergDataFile]],
+        properties: HashMap<String, String>,
+    ) -> Table {
         let schema = Schema::builder()
             .with_schema_id(0)
             .with_fields([Arc::new(NestedField::required(
@@ -30,7 +37,7 @@ impl MetadataTable {
             SortOrder::unsorted_order(),
             "s3://archive/table".to_string(),
             FormatVersion::V2,
-            HashMap::new(),
+            properties,
         )
         .unwrap();
 
@@ -165,6 +172,29 @@ fn empty_source_batches_cannot_produce_a_snapshot_property() {
     let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
 
     assert!(IcebergCatalog::snapshot_properties(&files, Some(&[])).is_err());
+}
+
+#[tokio::test]
+async fn missing_required_properties_include_retention_and_commit_retries() {
+    let table = MetadataTable::with_properties(
+        &[],
+        HashMap::from([(
+            "history.expire.min-snapshots-to-keep".to_string(),
+            i32::MAX.to_string(),
+        )]),
+    );
+
+    let missing = IcebergCatalog::missing_required_properties(&table);
+
+    assert!(!missing.contains_key("history.expire.min-snapshots-to-keep"));
+    assert_eq!(
+        missing.get("history.expire.max-snapshot-age-ms"),
+        Some(&i64::MAX.to_string())
+    );
+    assert_eq!(
+        missing.get("commit.retry.num-retries"),
+        Some(&"0".to_string())
+    );
 }
 
 #[tokio::test]
