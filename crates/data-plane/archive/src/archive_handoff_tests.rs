@@ -1,6 +1,6 @@
 use crate::{
     ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind, ArchiveRegistration,
-    IcebergDataFile, RegisterOutcome,
+    CommitContext, IcebergDataFile, RegisterOutcome,
 };
 use async_trait::async_trait;
 use platform_errors::PlatformResult;
@@ -19,6 +19,7 @@ impl ArchiveCatalog for FakeCatalog {
         &self,
         _table: ArchiveIcebergTable,
         _registration: &ArchiveRegistration,
+        _context: &CommitContext,
     ) -> PlatformResult<RegisterOutcome> {
         Ok(RegisterOutcome::Applied)
     }

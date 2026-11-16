@@ -1,4 +1,6 @@
-use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, ConflictDetails, RegisterOutcome};
+use crate::iceberg::{
+    ArchiveIcebergTable, ArchiveRegistration, CommitContext, ConflictDetails, RegisterOutcome,
+};
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};
 use platform_metrics::MarketDataMetrics;
@@ -116,6 +118,7 @@ where
     pub(super) async fn run(
         &self,
         registration: &ArchiveRegistration,
+        context: &CommitContext,
     ) -> PlatformResult<RegisterOutcome> {
         let table = self.target.table();
         let digest = registration.batch_digest();
@@ -128,10 +131,10 @@ where
             match self.target.evaluate(&current, registration).await? {
                 Evaluation::Apply => {}
                 Evaluation::AlreadyApplied => {
-                    return Ok(Self::already_applied(table, &digest));
+                    return Ok(Self::already_applied(table, &digest, context));
                 }
                 Evaluation::Conflict(conflict) => {
-                    return Ok(Self::conflict(table, &digest, conflict));
+                    return Ok(Self::conflict(table, &digest, context, conflict));
                 }
             }
 
@@ -140,6 +143,9 @@ where
                     MarketDataMetrics::record_archive_commit(table.name(), "applied");
                     info!(
                         table = table.name(),
+                        scope = context.scope(),
+                        owner = context.owner(),
+                        token = context.fencing_token(),
                         source_batch_digest = %digest,
                         files = registration.files().len(),
                         "registered archive files in Iceberg"
@@ -150,6 +156,9 @@ where
                     warn!(
                         %error,
                         table = table.name(),
+                        scope = context.scope(),
+                        owner = context.owner(),
+                        token = context.fencing_token(),
                         source_batch_digest = %digest,
                         attempt,
                         "conditional Iceberg commit did not succeed"
@@ -161,10 +170,10 @@ where
             let reloaded = self.target.load().await?;
             match self.target.evaluate(&reloaded, registration).await? {
                 Evaluation::AlreadyApplied => {
-                    return Ok(Self::already_applied(table, &digest));
+                    return Ok(Self::already_applied(table, &digest, context));
                 }
                 Evaluation::Conflict(conflict) => {
-                    return Ok(Self::conflict(table, &digest, conflict));
+                    return Ok(Self::conflict(table, &digest, context, conflict));
                 }
                 Evaluation::Apply => {
                     if attempt < self.retry.max_attempts {
@@ -182,10 +191,17 @@ where
         }))
     }
 
-    fn already_applied(table: ArchiveIcebergTable, digest: &str) -> RegisterOutcome {
+    fn already_applied(
+        table: ArchiveIcebergTable,
+        digest: &str,
+        context: &CommitContext,
+    ) -> RegisterOutcome {
         MarketDataMetrics::record_archive_commit(table.name(), "already_applied");
         info!(
             table = table.name(),
+            scope = context.scope(),
+            owner = context.owner(),
+            token = context.fencing_token(),
             source_batch_digest = %digest,
             "archive registration was already applied"
         );
@@ -195,11 +211,15 @@ where
     fn conflict(
         table: ArchiveIcebergTable,
         digest: &str,
+        context: &CommitContext,
         conflict: ConflictDetails,
     ) -> RegisterOutcome {
         MarketDataMetrics::record_archive_commit(table.name(), "conflict");
         warn!(
             table = table.name(),
+            scope = context.scope(),
+            owner = context.owner(),
+            token = context.fencing_token(),
             source_batch_digest = %digest,
             claimed_sources = ?conflict.claimed_sources,
             live_outputs = ?conflict.live_outputs,

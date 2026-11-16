@@ -9,9 +9,9 @@ use crate::{
     processor::CandleProcessor,
     shard_id::ShardId,
     state::AggregatorState,
-    writer_lease::LeaseStore,
 };
 use platform_errors::{ErrorType, PlatformError, PlatformResult};
+use platform_lease::LeaseStore;
 use platform_metrics::AggregatorMetrics;
 use platform_types::TimestampMilliseconds;
 use std::sync::Arc;

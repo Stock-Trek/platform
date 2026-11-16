@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::config::{Credentials, Region};
 use platform_archive::{
-    ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, Bucket, ConflictDetails,
-    IcebergDataFile, RegisterOutcome,
+    ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, Bucket, CommitContext,
+    ConflictDetails, IcebergDataFile, RegisterOutcome,
 };
 use platform_errors::PlatformResult;
 use platform_lease::{InMemoryLeaseStore, LeaseGuard, LeaseRequest, LeaseScope};
@@ -37,6 +37,7 @@ impl ArchiveCatalog for FakeCatalog {
         &self,
         _table: ArchiveIcebergTable,
         registration: &ArchiveRegistration,
+        _context: &CommitContext,
     ) -> PlatformResult<RegisterOutcome> {
         self.calls.fetch_add(1, Ordering::SeqCst);
         let mut outputs = registration
@@ -194,4 +195,35 @@ async fn recovery_reports_files_that_never_leave_conflict() {
 
     assert!(result.is_err());
     assert_eq!(catalog.calls.load(Ordering::SeqCst), 4);
+}
+
+#[tokio::test]
+async fn recovery_aborts_before_registering_after_its_soft_deadline() {
+    let catalog = Arc::new(FakeCatalog::with_outcomes([RegisterOutcome::Applied]));
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let sink = RecoveryFixture::sink(catalog.clone(), leases.clone());
+    let mut guard = LeaseGuard::acquire(
+        leases,
+        LeaseRequest::new(
+            LeaseScope::new("archive-recovery:raw_events"),
+            "recovery-owner",
+            Duration::from_millis(60),
+        ),
+        Duration::from_millis(20),
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    tokio::time::sleep(Duration::from_millis(40)).await;
+
+    let result = sink
+        .register_pending(
+            ArchiveIcebergTable::RawEvents,
+            RecoveryFixture::pending(),
+            &mut guard,
+        )
+        .await;
+
+    assert!(result.is_err());
+    assert_eq!(catalog.calls.load(Ordering::SeqCst), 0);
 }

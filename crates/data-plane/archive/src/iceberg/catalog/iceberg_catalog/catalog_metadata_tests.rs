@@ -166,3 +166,24 @@ fn empty_source_batches_cannot_produce_a_snapshot_property() {
 
     assert!(IcebergCatalog::snapshot_properties(&files, Some(&[])).is_err());
 }
+
+#[tokio::test]
+async fn a_commit_asserts_the_table_uuid_it_was_built_for() {
+    let first = MetadataTable::with_batches(&[]);
+    let second = MetadataTable::with_batches(&[]);
+    let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
+
+    let request = SnapshotCommit::build(&first, &files, HashMap::new())
+        .await
+        .unwrap()
+        .to_request(&TableIdent::from_strs(["ns", "table"]).unwrap());
+
+    assert_eq!(
+        request["requirements"][0]["uuid"],
+        first.metadata().uuid().to_string()
+    );
+    assert_ne!(
+        request["requirements"][0]["uuid"],
+        second.metadata().uuid().to_string()
+    );
+}

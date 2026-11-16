@@ -1,6 +1,6 @@
 use super::commit_algorithm::ConditionalCommit;
 use super::commit_fake_tests::{FakeBackend, FakeTarget};
-use crate::iceberg::RegisterOutcome;
+use crate::iceberg::{CommitContext, RegisterOutcome};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tokio::sync::Barrier;
@@ -13,7 +13,7 @@ async fn exact_match_is_already_applied_without_another_commit() {
     let target = FakeTarget::new(backend.clone());
 
     let outcome = ConditionalCommit::new(target, FakeTarget::retry())
-        .run(&registration)
+        .run(&registration, &CommitContext::default())
         .await
         .unwrap();
 
@@ -30,7 +30,7 @@ async fn partial_source_overlap_returns_the_overlapping_sources() {
     let target = FakeTarget::new(backend);
 
     let outcome = ConditionalCommit::new(target, FakeTarget::retry())
-        .run(&registration)
+        .run(&registration, &CommitContext::default())
         .await
         .unwrap();
 
@@ -51,7 +51,7 @@ async fn partial_output_overlap_returns_the_live_outputs() {
     let target = FakeTarget::new(backend);
 
     let outcome = ConditionalCommit::new(target, FakeTarget::retry())
-        .run(&registration)
+        .run(&registration, &CommitContext::default())
         .await
         .unwrap();
 
@@ -72,7 +72,7 @@ async fn an_ambiguous_lost_response_is_resolved_as_already_applied() {
     let target = FakeTarget::new(backend.clone());
 
     let outcome = ConditionalCommit::new(target, FakeTarget::retry())
-        .run(&registration)
+        .run(&registration, &CommitContext::default())
         .await
         .unwrap();
 
@@ -88,7 +88,7 @@ async fn a_transport_failure_before_apply_retries_the_new_state() {
     let target = FakeTarget::new(backend.clone());
 
     let outcome = ConditionalCommit::new(target, FakeTarget::retry())
-        .run(&registration)
+        .run(&registration, &CommitContext::default())
         .await
         .unwrap();
 
@@ -103,11 +103,11 @@ async fn a_writer_that_checks_after_a_commit_conflicts() {
     let second_registration =
         FakeTarget::registration(Some(&["s3://raw/a", "s3://raw/b"]), &["s3://out/b"]);
     let first = ConditionalCommit::new(FakeTarget::new(backend.clone()), FakeTarget::retry())
-        .run(&first_registration)
+        .run(&first_registration, &CommitContext::default())
         .await
         .unwrap();
     let second = ConditionalCommit::new(FakeTarget::new(backend.clone()), FakeTarget::retry())
-        .run(&second_registration)
+        .run(&second_registration, &CommitContext::default())
         .await
         .unwrap();
 
@@ -138,8 +138,16 @@ async fn writers_that_check_before_either_commits_produce_one_winner() {
         FakeTarget::retry(),
     );
 
-    let first = tokio::spawn(async move { first.run(&first_registration).await });
-    let second = tokio::spawn(async move { second.run(&second_registration).await });
+    let first = tokio::spawn(async move {
+        first
+            .run(&first_registration, &CommitContext::default())
+            .await
+    });
+    let second = tokio::spawn(async move {
+        second
+            .run(&second_registration, &CommitContext::default())
+            .await
+    });
     let first = first.await.unwrap().unwrap();
     let second = second.await.unwrap().unwrap();
     let outcomes = [first, second];

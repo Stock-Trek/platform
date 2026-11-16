@@ -5,9 +5,9 @@
 //! acknowledged only after this record has been written, so a crash can replay
 //! work but cannot silently skip it.
 
+use crate::config::AggregatorConfig;
 use crate::shard_id::ShardId;
 use crate::state::AggregatorState;
-use crate::{WriterLease, config::AggregatorConfig};
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};
 use platform_lease::Lease;
@@ -58,7 +58,7 @@ impl CheckpointRecord {
     }
 
     /// Binds the checkpoint to the lease that is allowed to write it.
-    pub fn with_lease(mut self, lease: &WriterLease) -> Self {
+    pub fn with_lease(mut self, lease: &Lease) -> Self {
         self.fencing_token = lease.fencing_token;
         self.writer_id = lease.owner_id.clone();
         self
@@ -210,7 +210,7 @@ impl NatsStateStore {
     async fn ensure_lease_holder(&self, checkpoint: &CheckpointRecord) -> PlatformResult<()> {
         let Some((payload, _)) = self
             .values
-            .get_with_revision(&WriterLease::key(checkpoint.shard))
+            .get_with_revision(&checkpoint.shard.lease_key())
             .await?
         else {
             return Err(PlatformError::bad_value(

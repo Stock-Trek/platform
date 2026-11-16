@@ -12,9 +12,9 @@ use crate::{
     },
     shard_id::ShardId,
     state::DeduplicationKey,
-    writer_lease::LeaseStore,
 };
 use platform_errors::PlatformResult;
+use platform_lease::LeaseStore;
 use platform_market_data::{GapMarker, MarketEvent, SharedTradeDecoder, TradeDecoderFactory};
 use platform_metrics::{
     AggregatorMetrics, DECODE_KIND_TRADE, DROP_REASON_NO_DECODER, MarketDataMetrics,

@@ -1,6 +1,8 @@
 use crate::iceberg::catalog::iceberg_catalog::retention::ClaimRetention;
 use crate::iceberg::catalog::{ArchiveCatalog, IcebergDataFile};
-use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, IcebergConfig, RegisterOutcome};
+use crate::iceberg::{
+    ArchiveIcebergTable, ArchiveRegistration, CommitContext, IcebergConfig, RegisterOutcome,
+};
 use async_trait::async_trait;
 use iceberg::{
     Catalog, CatalogBuilder, ErrorKind, NamespaceIdent, TableCreation, TableIdent,
@@ -176,8 +178,9 @@ impl ArchiveCatalog for IcebergCatalog {
         &self,
         table: ArchiveIcebergTable,
         registration: &ArchiveRegistration,
+        context: &CommitContext,
     ) -> PlatformResult<RegisterOutcome> {
-        self.commit_files(table, registration).await
+        self.commit_files(table, registration, context).await
     }
 
     async fn registered_data_files(

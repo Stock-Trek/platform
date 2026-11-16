@@ -14,4 +14,4 @@ pub use config::{
     ICEBERG_CATALOG_TOKEN, ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE, ICEBERG_NAMESPACE,
     IcebergConfig,
 };
-pub use registration::{ArchiveRegistration, ConflictDetails, RegisterOutcome};
+pub use registration::{ArchiveRegistration, CommitContext, ConflictDetails, RegisterOutcome};

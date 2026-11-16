@@ -62,20 +62,23 @@ impl LeaseGuard {
         );
         let lost = Arc::new(AtomicBool::new(false));
         let renewal_lock = Arc::new(Mutex::new(()));
-        let renewal = Self::spawn_renewal(
-            store.clone(),
-            lease.clone(),
-            request.ttl,
+        let deadline = Instant::now() + max_work;
+        let renewal = Renewal {
+            store: store.clone(),
+            lease: lease.clone(),
+            ttl: request.ttl,
             interval,
-            context.clone(),
-            lost.clone(),
-            renewal_lock.clone(),
-        );
+            deadline,
+            context: context.clone(),
+            lost: lost.clone(),
+            renewal_lock: renewal_lock.clone(),
+        }
+        .start();
         Ok(Self {
             store,
             lease,
             ttl: request.ttl,
-            deadline: Instant::now() + max_work,
+            deadline,
             context,
             lost,
             renewal,
@@ -94,52 +97,33 @@ impl LeaseGuard {
         Ok(())
     }
 
-    fn spawn_renewal(
+    fn release_on_drop(
         store: Arc<dyn LeaseStore>,
         lease: Lease,
-        ttl: Duration,
-        interval: Duration,
         context: LeaseContext,
-        lost: Arc<AtomicBool>,
-        renewal_lock: Arc<Mutex<()>>,
     ) -> JoinHandle<()> {
         tokio::spawn(async move {
-            let mut ticker = tokio::time::interval(interval);
-            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-            ticker.tick().await;
-            loop {
-                ticker.tick().await;
-                let _guard = renewal_lock.lock().await;
-                match store.renew(&lease, ttl).await {
-                    Ok(Some(_)) => {}
-                    Ok(None) => {
-                        lost.store(true, Ordering::SeqCst);
-                        MarketDataMetrics::record_lease_lost(lease.scope.as_str(), "renewal");
-                        warn!(
-                            table = context.table(),
-                            scope = %lease.scope.as_str(),
-                            owner = %lease.owner_id,
-                            token = lease.fencing_token,
-                            source_batch_digest = context.source_batch_digest(),
-                            "lease lost"
-                        );
-                        return;
-                    }
-                    Err(error) => {
-                        lost.store(true, Ordering::SeqCst);
-                        MarketDataMetrics::record_lease_lost(lease.scope.as_str(), "renewal_error");
-                        warn!(
-                            %error,
-                            table = context.table(),
-                            scope = %lease.scope.as_str(),
-                            owner = %lease.owner_id,
-                            token = lease.fencing_token,
-                            source_batch_digest = context.source_batch_digest(),
-                            "lease renewal failed"
-                        );
-                        return;
-                    }
+            match store.release(&lease).await {
+                Ok(true) => {
+                    debug!(
+                        table = context.table(),
+                        scope = %lease.scope.as_str(),
+                        owner = %lease.owner_id,
+                        token = lease.fencing_token,
+                        source_batch_digest = context.source_batch_digest(),
+                        "released lease on drop"
+                    );
                 }
+                Ok(false) => {}
+                Err(error) => warn!(
+                    %error,
+                    table = context.table(),
+                    scope = %lease.scope.as_str(),
+                    owner = %lease.owner_id,
+                    token = lease.fencing_token,
+                    source_batch_digest = context.source_batch_digest(),
+                    "failed to release lease on drop"
+                ),
             }
         })
     }
@@ -213,6 +197,67 @@ impl LeaseGuard {
     }
 }
 
+struct Renewal {
+    store: Arc<dyn LeaseStore>,
+    lease: Lease,
+    ttl: Duration,
+    interval: Duration,
+    deadline: Instant,
+    context: LeaseContext,
+    lost: Arc<AtomicBool>,
+    renewal_lock: Arc<Mutex<()>>,
+}
+
+impl Renewal {
+    fn start(self) -> JoinHandle<()> {
+        tokio::spawn(async move {
+            let mut ticker = tokio::time::interval(self.interval);
+            ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+            ticker.tick().await;
+            loop {
+                ticker.tick().await;
+                if Instant::now() >= self.deadline {
+                    return;
+                }
+                let _guard = self.renewal_lock.lock().await;
+                match self.store.renew(&self.lease, self.ttl).await {
+                    Ok(Some(_)) => {}
+                    Ok(None) => {
+                        self.lost.store(true, Ordering::SeqCst);
+                        MarketDataMetrics::record_lease_lost(self.lease.scope.as_str(), "renewal");
+                        warn!(
+                            table = self.context.table(),
+                            scope = %self.lease.scope.as_str(),
+                            owner = %self.lease.owner_id,
+                            token = self.lease.fencing_token,
+                            source_batch_digest = self.context.source_batch_digest(),
+                            "lease lost"
+                        );
+                        return;
+                    }
+                    Err(error) => {
+                        self.lost.store(true, Ordering::SeqCst);
+                        MarketDataMetrics::record_lease_lost(
+                            self.lease.scope.as_str(),
+                            "renewal_error",
+                        );
+                        warn!(
+                            %error,
+                            table = self.context.table(),
+                            scope = %self.lease.scope.as_str(),
+                            owner = %self.lease.owner_id,
+                            token = self.lease.fencing_token,
+                            source_batch_digest = self.context.source_batch_digest(),
+                            "lease renewal failed"
+                        );
+                        return;
+                    }
+                }
+            }
+        })
+    }
+}
+
 impl Drop for LeaseGuard {
     fn drop(&mut self) {
         if self.released {
@@ -222,31 +267,8 @@ impl Drop for LeaseGuard {
         let store = self.store.clone();
         let lease = self.lease.clone();
         let context = self.context.clone();
-        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
-            runtime.spawn(async move {
-                match store.release(&lease).await {
-                    Ok(true) => {
-                        debug!(
-                            table = context.table(),
-                            scope = %lease.scope.as_str(),
-                            owner = %lease.owner_id,
-                            token = lease.fencing_token,
-                            source_batch_digest = context.source_batch_digest(),
-                            "released lease on drop"
-                        );
-                    }
-                    Ok(false) => {}
-                    Err(error) => warn!(
-                        %error,
-                        table = context.table(),
-                        scope = %lease.scope.as_str(),
-                        owner = %lease.owner_id,
-                        token = lease.fencing_token,
-                        source_batch_digest = context.source_batch_digest(),
-                        "failed to release lease on drop"
-                    ),
-                }
-            });
+        if tokio::runtime::Handle::try_current().is_ok() {
+            Self::release_on_drop(store, lease, context);
         }
     }
 }

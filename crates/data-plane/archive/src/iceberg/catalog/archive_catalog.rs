@@ -1,5 +1,5 @@
 use crate::iceberg::catalog::IcebergDataFile;
-use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, RegisterOutcome};
+use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, CommitContext, RegisterOutcome};
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};
 use std::collections::HashSet;
@@ -10,6 +10,7 @@ pub trait ArchiveCatalog: Send + Sync {
         &self,
         table: ArchiveIcebergTable,
         registration: &ArchiveRegistration,
+        context: &CommitContext,
     ) -> PlatformResult<RegisterOutcome>;
 
     async fn registered_data_files(

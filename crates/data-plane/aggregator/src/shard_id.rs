@@ -1,9 +1,11 @@
 //! Stable key-to-shard assignment for the aggregator shard stream.
 
 use platform_archive::{RoutingBucket, RoutingKey};
+use platform_lease::{LeaseRequest, LeaseScope};
 use platform_market_data::{CandleKey, Trade};
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::time::Duration;
 use stock_trek_types::cex::{cex_id::CexId, trading_pair::TradingPair};
 
 /// Identifier of one aggregator shard.
@@ -28,6 +30,18 @@ impl ShardId {
     /// The subject this shard's routed input is published to.
     pub fn subject(self, prefix: &str) -> String {
         format!("{prefix}.{}", self.0)
+    }
+
+    pub fn lease_scope(self) -> LeaseScope {
+        LeaseScope::new(format!("aggregator-shard-{}", self.0))
+    }
+
+    pub fn lease_key(self) -> String {
+        self.lease_scope().key()
+    }
+
+    pub fn lease_request(self, owner_id: impl Into<String>, ttl: Duration) -> LeaseRequest {
+        LeaseRequest::new(self.lease_scope(), owner_id, ttl)
     }
 }
 

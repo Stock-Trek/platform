@@ -201,3 +201,59 @@ async fn guard_rejects_work_beyond_its_deadline() {
     tokio::time::sleep(Duration::from_millis(50)).await;
     assert!(guard.lost());
 }
+
+#[tokio::test]
+async fn a_failed_renewal_marks_the_guard_lost_and_blocks_writes() {
+    let store = Arc::new(InMemoryLeaseStore::new());
+    let request = LeaseRequest::new(
+        scope("renewal-failure"),
+        "owner-a",
+        Duration::from_millis(300),
+    );
+    let mut guard = LeaseGuard::acquire(store.clone(), request, Duration::from_millis(250))
+        .await
+        .unwrap()
+        .unwrap();
+    let lease = guard.lease().clone();
+
+    store.release(&lease).await.unwrap();
+    tokio::time::sleep(Duration::from_millis(150)).await;
+
+    assert!(guard.lost());
+    assert!(guard.ensure_writable().await.is_err());
+}
+
+#[tokio::test]
+async fn a_stalled_owner_cannot_write_after_a_successor_takes_over() {
+    let store = Arc::new(InMemoryLeaseStore::new());
+    let scope = scope("stalled");
+    let request = LeaseRequest::new(scope.clone(), "owner-a", Duration::from_millis(40));
+    let mut guard = LeaseGuard::acquire(store.clone(), request, Duration::from_millis(20))
+        .await
+        .unwrap()
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(100)).await;
+
+    let successor = store
+        .acquire(&LeaseRequest::new(
+            scope,
+            "owner-b",
+            Duration::from_secs(30),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+
+    assert_eq!(successor.fencing_token, guard.lease().fencing_token + 1);
+    assert!(guard.ensure_writable().await.is_err());
+}
+
+#[test]
+fn lease_buckets_must_retain_history() {
+    use crate::NatsLeaseStore;
+
+    assert!(NatsLeaseStore::validate_history(1).is_ok());
+    assert!(NatsLeaseStore::validate_history(10).is_ok());
+    assert!(NatsLeaseStore::validate_history(0).is_err());
+    assert!(NatsLeaseStore::validate_history(-1).is_err());
+}

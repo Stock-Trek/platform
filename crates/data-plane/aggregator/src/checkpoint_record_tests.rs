@@ -2,11 +2,11 @@ use crate::{
     checkpoint_record::{CheckpointRecord, NatsStateStore, StateStore},
     shard_id::ShardId,
     state::{AggregatorState, STATE_SCHEMA_VERSION},
-    writer_lease::WriterLease,
 };
 use async_trait::async_trait;
 use parking_lot::Mutex;
 use platform_errors::{PlatformError, PlatformResult};
+use platform_lease::Lease;
 use platform_nats::Message;
 use platform_types::TimestampMilliseconds;
 use std::collections::HashMap;
@@ -157,8 +157,8 @@ async fn in_memory_store_overwrites_are_atomic() {
 async fn an_older_fencing_token_cannot_overwrite_a_newer_checkpoint() {
     let store = InMemoryStateStore::new();
     let shard = ShardId::new(1);
-    let lease = WriterLease {
-        shard,
+    let lease = Lease {
+        scope: shard.lease_scope(),
         owner_id: "writer-b".to_string(),
         fencing_token: 2,
         expires_at: TimestampMilliseconds::now(),
@@ -170,8 +170,8 @@ async fn an_older_fencing_token_cannot_overwrite_a_newer_checkpoint() {
         .await
         .unwrap();
 
-    let stale_lease = WriterLease {
-        shard,
+    let stale_lease = Lease {
+        scope: shard.lease_scope(),
         owner_id: "writer-a".to_string(),
         fencing_token: 1,
         expires_at: TimestampMilliseconds::now(),
@@ -190,16 +190,16 @@ fn production_store_rejects_a_checkpoint_from_a_stale_writer() {
     let shard = ShardId::new(1);
     let mut stored = checkpoint();
     stored.shard = shard;
-    let stored = stored.with_lease(&WriterLease {
-        shard,
+    let stored = stored.with_lease(&Lease {
+        scope: shard.lease_scope(),
         owner_id: "writer-b".to_string(),
         fencing_token: 2,
         expires_at: TimestampMilliseconds::now(),
     });
     let mut stale = checkpoint();
     stale.shard = shard;
-    let stale = stale.with_lease(&WriterLease {
-        shard,
+    let stale = stale.with_lease(&Lease {
+        scope: shard.lease_scope(),
         owner_id: "writer-a".to_string(),
         fencing_token: 1,
         expires_at: TimestampMilliseconds::now(),
@@ -209,8 +209,8 @@ fn production_store_rejects_a_checkpoint_from_a_stale_writer() {
 
     let mut same_writer = checkpoint();
     same_writer.shard = shard;
-    let same_writer = same_writer.with_lease(&WriterLease {
-        shard,
+    let same_writer = same_writer.with_lease(&Lease {
+        scope: shard.lease_scope(),
         owner_id: "writer-b".to_string(),
         fencing_token: 2,
         expires_at: TimestampMilliseconds::now(),

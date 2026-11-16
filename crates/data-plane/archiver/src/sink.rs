@@ -4,8 +4,8 @@ use aws_sdk_s3::Client as S3Client;
 use bytes::Bytes;
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveParquet,
-    ArchiveRecord, ArchiveRegistration, Bucket, ContentHash, IcebergDataFile, ObjectKey,
-    RegisterOutcome, RoutingBucket, S3,
+    ArchiveRecord, ArchiveRegistration, Bucket, CommitContext, ContentHash, IcebergDataFile,
+    ObjectKey, RegisterOutcome, RoutingBucket, S3,
 };
 use platform_errors::PlatformResult;
 use platform_lease::LeaseStore;
@@ -160,7 +160,10 @@ impl ArchiveSink for S3ParquetSink {
 
         for (table, files) in pending {
             let registration = ArchiveRegistration::new(files, None::<Vec<String>>)?;
-            let outcome = self.catalog.register_files(table, &registration).await?;
+            let outcome = self
+                .catalog
+                .register_files(table, &registration, &CommitContext::default())
+                .await?;
             if let RegisterOutcome::Conflict(conflict) = outcome {
                 return Err(platform_errors::PlatformError::external(
                     std::io::Error::other(format!(
