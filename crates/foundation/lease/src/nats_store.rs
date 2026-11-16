@@ -108,16 +108,8 @@ impl LeaseStore for NatsLeaseStore {
         if !current.is_held_by(&lease.owner_id, lease.fencing_token) || current.is_expired(now) {
             return Ok(false);
         }
-        let released = Lease {
-            expires_at: now,
-            ..current
-        };
-        match self
-            .kv
-            .update(&key, &Self::encode(&released)?, revision)
-            .await
-        {
-            Ok(_) => Ok(true),
+        match self.kv.delete_with_revision(&key, revision).await {
+            Ok(()) => Ok(true),
             Err(_) => Ok(false),
         }
     }

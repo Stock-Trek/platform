@@ -50,7 +50,7 @@ async fn a_scope_has_one_live_owner() {
 }
 
 #[tokio::test]
-async fn takeover_advances_the_fencing_token() {
+async fn release_deletes_the_key_and_a_new_generation_starts_at_the_initial_token() {
     let store = InMemoryLeaseStore::new();
     let scope = scope("takeover");
     let first = store
@@ -63,6 +63,7 @@ async fn takeover_advances_the_fencing_token() {
         .unwrap()
         .unwrap();
     assert!(store.release(&first).await.unwrap());
+    assert!(store.current(&scope).await.unwrap().is_none());
 
     let second = store
         .acquire(&LeaseRequest::new(
@@ -74,7 +75,7 @@ async fn takeover_advances_the_fencing_token() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(second.fencing_token, first.fencing_token + 1);
+    assert_eq!(second.fencing_token, 1);
     assert!(
         store
             .renew(&first, Duration::from_secs(30))
@@ -164,6 +165,28 @@ async fn guard_renews_and_releases_its_lease() {
     drop(guard);
     tokio::time::sleep(Duration::from_millis(20)).await;
     assert!(!store.is_current(&lease).await.unwrap());
+}
+
+#[tokio::test]
+async fn a_recovered_lease_is_adopted_without_acquiring_it_again() {
+    let store = Arc::new(InMemoryLeaseStore::new());
+    let request = LeaseRequest::new(scope("adopt"), "owner-a", Duration::from_secs(1))
+        .with_context("raw_events", "digest");
+    let lease = store.acquire(&request).await.unwrap().unwrap();
+
+    let guard = LeaseGuard::adopt(
+        store.clone(),
+        lease.clone(),
+        request,
+        Duration::from_millis(800),
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(guard.lease().fencing_token, lease.fencing_token);
+    assert!(store.is_current(&lease).await.unwrap());
+    assert!(guard.release().await.unwrap());
+    assert!(store.current(&lease.scope).await.unwrap().is_none());
 }
 
 #[tokio::test]

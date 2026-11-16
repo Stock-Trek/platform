@@ -1,4 +1,5 @@
 use crate::iceberg::catalog::IcebergDataFile;
+use crate::{ContentHasher, SourceBatch};
 use platform_errors::{PlatformError, PlatformResult};
 use std::collections::HashSet;
 
@@ -57,6 +58,18 @@ impl ArchiveRegistration {
             .iter()
             .map(|file| file.file_path.clone())
             .collect()
+    }
+
+    pub fn batch_digest(&self) -> String {
+        if let Some(sources) = &self.source_files {
+            return SourceBatch::digest_files(sources);
+        }
+        let mut hasher = ContentHasher::new();
+        for file in &self.files {
+            hasher.update(file.file_path.as_bytes());
+            hasher.update([0_u8]);
+        }
+        hasher.finish().to_string()
     }
 }
 

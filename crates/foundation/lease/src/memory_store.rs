@@ -123,11 +123,7 @@ impl LeaseStore for InMemoryLeaseStore {
         if !current.is_held_by(&lease.owner_id, lease.fencing_token) || current.is_expired(now) {
             return Ok(false);
         }
-        let released = Lease {
-            expires_at: now,
-            ..current.clone()
-        };
-        leases.insert(lease.scope.clone(), released);
+        leases.remove(&lease.scope);
         drop(leases);
         self.notify(&lease.scope)?;
         Ok(true)

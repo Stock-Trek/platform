@@ -1,9 +1,10 @@
+use crate::iceberg::catalog::iceberg_catalog::retention::ClaimRetention;
 use crate::iceberg::catalog::{IcebergDataFile, iceberg_catalog::IcebergCatalog};
 use iceberg::{
     TableIdent, TableRequirement, TableUpdate,
     spec::{
         DataContentType, DataFile, DataFileBuilder, DataFileFormat, FormatVersion, MAIN_BRANCH,
-        ManifestListWriter, ManifestWriterBuilder, Snapshot, SnapshotReference, SnapshotRetention,
+        ManifestListWriter, ManifestWriterBuilder, Snapshot, SnapshotReference,
         SnapshotSummaryCollector, Struct, Summary,
     },
     table::Table,
@@ -27,12 +28,12 @@ impl SnapshotCommit {
         let snapshot_id = Self::snapshot_id(table);
         let sequence_number = table.metadata().next_sequence_number();
         let commit_uuid = Uuid::new_v4();
-        let metadata_location = table.metadata_location_result().map_err(|error| {
-            IcebergCatalog::catalog_error("read Iceberg metadata location", error)
+        let metadata_directory = table.metadata().metadata_location().map_err(|error| {
+            IcebergCatalog::catalog_error("read Iceberg metadata directory", error)
         })?;
-        let manifest_path = format!("{metadata_location}/{commit_uuid}-m0.avro");
+        let manifest_path = format!("{metadata_directory}/{commit_uuid}-m0.avro");
         let manifest_list_path =
-            format!("{metadata_location}/snap-{snapshot_id}-0-{commit_uuid}.avro");
+            format!("{metadata_directory}/snap-{snapshot_id}-0-{commit_uuid}.avro");
 
         let mut manifests = Vec::new();
         if let Some(current) = table.metadata().current_snapshot() {
@@ -159,10 +160,7 @@ impl SnapshotCommit {
                 TableUpdate::AddSnapshot { snapshot },
                 TableUpdate::SetSnapshotRef {
                     ref_name: MAIN_BRANCH.to_string(),
-                    reference: SnapshotReference::new(
-                        snapshot_id,
-                        SnapshotRetention::branch(None, None, None),
-                    ),
+                    reference: SnapshotReference::new(snapshot_id, ClaimRetention::branch()),
                 },
             ],
         })

@@ -2,6 +2,7 @@ use crate::iceberg::catalog::IcebergDataFile;
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use crate::{ContentHasher, SourceBatch};
 use iceberg::table::Table;
+use platform_errors::{PlatformError, PlatformResult};
 use std::collections::{HashMap, HashSet};
 
 const SOURCE_FILE_SUMMARY_PREFIX: &str = "source-file:";
@@ -36,7 +37,7 @@ impl IcebergCatalog {
     pub fn snapshot_properties(
         files: &[IcebergDataFile],
         source_files: Option<&[String]>,
-    ) -> HashMap<String, String> {
+    ) -> PlatformResult<HashMap<String, String>> {
         let mut properties = HashMap::from([(
             ARCHIVE_BATCH_SUMMARY_KEY.to_string(),
             Self::batch_fingerprint(files),
@@ -44,7 +45,7 @@ impl IcebergCatalog {
         if let Some(source_files) = source_files {
             properties.insert(
                 SOURCE_BATCH_SUMMARY_KEY.to_string(),
-                Self::source_batch_digest(source_files).unwrap_or_default(),
+                Self::source_batch_digest(source_files)?,
             );
             properties.extend(source_files.iter().map(|file| {
                 (
@@ -53,7 +54,7 @@ impl IcebergCatalog {
                 )
             }));
         }
-        properties
+        Ok(properties)
     }
 
     pub fn batch_fingerprint(files: &[IcebergDataFile]) -> String {
@@ -67,9 +68,9 @@ impl IcebergCatalog {
 }
 
 impl IcebergCatalog {
-    pub fn source_batch_digest(source_files: &[String]) -> platform_errors::PlatformResult<String> {
+    pub fn source_batch_digest(source_files: &[String]) -> PlatformResult<String> {
         if source_files.is_empty() {
-            return Err(platform_errors::PlatformError::config_invalid(
+            return Err(PlatformError::config_invalid(
                 "archive source batch",
                 "must contain at least one source object",
             ));

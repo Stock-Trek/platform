@@ -9,7 +9,7 @@ mod watch;
 mod lease_tests;
 
 pub use guard::LeaseGuard;
-pub use lease::{Lease, LeaseRequest, LeaseScope};
+pub use lease::{Lease, LeaseContext, LeaseRequest, LeaseScope};
 pub use memory_store::InMemoryLeaseStore;
 pub use nats_store::NatsLeaseStore;
 pub use store::LeaseStore;

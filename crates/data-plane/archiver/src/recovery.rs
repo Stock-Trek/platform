@@ -46,19 +46,10 @@ impl S3ParquetSink {
         let scope = LeaseScope::new(format!("archive-recovery:{}", table.name()));
         let owner_id = Lease::new_owner_id();
         let request = LeaseRequest::new(scope, &owner_id, self.lease_ttl)
-            .with_initial_token(i64::try_from(self.lease_initial_token).unwrap_or(i64::MAX))?;
-        loop {
-            match LeaseGuard::acquire(self.leases.clone(), request.clone(), self.max_work).await? {
-                Some(guard) => return Ok(guard),
-                None => {
-                    info!(
-                        table = table.name(),
-                        "archive recovery waiting for the current lease holder"
-                    );
-                    Lease::wait_for_lease(self.leases.as_ref(), &request).await?;
-                }
-            }
-        }
+            .with_initial_token(i64::try_from(self.lease_initial_token).unwrap_or(i64::MAX))?
+            .with_context(table.name(), "");
+        let lease = Lease::wait_for_lease(self.leases.as_ref(), &request).await?;
+        LeaseGuard::adopt(self.leases.clone(), lease, request, self.max_work).await
     }
 
     async fn recover_table(
@@ -123,12 +114,22 @@ impl S3ParquetSink {
         MarketDataMetrics::record_archive_recovery(table.name(), "unreadable", unreadable);
         MarketDataMetrics::record_archive_recovery(table.name(), "pending", pending.len() as u64);
 
+        self.register_pending(table, pending, guard).await
+    }
+
+    async fn register_pending(
+        &self,
+        table: ArchiveIcebergTable,
+        mut pending: Vec<IcebergDataFile>,
+        guard: &mut LeaseGuard,
+    ) -> PlatformResult<()> {
         for attempt in 1..=RECOVERY_MAX_ATTEMPTS {
             if pending.is_empty() {
                 return Ok(());
             }
             guard.ensure_writable().await?;
             let registration = ArchiveRegistration::new(pending.clone(), None::<Vec<String>>)?;
+            let digest = registration.batch_digest();
             match self.catalog.register_files(table, &registration).await? {
                 RegisterOutcome::Applied => {
                     MarketDataMetrics::record_archive_recovery(
@@ -165,6 +166,11 @@ impl S3ParquetSink {
                     warn!(
                         table = table.name(),
                         attempt,
+                        scope = %guard.lease().scope.as_str(),
+                        owner = %guard.lease().owner_id,
+                        token = guard.lease().fencing_token,
+                        source_batch_digest = %digest,
+                        claimed_sources = ?conflict.claimed_sources,
                         live_outputs = ?conflict.live_outputs,
                         "archive recovery conflict; reloading live files"
                     );
@@ -190,3 +196,6 @@ impl S3ParquetSink {
         }
     }
 }
+
+#[cfg(test)]
+mod recovery_tests;

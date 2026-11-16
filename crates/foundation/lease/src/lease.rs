@@ -101,7 +101,14 @@ impl Lease {
             tokio::select! {
                 change = watch.next() => {
                     if let Err(error) = change {
-                        warn!(%error, scope = %request.scope.as_str(), "lease watch failed; retrying");
+                        warn!(
+                            %error,
+                            table = request.context.table(),
+                            scope = %request.scope.as_str(),
+                            owner = %request.owner_id,
+                            source_batch_digest = request.context.source_batch_digest(),
+                            "lease watch failed; retrying"
+                        );
                         tokio::time::sleep(watch_backoff.next_delay()).await;
                     }
                 }
@@ -111,12 +118,29 @@ impl Lease {
     }
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct LeaseContext {
+    pub table: Option<String>,
+    pub source_batch_digest: Option<String>,
+}
+
+impl LeaseContext {
+    pub fn table(&self) -> &str {
+        self.table.as_deref().unwrap_or("")
+    }
+
+    pub fn source_batch_digest(&self) -> &str {
+        self.source_batch_digest.as_deref().unwrap_or("")
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct LeaseRequest {
     pub scope: LeaseScope,
     pub owner_id: String,
     pub ttl: Duration,
     pub initial_token: u64,
+    pub context: LeaseContext,
 }
 
 impl LeaseRequest {
@@ -126,7 +150,20 @@ impl LeaseRequest {
             owner_id: owner_id.into(),
             ttl,
             initial_token: 1,
+            context: LeaseContext::default(),
         }
+    }
+
+    pub fn with_context(
+        mut self,
+        table: impl Into<String>,
+        source_batch_digest: impl Into<String>,
+    ) -> Self {
+        self.context = LeaseContext {
+            table: Some(table.into()),
+            source_batch_digest: Some(source_batch_digest.into()),
+        };
+        self
     }
 
     pub fn with_initial_token(mut self, initial_token: i64) -> PlatformResult<Self> {
