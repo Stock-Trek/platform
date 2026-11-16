@@ -1,5 +1,8 @@
 mod storage;
 
+#[cfg(test)]
+mod compactor_tests;
+
 use crate::{
     config::CompactorConfig,
     partition_output::PartitionOutput,
@@ -78,20 +81,29 @@ impl Compactor {
     }
 
     pub async fn compact(&self, batch: &SourceBatch) -> PlatformResult<CompactionStats> {
+        let table = ArchiveIcebergTable::compacted(batch.kind);
+        let digest = batch.digest();
         let scope = LeaseScope::new(Self::lease_scope(batch));
+        let scope_name = scope.as_str().to_string();
+        let owner_id = Lease::new_owner_id();
         let initial_token = i64::try_from(self.lease_initial_token).unwrap_or(i64::MAX);
         let lease_ttl = match batch.kind {
             platform_archive::ArchiveKind::Events => self.lease_ttl_events,
             platform_archive::ArchiveKind::Candles => self.lease_ttl_candles,
         };
-        let request = LeaseRequest::new(scope, Lease::new_owner_id(), lease_ttl)
-            .with_initial_token(initial_token)?;
+        let request = LeaseRequest::new(scope, &owner_id, lease_ttl)
+            .with_initial_token(initial_token)?
+            .with_context(table.name(), &digest);
         let Some(mut guard) =
             LeaseGuard::acquire(self.leases.clone(), request, self.max_work).await?
         else {
             MarketDataMetrics::record_lease_skip("compactor");
             MarketDataMetrics::record_compaction_outcome(batch.kind.label(), "lease_held");
             info!(
+                table = table.name(),
+                scope = %scope_name,
+                owner = %owner_id,
+                source_batch_digest = %digest,
                 prefix = batch.prefix,
                 "compaction skipped because another compactor holds the lease"
             );
@@ -101,10 +113,7 @@ impl Compactor {
                 ..CompactionStats::default()
             });
         };
-        let processed = self
-            .catalog
-            .processed_source_files(ArchiveIcebergTable::compacted(batch.kind))
-            .await?;
+        let processed = self.catalog.processed_source_files(table).await?;
         let claimed = batch
             .files
             .iter()
@@ -113,13 +122,14 @@ impl Compactor {
             .collect::<Vec<_>>();
         if !claimed.is_empty() {
             warn!(
+                table = table.name(),
                 kind = batch.kind.label(),
                 prefix = %batch.prefix,
+                scope = %guard.lease().scope.as_str(),
+                owner = %guard.lease().owner_id,
+                token = guard.lease().fencing_token,
+                source_batch_digest = %digest,
                 claimed_sources = ?claimed,
-                "compaction skipped because the source set is already claimed"
-            );
-            info!(
-                prefix = batch.prefix,
                 "compaction skipped because the source set is already claimed"
             );
             guard.release().await?;
@@ -239,8 +249,13 @@ impl Compactor {
             RegisterOutcome::Applied | RegisterOutcome::AlreadyApplied => {}
             RegisterOutcome::Conflict(conflict) => {
                 warn!(
+                    table = table.name(),
                     kind = batch.kind.label(),
                     prefix = %batch.prefix,
+                    scope = %guard.lease().scope.as_str(),
+                    owner = %guard.lease().owner_id,
+                    token = guard.lease().fencing_token,
+                    source_batch_digest = %batch.digest(),
                     claimed_sources = ?conflict.claimed_sources,
                     live_outputs = ?conflict.live_outputs,
                     "compaction registration conflicted"

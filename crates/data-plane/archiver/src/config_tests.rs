@@ -50,3 +50,16 @@ fn lease_tokens_must_be_positive() {
         );
     }
 }
+
+#[test]
+fn lease_bucket_and_ttl_must_be_explicit() {
+    assert!(ArchiverConfig::from_vars(&Vars::env(&[("ARCHIVER_LEASE_BUCKET", "")])).is_err());
+    assert!(ArchiverConfig::from_vars(&Vars::env(&[("ARCHIVER_LEASE_TTL_SECS", "1")])).is_err());
+    assert!(
+        ArchiverConfig::from_vars(&Vars::env(&[
+            ("ARCHIVER_LEASE_TTL_SECS", "2"),
+            ("ARCHIVER_MAX_WORK_SECS", "1"),
+        ]))
+        .is_ok()
+    );
+}

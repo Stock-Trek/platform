@@ -43,7 +43,8 @@ impl MetadataTable {
                 .with_manifest_list(format!("s3://archive/table/metadata/snap-{index}.avro"))
                 .with_summary(Summary {
                     operation: Operation::Append,
-                    additional_properties: IcebergCatalog::snapshot_properties(files, None),
+                    additional_properties: IcebergCatalog::snapshot_properties(files, None)
+                        .unwrap(),
                 })
                 .build();
             builder = builder.add_snapshot(snapshot).unwrap();
@@ -96,7 +97,7 @@ async fn registered_batch_fingerprints_are_read_from_snapshot_metadata() {
 fn snapshot_properties_record_source_files_alongside_the_batch_fingerprint() {
     let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
     let source_files = ["s3://archive/raw/source.parquet".to_string()];
-    let properties = IcebergCatalog::snapshot_properties(&files, Some(&source_files));
+    let properties = IcebergCatalog::snapshot_properties(&files, Some(&source_files)).unwrap();
 
     assert_eq!(
         properties.get("archive-batch"),
@@ -129,8 +130,39 @@ async fn snapshot_commit_requests_are_conditional_on_uuid_and_main() {
     let request = commit.to_request(&TableIdent::from_strs(["ns", "table"]).unwrap());
 
     assert_eq!(request["requirements"][0]["type"], "assert-table-uuid");
+    assert_eq!(
+        request["requirements"][0]["uuid"],
+        table.metadata().uuid().to_string()
+    );
     assert_eq!(request["requirements"][1]["type"], "assert-ref-snapshot-id");
     assert_eq!(request["requirements"][1]["ref"], "main");
     assert_eq!(request["updates"][0]["action"], "add-snapshot");
     assert_eq!(request["updates"][1]["action"], "set-snapshot-ref");
+    assert_eq!(request["updates"][1]["ref-name"], "main");
+    assert_eq!(request["updates"][1]["type"], "branch");
+    assert_eq!(request["updates"][1]["min-snapshots-to-keep"], i32::MAX);
+    assert_eq!(request["updates"][1]["max-snapshot-age-ms"], i64::MAX);
+}
+
+#[tokio::test]
+async fn snapshot_commit_manifests_live_in_the_metadata_directory() {
+    let table = MetadataTable::with_batches(&[]);
+    let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
+    let commit = SnapshotCommit::build(&table, &files, HashMap::new())
+        .await
+        .unwrap();
+    let request = commit.to_request(&TableIdent::from_strs(["ns", "table"]).unwrap());
+    let manifest_list = request["updates"][0]["snapshot"]["manifest-list"]
+        .as_str()
+        .unwrap();
+
+    assert!(manifest_list.starts_with("s3://archive/table/metadata/snap-"));
+    assert!(!manifest_list.contains("metadata.json"));
+}
+
+#[test]
+fn empty_source_batches_cannot_produce_a_snapshot_property() {
+    let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
+
+    assert!(IcebergCatalog::snapshot_properties(&files, Some(&[])).is_err());
 }

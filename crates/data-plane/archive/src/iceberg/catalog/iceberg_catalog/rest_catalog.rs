@@ -1,3 +1,4 @@
+use crate::iceberg::catalog::iceberg_catalog::retention::ClaimRetention;
 use crate::iceberg::catalog::{ArchiveCatalog, IcebergDataFile};
 use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, IcebergConfig, RegisterOutcome};
 use async_trait::async_trait;
@@ -143,14 +144,13 @@ impl IcebergCatalog {
         }
 
         self.ensure_namespace().await?;
+        let mut properties = ClaimRetention::properties();
+        properties.insert("commit.retry.num-retries".to_string(), "0".to_string());
         let creation = TableCreation::builder()
             .name(table.name().to_string())
             .location(self.table_location(table))
             .schema(ArchiveIcebergTable::schema(table.kind())?)
-            .properties(HashMap::from([(
-                "commit.retry.num-retries".to_string(),
-                "0".to_string(),
-            )]))
+            .properties(properties)
             .format_version(FormatVersion::V2)
             .build();
 

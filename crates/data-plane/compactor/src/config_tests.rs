@@ -57,3 +57,25 @@ fn lease_tokens_and_ttls_must_be_positive() {
             .is_err()
     );
 }
+
+#[test]
+fn every_lease_bucket_must_be_explicit() {
+    assert!(CompactorConfig::from_vars(&Vars::env(&[("COMPACTOR_LEASE_BUCKET", "")])).is_err());
+}
+
+#[test]
+fn lease_ttls_are_at_least_two_seconds() {
+    assert!(
+        CompactorConfig::from_vars(&Vars::env(&[("COMPACTOR_LEASE_TTL_SECS_EVENTS", "1")]))
+            .is_err()
+    );
+    assert!(
+        CompactorConfig::from_vars(&Vars::env(&[
+            ("COMPACTOR_LEASE_TTL_SECS", "2"),
+            ("COMPACTOR_LEASE_TTL_SECS_EVENTS", "2"),
+            ("COMPACTOR_LEASE_TTL_SECS_CANDLES", "2"),
+            ("COMPACTOR_MAX_WORK_SECS", "1"),
+        ]))
+        .is_ok()
+    );
+}

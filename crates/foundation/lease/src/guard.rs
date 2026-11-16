@@ -1,4 +1,4 @@
-use crate::{Lease, LeaseRequest, LeaseStore};
+use crate::{Lease, LeaseContext, LeaseRequest, LeaseStore};
 use platform_errors::{PlatformError, PlatformResult};
 use platform_metrics::MarketDataMetrics;
 use std::sync::Arc;
@@ -13,6 +13,7 @@ pub struct LeaseGuard {
     lease: Lease,
     ttl: Duration,
     deadline: Instant,
+    context: LeaseContext,
     lost: Arc<AtomicBool>,
     renewal: JoinHandle<()>,
     renewal_lock: Arc<Mutex<()>>,
@@ -25,28 +26,38 @@ impl LeaseGuard {
         request: LeaseRequest,
         max_work: Duration,
     ) -> PlatformResult<Option<Self>> {
-        if max_work.is_zero() || max_work >= request.ttl {
-            return Err(PlatformError::config_invalid(
-                "lease max work time",
-                "must be positive and shorter than the lease TTL",
-            ));
-        }
-        let interval = LeaseRequest::renewal_interval(request.ttl)?;
+        Self::validate(request.ttl, max_work)?;
         let Some(lease) = store.acquire(&request).await? else {
             MarketDataMetrics::record_lease_contention(request.scope.as_str());
             info!(
+                table = request.context.table(),
                 scope = %request.scope.as_str(),
                 owner = %request.owner_id,
+                source_batch_digest = request.context.source_batch_digest(),
                 "lease contention"
             );
             return Ok(None);
         };
+        Ok(Some(Self::adopt(store, lease, request, max_work).await?))
+    }
+
+    pub async fn adopt(
+        store: Arc<dyn LeaseStore>,
+        lease: Lease,
+        request: LeaseRequest,
+        max_work: Duration,
+    ) -> PlatformResult<Self> {
+        Self::validate(request.ttl, max_work)?;
+        let interval = LeaseRequest::renewal_interval(request.ttl)?;
+        let context = request.context;
         MarketDataMetrics::record_lease_acquisition(lease.scope.as_str());
         info!(
+            table = context.table(),
             scope = %lease.scope.as_str(),
             owner = %lease.owner_id,
             token = lease.fencing_token,
             expires_at = lease.expires_at.0,
+            source_batch_digest = context.source_batch_digest(),
             "lease acquired"
         );
         let lost = Arc::new(AtomicBool::new(false));
@@ -56,19 +67,31 @@ impl LeaseGuard {
             lease.clone(),
             request.ttl,
             interval,
+            context.clone(),
             lost.clone(),
             renewal_lock.clone(),
         );
-        Ok(Some(Self {
+        Ok(Self {
             store,
             lease,
             ttl: request.ttl,
             deadline: Instant::now() + max_work,
+            context,
             lost,
             renewal,
             renewal_lock,
             released: false,
-        }))
+        })
+    }
+
+    fn validate(ttl: Duration, max_work: Duration) -> PlatformResult<()> {
+        if max_work.is_zero() || max_work >= ttl {
+            return Err(PlatformError::config_invalid(
+                "lease max work time",
+                "must be positive and shorter than the lease TTL",
+            ));
+        }
+        Ok(())
     }
 
     fn spawn_renewal(
@@ -76,6 +99,7 @@ impl LeaseGuard {
         lease: Lease,
         ttl: Duration,
         interval: Duration,
+        context: LeaseContext,
         lost: Arc<AtomicBool>,
         renewal_lock: Arc<Mutex<()>>,
     ) -> JoinHandle<()> {
@@ -91,13 +115,28 @@ impl LeaseGuard {
                     Ok(None) => {
                         lost.store(true, Ordering::SeqCst);
                         MarketDataMetrics::record_lease_lost(lease.scope.as_str(), "renewal");
-                        warn!(scope = %lease.scope.as_str(), owner = %lease.owner_id, token = lease.fencing_token, "lease lost");
+                        warn!(
+                            table = context.table(),
+                            scope = %lease.scope.as_str(),
+                            owner = %lease.owner_id,
+                            token = lease.fencing_token,
+                            source_batch_digest = context.source_batch_digest(),
+                            "lease lost"
+                        );
                         return;
                     }
                     Err(error) => {
                         lost.store(true, Ordering::SeqCst);
                         MarketDataMetrics::record_lease_lost(lease.scope.as_str(), "renewal_error");
-                        warn!(%error, scope = %lease.scope.as_str(), owner = %lease.owner_id, token = lease.fencing_token, "lease renewal failed");
+                        warn!(
+                            %error,
+                            table = context.table(),
+                            scope = %lease.scope.as_str(),
+                            owner = %lease.owner_id,
+                            token = lease.fencing_token,
+                            source_batch_digest = context.source_batch_digest(),
+                            "lease renewal failed"
+                        );
                         return;
                     }
                 }
@@ -117,19 +156,40 @@ impl LeaseGuard {
         let _guard = self.renewal_lock.lock().await;
         if self.lost() {
             MarketDataMetrics::record_lease_lost(self.lease.scope.as_str(), "deadline");
-            warn!(scope = %self.lease.scope.as_str(), owner = %self.lease.owner_id, token = self.lease.fencing_token, "lease is no longer writable");
+            warn!(
+                table = self.context.table(),
+                scope = %self.lease.scope.as_str(),
+                owner = %self.lease.owner_id,
+                token = self.lease.fencing_token,
+                source_batch_digest = self.context.source_batch_digest(),
+                "lease is no longer writable"
+            );
             return Err(Self::not_writable(&self.lease));
         }
         let Some(renewed) = self.store.renew(&self.lease, self.ttl).await? else {
             self.lost.store(true, Ordering::SeqCst);
             MarketDataMetrics::record_lease_lost(self.lease.scope.as_str(), "expired");
-            warn!(scope = %self.lease.scope.as_str(), owner = %self.lease.owner_id, token = self.lease.fencing_token, "lease lost before commit");
+            warn!(
+                table = self.context.table(),
+                scope = %self.lease.scope.as_str(),
+                owner = %self.lease.owner_id,
+                token = self.lease.fencing_token,
+                source_batch_digest = self.context.source_batch_digest(),
+                "lease lost before commit"
+            );
             return Err(Self::not_writable(&self.lease));
         };
         if !renewed.is_held_by(&self.lease.owner_id, self.lease.fencing_token) {
             self.lost.store(true, Ordering::SeqCst);
             MarketDataMetrics::record_lease_lost(self.lease.scope.as_str(), "token_changed");
-            warn!(scope = %self.lease.scope.as_str(), owner = %self.lease.owner_id, token = self.lease.fencing_token, "lease token changed before commit");
+            warn!(
+                table = self.context.table(),
+                scope = %self.lease.scope.as_str(),
+                owner = %self.lease.owner_id,
+                token = self.lease.fencing_token,
+                source_batch_digest = self.context.source_batch_digest(),
+                "lease token changed before commit"
+            );
             return Err(Self::not_writable(&self.lease));
         }
         self.lease = renewed;
@@ -161,12 +221,30 @@ impl Drop for LeaseGuard {
         self.renewal.abort();
         let store = self.store.clone();
         let lease = self.lease.clone();
+        let context = self.context.clone();
         if let Ok(runtime) = tokio::runtime::Handle::try_current() {
             runtime.spawn(async move {
                 match store.release(&lease).await {
-                    Ok(true) => debug!(scope = %lease.scope.as_str(), "released lease on drop"),
+                    Ok(true) => {
+                        debug!(
+                            table = context.table(),
+                            scope = %lease.scope.as_str(),
+                            owner = %lease.owner_id,
+                            token = lease.fencing_token,
+                            source_batch_digest = context.source_batch_digest(),
+                            "released lease on drop"
+                        );
+                    }
                     Ok(false) => {}
-                    Err(error) => warn!(%error, scope = %lease.scope.as_str(), "failed to release lease on drop"),
+                    Err(error) => warn!(
+                        %error,
+                        table = context.table(),
+                        scope = %lease.scope.as_str(),
+                        owner = %lease.owner_id,
+                        token = lease.fencing_token,
+                        source_batch_digest = context.source_batch_digest(),
+                        "failed to release lease on drop"
+                    ),
                 }
             });
         }

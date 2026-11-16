@@ -6,7 +6,6 @@ use crate::shard_id::ShardId;
 use crate::writer_lease::InMemoryLeaseStore;
 use crate::writer_lease::LeaseStore;
 use parking_lot::Mutex;
-use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use tokio::sync::watch;
@@ -46,8 +45,7 @@ async fn quiesce_stops_new_inputs_and_drains_accepted_records() {
     let checkpoint = checkpoints.get(ShardId::new(0)).unwrap();
     assert_eq!(checkpoint.next_sequence, 2);
     assert_eq!(checkpoint.state.last_processed_sequence, Some(1));
-    let lease = leases.current(ShardId::new(0)).await.unwrap().unwrap();
-    assert!(lease.is_expired(TimestampMilliseconds::now()));
+    assert!(leases.current(ShardId::new(0)).await.unwrap().is_none());
 }
 
 #[tokio::test]
