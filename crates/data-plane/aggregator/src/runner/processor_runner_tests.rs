@@ -1,12 +1,12 @@
 use crate::{
-    LeaseStore, MarketSource, ProcessorRunner, StateStore,
+    MarketSource, ProcessorRunner, StateStore,
     candle_sink::{ClosedCandlePublisher, OpenCandleStore},
     checkpoint_record_tests::InMemoryStateStore,
     config::AggregatorConfig,
     shard_id::ShardId,
     state::AggregatorState,
-    writer_lease::InMemoryLeaseStore,
 };
+use platform_lease::{InMemoryLeaseStore, LeaseStore};
 use std::sync::Arc;
 
 impl<S, K> ProcessorRunner<S, K>

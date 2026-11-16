@@ -1,7 +1,7 @@
 use crate::sink::S3ParquetSink;
 use platform_archive::{
-    ArchiveIcebergTable, ArchiveKind, ArchivePath, ArchiveRegistration, IcebergDataFile, ObjectKey,
-    ParquetReader, RegisterOutcome, S3,
+    ArchiveIcebergTable, ArchiveKind, ArchivePath, ArchiveRegistration, CommitContext,
+    IcebergDataFile, ObjectKey, ParquetReader, RegisterOutcome, S3,
 };
 use platform_errors::PlatformResult;
 use platform_lease::{Lease, LeaseGuard, LeaseRequest, LeaseScope};
@@ -128,9 +128,18 @@ impl S3ParquetSink {
                 return Ok(());
             }
             guard.ensure_writable().await?;
+            let context = CommitContext::default().with_lease(
+                guard.lease().scope.as_str(),
+                &guard.lease().owner_id,
+                guard.lease().fencing_token,
+            );
             let registration = ArchiveRegistration::new(pending.clone(), None::<Vec<String>>)?;
             let digest = registration.batch_digest();
-            match self.catalog.register_files(table, &registration).await? {
+            match self
+                .catalog
+                .register_files(table, &registration, &context)
+                .await?
+            {
                 RegisterOutcome::Applied => {
                     MarketDataMetrics::record_archive_recovery(
                         table.name(),

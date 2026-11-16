@@ -12,13 +12,18 @@ pub struct NatsLeaseStore {
 impl NatsLeaseStore {
     pub async fn connect(url: &str, name: &str, bucket: &str) -> PlatformResult<Self> {
         let kv = KeyValue::connect_existing(url, name, bucket).await?;
-        if kv.history().await? < 1 {
+        Self::validate_history(kv.history().await?)?;
+        Ok(Self { kv })
+    }
+
+    pub fn validate_history(history: i64) -> PlatformResult<()> {
+        if history < 1 {
             return Err(platform_errors::PlatformError::config_invalid(
                 "lease KV bucket",
                 "must retain key history",
             ));
         }
-        Ok(Self { kv })
+        Ok(())
     }
 
     fn decode(&self, value: &[u8]) -> PlatformResult<Lease> {

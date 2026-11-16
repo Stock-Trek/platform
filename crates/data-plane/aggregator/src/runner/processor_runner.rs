@@ -12,9 +12,9 @@ use crate::{
     processor::CandleProcessor,
     shard_id::ShardId,
     state::AggregatorState,
-    writer_lease::{LeaseStore, WriterLease},
 };
 use platform_errors::PlatformResult;
+use platform_lease::{Lease, LeaseStore};
 use platform_metrics::AggregatorMetrics;
 use platform_runtime::Runtime;
 use platform_types::TimestampMilliseconds;
@@ -43,7 +43,7 @@ pub struct ProcessorRunner<S, K> {
     /// position.
     pub replay_watermark: Option<TimestampMilliseconds>,
     pub writer_id: Option<String>,
-    pub initial_lease: Option<WriterLease>,
+    pub initial_lease: Option<Lease>,
     pub quiesce: Option<QuiesceReceiver>,
 }
 
@@ -58,7 +58,7 @@ where
     }
 
     /// Uses a lease acquired by the caller instead of waiting for one here.
-    pub fn with_lease(mut self, lease: WriterLease) -> Self {
+    pub fn with_lease(mut self, lease: Lease) -> Self {
         self.initial_lease = Some(lease);
         self
     }

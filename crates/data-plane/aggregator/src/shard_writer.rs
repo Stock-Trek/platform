@@ -1,10 +1,11 @@
 use crate::supervisor::Supervisor;
 use platform_aggregator::{
-    AggregatorConfig, ArchivedEventSource, LeaseStore, NatsCandleSink, NatsShardSource,
-    ProcessorRunner, RestoreOptions, S3ArchiveRecovery, ShardId, StateStore, WriterLease,
+    AggregatorConfig, ArchivedEventSource, NatsCandleSink, NatsShardSource, ProcessorRunner,
+    RestoreOptions, S3ArchiveRecovery, ShardId, StateStore,
 };
 use platform_archive::ICEBERG_CATALOG_URI;
 use platform_errors::{PlatformError, PlatformResult};
+use platform_lease::{Lease, LeaseStore};
 use platform_nats::JetStream;
 use platform_runtime::Runtime;
 use std::sync::Arc;
@@ -50,7 +51,7 @@ impl ShardWriter {
     }
 
     async fn run_once(&self, source_stream: String) -> PlatformResult<()> {
-        let writer_id = WriterLease::new_writer_id();
+        let writer_id = Lease::new_owner_id();
         let Some(mut lease) = self.acquire_lease(&writer_id).await? else {
             return Ok(());
         };
@@ -122,14 +123,10 @@ impl ShardWriter {
         Ok(())
     }
 
-    async fn acquire_lease(&self, writer_id: &str) -> PlatformResult<Option<WriterLease>> {
+    async fn acquire_lease(&self, writer_id: &str) -> PlatformResult<Option<Lease>> {
+        let request = self.shard.lease_request(writer_id, self.config.lease_ttl);
         tokio::select! {
-            result = WriterLease::wait_for_lease(
-                self.leases.as_ref(),
-                self.shard,
-                writer_id,
-                self.config.lease_ttl,
-            ) => Ok(Some(result?)),
+            result = Lease::wait_for_lease(self.leases.as_ref(), &request) => Ok(Some(result?)),
             signal = Runtime::shutdown_signal() => {
                 signal?;
                 Ok(None)

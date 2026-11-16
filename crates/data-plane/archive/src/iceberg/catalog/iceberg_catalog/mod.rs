@@ -9,6 +9,8 @@ mod snapshot;
 #[cfg(test)]
 mod catalog_metadata_tests;
 #[cfg(test)]
+mod commit_crash_tests;
+#[cfg(test)]
 mod commit_fake_tests;
 #[cfg(test)]
 mod commit_tests;

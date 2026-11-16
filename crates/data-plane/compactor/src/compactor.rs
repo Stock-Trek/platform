@@ -11,8 +11,8 @@ use crate::{
 use async_trait::async_trait;
 use aws_sdk_s3::Client as S3Client;
 use platform_archive::{
-    ArchiveCatalog, ArchiveIcebergTable, ArchiveParquet, ArchiveRegistration, IcebergDataFile,
-    RegisterOutcome, S3, SourceBatch,
+    ArchiveCatalog, ArchiveIcebergTable, ArchiveParquet, ArchiveRegistration, CommitContext,
+    IcebergDataFile, RegisterOutcome, S3, SourceBatch,
 };
 use platform_errors::{PlatformError, PlatformResult};
 use platform_lease::{Lease, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
@@ -113,39 +113,44 @@ impl Compactor {
                 ..CompactionStats::default()
             });
         };
-        let processed = self.catalog.processed_source_files(table).await?;
-        let claimed = batch
-            .files
-            .iter()
-            .filter(|file| processed.contains(&format!("s3://{}/{file}", self.bucket)))
-            .cloned()
-            .collect::<Vec<_>>();
-        if !claimed.is_empty() {
-            warn!(
-                table = table.name(),
-                kind = batch.kind.label(),
-                prefix = %batch.prefix,
-                scope = %guard.lease().scope.as_str(),
-                owner = %guard.lease().owner_id,
-                token = guard.lease().fencing_token,
-                source_batch_digest = %digest,
-                claimed_sources = ?claimed,
-                "compaction skipped because the source set is already claimed"
-            );
-            guard.release().await?;
-            MarketDataMetrics::record_lease_skip("compactor");
-            MarketDataMetrics::record_compaction_outcome(batch.kind.label(), "already_claimed");
-            return Ok(CompactionStats {
-                source_files: batch.files.len(),
-                skipped: true,
-                ..CompactionStats::default()
-            });
+        let mut claim_skip = false;
+        let result = async {
+            guard.ensure_writable().await?;
+            let processed = self.catalog.processed_source_files(table).await?;
+            let claimed = batch
+                .files
+                .iter()
+                .filter(|file| processed.contains(&format!("s3://{}/{file}", self.bucket)))
+                .cloned()
+                .collect::<Vec<_>>();
+            if !claimed.is_empty() {
+                warn!(
+                    table = table.name(),
+                    kind = batch.kind.label(),
+                    prefix = %batch.prefix,
+                    scope = %guard.lease().scope.as_str(),
+                    owner = %guard.lease().owner_id,
+                    token = guard.lease().fencing_token,
+                    source_batch_digest = %digest,
+                    claimed_sources = ?claimed,
+                    "compaction skipped because the source set is already claimed"
+                );
+                claim_skip = true;
+                return Ok(CompactionStats {
+                    source_files: batch.files.len(),
+                    skipped: true,
+                    ..CompactionStats::default()
+                });
+            }
+            guard.ensure_writable().await?;
+            self.compact_leased(batch, &mut guard).await
         }
-        let result = self.compact_leased(batch, &mut guard).await;
+        .await;
         if let Err(error) = guard.release().await {
             warn!(%error, prefix = batch.prefix, "failed to release compaction lease");
         }
         let status = match &result {
+            Ok(_) if claim_skip => "already_claimed",
             Ok(stats) if stats.skipped => "conflict",
             Ok(_) => "success",
             Err(_) => "error",
@@ -244,8 +249,17 @@ impl Compactor {
             .map(|key| format!("s3://{}/{key}", self.bucket))
             .collect::<Vec<_>>();
         guard.ensure_writable().await?;
+        let context = CommitContext::default().with_lease(
+            guard.lease().scope.as_str(),
+            &guard.lease().owner_id,
+            guard.lease().fencing_token,
+        );
         let registration = ArchiveRegistration::new(data_files, Some(source_files))?;
-        match self.catalog.register_files(table, &registration).await? {
+        match self
+            .catalog
+            .register_files(table, &registration, &context)
+            .await?
+        {
             RegisterOutcome::Applied | RegisterOutcome::AlreadyApplied => {}
             RegisterOutcome::Conflict(conflict) => {
                 warn!(

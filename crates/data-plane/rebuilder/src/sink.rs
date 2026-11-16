@@ -3,7 +3,8 @@ use aws_sdk_s3::primitives::ByteStream;
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveKind,
     ArchiveParquetWriter, ArchivePartition, ArchiveRecord, ArchiveRegistration, ArchiveTableLayer,
-    Bucket, ContentHash, IcebergDataFile, ObjectKey, RegisterOutcome, RoutingBucket, S3,
+    Bucket, CommitContext, ContentHash, IcebergDataFile, ObjectKey, RegisterOutcome, RoutingBucket,
+    S3,
 };
 use platform_errors::{PlatformError, PlatformResult};
 use platform_market_data::ClosedCandle;
@@ -229,6 +230,7 @@ impl CandleSink for S3CandleSink {
                 .register_files(
                     ArchiveIcebergTable::new(self.layer, ArchiveKind::Candles),
                     &registration,
+                    &CommitContext::default(),
                 )
                 .await?;
             if let RegisterOutcome::Conflict(conflict) = outcome {

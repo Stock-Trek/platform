@@ -1,7 +1,8 @@
 use crate::{config::RebuildSourceLayer, iceberg_event_reader::IcebergEventReader};
 use async_trait::async_trait;
 use platform_archive::{
-    ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, IcebergDataFile, RegisterOutcome,
+    ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, CommitContext, IcebergDataFile,
+    RegisterOutcome,
 };
 use platform_errors::PlatformResult;
 use std::collections::HashSet;
@@ -19,6 +20,7 @@ impl ArchiveCatalog for FakeCatalog {
         &self,
         _table: ArchiveIcebergTable,
         _registration: &ArchiveRegistration,
+        _context: &CommitContext,
     ) -> PlatformResult<RegisterOutcome> {
         Ok(RegisterOutcome::Applied)
     }

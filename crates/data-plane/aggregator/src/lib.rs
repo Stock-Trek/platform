@@ -14,7 +14,6 @@ mod runner;
 mod shard_id;
 mod source_record;
 mod state;
-mod writer_lease;
 
 #[cfg(test)]
 mod candle_sink_tests;
@@ -51,4 +50,3 @@ pub use state::{
     AggregatorState, DeduplicationKey, IncompleteWindow, KnownGap, MAX_SEEN_SEQUENCE_RANGES,
     STATE_SCHEMA_VERSION, SequenceRange, StreamProgress,
 };
-pub use writer_lease::{LeaseStore, NatsLeaseStore, WriterLease};

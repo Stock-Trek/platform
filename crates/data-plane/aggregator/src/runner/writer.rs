@@ -1,11 +1,8 @@
 //! Fenced writer lease management for a shard processor.
 
-use crate::{
-    config::AggregatorConfig,
-    shard_id::ShardId,
-    writer_lease::{LeaseStore, WriterLease},
-};
+use crate::{config::AggregatorConfig, shard_id::ShardId};
 use platform_errors::{PlatformError, PlatformResult};
+use platform_lease::{Lease, LeaseStore};
 use platform_metrics::AggregatorMetrics;
 use platform_runtime::Runtime;
 use std::sync::Arc;
@@ -15,7 +12,7 @@ use tracing::info;
 /// The identity and active lease of the writer owning a shard.
 pub struct Writer {
     id: String,
-    lease: WriterLease,
+    lease: Lease,
 }
 
 impl Writer {
@@ -25,26 +22,24 @@ impl Writer {
         leases: &Arc<dyn LeaseStore>,
         shard: ShardId,
         requested_id: Option<String>,
-        initial_lease: Option<WriterLease>,
+        initial_lease: Option<Lease>,
         config: &AggregatorConfig,
     ) -> PlatformResult<Option<Self>> {
         let writer_id = requested_id
             .or_else(|| initial_lease.as_ref().map(|lease| lease.owner_id.clone()))
-            .unwrap_or_else(WriterLease::new_writer_id);
+            .unwrap_or_else(Lease::new_owner_id);
         let lease = match initial_lease {
             Some(lease) => lease,
-            None => tokio::select! {
-                result = WriterLease::wait_for_lease(
-                    leases.as_ref(),
-                    shard,
-                    &writer_id,
-                    config.lease_ttl,
-                ) => result?,
-                signal = Runtime::shutdown_signal() => {
-                    signal?;
-                    return Ok(None);
+            None => {
+                let request = shard.lease_request(&writer_id, config.lease_ttl);
+                tokio::select! {
+                    result = Lease::wait_for_lease(leases.as_ref(), &request) => result?,
+                    signal = Runtime::shutdown_signal() => {
+                        signal?;
+                        return Ok(None);
+                    }
                 }
-            },
+            }
         };
 
         AggregatorMetrics::record_rebalance(shard.get(), "lease_acquired");
@@ -70,7 +65,7 @@ impl Writer {
         &self.id
     }
 
-    pub fn lease(&self) -> &WriterLease {
+    pub fn lease(&self) -> &Lease {
         &self.lease
     }
 
@@ -93,6 +88,6 @@ impl Writer {
     }
 
     pub async fn release(self, leases: &Arc<dyn LeaseStore>) -> PlatformResult<()> {
-        leases.release(&self.lease).await
+        leases.release(&self.lease).await.map(|_| ())
     }
 }

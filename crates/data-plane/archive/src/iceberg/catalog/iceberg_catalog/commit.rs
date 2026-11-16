@@ -3,7 +3,7 @@ use crate::iceberg::catalog::iceberg_catalog::commit_algorithm::{
     CommitRetry, ConditionalCommit, ConditionalCommitTarget, Evaluation,
 };
 use crate::iceberg::catalog::iceberg_catalog::snapshot::SnapshotCommit;
-use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, RegisterOutcome};
+use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, CommitContext, RegisterOutcome};
 use async_trait::async_trait;
 use iceberg::table::Table;
 use platform_errors::{PlatformError, PlatformResult};
@@ -63,12 +63,13 @@ impl IcebergCatalog {
         &self,
         table: ArchiveIcebergTable,
         registration: &ArchiveRegistration,
+        context: &CommitContext,
     ) -> PlatformResult<RegisterOutcome> {
         ConditionalCommit::new(
             IcebergCommitTarget::new(self, table),
             CommitRetry::default(),
         )
-        .run(registration)
+        .run(registration, context)
         .await
     }
 

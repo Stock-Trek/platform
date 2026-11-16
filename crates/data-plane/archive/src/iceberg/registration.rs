@@ -3,6 +3,39 @@ use crate::{ContentHasher, SourceBatch};
 use platform_errors::{PlatformError, PlatformResult};
 use std::collections::HashSet;
 
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CommitContext {
+    scope: Option<String>,
+    owner: Option<String>,
+    fencing_token: Option<u64>,
+}
+
+impl CommitContext {
+    pub fn with_lease(
+        mut self,
+        scope: impl Into<String>,
+        owner: impl Into<String>,
+        fencing_token: u64,
+    ) -> Self {
+        self.scope = Some(scope.into());
+        self.owner = Some(owner.into());
+        self.fencing_token = Some(fencing_token);
+        self
+    }
+
+    pub fn scope(&self) -> &str {
+        self.scope.as_deref().unwrap_or("")
+    }
+
+    pub fn owner(&self) -> &str {
+        self.owner.as_deref().unwrap_or("")
+    }
+
+    pub fn fencing_token(&self) -> u64 {
+        self.fencing_token.unwrap_or(0)
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ArchiveRegistration {
     files: Vec<IcebergDataFile>,

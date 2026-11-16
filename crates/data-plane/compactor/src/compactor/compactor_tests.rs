@@ -3,8 +3,8 @@ use async_trait::async_trait;
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::config::{Credentials, Region};
 use platform_archive::{
-    ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveRegistration, RegisterOutcome,
-    SourceBatch,
+    ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveRegistration, CommitContext,
+    RegisterOutcome, SourceBatch,
 };
 use platform_errors::PlatformResult;
 use platform_lease::{InMemoryLeaseStore, LeaseRequest, LeaseScope, LeaseStore};
@@ -23,6 +23,7 @@ impl ArchiveCatalog for FakeCatalog {
         &self,
         _table: ArchiveIcebergTable,
         _registration: &ArchiveRegistration,
+        _context: &CommitContext,
     ) -> PlatformResult<RegisterOutcome> {
         panic!("registration must not be attempted in this coordination test")
     }
@@ -128,4 +129,64 @@ async fn a_compactor_releases_the_scope_after_an_already_claimed_skip() {
 
     assert!(stats.skipped);
     assert!(leases.current(&scope).await.unwrap().is_none());
+}
+
+struct SlowCatalog;
+
+#[async_trait]
+impl ArchiveCatalog for SlowCatalog {
+    async fn register_files(
+        &self,
+        _table: ArchiveIcebergTable,
+        _registration: &ArchiveRegistration,
+        _context: &CommitContext,
+    ) -> PlatformResult<RegisterOutcome> {
+        panic!("a timed-out compaction must not register files")
+    }
+
+    async fn registered_data_files(
+        &self,
+        _table: ArchiveIcebergTable,
+    ) -> PlatformResult<HashSet<String>> {
+        Ok(HashSet::new())
+    }
+
+    async fn processed_source_files(
+        &self,
+        _table: ArchiveIcebergTable,
+    ) -> PlatformResult<HashSet<String>> {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        Ok(HashSet::new())
+    }
+}
+
+#[tokio::test]
+async fn a_compactor_aborts_and_releases_the_scope_after_its_soft_deadline() {
+    let batch = FakeCatalog::batch();
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let mut compactor = Compactor::for_coordination(Arc::new(SlowCatalog), leases.clone());
+    compactor.max_work = Duration::from_millis(20);
+    let scope = LeaseScope::new(Compactor::lease_scope(&batch));
+
+    let result = compactor.compact(&batch).await;
+
+    assert!(result.is_err());
+    assert!(leases.current(&scope).await.unwrap().is_none());
+}
+
+#[test]
+fn concurrent_hourly_prefixes_use_distinct_compaction_scopes() {
+    let mut first = FakeCatalog::batch();
+    let mut second = FakeCatalog::batch();
+    second.prefix = "raw/kind=events/hour=2024-01-01T00".to_string();
+    first.prefix = "raw/kind=events/hour=2024-01-01T01".to_string();
+
+    assert_eq!(
+        Compactor::lease_scope(&first),
+        Compactor::lease_scope(&first.clone())
+    );
+    assert_ne!(
+        Compactor::lease_scope(&first),
+        Compactor::lease_scope(&second)
+    );
 }

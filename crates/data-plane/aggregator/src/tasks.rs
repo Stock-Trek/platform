@@ -1,10 +1,11 @@
 use crate::shard_writer::ShardWriter;
 use crate::supervisor::Supervisor;
 use platform_aggregator::{
-    AggregatorConfig, LeaseStore, NatsCandleSink, NatsLeaseStore, NatsMarketSource, NatsRouter,
-    NatsStateStore, S3ArchiveRecovery, StateStore,
+    AggregatorConfig, NatsCandleSink, NatsMarketSource, NatsRouter, NatsStateStore,
+    S3ArchiveRecovery, StateStore,
 };
 use platform_errors::{PlatformError, PlatformResult};
+use platform_lease::{LeaseStore, NatsLeaseStore};
 use platform_nats::NatsPublisher;
 use platform_runtime::HealthState;
 use std::sync::Arc;
@@ -37,7 +38,14 @@ impl Tasks {
             .await?;
 
         let checkpoints: Arc<dyn StateStore> = Arc::new(NatsStateStore::connect(&config).await?);
-        let leases: Arc<dyn LeaseStore> = Arc::new(NatsLeaseStore::connect(&config).await?);
+        let leases: Arc<dyn LeaseStore> = Arc::new(
+            NatsLeaseStore::connect(
+                &config.nats_url,
+                "platform-aggregator",
+                &config.checkpoint_bucket(),
+            )
+            .await?,
+        );
         let sink = Arc::new(NatsCandleSink::connect(&config).await?);
         health.mark_ready();
 
