@@ -1,4 +1,5 @@
 use crate::config::CompactorConfig;
+use crate::object_lister::{ObjectLister, S3ObjectLister};
 use crate::source_inventory::RawInventory;
 use async_trait::async_trait;
 use platform_archive::{
@@ -17,7 +18,7 @@ pub trait ArchiveBatchSource: Send + Sync {
 }
 
 pub struct S3ArchiveSource {
-    client: aws_sdk_s3::Client,
+    pub(super) lister: Arc<dyn ObjectLister>,
     catalog: Arc<dyn ArchiveCatalog>,
     bucket: Bucket,
     prefix: String,
@@ -27,14 +28,32 @@ pub struct S3ArchiveSource {
 }
 
 impl S3ArchiveSource {
+    #[cfg(test)]
+    pub(crate) fn for_test(
+        catalog: Arc<dyn ArchiveCatalog>,
+        lister: Arc<dyn ObjectLister>,
+        bucket: Bucket,
+        prefix: String,
+    ) -> Self {
+        Self {
+            lister,
+            catalog,
+            bucket,
+            prefix,
+            settle_millis: 0,
+            min_source_files: 1,
+            inventory: Mutex::new(RawInventory::default()),
+        }
+    }
+
     pub async fn connect(
         config: &CompactorConfig,
         catalog: Arc<dyn ArchiveCatalog>,
     ) -> PlatformResult<Self> {
-        let client = S3::s3_client().await;
+        let lister = Arc::new(S3ObjectLister::new(S3::s3_client().await));
         let settle_millis = i64::try_from(config.settle.as_millis()).unwrap_or(i64::MAX);
         Ok(Self {
-            client,
+            lister,
             catalog,
             bucket: Bucket::new(config.s3_bucket.clone()),
             prefix: config.s3_prefix.trim_matches('/').to_string(),
@@ -54,8 +73,7 @@ impl ArchiveBatchSource for S3ArchiveSource {
             format!("{}/", self.prefix)
         };
         let prefix = ObjectKey::new(list_prefix.clone());
-        self.refresh_inventory(&self.client, &self.bucket, &prefix)
-            .await?;
+        self.refresh_inventory(&self.bucket, &prefix).await?;
         let objects = {
             let inventory = self.inventory.lock().await;
             inventory

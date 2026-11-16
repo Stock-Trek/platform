@@ -5,7 +5,7 @@ use super::snapshot::SnapshotCommit;
 use crate::ArchiveKind;
 use crate::iceberg::CommitContext;
 use crate::iceberg::catalog::{IcebergCatalog, IcebergDataFile};
-use crate::{Bucket, ObjectKey, S3Object};
+use crate::{Bucket, ObjectKey, S3, S3Object};
 use iceberg::{
     Runtime, TableIdent,
     io::FileIO,
@@ -20,6 +20,22 @@ use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
 };
+
+impl ClaimIndexPage {
+    pub(super) async fn write_consolidated(
+        table: &Table,
+        sources: HashSet<String>,
+        outputs: HashSet<String>,
+        depth: u64,
+    ) -> platform_errors::PlatformResult<HashMap<String, String>> {
+        let batches = if sources.is_empty() && outputs.is_empty() {
+            Vec::new()
+        } else {
+            vec![ClaimBatch::from_claims(sources, outputs)]
+        };
+        Self::write_consolidated_batches(table, batches, depth).await
+    }
+}
 
 struct MetadataTable;
 
@@ -434,7 +450,7 @@ async fn claim_indexes_find_and_retain_archive_batches() {
             .unwrap();
     let table = MetadataTable::with_properties_on(file_io.clone(), &[], properties);
 
-    let found = ClaimIndex::find_batch_cached(&table, None, &live.digest)
+    let found = ClaimIndex::find_batch(&table, None, &live.digest)
         .await
         .unwrap()
         .unwrap();
@@ -465,7 +481,7 @@ async fn claim_indexes_find_and_retain_archive_batches() {
         HashSet::from(["s3://archive/out/new.parquet".to_string()]),
     );
     assert_eq!(
-        ClaimIndex::find_batch_cached(&table, None, &new_batch.digest)
+        ClaimIndex::find_batch(&table, None, &new_batch.digest)
             .await
             .unwrap()
             .unwrap(),
@@ -701,6 +717,77 @@ async fn claim_index_consolidation_starts_at_the_depth_threshold() {
     );
     let deep = MetadataTable::with_properties(&[], properties);
     assert!(ClaimIndex::needs_consolidation(&deep));
+}
+
+#[tokio::test]
+async fn the_first_indexed_commit_installs_finite_retention_properties() {
+    let table = MetadataTable::with_batches(&[]);
+    let table_properties = HashMap::from([(
+        INDEX_HEAD_KEY.to_string(),
+        "s3://archive/table/metadata/head.json".to_string(),
+    )]);
+
+    let commit =
+        SnapshotCommit::build_with_table_properties(&table, &[], HashMap::new(), table_properties)
+            .await
+            .unwrap();
+    let request = commit.to_request(&TableIdent::from_strs(["ns", "table"]).unwrap());
+    let properties = request["updates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|update| update["action"] == "set-properties")
+        .unwrap();
+
+    assert_eq!(
+        properties["updates"]["history.expire.min-snapshots-to-keep"],
+        "10"
+    );
+    assert_eq!(
+        properties["updates"]["history.expire.max-snapshot-age-ms"],
+        (30 * 24 * 60 * 60 * 1_000_i64).to_string()
+    );
+}
+
+#[tokio::test]
+async fn an_unreferenced_index_page_waits_for_the_safety_window() {
+    let table = MetadataTable::with_batches(&[]);
+    let properties = ClaimIndexPage::write_consolidated(
+        &table,
+        HashSet::from(["s3://archive/raw/a.parquet".to_string()]),
+        HashSet::from(["s3://archive/out/a.parquet".to_string()]),
+        1,
+    )
+    .await
+    .unwrap();
+    let head = properties.get(INDEX_HEAD_KEY).unwrap().clone();
+    let (bucket, key) = S3::parse_uri(&head).unwrap();
+    let orphan = S3Object {
+        key,
+        last_modified_millis: Some(100),
+        size: 1,
+    };
+    let reachable = IcebergCatalog::reachable_metadata(&table).await.unwrap();
+
+    assert!(!reachable.contains(&head));
+    assert!(
+        IcebergCatalog::metadata_maintenance_candidates(
+            &bucket,
+            std::slice::from_ref(&orphan),
+            &reachable,
+            TimestampMilliseconds(50),
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        IcebergCatalog::metadata_maintenance_candidates(
+            &bucket,
+            std::slice::from_ref(&orphan),
+            &reachable,
+            TimestampMilliseconds(150),
+        ),
+        vec![orphan]
+    );
 }
 
 #[tokio::test]

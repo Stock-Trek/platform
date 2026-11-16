@@ -1,6 +1,5 @@
 use super::claim_index::{ClaimIndex, ClaimIndexCache, ClaimState, INDEX_HEAD_DIGEST_KEY};
 use super::claim_index::{INDEX_FORMAT_VERSION_KEY, INDEX_HEAD_KEY};
-#[cfg(test)]
 use super::claim_index_batch::{ClaimBatch, ClaimIndexBatchBlock};
 use super::claim_index_block::ClaimIndexBlock;
 use super::claim_index_page::{ClaimIndexPage, IndexParent};
@@ -91,8 +90,7 @@ impl ClaimIndex {
         Ok(Some(ClaimState::new(found_sources, found_outputs)))
     }
 
-    #[cfg(test)]
-    pub(super) async fn find_batch_cached(
+    pub(super) async fn find_batch(
         table: &Table,
         cache: Option<&ClaimIndexCache>,
         digest: &str,

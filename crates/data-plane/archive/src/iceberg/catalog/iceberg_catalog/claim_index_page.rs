@@ -47,21 +47,6 @@ impl ClaimIndexPage {
         )
     }
 
-    #[cfg(test)]
-    pub(super) async fn write_consolidated(
-        table: &Table,
-        sources: HashSet<String>,
-        outputs: HashSet<String>,
-        depth: u64,
-    ) -> PlatformResult<HashMap<String, String>> {
-        let batches = if sources.is_empty() && outputs.is_empty() {
-            Vec::new()
-        } else {
-            vec![ClaimBatch::from_claims(sources, outputs)]
-        };
-        Self::write_consolidated_batches(table, batches, depth).await
-    }
-
     pub(super) async fn write_consolidated_batches(
         table: &Table,
         batches: Vec<ClaimBatch>,

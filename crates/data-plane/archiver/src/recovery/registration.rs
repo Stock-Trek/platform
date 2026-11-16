@@ -63,6 +63,27 @@ impl S3ParquetSink {
         mut pending: Vec<IcebergDataFile>,
         guard: &mut LeaseGuard,
     ) -> PlatformResult<()> {
+        if pending.is_empty() {
+            return Ok(());
+        }
+        let registration = ArchiveRegistration::new(pending.clone(), None::<Vec<String>>)?;
+        if self
+            .catalog
+            .batch_registered(table, registration.files())
+            .await?
+        {
+            MarketDataMetrics::record_archive_recovery(
+                table.name(),
+                "already_live",
+                pending.len() as u64,
+            );
+            info!(
+                table = table.name(),
+                files = pending.len(),
+                "recovered uncommitted archive files"
+            );
+            return Ok(());
+        }
         for attempt in 1..=RECOVERY_MAX_ATTEMPTS {
             if pending.is_empty() {
                 return Ok(());

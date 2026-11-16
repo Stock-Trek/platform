@@ -1,9 +1,9 @@
 use crate::source::S3ArchiveSource;
-use platform_archive::{Bucket, ObjectKey, S3, S3Object};
+use platform_archive::{Bucket, ObjectKey, S3Object};
 use platform_errors::PlatformResult;
 use std::collections::{HashMap, HashSet};
 
-const INVENTORY_RECONCILE_POLLS: u64 = 60;
+pub(super) const INVENTORY_RECONCILE_POLLS: u64 = 60;
 
 #[derive(Default)]
 pub(super) struct RawInventory {
@@ -17,7 +17,6 @@ pub(super) struct RawInventory {
 impl S3ArchiveSource {
     pub(super) async fn refresh_inventory(
         &self,
-        client: &aws_sdk_s3::Client,
         bucket: &Bucket,
         prefix: &ObjectKey,
     ) -> PlatformResult<()> {
@@ -33,15 +32,16 @@ impl S3ArchiveSource {
         let mut continuation = None;
         let mut start_after = inventory.last_key.clone();
         loop {
-            let page = S3::list_objects_page(
-                client,
-                bucket,
-                prefix,
-                continuation.as_deref(),
-                start_after.as_deref(),
-                1_000,
-            )
-            .await?;
+            let page = self
+                .lister
+                .list_page(
+                    bucket,
+                    prefix,
+                    continuation.as_deref(),
+                    start_after.as_deref(),
+                    1_000,
+                )
+                .await?;
             platform_metrics::MarketDataMetrics::record_archive_listing_page(
                 "compactor-inventory",
                 u64::try_from(page.objects.len()).unwrap_or(u64::MAX),

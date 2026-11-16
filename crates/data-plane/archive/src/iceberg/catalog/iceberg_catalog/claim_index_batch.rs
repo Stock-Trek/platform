@@ -86,7 +86,6 @@ pub(super) struct IndexBatchBlockRef {
 }
 
 impl IndexBatchBlockRef {
-    #[cfg(test)]
     pub(super) fn may_contain_batch(&self, digest: &str) -> bool {
         self.batch_first.as_str() <= digest && digest <= self.batch_last.as_str()
     }
@@ -152,7 +151,6 @@ impl ClaimIndexBatchBlock {
         self.batches.clone()
     }
 
-    #[cfg(test)]
     pub(super) fn contains_batch(&self, digest: &str) -> Option<ClaimBatch> {
         self.batches
             .iter()

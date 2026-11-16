@@ -1,4 +1,4 @@
-use crate::iceberg::catalog::iceberg_catalog::claim_index::ClaimIndexCache;
+use crate::iceberg::catalog::iceberg_catalog::claim_index::{ClaimIndex, ClaimIndexCache};
 use crate::iceberg::catalog::iceberg_catalog::retention::ClaimRetention;
 use crate::iceberg::catalog::{ArchiveCatalog, IcebergDataFile};
 use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, CommitContext, RegisterOutcome};
@@ -117,6 +117,20 @@ impl ArchiveCatalog for IcebergCatalog {
     ) -> PlatformResult<HashSet<String>> {
         let table = self.ensure_table(table).await?;
         Ok(self.claim_state(&table).await?.sources)
+    }
+
+    async fn batch_registered(
+        &self,
+        table: ArchiveIcebergTable,
+        files: &[IcebergDataFile],
+    ) -> PlatformResult<bool> {
+        let table = self.ensure_table(table).await?;
+        let digest = Self::batch_fingerprint(files);
+        Ok(
+            ClaimIndex::find_batch(&table, Some(&self.claim_index_cache), &digest)
+                .await?
+                .is_some(),
+        )
     }
 
     async fn claimed_sources(
