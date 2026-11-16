@@ -6,6 +6,9 @@ mod source;
 mod spill;
 
 #[cfg(test)]
+mod config_tests;
+
+#[cfg(test)]
 mod compactor_runner_tests;
 
 use crate::{
@@ -14,6 +17,7 @@ use crate::{
 };
 use platform_archive::IcebergCatalog;
 use platform_errors::PlatformResult;
+use platform_lease::NatsLeaseStore;
 use platform_runtime::{HealthRunner, Service};
 use std::sync::Arc;
 
@@ -27,7 +31,11 @@ async fn main() -> PlatformResult<()> {
     let health = HealthRunner::from_service_env("COMPACTOR").await?;
     let catalog = Arc::new(IcebergCatalog::connect(&config.iceberg).await?);
     let source = S3ArchiveSource::connect(&config, catalog.clone()).await?;
-    let compactor = Compactor::connect(&config, catalog).await?;
+    let leases = Arc::new(
+        NatsLeaseStore::connect(&config.nats_url, "platform-compactor", &config.lease_bucket)
+            .await?,
+    );
+    let compactor = Compactor::connect(&config, catalog, leases).await?;
     health.mark_ready();
     health
         .run(CompactorRunner::new(config, source, compactor).run())

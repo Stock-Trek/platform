@@ -68,6 +68,69 @@ impl MarketDataMetrics {
     pub fn record_s3_retry(operation: &'static str) {
         counter!(MARKET_DATA_S3_RETRIES_TOTAL, "operation" => operation).increment(1);
     }
+
+    pub fn record_lease_acquisition(scope: &str) {
+        counter!(
+            MARKET_DATA_LEASE_ACQUISITIONS_TOTAL,
+            "scope" => scope.to_string(),
+        )
+        .increment(1);
+    }
+
+    pub fn record_lease_contention(scope: &str) {
+        counter!(
+            MARKET_DATA_LOCK_CONTENTIONS_TOTAL,
+            "scope" => scope.to_string(),
+        )
+        .increment(1);
+    }
+
+    pub fn record_lease_skip(scope: &str) {
+        counter!(
+            MARKET_DATA_LOCK_SKIPS_TOTAL,
+            "scope" => scope.to_string(),
+        )
+        .increment(1);
+    }
+
+    pub fn record_lease_lost(scope: &str, reason: &'static str) {
+        counter!(
+            MARKET_DATA_LOCK_LOST_TOTAL,
+            "scope" => scope.to_string(),
+            "reason" => reason,
+        )
+        .increment(1);
+    }
+
+    pub fn record_archive_commit(table: &'static str, outcome: &'static str) {
+        counter!(
+            MARKET_DATA_ARCHIVE_COMMIT_OUTCOMES_TOTAL,
+            "table" => table,
+            "outcome" => outcome,
+        )
+        .increment(1);
+    }
+
+    pub fn record_archive_recovery(table: &'static str, outcome: &'static str, objects: u64) {
+        if objects == 0 {
+            return;
+        }
+        counter!(
+            MARKET_DATA_ARCHIVE_RECOVERY_OBJECTS_TOTAL,
+            "table" => table,
+            "outcome" => outcome,
+        )
+        .increment(objects);
+    }
+
+    pub fn record_compaction_outcome(kind: &'static str, status: &'static str) {
+        counter!(
+            MARKET_DATA_COMPACTION_OUTCOMES_TOTAL,
+            "kind" => kind,
+            "status" => status,
+        )
+        .increment(1);
+    }
 }
 
 /// Metrics specific to sharded candle aggregation.

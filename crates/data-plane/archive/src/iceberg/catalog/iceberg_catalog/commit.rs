@@ -1,12 +1,11 @@
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
-use crate::iceberg::{ArchiveIcebergTable, catalog::IcebergDataFile};
-use iceberg::{
-    spec::{DataContentType, DataFile, DataFileBuilder, DataFileFormat, Struct},
-    table::Table,
-    transaction::{ApplyTransactionAction, Transaction},
-};
+use crate::iceberg::catalog::iceberg_catalog::snapshot::SnapshotCommit;
+use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, ConflictDetails, RegisterOutcome};
+use iceberg::table::Table;
 use platform_errors::{PlatformError, PlatformResult};
-use platform_time::RetryPolicy;
+use platform_metrics::MarketDataMetrics;
+use platform_time::RetryBackoff;
+use std::collections::HashSet;
 use std::time::Duration;
 use tracing::{info, warn};
 
@@ -14,164 +13,171 @@ const MAX_COMMIT_ATTEMPTS: usize = 4;
 const COMMIT_BACKOFF: Duration = Duration::from_millis(250);
 const COMMIT_MAX_BACKOFF: Duration = Duration::from_secs(1);
 
-enum CommitOutcome {
-    Applied,
-    Retry(PlatformError),
+enum Evaluation {
+    Apply,
+    AlreadyApplied,
+    Conflict(ConflictDetails),
 }
 
 impl IcebergCatalog {
     pub async fn commit_files(
         &self,
         table: ArchiveIcebergTable,
-        files: &[IcebergDataFile],
-        source_files: Option<&[String]>,
-    ) -> PlatformResult<()> {
-        if files.is_empty() && source_files.is_none() {
-            return Ok(());
-        }
-
-        let retry = RetryPolicy::linear(MAX_COMMIT_ATTEMPTS, COMMIT_BACKOFF, COMMIT_MAX_BACKOFF);
+        registration: &ArchiveRegistration,
+    ) -> PlatformResult<RegisterOutcome> {
+        let mut backoff = RetryBackoff::linear(COMMIT_BACKOFF, COMMIT_MAX_BACKOFF).with_jitter();
         let mut last_error = None;
-        for attempt in 1..=retry.max_attempts() {
-            match self
-                .commit_attempt(table, files, source_files, attempt)
-                .await?
-            {
-                CommitOutcome::Applied => return Ok(()),
-                CommitOutcome::Retry(error) => last_error = Some(error),
+        for attempt in 1..=MAX_COMMIT_ATTEMPTS {
+            let current = self.ensure_table(table).await?;
+            match self.evaluate(&current, registration).await? {
+                Evaluation::Apply => {}
+                Evaluation::AlreadyApplied => {
+                    MarketDataMetrics::record_archive_commit(table.name(), "already_applied");
+                    info!(
+                        table = table.name(),
+                        "archive registration was already applied"
+                    );
+                    return Ok(RegisterOutcome::AlreadyApplied);
+                }
+                Evaluation::Conflict(conflict) => {
+                    MarketDataMetrics::record_archive_commit(table.name(), "conflict");
+                    return Ok(RegisterOutcome::Conflict(conflict));
+                }
             }
-            if retry.should_retry(attempt) {
-                tokio::time::sleep(retry.delay(attempt - 1)).await;
+
+            let commit = SnapshotCommit::build(
+                &current,
+                registration.files(),
+                Self::snapshot_properties(registration.files(), registration.source_files()),
+            )
+            .await?;
+            let request = commit.to_request(&self.table_ident(table));
+            match self.send_commit(table, &request).await {
+                Ok(()) => {
+                    MarketDataMetrics::record_archive_commit(table.name(), "applied");
+                    info!(
+                        table = table.name(),
+                        files = registration.files().len(),
+                        "registered archive files in Iceberg"
+                    );
+                    return Ok(RegisterOutcome::Applied);
+                }
+                Err(error) => {
+                    warn!(%error, table = table.name(), attempt, "conditional Iceberg commit did not succeed");
+                    last_error = Some(error);
+                }
+            }
+
+            let reloaded = self.ensure_table(table).await?;
+            match self.evaluate(&reloaded, registration).await? {
+                Evaluation::AlreadyApplied => {
+                    MarketDataMetrics::record_archive_commit(table.name(), "already_applied");
+                    return Ok(RegisterOutcome::AlreadyApplied);
+                }
+                Evaluation::Conflict(conflict) => {
+                    MarketDataMetrics::record_archive_commit(table.name(), "conflict");
+                    return Ok(RegisterOutcome::Conflict(conflict));
+                }
+                Evaluation::Apply => {
+                    if attempt < MAX_COMMIT_ATTEMPTS {
+                        tokio::time::sleep(backoff.next_delay()).await;
+                    }
+                }
             }
         }
-
+        MarketDataMetrics::record_archive_commit(table.name(), "error");
         Err(last_error.unwrap_or_else(|| {
             PlatformError::external(std::io::Error::other(
-                "Iceberg commit failed without a reported error",
+                "conditional Iceberg commit remained ambiguous",
             ))
         }))
     }
 
-    async fn commit_attempt(
-        &self,
-        table: ArchiveIcebergTable,
-        files: &[IcebergDataFile],
-        source_files: Option<&[String]>,
-        attempt: usize,
-    ) -> PlatformResult<CommitOutcome> {
-        let current = match self.ensure_table(table).await {
-            Ok(current) => current,
-            Err(error) => return Ok(CommitOutcome::Retry(error)),
-        };
-
-        match self.already_registered(&current, files, source_files).await {
-            Ok(true) => {
-                info!(table = table.name(), "Iceberg commit was already applied");
-                return Ok(CommitOutcome::Applied);
-            }
-            Ok(false) => {}
-            Err(error) => return Ok(CommitOutcome::Retry(error)),
-        }
-
-        let data_files = files
-            .iter()
-            .map(|file| self.data_file(&current, file))
-            .collect::<PlatformResult<Vec<_>>>()?;
-        let snapshot_properties = Self::snapshot_properties(files, source_files);
-
-        let transaction = Transaction::new(&current);
-        let action = transaction
-            .fast_append()
-            .add_data_files(data_files)
-            .set_snapshot_properties(snapshot_properties);
-        let transaction = action
-            .apply(transaction)
-            .map_err(|error| Self::catalog_error("prepare Iceberg commit", error))?;
-
-        match transaction.commit(&self.catalog).await {
-            Ok(_) => {
-                info!(
-                    table = table.name(),
-                    files = files.len(),
-                    "registered archive files in Iceberg"
-                );
-                Ok(CommitOutcome::Applied)
-            }
-            Err(error) => {
-                warn!(
-                    error = %error,
-                    table = table.name(),
-                    attempt,
-                    "Iceberg commit failed"
-                );
-                let error = Self::catalog_error("commit Iceberg table", error);
-                if let Ok(current) = self.ensure_table(table).await
-                    && self
-                        .already_registered(&current, files, source_files)
-                        .await
-                        .unwrap_or(false)
-                {
-                    return Ok(CommitOutcome::Applied);
-                }
-                Ok(CommitOutcome::Retry(error))
-            }
-        }
-    }
-
-    async fn already_registered(
+    async fn evaluate(
         &self,
         table: &Table,
-        files: &[IcebergDataFile],
-        source_files: Option<&[String]>,
-    ) -> PlatformResult<bool> {
-        if let Some(source_files) = source_files {
-            let processed = Self::source_files_from_metadata(table);
-            return Ok(source_files.iter().all(|file| processed.contains(file)));
-        }
-        if files.is_empty() {
-            return Ok(false);
-        }
-        if Self::batch_registered_in_metadata(table, files) {
-            return Ok(true);
-        }
+        registration: &ArchiveRegistration,
+    ) -> PlatformResult<Evaluation> {
+        let live_outputs = self.registered_paths(table).await?;
+        let expected_outputs = registration.expected_outputs();
+        let present_outputs = expected_outputs
+            .intersection(&live_outputs)
+            .cloned()
+            .collect::<Vec<_>>();
+        let all_outputs_present =
+            !expected_outputs.is_empty() && present_outputs.len() == expected_outputs.len();
 
-        let paths = self.registered_paths(table).await?;
-        Ok(files.iter().all(|file| paths.contains(&file.file_path)))
+        let Some(sources) = registration.source_files() else {
+            if expected_outputs.is_empty() || present_outputs.is_empty() {
+                return Ok(Evaluation::Apply);
+            }
+            if all_outputs_present {
+                return Ok(Evaluation::AlreadyApplied);
+            }
+            return Ok(Evaluation::Conflict(ConflictDetails {
+                claimed_sources: Vec::new(),
+                live_outputs: present_outputs,
+            }));
+        };
+
+        let claimed = Self::source_files_from_metadata(table);
+        let mut claimed_sources = sources
+            .iter()
+            .filter(|source| claimed.contains(*source))
+            .cloned()
+            .collect::<Vec<_>>();
+        claimed_sources.sort();
+        claimed_sources.dedup();
+        let all_sources_present = claimed_sources.len() == sources.len();
+
+        if all_sources_present && (expected_outputs.is_empty() || all_outputs_present) {
+            return Ok(Evaluation::AlreadyApplied);
+        }
+        if !claimed_sources.is_empty() || !present_outputs.is_empty() {
+            return Ok(Evaluation::Conflict(ConflictDetails {
+                claimed_sources,
+                live_outputs: present_outputs,
+            }));
+        }
+        Ok(Evaluation::Apply)
     }
 
-    fn data_file(&self, table: &Table, file: &IcebergDataFile) -> PlatformResult<DataFile> {
-        let record_count = u64::try_from(file.record_count).map_err(|_| {
-            PlatformError::external(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!(
-                    "Iceberg data file {} has a negative record count {}",
-                    file.file_path, file.record_count
-                ),
-            ))
+    async fn send_commit(
+        &self,
+        table: ArchiveIcebergTable,
+        request: &serde_json::Value,
+    ) -> PlatformResult<()> {
+        let namespace = self.namespace.as_ref().join("\u{1f}");
+        let prefix = self
+            .prefix
+            .as_ref()
+            .map(|prefix| format!("/{prefix}"))
+            .unwrap_or_default();
+        let url = format!(
+            "{}/v1{prefix}/namespaces/{namespace}/tables/{}",
+            self.catalog_uri.trim_end_matches('/'),
+            table.name()
+        );
+        let mut request_builder = reqwest::Client::new().post(url.clone()).json(request);
+        if let Some(token) = &self.token {
+            request_builder = request_builder.bearer_auth(token);
+        }
+        let response = request_builder.send().await.map_err(|error| {
+            PlatformError::external(std::io::Error::other(format!(
+                "conditional Iceberg commit to {url} failed: {error}"
+            )))
         })?;
-        let file_size_in_bytes = u64::try_from(file.file_size_in_bytes).map_err(|_| {
-            PlatformError::external(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!(
-                    "Iceberg data file {} has a negative size {}",
-                    file.file_path, file.file_size_in_bytes
-                ),
-            ))
-        })?;
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        if status.is_success() {
+            return Ok(());
+        }
+        Err(PlatformError::external(std::io::Error::other(format!(
+            "conditional Iceberg commit rejected with {status}: {body}"
+        ))))
+    }
 
-        DataFileBuilder::default()
-            .content(DataContentType::Data)
-            .file_path(file.file_path.clone())
-            .file_format(DataFileFormat::Parquet)
-            .partition(Struct::empty())
-            .partition_spec_id(table.metadata().default_partition_spec_id())
-            .record_count(record_count)
-            .file_size_in_bytes(file_size_in_bytes)
-            .build()
-            .map_err(|error| {
-                PlatformError::external(std::io::Error::other(format!(
-                    "build Iceberg data file: {error}"
-                )))
-            })
+    pub fn expected_outputs(files: &[crate::iceberg::catalog::IcebergDataFile]) -> HashSet<String> {
+        files.iter().map(|file| file.file_path.clone()).collect()
     }
 }

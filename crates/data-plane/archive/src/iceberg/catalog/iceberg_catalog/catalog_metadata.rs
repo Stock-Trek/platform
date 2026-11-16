@@ -1,11 +1,12 @@
-use crate::ContentHasher;
 use crate::iceberg::catalog::IcebergDataFile;
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
+use crate::{ContentHasher, SourceBatch};
 use iceberg::table::Table;
 use std::collections::{HashMap, HashSet};
 
 const SOURCE_FILE_SUMMARY_PREFIX: &str = "source-file:";
 const ARCHIVE_BATCH_SUMMARY_KEY: &str = "archive-batch";
+const SOURCE_BATCH_SUMMARY_KEY: &str = "source-batch";
 
 impl IcebergCatalog {
     pub fn source_files_from_metadata(table: &Table) -> HashSet<String> {
@@ -41,6 +42,10 @@ impl IcebergCatalog {
             Self::batch_fingerprint(files),
         )]);
         if let Some(source_files) = source_files {
+            properties.insert(
+                SOURCE_BATCH_SUMMARY_KEY.to_string(),
+                Self::source_batch_digest(source_files).unwrap_or_default(),
+            );
             properties.extend(source_files.iter().map(|file| {
                 (
                     format!("{SOURCE_FILE_SUMMARY_PREFIX}{file}"),
@@ -58,5 +63,17 @@ impl IcebergCatalog {
             hasher.update([0_u8]);
         }
         hasher.finish().to_string()
+    }
+}
+
+impl IcebergCatalog {
+    pub fn source_batch_digest(source_files: &[String]) -> platform_errors::PlatformResult<String> {
+        if source_files.is_empty() {
+            return Err(platform_errors::PlatformError::config_invalid(
+                "archive source batch",
+                "must contain at least one source object",
+            ));
+        }
+        Ok(SourceBatch::digest_files(source_files))
     }
 }

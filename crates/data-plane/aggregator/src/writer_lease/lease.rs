@@ -1,20 +1,10 @@
-use crate::{
-    shard_id::ShardId,
-    writer_lease::{LeaseStore, LeaseWatch},
-};
-use platform_errors::PlatformResult;
-use platform_metrics::AggregatorMetrics;
-use platform_time::RetryBackoff;
-use platform_types::{DurationMilliseconds, TimestampMilliseconds};
-use serde::{Deserialize, Serialize};
-use std::sync::atomic::{AtomicU64, Ordering};
+use crate::{shard_id::ShardId, writer_lease::LeaseStore};
+use platform_errors::{PlatformError, PlatformResult};
+use platform_lease::{Lease, LeaseRequest, LeaseScope};
+use platform_types::TimestampMilliseconds;
 use std::time::Duration;
-use tracing::{info, warn};
 
-const LEASE_KEY_PREFIX: &str = "lease";
-const LEASE_WATCH_ERROR_BACKOFF: Duration = Duration::from_secs(1);
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct WriterLease {
     pub shard: ShardId,
     pub owner_id: String,
@@ -31,8 +21,34 @@ impl WriterLease {
         self.owner_id == owner_id && self.fencing_token == fencing_token
     }
 
+    pub fn scope(shard: ShardId) -> LeaseScope {
+        LeaseScope::new(format!("aggregator-shard-{}", shard.get()))
+    }
+
     pub fn key(shard: ShardId) -> String {
-        format!("{LEASE_KEY_PREFIX}-{}", shard.get())
+        Self::scope(shard).key()
+    }
+
+    pub fn request(shard: ShardId, owner_id: &str, ttl: Duration) -> LeaseRequest {
+        LeaseRequest::new(Self::scope(shard), owner_id, ttl)
+    }
+
+    pub fn from_lease(shard: ShardId, lease: Lease) -> Self {
+        Self {
+            shard,
+            owner_id: lease.owner_id,
+            fencing_token: lease.fencing_token,
+            expires_at: lease.expires_at,
+        }
+    }
+
+    pub fn to_lease(&self) -> Lease {
+        Lease {
+            scope: Self::scope(self.shard),
+            owner_id: self.owner_id.clone(),
+            fencing_token: self.fencing_token,
+            expires_at: self.expires_at,
+        }
     }
 
     pub async fn wait_for_lease(
@@ -41,66 +57,16 @@ impl WriterLease {
         owner_id: &str,
         ttl: Duration,
     ) -> PlatformResult<WriterLease> {
-        let mut waiting = false;
-        let mut watch: Option<LeaseWatch> = None;
-        let mut watch_backoff = RetryBackoff::constant(LEASE_WATCH_ERROR_BACKOFF).without_jitter();
-        loop {
-            if let Some(lease) = leases.acquire(shard, owner_id, ttl).await? {
-                return Ok(lease);
-            }
-            if !waiting {
-                waiting = true;
-                AggregatorMetrics::record_rebalance(shard.get(), "lease_waiting");
-                info!(
-                    shard = %shard,
-                    writer = %owner_id,
-                    "shard lease is held by another writer; standing by"
-                );
-            }
-            if watch.is_none() {
-                watch = Some(leases.watch(shard)?);
-            }
-            let current = leases.current(shard).await?;
-            let now = TimestampMilliseconds::now();
-            let Some(current) = current else {
-                continue;
-            };
-            if current.is_expired(now) {
-                continue;
-            }
-            let delay = Self::remaining(&current, now);
-            let watch = watch.as_mut().expect("lease watch is connected");
-            tokio::select! {
-                change = watch.next() => {
-                    if let Err(error) = change {
-                        warn!(%error, shard = %shard, "lease watch failed; retrying");
-                        tokio::time::sleep(watch_backoff.next_delay()).await;
-                    }
-                }
-                _ = tokio::time::sleep(delay) => {}
-            }
-        }
+        let request = Self::request(shard, owner_id, ttl);
+        let lease = platform_lease::Lease::wait_for_lease(leases.platform_store(), &request)
+            .await
+            .map_err(|error| {
+                PlatformError::bad_value("aggregator lease", shard.to_string(), error.to_string())
+            })?;
+        Ok(Self::from_lease(shard, lease))
     }
 
     pub fn new_writer_id() -> String {
-        static COUNTER: AtomicU64 = AtomicU64::new(0);
-        let counter = COUNTER.fetch_add(1, Ordering::Relaxed);
-        format!(
-            "{}-{}-{}",
-            std::process::id(),
-            TimestampMilliseconds::now().0,
-            counter
-        )
-    }
-
-    pub fn expires_at(now: TimestampMilliseconds, ttl: Duration) -> TimestampMilliseconds {
-        let millis = i64::try_from(ttl.as_millis()).unwrap_or(i64::MAX);
-        now.saturating_add(DurationMilliseconds(millis))
-    }
-
-    fn remaining(&self, now: TimestampMilliseconds) -> Duration {
-        let remaining = self.expires_at.saturating_duration_since(now);
-        let millis = u64::try_from(remaining.0.max(1)).unwrap_or(u64::MAX);
-        Duration::from_millis(millis)
+        Lease::new_owner_id()
     }
 }

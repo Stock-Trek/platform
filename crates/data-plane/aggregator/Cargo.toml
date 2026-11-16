@@ -13,6 +13,7 @@ parking_lot = { workspace = true }
 platform-archive = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
+platform-lease = { workspace = true }
 platform-market-data = { workspace = true }
 platform-metrics = { workspace = true }
 platform-nats = { workspace = true }

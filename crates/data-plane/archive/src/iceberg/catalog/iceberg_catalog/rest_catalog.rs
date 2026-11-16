@@ -1,5 +1,5 @@
 use crate::iceberg::catalog::{ArchiveCatalog, IcebergDataFile};
-use crate::iceberg::{ArchiveIcebergTable, IcebergConfig};
+use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, IcebergConfig, RegisterOutcome};
 use async_trait::async_trait;
 use iceberg::{
     Catalog, CatalogBuilder, ErrorKind, NamespaceIdent, TableCreation, TableIdent,
@@ -16,22 +16,25 @@ use std::{
 };
 
 pub struct IcebergCatalog {
-    pub catalog: iceberg_catalog_rest::RestCatalog,
-    namespace: NamespaceIdent,
+    pub(super) catalog: iceberg_catalog_rest::RestCatalog,
+    pub(super) namespace: NamespaceIdent,
     warehouse: String,
     namespace_name: String,
+    pub(super) catalog_uri: String,
+    pub(super) prefix: Option<String>,
+    pub(super) token: Option<String>,
 }
 
 impl IcebergCatalog {
     pub async fn connect(config: &IcebergConfig) -> PlatformResult<Self> {
+        let (catalog_uri, prefix) =
+            Self::resolve_endpoint(&config.catalog_uri, config.token.as_deref()).await?;
         let warehouse = config.warehouse.trim_end_matches('/').to_string();
         let namespace = NamespaceIdent::new(config.namespace.clone());
         let mut props = HashMap::from([
-            (
-                REST_CATALOG_PROP_URI.to_string(),
-                config.catalog_uri.clone(),
-            ),
+            (REST_CATALOG_PROP_URI.to_string(), catalog_uri.clone()),
             (REST_CATALOG_PROP_WAREHOUSE.to_string(), warehouse.clone()),
+            ("commit.retry.num-retries".to_string(), "0".to_string()),
         ]);
         if let Some(token) = &config.token {
             props.insert("token".to_string(), token.clone());
@@ -50,10 +53,54 @@ impl IcebergCatalog {
             namespace,
             warehouse,
             namespace_name: config.namespace.clone(),
+            catalog_uri,
+            prefix,
+            token: config.token.clone(),
         })
     }
 
-    fn table_ident(&self, table: ArchiveIcebergTable) -> TableIdent {
+    async fn resolve_endpoint(
+        catalog_uri: &str,
+        token: Option<&str>,
+    ) -> PlatformResult<(String, Option<String>)> {
+        let url = format!("{}/v1/config", catalog_uri.trim_end_matches('/'));
+        let mut request = reqwest::Client::new().get(&url);
+        if let Some(token) = token {
+            request = request.bearer_auth(token);
+        }
+        let response = request.send().await.map_err(|error| {
+            PlatformError::external(std::io::Error::other(format!(
+                "read Iceberg catalog configuration from {url}: {error}"
+            )))
+        })?;
+        if !response.status().is_success() {
+            return Err(PlatformError::external(std::io::Error::other(format!(
+                "read Iceberg catalog configuration from {url}: {}",
+                response.status()
+            ))));
+        }
+        let config: serde_json::Value = response.json().await.map_err(|error| {
+            PlatformError::external(std::io::Error::other(format!(
+                "decode Iceberg catalog configuration from {url}: {error}"
+            )))
+        })?;
+        let defaults = config.get("defaults");
+        let overrides = config.get("overrides");
+        let uri = overrides
+            .and_then(|value| value.get("uri"))
+            .and_then(serde_json::Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| catalog_uri.to_string());
+        let prefix = overrides
+            .and_then(|value| value.get("prefix"))
+            .or_else(|| defaults.and_then(|value| value.get("prefix")))
+            .and_then(serde_json::Value::as_str)
+            .map(|prefix| prefix.trim_matches('/').to_string())
+            .filter(|prefix| !prefix.is_empty());
+        Ok((uri, prefix))
+    }
+
+    pub(super) fn table_ident(&self, table: ArchiveIcebergTable) -> TableIdent {
         TableIdent::new(self.namespace.clone(), table.name().to_string())
     }
 
@@ -100,7 +147,10 @@ impl IcebergCatalog {
             .name(table.name().to_string())
             .location(self.table_location(table))
             .schema(ArchiveIcebergTable::schema(table.kind())?)
-            .properties(HashMap::<String, String>::new())
+            .properties(HashMap::from([(
+                "commit.retry.num-retries".to_string(),
+                "0".to_string(),
+            )]))
             .format_version(FormatVersion::V2)
             .build();
 
@@ -125,10 +175,9 @@ impl ArchiveCatalog for IcebergCatalog {
     async fn register_files(
         &self,
         table: ArchiveIcebergTable,
-        files: &[IcebergDataFile],
-        source_files: Option<&[String]>,
-    ) -> PlatformResult<()> {
-        self.commit_files(table, files, source_files).await
+        registration: &ArchiveRegistration,
+    ) -> PlatformResult<RegisterOutcome> {
+        self.commit_files(table, registration).await
     }
 
     async fn registered_data_files(
