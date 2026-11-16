@@ -28,8 +28,10 @@ impl ConditionalCommitTarget for IcebergCommitTarget<'_> {
         self.table
     }
 
-    async fn load(&self) -> PlatformResult<Self::State> {
-        self.catalog.ensure_table(self.table).await
+    async fn load(&self, context: &CommitContext) -> PlatformResult<Self::State> {
+        self.catalog
+            .ensure_table_with_context(self.table, Some(context))
+            .await
     }
 
     async fn evaluate(
@@ -78,7 +80,7 @@ impl ConditionalCommitTarget for IcebergCommitTarget<'_> {
 }
 
 impl IcebergCatalog {
-    pub async fn commit_files(
+    pub(super) async fn commit_files(
         &self,
         table: ArchiveIcebergTable,
         registration: &ArchiveRegistration,

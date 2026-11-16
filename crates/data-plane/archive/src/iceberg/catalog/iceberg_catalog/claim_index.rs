@@ -10,7 +10,7 @@ pub(super) const INDEX_HEAD_KEY: &str = "archive.index-head";
 pub(super) const INDEX_HEAD_DIGEST_KEY: &str = "archive.index-head-digest";
 pub(super) const INDEX_FORMAT_VERSION_KEY: &str = "archive.index-format-version";
 pub(super) const INDEX_DEPTH_KEY: &str = "archive.index-depth";
-const INDEX_CONSOLIDATION_DEPTH: u64 = 64;
+pub(super) const INDEX_CONSOLIDATION_DEPTH: u64 = 64;
 const CLAIM_INDEX_CACHE_CAPACITY: usize = 512;
 
 pub(super) struct ClaimIndex;
@@ -95,8 +95,8 @@ impl ClaimIndex {
                 Some(IndexParent { location, digest }),
                 properties
                     .get(INDEX_DEPTH_KEY)
-                    .and_then(|value| value.parse().ok())
-                    .unwrap_or_default(),
+                    .and_then(|value| value.parse::<u64>().ok())
+                    .unwrap_or(0),
             ),
             (None, None) => (None, 0),
             _ => return Err(Self::error("index head is only partially configured")),
@@ -122,16 +122,18 @@ impl ClaimIndex {
             )
             .await;
         }
-        if depth >= INDEX_CONSOLIDATION_DEPTH {
-            let mut state = Self::load(table).await?;
-            state.sources.extend(new_sources);
-            state.outputs.extend(new_outputs);
-            return ClaimIndexPage::write_consolidated(table, state.sources, state.outputs, 1)
-                .await;
-        }
         ClaimIndexPage::from_claims(parent, new_sources, new_outputs)
             .write(table, depth.saturating_add(1))
             .await
+    }
+
+    pub(super) fn needs_consolidation(table: &Table) -> bool {
+        table
+            .metadata()
+            .properties()
+            .get(INDEX_DEPTH_KEY)
+            .and_then(|depth| depth.parse::<u64>().ok())
+            .is_some_and(|depth| depth >= INDEX_CONSOLIDATION_DEPTH)
     }
 
     pub(super) async fn consolidate(

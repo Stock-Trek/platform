@@ -11,6 +11,13 @@ use iceberg::{
 use platform_errors::{PlatformError, PlatformResult};
 
 impl IcebergCatalog {
+    pub async fn validate_contract(&self) -> PlatformResult<()> {
+        for table in ArchiveIcebergTable::all() {
+            self.ensure_table(table).await?;
+        }
+        Ok(())
+    }
+
     pub(super) fn validate_table(table: &Table, kind: crate::ArchiveKind) -> PlatformResult<()> {
         if table.metadata().format_version() != FormatVersion::V2 {
             return Err(PlatformError::config_invalid(
@@ -82,13 +89,18 @@ impl IcebergCatalog {
         Ok(())
     }
 
-    pub async fn consolidate_claim_index(
+    pub(super) async fn consolidate_claim_index(
         &self,
         archive: ArchiveIcebergTable,
         context: &CommitContext,
     ) -> PlatformResult<()> {
-        context.authorize().await?;
-        let table = self.ensure_table(archive).await?;
+        context.require_authorizer()?;
+        let table = self
+            .ensure_table_with_context(archive, Some(context))
+            .await?;
+        if !ClaimIndex::needs_consolidation(&table) {
+            return Ok(());
+        }
         let updates = ClaimIndex::consolidate(&table, context).await?;
         let request = serde_json::json!({
             "requirements": [

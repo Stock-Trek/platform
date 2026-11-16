@@ -1,3 +1,4 @@
+use crate::iceberg::CommitContext;
 use crate::iceberg::catalog::iceberg_catalog::claim_index::ClaimIndex;
 use crate::iceberg::catalog::iceberg_catalog::rest_catalog::IcebergCatalog;
 use crate::iceberg::catalog::iceberg_catalog::retention::ClaimRetention;
@@ -26,6 +27,7 @@ impl IcebergCatalog {
     pub(super) async fn ensure_required_properties(
         &self,
         mut table: Table,
+        context: &CommitContext,
     ) -> PlatformResult<Table> {
         let mut backoff =
             RetryBackoff::linear(PROPERTY_COMMIT_BACKOFF, PROPERTY_COMMIT_MAX_BACKOFF)
@@ -36,6 +38,7 @@ impl IcebergCatalog {
             if missing.is_empty() {
                 return Ok(table);
             }
+            context.authorize().await?;
             match self
                 .send_table_commit(
                     table.identifier(),
@@ -63,6 +66,7 @@ impl IcebergCatalog {
                         })?;
                     if attempt < PROPERTY_COMMIT_ATTEMPTS {
                         tokio::time::sleep(backoff.next_delay()).await;
+                        context.authorize().await?;
                     }
                 }
             }

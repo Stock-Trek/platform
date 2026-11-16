@@ -70,6 +70,14 @@ pub trait ArchiveCatalog: Send + Sync {
     /// from the same snapshot, otherwise a concurrent compaction commit can mark
     /// a raw object as processed before the matching compacted files are visible
     /// to the recovery reader.
+    async fn consolidate_claim_index(
+        &self,
+        _table: ArchiveIcebergTable,
+        _context: &CommitContext,
+    ) -> PlatformResult<()> {
+        Ok(())
+    }
+
     async fn compacted_snapshot(
         &self,
         table: ArchiveIcebergTable,

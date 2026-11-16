@@ -228,3 +228,47 @@ fn checkpoint_bucket_is_a_valid_kv_name() {
     let bucket = NatsStateStore::bucket_name("aggregator.shards");
     assert_eq!(bucket, "aggregator_shards_checkpoints");
 }
+
+#[tokio::test]
+async fn a_successor_writer_checkpoints_after_a_graceful_handover() {
+    use platform_lease::{InMemoryLeaseStore, LeaseStore};
+    use std::sync::Arc;
+
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let store = InMemoryStateStore::new();
+    let shard = ShardId::new(4);
+    let ttl = std::time::Duration::from_secs(30);
+
+    let first = leases
+        .acquire(&shard.lease_request("writer-a", ttl))
+        .await
+        .unwrap()
+        .unwrap();
+    let mut checkpoint = checkpoint();
+    checkpoint.shard = shard;
+    checkpoint.next_sequence = 10;
+    store
+        .save(&checkpoint.clone().with_lease(&first))
+        .await
+        .unwrap();
+    leases.release(&first).await.unwrap();
+
+    let second = leases
+        .acquire(&shard.lease_request("writer-b", ttl))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(second.fencing_token, first.fencing_token + 1);
+
+    checkpoint.next_sequence = 20;
+    store
+        .save(&checkpoint.clone().with_lease(&second))
+        .await
+        .unwrap();
+    let loaded = store.load(shard).await.unwrap().unwrap();
+    assert_eq!(loaded.next_sequence, 20);
+    assert_eq!(loaded.writer_id, "writer-b");
+    assert_eq!(loaded.fencing_token, second.fencing_token);
+
+    assert!(store.save(&checkpoint.with_lease(&first)).await.is_err());
+}

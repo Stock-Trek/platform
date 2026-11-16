@@ -4,6 +4,7 @@ use crate::iceberg::catalog::iceberg_catalog::claim_index::{ClaimIndex, ClaimSta
 use futures::TryStreamExt;
 use iceberg::table::Table;
 use platform_errors::PlatformResult;
+use platform_metrics::MarketDataMetrics;
 use std::collections::HashSet;
 
 impl IcebergCatalog {
@@ -11,6 +12,14 @@ impl IcebergCatalog {
         if ClaimIndex::has_head(table) {
             return ClaimIndex::load_cached(table, Some(&self.claim_index_cache)).await;
         }
+        let table_name = match table.identifier().name() {
+            "raw/events" => "raw/events",
+            "raw/candles" => "raw/candles",
+            "compacted/events" => "compacted/events",
+            "compacted/candles" => "compacted/candles",
+            _ => "unknown",
+        };
+        MarketDataMetrics::record_index_fallback_scan(table_name);
         let outputs = self.registered_paths(table).await?;
         let require_claims = table.identifier().name().starts_with("compacted/");
         let sources = Self::source_files_from_metadata(table, require_claims)?;
