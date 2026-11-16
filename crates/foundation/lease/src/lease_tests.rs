@@ -1,6 +1,8 @@
 use crate::{
-    InMemoryLeaseStore, Lease, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore, NatsLeaseStore,
+    CommitAuthorizer, InMemoryLeaseStore, Lease, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore,
+    NatsLeaseStore,
 };
+use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
@@ -52,7 +54,7 @@ async fn a_scope_has_one_live_owner() {
 }
 
 #[tokio::test]
-async fn release_deletes_the_key_and_a_new_generation_starts_at_the_initial_token() {
+async fn release_tombstones_the_key_and_the_next_generation_advances_the_token() {
     let store = InMemoryLeaseStore::new();
     let scope = scope("takeover");
     let first = store
@@ -77,7 +79,7 @@ async fn release_deletes_the_key_and_a_new_generation_starts_at_the_initial_toke
         .unwrap()
         .unwrap();
 
-    assert_eq!(second.fencing_token, 1);
+    assert_eq!(second.fencing_token, 2);
     assert!(
         store
             .renew(&first, Duration::from_secs(30))
@@ -258,6 +260,43 @@ fn lease_buckets_must_retain_history() {
     assert!(NatsLeaseStore::validate_history(10).is_ok());
     assert!(NatsLeaseStore::validate_history(0).is_err());
     assert!(NatsLeaseStore::validate_history(-1).is_err());
+    assert!(NatsLeaseStore::validate_max_age(Duration::ZERO).is_ok());
+    assert!(NatsLeaseStore::validate_max_age(Duration::from_secs(1)).is_err());
+}
+
+#[test]
+fn clock_skew_extends_the_expiry_margin() {
+    let now = TimestampMilliseconds::now();
+    let lease = Lease {
+        scope: scope("skew"),
+        owner_id: "owner-a".to_string(),
+        fencing_token: 1,
+        expires_at: now,
+        clock_skew_ms: 900,
+    };
+
+    assert!(!lease.is_expired(now));
+    assert!(!lease.is_expired(TimestampMilliseconds(now.0 + 900)));
+    assert!(lease.is_expired(TimestampMilliseconds(now.0 + 901)));
+}
+
+#[tokio::test]
+async fn commit_authorization_renews_the_lease_before_writing() {
+    let store = Arc::new(InMemoryLeaseStore::new());
+    let scope = scope("authorizer");
+    let request = LeaseRequest::new(scope.clone(), "owner-a", Duration::from_secs(1));
+    let guard = LeaseGuard::acquire(store.clone(), request, Duration::from_millis(900))
+        .await
+        .unwrap()
+        .unwrap();
+    let authorizer = guard.authorizer();
+
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    authorizer.authorize().await.unwrap();
+    assert!(store.is_current(guard.lease()).await.unwrap());
+
+    store.release(guard.lease()).await.unwrap();
+    assert!(authorizer.authorize().await.is_err());
 }
 
 #[tokio::test]

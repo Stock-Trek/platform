@@ -1,14 +1,40 @@
 use crate::iceberg::catalog::IcebergDataFile;
 use crate::{ContentHasher, SourceBatch};
 use platform_errors::{PlatformError, PlatformResult};
+use platform_lease::CommitAuthorizer;
 use std::collections::HashSet;
+use std::fmt;
+use std::sync::Arc;
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[derive(Clone, Default)]
 pub struct CommitContext {
     scope: Option<String>,
     owner: Option<String>,
     fencing_token: Option<u64>,
+    authorizer: Option<Arc<dyn CommitAuthorizer>>,
 }
+
+impl fmt::Debug for CommitContext {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        formatter
+            .debug_struct("CommitContext")
+            .field("scope", &self.scope)
+            .field("owner", &self.owner)
+            .field("fencing_token", &self.fencing_token)
+            .field("authorized", &self.authorizer.is_some())
+            .finish()
+    }
+}
+
+impl PartialEq for CommitContext {
+    fn eq(&self, other: &Self) -> bool {
+        self.scope == other.scope
+            && self.owner == other.owner
+            && self.fencing_token == other.fencing_token
+    }
+}
+
+impl Eq for CommitContext {}
 
 impl CommitContext {
     pub fn with_lease(
@@ -33,6 +59,18 @@ impl CommitContext {
 
     pub fn fencing_token(&self) -> u64 {
         self.fencing_token.unwrap_or(0)
+    }
+
+    pub fn with_authorizer(mut self, authorizer: Arc<dyn CommitAuthorizer>) -> Self {
+        self.authorizer = Some(authorizer);
+        self
+    }
+
+    pub async fn authorize(&self) -> PlatformResult<()> {
+        match &self.authorizer {
+            Some(authorizer) => authorizer.authorize().await,
+            None => Ok(()),
+        }
     }
 }
 
@@ -94,10 +132,10 @@ impl ArchiveRegistration {
     }
 
     pub fn batch_digest(&self) -> String {
-        if let Some(sources) = &self.source_files {
-            return SourceBatch::digest_files(sources);
-        }
         let mut hasher = ContentHasher::new();
+        if let Some(sources) = &self.source_files {
+            hasher.update(SourceBatch::digest_files(sources).as_bytes());
+        }
         for file in &self.files {
             hasher.update(file.file_path.as_bytes());
             hasher.update([0_u8]);

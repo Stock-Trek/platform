@@ -79,7 +79,6 @@ impl From<String> for ObjectKey {
     }
 }
 
-/// An object returned by an S3 listing.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct S3Object {
     pub key: ObjectKey,
@@ -95,13 +94,17 @@ impl S3Object {
 
 pub struct S3;
 
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct S3ObjectPage {
+    pub objects: Vec<S3Object>,
+    pub next_continuation_token: Option<String>,
+}
+
 impl S3 {
     pub async fn s3_client() -> S3Client {
         Aws::s3_client(&Aws::load_default_sdk_config().await)
     }
 
-    /// List objects together with the metadata needed to decide when a partition
-    /// is settled.
     pub async fn list_objects(
         s3_client: &S3Client,
         bucket: &Bucket,
@@ -119,17 +122,55 @@ impl S3 {
         while let Some(page_result) = paginator.next().await {
             let page = page_result
                 .map_err(|error| PlatformError::s3("list objects", target.clone(), error))?;
-            for object in page.contents() {
-                if let Some(key) = object.key() {
-                    files.push(S3Object {
-                        key: ObjectKey::new(key),
-                        last_modified_millis: object.last_modified().map(Self::modified_millis),
-                        size: object.size().unwrap_or_default(),
-                    });
-                }
-            }
+            files.extend(page.contents().iter().filter_map(|object| {
+                object.key().map(|key| S3Object {
+                    key: ObjectKey::new(key),
+                    last_modified_millis: object.last_modified().map(Self::modified_millis),
+                    size: object.size().unwrap_or_default(),
+                })
+            }));
         }
         Ok(files)
+    }
+
+    pub async fn list_objects_page(
+        s3_client: &S3Client,
+        bucket: &Bucket,
+        prefix: &ObjectKey,
+        continuation_token: Option<&str>,
+        start_after: Option<&str>,
+        max_keys: i32,
+    ) -> PlatformResult<S3ObjectPage> {
+        let target = Self::object_target(bucket, prefix);
+        let mut request = s3_client
+            .list_objects_v2()
+            .bucket(bucket.as_str())
+            .prefix(prefix.as_str())
+            .max_keys(max_keys.clamp(1, 1000));
+        if let Some(token) = continuation_token {
+            request = request.continuation_token(token);
+        } else if let Some(key) = start_after {
+            request = request.start_after(key);
+        }
+        let page = request
+            .send()
+            .await
+            .map_err(|error| PlatformError::s3("list an object page", target, error))?;
+        let objects = page
+            .contents()
+            .iter()
+            .filter_map(|object| {
+                object.key().map(|key| S3Object {
+                    key: ObjectKey::new(key),
+                    last_modified_millis: object.last_modified().map(Self::modified_millis),
+                    size: object.size().unwrap_or_default(),
+                })
+            })
+            .collect();
+        Ok(S3ObjectPage {
+            objects,
+            next_continuation_token: page.next_continuation_token().map(str::to_string),
+        })
     }
 
     pub async fn upload_bytes(
@@ -177,7 +218,6 @@ impl S3 {
         format!("s3://{bucket}/{key}")
     }
 
-    /// Splits an `s3://bucket/key` URI into its object identity.
     pub fn parse_uri(uri: &str) -> PlatformResult<(Bucket, ObjectKey)> {
         let path = uri.strip_prefix("s3://").ok_or_else(|| {
             PlatformError::external(std::io::Error::new(

@@ -13,6 +13,7 @@ impl NatsLeaseStore {
     pub async fn connect(url: &str, name: &str, bucket: &str) -> PlatformResult<Self> {
         let kv = KeyValue::connect_existing(url, name, bucket).await?;
         Self::validate_history(kv.history().await?)?;
+        Self::validate_max_age(kv.max_age().await?)?;
         Ok(Self { kv })
     }
 
@@ -21,6 +22,16 @@ impl NatsLeaseStore {
             return Err(platform_errors::PlatformError::config_invalid(
                 "lease KV bucket",
                 "must retain key history",
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn validate_max_age(max_age: Duration) -> PlatformResult<()> {
+        if !max_age.is_zero() {
+            return Err(platform_errors::PlatformError::config_invalid(
+                "lease KV bucket",
+                "must not expire keys by age",
             ));
         }
         Ok(())
@@ -48,12 +59,14 @@ impl LeaseStore for NatsLeaseStore {
         let key = request.scope.key();
         for _ in 0..4 {
             let now = TimestampMilliseconds::now();
+            let clock_skew_ms = request.clock_skew_millis();
             let Some((current, revision)) = self.load(&request.scope).await? else {
                 let lease = Lease {
                     scope: request.scope.clone(),
                     owner_id: request.owner_id.clone(),
                     fencing_token: request.initial_token,
                     expires_at: Lease::expires_at(now, request.ttl),
+                    clock_skew_ms,
                 };
                 match self.kv.create(&key, &Self::encode(&lease)?).await {
                     Ok(_) => return Ok(Some(lease)),
@@ -72,6 +85,7 @@ impl LeaseStore for NatsLeaseStore {
                     current.fencing_token
                 },
                 expires_at: Lease::expires_at(now, request.ttl),
+                clock_skew_ms,
             };
             match self.kv.update(&key, &Self::encode(&lease)?, revision).await {
                 Ok(_) => return Ok(Some(lease)),
@@ -92,6 +106,7 @@ impl LeaseStore for NatsLeaseStore {
         }
         let renewed = Lease {
             expires_at: Lease::expires_at(now, ttl),
+            clock_skew_ms: lease.clock_skew_ms,
             ..current
         };
         match self
@@ -113,14 +128,27 @@ impl LeaseStore for NatsLeaseStore {
         if !current.is_held_by(&lease.owner_id, lease.fencing_token) || current.is_expired(now) {
             return Ok(false);
         }
-        match self.kv.delete_with_revision(&key, revision).await {
-            Ok(()) => Ok(true),
+        let released = Lease::released(
+            lease.scope.clone(),
+            lease.fencing_token,
+            lease.clock_skew_ms,
+        );
+        match self
+            .kv
+            .update(&key, &Self::encode(&released)?, revision)
+            .await
+        {
+            Ok(_) => Ok(true),
             Err(_) => Ok(false),
         }
     }
 
     async fn current(&self, scope: &LeaseScope) -> PlatformResult<Option<Lease>> {
-        Ok(self.load(scope).await?.map(|(lease, _)| lease))
+        Ok(self
+            .load(scope)
+            .await?
+            .map(|(lease, _)| lease)
+            .filter(|lease| !lease.is_released()))
     }
 
     fn watch(&self, scope: &LeaseScope) -> PlatformResult<LeaseWatch> {

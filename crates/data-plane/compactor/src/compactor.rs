@@ -58,6 +58,7 @@ pub struct Compactor {
     lease_ttl_candles: std::time::Duration,
     max_work: std::time::Duration,
     lease_initial_token: u64,
+    lease_clock_skew: std::time::Duration,
 }
 
 impl Compactor {
@@ -77,6 +78,7 @@ impl Compactor {
             lease_ttl_candles: config.lease_ttl_for(platform_archive::ArchiveKind::Candles),
             max_work: config.max_work,
             lease_initial_token: config.lease_initial_token,
+            lease_clock_skew: config.lease_clock_skew,
         })
     }
 
@@ -93,6 +95,7 @@ impl Compactor {
         };
         let request = LeaseRequest::new(scope, &owner_id, lease_ttl)
             .with_initial_token(initial_token)?
+            .with_clock_skew(self.lease_clock_skew)
             .with_context(table.name(), &digest);
         let Some(mut guard) =
             LeaseGuard::acquire(self.leases.clone(), request, self.max_work).await?
@@ -116,12 +119,18 @@ impl Compactor {
         let mut claim_skip = false;
         let result = async {
             guard.ensure_writable().await?;
-            let processed = self.catalog.processed_source_files(table).await?;
+            let uris = batch
+                .files
+                .iter()
+                .map(|file| format!("s3://{}/{file}", self.bucket))
+                .collect::<Vec<_>>();
+            let claimed_uris = self.catalog.claimed_sources(table, &uris).await?;
             let claimed = batch
                 .files
                 .iter()
-                .filter(|file| processed.contains(&format!("s3://{}/{file}", self.bucket)))
-                .cloned()
+                .zip(&uris)
+                .filter(|(_, uri)| claimed_uris.contains(*uri))
+                .map(|(file, _)| file.clone())
                 .collect::<Vec<_>>();
             if !claimed.is_empty() {
                 warn!(
@@ -249,11 +258,13 @@ impl Compactor {
             .map(|key| format!("s3://{}/{key}", self.bucket))
             .collect::<Vec<_>>();
         guard.ensure_writable().await?;
-        let context = CommitContext::default().with_lease(
-            guard.lease().scope.as_str(),
-            &guard.lease().owner_id,
-            guard.lease().fencing_token,
-        );
+        let context = CommitContext::default()
+            .with_lease(
+                guard.lease().scope.as_str(),
+                &guard.lease().owner_id,
+                guard.lease().fencing_token,
+            )
+            .with_authorizer(guard.authorizer());
         let registration = ArchiveRegistration::new(data_files, Some(source_files))?;
         stats.skipped = self
             .register_compaction(batch, table, &registration, &context, guard)

@@ -1,3 +1,4 @@
+use crate::commit_authorizer::LeaseCommitAuthorizer;
 use crate::{Lease, LeaseContext, LeaseRequest, LeaseStore};
 use platform_errors::{PlatformError, PlatformResult};
 use platform_metrics::MarketDataMetrics;
@@ -130,6 +131,17 @@ impl LeaseGuard {
 
     pub fn lease(&self) -> &Lease {
         &self.lease
+    }
+
+    pub fn authorizer(&self) -> Arc<LeaseCommitAuthorizer> {
+        Arc::new(LeaseCommitAuthorizer::new(
+            self.store.clone(),
+            self.lease.clone(),
+            self.ttl,
+            self.deadline,
+            self.context.clone(),
+            self.lost.clone(),
+        ))
     }
 
     pub fn lost(&self) -> bool {

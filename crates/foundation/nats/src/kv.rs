@@ -10,6 +10,7 @@ use async_nats::{
 };
 use futures::TryStreamExt;
 use platform_errors::{NatsError, PlatformError, PlatformResult};
+use std::time::Duration;
 
 /// A NATS KV bucket storing the latest value per key.
 ///
@@ -80,12 +81,18 @@ impl KeyValue {
     /// Returns the configured per-key history depth without creating the
     /// bucket when it is missing.
     pub async fn history(&self) -> PlatformResult<i64> {
-        let status = self
-            .store
+        Ok(self.status().await?.history())
+    }
+
+    pub async fn max_age(&self) -> PlatformResult<Duration> {
+        Ok(self.status().await?.max_age())
+    }
+
+    async fn status(&self) -> PlatformResult<async_nats::jetstream::kv::bucket::Status> {
+        self.store
             .status()
             .await
-            .map_err(|error| JetStream::protocol_error("failed to read KV status", error))?;
-        Ok(status.history())
+            .map_err(|error| JetStream::protocol_error("failed to read KV status", error))
     }
 
     /// Stores `value` under `key` and returns the KV revision assigned by the

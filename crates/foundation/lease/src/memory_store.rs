@@ -57,6 +57,7 @@ impl InMemoryLeaseStore {
 impl LeaseStore for InMemoryLeaseStore {
     async fn acquire(&self, request: &LeaseRequest) -> PlatformResult<Option<Lease>> {
         let now = TimestampMilliseconds::now();
+        let clock_skew_ms = request.clock_skew_millis();
         let mut leases = self.leases.lock();
         *self
             .attempts
@@ -72,6 +73,7 @@ impl LeaseStore for InMemoryLeaseStore {
                 }
                 Lease {
                     expires_at: Lease::expires_at(now, request.ttl),
+                    clock_skew_ms,
                     ..current.clone()
                 }
             }
@@ -80,12 +82,14 @@ impl LeaseStore for InMemoryLeaseStore {
                 owner_id: request.owner_id.clone(),
                 fencing_token: current.fencing_token.saturating_add(1),
                 expires_at: Lease::expires_at(now, request.ttl),
+                clock_skew_ms,
             },
             None => Lease {
                 scope: request.scope.clone(),
                 owner_id: request.owner_id.clone(),
                 fencing_token: request.initial_token,
                 expires_at: Lease::expires_at(now, request.ttl),
+                clock_skew_ms,
             },
         };
         leases.insert(request.scope.clone(), lease.clone());
@@ -106,6 +110,7 @@ impl LeaseStore for InMemoryLeaseStore {
         }
         let renewed = Lease {
             expires_at: Lease::expires_at(now, ttl),
+            clock_skew_ms: lease.clock_skew_ms,
             ..current.clone()
         };
         leases.insert(lease.scope.clone(), renewed.clone());
@@ -123,14 +128,26 @@ impl LeaseStore for InMemoryLeaseStore {
         if !current.is_held_by(&lease.owner_id, lease.fencing_token) || current.is_expired(now) {
             return Ok(false);
         }
-        leases.remove(&lease.scope);
+        leases.insert(
+            lease.scope.clone(),
+            Lease::released(
+                lease.scope.clone(),
+                lease.fencing_token,
+                lease.clock_skew_ms,
+            ),
+        );
         drop(leases);
         self.notify(&lease.scope)?;
         Ok(true)
     }
 
     async fn current(&self, scope: &LeaseScope) -> PlatformResult<Option<Lease>> {
-        Ok(self.leases.lock().get(scope).cloned())
+        Ok(self
+            .leases
+            .lock()
+            .get(scope)
+            .filter(|lease| !lease.is_released())
+            .cloned())
     }
 
     fn watch(&self, scope: &LeaseScope) -> PlatformResult<LeaseWatch> {

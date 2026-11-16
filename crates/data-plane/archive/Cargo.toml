@@ -20,6 +20,7 @@ parquet = { workspace = true, features = ["async"] }
 platform-aws = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["archive", "http", "storage"] }
+platform-lease = { workspace = true }
 platform-market-data = { workspace = true }
 platform-metrics = { workspace = true }
 platform-time = { workspace = true }

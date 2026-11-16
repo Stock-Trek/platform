@@ -1,15 +1,16 @@
+use crate::iceberg::catalog::iceberg_catalog::claim_index::INDEX_HEAD_KEY;
 use crate::iceberg::catalog::iceberg_catalog::retention::ClaimRetention;
+use crate::iceberg::catalog::iceberg_catalog::snapshot_file::SnapshotFile;
 use crate::iceberg::catalog::{IcebergDataFile, iceberg_catalog::IcebergCatalog};
 use iceberg::{
     TableIdent, TableRequirement, TableUpdate,
     spec::{
-        DataContentType, DataFile, DataFileBuilder, DataFileFormat, FormatVersion, MAIN_BRANCH,
-        ManifestListWriter, ManifestWriterBuilder, Snapshot, SnapshotReference,
-        SnapshotSummaryCollector, Struct, Summary,
+        FormatVersion, MAIN_BRANCH, ManifestListWriter, ManifestWriterBuilder, Snapshot,
+        SnapshotReference, SnapshotSummaryCollector, Summary,
     },
     table::Table,
 };
-use platform_errors::{PlatformError, PlatformResult};
+use platform_errors::PlatformResult;
 use serde_json::{Value, json};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -20,12 +21,13 @@ pub(super) struct SnapshotCommit {
 }
 
 impl SnapshotCommit {
-    pub(super) async fn build(
+    pub(super) async fn build_with_table_properties(
         table: &Table,
         files: &[IcebergDataFile],
         properties: HashMap<String, String>,
+        table_properties: HashMap<String, String>,
     ) -> PlatformResult<Self> {
-        let snapshot_id = Self::snapshot_id(table);
+        let snapshot_id = SnapshotFile::snapshot_id(table);
         let sequence_number = table.metadata().next_sequence_number();
         let commit_uuid = Uuid::new_v4();
         let metadata_directory = table.metadata().metadata_location().map_err(|error| {
@@ -51,7 +53,7 @@ impl SnapshotCommit {
 
         let mut data_files = files
             .iter()
-            .map(|file| Self::data_file(table, file))
+            .map(|file| SnapshotFile::data_file(table, file))
             .collect::<PlatformResult<Vec<_>>>()?;
         data_files.sort_by(|left, right| left.file_path().cmp(right.file_path()));
 
@@ -133,6 +135,8 @@ impl SnapshotCommit {
                 table.metadata().default_partition_spec().clone(),
             );
         }
+        let index_authoritative = table.metadata().properties().contains_key(INDEX_HEAD_KEY)
+            || table_properties.contains_key(INDEX_HEAD_KEY);
         let snapshot = Snapshot::builder()
             .with_manifest_list(manifest_list_path)
             .with_snapshot_id(snapshot_id)
@@ -146,6 +150,21 @@ impl SnapshotCommit {
             .with_timestamp_ms(chrono::Utc::now().timestamp_millis())
             .build();
 
+        let mut updates = vec![
+            TableUpdate::AddSnapshot { snapshot },
+            TableUpdate::SetSnapshotRef {
+                ref_name: MAIN_BRANCH.to_string(),
+                reference: SnapshotReference::new(
+                    snapshot_id,
+                    ClaimRetention::branch(index_authoritative),
+                ),
+            },
+        ];
+        if !table_properties.is_empty() {
+            updates.push(TableUpdate::SetProperties {
+                updates: table_properties,
+            });
+        }
         Ok(Self {
             requirements: vec![
                 TableRequirement::UuidMatch {
@@ -156,13 +175,7 @@ impl SnapshotCommit {
                     snapshot_id: parent_snapshot_id,
                 },
             ],
-            updates: vec![
-                TableUpdate::AddSnapshot { snapshot },
-                TableUpdate::SetSnapshotRef {
-                    ref_name: MAIN_BRANCH.to_string(),
-                    reference: SnapshotReference::new(snapshot_id, ClaimRetention::branch()),
-                },
-            ],
+            updates,
         })
     }
 
@@ -175,49 +188,5 @@ impl SnapshotCommit {
             "requirements": self.requirements,
             "updates": self.updates,
         })
-    }
-
-    fn snapshot_id(table: &Table) -> i64 {
-        loop {
-            let (left, right) = Uuid::new_v4().as_u64_pair();
-            let candidate = (left ^ right) as i64 & i64::MAX;
-            let candidate = candidate.max(1);
-            if !table
-                .metadata()
-                .snapshots()
-                .any(|snapshot| snapshot.snapshot_id() == candidate)
-            {
-                return candidate;
-            }
-        }
-    }
-
-    fn data_file(table: &Table, file: &IcebergDataFile) -> PlatformResult<DataFile> {
-        let record_count = u64::try_from(file.record_count).map_err(|_| {
-            PlatformError::external(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("negative record count for {}", file.file_path),
-            ))
-        })?;
-        let file_size_in_bytes = u64::try_from(file.file_size_in_bytes).map_err(|_| {
-            PlatformError::external(std::io::Error::new(
-                std::io::ErrorKind::InvalidData,
-                format!("negative file size for {}", file.file_path),
-            ))
-        })?;
-        DataFileBuilder::default()
-            .content(DataContentType::Data)
-            .file_path(file.file_path.clone())
-            .file_format(DataFileFormat::Parquet)
-            .partition(Struct::empty())
-            .partition_spec_id(table.metadata().default_partition_spec_id())
-            .record_count(record_count)
-            .file_size_in_bytes(file_size_in_bytes)
-            .build()
-            .map_err(|error| {
-                PlatformError::external(std::io::Error::other(format!(
-                    "build Iceberg data file: {error}"
-                )))
-            })
     }
 }

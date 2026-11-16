@@ -74,6 +74,9 @@ fn config() -> ArchiverConfig {
         lease_ttl: std::time::Duration::from_secs(30),
         max_work: std::time::Duration::from_secs(20),
         lease_initial_token: 1,
+        lease_clock_skew: std::time::Duration::ZERO,
+        recovery_page_files: 1_000,
+        recovery_page_bytes: 64 * 1024 * 1024,
         iceberg: platform_archive::IcebergConfig {
             catalog_uri: "http://localhost:8181".to_string(),
             warehouse: "s3://archive/iceberg".to_string(),

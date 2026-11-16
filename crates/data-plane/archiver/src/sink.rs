@@ -43,6 +43,9 @@ pub struct S3ParquetSink {
     pub(crate) lease_ttl: Duration,
     pub(crate) max_work: Duration,
     pub(crate) lease_initial_token: u64,
+    pub(crate) lease_clock_skew: Duration,
+    pub(crate) recovery_page_files: usize,
+    pub(crate) recovery_page_bytes: usize,
 }
 
 impl S3ParquetSink {
@@ -61,6 +64,9 @@ impl S3ParquetSink {
             lease_ttl: config.lease_ttl,
             max_work: config.max_work,
             lease_initial_token: config.lease_initial_token,
+            lease_clock_skew: config.lease_clock_skew,
+            recovery_page_files: config.recovery_page_files,
+            recovery_page_bytes: config.recovery_page_bytes,
         })
     }
 

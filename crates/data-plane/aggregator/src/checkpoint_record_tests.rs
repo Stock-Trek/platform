@@ -162,6 +162,7 @@ async fn an_older_fencing_token_cannot_overwrite_a_newer_checkpoint() {
         owner_id: "writer-b".to_string(),
         fencing_token: 2,
         expires_at: TimestampMilliseconds::now(),
+        clock_skew_ms: 0,
     };
     let mut checkpoint = checkpoint();
     checkpoint.shard = shard;
@@ -175,6 +176,7 @@ async fn an_older_fencing_token_cannot_overwrite_a_newer_checkpoint() {
         owner_id: "writer-a".to_string(),
         fencing_token: 1,
         expires_at: TimestampMilliseconds::now(),
+        clock_skew_ms: 0,
     };
     let stale = checkpoint.with_lease(&stale_lease);
 
@@ -195,6 +197,7 @@ fn production_store_rejects_a_checkpoint_from_a_stale_writer() {
         owner_id: "writer-b".to_string(),
         fencing_token: 2,
         expires_at: TimestampMilliseconds::now(),
+        clock_skew_ms: 0,
     });
     let mut stale = checkpoint();
     stale.shard = shard;
@@ -203,6 +206,7 @@ fn production_store_rejects_a_checkpoint_from_a_stale_writer() {
         owner_id: "writer-a".to_string(),
         fencing_token: 1,
         expires_at: TimestampMilliseconds::now(),
+        clock_skew_ms: 0,
     });
 
     assert!(NatsStateStore::ensure_fence_allows(&stored, &stale).is_err());
@@ -214,6 +218,7 @@ fn production_store_rejects_a_checkpoint_from_a_stale_writer() {
         owner_id: "writer-b".to_string(),
         fencing_token: 2,
         expires_at: TimestampMilliseconds::now(),
+        clock_skew_ms: 0,
     });
     assert!(NatsStateStore::ensure_fence_allows(&stored, &same_writer).is_ok());
 }

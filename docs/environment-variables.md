@@ -231,11 +231,13 @@ No process-specific optional variables.
 | `ARCHIVER_DEDUPE_CAPACITY` | Capacity of the in-memory archive deduplication buffer. |
 | `ARCHIVER_EVENT_SUBJECT_PREFIX` | NATS subject prefix for source market events. |
 | `ARCHIVER_FLUSH_INTERVAL_SECS` | Maximum time between archive flushes, in seconds. |
-| `ARCHIVER_LEASE_BUCKET` | NATS KV bucket for archiver recovery leases. Must already exist with a positive history limit. |
+| `ARCHIVER_LEASE_BUCKET` | NATS KV bucket for archiver recovery leases. Must already exist with a positive history limit and no key-age expiry. |
 | `ARCHIVER_LEASE_TTL_SECS` | Fenced lease TTL for archiver recovery, in seconds. |
 | `ARCHIVER_MAX_RECORDS` | Maximum number of records buffered before an archive flush. |
-| `ARCHIVER_MAX_WORK_SECS` | Soft deadline for one recovery scan, in seconds. Must be shorter than the lease TTL. |
+| `ARCHIVER_MAX_WORK_SECS` | Soft deadline for one recovery scan or page, in seconds. Must be shorter than the skew-adjusted lease TTL. |
 | `ARCHIVER_NATS_URL` | NATS URL used to subscribe to market events and closed candles. |
+| `ARCHIVER_RECOVERY_PAGE_BYTES` | Maximum candidate bytes in one recovery registration page. Must be positive. |
+| `ARCHIVER_RECOVERY_PAGE_FILES` | Maximum candidate files in one recovery registration page. Must be positive. |
 | `ARCHIVER_S3_BUCKET` | S3 bucket for archived raw objects. |
 | `ARCHIVER_S3_PREFIX` | S3 prefix for archived raw objects. |
 
@@ -243,6 +245,7 @@ No process-specific optional variables.
 
 | Variable | Description |
 | --- | --- |
+| `ARCHIVER_LEASE_CLOCK_SKEW_SECS` | Clock-skew margin added to the recovery lease expiry, in seconds. Must be shorter than the lease TTL and leave room for the renewal interval. Defaults to `5`, capped at one quarter of the TTL. |
 | `ARCHIVER_LEASE_INITIAL_TOKEN` | Initial archiver recovery fencing token. Must be positive. Defaults to `1`. |
 
 ### Compactor
@@ -251,9 +254,9 @@ No process-specific optional variables.
 
 | Variable | Description |
 | --- | --- |
-| `COMPACTOR_LEASE_BUCKET` | NATS KV bucket for compactor leases. Must already exist with a positive history limit. |
+| `COMPACTOR_LEASE_BUCKET` | NATS KV bucket for compactor leases. Must already exist with a positive history limit and no key-age expiry. |
 | `COMPACTOR_LEASE_TTL_SECS` | Default fenced lease TTL for compaction, in seconds. |
-| `COMPACTOR_MAX_WORK_SECS` | Soft deadline for one compaction attempt, in seconds. Must be shorter than the effective lease TTL. |
+| `COMPACTOR_MAX_WORK_SECS` | Soft deadline for one compaction attempt, in seconds. Must be shorter than every skew-adjusted lease TTL. |
 | `COMPACTOR_MIN_SOURCE_FILES` | Minimum number of source files required before a compaction group is processed. |
 | `COMPACTOR_NATS_URL` | NATS URL used for compactor leases. |
 | `COMPACTOR_OUTPUT_PREFIX` | S3 prefix for compacted output objects. |
@@ -267,6 +270,7 @@ No process-specific optional variables.
 
 | Variable | Description |
 | --- | --- |
+| `COMPACTOR_LEASE_CLOCK_SKEW_SECS` | Clock-skew margin added to the compaction lease expiry, in seconds. Must be shorter than every lease TTL and leave room for each renewal interval. Defaults to `5`, capped at one quarter of the shortest TTL. |
 | `COMPACTOR_LEASE_INITIAL_TOKEN` | Initial compactor fencing token. Must be positive. Defaults to `1`. |
 | `COMPACTOR_LEASE_TTL_SECS_CANDLES` | Candle compaction lease TTL override, in seconds. |
 | `COMPACTOR_LEASE_TTL_SECS_EVENTS` | Event compaction lease TTL override, in seconds. |

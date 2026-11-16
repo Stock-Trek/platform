@@ -3,6 +3,7 @@ mod compactor_runner;
 mod config;
 mod partition_output;
 mod source;
+mod source_inventory;
 mod spill;
 
 #[cfg(test)]

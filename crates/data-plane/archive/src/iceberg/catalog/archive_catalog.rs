@@ -37,6 +37,32 @@ pub trait ArchiveCatalog: Send + Sync {
         table: ArchiveIcebergTable,
     ) -> PlatformResult<HashSet<String>>;
 
+    async fn claimed_sources(
+        &self,
+        table: ArchiveIcebergTable,
+        sources: &[String],
+    ) -> PlatformResult<HashSet<String>> {
+        let processed = self.processed_source_files(table).await?;
+        Ok(sources
+            .iter()
+            .filter(|source| processed.contains(*source))
+            .cloned()
+            .collect())
+    }
+
+    async fn live_outputs(
+        &self,
+        table: ArchiveIcebergTable,
+        outputs: &[String],
+    ) -> PlatformResult<HashSet<String>> {
+        let live = self.registered_data_files(table).await?;
+        Ok(outputs
+            .iter()
+            .filter(|output| live.contains(*output))
+            .cloned()
+            .collect())
+    }
+
     /// Reads the compacted data files and the processed raw-source set from one
     /// table snapshot.
     ///
