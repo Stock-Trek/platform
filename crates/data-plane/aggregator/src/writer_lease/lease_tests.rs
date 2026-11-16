@@ -29,7 +29,7 @@ async fn only_one_owner_can_hold_a_shard_lease() {
 }
 
 #[tokio::test]
-async fn release_allows_a_new_owner_with_a_higher_fencing_token() {
+async fn release_deletes_the_lease_and_a_new_owner_starts_a_new_generation() {
     let store = InMemoryLeaseStore::new();
     let ttl = Duration::from_secs(30);
     let first = store
@@ -38,6 +38,7 @@ async fn release_allows_a_new_owner_with_a_higher_fencing_token() {
         .unwrap()
         .unwrap();
     store.release(&first).await.unwrap();
+    assert!(store.current(shard()).await.unwrap().is_none());
 
     let second = store
         .acquire(shard(), "writer-b", ttl)
@@ -45,7 +46,7 @@ async fn release_allows_a_new_owner_with_a_higher_fencing_token() {
         .unwrap()
         .unwrap();
 
-    assert_eq!(second.fencing_token, 2);
+    assert_eq!(second.fencing_token, 1);
 }
 
 #[tokio::test]

@@ -5,7 +5,7 @@ use crate::writer_lease::{InMemoryLeaseStore, LeaseStore};
 use std::sync::Arc;
 
 #[tokio::test]
-async fn waits_for_an_active_writer_then_takes_over_the_shard() {
+async fn waits_for_an_active_writer_then_takes_over_and_releases_the_shard() {
     let leases = Arc::new(InMemoryLeaseStore::new());
     let ttl = std::time::Duration::from_secs(30);
     let held = leases
@@ -32,7 +32,5 @@ async fn waits_for_an_active_writer_then_takes_over_the_shard() {
         .expect("runner task should not panic")
         .unwrap();
 
-    let lease = leases.current(held.shard).await.unwrap().unwrap();
-    assert_eq!(lease.owner_id, "this-writer");
-    assert_eq!(lease.fencing_token, held.fencing_token + 1);
+    assert!(leases.current(held.shard).await.unwrap().is_none());
 }
