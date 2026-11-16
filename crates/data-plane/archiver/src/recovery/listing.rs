@@ -1,7 +1,6 @@
 use crate::sink::S3ParquetSink;
 use platform_archive::{
-    ArchiveIcebergTable, ArchiveKind, ArchivePath, IcebergDataFile, ObjectKey, ParquetReader, S3,
-    S3Object,
+    ArchiveIcebergTable, ArchiveKind, ArchivePath, IcebergDataFile, ObjectKey, S3Object,
 };
 use platform_errors::{PlatformError, PlatformResult};
 use platform_lease::LeaseGuard;
@@ -36,15 +35,15 @@ impl S3ParquetSink {
             let mut guard = self.acquire_recovery_guard(table).await?;
             let page = async {
                 guard.ensure_writable().await?;
-                let page = S3::list_objects_page(
-                    &self.s3_client,
-                    &self.bucket,
-                    &prefix,
-                    continuation.as_deref(),
-                    None,
-                    i32::try_from(self.recovery_page_files.clamp(1, 1_000)).unwrap_or(1_000),
-                )
-                .await?;
+                let page = self
+                    .objects
+                    .list_page(
+                        &self.bucket,
+                        &prefix,
+                        continuation.as_deref(),
+                        i32::try_from(self.recovery_page_files.clamp(1, 1_000)).unwrap_or(1_000),
+                    )
+                    .await?;
                 self.recover_listing_page(
                     table,
                     list_prefix,
@@ -113,8 +112,11 @@ impl S3ParquetSink {
                 );
                 continue;
             };
-            let reader = ParquetReader::new(&self.s3_client, &self.bucket, &object.key, file_size);
-            let record_count = match reader.row_count().await {
+            let record_count = match self
+                .row_counter
+                .row_count(&self.bucket, &object.key, file_size)
+                .await
+            {
                 Ok(record_count) => record_count,
                 Err(error) => {
                     unreadable += 1;

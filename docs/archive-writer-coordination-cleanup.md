@@ -7,8 +7,8 @@ and the current code. It does not replace the plan or re-open completed work.
 
 The coordination primitives, claim-index maintenance, lease authorization,
 polling instrumentation, and metadata cleanup are implemented. The remaining
-work is evidence against real infrastructure and a small number of fault
-injection tests that cannot be covered by in-memory fakes.
+work is evidence against real infrastructure. Multi-token sweep and recovery
+fault injection are now covered with an injected object store.
 
 ## Status at a glance
 
@@ -16,8 +16,8 @@ injection tests that cannot be covered by in-memory fakes.
 | --- | --- | --- |
 | P0-1 source claims | Properties are serialized in the snapshot summary, reloaded from metadata, and validated for version, count, and digest. Fake commit tests cover ambiguous responses and damaged claim metadata. | No real REST-catalog round-trip that applies the serialized request and reloads the claim set. |
 | P0-2 lease generations | Release writes a tombstone in both stores. Acquisition advances the token by one. In-memory tests cover release, reacquire, stale writes, and checkpoint handover. | The NATS suite is opt-in and not part of a required gate. |
-| P1-1 claim index | Batch-keyed format v4, point lookups by source, output, and archive batch, digest cache, atomic head update, lease-gated scheduled consolidation, live-batch retirement, reachable-metadata sweep, and a configurable safety window. Indexed commits also install finite retention properties in the same conditional update. | The sweep and expired-snapshot retention still need S3-backed tests. |
-| P1-2 paged recovery | Paginated listing, bounded registration pages, deadline checks, page metrics, conflict remainder handling, and restart skipping are implemented. | No S3-backed pagination, deadline, restart, or cross-page conflict test. |
+| P1-1 claim index | Batch-keyed format v4, point lookups by source, output, and archive batch, digest cache, atomic head update, lease-gated scheduled consolidation, live-batch retirement, reachable-metadata sweep, and a configurable safety window. Indexed commits also install finite retention properties in the same conditional update. A paginated object-store test proves multi-token sweep deletion only after the safety window. | Expired-snapshot retention still needs real S3-backed evidence. |
+| P1-2 paged recovery | Paginated listing, bounded registration pages, deadline checks, page metrics, conflict remainder handling, and restart skipping are implemented. Injected object-store pagination now covers multi-token listing, cross-page conflict remainder, restart skipping, and soft-deadline lease release. | No real S3-backed pagination, deadline, restart, or cross-page conflict test. |
 | P1-3 indexed polling | Inventory is incremental with a periodic full reconcile. Listing, index-read, cache, poll-duration, fallback-scan, and backlog metrics are emitted. The inventory-gap path is covered by a deterministic listing fake. | None. |
 | P1-4 lease-gated retries | Every file commit and property update authorizes before submit and after backoff. Consolidation requires an authorized commit context. | Property-contention and successor-during-backoff tests still rely on fakes. |
 | P1-5 operational hardening | Clock-skew margins, conditional property updates, bucket history and size limits, startup validation, and readiness-after-validation are implemented. The compactor removes unreachable metadata behind a safety window, and an unreferenced index page is proven to survive until that window elapses. | No real end-to-end suite. |
@@ -46,19 +46,21 @@ alongside it.
 ### P1-1: S3-backed retention and sweep
 
 Exercise the maintenance path against S3 listing behavior with more than one
-continuation token. Prove that a live compacted output still blocks
-recompaction after old snapshots expire, that retained batches keep their
-source/output claims, and that old pages are deleted only after the safety
-window. The implementation uses `COMPACTOR_MAINTENANCE_SAFETY_SECS`, which
-defaults to 24 hours and is validated as positive.
+continuation token. `metadata_sweep_paginates_and_deletes_only_unreachable_old_objects`
+covers the paginated sweep and safety-window decision with an injected object
+store. Prove against real S3 that a live compacted output still blocks
+recompaction after old snapshots expire and that retained batches keep their
+source/output claims. The implementation uses
+`COMPACTOR_MAINTENANCE_SAFETY_SECS`, which defaults to 24 hours and is validated
+as positive.
 
 ### P1-2: S3-backed recovery pages
 
-Exercise `recover_table_pages` against a real or emulated S3 listing with
-multiple continuation tokens. Inject a conflict into one page and prove later
-pages register only the remainder. Force the soft deadline between pages and
-prove no further commit occurs and the lease is released. Restart after the
-deadline and prove already-live paths are skipped and the remainder completes.
+Exercise `recover_table_pages` against a real S3 listing with multiple
+continuation tokens. Injected object-store tests now cover multi-token paging,
+a cross-page conflict that registers only the remainder, restart skipping for
+already-live paths, and a soft deadline between pages that stops commits and
+releases the lease. The remaining evidence is the same flow against real S3.
 
 ### P1-3: inventory gap
 

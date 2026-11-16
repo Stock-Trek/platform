@@ -4,7 +4,8 @@ use aws_sdk_s3::Client as S3Client;
 use bytes::Bytes;
 use platform_archive::{
     ArchiveBatch, ArchiveBucket, ArchiveCatalog, ArchiveIcebergTable, ArchiveParquet,
-    ArchiveRecord, Bucket, ContentHash, IcebergDataFile, ObjectKey, RoutingBucket, S3,
+    ArchiveRecord, Bucket, ContentHash, IcebergDataFile, ObjectKey, ObjectStore, ParquetRowCounter,
+    RoutingBucket, S3, S3ObjectStore, S3ParquetRowCounter,
 };
 use platform_errors::PlatformResult;
 use platform_lease::LeaseStore;
@@ -35,6 +36,8 @@ pub trait ArchiveSink: Send + Sync {
 /// uncommitted by an earlier run are registered during startup.
 pub struct S3ParquetSink {
     pub(crate) s3_client: S3Client,
+    pub(crate) objects: Arc<dyn ObjectStore>,
+    pub(crate) row_counter: Arc<dyn ParquetRowCounter>,
     pub(crate) catalog: Arc<dyn ArchiveCatalog>,
     pub(crate) leases: Arc<dyn LeaseStore>,
     pub(crate) bucket: Bucket,
@@ -54,8 +57,11 @@ impl S3ParquetSink {
         catalog: Arc<dyn ArchiveCatalog>,
         leases: Arc<dyn LeaseStore>,
     ) -> PlatformResult<Self> {
+        let s3_client = S3::s3_client().await;
         Ok(Self {
-            s3_client: S3::s3_client().await,
+            objects: Arc::new(S3ObjectStore::new(s3_client.clone())),
+            row_counter: Arc::new(S3ParquetRowCounter::new(s3_client.clone())),
+            s3_client,
             catalog,
             leases,
             bucket: Bucket::new(config.s3_bucket.clone()),

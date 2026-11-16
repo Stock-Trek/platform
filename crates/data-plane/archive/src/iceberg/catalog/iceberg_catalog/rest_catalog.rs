@@ -1,3 +1,4 @@
+use crate::ObjectStore;
 use crate::iceberg::catalog::iceberg_catalog::claim_index::{ClaimIndex, ClaimIndexCache};
 use crate::iceberg::catalog::iceberg_catalog::retention::ClaimRetention;
 use crate::iceberg::catalog::{ArchiveCatalog, IcebergDataFile};
@@ -162,7 +163,7 @@ impl ArchiveCatalog for IcebergCatalog {
     async fn sweep_metadata(
         &self,
         table: ArchiveIcebergTable,
-        client: &aws_sdk_s3::Client,
+        client: &dyn ObjectStore,
         safety_window: std::time::Duration,
     ) -> PlatformResult<usize> {
         let table = self.ensure_table(table).await?;

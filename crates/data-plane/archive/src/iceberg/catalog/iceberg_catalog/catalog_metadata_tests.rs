@@ -5,7 +5,7 @@ use super::snapshot::SnapshotCommit;
 use crate::ArchiveKind;
 use crate::iceberg::CommitContext;
 use crate::iceberg::catalog::{IcebergCatalog, IcebergDataFile};
-use crate::{Bucket, ObjectKey, S3, S3Object};
+use crate::{Bucket, ObjectKey, ObjectStore, S3, S3Object, S3ObjectPage};
 use iceberg::{
     Runtime, TableIdent,
     io::FileIO,
@@ -17,8 +17,8 @@ use iceberg::{
 };
 use platform_types::TimestampMilliseconds;
 use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
+    collections::{HashMap, HashSet, VecDeque},
+    sync::{Arc, Mutex},
 };
 
 impl ClaimIndexPage {
@@ -119,6 +119,76 @@ impl MetadataTable {
             .runtime(Runtime::current())
             .build()
             .unwrap()
+    }
+}
+
+struct FakeObjectStore {
+    pages: Mutex<VecDeque<Vec<S3Object>>>,
+    observed_continuations: Mutex<Vec<Option<String>>>,
+    deleted: Mutex<Vec<String>>,
+}
+
+impl FakeObjectStore {
+    fn with_pages(pages: Vec<Vec<S3Object>>) -> Self {
+        Self {
+            pages: Mutex::new(pages.into()),
+            observed_continuations: Mutex::new(Vec::new()),
+            deleted: Mutex::new(Vec::new()),
+        }
+    }
+
+    fn observed_continuations(&self) -> Vec<Option<String>> {
+        self.observed_continuations.lock().unwrap().clone()
+    }
+
+    fn deleted(&self) -> Vec<String> {
+        self.deleted.lock().unwrap().clone()
+    }
+
+    fn object(key: impl Into<String>, last_modified_millis: i64) -> S3Object {
+        S3Object {
+            key: ObjectKey::new(key),
+            last_modified_millis: Some(last_modified_millis),
+            size: 1,
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl ObjectStore for FakeObjectStore {
+    async fn list_page(
+        &self,
+        _bucket: &Bucket,
+        _prefix: &ObjectKey,
+        continuation_token: Option<&str>,
+        _max_keys: i32,
+    ) -> platform_errors::PlatformResult<S3ObjectPage> {
+        self.observed_continuations
+            .lock()
+            .unwrap()
+            .push(continuation_token.map(str::to_string));
+        let objects = self.pages.lock().unwrap().pop_front().unwrap_or_default();
+        let next_continuation_token = if self.pages.lock().unwrap().is_empty() {
+            None
+        } else {
+            Some(format!(
+                "page-{}",
+                self.observed_continuations.lock().unwrap().len()
+            ))
+        };
+        Ok(S3ObjectPage {
+            objects,
+            next_continuation_token,
+        })
+    }
+
+    async fn delete(
+        &self,
+        _bucket: &Bucket,
+        key: &ObjectKey,
+    ) -> platform_errors::PlatformResult<()> {
+        self.deleted.lock().unwrap().push(key.as_str().to_string());
+        Ok(())
     }
 }
 
@@ -546,6 +616,59 @@ fn metadata_cleanup_only_selects_unreachable_objects_beyond_the_safety_window() 
     );
 
     assert_eq!(candidates, vec![old]);
+}
+
+#[tokio::test]
+async fn metadata_sweep_paginates_and_deletes_only_unreachable_old_objects() {
+    let (address, _submitted, _server) = catalog_config_server();
+    let catalog = IcebergCatalog::connect(&crate::iceberg::IcebergConfig {
+        catalog_uri: address,
+        warehouse: "s3://archive/warehouse".to_string(),
+        token: None,
+        namespace: "ns".to_string(),
+    })
+    .await
+    .unwrap();
+    let base = MetadataTable::with_batches(&[]);
+    let file_io = base.file_io().clone();
+    let properties = ClaimIndexPage::write_consolidated(
+        &base,
+        HashSet::from(["s3://archive/raw/a.parquet".to_string()]),
+        HashSet::from(["s3://archive/out/a.parquet".to_string()]),
+        1,
+    )
+    .await
+    .unwrap();
+    let head = properties.get(INDEX_HEAD_KEY).unwrap().clone();
+    let table = MetadataTable::with_properties_on(file_io, &[], properties);
+    let head_key = head.strip_prefix("s3://archive/").unwrap().to_string();
+    let old_key = "table/metadata/orphan-old.json";
+    let fresh_key = "table/metadata/orphan-fresh.json";
+    let now = TimestampMilliseconds::now().0;
+    let old = now - 3 * 24 * 60 * 60 * 1_000;
+    let pages = vec![
+        vec![
+            FakeObjectStore::object(head_key, old),
+            FakeObjectStore::object(old_key, old),
+        ],
+        vec![
+            FakeObjectStore::object("table/metadata/v1.json", old),
+            FakeObjectStore::object(fresh_key, now),
+        ],
+    ];
+    let store = FakeObjectStore::with_pages(pages);
+
+    let deleted = catalog
+        .sweep_metadata(&table, &store, std::time::Duration::from_secs(24 * 60 * 60))
+        .await
+        .unwrap();
+
+    assert_eq!(deleted, 1);
+    assert_eq!(store.deleted(), vec![old_key.to_string()]);
+    assert_eq!(
+        store.observed_continuations(),
+        vec![None, Some("page-1".to_string())]
+    );
 }
 
 #[tokio::test]
