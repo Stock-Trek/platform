@@ -78,7 +78,9 @@ impl Lease {
     }
 
     pub fn remaining(&self, now: TimestampMilliseconds) -> Duration {
-        let remaining = self.expires_at.saturating_duration_since(now);
+        let skew = i64::try_from(self.clock_skew_ms).unwrap_or(i64::MAX);
+        let expires_at = self.expires_at.saturating_add(DurationMilliseconds(skew));
+        let remaining = expires_at.saturating_duration_since(now);
         let millis = u64::try_from(remaining.0.max(1)).unwrap_or(u64::MAX);
         Duration::from_millis(millis)
     }

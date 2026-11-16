@@ -12,7 +12,8 @@ impl IcebergCatalog {
             return ClaimIndex::load_cached(table, Some(&self.claim_index_cache)).await;
         }
         let outputs = self.registered_paths(table).await?;
-        let sources = Self::source_files_from_metadata(table)?;
+        let require_claims = table.identifier().name().starts_with("compacted/");
+        let sources = Self::source_files_from_metadata(table, require_claims)?;
         Ok(ClaimState::new(sources, outputs))
     }
 

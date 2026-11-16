@@ -123,6 +123,38 @@ impl MarketDataMetrics {
         .increment(objects);
     }
 
+    pub fn record_archive_recovery_page(
+        table: &'static str,
+        files: u64,
+        bytes: u64,
+        remaining: u64,
+    ) {
+        if files > 0 {
+            counter!(
+                MARKET_DATA_ARCHIVE_RECOVERY_PAGE_FILES_TOTAL,
+                "table" => table,
+            )
+            .increment(files);
+        }
+        if bytes > 0 {
+            counter!(
+                MARKET_DATA_ARCHIVE_RECOVERY_PAGE_BYTES_TOTAL,
+                "table" => table,
+            )
+            .increment(bytes);
+        }
+        gauge!(
+            MARKET_DATA_ARCHIVE_RECOVERY_REMAINING_OBJECTS,
+            "table" => table,
+        )
+        .set(remaining as f64);
+    }
+
+    pub fn record_compactor_inventory(pending: usize, total: usize) {
+        gauge!(MARKET_DATA_COMPACTOR_INVENTORY_OBJECTS).set(total as f64);
+        gauge!(MARKET_DATA_COMPACTOR_PENDING_OBJECTS).set(pending as f64);
+    }
+
     pub fn record_compaction_outcome(kind: &'static str, status: &'static str) {
         counter!(
             MARKET_DATA_COMPACTION_OUTCOMES_TOTAL,

@@ -1,3 +1,4 @@
+use crate::iceberg::catalog::iceberg_catalog::claim_index_block::ClaimIndexBlock;
 use crate::iceberg::catalog::iceberg_catalog::claim_index_page::{ClaimIndexPage, IndexParent};
 use crate::iceberg::{ArchiveRegistration, CommitContext};
 use iceberg::table::Table;
@@ -10,6 +11,7 @@ pub(super) const INDEX_HEAD_DIGEST_KEY: &str = "archive.index-head-digest";
 pub(super) const INDEX_FORMAT_VERSION_KEY: &str = "archive.index-format-version";
 pub(super) const INDEX_DEPTH_KEY: &str = "archive.index-depth";
 const INDEX_CONSOLIDATION_DEPTH: u64 = 64;
+const CLAIM_INDEX_CACHE_CAPACITY: usize = 512;
 
 pub(super) struct ClaimIndex;
 
@@ -69,6 +71,11 @@ impl ClaimIndex {
             let page = ClaimIndexPage::read(table, &parent, cache).await?;
             sources.extend(page.sources);
             outputs.extend(page.outputs);
+            for reference in &page.blocks {
+                let block = ClaimIndexBlock::read(table, reference, cache).await?;
+                sources.extend(block.sources_for_load());
+                outputs.extend(block.outputs_for_load());
+            }
             next = page.parent;
         }
         Ok(ClaimState::new(sources, outputs))
@@ -94,38 +101,36 @@ impl ClaimIndex {
             (None, None) => (None, 0),
             _ => return Err(Self::error("index head is only partially configured")),
         };
-        let consolidate = parent.is_some() && depth >= INDEX_CONSOLIDATION_DEPTH;
-        let baseline = if consolidate {
-            Some(Self::load(table).await?)
-        } else {
-            baseline
-        };
-        let mut sources = baseline
-            .as_ref()
-            .map(|state| state.sources.clone())
-            .unwrap_or_default();
-        sources.extend(
-            registration
-                .source_files()
-                .unwrap_or_default()
-                .iter()
-                .cloned(),
-        );
-        let mut outputs = baseline.map(|state| state.outputs).unwrap_or_default();
-        outputs.extend(
-            registration
-                .files()
-                .iter()
-                .map(|file| file.file_path.clone()),
-        );
-        let parent = if consolidate { None } else { parent };
-        let depth = if parent.is_none() {
-            1
-        } else {
-            depth.saturating_add(1)
-        };
-        ClaimIndexPage::from_claims(parent, sources, outputs)
-            .write(table, depth)
+        let new_sources = registration
+            .source_files()
+            .unwrap_or_default()
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>();
+        let new_outputs = registration
+            .files()
+            .iter()
+            .map(|file| file.file_path.clone())
+            .collect::<HashSet<_>>();
+        if parent.is_none() {
+            let baseline = baseline.unwrap_or_else(|| ClaimState::new(Vec::new(), Vec::new()));
+            return ClaimIndexPage::write_consolidated(
+                table,
+                baseline.sources.into_iter().chain(new_sources).collect(),
+                baseline.outputs.into_iter().chain(new_outputs).collect(),
+                1,
+            )
+            .await;
+        }
+        if depth >= INDEX_CONSOLIDATION_DEPTH {
+            let mut state = Self::load(table).await?;
+            state.sources.extend(new_sources);
+            state.outputs.extend(new_outputs);
+            return ClaimIndexPage::write_consolidated(table, state.sources, state.outputs, 1)
+                .await;
+        }
+        ClaimIndexPage::from_claims(parent, new_sources, new_outputs)
+            .write(table, depth.saturating_add(1))
             .await
     }
 
@@ -135,9 +140,7 @@ impl ClaimIndex {
     ) -> PlatformResult<HashMap<String, String>> {
         context.authorize().await?;
         let state = Self::load(table).await?;
-        ClaimIndexPage::from_claims(None, state.sources, state.outputs)
-            .write(table, 1)
-            .await
+        ClaimIndexPage::write_consolidated(table, state.sources, state.outputs, 1).await
     }
 
     pub(super) fn error(reason: impl std::fmt::Display) -> PlatformError {
@@ -151,10 +154,11 @@ impl ClaimIndex {
 #[derive(Default)]
 pub(super) struct ClaimIndexCache {
     pages: Mutex<HashMap<String, Arc<ClaimIndexPage>>>,
+    blocks: Mutex<HashMap<String, Arc<ClaimIndexBlock>>>,
 }
 
 impl ClaimIndexCache {
-    pub(super) fn get(&self, digest: &str) -> Option<Arc<ClaimIndexPage>> {
+    pub(super) fn get_page(&self, digest: &str) -> Option<Arc<ClaimIndexPage>> {
         self.pages
             .lock()
             .expect("claim index cache lock poisoned")
@@ -162,10 +166,32 @@ impl ClaimIndexCache {
             .cloned()
     }
 
-    pub(super) fn insert(&self, digest: String, page: ClaimIndexPage) {
-        self.pages
+    pub(super) fn get_block(&self, digest: &str) -> Option<Arc<ClaimIndexBlock>> {
+        self.blocks
             .lock()
             .expect("claim index cache lock poisoned")
-            .insert(digest, Arc::new(page));
+            .get(digest)
+            .cloned()
+    }
+
+    pub(super) fn insert_page(&self, digest: String, page: ClaimIndexPage) {
+        let mut pages = self.pages.lock().expect("claim index cache lock poisoned");
+        Self::evict_if_full(&mut pages);
+        pages.insert(digest, Arc::new(page));
+    }
+
+    pub(super) fn insert_block(&self, digest: String, block: ClaimIndexBlock) {
+        let mut blocks = self.blocks.lock().expect("claim index cache lock poisoned");
+        Self::evict_if_full(&mut blocks);
+        blocks.insert(digest, Arc::new(block));
+    }
+
+    fn evict_if_full<T>(entries: &mut HashMap<String, Arc<T>>) {
+        if entries.len() < CLAIM_INDEX_CACHE_CAPACITY {
+            return;
+        }
+        if let Some(key) = entries.keys().next().cloned() {
+            entries.remove(&key);
+        }
     }
 }

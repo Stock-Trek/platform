@@ -72,6 +72,12 @@ impl CommitContext {
             None => Ok(()),
         }
     }
+
+    pub fn remaining(&self) -> Option<std::time::Duration> {
+        self.authorizer
+            .as_ref()
+            .and_then(|authorizer| authorizer.remaining())
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

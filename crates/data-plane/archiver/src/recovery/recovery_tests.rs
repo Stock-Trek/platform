@@ -251,3 +251,41 @@ fn recovery_scopes_include_the_bucket_and_prefix_identity() {
         sink.recovery_scope(ArchiveIcebergTable::RawEvents).as_str()
     );
 }
+
+#[tokio::test]
+async fn recovery_pages_respect_both_file_and_byte_boundaries() {
+    let catalog = Arc::new(FakeCatalog::with_outcomes([]));
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let mut sink = RecoveryFixture::sink(catalog.clone(), leases.clone());
+    sink.recovery_page_files = 1;
+    let mut guard = RecoveryFixture::guard(leases.clone()).await;
+    let pending = vec![
+        IcebergDataFile::new("s3://archive/raw/a.parquet", 10, 1),
+        IcebergDataFile::new("s3://archive/raw/b.parquet", 10, 1),
+        IcebergDataFile::new("s3://archive/raw/c.parquet", 10, 1),
+    ];
+
+    sink.register_pending_pages(ArchiveIcebergTable::RawEvents, pending, &mut guard)
+        .await
+        .unwrap();
+
+    assert_eq!(catalog.calls.load(Ordering::SeqCst), 3);
+    {
+        let batches = catalog.batches.lock().unwrap();
+        assert!(batches.iter().all(|batch| batch.len() == 1));
+    }
+
+    let catalog = Arc::new(FakeCatalog::with_outcomes([]));
+    let mut sink = RecoveryFixture::sink(catalog.clone(), leases);
+    sink.recovery_page_files = 100;
+    sink.recovery_page_bytes = 15;
+    sink.register_pending_pages(
+        ArchiveIcebergTable::RawEvents,
+        RecoveryFixture::pending(),
+        &mut guard,
+    )
+    .await
+    .unwrap();
+
+    assert_eq!(catalog.calls.load(Ordering::SeqCst), 2);
+}

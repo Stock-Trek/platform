@@ -1,4 +1,4 @@
-use super::claim_index::{INDEX_HEAD_DIGEST_KEY, INDEX_HEAD_KEY};
+use super::claim_index::{ClaimIndex, INDEX_HEAD_DIGEST_KEY, INDEX_HEAD_KEY};
 use super::claim_index_page::{ClaimIndexPage, IndexParent};
 use super::snapshot::SnapshotCommit;
 use crate::ArchiveKind;
@@ -25,6 +25,14 @@ impl MetadataTable {
     }
 
     fn with_properties(
+        batches: &[&[IcebergDataFile]],
+        properties: HashMap<String, String>,
+    ) -> Table {
+        Self::with_properties_on(FileIO::new_with_memory(), batches, properties)
+    }
+
+    fn with_properties_on(
+        file_io: FileIO,
         batches: &[&[IcebergDataFile]],
         properties: HashMap<String, String>,
     ) -> Table {
@@ -64,7 +72,7 @@ impl MetadataTable {
         }
 
         Table::builder()
-            .file_io(FileIO::new_with_memory())
+            .file_io(file_io)
             .metadata_location("s3://archive/table/metadata/v1.json")
             .metadata(builder.build().unwrap().metadata)
             .identifier(TableIdent::from_strs(["ns", "table"]).unwrap())
@@ -102,7 +110,7 @@ async fn source_claims_require_a_version_count_and_matching_digest() {
     );
     assert_eq!(properties.get("source-claim-count"), Some(&"1".to_string()));
     assert_eq!(
-        IcebergCatalog::source_files_from_metadata(&table)
+        IcebergCatalog::source_files_from_metadata(&table, false)
             .unwrap()
             .len(),
         0
@@ -278,4 +286,164 @@ async fn retention_becomes_finite_once_the_claim_index_is_authoritative() {
         missing.get("history.expire.max-snapshot-age-ms"),
         Some(&(30 * 24 * 60 * 60 * 1_000_i64).to_string())
     );
+}
+
+#[tokio::test]
+async fn snapshot_commits_serialize_claim_properties_in_the_snapshot_summary() {
+    let table = MetadataTable::with_batches(&[]);
+    let files = [IcebergDataFile::new("s3://archive/out/a.parquet", 1, 2)];
+    let sources = ["s3://archive/raw/source.parquet".to_string()];
+    let properties = IcebergCatalog::snapshot_properties(&files, Some(&sources)).unwrap();
+    let request =
+        SnapshotCommit::build_with_table_properties(&table, &files, properties, HashMap::new())
+            .await
+            .unwrap()
+            .to_request(&TableIdent::from_strs(["ns", "table"]).unwrap());
+    let summary = &request["updates"][0]["snapshot"]["summary"];
+
+    assert_eq!(
+        summary["archive-batch"],
+        IcebergCatalog::batch_fingerprint(&files)
+    );
+    assert_eq!(summary["source-file:s3://archive/raw/source.parquet"], "1");
+    assert_eq!(summary["source-claim-count"], "1");
+    assert_eq!(summary["archive-claim-version"], "1");
+}
+
+#[tokio::test]
+async fn consolidated_claim_indexes_load_and_look_up_block_entries() {
+    let table = MetadataTable::with_batches(&[]);
+    let file_io = table.file_io().clone();
+    let sources = (0..64)
+        .map(|index| format!("s3://archive/raw/{index}.parquet"))
+        .collect::<HashSet<_>>();
+    let outputs = (0..64)
+        .map(|index| format!("s3://archive/out/{index}.parquet"))
+        .collect::<HashSet<_>>();
+    let properties =
+        ClaimIndexPage::write_consolidated(&table, sources.clone(), outputs.clone(), 1)
+            .await
+            .unwrap();
+    let table = MetadataTable::with_properties_on(file_io, &[], properties);
+
+    let loaded = ClaimIndex::load(&table).await.unwrap();
+    assert_eq!(loaded.sources, sources);
+    assert_eq!(loaded.outputs, outputs);
+
+    let wanted_sources = vec!["s3://archive/raw/7.parquet".to_string()];
+    let wanted_outputs = vec!["s3://archive/out/42.parquet".to_string()];
+    let found = ClaimIndex::find_cached(&table, None, &wanted_sources, &wanted_outputs)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(found.sources, HashSet::from_iter(wanted_sources));
+    assert_eq!(found.outputs, HashSet::from_iter(wanted_outputs));
+}
+
+#[tokio::test]
+async fn claim_index_deltas_chain_to_the_consolidated_parent() {
+    let table = MetadataTable::with_batches(&[]);
+    let file_io = table.file_io().clone();
+    let first = ClaimIndexPage::write_consolidated(
+        &table,
+        HashSet::from(["s3://archive/raw/a.parquet".to_string()]),
+        HashSet::from(["s3://archive/out/a.parquet".to_string()]),
+        1,
+    )
+    .await
+    .unwrap();
+    let table = MetadataTable::with_properties_on(file_io.clone(), &[], first);
+    let registration = crate::iceberg::ArchiveRegistration::new(
+        [IcebergDataFile::new("s3://archive/out/b.parquet", 1, 1)],
+        Some(vec!["s3://archive/raw/b.parquet".to_string()]),
+    )
+    .unwrap();
+    let second = ClaimIndex::append(&table, &registration, None)
+        .await
+        .unwrap();
+    let table = MetadataTable::with_properties_on(file_io, &[], second);
+
+    let loaded = ClaimIndex::load(&table).await.unwrap();
+    assert_eq!(
+        loaded.sources,
+        HashSet::from([
+            "s3://archive/raw/a.parquet".to_string(),
+            "s3://archive/raw/b.parquet".to_string()
+        ])
+    );
+    let found = ClaimIndex::find_cached(
+        &table,
+        None,
+        &["s3://archive/raw/a.parquet".to_string()],
+        &[],
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    assert_eq!(
+        found.sources,
+        HashSet::from(["s3://archive/raw/a.parquet".to_string()])
+    );
+}
+
+#[tokio::test]
+async fn large_consolidated_claim_indexes_are_sharded_into_multiple_blocks() {
+    let table = MetadataTable::with_batches(&[]);
+    let file_io = table.file_io().clone();
+    let sources = (0..6_000)
+        .map(|index| format!("s3://archive/raw/{index:0>6}-{}.parquet", "x".repeat(180)))
+        .collect::<HashSet<_>>();
+    let properties = ClaimIndexPage::write_consolidated(
+        &table,
+        sources.clone(),
+        HashSet::from(["s3://archive/out/a.parquet".to_string()]),
+        1,
+    )
+    .await
+    .unwrap();
+    let root = IndexParent {
+        location: properties.get(INDEX_HEAD_KEY).unwrap().clone(),
+        digest: properties.get(INDEX_HEAD_DIGEST_KEY).unwrap().clone(),
+    };
+    let page = ClaimIndexPage::read(&table, &root, None).await.unwrap();
+    assert!(page.blocks.len() > 1);
+
+    let table = MetadataTable::with_properties_on(file_io, &[], properties);
+    let loaded = ClaimIndex::load(&table).await.unwrap();
+    assert_eq!(loaded.sources, sources);
+}
+
+#[tokio::test]
+async fn compacted_metadata_without_a_claim_block_is_a_hard_fault() {
+    let files = [IcebergDataFile::new("s3://archive/out/a.parquet", 1, 2)];
+    let table = MetadataTable::with_batches(&[&files]);
+
+    assert!(IcebergCatalog::source_files_from_metadata(&table, true).is_err());
+    assert!(
+        IcebergCatalog::source_files_from_metadata(&table, false)
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn claim_index_validation_rejects_unsupported_versions_and_partial_heads() {
+    let unsupported = MetadataTable::with_properties(
+        &[],
+        HashMap::from([
+            (INDEX_HEAD_KEY.to_string(), "s3://archive/head".to_string()),
+            (INDEX_HEAD_DIGEST_KEY.to_string(), "0".repeat(64)),
+            (
+                super::claim_index::INDEX_FORMAT_VERSION_KEY.to_string(),
+                "1".to_string(),
+            ),
+        ]),
+    );
+    assert!(IcebergCatalog::validate_claim_index(&unsupported).is_err());
+
+    let partial = MetadataTable::with_properties(
+        &[],
+        HashMap::from([(INDEX_HEAD_KEY.to_string(), "s3://archive/head".to_string())]),
+    );
+    assert!(IcebergCatalog::validate_claim_index(&partial).is_err());
 }

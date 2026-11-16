@@ -56,14 +56,14 @@ impl ArchiveBatchSource for S3ArchiveSource {
         let prefix = ObjectKey::new(list_prefix.clone());
         self.refresh_inventory(&self.client, &self.bucket, &prefix)
             .await?;
-        let objects = self
-            .inventory
-            .lock()
-            .await
-            .objects
-            .values()
-            .cloned()
-            .collect::<Vec<_>>();
+        let objects = {
+            let inventory = self.inventory.lock().await;
+            inventory
+                .candidate_keys
+                .iter()
+                .filter_map(|key| inventory.objects.get(key).cloned())
+                .collect::<Vec<_>>()
+        };
         let mut candidates: HashMap<ArchiveKind, Vec<Candidate>> = HashMap::new();
 
         for object in objects {
@@ -95,6 +95,7 @@ impl ArchiveBatchSource for S3ArchiveSource {
             });
         }
 
+        let mut completed_keys = Vec::new();
         let mut groups: HashMap<String, PendingGroup> = HashMap::new();
         for (kind, candidates) in candidates {
             let candidates = candidates
@@ -111,7 +112,11 @@ impl ArchiveBatchSource for S3ArchiveSource {
                 .claimed_sources(ArchiveIcebergTable::compacted(kind), &uris)
                 .await?;
             for (uri, candidate) in candidates {
-                if !live.contains(&uri) || claimed.contains(&uri) {
+                if live.contains(&uri) && claimed.contains(&uri) {
+                    completed_keys.push(candidate.key);
+                    continue;
+                }
+                if !live.contains(&uri) {
                     continue;
                 }
                 let group = groups
@@ -127,6 +132,18 @@ impl ArchiveBatchSource for S3ArchiveSource {
             }
         }
 
+        {
+            let mut inventory = self.inventory.lock().await;
+            for key in completed_keys {
+                inventory.candidate_keys.remove(&key);
+            }
+            let RawInventory {
+                objects,
+                candidate_keys,
+                ..
+            } = &mut *inventory;
+            candidate_keys.retain(|key| objects.contains_key(key));
+        }
         let cutoff = TimestampMilliseconds::now()
             .0
             .saturating_sub(self.settle_millis);

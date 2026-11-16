@@ -48,6 +48,14 @@ pub const MARKET_DATA_ARCHIVE_COMMIT_OUTCOMES_TOTAL: &str =
     "market_data_archive_commit_outcomes_total";
 pub const MARKET_DATA_ARCHIVE_RECOVERY_OBJECTS_TOTAL: &str =
     "market_data_archive_recovery_objects_total";
+pub const MARKET_DATA_ARCHIVE_RECOVERY_PAGE_FILES_TOTAL: &str =
+    "market_data_archive_recovery_page_files_total";
+pub const MARKET_DATA_ARCHIVE_RECOVERY_PAGE_BYTES_TOTAL: &str =
+    "market_data_archive_recovery_page_bytes_total";
+pub const MARKET_DATA_ARCHIVE_RECOVERY_REMAINING_OBJECTS: &str =
+    "market_data_archive_recovery_remaining_objects";
+pub const MARKET_DATA_COMPACTOR_INVENTORY_OBJECTS: &str = "market_data_compactor_inventory_objects";
+pub const MARKET_DATA_COMPACTOR_PENDING_OBJECTS: &str = "market_data_compactor_pending_objects";
 pub const MARKET_DATA_S3_RETRIES_TOTAL: &str = "market_data_s3_retries_total";
 pub const MARKET_DATA_AGGREGATOR_CHECKPOINT_AGE_SECONDS: &str =
     "market_data_aggregator_checkpoint_age_seconds";
@@ -322,6 +330,26 @@ impl DescriptionsMetrics {
         describe_counter!(
             MARKET_DATA_ARCHIVE_RECOVERY_OBJECTS_TOTAL,
             "Total number of archive recovery objects, labelled by table and outcome"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_RECOVERY_PAGE_FILES_TOTAL,
+            "Total number of files registered in archive recovery pages, labelled by table"
+        );
+        describe_counter!(
+            MARKET_DATA_ARCHIVE_RECOVERY_PAGE_BYTES_TOTAL,
+            "Total bytes of files registered in archive recovery pages, labelled by table"
+        );
+        describe_gauge!(
+            MARKET_DATA_ARCHIVE_RECOVERY_REMAINING_OBJECTS,
+            "Archive recovery candidates remaining after the last registered page, labelled by table"
+        );
+        describe_gauge!(
+            MARKET_DATA_COMPACTOR_INVENTORY_OBJECTS,
+            "Total number of raw archive objects currently held in the compactor inventory"
+        );
+        describe_gauge!(
+            MARKET_DATA_COMPACTOR_PENDING_OBJECTS,
+            "Number of raw archive objects awaiting registration or compaction"
         );
         describe_counter!(
             MARKET_DATA_S3_RETRIES_TOTAL,

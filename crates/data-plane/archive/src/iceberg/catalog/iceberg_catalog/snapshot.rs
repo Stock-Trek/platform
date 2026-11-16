@@ -125,9 +125,6 @@ impl SnapshotCommit {
             .map_err(|error| IcebergCatalog::catalog_error("write Iceberg manifest list", error))?;
 
         let mut summary = SnapshotSummaryCollector::default();
-        for (key, value) in &properties {
-            summary.set(key, value);
-        }
         for file in &data_files {
             summary.add_file(
                 file,
@@ -135,6 +132,8 @@ impl SnapshotCommit {
                 table.metadata().default_partition_spec().clone(),
             );
         }
+        let mut additional_properties = summary.build();
+        additional_properties.extend(properties);
         let index_authoritative = table.metadata().properties().contains_key(INDEX_HEAD_KEY)
             || table_properties.contains_key(INDEX_HEAD_KEY);
         let snapshot = Snapshot::builder()
@@ -144,7 +143,7 @@ impl SnapshotCommit {
             .with_sequence_number(sequence_number)
             .with_summary(Summary {
                 operation: iceberg::spec::Operation::Append,
-                additional_properties: summary.build(),
+                additional_properties,
             })
             .with_schema_id(table.metadata().current_schema_id())
             .with_timestamp_ms(chrono::Utc::now().timestamp_millis())

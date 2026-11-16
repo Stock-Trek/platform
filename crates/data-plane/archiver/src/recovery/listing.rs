@@ -3,9 +3,10 @@ use platform_archive::{
     ArchiveIcebergTable, ArchiveKind, ArchivePath, IcebergDataFile, ObjectKey, ParquetReader, S3,
     S3Object,
 };
-use platform_errors::PlatformResult;
+use platform_errors::{PlatformError, PlatformResult};
 use platform_lease::LeaseGuard;
 use platform_metrics::MarketDataMetrics;
+use std::collections::HashSet;
 use tracing::warn;
 
 impl S3ParquetSink {
@@ -17,47 +18,63 @@ impl S3ParquetSink {
             format!("{prefix}/")
         };
         for kind in [ArchiveKind::Events, ArchiveKind::Candles] {
-            let table = ArchiveIcebergTable::raw(kind);
-            let mut guard = self.acquire_recovery_guard(table).await?;
-            let recovery: PlatformResult<()> = async {
-                let prefix = ObjectKey::new(list_prefix.clone());
-                let mut continuation = None;
-                loop {
-                    guard.ensure_writable().await?;
-                    let page = S3::list_objects_page(
-                        &self.s3_client,
-                        &self.bucket,
-                        &prefix,
-                        continuation.as_deref(),
-                        None,
-                        i32::try_from(self.recovery_page_files.min(1_000)).unwrap_or(1_000),
-                    )
-                    .await?;
-                    self.recover_table(table, &list_prefix, &page.objects, &mut guard)
-                        .await?;
-                    match page.next_continuation_token {
-                        Some(next) => continuation = Some(next),
-                        None => break,
-                    }
-                }
-                Ok(())
-            }
-            .await;
-            let release = guard.release().await;
-            recovery?;
-            release?;
+            self.recover_table_pages(ArchiveIcebergTable::raw(kind), &list_prefix)
+                .await?;
         }
         Ok(())
     }
 
-    async fn recover_table(
+    async fn recover_table_pages(
+        &self,
+        table: ArchiveIcebergTable,
+        list_prefix: &str,
+    ) -> PlatformResult<()> {
+        let mut registered = self.catalog.registered_data_files(table).await?;
+        let prefix = ObjectKey::new(list_prefix.to_string());
+        let mut continuation = None;
+        loop {
+            let mut guard = self.acquire_recovery_guard(table).await?;
+            let page = async {
+                guard.ensure_writable().await?;
+                let page = S3::list_objects_page(
+                    &self.s3_client,
+                    &self.bucket,
+                    &prefix,
+                    continuation.as_deref(),
+                    None,
+                    i32::try_from(self.recovery_page_files.clamp(1, 1_000)).unwrap_or(1_000),
+                )
+                .await?;
+                self.recover_listing_page(
+                    table,
+                    list_prefix,
+                    &page.objects,
+                    &mut registered,
+                    &mut guard,
+                )
+                .await?;
+                Ok::<_, PlatformError>(page.next_continuation_token)
+            }
+            .await;
+            let release = guard.release().await;
+            let next = page?;
+            release?;
+            match next {
+                Some(next) => continuation = Some(next),
+                None => break,
+            }
+        }
+        Ok(())
+    }
+
+    async fn recover_listing_page(
         &self,
         table: ArchiveIcebergTable,
         list_prefix: &str,
         objects: &[S3Object],
+        registered: &mut HashSet<String>,
         guard: &mut LeaseGuard,
     ) -> PlatformResult<()> {
-        let registered = self.catalog.registered_data_files(table).await?;
         let mut already_registered = 0_u64;
         let mut duplicates = 0_u64;
         let mut unreadable = 0_u64;
@@ -115,6 +132,12 @@ impl S3ParquetSink {
         MarketDataMetrics::record_archive_recovery(table.name(), "duplicate", duplicates);
         MarketDataMetrics::record_archive_recovery(table.name(), "unreadable", unreadable);
         MarketDataMetrics::record_archive_recovery(table.name(), "candidate", pending.len() as u64);
-        self.register_pending_pages(table, pending, guard).await
+        let registered_here = pending
+            .iter()
+            .map(|file| file.file_path.clone())
+            .collect::<Vec<_>>();
+        self.register_pending_pages(table, pending, guard).await?;
+        registered.extend(registered_here);
+        Ok(())
     }
 }

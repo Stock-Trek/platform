@@ -1,5 +1,6 @@
 mod catalog_metadata;
 mod claim_index;
+mod claim_index_block;
 mod claim_index_lookup;
 mod claim_index_page;
 mod commit;
@@ -15,6 +16,8 @@ mod table_properties;
 
 #[cfg(test)]
 mod catalog_metadata_tests;
+#[cfg(test)]
+mod commit_authorizer_tests;
 #[cfg(test)]
 mod commit_crash_tests;
 #[cfg(test)]
