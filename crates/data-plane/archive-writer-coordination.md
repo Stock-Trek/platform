@@ -141,6 +141,7 @@ The archive writers fail startup when coordination configuration is missing or i
 | `COMPACTOR_LEASE_BUCKET` | required | KV bucket for compactor leases. Must already exist with a history limit of at least `1`. |
 | `COMPACTOR_LEASE_TTL_SECS` | required | Default lease TTL for compaction. Positive and long enough for a positive renewal interval. Per-kind override: `COMPACTOR_LEASE_TTL_SECS_{KIND}`. |
 | `COMPACTOR_MAX_WORK_SECS` | required | Soft upper bound on one compaction attempt. Positive and strictly less than the effective TTL. |
+| `COMPACTOR_MAINTENANCE_SAFETY_SECS` | `86400` | Minimum age before unreachable Iceberg manifests, claim-index pages, and claim-index blocks are deleted. Positive. |
 | `COMPACTOR_LEASE_INITIAL_TOKEN` | `1` | First fencing generation for a new compactor scope. Positive. Later generations always use `previous + 1`. |
 | `COMPACTOR_LEASE_CLOCK_SKEW_SECS` | `5` | Safety margin added to lease expiry to tolerate wall-clock skew. Non-negative and compatible with the TTL and renewal interval. |
 | `ARCHIVER_LEASE_BUCKET` | required | KV bucket for archiver recovery leases. Must already exist with a history limit of at least `1` and no key-age expiry. |

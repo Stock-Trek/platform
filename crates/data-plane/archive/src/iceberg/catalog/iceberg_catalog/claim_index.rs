@@ -1,3 +1,6 @@
+use crate::iceberg::catalog::iceberg_catalog::claim_index_batch::{
+    BatchMap, ClaimBatch, ClaimIndexBatchBlock,
+};
 use crate::iceberg::catalog::iceberg_catalog::claim_index_block::ClaimIndexBlock;
 use crate::iceberg::catalog::iceberg_catalog::claim_index_page::{ClaimIndexPage, IndexParent};
 use crate::iceberg::{ArchiveRegistration, CommitContext};
@@ -18,6 +21,7 @@ pub(super) struct ClaimIndex;
 pub(super) struct ClaimState {
     pub(super) sources: HashSet<String>,
     pub(super) outputs: HashSet<String>,
+    pub(super) batches: BatchMap,
 }
 
 impl ClaimState {
@@ -28,7 +32,43 @@ impl ClaimState {
         Self {
             sources: sources.into_iter().collect(),
             outputs: outputs.into_iter().collect(),
+            batches: BatchMap::new(),
         }
+    }
+
+    pub(super) fn with_batches(
+        sources: impl IntoIterator<Item = String>,
+        outputs: impl IntoIterator<Item = String>,
+        batches: BatchMap,
+    ) -> Self {
+        Self {
+            sources: sources.into_iter().collect(),
+            outputs: outputs.into_iter().collect(),
+            batches,
+        }
+    }
+
+    pub(super) fn retained(&self, live_outputs: &HashSet<String>) -> Self {
+        if self.batches.is_empty() {
+            return Self::with_batches(
+                self.sources.iter().cloned(),
+                self.outputs.iter().cloned(),
+                BatchMap::new(),
+            );
+        }
+        let batches = self
+            .batches
+            .iter()
+            .filter(|(_, batch)| batch.is_live(live_outputs))
+            .map(|(digest, batch)| (digest.clone(), batch.clone()))
+            .collect::<BatchMap>();
+        let mut sources = HashSet::new();
+        let mut outputs = HashSet::new();
+        for batch in batches.values() {
+            sources.extend(batch.sources.iter().cloned());
+            outputs.extend(batch.outputs.iter().cloned());
+        }
+        Self::with_batches(sources, outputs, batches)
     }
 }
 
@@ -62,6 +102,7 @@ impl ClaimIndex {
         }
         let mut sources = HashSet::new();
         let mut outputs = HashSet::new();
+        let mut batches = BatchMap::new();
         let mut visited = HashSet::new();
         let mut next = Some(IndexParent { location, digest });
         while let Some(parent) = next {
@@ -71,14 +112,27 @@ impl ClaimIndex {
             let page = ClaimIndexPage::read(table, &parent, cache).await?;
             sources.extend(page.sources);
             outputs.extend(page.outputs);
+            for batch in page.batches {
+                sources.extend(batch.sources.iter().cloned());
+                outputs.extend(batch.outputs.iter().cloned());
+                batches.insert(batch.digest.clone(), batch);
+            }
             for reference in &page.blocks {
                 let block = ClaimIndexBlock::read(table, reference, cache).await?;
                 sources.extend(block.sources_for_load());
                 outputs.extend(block.outputs_for_load());
             }
+            for reference in &page.batch_blocks {
+                let block = ClaimIndexBatchBlock::read(table, reference, cache).await?;
+                for batch in block.batches_for_load() {
+                    sources.extend(batch.sources.iter().cloned());
+                    outputs.extend(batch.outputs.iter().cloned());
+                    batches.insert(batch.digest.clone(), batch);
+                }
+            }
             next = page.parent;
         }
-        Ok(ClaimState::new(sources, outputs))
+        Ok(ClaimState::with_batches(sources, outputs, batches))
     }
 
     pub(super) async fn append(
@@ -114,10 +168,17 @@ impl ClaimIndex {
             .collect::<HashSet<_>>();
         if parent.is_none() {
             let baseline = baseline.unwrap_or_else(|| ClaimState::new(Vec::new(), Vec::new()));
-            return ClaimIndexPage::write_consolidated(
+            let mut batches = baseline.batches;
+            if batches.is_empty() && (!baseline.sources.is_empty() || !baseline.outputs.is_empty())
+            {
+                let batch = ClaimBatch::from_claims(baseline.sources, baseline.outputs);
+                batches.insert(batch.digest.clone(), batch);
+            }
+            let batch = ClaimBatch::from_claims(new_sources, new_outputs);
+            batches.insert(batch.digest.clone(), batch);
+            return ClaimIndexPage::write_consolidated_batches(
                 table,
-                baseline.sources.into_iter().chain(new_sources).collect(),
-                baseline.outputs.into_iter().chain(new_outputs).collect(),
+                batches.into_values().collect(),
                 1,
             )
             .await;
@@ -139,10 +200,12 @@ impl ClaimIndex {
     pub(super) async fn consolidate(
         table: &Table,
         context: &CommitContext,
+        live_outputs: &HashSet<String>,
     ) -> PlatformResult<HashMap<String, String>> {
         context.authorize().await?;
-        let state = Self::load(table).await?;
-        ClaimIndexPage::write_consolidated(table, state.sources, state.outputs, 1).await
+        let state = Self::load(table).await?.retained(live_outputs);
+        ClaimIndexPage::write_consolidated_batches(table, state.batches.into_values().collect(), 1)
+            .await
     }
 
     pub(super) fn error(reason: impl std::fmt::Display) -> PlatformError {
@@ -157,6 +220,7 @@ impl ClaimIndex {
 pub(super) struct ClaimIndexCache {
     pages: Mutex<HashMap<String, Arc<ClaimIndexPage>>>,
     blocks: Mutex<HashMap<String, Arc<ClaimIndexBlock>>>,
+    batch_blocks: Mutex<HashMap<String, Arc<ClaimIndexBatchBlock>>>,
 }
 
 impl ClaimIndexCache {
@@ -176,6 +240,14 @@ impl ClaimIndexCache {
             .cloned()
     }
 
+    pub(super) fn get_batch_block(&self, digest: &str) -> Option<Arc<ClaimIndexBatchBlock>> {
+        self.batch_blocks
+            .lock()
+            .expect("claim index cache lock poisoned")
+            .get(digest)
+            .cloned()
+    }
+
     pub(super) fn insert_page(&self, digest: String, page: ClaimIndexPage) {
         let mut pages = self.pages.lock().expect("claim index cache lock poisoned");
         Self::evict_if_full(&mut pages);
@@ -184,6 +256,15 @@ impl ClaimIndexCache {
 
     pub(super) fn insert_block(&self, digest: String, block: ClaimIndexBlock) {
         let mut blocks = self.blocks.lock().expect("claim index cache lock poisoned");
+        Self::evict_if_full(&mut blocks);
+        blocks.insert(digest, Arc::new(block));
+    }
+
+    pub(super) fn insert_batch_block(&self, digest: String, block: ClaimIndexBatchBlock) {
+        let mut blocks = self
+            .batch_blocks
+            .lock()
+            .expect("claim index cache lock poisoned");
         Self::evict_if_full(&mut blocks);
         blocks.insert(digest, Arc::new(block));
     }

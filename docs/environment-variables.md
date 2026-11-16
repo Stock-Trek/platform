@@ -272,6 +272,7 @@ No process-specific optional variables.
 | --- | --- |
 | `COMPACTOR_LEASE_CLOCK_SKEW_SECS` | Clock-skew margin added to the compaction lease expiry, in seconds. Must be shorter than every lease TTL and leave room for each renewal interval. Defaults to `5`, capped at one quarter of the shortest TTL. |
 | `COMPACTOR_LEASE_INITIAL_TOKEN` | Initial compactor fencing token. Must be positive. Defaults to `1`. |
+| `COMPACTOR_MAINTENANCE_SAFETY_SECS` | Minimum age before unreachable archive metadata is deleted, in seconds. Must be positive. Defaults to `86400`. |
 | `COMPACTOR_LEASE_TTL_SECS_CANDLES` | Candle compaction lease TTL override, in seconds. |
 | `COMPACTOR_LEASE_TTL_SECS_EVENTS` | Event compaction lease TTL override, in seconds. |
 

@@ -1,8 +1,10 @@
 use crate::iceberg::catalog::IcebergDataFile;
 use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, CommitContext, RegisterOutcome};
 use async_trait::async_trait;
+use aws_sdk_s3::Client as S3Client;
 use platform_errors::{PlatformError, PlatformResult};
 use std::collections::HashSet;
+use std::time::Duration;
 
 #[async_trait]
 pub trait ArchiveCatalog: Send + Sync {
@@ -76,6 +78,15 @@ pub trait ArchiveCatalog: Send + Sync {
         _context: &CommitContext,
     ) -> PlatformResult<()> {
         Ok(())
+    }
+
+    async fn sweep_metadata(
+        &self,
+        _table: ArchiveIcebergTable,
+        _client: &S3Client,
+        _safety_window: Duration,
+    ) -> PlatformResult<usize> {
+        Ok(0)
     }
 
     async fn compacted_snapshot(

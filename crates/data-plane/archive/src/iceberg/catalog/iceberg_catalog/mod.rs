@@ -1,10 +1,13 @@
 mod catalog_metadata;
 mod claim_index;
+mod claim_index_batch;
 mod claim_index_block;
+mod claim_index_cleanup;
 mod claim_index_lookup;
 mod claim_index_page;
 mod commit;
 mod commit_algorithm;
+mod metadata_maintenance;
 mod rest_catalog;
 mod rest_connection;
 mod retention;

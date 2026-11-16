@@ -17,6 +17,7 @@ const COMPACTOR_LEASE_TTL_SECS: &str = "COMPACTOR_LEASE_TTL_SECS";
 const COMPACTOR_LEASE_TTL_SECS_EVENTS: &str = "COMPACTOR_LEASE_TTL_SECS_EVENTS";
 const COMPACTOR_LEASE_TTL_SECS_CANDLES: &str = "COMPACTOR_LEASE_TTL_SECS_CANDLES";
 const COMPACTOR_MAX_WORK_SECS: &str = "COMPACTOR_MAX_WORK_SECS";
+const COMPACTOR_MAINTENANCE_SAFETY_SECS: &str = "COMPACTOR_MAINTENANCE_SAFETY_SECS";
 const COMPACTOR_LEASE_INITIAL_TOKEN: &str = "COMPACTOR_LEASE_INITIAL_TOKEN";
 const COMPACTOR_LEASE_CLOCK_SKEW_SECS: &str = "COMPACTOR_LEASE_CLOCK_SKEW_SECS";
 
@@ -35,6 +36,7 @@ pub struct CompactorConfig {
     pub lease_ttl_events: Duration,
     pub lease_ttl_candles: Duration,
     pub max_work: Duration,
+    pub maintenance_safety: Duration,
     pub lease_initial_token: u64,
     pub lease_clock_skew: Duration,
     pub iceberg: IcebergConfig,
@@ -64,6 +66,11 @@ impl CompactorConfig {
             Self::optional_duration_secs(vars, COMPACTOR_LEASE_TTL_SECS_CANDLES, lease_ttl)?;
         let lease_clock_skew = Self::clock_skew(vars, lease_ttl_events, lease_ttl_candles)?;
         let max_work = Config::required_positive_duration_secs(vars, COMPACTOR_MAX_WORK_SECS)?;
+        let maintenance_safety = Self::optional_duration_secs(
+            vars,
+            COMPACTOR_MAINTENANCE_SAFETY_SECS,
+            Duration::from_secs(24 * 60 * 60),
+        )?;
         for (kind, ttl) in [
             (platform_archive::ArchiveKind::Events, lease_ttl_events),
             (platform_archive::ArchiveKind::Candles, lease_ttl_candles),
@@ -109,6 +116,7 @@ impl CompactorConfig {
             lease_ttl_events,
             lease_ttl_candles,
             max_work,
+            maintenance_safety,
             lease_initial_token,
             lease_clock_skew,
             iceberg,
