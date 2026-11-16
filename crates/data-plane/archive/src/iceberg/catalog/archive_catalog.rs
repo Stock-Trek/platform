@@ -39,6 +39,14 @@ pub trait ArchiveCatalog: Send + Sync {
         table: ArchiveIcebergTable,
     ) -> PlatformResult<HashSet<String>>;
 
+    async fn batch_registered(
+        &self,
+        _table: ArchiveIcebergTable,
+        _files: &[IcebergDataFile],
+    ) -> PlatformResult<bool> {
+        Ok(false)
+    }
+
     async fn claimed_sources(
         &self,
         table: ArchiveIcebergTable,

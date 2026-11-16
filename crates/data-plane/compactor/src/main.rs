@@ -1,6 +1,7 @@
 mod compactor;
 mod compactor_runner;
 mod config;
+mod object_lister;
 mod partition_output;
 mod source;
 mod source_inventory;
@@ -11,6 +12,9 @@ mod config_tests;
 
 #[cfg(test)]
 mod compactor_runner_tests;
+
+#[cfg(test)]
+mod source_tests;
 
 use crate::{
     compactor::Compactor, compactor_runner::CompactorRunner, config::CompactorConfig,

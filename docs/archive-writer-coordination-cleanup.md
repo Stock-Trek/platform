@@ -16,12 +16,12 @@ injection tests that cannot be covered by in-memory fakes.
 | --- | --- | --- |
 | P0-1 source claims | Properties are serialized in the snapshot summary, reloaded from metadata, and validated for version, count, and digest. Fake commit tests cover ambiguous responses and damaged claim metadata. | No real REST-catalog round-trip that applies the serialized request and reloads the claim set. |
 | P0-2 lease generations | Release writes a tombstone in both stores. Acquisition advances the token by one. In-memory tests cover release, reacquire, stale writes, and checkpoint handover. | The NATS suite is opt-in and not part of a required gate. |
-| P1-1 claim index | Batch-keyed format v4, point lookups by source, output, and archive batch, digest cache, atomic head update, lease-gated scheduled consolidation, live-batch retirement, reachable-metadata sweep, and a configurable safety window. | The sweep and expired-snapshot retention still need S3-backed tests. |
+| P1-1 claim index | Batch-keyed format v4, point lookups by source, output, and archive batch, digest cache, atomic head update, lease-gated scheduled consolidation, live-batch retirement, reachable-metadata sweep, and a configurable safety window. Indexed commits also install finite retention properties in the same conditional update. | The sweep and expired-snapshot retention still need S3-backed tests. |
 | P1-2 paged recovery | Paginated listing, bounded registration pages, deadline checks, page metrics, conflict remainder handling, and restart skipping are implemented. | No S3-backed pagination, deadline, restart, or cross-page conflict test. |
-| P1-3 indexed polling | Inventory is incremental with a periodic full reconcile. Listing, index-read, cache, poll-duration, fallback-scan, and backlog metrics are emitted. | No inventory-gap test for an object omitted by an incremental listing. |
+| P1-3 indexed polling | Inventory is incremental with a periodic full reconcile. Listing, index-read, cache, poll-duration, fallback-scan, and backlog metrics are emitted. The inventory-gap path is covered by a deterministic listing fake. | None. |
 | P1-4 lease-gated retries | Every file commit and property update authorizes before submit and after backoff. Consolidation requires an authorized commit context. | Property-contention and successor-during-backoff tests still rely on fakes. |
-| P1-5 operational hardening | Clock-skew margins, conditional property updates, bucket history and size limits, startup validation, and readiness-after-validation are implemented. The compactor removes unreachable metadata behind a safety window. | No real end-to-end suite and no ambiguous-commit orphan-cleanup test. |
-| P2 metadata hygiene | Test-only lease helpers are gated, the archive-batch key is queried through the batch index, and consolidation has a production caller. | None. |
+| P1-5 operational hardening | Clock-skew margins, conditional property updates, bucket history and size limits, startup validation, and readiness-after-validation are implemented. The compactor removes unreachable metadata behind a safety window, and an unreferenced index page is proven to survive until that window elapses. | No real end-to-end suite. |
+| P2 metadata hygiene | Test-only lease helpers are gated, the archive-batch key is queried through the batch index during recovery, consolidation has a production caller, and the batch-index lookup helpers are part of the production API. | None. |
 
 ## Remaining evidence
 
@@ -62,18 +62,17 @@ deadline and prove already-live paths are skipped and the remainder completes.
 
 ### P1-3: inventory gap
 
-Add a test that creates an object, omits it from an incremental listing, forces
-the periodic reconciliation, and proves the object is neither skipped nor
-compacted twice. The metrics needed to alert on candidate backlog growth are
-already emitted.
+Covered by `an_inventory_gap_is_reconciled_without_skipping_or_duplicating_a_source`:
+the fake listing omits a new object from incremental polls, the periodic
+reconciliation discovers it, and the completed source is not compacted again.
 
 ### P1-5: end-to-end and ambiguous orphan cleanup
 
 Add a suite using a real REST catalog, S3-compatible storage, and NATS that
 covers archiver flush, compactor claim, reload, ambiguous response, graceful
-handover, and recovery. Add an ambiguous-commit cleanup test that proves
-unreferenced manifests and index files are left alone until the safety window
-elapses.
+handover, and recovery. The in-memory cleanup path is covered by
+`an_unreferenced_index_page_waits_for_the_safety_window`; real manifest cleanup
+still needs the end-to-end environment.
 
 ## Suggested order
 

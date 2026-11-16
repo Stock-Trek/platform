@@ -136,6 +136,12 @@ impl SnapshotCommit {
         additional_properties.extend(properties);
         let index_authoritative = table.metadata().properties().contains_key(INDEX_HEAD_KEY)
             || table_properties.contains_key(INDEX_HEAD_KEY);
+        let mut table_properties = table_properties;
+        for (key, value) in ClaimRetention::properties(index_authoritative) {
+            if table.metadata().properties().get(&key) != Some(&value) {
+                table_properties.insert(key, value);
+            }
+        }
         let snapshot = Snapshot::builder()
             .with_manifest_list(manifest_list_path)
             .with_snapshot_id(snapshot_id)
