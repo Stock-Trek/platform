@@ -11,7 +11,9 @@ mod batch;
 mod content_hash;
 mod iceberg;
 mod layout;
+mod object_store;
 mod parquet_reader;
+mod parquet_row_counter;
 mod quantization;
 mod quantized_time;
 mod routing_key;
@@ -61,7 +63,9 @@ pub use iceberg::{
     ICEBERG_NAMESPACE, IcebergCatalog, IcebergConfig, IcebergDataFile, RegisterOutcome,
 };
 pub use layout::{ArchiveBucket, ArchiveHour, ArchivePath};
+pub use object_store::{ObjectStore, S3ObjectStore};
 pub use parquet_reader::ParquetReader;
+pub use parquet_row_counter::{ParquetRowCounter, S3ParquetRowCounter};
 pub use quantization::Quantization;
 pub use quantized_time::QuantizedTime;
 pub use routing_key::{ROUTING_BUCKET_COUNT, RoutingBucket, RoutingKey};

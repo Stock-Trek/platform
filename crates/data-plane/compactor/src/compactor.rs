@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use aws_sdk_s3::Client as S3Client;
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveParquet, ArchiveRegistration, CommitContext,
-    IcebergDataFile, RegisterOutcome, S3, SourceBatch,
+    IcebergDataFile, ObjectStore, RegisterOutcome, S3, S3ObjectStore, SourceBatch,
 };
 use platform_errors::{PlatformError, PlatformResult};
 use platform_lease::{Lease, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
@@ -53,6 +53,7 @@ pub trait BatchCompactor: Send + Sync {
 /// Raw objects are intentionally left in place.
 pub struct Compactor {
     client: S3Client,
+    objects: Arc<dyn ObjectStore>,
     catalog: Arc<dyn ArchiveCatalog>,
     bucket: String,
     output_prefix: String,
@@ -72,8 +73,10 @@ impl Compactor {
         catalog: Arc<dyn ArchiveCatalog>,
         leases: Arc<dyn LeaseStore>,
     ) -> PlatformResult<Self> {
+        let client = S3::s3_client().await;
         Ok(Self {
-            client: S3::s3_client().await,
+            objects: Arc::new(S3ObjectStore::new(client.clone())),
+            client,
             catalog,
             bucket: config.s3_bucket.clone(),
             output_prefix: config.output_prefix.trim_matches('/').to_string(),
@@ -320,7 +323,7 @@ impl Compactor {
             let table = ArchiveIcebergTable::compacted(kind);
             let deleted = self
                 .catalog
-                .sweep_metadata(table, &self.client, self.maintenance_safety)
+                .sweep_metadata(table, self.objects.as_ref(), self.maintenance_safety)
                 .await?;
             if deleted > 0 {
                 info!(

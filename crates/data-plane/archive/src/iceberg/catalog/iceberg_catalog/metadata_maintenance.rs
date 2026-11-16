@@ -1,7 +1,6 @@
 use super::claim_index::ClaimIndex;
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
-use crate::{Bucket, ObjectKey, S3, S3Object};
-use aws_sdk_s3::Client as S3Client;
+use crate::{Bucket, ObjectKey, ObjectStore, S3, S3Object};
 use iceberg::table::Table;
 use platform_errors::PlatformResult;
 use platform_types::TimestampMilliseconds;
@@ -12,7 +11,7 @@ impl IcebergCatalog {
     pub async fn sweep_metadata(
         &self,
         table: &Table,
-        client: &S3Client,
+        client: &dyn ObjectStore,
         safety_window: Duration,
     ) -> PlatformResult<usize> {
         let directory = table
@@ -20,7 +19,7 @@ impl IcebergCatalog {
             .metadata_location()
             .map_err(|error| Self::catalog_error("read Iceberg metadata directory", error))?;
         let (bucket, prefix) = Self::metadata_listing_prefix(&directory)?;
-        let objects = S3::list_objects(client, &bucket, &prefix).await?;
+        let objects = client.list_all(&bucket, &prefix).await?;
         let reachable = Self::reachable_metadata(table).await?;
         let safety_millis = i64::try_from(safety_window.as_millis()).unwrap_or(i64::MAX);
         let cutoff =
@@ -29,7 +28,7 @@ impl IcebergCatalog {
             Self::metadata_maintenance_candidates(&bucket, &objects, &reachable, cutoff);
         let mut deleted = 0;
         for object in candidates {
-            S3::delete_object(client, &bucket, &object.key).await?;
+            client.delete(&bucket, &object.key).await?;
             deleted += 1;
         }
         Ok(deleted)

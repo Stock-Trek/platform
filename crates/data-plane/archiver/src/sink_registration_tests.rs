@@ -4,7 +4,7 @@ use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::config::{Credentials, Region};
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, Bucket, CommitContext,
-    ConflictDetails, IcebergDataFile, RegisterOutcome,
+    ConflictDetails, IcebergDataFile, RegisterOutcome, S3ObjectStore, S3ParquetRowCounter,
 };
 use platform_errors::PlatformResult;
 use platform_lease::InMemoryLeaseStore;
@@ -84,8 +84,11 @@ impl Fixture {
             .region(Region::new("us-east-1"))
             .credentials_provider(Credentials::new("test", "test", None, None, "flush-test"))
             .build();
+        let client = S3Client::from_conf(config);
         S3ParquetSink {
-            s3_client: S3Client::from_conf(config),
+            objects: Arc::new(S3ObjectStore::new(client.clone())),
+            row_counter: Arc::new(S3ParquetRowCounter::new(client.clone())),
+            s3_client: client,
             catalog,
             leases: Arc::new(InMemoryLeaseStore::new()),
             bucket: Bucket::new("archive".to_string()),

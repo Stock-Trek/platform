@@ -4,7 +4,7 @@ use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::config::{Credentials, Region};
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveRegistration, CommitContext,
-    ConflictDetails, IcebergDataFile, RegisterOutcome, SourceBatch,
+    ConflictDetails, IcebergDataFile, RegisterOutcome, S3ObjectStore, SourceBatch,
 };
 use platform_errors::PlatformResult;
 use platform_lease::{InMemoryLeaseStore, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
@@ -64,8 +64,10 @@ impl Compactor {
                 "coordination-test",
             ))
             .build();
+        let client = S3Client::from_conf(config);
         Self {
-            client: S3Client::from_conf(config),
+            objects: Arc::new(S3ObjectStore::new(client.clone())),
+            client,
             catalog,
             bucket: "archive".to_string(),
             output_prefix: "compacted".to_string(),
