@@ -278,6 +278,7 @@ fn clock_skew_extends_the_expiry_margin() {
     assert!(!lease.is_expired(now));
     assert!(!lease.is_expired(TimestampMilliseconds(now.0 + 900)));
     assert!(lease.is_expired(TimestampMilliseconds(now.0 + 901)));
+    assert_eq!(lease.remaining(now), Duration::from_millis(900));
 }
 
 #[tokio::test]

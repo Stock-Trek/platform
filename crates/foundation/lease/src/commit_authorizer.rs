@@ -10,6 +10,10 @@ use tracing::warn;
 #[async_trait]
 pub trait CommitAuthorizer: Send + Sync {
     async fn authorize(&self) -> PlatformResult<()>;
+
+    fn remaining(&self) -> Option<Duration> {
+        None
+    }
 }
 
 pub struct LeaseCommitAuthorizer {
@@ -52,6 +56,10 @@ impl LeaseCommitAuthorizer {
 
 #[async_trait]
 impl CommitAuthorizer for LeaseCommitAuthorizer {
+    fn remaining(&self) -> Option<Duration> {
+        Some(self.deadline.saturating_duration_since(Instant::now()))
+    }
+
     async fn authorize(&self) -> PlatformResult<()> {
         if self.lost.load(Ordering::SeqCst) || Instant::now() >= self.deadline {
             let lease = self.lease.lock().expect("lease authorizer lock poisoned");

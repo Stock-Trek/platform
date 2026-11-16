@@ -179,7 +179,13 @@ where
                 }
                 Evaluation::Apply => {
                     if attempt < self.retry.max_attempts {
-                        tokio::time::sleep(backoff.next_delay()).await;
+                        let delay = backoff.next_delay();
+                        let delay = context
+                            .remaining()
+                            .map_or(delay, |remaining| delay.min(remaining));
+                        if !delay.is_zero() {
+                            tokio::time::sleep(delay).await;
+                        }
                         context.authorize().await?;
                     }
                 }

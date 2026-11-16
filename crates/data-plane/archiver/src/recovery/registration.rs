@@ -16,20 +16,45 @@ impl S3ParquetSink {
         pending: Vec<IcebergDataFile>,
         guard: &mut LeaseGuard,
     ) -> PlatformResult<()> {
+        let mut remaining = pending.len();
         let mut page = Vec::new();
         let mut page_bytes = 0_usize;
         for file in pending {
             let file_bytes = usize::try_from(file.file_size_in_bytes).unwrap_or(usize::MAX);
-            if !page.is_empty() && page_bytes.saturating_add(file_bytes) > self.recovery_page_bytes
-            {
-                self.register_pending(table, std::mem::take(&mut page), guard)
-                    .await?;
+            let exceeds_files =
+                !page.is_empty() && page.len().saturating_add(1) > self.recovery_page_files;
+            let exceeds_bytes = !page.is_empty()
+                && page_bytes.saturating_add(file_bytes) > self.recovery_page_bytes;
+            if exceeds_files || exceeds_bytes {
+                let files = page.len() as u64;
+                let bytes = page_bytes as u64;
+                let batch = std::mem::take(&mut page);
+                remaining = remaining.saturating_sub(batch.len());
+                MarketDataMetrics::record_archive_recovery_page(
+                    table.name(),
+                    files,
+                    bytes,
+                    remaining as u64,
+                );
+                self.register_pending(table, batch, guard).await?;
                 page_bytes = 0;
             }
             page_bytes = page_bytes.saturating_add(file_bytes);
             page.push(file);
         }
-        self.register_pending(table, page, guard).await
+        if !page.is_empty() {
+            let files = page.len() as u64;
+            let bytes = page_bytes as u64;
+            remaining = remaining.saturating_sub(page.len());
+            MarketDataMetrics::record_archive_recovery_page(
+                table.name(),
+                files,
+                bytes,
+                remaining as u64,
+            );
+            self.register_pending(table, page, guard).await?;
+        }
+        Ok(())
     }
 
     pub(super) async fn register_pending(
@@ -93,10 +118,9 @@ impl S3ParquetSink {
                         source_batch_digest = %digest,
                         claimed_sources = ?conflict.claimed_sources,
                         live_outputs = ?conflict.live_outputs,
-                        "archive recovery conflict; reloading live files"
+                        "archive recovery conflict; registering only the remainder"
                     );
-                    let live = self.catalog.registered_data_files(table).await?;
-                    pending.retain(|file| !live.contains(&file.file_path));
+                    pending.retain(|file| !conflict.live_outputs.contains(&file.file_path));
                     MarketDataMetrics::record_archive_recovery(
                         table.name(),
                         "deferred_by_conflict",

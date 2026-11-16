@@ -13,7 +13,10 @@ const CLAIM_VERSION_KEY: &str = "archive-claim-version";
 const CLAIM_VERSION: &str = "1";
 
 impl IcebergCatalog {
-    pub fn source_files_from_metadata(table: &Table) -> PlatformResult<HashSet<String>> {
+    pub fn source_files_from_metadata(
+        table: &Table,
+        require_claims: bool,
+    ) -> PlatformResult<HashSet<String>> {
         let mut sources = HashSet::new();
         for snapshot in table.metadata().snapshots() {
             let properties = &snapshot.summary().additional_properties;
@@ -23,6 +26,9 @@ impl IcebergCatalog {
                 || properties.contains_key(SOURCE_CLAIM_COUNT_KEY)
                 || !source_files.is_empty();
             if !has_claim {
+                if require_claims {
+                    return Err(Self::claim_error("is missing a claim block"));
+                }
                 continue;
             }
             Self::validate_claim(properties, &source_files)?;

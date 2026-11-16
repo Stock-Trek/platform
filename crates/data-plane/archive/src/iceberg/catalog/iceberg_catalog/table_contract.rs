@@ -1,5 +1,8 @@
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
-use crate::iceberg::catalog::iceberg_catalog::claim_index::ClaimIndex;
+use crate::iceberg::catalog::iceberg_catalog::claim_index::{
+    ClaimIndex, INDEX_FORMAT_VERSION_KEY, INDEX_HEAD_DIGEST_KEY, INDEX_HEAD_KEY,
+};
+use crate::iceberg::catalog::iceberg_catalog::claim_index_page::ClaimIndexPage;
 use crate::iceberg::{ArchiveIcebergTable, CommitContext};
 use iceberg::{
     spec::{FormatVersion, MAIN_BRANCH},
@@ -44,6 +47,36 @@ impl IcebergCatalog {
             return Err(PlatformError::config_invalid(
                 "archive Iceberg table",
                 "schema does not match the archive writer contract",
+            ));
+        }
+        Self::validate_claim_index(table)?;
+        Ok(())
+    }
+
+    pub(super) fn validate_claim_index(table: &Table) -> PlatformResult<()> {
+        let properties = table.metadata().properties();
+        let head = properties.get(INDEX_HEAD_KEY);
+        let digest = properties.get(INDEX_HEAD_DIGEST_KEY);
+        if head.is_none() && digest.is_none() && !properties.contains_key(INDEX_FORMAT_VERSION_KEY)
+        {
+            return Ok(());
+        }
+        if head.is_none() || digest.is_none() {
+            return Err(PlatformError::config_invalid(
+                "archive Iceberg table",
+                "claim index head is only partially configured",
+            ));
+        }
+        let version = properties.get(INDEX_FORMAT_VERSION_KEY).ok_or_else(|| {
+            PlatformError::config_invalid(
+                "archive Iceberg table",
+                "claim index head is missing its format version",
+            )
+        })?;
+        if version != &ClaimIndexPage::format_version().to_string() {
+            return Err(PlatformError::config_invalid(
+                "archive Iceberg table",
+                format!("claim index uses unsupported format version {version}"),
             ));
         }
         Ok(())

@@ -1,5 +1,6 @@
+use super::claim_index::ClaimIndexCache;
+use super::claim_index_block::{ClaimIndexBlock, IndexBlockRef};
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
-use crate::iceberg::catalog::iceberg_catalog::claim_index::ClaimIndexCache;
 use bytes::Bytes;
 use iceberg::table::Table;
 use platform_errors::{PlatformError, PlatformResult};
@@ -7,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 
-const INDEX_FORMAT_VERSION: u32 = 1;
+pub(super) const INDEX_FORMAT_VERSION: u32 = 2;
 const INDEX_PAGE_MAX_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -22,6 +23,7 @@ pub(super) struct ClaimIndexPage {
     pub(super) parent: Option<IndexParent>,
     pub(super) sources: Vec<String>,
     pub(super) outputs: Vec<String>,
+    pub(super) blocks: Vec<IndexBlockRef>,
     pub(super) archive_batch: String,
 }
 
@@ -31,24 +33,26 @@ impl ClaimIndexPage {
         sources: HashSet<String>,
         outputs: HashSet<String>,
     ) -> Self {
-        let mut sources = sources.into_iter().collect::<Vec<_>>();
-        sources.sort();
-        let mut outputs = outputs.into_iter().collect::<Vec<_>>();
-        outputs.sort();
-        let archive_batch = Self::paths_fingerprint(
-            outputs
-                .iter()
-                .map(String::as_str)
-                .collect::<Vec<_>>()
-                .as_slice(),
-        );
-        Self {
-            format_version: INDEX_FORMAT_VERSION,
+        Self::new(
             parent,
-            sources,
-            outputs,
-            archive_batch,
-        }
+            Self::sorted_set(sources),
+            Self::sorted_set(outputs),
+            Vec::new(),
+        )
+    }
+
+    pub(super) async fn write_consolidated(
+        table: &Table,
+        sources: HashSet<String>,
+        outputs: HashSet<String>,
+        depth: u64,
+    ) -> PlatformResult<HashMap<String, String>> {
+        let blocks =
+            ClaimIndexBlock::write_all(table, Self::sorted_set(sources), Self::sorted_set(outputs))
+                .await?;
+        Self::new(None, Vec::new(), Vec::new(), blocks)
+            .write(table, depth)
+            .await
     }
 
     pub(super) async fn read(
@@ -56,7 +60,7 @@ impl ClaimIndexPage {
         parent: &IndexParent,
         cache: Option<&ClaimIndexCache>,
     ) -> PlatformResult<Self> {
-        if let Some(page) = cache.and_then(|cache| cache.get(&parent.digest)) {
+        if let Some(page) = cache.and_then(|cache| cache.get_page(&parent.digest)) {
             return Ok((*page).clone());
         }
         let bytes = table
@@ -74,22 +78,9 @@ impl ClaimIndexPage {
         }
         let page: Self = serde_json::from_slice(&bytes)
             .map_err(|error| Self::error(format!("could not decode index page: {error}")))?;
-        if page.format_version != INDEX_FORMAT_VERSION {
-            return Err(Self::error("index page uses an unsupported format version"));
-        }
-        if page.archive_batch
-            != Self::paths_fingerprint(
-                page.outputs
-                    .iter()
-                    .map(String::as_str)
-                    .collect::<Vec<_>>()
-                    .as_slice(),
-            )
-        {
-            return Err(Self::error("index page output fingerprint does not match"));
-        }
+        page.validate()?;
         if let Some(cache) = cache {
-            cache.insert(parent.digest.clone(), page.clone());
+            cache.insert_page(parent.digest.clone(), page.clone());
         }
         Ok(page)
     }
@@ -99,6 +90,7 @@ impl ClaimIndexPage {
         table: &Table,
         depth: u64,
     ) -> PlatformResult<HashMap<String, String>> {
+        self.validate()?;
         let bytes = serde_json::to_vec(&self)
             .map_err(|error| Self::error(format!("could not encode an index page: {error}")))?;
         if bytes.len() > INDEX_PAGE_MAX_BYTES {
@@ -135,6 +127,60 @@ impl ClaimIndexPage {
 
     pub(super) fn format_version() -> u32 {
         INDEX_FORMAT_VERSION
+    }
+
+    fn new(
+        parent: Option<IndexParent>,
+        sources: Vec<String>,
+        outputs: Vec<String>,
+        blocks: Vec<IndexBlockRef>,
+    ) -> Self {
+        let archive_batch = Self::paths_fingerprint(
+            outputs
+                .iter()
+                .map(String::as_str)
+                .collect::<Vec<_>>()
+                .as_slice(),
+        );
+        Self {
+            format_version: INDEX_FORMAT_VERSION,
+            parent,
+            sources,
+            outputs,
+            blocks,
+            archive_batch,
+        }
+    }
+
+    fn validate(&self) -> PlatformResult<()> {
+        if self.format_version != INDEX_FORMAT_VERSION {
+            return Err(Self::error("index page uses an unsupported format version"));
+        }
+        if !Self::is_sorted(&self.sources) || !Self::is_sorted(&self.outputs) {
+            return Err(Self::error("index page entries are not sorted"));
+        }
+        if self.archive_batch
+            != Self::paths_fingerprint(
+                self.outputs
+                    .iter()
+                    .map(String::as_str)
+                    .collect::<Vec<_>>()
+                    .as_slice(),
+            )
+        {
+            return Err(Self::error("index page output fingerprint does not match"));
+        }
+        Ok(())
+    }
+
+    fn sorted_set(entries: HashSet<String>) -> Vec<String> {
+        let mut entries = entries.into_iter().collect::<Vec<_>>();
+        entries.sort();
+        entries
+    }
+
+    fn is_sorted(entries: &[String]) -> bool {
+        entries.windows(2).all(|pair| pair[0] <= pair[1])
     }
 
     fn metadata_directory(table: &Table) -> PlatformResult<String> {
