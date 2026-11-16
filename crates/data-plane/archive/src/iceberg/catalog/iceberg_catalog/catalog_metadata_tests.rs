@@ -1,4 +1,7 @@
+use super::claim_index::{INDEX_HEAD_DIGEST_KEY, INDEX_HEAD_KEY};
+use super::claim_index_page::{ClaimIndexPage, IndexParent};
 use super::snapshot::SnapshotCommit;
+use crate::ArchiveKind;
 use crate::iceberg::catalog::{IcebergCatalog, IcebergDataFile};
 use iceberg::{
     Runtime, TableIdent,
@@ -9,7 +12,10 @@ use iceberg::{
     },
     table::Table,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 struct MetadataTable;
 
@@ -84,20 +90,23 @@ fn batch_fingerprints_are_stable_and_order_sensitive() {
 }
 
 #[tokio::test]
-async fn registered_batch_fingerprints_are_read_from_snapshot_metadata() {
-    let first = IcebergDataFile::new("s3://archive/a.parquet", 1, 2);
-    let second = IcebergDataFile::new("s3://archive/b.parquet", 3, 4);
-    let table = MetadataTable::with_batches(&[&[first.clone(), second.clone()]]);
+async fn source_claims_require_a_version_count_and_matching_digest() {
+    let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
+    let sources = vec!["s3://archive/raw/source.parquet".to_string()];
+    let properties = IcebergCatalog::snapshot_properties(&files, Some(&sources)).unwrap();
+    let table = MetadataTable::with_properties(&[&files], HashMap::new());
 
-    assert!(IcebergCatalog::batch_registered_in_metadata(
-        &table,
-        &[first.clone(), second.clone()]
-    ));
-    assert!(!IcebergCatalog::batch_registered_in_metadata(
-        &table,
-        &[second, first]
-    ));
-    assert!(!IcebergCatalog::batch_registered_in_metadata(&table, &[]));
+    assert_eq!(
+        properties.get("archive-claim-version"),
+        Some(&"1".to_string())
+    );
+    assert_eq!(properties.get("source-claim-count"), Some(&"1".to_string()));
+    assert_eq!(
+        IcebergCatalog::source_files_from_metadata(&table)
+            .unwrap()
+            .len(),
+        0
+    );
 }
 
 #[test]
@@ -131,9 +140,10 @@ fn source_batch_digests_are_full_sha256_and_reject_empty_sets() {
 async fn snapshot_commit_requests_are_conditional_on_uuid_and_main() {
     let table = MetadataTable::with_batches(&[]);
     let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
-    let commit = SnapshotCommit::build(&table, &files, HashMap::new())
-        .await
-        .unwrap();
+    let commit =
+        SnapshotCommit::build_with_table_properties(&table, &files, HashMap::new(), HashMap::new())
+            .await
+            .unwrap();
     let request = commit.to_request(&TableIdent::from_strs(["ns", "table"]).unwrap());
 
     assert_eq!(request["requirements"][0]["type"], "assert-table-uuid");
@@ -155,9 +165,10 @@ async fn snapshot_commit_requests_are_conditional_on_uuid_and_main() {
 async fn snapshot_commit_manifests_live_in_the_metadata_directory() {
     let table = MetadataTable::with_batches(&[]);
     let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
-    let commit = SnapshotCommit::build(&table, &files, HashMap::new())
-        .await
-        .unwrap();
+    let commit =
+        SnapshotCommit::build_with_table_properties(&table, &files, HashMap::new(), HashMap::new())
+            .await
+            .unwrap();
     let request = commit.to_request(&TableIdent::from_strs(["ns", "table"]).unwrap());
     let manifest_list = request["updates"][0]["snapshot"]["manifest-list"]
         .as_str()
@@ -203,10 +214,11 @@ async fn a_commit_asserts_the_table_uuid_it_was_built_for() {
     let second = MetadataTable::with_batches(&[]);
     let files = [IcebergDataFile::new("s3://archive/a.parquet", 1, 2)];
 
-    let request = SnapshotCommit::build(&first, &files, HashMap::new())
-        .await
-        .unwrap()
-        .to_request(&TableIdent::from_strs(["ns", "table"]).unwrap());
+    let request =
+        SnapshotCommit::build_with_table_properties(&first, &files, HashMap::new(), HashMap::new())
+            .await
+            .unwrap()
+            .to_request(&TableIdent::from_strs(["ns", "table"]).unwrap());
 
     assert_eq!(
         request["requirements"][0]["uuid"],
@@ -215,5 +227,55 @@ async fn a_commit_asserts_the_table_uuid_it_was_built_for() {
     assert_ne!(
         request["requirements"][0]["uuid"],
         second.metadata().uuid().to_string()
+    );
+}
+
+#[tokio::test]
+async fn table_validation_rejects_a_schema_outside_the_archive_contract() {
+    let table = MetadataTable::with_batches(&[]);
+
+    assert!(IcebergCatalog::validate_table(&table, ArchiveKind::Events).is_err());
+}
+
+#[tokio::test]
+async fn claim_index_pages_round_trip_and_verify_their_digest() {
+    let table = MetadataTable::with_batches(&[]);
+    let page = ClaimIndexPage::from_claims(
+        None,
+        HashSet::from(["s3://archive/raw/a.parquet".to_string()]),
+        HashSet::from(["s3://archive/out/a.parquet".to_string()]),
+    );
+    let properties = page.write(&table, 1).await.unwrap();
+    let parent = IndexParent {
+        location: properties.get(INDEX_HEAD_KEY).unwrap().clone(),
+        digest: properties.get(INDEX_HEAD_DIGEST_KEY).unwrap().clone(),
+    };
+
+    let loaded = ClaimIndexPage::read(&table, &parent, None).await.unwrap();
+    assert_eq!(loaded.sources, ["s3://archive/raw/a.parquet"]);
+    assert_eq!(loaded.outputs, ["s3://archive/out/a.parquet"]);
+
+    let corrupt = IndexParent {
+        location: parent.location,
+        digest: "0".repeat(64),
+    };
+    assert!(ClaimIndexPage::read(&table, &corrupt, None).await.is_err());
+}
+
+#[tokio::test]
+async fn retention_becomes_finite_once_the_claim_index_is_authoritative() {
+    let table = MetadataTable::with_properties(
+        &[],
+        HashMap::from([(INDEX_HEAD_KEY.to_string(), "s3://archive/head".to_string())]),
+    );
+    let missing = IcebergCatalog::missing_required_properties(&table);
+
+    assert_eq!(
+        missing.get("history.expire.min-snapshots-to-keep"),
+        Some(&"10".to_string())
+    );
+    assert_eq!(
+        missing.get("history.expire.max-snapshot-age-ms"),
+        Some(&(30 * 24 * 60 * 60 * 1_000_i64).to_string())
     );
 }

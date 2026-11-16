@@ -1,4 +1,5 @@
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
+use crate::iceberg::catalog::iceberg_catalog::claim_index::ClaimIndex;
 use crate::iceberg::catalog::iceberg_catalog::commit_algorithm::{
     CommitRetry, ConditionalCommit, ConditionalCommitTarget, Evaluation,
 };
@@ -36,12 +37,16 @@ impl ConditionalCommitTarget for IcebergCommitTarget<'_> {
         state: &Self::State,
         registration: &ArchiveRegistration,
     ) -> PlatformResult<Evaluation> {
-        let live_outputs = self.catalog.registered_paths(state).await?;
-        let claimed_sources = IcebergCatalog::source_files_from_metadata(state);
+        let sources = registration.source_files().unwrap_or_default();
+        let outputs = registration
+            .expected_outputs()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let claims = self.catalog.claim_matches(state, sources, &outputs).await?;
         Ok(Evaluation::resolve(
             registration,
-            &claimed_sources,
-            &live_outputs,
+            &claims.sources,
+            &claims.outputs,
         ))
     }
 
@@ -49,11 +54,25 @@ impl ConditionalCommitTarget for IcebergCommitTarget<'_> {
         &self,
         state: &Self::State,
         registration: &ArchiveRegistration,
+        context: &CommitContext,
     ) -> PlatformResult<()> {
+        let baseline = if ClaimIndex::has_head(state) {
+            None
+        } else {
+            Some(self.catalog.claim_state(state).await?)
+        };
+        let table_properties = ClaimIndex::append(state, registration, baseline).await?;
         let properties =
             IcebergCatalog::snapshot_properties(registration.files(), registration.source_files())?;
-        let commit = SnapshotCommit::build(state, registration.files(), properties).await?;
+        let commit = SnapshotCommit::build_with_table_properties(
+            state,
+            registration.files(),
+            properties,
+            table_properties,
+        )
+        .await?;
         let request = commit.to_request(&self.catalog.table_ident(self.table));
+        context.authorize().await?;
         self.catalog.send_commit(self.table, &request).await
     }
 }

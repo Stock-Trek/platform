@@ -65,7 +65,7 @@ pub use parquet_reader::ParquetReader;
 pub use quantization::Quantization;
 pub use quantized_time::QuantizedTime;
 pub use routing_key::{ROUTING_BUCKET_COUNT, RoutingBucket, RoutingKey};
-pub use s3_object::{Bucket, ObjectKey, S3, S3Object};
+pub use s3_object::{Bucket, ObjectKey, S3, S3Object, S3ObjectPage};
 pub use source::SourceBatch;
 pub use spill::{SpillRun, SpillRunReader, SpillRunWriter};
 pub use state_epoch_header::STATE_EPOCH_HEADER;

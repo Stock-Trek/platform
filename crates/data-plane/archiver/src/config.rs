@@ -18,6 +18,9 @@ const ARCHIVER_LEASE_BUCKET: &str = "ARCHIVER_LEASE_BUCKET";
 const ARCHIVER_LEASE_TTL_SECS: &str = "ARCHIVER_LEASE_TTL_SECS";
 const ARCHIVER_MAX_WORK_SECS: &str = "ARCHIVER_MAX_WORK_SECS";
 const ARCHIVER_LEASE_INITIAL_TOKEN: &str = "ARCHIVER_LEASE_INITIAL_TOKEN";
+const ARCHIVER_LEASE_CLOCK_SKEW_SECS: &str = "ARCHIVER_LEASE_CLOCK_SKEW_SECS";
+const ARCHIVER_RECOVERY_PAGE_FILES: &str = "ARCHIVER_RECOVERY_PAGE_FILES";
+const ARCHIVER_RECOVERY_PAGE_BYTES: &str = "ARCHIVER_RECOVERY_PAGE_BYTES";
 
 #[derive(Debug, Clone)]
 pub struct ArchiverConfig {
@@ -35,6 +38,9 @@ pub struct ArchiverConfig {
     pub lease_ttl: Duration,
     pub max_work: Duration,
     pub lease_initial_token: u64,
+    pub lease_clock_skew: Duration,
+    pub recovery_page_files: usize,
+    pub recovery_page_bytes: usize,
     pub iceberg: IcebergConfig,
 }
 
@@ -63,11 +69,13 @@ impl ArchiverConfig {
         let dedupe_capacity = Config::required_positive_usize(vars, ARCHIVER_DEDUPE_CAPACITY)?;
         let lease_bucket = vars.required(ARCHIVER_LEASE_BUCKET)?;
         let lease_ttl = Config::required_positive_duration_secs(vars, ARCHIVER_LEASE_TTL_SECS)?;
+        let lease_clock_skew = Self::clock_skew(vars, lease_ttl)?;
+        let effective_ttl = lease_ttl.saturating_sub(lease_clock_skew);
         let max_work = Config::required_positive_duration_secs(vars, ARCHIVER_MAX_WORK_SECS)?;
-        if max_work >= lease_ttl {
+        if max_work >= effective_ttl {
             return Err(PlatformError::config_invalid(
                 ARCHIVER_MAX_WORK_SECS,
-                "must be shorter than ARCHIVER_LEASE_TTL_SECS",
+                "must be shorter than the skew-adjusted ARCHIVER_LEASE_TTL_SECS",
             ));
         }
         platform_lease::LeaseRequest::renewal_interval(lease_ttl)?;
@@ -82,6 +90,10 @@ impl ArchiverConfig {
             .unwrap_or(1);
         let lease_initial_token =
             platform_lease::LeaseRequest::validate_initial_token(initial_token)?;
+        let recovery_page_files =
+            Config::required_positive_usize(vars, ARCHIVER_RECOVERY_PAGE_FILES)?;
+        let recovery_page_bytes =
+            Config::required_positive_usize(vars, ARCHIVER_RECOVERY_PAGE_BYTES)?;
         let iceberg = IcebergConfig::from_vars(vars)?;
 
         Ok(Self {
@@ -99,8 +111,39 @@ impl ArchiverConfig {
             lease_ttl,
             max_work,
             lease_initial_token,
+            lease_clock_skew,
+            recovery_page_files,
+            recovery_page_bytes,
             iceberg,
         })
+    }
+
+    fn clock_skew(vars: &EnvVars, lease_ttl: Duration) -> PlatformResult<Duration> {
+        let Some(value) = vars.optional(ARCHIVER_LEASE_CLOCK_SKEW_SECS)? else {
+            return Ok(Self::default_clock_skew(lease_ttl));
+        };
+        let seconds = value.parse::<u64>().map_err(|error| {
+            PlatformError::config_invalid_source(ARCHIVER_LEASE_CLOCK_SKEW_SECS, error)
+        })?;
+        let skew = Duration::from_secs(seconds);
+        if skew >= lease_ttl {
+            return Err(PlatformError::config_invalid(
+                ARCHIVER_LEASE_CLOCK_SKEW_SECS,
+                "must be shorter than ARCHIVER_LEASE_TTL_SECS",
+            ));
+        }
+        let renewal = platform_lease::LeaseRequest::renewal_interval(lease_ttl)?;
+        if skew > lease_ttl.saturating_sub(renewal) {
+            return Err(PlatformError::config_invalid(
+                ARCHIVER_LEASE_CLOCK_SKEW_SECS,
+                "must leave room for the renewal interval inside the lease TTL",
+            ));
+        }
+        Ok(skew)
+    }
+
+    fn default_clock_skew(lease_ttl: Duration) -> Duration {
+        Duration::from_secs(5).min(lease_ttl / 4)
     }
 
     /// Acknowledgement window used by the archiver's durable consumers.

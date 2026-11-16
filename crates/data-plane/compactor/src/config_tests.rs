@@ -79,3 +79,20 @@ fn lease_ttls_are_at_least_two_seconds() {
         .is_ok()
     );
 }
+
+#[test]
+fn clock_skew_must_be_shorter_than_every_ttl() {
+    assert!(
+        CompactorConfig::from_vars(&Vars::env(&[("COMPACTOR_LEASE_CLOCK_SKEW_SECS", "30")]))
+            .is_err()
+    );
+    assert!(
+        CompactorConfig::from_vars(&Vars::env(&[
+            ("COMPACTOR_LEASE_CLOCK_SKEW_SECS", "1"),
+            ("COMPACTOR_LEASE_TTL_SECS_EVENTS", "4"),
+            ("COMPACTOR_LEASE_TTL_SECS_CANDLES", "4"),
+            ("COMPACTOR_MAX_WORK_SECS", "1"),
+        ]))
+        .is_ok()
+    );
+}

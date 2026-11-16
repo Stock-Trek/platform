@@ -1,11 +1,45 @@
 use crate::iceberg::catalog::IcebergDataFile;
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
+use crate::iceberg::catalog::iceberg_catalog::claim_index::{ClaimIndex, ClaimState};
 use futures::TryStreamExt;
 use iceberg::table::Table;
 use platform_errors::PlatformResult;
 use std::collections::HashSet;
 
 impl IcebergCatalog {
+    pub(super) async fn claim_state(&self, table: &Table) -> PlatformResult<ClaimState> {
+        if ClaimIndex::has_head(table) {
+            return ClaimIndex::load_cached(table, Some(&self.claim_index_cache)).await;
+        }
+        let outputs = self.registered_paths(table).await?;
+        let sources = Self::source_files_from_metadata(table)?;
+        Ok(ClaimState::new(sources, outputs))
+    }
+
+    pub(super) async fn claim_matches(
+        &self,
+        table: &Table,
+        sources: &[String],
+        outputs: &[String],
+    ) -> PlatformResult<ClaimState> {
+        if let Some(state) =
+            ClaimIndex::find_cached(table, Some(&self.claim_index_cache), sources, outputs).await?
+        {
+            return Ok(state);
+        }
+        let claims = self.claim_state(table).await?;
+        Ok(ClaimState::new(
+            sources
+                .iter()
+                .filter(|source| claims.sources.contains(*source))
+                .cloned(),
+            outputs
+                .iter()
+                .filter(|output| claims.outputs.contains(*output))
+                .cloned(),
+        ))
+    }
+
     pub async fn registered_paths(&self, table: &Table) -> PlatformResult<HashSet<String>> {
         let scan = table
             .scan()

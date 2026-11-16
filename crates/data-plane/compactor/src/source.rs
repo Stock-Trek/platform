@@ -1,4 +1,5 @@
 use crate::config::CompactorConfig;
+use crate::source_inventory::RawInventory;
 use async_trait::async_trait;
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchivePath, Bucket, ObjectKey, S3,
@@ -6,23 +7,15 @@ use platform_archive::{
 };
 use platform_errors::PlatformResult;
 use platform_types::TimestampMilliseconds;
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::{collections::HashMap, sync::Arc};
+use tokio::sync::Mutex;
 use tracing::warn;
 
-/// Finds raw archive files that are ready to be compacted.
 #[async_trait]
 pub trait ArchiveBatchSource: Send + Sync {
     async fn pending_batches(&self) -> PlatformResult<Vec<SourceBatch>>;
 }
 
-/// Lists raw archive Parquet files from S3 and groups them by source folder.
-///
-/// A raw object is only compactable after the archiver has committed it to the
-/// raw Iceberg table. Similarly, a raw object is skipped once a compacted table
-/// snapshot records it as a processed source file.
 pub struct S3ArchiveSource {
     client: aws_sdk_s3::Client,
     catalog: Arc<dyn ArchiveCatalog>,
@@ -30,6 +23,7 @@ pub struct S3ArchiveSource {
     prefix: String,
     settle_millis: i64,
     min_source_files: usize,
+    pub(super) inventory: Mutex<RawInventory>,
 }
 
 impl S3ArchiveSource {
@@ -46,35 +40,8 @@ impl S3ArchiveSource {
             prefix: config.s3_prefix.trim_matches('/').to_string(),
             settle_millis,
             min_source_files: config.min_source_files,
+            inventory: Mutex::new(RawInventory::default()),
         })
-    }
-
-    async fn registered_raw_files(&self) -> PlatformResult<HashMap<ArchiveKind, HashSet<String>>> {
-        let mut files = HashMap::new();
-        for kind in [ArchiveKind::Events, ArchiveKind::Candles] {
-            files.insert(
-                kind,
-                self.catalog
-                    .registered_data_files(ArchiveIcebergTable::raw(kind))
-                    .await?,
-            );
-        }
-        Ok(files)
-    }
-
-    async fn processed_source_files(
-        &self,
-    ) -> PlatformResult<HashMap<ArchiveKind, HashSet<String>>> {
-        let mut files = HashMap::new();
-        for kind in [ArchiveKind::Events, ArchiveKind::Candles] {
-            files.insert(
-                kind,
-                self.catalog
-                    .processed_source_files(ArchiveIcebergTable::compacted(kind))
-                    .await?,
-            );
-        }
-        Ok(files)
     }
 }
 
@@ -86,15 +53,18 @@ impl ArchiveBatchSource for S3ArchiveSource {
         } else {
             format!("{}/", self.prefix)
         };
-        let registered_raw = self.registered_raw_files().await?;
-        let processed = self.processed_source_files().await?;
-        let objects = S3::list_objects(
-            &self.client,
-            &self.bucket,
-            &ObjectKey::new(list_prefix.clone()),
-        )
-        .await?;
-        let mut groups: HashMap<String, PendingGroup> = HashMap::new();
+        let prefix = ObjectKey::new(list_prefix.clone());
+        self.refresh_inventory(&self.client, &self.bucket, &prefix)
+            .await?;
+        let objects = self
+            .inventory
+            .lock()
+            .await
+            .objects
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        let mut candidates: HashMap<ArchiveKind, Vec<Candidate>> = HashMap::new();
 
         for object in objects {
             let key = object.key.as_str();
@@ -115,32 +85,46 @@ impl ArchiveBatchSource for S3ArchiveSource {
             let Some((parent, _)) = key.rsplit_once('/') else {
                 continue;
             };
+            candidates.entry(kind).or_default().push(Candidate {
+                kind,
+                parent: parent.to_string(),
+                bucket_start,
+                modified_at: object.last_modified_millis().unwrap_or(bucket_start.0),
+                s3_uri: format!("s3://{}/{key}", self.bucket),
+                key: key.to_string(),
+            });
+        }
 
-            let s3_uri = format!("s3://{}/{key}", self.bucket);
-            if !registered_raw
-                .get(&kind)
-                .is_some_and(|files| files.contains(&s3_uri))
-            {
-                continue;
+        let mut groups: HashMap<String, PendingGroup> = HashMap::new();
+        for (kind, candidates) in candidates {
+            let candidates = candidates
+                .into_iter()
+                .map(|candidate| (candidate.s3_uri.clone(), candidate))
+                .collect::<HashMap<_, _>>();
+            let uris = candidates.keys().cloned().collect::<Vec<_>>();
+            let live = self
+                .catalog
+                .live_outputs(ArchiveIcebergTable::raw(kind), &uris)
+                .await?;
+            let claimed = self
+                .catalog
+                .claimed_sources(ArchiveIcebergTable::compacted(kind), &uris)
+                .await?;
+            for (uri, candidate) in candidates {
+                if !live.contains(&uri) || claimed.contains(&uri) {
+                    continue;
+                }
+                let group = groups
+                    .entry(candidate.parent)
+                    .or_insert_with(|| PendingGroup {
+                        kind: candidate.kind,
+                        bucket_start: candidate.bucket_start,
+                        latest_modified: candidate.modified_at,
+                        files: Vec::new(),
+                    });
+                group.latest_modified = group.latest_modified.max(candidate.modified_at);
+                group.files.push(candidate.key);
             }
-            if processed
-                .get(&kind)
-                .is_some_and(|files| files.contains(&s3_uri))
-            {
-                continue;
-            }
-
-            let modified_at = object.last_modified_millis().unwrap_or(bucket_start.0);
-            let group = groups
-                .entry(parent.to_string())
-                .or_insert_with(|| PendingGroup {
-                    kind,
-                    bucket_start,
-                    latest_modified: modified_at,
-                    files: Vec::new(),
-                });
-            group.latest_modified = group.latest_modified.max(modified_at);
-            group.files.push(key.to_string());
         }
 
         let cutoff = TimestampMilliseconds::now()
@@ -161,6 +145,15 @@ impl ArchiveBatchSource for S3ArchiveSource {
         batches.sort_by_key(|batch| (batch.bucket_start.0, batch.prefix.clone()));
         Ok(batches)
     }
+}
+
+struct Candidate {
+    kind: ArchiveKind,
+    parent: String,
+    bucket_start: TimestampMilliseconds,
+    modified_at: i64,
+    s3_uri: String,
+    key: String,
 }
 
 struct PendingGroup {

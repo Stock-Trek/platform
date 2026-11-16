@@ -42,20 +42,39 @@ pub struct Lease {
     pub owner_id: String,
     pub fencing_token: u64,
     pub expires_at: TimestampMilliseconds,
+    #[serde(default)]
+    pub clock_skew_ms: u64,
 }
 
 impl Lease {
     pub fn is_expired(&self, now: TimestampMilliseconds) -> bool {
-        self.expires_at <= now
+        let skew = i64::try_from(self.clock_skew_ms).unwrap_or(i64::MAX);
+        self.expires_at.saturating_add(DurationMilliseconds(skew)) < now
     }
 
     pub fn is_held_by(&self, owner_id: &str, fencing_token: u64) -> bool {
-        self.owner_id == owner_id && self.fencing_token == fencing_token
+        !self.owner_id.is_empty()
+            && self.owner_id == owner_id
+            && self.fencing_token == fencing_token
+    }
+
+    pub fn is_released(&self) -> bool {
+        self.owner_id.is_empty()
     }
 
     pub fn expires_at(now: TimestampMilliseconds, ttl: Duration) -> TimestampMilliseconds {
         let millis = i64::try_from(ttl.as_millis()).unwrap_or(i64::MAX);
         now.saturating_add(DurationMilliseconds(millis))
+    }
+
+    pub fn released(scope: LeaseScope, fencing_token: u64, clock_skew_ms: u64) -> Self {
+        Self {
+            scope,
+            owner_id: String::new(),
+            fencing_token,
+            expires_at: TimestampMilliseconds(0),
+            clock_skew_ms,
+        }
     }
 
     pub fn remaining(&self, now: TimestampMilliseconds) -> Duration {
@@ -140,6 +159,7 @@ pub struct LeaseRequest {
     pub owner_id: String,
     pub ttl: Duration,
     pub initial_token: u64,
+    pub clock_skew: Duration,
     pub context: LeaseContext,
 }
 
@@ -150,8 +170,26 @@ impl LeaseRequest {
             owner_id: owner_id.into(),
             ttl,
             initial_token: 1,
+            clock_skew: Duration::ZERO,
             context: LeaseContext::default(),
         }
+    }
+
+    pub fn with_clock_skew(mut self, clock_skew: Duration) -> Self {
+        self.clock_skew = clock_skew;
+        self
+    }
+
+    pub fn clock_skew_millis(&self) -> u64 {
+        u64::try_from(self.clock_skew.as_millis()).unwrap_or(u64::MAX)
+    }
+
+    pub fn acquire_now(&self) -> TimestampMilliseconds {
+        TimestampMilliseconds(
+            TimestampMilliseconds::now()
+                .0
+                .saturating_sub(i64::try_from(self.clock_skew_millis()).unwrap_or(i64::MAX)),
+        )
     }
 
     pub fn with_context(

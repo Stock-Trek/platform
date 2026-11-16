@@ -18,6 +18,7 @@ const COMPACTOR_LEASE_TTL_SECS_EVENTS: &str = "COMPACTOR_LEASE_TTL_SECS_EVENTS";
 const COMPACTOR_LEASE_TTL_SECS_CANDLES: &str = "COMPACTOR_LEASE_TTL_SECS_CANDLES";
 const COMPACTOR_MAX_WORK_SECS: &str = "COMPACTOR_MAX_WORK_SECS";
 const COMPACTOR_LEASE_INITIAL_TOKEN: &str = "COMPACTOR_LEASE_INITIAL_TOKEN";
+const COMPACTOR_LEASE_CLOCK_SKEW_SECS: &str = "COMPACTOR_LEASE_CLOCK_SKEW_SECS";
 
 #[derive(Debug, Clone)]
 pub struct CompactorConfig {
@@ -35,6 +36,7 @@ pub struct CompactorConfig {
     pub lease_ttl_candles: Duration,
     pub max_work: Duration,
     pub lease_initial_token: u64,
+    pub lease_clock_skew: Duration,
     pub iceberg: IcebergConfig,
 }
 
@@ -60,15 +62,19 @@ impl CompactorConfig {
             Self::optional_duration_secs(vars, COMPACTOR_LEASE_TTL_SECS_EVENTS, lease_ttl)?;
         let lease_ttl_candles =
             Self::optional_duration_secs(vars, COMPACTOR_LEASE_TTL_SECS_CANDLES, lease_ttl)?;
+        let lease_clock_skew = Self::clock_skew(vars, lease_ttl_events, lease_ttl_candles)?;
         let max_work = Config::required_positive_duration_secs(vars, COMPACTOR_MAX_WORK_SECS)?;
         for (kind, ttl) in [
             (platform_archive::ArchiveKind::Events, lease_ttl_events),
             (platform_archive::ArchiveKind::Candles, lease_ttl_candles),
         ] {
-            if max_work >= ttl {
+            if max_work >= ttl.saturating_sub(lease_clock_skew) {
                 return Err(platform_errors::PlatformError::config_invalid(
                     COMPACTOR_MAX_WORK_SECS,
-                    format!("must be shorter than the {} lease TTL", kind.label()),
+                    format!(
+                        "must be shorter than the skew-adjusted {} lease TTL",
+                        kind.label()
+                    ),
                 ));
             }
             platform_lease::LeaseRequest::renewal_interval(ttl)?;
@@ -104,8 +110,49 @@ impl CompactorConfig {
             lease_ttl_candles,
             max_work,
             lease_initial_token,
+            lease_clock_skew,
             iceberg,
         })
+    }
+
+    fn clock_skew(
+        vars: &EnvVars,
+        lease_ttl_events: Duration,
+        lease_ttl_candles: Duration,
+    ) -> PlatformResult<Duration> {
+        let Some(value) = vars.optional(COMPACTOR_LEASE_CLOCK_SKEW_SECS)? else {
+            return Ok(Self::default_clock_skew(
+                lease_ttl_events,
+                lease_ttl_candles,
+            ));
+        };
+        let seconds = value.parse::<u64>().map_err(|error| {
+            platform_errors::PlatformError::config_invalid_source(
+                COMPACTOR_LEASE_CLOCK_SKEW_SECS,
+                error,
+            )
+        })?;
+        let skew = Duration::from_secs(seconds);
+        if skew >= lease_ttl_events || skew >= lease_ttl_candles {
+            return Err(platform_errors::PlatformError::config_invalid(
+                COMPACTOR_LEASE_CLOCK_SKEW_SECS,
+                "must be shorter than every lease TTL",
+            ));
+        }
+        for ttl in [lease_ttl_events, lease_ttl_candles] {
+            let renewal = platform_lease::LeaseRequest::renewal_interval(ttl)?;
+            if skew > ttl.saturating_sub(renewal) {
+                return Err(platform_errors::PlatformError::config_invalid(
+                    COMPACTOR_LEASE_CLOCK_SKEW_SECS,
+                    "must leave room for every renewal interval inside its lease TTL",
+                ));
+            }
+        }
+        Ok(skew)
+    }
+
+    fn default_clock_skew(lease_ttl_events: Duration, lease_ttl_candles: Duration) -> Duration {
+        Duration::from_secs(5).min(lease_ttl_events.min(lease_ttl_candles) / 4)
     }
 
     fn optional_duration_secs(

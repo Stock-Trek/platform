@@ -1,5 +1,5 @@
 use super::commit_algorithm::{CommitRetry, ConditionalCommitTarget, Evaluation};
-use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, IcebergDataFile};
+use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, CommitContext, IcebergDataFile};
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};
 use std::collections::HashSet;
@@ -146,6 +146,7 @@ impl ConditionalCommitTarget for FakeTarget {
         &self,
         state: &Self::State,
         registration: &ArchiveRegistration,
+        _context: &CommitContext,
     ) -> PlatformResult<()> {
         if self.wait_for_first_commit {
             self.backend.first_commit.notified().await;

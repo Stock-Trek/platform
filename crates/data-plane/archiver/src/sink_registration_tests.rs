@@ -94,6 +94,9 @@ impl Fixture {
             lease_ttl: Duration::from_secs(30),
             max_work: Duration::from_secs(20),
             lease_initial_token: 1,
+            lease_clock_skew: Duration::ZERO,
+            recovery_page_files: 1_000,
+            recovery_page_bytes: 64 * 1024 * 1024,
         }
     }
 

@@ -20,6 +20,8 @@ impl Vars {
             ("ARCHIVER_LEASE_BUCKET", "leases"),
             ("ARCHIVER_LEASE_TTL_SECS", "30"),
             ("ARCHIVER_MAX_WORK_SECS", "20"),
+            ("ARCHIVER_RECOVERY_PAGE_FILES", "1000"),
+            ("ARCHIVER_RECOVERY_PAGE_BYTES", "67108864"),
             ("ICEBERG_CATALOG_URI", "http://localhost:8181"),
             ("ICEBERG_CATALOG_WAREHOUSE", "s3://archive/warehouse"),
             ("ICEBERG_NAMESPACE", "archive"),
@@ -59,6 +61,27 @@ fn lease_bucket_and_ttl_must_be_explicit() {
         ArchiverConfig::from_vars(&Vars::env(&[
             ("ARCHIVER_LEASE_TTL_SECS", "2"),
             ("ARCHIVER_MAX_WORK_SECS", "1"),
+        ]))
+        .is_ok()
+    );
+}
+
+#[test]
+fn clock_skew_and_recovery_pages_must_be_bounded() {
+    assert!(
+        ArchiverConfig::from_vars(&Vars::env(&[("ARCHIVER_LEASE_CLOCK_SKEW_SECS", "30")])).is_err()
+    );
+    assert!(
+        ArchiverConfig::from_vars(&Vars::env(&[("ARCHIVER_RECOVERY_PAGE_FILES", "0")])).is_err()
+    );
+    assert!(
+        ArchiverConfig::from_vars(&Vars::env(&[("ARCHIVER_RECOVERY_PAGE_BYTES", "0")])).is_err()
+    );
+    assert!(
+        ArchiverConfig::from_vars(&Vars::env(&[
+            ("ARCHIVER_LEASE_CLOCK_SKEW_SECS", "1"),
+            ("ARCHIVER_RECOVERY_PAGE_FILES", "100"),
+            ("ARCHIVER_RECOVERY_PAGE_BYTES", "1048576"),
         ]))
         .is_ok()
     );

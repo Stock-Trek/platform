@@ -1,3 +1,4 @@
+mod commit_authorizer;
 mod guard;
 mod lease;
 mod memory_store;
@@ -8,6 +9,7 @@ mod watch;
 #[cfg(test)]
 mod lease_tests;
 
+pub use commit_authorizer::{CommitAuthorizer, LeaseCommitAuthorizer};
 pub use guard::LeaseGuard;
 pub use lease::{Lease, LeaseContext, LeaseRequest, LeaseScope};
 pub use memory_store::InMemoryLeaseStore;

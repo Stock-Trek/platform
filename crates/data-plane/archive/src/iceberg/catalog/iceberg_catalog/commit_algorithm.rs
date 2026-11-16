@@ -83,6 +83,7 @@ pub(super) trait ConditionalCommitTarget {
         &self,
         state: &Self::State,
         registration: &ArchiveRegistration,
+        context: &CommitContext,
     ) -> PlatformResult<()>;
 }
 
@@ -138,7 +139,8 @@ where
                 }
             }
 
-            match self.target.submit(&current, registration).await {
+            context.authorize().await?;
+            match self.target.submit(&current, registration, context).await {
                 Ok(()) => {
                     MarketDataMetrics::record_archive_commit(table.name(), "applied");
                     info!(
@@ -178,6 +180,7 @@ where
                 Evaluation::Apply => {
                     if attempt < self.retry.max_attempts {
                         tokio::time::sleep(backoff.next_delay()).await;
+                        context.authorize().await?;
                     }
                 }
             }
