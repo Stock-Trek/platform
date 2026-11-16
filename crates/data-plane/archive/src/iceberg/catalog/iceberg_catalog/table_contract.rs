@@ -101,7 +101,8 @@ impl IcebergCatalog {
         if !ClaimIndex::needs_consolidation(&table) {
             return Ok(());
         }
-        let updates = ClaimIndex::consolidate(&table, context).await?;
+        let live_outputs = self.registered_paths(&table).await?;
+        let updates = ClaimIndex::consolidate(&table, context, &live_outputs).await?;
         let request = serde_json::json!({
             "requirements": [
                 {

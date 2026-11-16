@@ -1,4 +1,5 @@
 use super::claim_index::ClaimIndexCache;
+use super::claim_index_batch::{ClaimBatch, ClaimIndexBatchBlock, IndexBatchBlockRef};
 use super::claim_index_block::{ClaimIndexBlock, IndexBlockRef};
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use bytes::Bytes;
@@ -9,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 
-pub(super) const INDEX_FORMAT_VERSION: u32 = 3;
+pub(super) const INDEX_FORMAT_VERSION: u32 = 4;
 const INDEX_PAGE_MAX_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -24,7 +25,9 @@ pub(super) struct ClaimIndexPage {
     pub(super) parent: Option<IndexParent>,
     pub(super) sources: Vec<String>,
     pub(super) outputs: Vec<String>,
+    pub(super) batches: Vec<ClaimBatch>,
     pub(super) blocks: Vec<IndexBlockRef>,
+    pub(super) batch_blocks: Vec<IndexBatchBlockRef>,
 }
 
 impl ClaimIndexPage {
@@ -33,26 +36,57 @@ impl ClaimIndexPage {
         sources: HashSet<String>,
         outputs: HashSet<String>,
     ) -> Self {
+        let batch = ClaimBatch::from_claims(sources.clone(), outputs.clone());
         Self::new(
             parent,
             Self::sorted_set(sources),
             Self::sorted_set(outputs),
+            vec![batch],
+            Vec::new(),
             Vec::new(),
         )
     }
 
+    #[cfg(test)]
     pub(super) async fn write_consolidated(
         table: &Table,
         sources: HashSet<String>,
         outputs: HashSet<String>,
         depth: u64,
     ) -> PlatformResult<HashMap<String, String>> {
+        let batches = if sources.is_empty() && outputs.is_empty() {
+            Vec::new()
+        } else {
+            vec![ClaimBatch::from_claims(sources, outputs)]
+        };
+        Self::write_consolidated_batches(table, batches, depth).await
+    }
+
+    pub(super) async fn write_consolidated_batches(
+        table: &Table,
+        batches: Vec<ClaimBatch>,
+        depth: u64,
+    ) -> PlatformResult<HashMap<String, String>> {
+        let mut sources = HashSet::new();
+        let mut outputs = HashSet::new();
+        for batch in &batches {
+            sources.extend(batch.sources.iter().cloned());
+            outputs.extend(batch.outputs.iter().cloned());
+        }
         let blocks =
             ClaimIndexBlock::write_all(table, Self::sorted_set(sources), Self::sorted_set(outputs))
                 .await?;
-        Self::new(None, Vec::new(), Vec::new(), blocks)
-            .write(table, depth)
-            .await
+        let batch_blocks = ClaimIndexBatchBlock::write_all(table, batches).await?;
+        Self::new(
+            None,
+            Vec::new(),
+            Vec::new(),
+            Vec::new(),
+            blocks,
+            batch_blocks,
+        )
+        .write(table, depth)
+        .await
     }
 
     pub(super) async fn read(
@@ -136,14 +170,18 @@ impl ClaimIndexPage {
         parent: Option<IndexParent>,
         sources: Vec<String>,
         outputs: Vec<String>,
+        batches: Vec<ClaimBatch>,
         blocks: Vec<IndexBlockRef>,
+        batch_blocks: Vec<IndexBatchBlockRef>,
     ) -> Self {
         Self {
             format_version: INDEX_FORMAT_VERSION,
             parent,
             sources,
             outputs,
+            batches,
             blocks,
+            batch_blocks,
         }
     }
 
@@ -153,6 +191,16 @@ impl ClaimIndexPage {
         }
         if !Self::is_sorted(&self.sources) || !Self::is_sorted(&self.outputs) {
             return Err(Self::error("index page entries are not sorted"));
+        }
+        if !self
+            .batches
+            .windows(2)
+            .all(|pair| pair[0].digest < pair[1].digest)
+        {
+            return Err(Self::error("index page batches are not sorted"));
+        }
+        for batch in &self.batches {
+            batch.validate()?;
         }
         Ok(())
     }

@@ -145,6 +145,16 @@ impl ArchiveCatalog for IcebergCatalog {
         IcebergCatalog::consolidate_claim_index(self, table, context).await
     }
 
+    async fn sweep_metadata(
+        &self,
+        table: ArchiveIcebergTable,
+        client: &aws_sdk_s3::Client,
+        safety_window: std::time::Duration,
+    ) -> PlatformResult<usize> {
+        let table = self.ensure_table(table).await?;
+        IcebergCatalog::sweep_metadata(self, &table, client, safety_window).await
+    }
+
     async fn compacted_snapshot(
         &self,
         table: ArchiveIcebergTable,

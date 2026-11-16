@@ -61,6 +61,7 @@ pub struct Compactor {
     lease_ttl_events: std::time::Duration,
     lease_ttl_candles: std::time::Duration,
     max_work: std::time::Duration,
+    maintenance_safety: std::time::Duration,
     lease_initial_token: u64,
     lease_clock_skew: std::time::Duration,
 }
@@ -81,6 +82,7 @@ impl Compactor {
             lease_ttl_events: config.lease_ttl_for(platform_archive::ArchiveKind::Events),
             lease_ttl_candles: config.lease_ttl_for(platform_archive::ArchiveKind::Candles),
             max_work: config.max_work,
+            maintenance_safety: config.maintenance_safety,
             lease_initial_token: config.lease_initial_token,
             lease_clock_skew: config.lease_clock_skew,
         })
@@ -315,6 +317,17 @@ impl Compactor {
             platform_archive::ArchiveKind::Candles,
         ] {
             self.consolidate_claim_index(kind).await?;
+            let table = ArchiveIcebergTable::compacted(kind);
+            let deleted = self
+                .catalog
+                .sweep_metadata(table, &self.client, self.maintenance_safety)
+                .await?;
+            if deleted > 0 {
+                info!(
+                    table = table.name(),
+                    deleted, "removed unreachable archive metadata"
+                );
+            }
         }
         Ok(())
     }

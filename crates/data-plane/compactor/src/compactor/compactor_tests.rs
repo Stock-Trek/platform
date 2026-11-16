@@ -74,6 +74,7 @@ impl Compactor {
             lease_ttl_events: Duration::from_secs(30),
             lease_ttl_candles: Duration::from_secs(30),
             max_work: Duration::from_secs(20),
+            maintenance_safety: Duration::from_secs(24 * 60 * 60),
             lease_initial_token: 1,
             lease_clock_skew: Duration::ZERO,
         }

@@ -1,9 +1,11 @@
 use super::claim_index::{ClaimIndex, INDEX_HEAD_DIGEST_KEY, INDEX_HEAD_KEY};
+use super::claim_index_batch::ClaimBatch;
 use super::claim_index_page::{ClaimIndexPage, IndexParent};
 use super::snapshot::SnapshotCommit;
 use crate::ArchiveKind;
 use crate::iceberg::CommitContext;
 use crate::iceberg::catalog::{IcebergCatalog, IcebergDataFile};
+use crate::{Bucket, ObjectKey, S3Object};
 use iceberg::{
     Runtime, TableIdent,
     io::FileIO,
@@ -13,6 +15,7 @@ use iceberg::{
     },
     table::Table,
 };
+use platform_types::TimestampMilliseconds;
 use std::{
     collections::{HashMap, HashSet},
     sync::Arc,
@@ -411,6 +414,122 @@ async fn claim_index_deltas_chain_to_the_consolidated_parent() {
         found.sources,
         HashSet::from(["s3://archive/raw/a.parquet".to_string()])
     );
+}
+
+#[tokio::test]
+async fn claim_indexes_find_and_retain_archive_batches() {
+    let table = MetadataTable::with_batches(&[]);
+    let file_io = table.file_io().clone();
+    let live = ClaimBatch::from_claims(
+        HashSet::from(["s3://archive/raw/live.parquet".to_string()]),
+        HashSet::from(["s3://archive/out/live.parquet".to_string()]),
+    );
+    let dead = ClaimBatch::from_claims(
+        HashSet::from(["s3://archive/raw/dead.parquet".to_string()]),
+        HashSet::from(["s3://archive/out/dead.parquet".to_string()]),
+    );
+    let properties =
+        ClaimIndexPage::write_consolidated_batches(&table, vec![live.clone(), dead.clone()], 1)
+            .await
+            .unwrap();
+    let table = MetadataTable::with_properties_on(file_io.clone(), &[], properties);
+
+    let found = ClaimIndex::find_batch_cached(&table, None, &live.digest)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(found, live);
+
+    let loaded = ClaimIndex::load(&table).await.unwrap();
+    assert_eq!(loaded.batches.len(), 2);
+    let retained = loaded.retained(&HashSet::from(
+        ["s3://archive/out/live.parquet".to_string()],
+    ));
+    assert_eq!(
+        retained.batches.keys().cloned().collect::<HashSet<_>>(),
+        HashSet::from([live.digest.clone()])
+    );
+    assert!(!retained.outputs.contains("s3://archive/out/dead.parquet"));
+
+    let registration = crate::iceberg::ArchiveRegistration::new(
+        [IcebergDataFile::new("s3://archive/out/new.parquet", 1, 1)],
+        Some(vec!["s3://archive/raw/new.parquet".to_string()]),
+    )
+    .unwrap();
+    let appended = ClaimIndex::append(&table, &registration, None)
+        .await
+        .unwrap();
+    let table = MetadataTable::with_properties_on(file_io, &[], appended);
+    let new_batch = ClaimBatch::from_claims(
+        HashSet::from(["s3://archive/raw/new.parquet".to_string()]),
+        HashSet::from(["s3://archive/out/new.parquet".to_string()]),
+    );
+    assert_eq!(
+        ClaimIndex::find_batch_cached(&table, None, &new_batch.digest)
+            .await
+            .unwrap()
+            .unwrap(),
+        new_batch
+    );
+}
+
+#[tokio::test]
+async fn metadata_reachability_covers_the_current_file_and_every_index_page() {
+    let table = MetadataTable::with_batches(&[]);
+    let file_io = table.file_io().clone();
+    let properties = ClaimIndexPage::write_consolidated(
+        &table,
+        HashSet::from(["s3://archive/raw/a.parquet".to_string()]),
+        HashSet::from(["s3://archive/out/a.parquet".to_string()]),
+        1,
+    )
+    .await
+    .unwrap();
+    let head = properties.get(INDEX_HEAD_KEY).unwrap().clone();
+    let table = MetadataTable::with_properties_on(file_io, &[], properties);
+
+    let reachable = IcebergCatalog::reachable_metadata(&table).await.unwrap();
+    assert!(reachable.contains("s3://archive/table/metadata/v1.json"));
+    assert!(reachable.contains(&head));
+    assert!(reachable.len() >= 2);
+}
+
+#[test]
+fn metadata_cleanup_lists_the_parent_directory_of_the_current_metadata_file() {
+    let (bucket, prefix) =
+        IcebergCatalog::metadata_listing_prefix("s3://archive/table/metadata/v1.json").unwrap();
+
+    assert_eq!(bucket, Bucket::new("archive"));
+    assert_eq!(prefix, ObjectKey::new("table/metadata/"));
+}
+
+#[test]
+fn metadata_cleanup_only_selects_unreachable_objects_beyond_the_safety_window() {
+    let bucket = Bucket::new("archive");
+    let live = S3Object {
+        key: ObjectKey::new("table/metadata/live.json"),
+        last_modified_millis: Some(10),
+        size: 1,
+    };
+    let old = S3Object {
+        key: ObjectKey::new("table/metadata/archive-index-old.json"),
+        last_modified_millis: Some(10),
+        size: 1,
+    };
+    let fresh = S3Object {
+        key: ObjectKey::new("table/metadata/archive-index-fresh.json"),
+        last_modified_millis: Some(100),
+        size: 1,
+    };
+    let reachable = HashSet::from(["s3://archive/table/metadata/live.json".to_string()]);
+    let candidates = IcebergCatalog::metadata_maintenance_candidates(
+        &bucket,
+        &[live, old.clone(), fresh],
+        &reachable,
+        TimestampMilliseconds(50),
+    );
+
+    assert_eq!(candidates, vec![old]);
 }
 
 #[tokio::test]

@@ -214,6 +214,23 @@ impl S3 {
             .map_err(|error| PlatformError::s3("read object body", target, error))
     }
 
+    pub async fn delete_object(
+        s3_client: &S3Client,
+        bucket: &Bucket,
+        key: &ObjectKey,
+    ) -> PlatformResult<()> {
+        let target = Self::object_target(bucket, key);
+        info!("delete object for key {}", key);
+        s3_client
+            .delete_object()
+            .bucket(bucket.as_str())
+            .key(key.as_str())
+            .send()
+            .await
+            .map_err(|error| PlatformError::s3("delete object", target, error))?;
+        Ok(())
+    }
+
     pub fn object_target(bucket: &Bucket, key: &ObjectKey) -> String {
         format!("s3://{bucket}/{key}")
     }

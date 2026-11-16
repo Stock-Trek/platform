@@ -1,5 +1,7 @@
 use super::claim_index::{ClaimIndex, ClaimIndexCache, ClaimState, INDEX_HEAD_DIGEST_KEY};
 use super::claim_index::{INDEX_FORMAT_VERSION_KEY, INDEX_HEAD_KEY};
+#[cfg(test)]
+use super::claim_index_batch::{ClaimBatch, ClaimIndexBatchBlock};
 use super::claim_index_block::ClaimIndexBlock;
 use super::claim_index_page::{ClaimIndexPage, IndexParent};
 use iceberg::table::Table;
@@ -87,6 +89,59 @@ impl ClaimIndex {
             next = page.parent;
         }
         Ok(Some(ClaimState::new(found_sources, found_outputs)))
+    }
+
+    #[cfg(test)]
+    pub(super) async fn find_batch_cached(
+        table: &Table,
+        cache: Option<&ClaimIndexCache>,
+        digest: &str,
+    ) -> PlatformResult<Option<ClaimBatch>> {
+        let properties = table.metadata().properties();
+        let Some(location) = properties.get(INDEX_HEAD_KEY).cloned() else {
+            return Ok(None);
+        };
+        let Some(head_digest) = properties.get(INDEX_HEAD_DIGEST_KEY).cloned() else {
+            return Err(Self::error("index head is missing its digest"));
+        };
+        let version = properties
+            .get(INDEX_FORMAT_VERSION_KEY)
+            .ok_or_else(|| Self::error("index head is missing its format version"))?;
+        if version != &ClaimIndexPage::format_version().to_string() {
+            return Err(Self::error(format!(
+                "index head uses unsupported format version {version}"
+            )));
+        }
+        let mut visited = HashSet::new();
+        let mut next = Some(IndexParent {
+            location,
+            digest: head_digest,
+        });
+        while let Some(parent) = next {
+            if !visited.insert(parent.digest.clone()) {
+                return Err(Self::error("index chain contains a cycle"));
+            }
+            let page = ClaimIndexPage::read(table, &parent, cache).await?;
+            if let Some(batch) = page
+                .batches
+                .iter()
+                .find(|batch| batch.digest == digest)
+                .cloned()
+            {
+                return Ok(Some(batch));
+            }
+            for reference in &page.batch_blocks {
+                if !reference.may_contain_batch(digest) {
+                    continue;
+                }
+                let block = ClaimIndexBatchBlock::read(table, reference, cache).await?;
+                if let Some(batch) = block.contains_batch(digest) {
+                    return Ok(Some(batch));
+                }
+            }
+            next = page.parent;
+        }
+        Ok(None)
     }
 
     fn collect_entries(
