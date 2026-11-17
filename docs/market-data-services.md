@@ -99,7 +99,7 @@ Exchange delivery is behind the `PortfolioFeed` interface. `ExchangePortfolioFee
 
 Configuration:
 
-The service reads the variables documented under [Portfolio service](../../docs/environment-variables.md#portfolio-service) in the environment variable reference. `RUST_LOG` selects the tracing filter.
+The service reads the variables documented under [Portfolio service](environment-variables.md#portfolio-service) in the environment variable reference. `RUST_LOG` selects the tracing filter.
 
 ## Archiver
 

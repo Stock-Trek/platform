@@ -490,4 +490,4 @@ authority, record that choice, and never silently fall back to missing raw objec
 - [Environment variables](environment-variables.md)
 - [Health checks](health-checks.md)
 - [Archive retention and Iceberg maintenance options](archive-maintenance-options.md)
-- [Market data services](../crates/data-plane/README.md)
+- [Market data services](market-data-services.md)
