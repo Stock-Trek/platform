@@ -1,4 +1,4 @@
-use crate::aws_ops::post_policy::PresignedPost;
+use crate::aws_ops::post_policy::ArtifactPost;
 use platform_errors::PlatformResult;
 use platform_messages::{
     BuildRequest as BuildRequestPayload, BuildRequestSignedPost, GitSource, SqsRefType,
@@ -11,7 +11,7 @@ pub struct BuildRequest {
     pub ref_type: SqsRefType,
     pub commit_hash: Option<String>,
     pub signed_get_url: String,
-    pub signed_post: PresignedPost,
+    pub signed_post: ArtifactPost,
 }
 
 impl BuildRequest {

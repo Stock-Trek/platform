@@ -1,4 +1,4 @@
-use crate::aws_ops::post_policy::{PresignedPost, PresignedPostSigner};
+use crate::aws_ops::post_policy::{ArtifactPost, ArtifactPostSigner};
 use aws_credential_types::{
     Credentials,
     provider::{ProvideCredentials, SharedCredentialsProvider},
@@ -25,7 +25,7 @@ pub struct UploadedObject {
 
 pub struct S3 {
     client: S3Client,
-    signer: PresignedPostSigner,
+    signer: ArtifactPostSigner,
     credentials_provider: SharedCredentialsProvider,
     timeouts: Timeouts,
     config: S3Config,
@@ -34,7 +34,7 @@ pub struct S3 {
 impl S3 {
     fn new(
         client: S3Client,
-        signer: PresignedPostSigner,
+        signer: ArtifactPostSigner,
         credentials_provider: SharedCredentialsProvider,
         timeouts: Timeouts,
         config: S3Config,
@@ -70,7 +70,7 @@ impl S3 {
             }
             None => platform_aws::Aws::s3_client(sdk_config),
         };
-        let signer = PresignedPostSigner::new(
+        let signer = ArtifactPostSigner::new(
             config.user_artifacts_bucket.clone(),
             region,
             endpoint_url,
@@ -89,7 +89,7 @@ impl S3 {
         &self,
         key_prefix: &str,
         deadline: Deadline,
-    ) -> PlatformResult<PresignedPost> {
+    ) -> PlatformResult<ArtifactPost> {
         let credentials = self.credentials(deadline).await?;
         self.signer.sign(
             &credentials,

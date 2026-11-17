@@ -4,7 +4,7 @@
 //! wraps it with the build plane's artifact key template and size limit.
 
 use aws_credential_types::Credentials;
-use platform_aws::{PresignedPost as BasePost, PresignedPostSigner as SharedSigner};
+use platform_aws::{PresignedPost, PresignedPostSigner};
 use platform_errors::PlatformResult;
 use platform_messages::BuildRequestSignedPost;
 use serde_json::json;
@@ -16,18 +16,18 @@ use std::{
 
 const MIN_OBJECT_SIZE_BYTES: u64 = 0;
 
-pub struct PresignedPost {
+pub struct ArtifactPost {
     pub url: String,
     pub fields: BTreeMap<String, String>,
     pub max_artifact_size_bytes: NonZeroU64,
 }
 
-impl PresignedPost {
+impl ArtifactPost {
     pub fn max_artifact_size_bytes(&self) -> NonZeroU64 {
         self.max_artifact_size_bytes
     }
 
-    fn from_base_post(post: BasePost, max_artifact_size_bytes: NonZeroU64) -> Self {
+    fn new(post: PresignedPost, max_artifact_size_bytes: NonZeroU64) -> Self {
         Self {
             url: post.url,
             fields: post.fields,
@@ -36,12 +36,12 @@ impl PresignedPost {
     }
 }
 
-pub struct PresignedPostSigner {
-    signer: SharedSigner,
+pub struct ArtifactPostSigner {
+    signer: PresignedPostSigner,
     max_artifact_size_bytes: NonZeroU64,
 }
 
-impl PresignedPostSigner {
+impl ArtifactPostSigner {
     pub fn new(
         bucket: String,
         region: String,
@@ -49,7 +49,7 @@ impl PresignedPostSigner {
         max_artifact_size_bytes: NonZeroU64,
     ) -> Self {
         Self {
-            signer: SharedSigner::new(bucket, region, endpoint_url),
+            signer: PresignedPostSigner::new(bucket, region, endpoint_url),
             max_artifact_size_bytes,
         }
     }
@@ -60,7 +60,7 @@ impl PresignedPostSigner {
         key_prefix: &str,
         now: SystemTime,
         expires_in: Duration,
-    ) -> PlatformResult<PresignedPost> {
+    ) -> PlatformResult<ArtifactPost> {
         let max_artifact_size_bytes = self.max_artifact_size_bytes.get();
         let post = self.signer.sign(
             credentials,
@@ -74,9 +74,6 @@ impl PresignedPostSigner {
             now,
             expires_in,
         )?;
-        Ok(PresignedPost::from_base_post(
-            post,
-            self.max_artifact_size_bytes,
-        ))
+        Ok(ArtifactPost::new(post, self.max_artifact_size_bytes))
     }
 }
