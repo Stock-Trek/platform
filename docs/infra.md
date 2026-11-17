@@ -75,14 +75,28 @@ archiver and compactor may share a lease bucket as long as their scope prefixes 
 collisions. Lease updates use the observed KV revision; a revision race is retried by re-reading
 the key, never by overwriting it unconditionally.
 
-Portfolio streams are provisioned idempotently with file storage, limits retention, and three
-replicas by default. Set replicas explicitly below cluster size. Retention must exceed the maximum
-consumer outage plus the disaster-recovery replay window.
+The portfolio update and ownership pipeline covers exchange gateway portfolio connectors,
+`portfolio.updates.v1` and `portfolio.ownership.changed.v1` JetStream streams, the portfolio-service
+update and ownership consumers, and the durable portfolio read model in the NATS KV bucket used for
+checkpoints.
 
-| Stream | Default retention | Default capacity |
-| --- | --- | --- |
-| `portfolio.updates.v1` | 7 days | 10 GiB / 100 million messages |
-| `portfolio.ownership.changed.v1` | 30 days | 1 GiB / 10 million messages |
+Portfolio streams are provisioned idempotently with file storage, limits retention, and three
+replicas by default. Set replicas explicitly in production and keep them below the NATS cluster
+size. Retention must exceed the maximum tolerated consumer outage plus the replay window required
+for disaster recovery.
+
+| Stream | Default retention | Default capacity | Replicas |
+| --- | --- | --- | --- |
+| `portfolio.updates.v1` | 7 days | 10 GiB / 100 million messages | 3 |
+| `portfolio.ownership.changed.v1` | 30 days | 1 GiB / 10 million messages | 3 |
+
+Each stream must report file storage, limits retention, the configured maximum age and size, and the
+expected replica count.
+
+```sh
+nats stream info portfolio.updates.v1
+nats stream info portfolio.ownership.changed.v1
+```
 
 ### Capacity and safety
 
@@ -170,6 +184,91 @@ Dashboard connector connectivity, subscriptions, reconnect rate, update age, con
 failures, ownership lag, and order rejections. Page on disconnected connectors, stale feeds, lag
 above threshold, any apply failure, and `not_owned` or `stale` order-rejection spikes.
 
+#### Portfolio dashboards
+
+Connector health:
+
+```promql
+portfolio_connector_connected
+portfolio_connector_subscriptions
+increase(portfolio_connector_reconnects_total[15m])
+```
+
+Update freshness:
+
+```promql
+portfolio_connector_last_update_age_seconds
+histogram_quantile(0.95, sum by (le) (rate(portfolio_consumer_lag_seconds_bucket[5m])))
+```
+
+Consumer throughput and failures:
+
+```promql
+sum by (cex, outcome) (rate(portfolio_updates_total[5m]))
+sum by (outcome) (rate(portfolio_ownership_outcomes_total[5m]))
+sum by (stage, operation) (rate(portfolio_apply_failures_total[5m]))
+```
+
+Ownership and order authorization:
+
+```promql
+histogram_quantile(0.95, sum by (le) (rate(portfolio_ownership_lag_seconds_bucket[5m])))
+sum by (reason) (rate(portfolio_order_rejections_total[5m]))
+```
+
+#### Portfolio alerts
+
+Connector disconnected:
+
+```promql
+max by (cex) (portfolio_connector_connected) == 0
+```
+
+Fire after five minutes. Check exchange status, connector logs, network policy, and credential
+validity. A planned connector shutdown must silence this alert.
+
+Stale connector feed:
+
+```promql
+max by (cex) (portfolio_connector_last_update_age_seconds) > 120
+```
+
+Fire after five minutes. Confirm the connector is connected and subscribed before treating this as
+an exchange-side outage.
+
+Consumer lag:
+
+```promql
+histogram_quantile(0.95, sum by (le) (rate(portfolio_consumer_lag_seconds_bucket[10m]))) > 60
+```
+
+Fire after ten minutes. Inspect apply failures and NATS consumer state.
+
+Ownership event lag:
+
+```promql
+histogram_quantile(0.95, sum by (le) (rate(portfolio_ownership_lag_seconds_bucket[10m]))) > 60
+```
+
+Fire after ten minutes. Ownership events gate order authorization, so page the on-call owner.
+
+Apply failures:
+
+```promql
+sum by (stage, operation) (increase(portfolio_apply_failures_total[5m])) > 0
+```
+
+Fire immediately. The labels distinguish fetch, apply, checkpoint, acknowledge, and persist
+failures.
+
+Order rejection spike:
+
+```promql
+sum by (reason) (rate(portfolio_order_rejections_total[5m])) > 1
+```
+
+Treat `not_owned` and `stale` spikes as authorization incidents.
+
 Aggregator metrics named `market_data_aggregator_*` cover checkpoint age and failures, watermark
 lag, replay progress, restore duration, lease acquisition, duplicate events, incomplete windows,
 retained and evicted candles, and out-of-contract corrections.
@@ -198,13 +297,61 @@ nats stream backup portfolio.updates.v1 /backups/portfolio-updates
 nats stream backup portfolio.ownership.changed.v1 /backups/portfolio-ownership
 ```
 
+Restore in this order:
+
+1. Restore NATS stream backups.
+2. Restore the read-model KV bucket.
+3. Start portfolio-service and verify the restored ownership count and portfolio count before
+   enabling order traffic.
+4. Confirm consumer lag returns to the normal range.
+
 ### Credential rotation
 
-Rotate exchange credentials by starting a replacement connector with the new version, waiting for
-connected status and non-zero subscriptions, then draining the old connector. Revoke the old
-credential only after the replacement is healthy. If rotation fails, restore the previous Vault
-version and restart the connector. Auth token mutations invalidate or refresh the bounded token
-cache; usage and audit records drain through the auth relay.
+1. Confirm the connector reads the new secret version from Vault and validate exchange permissions
+   and IP allowlists for the new credential.
+2. Start a replacement connector with the new credential and wait for connected status and non-zero
+   subscriptions.
+3. Drain the old connector after the new subscriptions are active.
+4. Revoke the old credential only after the replacement reports connected and has non-zero
+   subscriptions.
+5. If rotation fails, roll back to the previous Vault version and restart the connector. Verify
+   update age recovers and no ownership events were lost.
+
+Auth token mutations invalidate or refresh the bounded token cache; usage and audit records drain
+through the auth relay.
+
+## Portfolio runbooks
+
+### Stuck consumer
+
+1. Inspect the consumer:
+
+   ```sh
+   nats consumer info portfolio.updates.v1 portfolio-updates
+   nats consumer info portfolio.ownership.changed.v1 portfolio-ownership
+   ```
+
+2. Check the failure operation:
+
+   - `fetch`: NATS connectivity, stream existence, replica health, permissions.
+   - `apply`: malformed events or a version conflict; inspect service logs.
+   - `checkpoint` or `ack`: KV bucket availability or permissions.
+   - `persist`: the read-model KV bucket is unavailable or full.
+
+3. Verify the read-model bucket exists and is writable.
+4. If the consumer is wedged on a single poison message, restore service after fixing the payload
+   path; do not skip the message without recording the affected account and ownership version.
+5. After recovery, confirm lag returns to baseline and both applied counters advance.
+
+### Stale feed
+
+1. Check `portfolio_connector_connected` and subscription count for the affected exchange.
+2. Check connector reconnect rate and logs.
+3. Confirm the exchange status page and rate-limit behavior.
+4. Verify the exchange gateway has the expected account set from ownership events.
+5. If the connector is connected with subscriptions but update age keeps rising, restart the
+   connector and confirm new snapshots arrive.
+6. Verify order traffic respects the staleness policy while the feed recovers.
 
 ## Teardown process
 
@@ -330,7 +477,7 @@ authority, record that choice, and never silently fall back to missing raw objec
   replicas. Backup and restore drills preserve consumers and rebuild the read model when its
   checkpoints are reset.
 - Connector credential rotation, stale-feed recovery, stuck-consumer recovery, and order
-  authorization fail closed as described by the portfolio runbook.
+  authorization fail closed as described in the portfolio runbooks and credential rotation steps.
 - Run `cargo fmt --all -- --check`, `cargo clippy` with warnings denied, and the archive, lease,
   archiver, compactor, and aggregator suites before rollout.
 - Keep the rollout order: close P0 correctness with real infrastructure tests, add the P1-1 and
@@ -342,6 +489,5 @@ authority, record that choice, and never silently fall back to missing raw objec
 
 - [Environment variables](environment-variables.md)
 - [Health checks](health-checks.md)
-- [Portfolio hardening runbook](portfolio-hardening-runbook.md)
 - [Archive retention and Iceberg maintenance options](archive-maintenance-options.md)
 - [Market data services](../crates/data-plane/README.md)
