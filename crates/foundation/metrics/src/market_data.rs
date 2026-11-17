@@ -219,6 +219,62 @@ impl MarketDataMetrics {
         )
         .increment(1);
     }
+
+    pub fn record_maintenance_stage(stage: &'static str, status: &'static str, objects: u64) {
+        counter!(
+            "market_data_archive_maintenance_stage_outcomes_total",
+            "stage" => stage,
+            "status" => status,
+        )
+        .increment(1);
+        if objects > 0 {
+            counter!(
+                "market_data_archive_maintenance_stage_objects_total",
+                "stage" => stage,
+                "status" => status,
+            )
+            .increment(objects);
+        }
+    }
+
+    pub fn record_maintenance_stage_lag(stage: &str, lag: Duration) {
+        gauge!(
+            "market_data_archive_maintenance_stage_lag_seconds",
+            "stage" => stage.to_string(),
+        )
+        .set(lag.as_secs_f64());
+    }
+
+    pub fn record_maintenance_alert(stage: &'static str, code: &str) {
+        counter!(
+            "market_data_archive_maintenance_alerts_total",
+            "stage" => stage,
+            "code" => code.to_string(),
+        )
+        .increment(1);
+    }
+
+    pub fn record_maintenance_lease_age(fencing_token: u64) {
+        gauge!("market_data_archive_maintenance_lease_token").set(fencing_token as f64);
+    }
+
+    pub fn record_recovery_layer(layer: &'static str, kind: &'static str) {
+        counter!(
+            "market_data_archive_recovery_layer_total",
+            "layer" => layer,
+            "kind" => kind,
+        )
+        .increment(1);
+    }
+
+    pub fn record_raw_expiry_decision(decision: &'static str, kind: &'static str) {
+        counter!(
+            "market_data_archive_raw_expiry_decisions_total",
+            "decision" => decision,
+            "kind" => kind,
+        )
+        .increment(1);
+    }
 }
 
 /// Metrics specific to sharded candle aggregation.

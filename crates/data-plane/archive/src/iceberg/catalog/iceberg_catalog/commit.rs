@@ -64,8 +64,14 @@ impl ConditionalCommitTarget for IcebergCommitTarget<'_> {
             Some(self.catalog.claim_state(state).await?)
         };
         let table_properties = ClaimIndex::append(state, registration, baseline).await?;
-        let properties =
+        let mut properties =
             IcebergCatalog::snapshot_properties(registration.files(), registration.source_files())?;
+        if let Some(compaction_id) = registration.compaction_id() {
+            properties.insert(
+                crate::COMPACTION_ID_PROPERTY.to_string(),
+                compaction_id.as_str(),
+            );
+        }
         let commit = SnapshotCommit::build_with_table_properties(
             state,
             registration.files(),

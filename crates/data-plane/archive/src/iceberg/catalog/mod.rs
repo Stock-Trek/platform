@@ -3,5 +3,5 @@ mod data_file;
 mod iceberg_catalog;
 
 pub use archive_catalog::ArchiveCatalog;
-pub use data_file::IcebergDataFile;
+pub use data_file::{IcebergDataFile, IcebergFilePartition};
 pub use iceberg_catalog::IcebergCatalog;

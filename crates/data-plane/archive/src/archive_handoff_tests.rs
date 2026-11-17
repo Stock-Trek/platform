@@ -35,6 +35,7 @@ impl ArchiveCatalog for FakeCatalog {
         let files = match table.layer() {
             crate::ArchiveTableLayer::Raw => &self.raw,
             crate::ArchiveTableLayer::Compacted => &self.compacted,
+            crate::ArchiveTableLayer::Ledger => &self.compacted,
         };
         Ok(files.clone())
     }

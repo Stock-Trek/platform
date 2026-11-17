@@ -1,8 +1,10 @@
 use crate::ObjectStore;
 use crate::iceberg::catalog::IcebergDataFile;
 use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, CommitContext, RegisterOutcome};
+use crate::{ArchiveKind, CompactionId, LedgerEntry};
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};
+use platform_types::TimestampMilliseconds;
 use std::collections::HashSet;
 use std::time::Duration;
 
@@ -97,6 +99,25 @@ pub trait ArchiveCatalog: Send + Sync {
         Ok(0)
     }
 
+    async fn sweep_orphans(
+        &self,
+        _table: ArchiveIcebergTable,
+        _client: &dyn ObjectStore,
+        _safety_window: Duration,
+    ) -> PlatformResult<usize> {
+        Ok(0)
+    }
+
+    async fn expire_snapshots(
+        &self,
+        _table: ArchiveIcebergTable,
+        _older_than: platform_types::TimestampMilliseconds,
+        _retain_last: usize,
+        _context: &CommitContext,
+    ) -> PlatformResult<usize> {
+        Ok(0)
+    }
+
     async fn compacted_snapshot(
         &self,
         table: ArchiveIcebergTable,
@@ -105,5 +126,40 @@ pub trait ArchiveCatalog: Send + Sync {
             self.data_files(table).await?,
             self.processed_source_files(table).await?,
         ))
+    }
+
+    async fn record_compaction(
+        &self,
+        kind: ArchiveKind,
+        _compaction_id: CompactionId,
+        _bucket_start: TimestampMilliseconds,
+        _sources: &[String],
+        _processed_at: TimestampMilliseconds,
+        _context: &CommitContext,
+    ) -> PlatformResult<RegisterOutcome> {
+        Err(PlatformError::external(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            format!("archive catalog cannot publish the {} ledger", kind.label()),
+        )))
+    }
+
+    async fn ledger_entries(&self, _kind: ArchiveKind) -> PlatformResult<Vec<LedgerEntry>> {
+        Ok(Vec::new())
+    }
+
+    async fn ledger_source_files(&self, _kind: ArchiveKind) -> PlatformResult<HashSet<String>> {
+        Ok(HashSet::new())
+    }
+
+    async fn compaction_recorded(
+        &self,
+        _kind: ArchiveKind,
+        _compaction_id: CompactionId,
+    ) -> PlatformResult<bool> {
+        Ok(false)
+    }
+
+    fn supports_compaction_ledger(&self) -> bool {
+        false
     }
 }

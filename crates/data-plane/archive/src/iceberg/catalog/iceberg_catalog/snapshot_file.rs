@@ -1,6 +1,9 @@
 use crate::iceberg::catalog::IcebergDataFile;
 use iceberg::{
-    spec::{DataContentType, DataFile, DataFileBuilder, DataFileFormat, Struct},
+    spec::{
+        DataContentType, DataFile, DataFileBuilder, DataFileFormat, Literal, PrimitiveLiteral,
+        Struct,
+    },
     table::Table,
 };
 use platform_errors::{PlatformError, PlatformResult};
@@ -41,7 +44,7 @@ impl SnapshotFile {
             .content(DataContentType::Data)
             .file_path(file.file_path.clone())
             .file_format(DataFileFormat::Parquet)
-            .partition(Struct::empty())
+            .partition(Self::partition(table, file)?)
             .partition_spec_id(table.metadata().default_partition_spec_id())
             .record_count(record_count)
             .file_size_in_bytes(file_size_in_bytes)
@@ -51,5 +54,38 @@ impl SnapshotFile {
                     "build Iceberg data file: {error}"
                 )))
             })
+    }
+
+    fn partition(table: &Table, file: &IcebergDataFile) -> PlatformResult<Struct> {
+        let spec = table.metadata().default_partition_spec();
+        if spec.fields().is_empty() {
+            return Ok(Struct::empty());
+        }
+        let partition = file.partition.ok_or_else(|| {
+            PlatformError::external(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "{} is missing partition values for the ledger table",
+                    file.file_path
+                ),
+            ))
+        })?;
+        let fields = spec
+            .fields()
+            .iter()
+            .map(|field| match field.name.as_str() {
+                "archive_kind" => Ok(Some(Literal::Primitive(PrimitiveLiteral::String(
+                    partition.kind.label().to_string(),
+                )))),
+                "partition_hour_millis" => Ok(Some(Literal::Primitive(PrimitiveLiteral::Long(
+                    partition.hour_millis,
+                )))),
+                name => Err(PlatformError::external(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("unsupported ledger partition field {name}"),
+                ))),
+            })
+            .collect::<PlatformResult<Struct>>()?;
+        Ok(fields)
     }
 }
