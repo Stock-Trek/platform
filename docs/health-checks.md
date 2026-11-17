@@ -1,8 +1,8 @@
 # Health checks
 
-Long-running platform services require an HTTP listener for orchestrator probes. Configure it with
-`HEALTH_BIND_ADDRESS`, or with a service-specific `<SERVICE>_HEALTH_BIND_ADDRESS` that takes
-precedence over the shared value. A service refuses to start when neither variable is set.
+Long-running platform services require an HTTP listener for orchestrator probes.
+Configure it with `HEALTH_BIND_ADDRESS`, or with a service-specific `<SERVICE>_HEALTH_BIND_ADDRESS` that takes precedence over the shared value.
+A service refuses to start when neither variable is set.
 
 The listener serves two endpoints:
 
@@ -11,15 +11,16 @@ The listener serves two endpoints:
 | `GET /healthz` | Liveness. The process can serve requests. This endpoint does not depend on downstream systems. |
 | `GET /readyz` | Readiness. The process has completed startup and is ready to receive production traffic. |
 
-Both endpoints return `204 No Content` when healthy. `GET /readyz` returns
-`503 Service Unavailable` while startup or recovery is still in progress. `HEAD` is accepted on
-both paths. Other methods return `405 Method Not Allowed`; unknown paths return `404 Not Found`.
+Both endpoints return `204 No Content` when healthy.
+`GET /readyz` returns `503 Service Unavailable` while startup or recovery is still in progress.
+`HEAD` is accepted on both paths.
+Other methods return `405 Method Not Allowed`; unknown paths return `404 Not Found`.
 
-Liveness is tied to process exit. A process that cannot start, loses its listener, or terminates
-must be restarted by the orchestrator. A failed health listener is treated as a fatal service
-error. Readiness is set only after the service has connected its required dependencies, completed
-recovery work, and bound its production listener. It is cleared when the service begins shutting
-down.
+Liveness is tied to process exit.
+A process that cannot start, loses its listener, or terminates must be restarted by the orchestrator.
+A failed health listener is treated as a fatal service error.
+Readiness is set only after the service has connected its required dependencies, completed recovery work, and bound its production listener.
+It is cleared when the service begins shutting down.
 
 ## Services
 
@@ -35,11 +36,11 @@ down.
 | Rebuilder | `REBUILDER` |
 | Maintainer | `MAINTAINER` |
 
-The portfolio registry exposes `/healthz` and `/readyz` on both its admin and read listeners. Its
-readiness is true once those listeners are accepting requests.
+The portfolio registry exposes `/healthz` and `/readyz` on both its admin and read listeners.
+Its readiness is true once those listeners are accepting requests.
 
 ## Probe guidance
 
-Use `GET /healthz` for liveness probes with a restart policy. Use `GET /readyz` for readiness
-probes that remove the instance from traffic without restarting it. During graceful shutdown,
-orchestrators should rely on connection draining rather than a readiness probe alone.
+Use `GET /healthz` for liveness probes with a restart policy.
+Use `GET /readyz` for readiness probes that remove the instance from traffic without restarting it.
+During graceful shutdown, orchestrators should rely on connection draining rather than a readiness probe alone.

@@ -39,9 +39,8 @@ Everything else is a projection of existing state: the ownership registry, the p
   All resources live under a fixed major version prefix: `/v1`.
 - Changes within `/v1` are additive: new fields may appear in responses, new endpoints may appear.
   Removing or renaming fields, or changing semantics, requires `/v2`.
-- Clients build request bodies from the fields this document defines and never echo response
-  representations back. Unknown fields in requests are rejected with `validation_failed`; unknown
-  fields in responses are ignored by clients.
+- Clients build request bodies from the fields this document defines and never echo response representations back.
+  Unknown fields in requests are rejected with `validation_failed`; unknown fields in responses are ignored by clients.
 
 ## Authentication and sessions
 
