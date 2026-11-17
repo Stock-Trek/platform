@@ -61,7 +61,6 @@ Resource identifiers are not guessable, and every request re-checks ownership.
 | `DELETE` | `/v1/session` | Invalidate the presented token |
 
 `POST /v1/session` takes the owner's platform login credential, an owner-bound credential pair issued by the platform when the owner is onboarded.
-It is a platform credential, not an AWS credential: this is a public API and no AWS keys are involved anywhere in it.
 
 ```json
 { "loginId": "lgn_9f2b", "loginSecret": "..." }
