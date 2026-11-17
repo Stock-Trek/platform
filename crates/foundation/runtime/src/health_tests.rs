@@ -46,13 +46,15 @@ fn health_config_reads_the_shared_address() {
 }
 
 #[test]
-fn health_config_accepts_the_address_alias() {
+fn health_config_rejects_the_retired_address_alias() {
     let vars = EnvVars::from_map([("HEALTH_BIND_ADDRESS", "127.0.0.1:8081")]);
-    let config = HealthConfig::from_vars(&vars).expect("config");
-    assert_eq!(
-        config.address(),
-        "127.0.0.1:8081".parse::<SocketAddr>().expect("address")
-    );
+    assert!(HealthConfig::from_vars(&vars).is_err());
+}
+
+#[test]
+fn health_config_rejects_the_retired_service_address_alias() {
+    let vars = EnvVars::from_map([("AGGREGATOR_HEALTH_BIND_ADDRESS", "127.0.0.1:8082")]);
+    assert!(HealthConfig::from_service_vars(&vars, "AGGREGATOR").is_err());
 }
 
 #[test]

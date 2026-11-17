@@ -12,7 +12,7 @@ mod service;
 mod health_tests;
 
 pub use config::Config;
-pub use health_config::{HEALTH_BIND_ADDR, HEALTH_BIND_ADDRESS, HealthConfig};
+pub use health_config::{HEALTH_BIND_ADDR, HealthConfig};
 pub use health_runner::HealthRunner;
 pub use health_server::HealthServer;
 pub use health_state::HealthState;
