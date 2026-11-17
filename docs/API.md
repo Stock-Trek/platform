@@ -39,7 +39,9 @@ Everything else is a projection of existing state: the ownership registry, the p
   All resources live under a fixed major version prefix: `/v1`.
 - Changes within `/v1` are additive: new fields may appear in responses, new endpoints may appear.
   Removing or renaming fields, or changing semantics, requires `/v2`.
-- Unknown fields in requests are rejected; unknown fields in responses are ignored by clients.
+- Clients build request bodies from the fields this document defines and never echo response
+  representations back. Unknown fields in requests are rejected with `validation_failed`; unknown
+  fields in responses are ignored by clients.
 
 ## Authentication and sessions
 
@@ -53,7 +55,7 @@ Because the client is a browser, the API answers CORS preflights from an allowli
 
 The JWT `owner` claim is the platform identity.
 Every resource in the API is scoped to the owner: a user can only ever see and act on their own accounts, algorithms, bots, runs, and backtests.
-Resource identifiers are not guessable, and every request re-checks ownership.
+Server-assigned identifiers (`alg_`, `bld_`, `bot_`, `run_`, `bt_`) are not guessable; account identifiers are chosen by the owner, so every request re-checks ownership.
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -130,7 +132,7 @@ Errors use RFC 9457 problem details:
 Every response carries an `X-Request-Id` header: the API echoes a client-supplied `X-Request-Id` or generates one, and problem details repeat it as `requestId` so front-end error reports can be matched to server logs.
 
 `stale` mirrors the portfolio service staleness policy (`allow`, `degrade`, `reject`) and applies where an action authorizes against portfolio data: enabling a bot and triggering an ad-hoc run.
-In `degrade` mode accepted-but-stale actions are flagged in responses so the front-end can warn.
+In `degrade` mode accepted-but-stale actions are flagged: the response carries `stale: true` with the `asOf` of the snapshot the action was authorized against, so the front-end can warn.
 `rate_limited` responses carry a `Retry-After` header with the number of seconds to wait before retrying.
 
 ## Streaming
@@ -150,6 +152,7 @@ The client subscribes to channels with `subscribe` actions and leaves them with 
 | `GET` | `/v1/stream` | WebSocket for channel subscriptions |
 
 The server never replays history on any channel.
+A first subscribe omits `lastSequence` and receives only frames published after the server accepts it.
 A `lastSequence` older than the channel's current head is answered with a single gap frame, `{ "channel": "portfolio.binance.main", "gap": { "afterSequence": 41 } }`, and live frames continue after it; the client recovers by re-fetching state over REST (a portfolio snapshot for `portfolio` channels, build and run detail for the others).
 A subscribe that would exceed the per-connection subscription limit is rejected with an error frame and the connection stays open.
 The server pings every 30 seconds and closes connections that miss two pongs.
@@ -528,6 +531,9 @@ Run state changes are pushed on the `runs.{botId}` stream channel.
 `POST /v1/bots/{botId}/runs` materializes a run scheduled now, subject to the ad-hoc run rate limit, and returns `202` with the run representation.
 Disabled and archived bots answer `409 conflict`; ad-hoc runs never bypass a paused schedule.
 
+Runs and their logs are retained for 90 days after a run reaches a terminal state and are deleted afterwards; a deleted run disappears from lists and answers `not_found`.
+Retention is what bounds the run store, because scheduling materializes one record per tick.
+
 ## Backtesting
 
 ### Model
@@ -619,10 +625,11 @@ They are delivered twice: incrementally on the stream as each simulation finishe
 ```
 
 `GET /v1/backtests/{backtestId}/stream?ticket=...` upgrades to a WebSocket, using a stream ticket as described in [Streaming](#streaming).
-Frames are `{ "sequence": 7, "simulation": 13, "result": { ... } }` with `sequence` increasing monotonically for the backtest across connections; a `complete` frame with no `simulation` field marks the collated result.
+Frames are `{ "sequence": 7, "simulation": 13, "result": { ... } }` with `sequence` increasing monotonically for the backtest across connections; a `complete` frame with no `simulation` field marks completion and carries no results; clients then fetch the collated set over REST.
 The stream ends when the backtest reaches a terminal state; reconnecting clients pass `?cursor=<sequence>` for the last frame they saw and receive the stored results after it, and clients that connect after the backtest finished receive the `complete` frame and the stream closes.
 
 `DELETE /v1/backtests/{backtestId}` cancels queued and running backtests (`204`) and is idempotent on terminal backtests.
+Backtests and their results are retained for 30 days after a backtest reaches a terminal state and are deleted afterwards; a deleted backtest disappears from lists and answers `not_found`.
 
 ### Initial balances
 
@@ -636,3 +643,4 @@ Using a real linked account's current balances is a front-end convenience: it co
 - [Market data services](market-data-services.md) for the aggregation and correction contract
 - [Market data](market-data.md) for the ingest pipeline
 - [Environment variables](environment-variables.md) for the portfolio service and artifact limits referenced above
+- [Health checks](health-checks.md) for the platform probe contract the API follows
