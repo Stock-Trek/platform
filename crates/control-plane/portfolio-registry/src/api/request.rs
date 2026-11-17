@@ -43,7 +43,7 @@ pub async fn read_json<T: DeserializeOwned>(request: Request<Incoming>) -> Resul
     let body = Limited::new(request.into_body(), MAX_REQUEST_BYTES);
     let collected = timeout(BODY_TIMEOUT, body.collect())
         .await
-        .map_err(|_| ApiError::bad_request("request body timed out"))?
+        .map_err(|_| ApiError::request_timeout("request body timed out"))?
         .map_err(|error| {
             if error.downcast_ref::<LengthLimitError>().is_some() {
                 ApiError::payload_too_large()
