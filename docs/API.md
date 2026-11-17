@@ -87,6 +87,7 @@ Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
 - Exchange and asset identifiers use the platform's canonical codes: `CexId` values such as `binance` and `AssetId` codes such as `btc` and `usdt`.
   Trading pairs are `{"base": "btc", "quote": "usdt"}`.
 - List endpoints paginate with `limit` (default `50`, maximum `200`) and an opaque `cursor`.
+  A `limit` above the maximum is clamped to the maximum.
   Responses wrap arrays as `{ "data": [...], "nextCursor": "..." | null }`.
   Lists are newest first by creation time unless an endpoint says otherwise.
 - `POST` endpoints that create resources or trigger work accept an `Idempotency-Key` header.
@@ -118,11 +119,11 @@ Errors use RFC 9457 problem details:
 | `forbidden` | 403 | Token lacks the required scope |
 | `not_owned` | 403 | Resource exists but belongs to another owner |
 | `not_found` | 404 | Resource does not exist for this owner |
-| `conflict` | 409 | Version mismatch or duplicate resource |
+| `conflict` | 409 | Version mismatch, duplicate resource, or resource state that forbids the action |
 | `stale` | 409 | Portfolio data is too old to authorize the action |
 | `out_of_contract` | 409 | Candle correction reach exceeded the retention contract |
-| `payload_too_large` | 413 | Request or referenced artifact exceeds a size limit |
-| `rate_limited` | 429 | Per-owner quota exhausted |
+| `payload_too_large` | 413 | Request, result, or referenced artifact exceeds a size limit |
+| `rate_limited` | 429 | Rate limit or quota exhausted |
 | `internal` | 500 | Unexpected server error |
 | `unavailable` | 503 | Dependency is down; retry with backoff |
 
@@ -142,6 +143,11 @@ The client subscribes to channels with `subscribe` actions and leaves them with 
 { "action": "subscribe", "channel": "portfolio.binance.main", "lastSequence": 41 }
 { "channel": "portfolio.binance.main", "sequence": 42, "data": { "...": "..." } }
 ```
+
+| Method | Path | Description |
+| --- | --- | --- |
+| `POST` | `/v1/stream/ticket` | Issue a single-use stream ticket |
+| `GET` | `/v1/stream` | WebSocket for channel subscriptions |
 
 The server never replays history on any channel.
 A `lastSequence` older than the channel's current head is answered with a single gap frame, `{ "channel": "portfolio.binance.main", "gap": { "afterSequence": 41 } }`, and live frames continue after it; the client recovers by re-fetching state over REST (a portfolio snapshot for `portfolio` channels, build and run detail for the others).
@@ -166,6 +172,7 @@ Channels:
 | Concurrent stream subscriptions per connection | 32 |
 | Maximum request body size | 1 MiB |
 | Referenced build artifact size | `S3_MAX_ARTIFACT_SIZE_BYTES` |
+| Maximum backtest result size per simulation | 64 KiB |
 
 ## Accounts and portfolios
 
@@ -462,6 +469,7 @@ The response is `201` with:
 
 Validation rules:
 
+- `algorithmId` must reference an `active` algorithm when the bot is created.
 - `buildId` must be `latest` or belong to `algorithmId` and be in state `ready`.
 - `strategyName` must exist in that build.
 - `parameters` must satisfy the strategy's preference schema.
@@ -470,6 +478,7 @@ Validation rules:
 
 `PATCH /v1/bots/{botId}` accepts the same fields minus `algorithmId`, applies only the fields present in the body, and re-validates `parameters` when the build or strategy changes, failing with `400 validation_failed` on mismatch.
 Bot mutations — `PATCH`, `enable`, `disable` — require `If-Match` with the current `version` and return the updated bot representation.
+Enabling re-checks the account references against current state and fails with `400 validation_failed` when a referenced account is no longer linked or active.
 
 A `buildId` of `latest` tracks the algorithm's `latestReadyBuildId`: every run resolves the current latest ready build and re-validates `parameters` against its preference schema, falling back to the previous build when validation fails.
 A concrete `buildId` pins the bot to that build.
@@ -589,6 +598,7 @@ Validation mirrors the runner's spec checks and fails fast with `validation_fail
 - Every chance field is a decimal string in `[0, 1]`.
 - `count` is at least 1 and at most 1000; `maxConcurrent` is clamped to the runner's worker limits.
 - No more than the per-owner concurrent backtest limit in [Limits](#limits) may be `queued` or `running` at once; a further creation returns `429 rate_limited` with `Retry-After`.
+- A simulation result larger than the per-simulation limit in [Limits](#limits) fails the backtest.
 
 `from` and `to` bound the archived candles fetched for every requested pair and window, and each strategy sees the last `historicalCandleCount` closed candles before every simulation step.
 
@@ -597,7 +607,7 @@ Validation mirrors the runner's spec checks and fails fast with `validation_fail
 Per-simulation results are JSON objects produced by the strategy's simulation runtime.
 They are delivered twice: incrementally on the stream as each simulation finishes, and collated as an array at completion.
 
-`GET /v1/backtests/{backtestId}/results` returns the collated array:
+`GET /v1/backtests/{backtestId}/results` returns the collated array; `results` stays empty until the backtest reaches `completed`:
 
 ```json
 {
