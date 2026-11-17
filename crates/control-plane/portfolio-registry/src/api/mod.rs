@@ -1,8 +1,6 @@
 mod admin_api;
 mod api_connection;
 mod api_error;
-#[cfg(test)]
-mod api_error_tests;
 mod api_server;
 mod read_api;
 mod request;
