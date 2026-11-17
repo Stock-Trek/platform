@@ -2,6 +2,7 @@ use crate::object_lister::ObjectLister;
 use crate::source::{ArchiveBatchSource, S3ArchiveSource};
 use crate::source_inventory::INVENTORY_RECONCILE_POLLS;
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchivePath, ArchiveRegistration, Bucket,
     CommitContext, ObjectKey, RegisterOutcome, RoutingBucket, S3Object, S3ObjectPage, SourceBatch,
@@ -9,7 +10,7 @@ use platform_archive::{
 use platform_errors::PlatformResult;
 use platform_types::TimestampMilliseconds;
 use std::collections::{BTreeMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 #[derive(Default)]
 struct FakeLister {
@@ -21,16 +22,15 @@ impl FakeLister {
     fn insert(&self, object: S3Object) {
         self.objects
             .lock()
-            .unwrap()
             .insert(object.key.as_str().to_string(), object);
     }
 
     fn omit(&self, key: &str) {
-        self.omitted.lock().unwrap().insert(key.to_string());
+        self.omitted.lock().insert(key.to_string());
     }
 
     fn restore(&self, key: &str) {
-        self.omitted.lock().unwrap().remove(key);
+        self.omitted.lock().remove(key);
     }
 }
 
@@ -45,11 +45,10 @@ impl ObjectLister for FakeLister {
         max_keys: i32,
     ) -> PlatformResult<S3ObjectPage> {
         let after = continuation_token.or(start_after).unwrap_or("");
-        let omitted = self.omitted.lock().unwrap();
+        let omitted = self.omitted.lock();
         let objects = self
             .objects
             .lock()
-            .unwrap()
             .range(after.to_string()..)
             .filter(|(key, _)| {
                 key.starts_with(prefix.as_str()) && key.as_str() > after && !omitted.contains(*key)
@@ -77,14 +76,11 @@ struct FakeCatalog {
 
 impl FakeCatalog {
     fn live(&self, uri: &str) {
-        self.raw_live.lock().unwrap().insert(uri.to_string());
+        self.raw_live.lock().insert(uri.to_string());
     }
 
     fn claim(&self, uri: &str) {
-        self.compacted_claimed
-            .lock()
-            .unwrap()
-            .insert(uri.to_string());
+        self.compacted_claimed.lock().insert(uri.to_string());
     }
 }
 
@@ -103,14 +99,14 @@ impl ArchiveCatalog for FakeCatalog {
         &self,
         _table: ArchiveIcebergTable,
     ) -> PlatformResult<HashSet<String>> {
-        Ok(self.raw_live.lock().unwrap().clone())
+        Ok(self.raw_live.lock().clone())
     }
 
     async fn processed_source_files(
         &self,
         _table: ArchiveIcebergTable,
     ) -> PlatformResult<HashSet<String>> {
-        Ok(self.compacted_claimed.lock().unwrap().clone())
+        Ok(self.compacted_claimed.lock().clone())
     }
 }
 

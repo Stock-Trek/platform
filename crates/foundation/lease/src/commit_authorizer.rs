@@ -1,9 +1,10 @@
 use crate::{Lease, LeaseContext, LeaseStore};
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::{PlatformError, PlatformResult};
 use platform_metrics::MarketDataMetrics;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tracing::warn;
 
@@ -62,15 +63,11 @@ impl CommitAuthorizer for LeaseCommitAuthorizer {
 
     async fn authorize(&self) -> PlatformResult<()> {
         if self.lost.load(Ordering::SeqCst) || Instant::now() >= self.deadline {
-            let lease = self.lease.lock().expect("lease authorizer lock poisoned");
+            let lease = self.lease.lock();
             MarketDataMetrics::record_lease_lost(lease.scope.as_str(), "deadline");
             return Err(Self::not_writable(&lease));
         }
-        let lease = self
-            .lease
-            .lock()
-            .expect("lease authorizer lock poisoned")
-            .clone();
+        let lease = self.lease.lock().clone();
         let Some(renewed) = self.store.renew(&lease, self.ttl).await? else {
             self.lost.store(true, Ordering::SeqCst);
             MarketDataMetrics::record_lease_lost(lease.scope.as_str(), "expired");
@@ -81,7 +78,7 @@ impl CommitAuthorizer for LeaseCommitAuthorizer {
             MarketDataMetrics::record_lease_lost(lease.scope.as_str(), "token_changed");
             return Err(Self::not_writable(&lease));
         }
-        *self.lease.lock().expect("lease authorizer lock poisoned") = renewed;
+        *self.lease.lock() = renewed;
         Ok(())
     }
 }
@@ -89,7 +86,7 @@ impl CommitAuthorizer for LeaseCommitAuthorizer {
 impl Drop for LeaseCommitAuthorizer {
     fn drop(&mut self) {
         if self.lost.load(Ordering::SeqCst) {
-            let lease = self.lease.lock().expect("lease authorizer lock poisoned");
+            let lease = self.lease.lock();
             warn!(
                 table = self.context.table(),
                 scope = %lease.scope.as_str(),

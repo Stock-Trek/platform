@@ -16,6 +16,7 @@ futures = { workspace = true }
 iceberg = { workspace = true }
 iceberg-catalog-rest = { workspace = true }
 iceberg-storage-opendal = { workspace = true }
+parking_lot = { workspace = true }
 parquet = { workspace = true, features = ["async"] }
 platform-aws = { workspace = true }
 platform-config = { workspace = true }

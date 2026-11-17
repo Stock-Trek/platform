@@ -2,6 +2,7 @@ use crate::sink::S3ParquetSink;
 use async_trait::async_trait;
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::config::{Credentials, Region};
+use parking_lot::Mutex;
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, Bucket, CommitContext,
     ConflictDetails, IcebergDataFile, RegisterOutcome, S3ObjectStore, S3ParquetRowCounter,
@@ -9,8 +10,8 @@ use platform_archive::{
 use platform_errors::PlatformResult;
 use platform_lease::InMemoryLeaseStore;
 use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 struct FakeCatalog {
@@ -48,15 +49,14 @@ impl ArchiveCatalog for FakeCatalog {
             .into_iter()
             .collect::<Vec<_>>();
         outputs.sort();
-        self.batches.lock().unwrap().push(outputs.clone());
+        self.batches.lock().push(outputs.clone());
         let outcome = self
             .outcomes
             .lock()
-            .unwrap()
             .pop_front()
             .unwrap_or(RegisterOutcome::Applied);
         if matches!(outcome, RegisterOutcome::Applied) {
-            self.live.lock().unwrap().extend(outputs);
+            self.live.lock().extend(outputs);
         }
         Ok(outcome)
     }
@@ -65,7 +65,7 @@ impl ArchiveCatalog for FakeCatalog {
         &self,
         _table: ArchiveIcebergTable,
     ) -> PlatformResult<HashSet<String>> {
-        Ok(self.live.lock().unwrap().clone())
+        Ok(self.live.lock().clone())
     }
 
     async fn processed_source_files(
@@ -135,7 +135,7 @@ async fn a_partial_flush_conflict_registers_only_the_remainder() {
         .unwrap();
 
     assert_eq!(catalog.calls.load(Ordering::SeqCst), 2);
-    let batches = catalog.batches.lock().unwrap();
+    let batches = catalog.batches.lock();
     assert_eq!(batches[0].len(), 2);
     assert_eq!(batches[1], vec!["s3://archive/raw/b.parquet".to_string()]);
 }

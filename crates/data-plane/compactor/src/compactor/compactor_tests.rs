@@ -2,6 +2,7 @@ use super::Compactor;
 use async_trait::async_trait;
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::config::{Credentials, Region};
+use parking_lot::Mutex;
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveRegistration, CommitContext,
     ConflictDetails, IcebergDataFile, RegisterOutcome, S3ObjectStore, SourceBatch,
@@ -10,7 +11,7 @@ use platform_errors::PlatformResult;
 use platform_lease::{InMemoryLeaseStore, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
 use platform_types::TimestampMilliseconds;
 use std::collections::HashSet;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 struct FakeCatalog {
@@ -30,10 +31,7 @@ impl ArchiveCatalog for FakeCatalog {
         let Some(outcome) = &self.outcome else {
             panic!("registration must not be attempted in this coordination test")
         };
-        self.registrations
-            .lock()
-            .unwrap()
-            .push(registration.clone());
+        self.registrations.lock().push(registration.clone());
         Ok(outcome.clone())
     }
 
@@ -272,7 +270,7 @@ async fn a_compaction_conflict_defers_the_source_claim_without_failing() {
 
     assert!(skipped);
     {
-        let registrations = catalog.registrations.lock().unwrap();
+        let registrations = catalog.registrations.lock();
         assert_eq!(registrations.len(), 1);
         assert_eq!(
             registrations[0].source_files().unwrap(),
@@ -323,7 +321,7 @@ async fn a_successful_compaction_registration_is_not_reported_as_skipped() {
         .unwrap();
 
     assert!(!skipped);
-    assert_eq!(catalog.registrations.lock().unwrap().len(), 1);
+    assert_eq!(catalog.registrations.lock().len(), 1);
     guard.release().await.unwrap();
 }
 

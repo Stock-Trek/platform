@@ -1,10 +1,11 @@
 use super::commit_algorithm::{CommitRetry, ConditionalCommitTarget, Evaluation};
 use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, CommitContext, IcebergDataFile};
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::{PlatformError, PlatformResult};
 use std::collections::HashSet;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::sync::{Barrier, Notify};
 
@@ -26,7 +27,7 @@ pub(super) struct FakeBackend {
 
 impl FakeBackend {
     pub(super) fn claim(&self, sources: &[&str], outputs: &[&str]) {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         state
             .claimed_sources
             .extend(sources.iter().map(|source| source.to_string()));
@@ -37,11 +38,11 @@ impl FakeBackend {
     }
 
     fn state(&self) -> FakeState {
-        self.state.lock().unwrap().clone()
+        self.state.lock().clone()
     }
 
     fn apply(&self, expected_version: u64, registration: &ArchiveRegistration) -> bool {
-        let mut state = self.state.lock().unwrap();
+        let mut state = self.state.lock();
         if state.version != expected_version {
             return false;
         }

@@ -5,9 +5,10 @@ use crate::iceberg::catalog::iceberg_catalog::claim_index_block::ClaimIndexBlock
 use crate::iceberg::catalog::iceberg_catalog::claim_index_page::{ClaimIndexPage, IndexParent};
 use crate::iceberg::{ArchiveRegistration, CommitContext};
 use iceberg::table::Table;
+use parking_lot::Mutex;
 use platform_errors::{PlatformError, PlatformResult};
 use std::collections::{HashMap, HashSet};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 pub(super) const INDEX_HEAD_KEY: &str = "archive.index-head";
 pub(super) const INDEX_HEAD_DIGEST_KEY: &str = "archive.index-head-digest";
@@ -225,46 +226,31 @@ pub(super) struct ClaimIndexCache {
 
 impl ClaimIndexCache {
     pub(super) fn get_page(&self, digest: &str) -> Option<Arc<ClaimIndexPage>> {
-        self.pages
-            .lock()
-            .expect("claim index cache lock poisoned")
-            .get(digest)
-            .cloned()
+        self.pages.lock().get(digest).cloned()
     }
 
     pub(super) fn get_block(&self, digest: &str) -> Option<Arc<ClaimIndexBlock>> {
-        self.blocks
-            .lock()
-            .expect("claim index cache lock poisoned")
-            .get(digest)
-            .cloned()
+        self.blocks.lock().get(digest).cloned()
     }
 
     pub(super) fn get_batch_block(&self, digest: &str) -> Option<Arc<ClaimIndexBatchBlock>> {
-        self.batch_blocks
-            .lock()
-            .expect("claim index cache lock poisoned")
-            .get(digest)
-            .cloned()
+        self.batch_blocks.lock().get(digest).cloned()
     }
 
     pub(super) fn insert_page(&self, digest: String, page: ClaimIndexPage) {
-        let mut pages = self.pages.lock().expect("claim index cache lock poisoned");
+        let mut pages = self.pages.lock();
         Self::evict_if_full(&mut pages);
         pages.insert(digest, Arc::new(page));
     }
 
     pub(super) fn insert_block(&self, digest: String, block: ClaimIndexBlock) {
-        let mut blocks = self.blocks.lock().expect("claim index cache lock poisoned");
+        let mut blocks = self.blocks.lock();
         Self::evict_if_full(&mut blocks);
         blocks.insert(digest, Arc::new(block));
     }
 
     pub(super) fn insert_batch_block(&self, digest: String, block: ClaimIndexBatchBlock) {
-        let mut blocks = self
-            .batch_blocks
-            .lock()
-            .expect("claim index cache lock poisoned");
+        let mut blocks = self.batch_blocks.lock();
         Self::evict_if_full(&mut blocks);
         blocks.insert(digest, Arc::new(block));
     }
