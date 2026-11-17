@@ -43,28 +43,36 @@ impl IcebergCatalog {
         let entries = self.read_ledger_entries(&table, kind).await?;
         let mut sources = HashSet::new();
         for entry in entries {
-            let input = table
-                .file_io()
-                .new_input(&entry.source_manifest_uri)
-                .map_err(|error| Self::catalog_error("open source manifest", error))?;
-            let manifest = SourceManifestParquet::decode(
-                input
-                    .read()
-                    .await
-                    .map_err(|error| Self::catalog_error("read source manifest", error))?,
-            )?;
-            if manifest.compaction_id != entry.compaction_id {
-                return Err(PlatformError::external(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!(
-                        "source manifest {} does not match ledger compaction id {}",
-                        entry.source_manifest_uri, entry.compaction_id
-                    ),
-                )));
-            }
-            sources.extend(manifest.sources);
+            sources.extend(self.read_source_manifest(&table, &entry).await?.sources);
         }
         Ok(sources)
+    }
+
+    pub(super) async fn read_source_manifest(
+        &self,
+        table: &iceberg::table::Table,
+        entry: &LedgerEntry,
+    ) -> PlatformResult<SourceManifest> {
+        let input = table
+            .file_io()
+            .new_input(&entry.source_manifest_uri)
+            .map_err(|error| Self::catalog_error("open source manifest", error))?;
+        let manifest = SourceManifestParquet::decode(
+            input
+                .read()
+                .await
+                .map_err(|error| Self::catalog_error("read source manifest", error))?,
+        )?;
+        if manifest.compaction_id != entry.compaction_id {
+            return Err(PlatformError::external(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!(
+                    "source manifest {} does not match ledger compaction id {}",
+                    entry.source_manifest_uri, entry.compaction_id
+                ),
+            )));
+        }
+        Ok(manifest)
     }
 
     pub async fn compaction_recorded(
@@ -81,42 +89,69 @@ impl IcebergCatalog {
         table: &iceberg::table::Table,
         kind: ArchiveKind,
     ) -> PlatformResult<Vec<LedgerEntry>> {
+        let files = self
+            .data_files_from_table(table)
+            .await?
+            .into_iter()
+            .map(|file| file.file_path);
+        self.read_ledger_entries_from_files(table, kind, files)
+            .await
+    }
+
+    pub(super) async fn read_ledger_entries_from_files(
+        &self,
+        table: &iceberg::table::Table,
+        kind: ArchiveKind,
+        files: impl IntoIterator<Item = String>,
+    ) -> PlatformResult<Vec<LedgerEntry>> {
         let mut by_id = HashMap::new();
-        for file in self.data_files_from_table(table).await? {
-            let input = table
-                .file_io()
-                .new_input(&file.file_path)
-                .map_err(|error| Self::catalog_error("open ledger data file", error))?;
-            let bytes = input
-                .read()
-                .await
-                .map_err(|error| Self::catalog_error("read ledger data file", error))?;
-            for entry in LedgerParquet::decode(bytes)? {
-                if entry.kind != kind {
-                    return Err(PlatformError::external(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "ledger row has the wrong archive kind",
-                    )));
-                }
-                if entry.format_version > LEDGER_FORMAT_VERSION {
-                    return Err(PlatformError::external(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        "ledger row uses a newer format version",
-                    )));
-                }
-                if let Some(existing) = by_id.insert(entry.compaction_id, entry.clone())
-                    && existing != entry
-                {
-                    return Err(PlatformError::external(std::io::Error::new(
-                        std::io::ErrorKind::InvalidData,
-                        format!("ledger has conflicting rows for {}", entry.compaction_id),
-                    )));
-                }
-            }
+        for file in files {
+            self.read_ledger_entry_file(table, kind, &file, &mut by_id)
+                .await?;
         }
         let mut entries = by_id.into_values().collect::<Vec<_>>();
         entries.sort_by_key(|entry| (entry.processed_at, entry.compaction_id));
         Ok(entries)
+    }
+
+    async fn read_ledger_entry_file(
+        &self,
+        table: &iceberg::table::Table,
+        kind: ArchiveKind,
+        file: &str,
+        by_id: &mut HashMap<CompactionId, LedgerEntry>,
+    ) -> PlatformResult<()> {
+        let input = table
+            .file_io()
+            .new_input(file)
+            .map_err(|error| Self::catalog_error("open ledger data file", error))?;
+        let bytes = input
+            .read()
+            .await
+            .map_err(|error| Self::catalog_error("read ledger data file", error))?;
+        for entry in LedgerParquet::decode(bytes)? {
+            if entry.kind != kind {
+                return Err(PlatformError::external(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "ledger row has the wrong archive kind",
+                )));
+            }
+            if entry.format_version > LEDGER_FORMAT_VERSION {
+                return Err(PlatformError::external(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "ledger row uses a newer format version",
+                )));
+            }
+            if let Some(existing) = by_id.insert(entry.compaction_id, entry.clone())
+                && existing != entry
+            {
+                return Err(PlatformError::external(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    format!("ledger has conflicting rows for {}", entry.compaction_id),
+                )));
+            }
+        }
+        Ok(())
     }
 
     async fn ledger_contains(

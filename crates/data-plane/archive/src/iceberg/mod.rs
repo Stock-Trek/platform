@@ -9,7 +9,10 @@ mod archive_iceberg_table_tests;
 mod registration_tests;
 
 pub use archive_iceberg_table::{ArchiveIcebergTable, ArchiveTableLayer};
-pub use catalog::{ArchiveCatalog, IcebergCatalog, IcebergDataFile, IcebergFilePartition};
+pub use catalog::{
+    ArchiveCatalog, CompactedRewriteCandidate, CompactedRewritePlan, IcebergCatalog,
+    IcebergDataFile, IcebergFilePartition, RawCleanupOutcome, RawCleanupPlan,
+};
 pub use config::{
     ICEBERG_CATALOG_TOKEN, ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE, ICEBERG_NAMESPACE,
     IcebergConfig,

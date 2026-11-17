@@ -60,10 +60,10 @@ impl RecoveryInput {
                 "ledger is unavailable after raw expiry",
             ));
         }
-        if !self.raw_expired && !self.raw_available && self.ledger_sources.is_empty() {
+        if !self.raw_expired && !self.raw_available {
             return Err(Self::error(
                 self.kind,
-                "raw data is unavailable before raw expiry and no ledger is present",
+                "raw data is unavailable before raw expiry",
             ));
         }
 

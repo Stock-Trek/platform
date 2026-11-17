@@ -65,6 +65,13 @@ fn recovery_requires_durable_copies_after_raw_expiry() {
 }
 
 #[test]
+fn a_missing_raw_object_before_expiry_fails_closed() {
+    let mut input = base();
+    input.raw_available = false;
+    assert!(input.decide().is_err());
+}
+
+#[test]
 fn unreadable_source_manifests_quarantine_recovery() {
     let mut input = base();
     input.source_manifests_readable = false;

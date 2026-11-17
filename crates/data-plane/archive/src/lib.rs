@@ -89,8 +89,9 @@ pub use compaction_id::{COMPACTION_ID_PROPERTY, CompactionId};
 pub use content_hash::{ContentHash, ContentHasher};
 pub use iceberg::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, ArchiveTableLayer, CommitContext,
-    ConflictDetails, ICEBERG_CATALOG_TOKEN, ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE,
-    ICEBERG_NAMESPACE, IcebergCatalog, IcebergConfig, IcebergDataFile, IcebergFilePartition,
+    CompactedRewriteCandidate, CompactedRewritePlan, ConflictDetails, ICEBERG_CATALOG_TOKEN,
+    ICEBERG_CATALOG_URI, ICEBERG_CATALOG_WAREHOUSE, ICEBERG_NAMESPACE, IcebergCatalog,
+    IcebergConfig, IcebergDataFile, IcebergFilePartition, RawCleanupOutcome, RawCleanupPlan,
     RegisterOutcome,
 };
 pub use layout::{ArchiveBucket, ArchiveHour, ArchivePath};
