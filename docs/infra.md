@@ -27,8 +27,8 @@ endpoint, and network access to every configured exchange.
 - S3 must provide the raw archive, compacted archive, build artifact, run artifact, run log, and
   rebuilt-candle locations. The Iceberg REST catalog must support conditional updates containing
   `assert-table-uuid` and `assert-ref-snapshot-id`.
-- Archive tables must use an unpartitioned default spec, the supported schema/format and claim-index
-  version, and `commit.retry.num-retries=0`.
+- Archive tables must use an unpartitioned default spec, the supported schema/format and batch-keyed
+  claim-index format v4, and `commit.retry.num-retries=0`.
 - Vault stores auth-service tokens and exchange credentials. Valkey provides replay protection and
   the token-usage queue. DynamoDB stores portfolio ownership and scheduled runs. SQS carries build
   requests and auth audit events.
@@ -107,6 +107,21 @@ consumer outage plus the disaster-recovery replay window.
   each raw prefix and raw table. Normal raw flushes do not need a lease because their path-based
   conditional commit is sufficient.
 
+### Archive claim index and maintenance
+
+Snapshot summaries serialize source claims with a version, count, and digest. Loading rejects
+missing `source-file:`, wrong `source-claim-count`, or wrong `archive-claim-version` metadata rather
+than treating damaged claims as unclaimed.
+
+The claim index is batch-keyed format v4 and supports point lookups by source, output, and archive
+batch. It uses a digest cache and atomic head updates. Consolidation is scheduled and lease-gated,
+retires live batches, and sweeps only metadata unreachable from the current table state. Indexed
+commits install finite retention properties in the same conditional update.
+
+The compactor deletes unreachable archive metadata only after `COMPACTOR_MAINTENANCE_SAFETY_SECS`,
+which defaults to 24 hours and must be positive. A live compacted output or retained batch keeps its
+source and output claims and blocks recompaction even after older snapshots expire.
+
 ## Provisioning process
 
 1. Provision NATS, object storage, the Iceberg catalog and warehouse, Vault, Valkey, DynamoDB, SQS,
@@ -167,6 +182,9 @@ overlapping claim; and recovery objects registered, skipped as already live, and
 conflict. Lease loss and source-claim overlap are warnings, not silent retries. Treat repeated
 compaction of the same sources, index fallback scans, lease-token regressions, and recovery pages
 that cannot finish inside the lease window as release-blocking.
+
+Compactor inventory polling is incremental with a periodic full reconcile. It emits listing,
+claim-index read, cache, poll-duration, fallback-scan, and backlog metrics.
 
 ### Backup
 
@@ -268,21 +286,30 @@ authority, record that choice, and never silently fall back to missing raw objec
 
 - A source-bearing compacted commit survives a real REST-catalog round trip, reloads the same live
   files and processed-source set, and returns `AlreadyApplied` when the response is lost. Damaged
-  claim metadata fails loading instead of appearing unclaimed.
-- The required NATS lease suite proves acquire/release/reacquire with `previous + 1`, stale release,
-  expired takeover, renewal failure, and aggregator checkpoint handover.
+  claim metadata, including a missing `source-file:`, a wrong `source-claim-count`, or a wrong
+  `archive-claim-version`, fails loading instead of appearing unclaimed.
+- The NATS lease suite runs in CI or a required integration environment, not as an opt-in test. It
+  proves acquire/release/reacquire with `previous + 1`, stale release, expired takeover, renewal
+  failure, property contention, successor takeover during backoff, and aggregator checkpoint
+  handover.
 - S3-backed retention tests use multiple continuation tokens, prove a live output still blocks
   recompaction after old snapshots expire, and delete only unreachable metadata after the safety
-  window.
-- Recovery tests page a large backlog, register each object once, handle a cross-page conflict, skip
-  already-live paths on restart, and release the lease at the soft deadline. A recovery scan that
-  exceeds `ARCHIVER_MAX_WORK_SECS` aborts without registering.
+  window. Use `metadata_sweep_paginates_and_deletes_only_unreachable_old_objects` to cover the
+  paginated sweep and safety-window decision with an injected object store.
+- Recovery tests exercise `recover_table_pages` against a real S3 listing with multiple
+  continuation tokens. They page a large backlog, register each object once, handle a cross-page
+  conflict by registering only the remainder, skip already-live paths on restart, and release the
+  lease at the soft deadline. A recovery scan that exceeds `ARCHIVER_MAX_WORK_SECS` aborts without
+  registering.
 - A compaction that exceeds `COMPACTOR_MAX_WORK_SECS` aborts without registering, and concurrent
   normal flushes of the same object path append it once.
-- Inventory-gap reconciliation discovers an omitted object without skipping or duplicating it.
+- Inventory-gap reconciliation discovers an omitted object without skipping or duplicating it. Use
+  `an_inventory_gap_is_reconciled_without_skipping_or_duplicating_a_source` to prove that the fake
+  incremental listing omits the object and the periodic full reconcile finds it.
 - An end-to-end suite against the real REST catalog, S3-compatible storage, and NATS covers
   archiver flush, compactor claim, reload, ambiguous response, graceful handover, recovery, and
-  orphan cleanup.
+  orphan cleanup. `an_unreferenced_index_page_waits_for_the_safety_window` covers only an
+  unreferenced index page; real manifest cleanup still needs the end-to-end environment.
 
 ### Data plane
 
@@ -306,8 +333,10 @@ authority, record that choice, and never silently fall back to missing raw objec
   authorization fail closed as described by the portfolio runbook.
 - Run `cargo fmt --all -- --check`, `cargo clippy` with warnings denied, and the archive, lease,
   archiver, compactor, and aggregator suites before rollout.
-- Do not enable production compaction until P0 correctness gates and the P1 scale,
-  fault-injection, and orphan-cleanup tests pass against real infrastructure.
+- Keep the rollout order: close P0 correctness with real infrastructure tests, add the P1-1 and
+  P1-2 S3-backed evidence, then add P1-3 inventory-gap and P1-5 end-to-end and orphan-cleanup tests.
+  Do not enable production compaction until all P0 and P1 scale, fault-injection, and
+  orphan-cleanup tests pass against real infrastructure.
 
 ## Related references
 
@@ -315,5 +344,4 @@ authority, record that choice, and never silently fall back to missing raw objec
 - [Health checks](health-checks.md)
 - [Portfolio hardening runbook](portfolio-hardening-runbook.md)
 - [Archive retention and Iceberg maintenance options](archive-maintenance-options.md)
-- [Archive writer coordination cleanup](archive-writer-coordination-cleanup.md)
 - [Market data services](../crates/data-plane/README.md)
