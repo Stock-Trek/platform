@@ -13,7 +13,7 @@ use tokio::{net::TcpListener, sync::watch, task::JoinSet, time::timeout};
 use tracing::warn;
 
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(5);
-const ALLOWED_METHODS: &str = "GET, HEAD";
+const ALLOWED_METHODS: &[Method] = &[Method::GET, Method::HEAD];
 
 pub struct HealthServer {
     listener: TcpListener,
@@ -123,10 +123,15 @@ impl HealthServer {
         Ok(response)
     }
 
-    fn response(status: StatusCode, allow: Option<&str>) -> Response<Full<Bytes>> {
+    fn response(status: StatusCode, allow: Option<&[Method]>) -> Response<Full<Bytes>> {
         let mut response = Response::new(Full::default());
         *response.status_mut() = status;
         if let Some(allow) = allow {
+            let allow = allow
+                .iter()
+                .map(Method::as_str)
+                .collect::<Vec<_>>()
+                .join(", ");
             response.headers_mut().insert(
                 hyper::header::ALLOW,
                 allow.parse().expect("valid allow header"),

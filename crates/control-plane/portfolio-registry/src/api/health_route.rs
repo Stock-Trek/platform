@@ -5,7 +5,7 @@ use hyper::{
     body::{Bytes, Incoming},
 };
 
-const ALLOWED_METHODS: &str = "GET, HEAD";
+const ALLOWED_METHODS: &[Method] = &[Method::GET, Method::HEAD];
 
 pub struct HealthRoute;
 

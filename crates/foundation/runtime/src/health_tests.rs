@@ -1,4 +1,5 @@
 use crate::{HealthConfig, HealthServer, HealthState};
+use hyper::Method;
 use platform_config::EnvVars;
 use platform_errors::PlatformResult;
 use std::net::SocketAddr;
@@ -11,10 +12,12 @@ use tokio::{
 struct TestRequest;
 
 impl TestRequest {
-    async fn send(address: SocketAddr, method: &str, path: &str) -> (u16, String) {
+    async fn send(address: SocketAddr, method: Method, path: &str) -> (u16, String) {
         let mut stream = TcpStream::connect(address).await.expect("connect");
-        let request =
-            format!("{method} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n");
+        let request = format!(
+            "{} {path} HTTP/1.1\r\nHost: localhost\r\nConnection: close\r\n\r\n",
+            method.as_str()
+        );
         stream
             .write_all(request.as_bytes())
             .await
@@ -108,16 +111,31 @@ async fn health_endpoints_reflect_readiness() {
         }
     }));
 
-    assert_eq!(TestRequest::send(address, "GET", "/healthz").await.0, 204);
-    assert_eq!(TestRequest::send(address, "GET", "/readyz").await.0, 503);
+    assert_eq!(
+        TestRequest::send(address, Method::GET, "/healthz").await.0,
+        204
+    );
+    assert_eq!(
+        TestRequest::send(address, Method::GET, "/readyz").await.0,
+        503
+    );
 
     state.mark_ready();
 
-    assert_eq!(TestRequest::send(address, "GET", "/readyz").await.0, 204);
-    assert_eq!(TestRequest::send(address, "HEAD", "/healthz").await.0, 204);
-    assert_eq!(TestRequest::send(address, "GET", "/missing").await.0, 404);
+    assert_eq!(
+        TestRequest::send(address, Method::GET, "/readyz").await.0,
+        204
+    );
+    assert_eq!(
+        TestRequest::send(address, Method::HEAD, "/healthz").await.0,
+        204
+    );
+    assert_eq!(
+        TestRequest::send(address, Method::GET, "/missing").await.0,
+        404
+    );
 
-    let (status, response) = TestRequest::send(address, "POST", "/healthz").await;
+    let (status, response) = TestRequest::send(address, Method::POST, "/healthz").await;
     assert_eq!(status, 405);
     assert!(response.to_ascii_lowercase().contains("allow: get, head"));
 
