@@ -26,8 +26,8 @@ Storage, snapshots, manifests, and metadata grow with total history.
 ## Constraints and invariants
 
 Snapshot expiry removes snapshots from metadata only.
-Modern iceberg-rust already provides `ExpireSnapshotsAction`, and physical cleanup and rewrite primitives are landing upstream.
-Physical cleanup still needs a separate orphan-removal pass.
+As of late 2026, iceberg-rust provides the metadata-only `ExpireSnapshotsAction`, while physical file cleanup and high-level rewrite actions are still maturing or are follow-ups.
+Physical cleanup therefore still needs a separate orphan-removal pass, and the design keeps emerging actions behind interfaces instead of inventing ad-hoc manifest surgery.
 
 Expiring compacted snapshots would remove their `source-file:` properties, so the compactor would reprocess raw objects and recovery would replay both layers.
 Expiring raw snapshots does not remove processed data-file entries from the raw table's current snapshot, so raw metadata is not bounded by expiry alone.
@@ -47,6 +47,7 @@ The design must preserve these invariants:
 - Maintenance has explicit retention and grace periods, runs separately from ingestion and compaction, is observable, and supports a dry run.
 - Maintenance stages have a defined order, a fencing lease, and partition-level coordination so maintenance cannot race compaction on the same partitions.
 - Recovery states and records which layer is authoritative after raw expiry.
+- Destructive stages, retention floors, and recovery choices fail closed and are visible in metrics and logs.
 
 ## Recommended design: durable compaction ledger plus separate maintenance
 
@@ -55,36 +56,64 @@ Add an authoritative processed-source ledger stored independently of compacted s
 A dedicated Iceberg table holds one row per compaction batch with the compaction id, archive kind, source-manifest URI, source count, and processed timestamp.
 The source manifest is an immutable Parquet file listing the batch's raw object URIs.
 Keeping the per-file mapping in manifests avoids snapshot summary size limits and keeps it out of every commit and scan.
-The ledger's current snapshot is the processed set, and its own old snapshots can be expired and its rows compacted by hour.
+The ledger's current snapshot is the processed set. Its old snapshots can be expired after retention, and its rows are compacted by archive kind and hour.
+
+### Ledger and source-manifest lifecycle
+
+Ledger rows are partitioned by archive kind and hour, matching the archive kind they track so that raw deletion and ledger retention can be coordinated at partition level. The compacted-rewrite stage also runs on ledger partitions, with explicit targets such as at most 100 data files and 512 MiB per partition and a cap of one rewrite commit per partition per maintenance cycle.
+
+Source manifests are immutable data files of the ledger table, not side artefacts. Ledger retention applies to them. Orphan cleanup must never delete a manifest while any ledger row that references it is live or inside the ledger retention window, and a manifest is only eligible for deletion after all referencing rows and snapshots have expired.
+
+Compaction ids are UUIDv7 values generated once per batch and recorded in the ledger row, the compacted table property, and the source-manifest metadata. The compacted-table property is informational only; the ledger remains the sole authority. This makes retries idempotent and lets auditors correlate the manifest, ledger row, and compacted commit.
+
+### Publication order
 
 The ledger is the single source of truth for what has been processed.
 Compaction publishes in a crash-safe order:
 
 1. Write deterministic compacted output objects.
-2. Append the compacted data files and a single compaction-id property to the compacted table.
-3. Append the batch row and source manifest to the ledger.
+2. Append the compacted data files and a single informational compaction-id property to the compacted table.
+3. Write the immutable source manifest, then append the ledger row that references it.
 
 On retry, an existing compaction id means the compacted files are already published, so only the ledger step is repeated.
 A ledger entry is never written before its compacted files are visible.
 Compaction ids make retries idempotent without relying on snapshot summaries or batch fingerprint reconstruction.
-The compaction-id property on the compacted table is informational only and must not be used to calculate the processed set.
+The compaction-id property on the compacted table must not be used to calculate the processed set.
 
-After a grace period, maintenance deletes processed raw objects and removes their entries from the raw table with a rewrite, or replaces in-place removal with a periodic rebuild from the unprocessed tail.
+After the grace period, maintenance deletes processed raw objects and removes their entries from the raw table with a rewrite, or replaces in-place removal with a periodic rebuild from the unprocessed tail.
 Raw-table cleanup is a first-class part of the raw-deletion stage, with its own metrics, throughput limits, and back-pressure.
 It is not allowed to lag silently behind raw object deletion.
+
+### Maintenance runner
 
 Maintenance is a dedicated runner with four stages that can be scheduled independently:
 
 1. Expire old snapshots on the raw, compacted, and ledger tables.
-2. Delete unreferenced data, manifest, and metadata files older than a grace period.
-3. Rewrite compacted files into target-size outputs when a partition exceeds its configured file count or size target.
-4. Remove processed entries from the raw table, then delete raw objects whose ledger entry is older than the configured retention, with an S3 lifecycle backstop.
+2. Delete unreferenced data, manifest, and metadata files older than the orphan grace period, including manifests only after their ledger rows and snapshots have expired.
+3. Rewrite compacted files into target-size outputs when a compacted or ledger partition exceeds its configured file count or size target.
+4. Remove processed entries from the raw table, then delete raw objects whose ledger entry and source manifest are older than the configured retention, with an S3 lifecycle backstop.
 
 The enforced order is expire, orphan cleanup, compacted rewrite, then raw deletion.
 Stages can be scheduled independently, but the runner never advances a later stage while an earlier one is blocked.
 The runner holds a fencing lease so two maintenance instances cannot act at once.
 Compaction and the rewrite stage use partition-level locks or leases, so concurrent compaction and maintenance cannot race on the same partition.
 The lease and concurrent-maintenance tests are required, not optional hardening.
+
+The orphan grace period has a hard floor of 7 days, is configurable upward, and must always exceed the longest expected write, compaction, or maintenance lease. A dry run lists candidate files and their age; deletion fails closed if any candidate is younger than the floor or referenced by a retained snapshot.
+
+Stage 4 never advances while any earlier stage or raw-table cleanup is blocked. It deletes a raw object only when the compacted files are durable, its ledger row and manifest are older than raw retention, and its raw-table entry is gone. A batch that is published but cannot be cleaned up because of a permanent maintenance failure raises an alert, applies back-pressure to the affected partition, and requires operator action rather than silently retrying forever.
+
+### Safety, visibility, and edge cases
+
+Every stage emits a lag metric and an alert threshold. The critical metric is the age of the oldest processed ledger entry whose raw objects are still present in the raw table; it must trend down and alert if it exceeds one maintenance cycle or fails to fall over two consecutive cycles. Other required metrics are unreferenced files older than the grace floor, compacted and ledger files per partition against target, metadata-log and manifest growth, lease age, stage duration and retries, and recovery layer selections. A blocked earlier stage stops later stages and raises an alert; silent lag is a failure.
+
+S3 lifecycle rules are a pure backstop. Raw objects have no age-based expiration; only the runner deletes them after the handoff, raw-table, and retention conditions are met. The baseline policy transitions eligible raw objects to Intelligent-Tiering after 30 days, aborts incomplete multipart uploads after 7 days, and applies no expiration to compacted, manifest, or metadata prefixes. If a backstop expiration is enabled, it is at least 30 days longer than the runner's raw-deletion window, is monitored, and is never the primary deletion mechanism.
+
+Recovery records the selected layer in structured logs and a metric, including the ledger watermark and raw expiry state. After raw expiry, a missing or unreadable raw object must not trigger a silent raw fallback; recovery fails closed and alerts instead.
+
+If a source manifest is missing or corrupt, quarantine the batch, keep its raw objects and ledger rows, and mark it for investigation. If raw objects are still live, re-compact the batch under a new compaction id and reconcile the ledger. If raw objects have expired, fail closed and rebuild from the compacted layer plus retained ledger state.
+
+Schema and partition evolution are handled at batch boundaries. The source-manifest schema and ledger partition spec are versioned and pinned when a batch is created. Compaction, rewrite, and recovery read the spec recorded for that batch and never rewrite across incompatible specs. A partition-spec change pauses maintenance and requires a re-baseline before old raw objects are expired.
 
 This keeps the two-layer design, allows incremental delivery, and scales processed state by compaction batches rather than by every raw file in every snapshot.
 The costs are the extra ledger table, cross-table ordering, and the raw-table rewrite or rebuild needed to reclaim raw table metadata.
@@ -138,19 +167,19 @@ Choose the single-table design before building extensive ledger-specific tooling
 
 ## Implementation plan for the recommended design
 
-1. Define the ledger schema, compaction id, source-manifest format, and raw and snapshot retention settings.
+1. Define the ledger schema, UUIDv7 compaction ids, versioned source-manifest format, partition targets, and raw, snapshot, and orphan-retention settings with their hard floors.
 2. Publish compacted files first, then the ledger row, and make retries detect an existing compaction id.
 3. Read the ledger's current snapshot in the compactor and recovery handoff instead of all compacted snapshot summaries.
 4. Make the ledger the only processed-set authority, with an observable authoritative-layer decision after raw expiry.
-5. Add a maintenance runner with a fencing lease, dry-run mode, metrics, stage ordering, and the four stages above.
+5. Add a maintenance runner with a fencing lease, dry-run mode, stage-lag metrics, alerts, an S3 lifecycle policy that is only a backstop, stage ordering, and the four stages above.
    Keep it out of ingestion and compaction.
 6. Add partition-level coordination between compaction and compacted-file rewriting.
    Prove with concurrency tests that maintenance and compaction cannot race on the same partition.
-7. Add raw-table entry removal or periodic rebuild as a first-class part of raw cleanup with its own metrics, limits, and back-pressure.
-   Only then enable raw object deletion and an S3 lifecycle backstop.
-8. Add compacted-file rewriting and test that replacement, expiry, and orphan removal preserve exactly one copy of every archived record.
-9. Test crash points, expired snapshots, orphan grace periods, lease expiry, concurrent maintenance, and recovery after raw objects are gone.
-   Recovery tests must confirm that the compacted layer and ledger are authoritative and that no raw fallback occurs.
+7. Add raw-table entry removal or periodic rebuild as a first-class part of raw cleanup with its own metrics, limits, alerting, and back-pressure, including permanent-failure handling.
+   Only then enable raw object deletion and the S3 lifecycle backstop.
+8. Add compacted-file rewriting for compacted and ledger partitions and test that replacement, expiry, and orphan removal preserve exactly one copy of every archived record.
+9. Test crash points, expired snapshots, orphan grace floors, lease expiry, concurrent maintenance, manifest corruption or loss, schema and partition evolution, and recovery after raw objects are gone.
+   Recovery tests must confirm that the compacted layer and ledger are authoritative, that the selected layer is logged and metered, and that no raw fallback occurs.
 
 ## Acceptance criteria for closing the issue
 
@@ -161,7 +190,11 @@ Choose the single-table design before building extensive ledger-specific tooling
 - Compacted files per partition remain within a configured count or size target.
 - Snapshot, metadata-log, manifest, and orphan-file counts remain bounded under continuous ingestion and compaction.
 - Maintenance has a fencing lease and partition-level coordination with compaction, demonstrated by concurrent-maintenance tests.
-- Recovery after raw expiry uses the compacted layer plus the ledger as the sole authority, records that choice, and still produces the same records as before maintenance.
+- Orphan cleanup respects the 7-day floor and never deletes a source manifest referenced by a live or retained ledger row.
+- Ledger partitions meet the same file-count and size targets as compacted partitions.
+- Stage lag is metered and alerted, and a blocked stage stops later stages, including after a permanent raw-cleanup failure.
+- Recovery after raw expiry uses the compacted layer plus the ledger as the sole authority, records that choice in logs and metrics, and still produces the same records as before maintenance.
+- Schema and partition evolution are pinned per batch and covered by recovery tests.
 
 ## Open questions and decisions
 
@@ -184,3 +217,9 @@ Each decision is deliberately conservative because the archive is a primary data
 
 6. **Should raw-table cleanup use in-place rewrites or periodic rebuilds from the unprocessed tail, and what metadata-churn budget applies?**
    Default to periodic rebuilds from the unprocessed tail because they are bounded, restartable, and easier to validate against the ledger. Use in-place rewrites only for small, explicitly bounded partitions where a rebuild is too expensive, and require a dry run plus back-pressure. Budget at most one raw-table rewrite commit per partition per maintenance cycle, cap total maintenance commits and bytes per hour, and pause with an alert before metadata growth exceeds a configured weekly threshold, for example 10 percent, or before the metadata-log or manifest count reaches its alert limit.
+
+7. **What orphan grace period and S3 lifecycle policy apply?**
+   Use 7 days as a hard floor, 14 days as the default, and always keep the grace period longer than the longest expected write, compaction, or maintenance lease. Dry runs must show candidate age. Baseline S3 policy: no expiration on raw, compacted, manifest, or metadata prefixes; transition eligible raw objects to Intelligent-Tiering after 30 days; abort incomplete multipart uploads after 7 days. If a backstop expiration is enabled, set it at least 30 days beyond the runner's raw-deletion window, monitor it, and never rely on it as the primary deletion mechanism.
+
+8. **How should a lost or corrupt source manifest, schema evolution, or a permanently failed raw cleanup be handled?**
+   Quarantine the batch, keep its raw objects and ledger rows, and mark it for investigation. If raw objects are still live, re-compact under a new compaction id and reconcile the ledger. If they have expired, fail closed and rebuild from the compacted layer plus retained ledger state. Pin the manifest schema and ledger partition spec per batch, never rewrite across incompatible specs, and pause maintenance for a re-baseline after a partition-spec change. Permanent raw-cleanup failures alert and apply back-pressure instead of silently retrying.
