@@ -54,7 +54,7 @@ Because the client is a browser, the API answers CORS preflights from an allowli
 
 The JWT `owner` claim is the platform identity.
 Every resource in the API is scoped to the owner: a user can only ever see and act on their own accounts, algorithms, bots, runs, and backtests.
-Server-assigned identifiers (`alg_`, `bld_`, `bot_`, `run_`, `bt_`) are not guessable; account identifiers are chosen by the owner, so every request re-checks ownership.
+Server-assigned identifiers (`algorithm_`, `build_`, `bot_`, `run_`, `backtest_`) are not guessable; account identifiers are chosen by the owner, so every request re-checks ownership.
 
 | Method | Path | Description |
 | --- | --- | --- |
@@ -64,7 +64,7 @@ Server-assigned identifiers (`alg_`, `bld_`, `bot_`, `run_`, `bt_`) are not gues
 `POST /v1/session` takes the owner's platform login credential, an owner-bound credential pair issued by the platform when the owner is onboarded.
 
 ```json
-{ "loginId": "lgn_9f2b", "loginSecret": "..." }
+{ "loginId": "login_9f2b", "loginSecret": "..." }
 ```
 
 Invalid or unknown credentials fail with `401 unauthorized`, and failed attempts are rate limited per source address (see [Limits](#limits)).
@@ -72,7 +72,7 @@ Invalid or unknown credentials fail with `401 unauthorized`, and failed attempts
 `POST /v1/session` returns `201` with:
 
 ```json
-{ "token": "eyJ...", "expiresAt": "2026-07-14T10:30:00.000Z", "owner": "usr_7gk2" }
+{ "token": "eyJ...", "expiresAt": "2026-07-14T10:30:00.000Z", "owner": "user_7gk2" }
 ```
 
 Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
@@ -83,7 +83,7 @@ Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
 - Timestamps are RFC 3339 UTC with millisecond precision, for example `2026-07-14T09:30:00.000Z`.
   Durations are integer seconds unless a field name ends in `_millis`.
 - Quantities and prices are decimal strings, for example `"1250.50"`, never JSON numbers.
-- Identifiers are opaque strings prefixed by type: `usr_`, `lgn_`, `alg_`, `bld_`, `bot_`, `run_`, `bt_`, `ord_`.
+- Identifiers are opaque strings prefixed by type: `user_`, `login_`, `algorithm_`, `build_`, `bot_`, `run_`, `backtest_`, `order_`.
 - Enum values are snake_case strings.
 - Exchange and asset identifiers use the platform's canonical codes: `CexId` values such as `binance` and `AssetId` codes such as `btc` and `usdt`.
   Trading pairs are `{"base": "btc", "quote": "usdt"}`.
@@ -257,7 +257,7 @@ The read model is rebuilt from the portfolio update stream, so snapshots carry t
   ],
   "pendingOrders": [
     {
-      "tag": "ord_9x2",
+      "tag": "order_9x2",
       "symbol": { "base": "btc", "quote": "usdt" },
       "side": "sell",
       "type": "limit",
@@ -328,13 +328,13 @@ Algorithm list items identify the connected repository:
 {
   "data": [
     {
-      "algorithmId": "alg_5t1",
+      "algorithmId": "algorithm_5t1",
       "name": "momentum",
       "repository": { "provider": "github", "host": "github.com", "repo": "acme/momentum" },
       "defaultRef": "main",
       "state": "active",
       "version": 3,
-      "latestReadyBuildId": "bld_882"
+      "latestReadyBuildId": "build_882"
     }
   ],
   "nextCursor": null
@@ -357,8 +357,8 @@ Builds are idempotent per `(ref, commit)`: re-triggering an existing build retur
 
 ```json
 {
-  "buildId": "bld_882",
-  "algorithmId": "alg_5t1",
+  "buildId": "build_882",
+  "algorithmId": "algorithm_5t1",
   "ref": "heads/main",
   "commit": "e1f3a9b",
   "state": "ready",
@@ -443,8 +443,8 @@ Creating a bot does not enable it implicitly: the first creation returns `disabl
 ```json
 {
   "name": "momentum-main",
-  "algorithmId": "alg_5t1",
-  "buildId": "bld_882",
+  "algorithmId": "algorithm_5t1",
+  "buildId": "build_882",
   "strategyName": "momentum_v2",
   "parameters": { "fast": 8, "slow": 34 },
   "accounts": [{ "cexId": "binance", "accountId": "main" }],
@@ -457,10 +457,10 @@ The response is `201` with:
 ```json
 {
   "botId": "bot_4fd",
-  "owner": "usr_7gk2",
+  "owner": "user_7gk2",
   "name": "momentum-main",
-  "algorithmId": "alg_5t1",
-  "buildId": "bld_882",
+  "algorithmId": "algorithm_5t1",
+  "buildId": "build_882",
   "strategyName": "momentum_v2",
   "parameters": { "fast": 8, "slow": 34 },
   "accounts": [{ "cexId": "binance", "accountId": "main" }],
@@ -509,8 +509,8 @@ Runs follow the run store lifecycle:
     {
       "runId": "run_b7c",
       "botId": "bot_4fd",
-      "algorithmId": "alg_5t1",
-      "buildId": "bld_882",
+      "algorithmId": "algorithm_5t1",
+      "buildId": "build_882",
       "strategyName": "momentum_v2",
       "scheduledAt": "2026-07-14T09:31:00.000Z",
       "status": "failed",
@@ -571,8 +571,8 @@ Execution uses the sandbox runner's backtest subsystem, which already enforces w
 
 ```json
 {
-  "algorithmId": "alg_5t1",
-  "buildId": "bld_882",
+  "algorithmId": "algorithm_5t1",
+  "buildId": "build_882",
   "strategyName": "momentum_v2",
   "parameters": { "fast": 8, "slow": 34 },
   "initialBalances": [{ "cexId": "binance", "accountId": "paper", "asset": "usdt", "total": "10000.000000000" }],
@@ -595,7 +595,7 @@ Execution uses the sandbox runner's backtest subsystem, which already enforces w
 }
 ```
 
-The response is `202` with `{ "backtestId": "bt_31a", "state": "queued" }`.
+The response is `202` with `{ "backtestId": "backtest_31a", "state": "queued" }`.
 
 Validation mirrors the runner's spec checks and fails fast with `validation_failed`:
 
@@ -618,7 +618,7 @@ They are delivered twice: incrementally on the stream as each simulation finishe
 
 ```json
 {
-  "backtestId": "bt_31a",
+  "backtestId": "backtest_31a",
   "state": "completed",
   "simulationCount": 100,
   "results": [ { "simulation": 0, "finalEquity": "10412.500000000", "...": "..." } ]
