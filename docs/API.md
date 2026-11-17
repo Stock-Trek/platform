@@ -45,7 +45,8 @@ Everything else is a projection of existing state: the ownership registry, the p
 
 Every request carries `Authorization: Bearer <jwt>`.
 Tokens are short-lived EdDSA (Ed25519) JWTs signed by the auth service; the API verifies them locally against the auth service JWKS (`/.well-known/jwks.json`) with a bounded key cache.
-Token minting goes through the auth service, whose JWT requests require a valid SigV4 signature from an access key bound to the requested owner; the API signs minting requests with the login credential the user presented, so it cannot mint a token for an owner it has not authenticated.
+Token minting goes through the auth service, which only mints a token for an owner it can authenticate: every minting request must be signed with the login credential bound to the requested owner, and the API signs with the login credential the user presented, so it cannot mint a token for an owner it has not authenticated.
+The request-signing scheme used between the API and the auth service is an internal platform detail and never reaches the browser.
 Tokens carry a single scope that grants access to every endpoint in this document; `forbidden` means the presented token does not carry it.
 `DELETE /v1/session` revokes the presented token server-side, and every authenticated request re-checks revocation, so locally verified tokens stop working immediately after invalidation.
 Because the client is a browser, the API answers CORS preflights from an allowlist of origins, accepts the `Authorization` and `Idempotency-Key` request headers, and varies cached responses on `Origin`.
@@ -59,10 +60,11 @@ Resource identifiers are not guessable, and every request re-checks ownership.
 | `POST` | `/v1/session` | Exchange a platform login credential for a short-lived API token |
 | `DELETE` | `/v1/session` | Invalidate the presented token |
 
-`POST /v1/session` takes the platform login credential, an owner-bound access key pair issued when the owner is onboarded:
+`POST /v1/session` takes the owner's platform login credential, an owner-bound credential pair issued by the platform when the owner is onboarded.
+It is a platform credential, not an AWS credential: this is a public API and no AWS keys are involved anywhere in it.
 
 ```json
-{ "accessKeyId": "AKIA23XQ", "secretAccessKey": "..." }
+{ "loginId": "lgn_9f2b", "loginSecret": "..." }
 ```
 
 Invalid or unknown credentials fail with `401 unauthorized`, and failed attempts are rate limited per source address (see [Limits](#limits)).
@@ -81,7 +83,7 @@ Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
 - Timestamps are RFC 3339 UTC with millisecond precision, for example `2026-07-14T09:30:00.000Z`.
   Durations are integer seconds unless a field name ends in `_millis`.
 - Quantities and prices are decimal strings, for example `"1250.50"`, never JSON numbers.
-- Identifiers are opaque strings prefixed by type: `usr_`, `alg_`, `bld_`, `bot_`, `run_`, `bt_`, `ord_`.
+- Identifiers are opaque strings prefixed by type: `usr_`, `lgn_`, `alg_`, `bld_`, `bot_`, `run_`, `bt_`, `ord_`.
 - Enum values are snake_case strings.
 - Exchange and asset identifiers use the platform's canonical codes: `CexId` values such as `binance` and `AssetId` codes such as `btc` and `usdt`.
   Trading pairs are `{"base": "btc", "quote": "usdt"}`.
