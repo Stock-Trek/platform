@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use aws_sdk_s3::Client as S3Client;
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveParquet, ArchiveRegistration, CommitContext,
-    IcebergDataFile, ObjectStore, RegisterOutcome, S3, S3ObjectStore, SourceBatch,
+    CompactionId, IcebergDataFile, ObjectStore, RegisterOutcome, S3, S3ObjectStore, SourceBatch,
 };
 use platform_errors::{PlatformError, PlatformResult};
 use platform_lease::{Lease, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
@@ -141,6 +141,33 @@ impl Compactor {
                 .filter(|(_, uri)| claimed_uris.contains(*uri))
                 .map(|(file, _)| file.clone())
                 .collect::<Vec<_>>();
+            if claimed.len() == uris.len() && self.catalog.supports_compaction_ledger() {
+                let compaction_id =
+                    CompactionId::for_batch(batch.kind, batch.bucket_start, &digest)?;
+                if !self
+                    .catalog
+                    .compaction_recorded(batch.kind, compaction_id)
+                    .await?
+                {
+                    let context = CommitContext::default()
+                        .with_lease(
+                            guard.lease().scope.as_str(),
+                            &guard.lease().owner_id,
+                            guard.lease().fencing_token,
+                        )
+                        .with_authorizer(guard.authorizer());
+                    self.catalog
+                        .record_compaction(
+                            batch.kind,
+                            compaction_id,
+                            batch.bucket_start,
+                            &uris,
+                            platform_types::TimestampMilliseconds::now(),
+                            &context,
+                        )
+                        .await?;
+                }
+            }
             if !claimed.is_empty() {
                 warn!(
                     table = table.name(),
@@ -274,10 +301,25 @@ impl Compactor {
                 guard.lease().fencing_token,
             )
             .with_authorizer(guard.authorizer());
-        let registration = ArchiveRegistration::new(data_files, Some(source_files))?;
+        let compaction_id =
+            CompactionId::for_batch(batch.kind, batch.bucket_start, &batch.digest())?;
+        let registration = ArchiveRegistration::new(data_files, Some(source_files.clone()))?
+            .with_compaction_id(compaction_id);
         stats.skipped = self
             .register_compaction(batch, table, &registration, &context, guard)
             .await?;
+        if !stats.skipped && self.catalog.supports_compaction_ledger() {
+            self.catalog
+                .record_compaction(
+                    batch.kind,
+                    compaction_id,
+                    batch.bucket_start,
+                    &source_files,
+                    platform_types::TimestampMilliseconds::now(),
+                    &context,
+                )
+                .await?;
+        }
 
         Ok(stats)
     }
@@ -320,7 +362,8 @@ impl Compactor {
             platform_archive::ArchiveKind::Candles,
         ] {
             self.consolidate_claim_index(kind).await?;
-            let table = ArchiveIcebergTable::compacted(kind);
+        }
+        for table in ArchiveIcebergTable::all() {
             let deleted = self
                 .catalog
                 .sweep_metadata(table, self.objects.as_ref(), self.maintenance_safety)
@@ -330,6 +373,18 @@ impl Compactor {
                     table = table.name(),
                     deleted, "removed unreachable archive metadata"
                 );
+            }
+            if table.layer() != platform_archive::ArchiveTableLayer::Raw {
+                let deleted = self
+                    .catalog
+                    .sweep_orphans(table, self.objects.as_ref(), self.maintenance_safety)
+                    .await?;
+                if deleted > 0 {
+                    info!(
+                        table = table.name(),
+                        deleted, "removed unreachable archive data"
+                    );
+                }
             }
         }
         Ok(())

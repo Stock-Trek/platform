@@ -1,5 +1,5 @@
 use crate::iceberg::catalog::IcebergDataFile;
-use crate::{ContentHasher, SourceBatch};
+use crate::{CompactionId, ContentHasher, SourceBatch};
 use platform_errors::{PlatformError, PlatformResult};
 use platform_lease::CommitAuthorizer;
 use std::collections::HashSet;
@@ -94,6 +94,7 @@ impl CommitContext {
 pub struct ArchiveRegistration {
     files: Vec<IcebergDataFile>,
     source_files: Option<Vec<String>>,
+    compaction_id: Option<CompactionId>,
 }
 
 impl ArchiveRegistration {
@@ -129,7 +130,17 @@ impl ArchiveRegistration {
         Ok(Self {
             files,
             source_files,
+            compaction_id: None,
         })
+    }
+
+    pub fn with_compaction_id(mut self, compaction_id: CompactionId) -> Self {
+        self.compaction_id = Some(compaction_id);
+        self
+    }
+
+    pub fn compaction_id(&self) -> Option<CompactionId> {
+        self.compaction_id
     }
 
     pub fn files(&self) -> &[IcebergDataFile] {

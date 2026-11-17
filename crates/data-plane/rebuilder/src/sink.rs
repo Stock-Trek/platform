@@ -90,6 +90,12 @@ impl S3CandleSink {
             ArchiveTableLayer::Compacted => {
                 bucket.compacted_key(&self.prefix, partition, routing_bucket, file_name)
             }
+            ArchiveTableLayer::Ledger => {
+                return Err(PlatformError::external(std::io::Error::new(
+                    std::io::ErrorKind::Unsupported,
+                    "ledger tables are not rebuilder output",
+                )));
+            }
         }?;
         Ok(ObjectKey::new(key))
     }

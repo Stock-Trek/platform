@@ -355,7 +355,13 @@ async fn a_commit_asserts_the_table_uuid_it_was_built_for() {
 async fn table_validation_rejects_a_schema_outside_the_archive_contract() {
     let table = MetadataTable::with_batches(&[]);
 
-    assert!(IcebergCatalog::validate_table(&table, ArchiveKind::Events).is_err());
+    assert!(
+        IcebergCatalog::validate_table(
+            &table,
+            crate::iceberg::ArchiveIcebergTable::compacted(ArchiveKind::Events)
+        )
+        .is_err()
+    );
 }
 
 #[tokio::test]

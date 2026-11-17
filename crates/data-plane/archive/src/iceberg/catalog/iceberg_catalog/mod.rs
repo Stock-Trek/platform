@@ -7,6 +7,8 @@ mod claim_index_lookup;
 mod claim_index_page;
 mod commit;
 mod commit_algorithm;
+mod expire;
+mod ledger;
 mod metadata_maintenance;
 mod rest_catalog;
 mod rest_connection;

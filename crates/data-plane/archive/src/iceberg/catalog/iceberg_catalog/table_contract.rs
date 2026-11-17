@@ -18,25 +18,29 @@ impl IcebergCatalog {
         Ok(())
     }
 
-    pub(super) fn validate_table(table: &Table, kind: crate::ArchiveKind) -> PlatformResult<()> {
+    pub(super) fn validate_table(
+        table: &Table,
+        archive_table: ArchiveIcebergTable,
+    ) -> PlatformResult<()> {
         if table.metadata().format_version() != FormatVersion::V2 {
             return Err(PlatformError::config_invalid(
                 "archive Iceberg table",
                 "must use Iceberg format version 2",
             ));
         }
-        if !table
-            .metadata()
-            .default_partition_spec()
-            .fields()
-            .is_empty()
+        if !archive_table.is_ledger()
+            && !table
+                .metadata()
+                .default_partition_spec()
+                .fields()
+                .is_empty()
         {
             return Err(PlatformError::config_invalid(
                 "archive Iceberg table",
                 "must be unpartitioned; archive rows are ordered within data files",
             ));
         }
-        let expected = ArchiveIcebergTable::schema(kind)?;
+        let expected = archive_table.table_schema()?;
         let current = table.metadata().current_schema();
         let current = current.as_struct();
         let expected = expected.as_struct();

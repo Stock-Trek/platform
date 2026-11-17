@@ -32,7 +32,7 @@ impl CandleCodec {
             ArchiveBucket::new(record, self.bucket_millis),
             record.routing_bucket(),
             match self.layer {
-                ArchiveTableLayer::Raw => None,
+                ArchiveTableLayer::Raw | ArchiveTableLayer::Ledger => None,
                 ArchiveTableLayer::Compacted => Some(record.partition().path()),
             },
             record.sort_key(),
