@@ -85,8 +85,8 @@ Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
 - Quantities and prices are decimal strings, for example `"1250.50"`, never JSON numbers.
 - Identifiers are opaque strings prefixed by type: `user_`, `login_`, `algorithm_`, `build_`, `bot_`, `run_`, `backtest_`, `order_`.
 - Enum values are snake_case strings.
-- Exchange and asset identifiers use the platform's canonical codes: `CexId` values such as `binance` and `AssetId` codes such as `btc` and `usdt`.
-  Trading pairs are `{"base": "btc", "quote": "usdt"}`.
+- Exchange and asset identifiers use the platform's canonical names: exchange codes such as `binance` and asset names such as `bitcoin` and `tether_u_s_d`.
+  Trading pairs are `{"base": "bitcoin", "quote": "tether_u_s_d"}`.
 - List endpoints paginate with `limit` (default `50`, maximum `200`) and an opaque `cursor`.
   A `limit` above the maximum is clamped to the maximum.
   Responses wrap arrays as `{ "data": [...], "nextCursor": "..." | null }`.
@@ -94,7 +94,7 @@ Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
 - `POST` endpoints that create resources or trigger work accept an `Idempotency-Key` header.
   Retries with the same key return the original response instead of creating a duplicate.
   Reusing a key with a different request body fails with `409 conflict`.
-  Keys are scoped to the owner and endpoint and are remembered for 24 hours; a retry after that window may create a duplicate.
+  Keys are scoped to the owner and endpoint and are remembered indefinitely.
 - Mutable resources expose a `version` integer.
   Mutations may be conditioned with `If-Match: <version>` and fail with `409 conflict` when the version does not match; endpoints that require it say so below.
 - Account identifiers may contain only lowercase letters, digits, `-`, and `_`, because they are embedded in stream channel names and URL paths.
@@ -121,17 +121,13 @@ Errors use RFC 9457 problem details:
 | `not_owned` | 403 | Resource exists but belongs to another owner |
 | `not_found` | 404 | Resource does not exist for this owner |
 | `conflict` | 409 | Version mismatch, duplicate resource, or resource state that forbids the action |
-| `stale` | 409 | Portfolio data is too old to authorize the action |
-| `out_of_contract` | 409 | Candle correction reach exceeded the retention contract |
-| `payload_too_large` | 413 | Request, result, or referenced artifact exceeds a size limit |
+| `payload_too_large` | 413 | Request or result exceeds a size limit |
 | `rate_limited` | 429 | Rate limit or quota exhausted |
 | `internal` | 500 | Unexpected server error |
 | `unavailable` | 503 | Dependency is down; retry with backoff |
 
 Every response carries an `X-Request-Id` header: the API echoes a client-supplied `X-Request-Id` or generates one, and problem details repeat it as `requestId` so front-end error reports can be matched to server logs.
 
-`stale` mirrors the portfolio service staleness policy (`allow`, `degrade`, `reject`) and applies where an action authorizes against portfolio data: enabling a bot and triggering an ad-hoc run.
-In `degrade` mode accepted-but-stale actions are flagged: the response carries `stale: true` with the `asOf` of the snapshot the action was authorized against, so the front-end can warn.
 `rate_limited` responses carry a `Retry-After` header with the number of seconds to wait before retrying.
 
 ## Streaming
@@ -174,7 +170,6 @@ Channels:
 | API requests per owner | 120 per minute |
 | Concurrent stream subscriptions per connection | 32 |
 | Maximum request body size | 1 MiB |
-| Referenced build artifact size | `S3_MAX_ARTIFACT_SIZE_BYTES` |
 | Maximum backtest result size per simulation | 64 KiB |
 
 ## Accounts and portfolios
@@ -252,13 +247,13 @@ The read model is rebuilt from the portfolio update stream, so snapshots carry t
   "asOf": "2026-07-14T09:59:41.120Z",
   "sequence": 9182,
   "assets": [
-    { "asset": "btc", "total": "1.250000000" },
-    { "asset": "usdt", "total": "4210.770000000" }
+    { "asset": "bitcoin", "total": "1.250000000" },
+    { "asset": "tether_u_s_d", "total": "4210.770000000" }
   ],
   "pendingOrders": [
     {
       "tag": "order_9x2",
-      "symbol": { "base": "btc", "quote": "usdt" },
+      "symbol": { "base": "bitcoin", "quote": "tether_u_s_d" },
       "side": "sell",
       "type": "limit",
       "quantity": "0.100000000",
@@ -282,13 +277,10 @@ The channel frames carry the same body as the snapshot endpoint with the stream 
   The build plane watches the repository through the GitHub App; pushes to watched refs trigger builds.
   Owners connect a repository by granting the GitHub App access to it, so the API has no endpoint to create algorithms; they appear once the build plane registers the connection.
 - A **build** is one compile of a commit.
-  It produces a compiled cwasm artifact in the artifact bucket together with its SHA-256, size, and the Wasmtime version required to run it.
-  Artifact bytes are never proxied through the API; the runner fetches them directly.
+  It produces the executable artifact used by runs and backtests.
 - A **strategy** is a named algorithm inside a build.
   One build may expose several strategies.
   Strategy names are unique within a build; duplicate names fail the build.
-- **Preferences** are the strategy's tunable parameters, described by a JSON schema the build exposes.
-  Bots reference strategies by name and carry parameter values validated against this schema.
 
 ### Lifecycle
 
@@ -303,7 +295,7 @@ Algorithms and builds have independent lifecycles:
 | --- | --- |
 | `queued` | Accepted, waiting for the build agent |
 | `building` | Source fetched and compiling |
-| `ready` | Artifact stored with SHA-256 and Wasmtime version; strategies and preference schemas extracted |
+| `ready` | Compilation finished; strategies extracted |
 | `failed` | Compilation or packaging failed; `error` carries the reason |
 
 A build only becomes usable by bots when it is `ready`.
@@ -320,7 +312,6 @@ Archiving an algorithm is a soft delete: history stays queryable.
 | `POST` | `/v1/algorithms/{algorithmId}/builds` | Trigger a build for a ref or commit |
 | `GET` | `/v1/algorithms/{algorithmId}/builds/{buildId}` | Build detail and status |
 | `GET` | `/v1/algorithms/{algorithmId}/builds/{buildId}/strategies` | Strategies exposed by the build |
-| `GET` | `/v1/algorithms/{algorithmId}/builds/{buildId}/strategies/{strategyName}/preferences` | Parameter schema |
 
 Algorithm list items identify the connected repository:
 
@@ -349,7 +340,7 @@ Algorithm list items identify the connected repository:
 { "ref": "heads/main", "commit": "e1f3a9b" }
 ```
 
-`ref` uses the `heads/` or `tags/` form used by the build plane's source keys and defaults to the algorithm's `defaultRef`; `commit` pins an exact revision and defaults to the ref head.
+`ref` uses the `heads/` or `tags/` form and defaults to the algorithm's `defaultRef`; `commit` pins an exact revision and defaults to the ref head.
 The response is `202` with the build representation.
 Builds are idempotent per `(ref, commit)`: re-triggering an existing build returns that build, unless it is `failed`, in which case a new build is created so compilation can be retried.
 
@@ -362,11 +353,6 @@ Builds are idempotent per `(ref, commit)`: re-triggering an existing build retur
   "ref": "heads/main",
   "commit": "e1f3a9b",
   "state": "ready",
-  "artifact": {
-    "sha256": "9f2b…",
-    "sizeBytes": 4211843,
-    "wasmtimeVersion": "50.0.1"
-  },
   "error": null,
   "createdAt": "2026-07-14T08:12:00.000Z",
   "completedAt": "2026-07-14T08:14:31.000Z"
@@ -375,7 +361,7 @@ Builds are idempotent per `(ref, commit)`: re-triggering an existing build retur
 
 Build state changes are pushed on the `builds.{algorithmId}` stream channel.
 
-### Strategies and preferences
+### Strategies
 
 `GET .../strategies` lists the strategies extracted from the build:
 
@@ -383,34 +369,21 @@ Build state changes are pushed on the `builds.{algorithmId}` stream channel.
 { "data": [ { "name": "momentum_v2", "description": "Window-cross momentum" } ], "nextCursor": null }
 ```
 
-`GET .../strategies/{strategyName}/preferences` returns the JSON schema bots must satisfy in their `parameters` object.
-The schema is what the front-end renders as a parameter form.
-Metadata is extracted once when the build finishes, by running the artifact's metadata command in the sandbox; a build that fails to report strategies and preference schemas is treated as `failed`, and these endpoints serve the stored metadata.
-
-```json
-{
-  "strategyName": "momentum_v2",
-  "jsonSchema": {
-    "type": "object",
-    "properties": { "fast": { "type": "integer", "minimum": 2 }, "slow": { "type": "integer" } },
-    "required": ["fast", "slow"]
-  }
-}
-```
+Strategies are extracted once when the build finishes; a build that fails to report its strategies is treated as `failed`.
 
 Bots pick the build and strategy they run; they may pin an exact `buildId` or track an algorithm's `latestReadyBuildId`.
-Tracking upgrades happen at run time, not at update time: the bot re-validates `parameters` against the new build's preference schema on every run and falls back to the previously used build when validation fails.
+Tracking upgrades happen at run time, not at update time: every run checks that the newly resolved build still exposes the strategy and falls back to the previously used build when it does not.
 
 ## Bots and runs
 
 ### Model
 
-A **bot** is a user's persistent trading configuration: which compiled strategy runs, with which parameters, against which exchange accounts, and on what schedule.
+A **bot** is a user's persistent trading configuration: which compiled strategy runs, against which exchange accounts, and on what schedule.
 A **run** is one execution of a bot.
 Scheduling works by materializing runs: every due schedule tick exists as a run record with its own status, error, and log, so history is inspectable and retries are explicit.
 
-Bot configuration is stored by the front-end API.
-Scheduling writes run records to the run store (DynamoDB); the run invoker claims due runs and invokes the runner, which downloads the pinned cwasm artifact, executes the strategy, submits signed order requests, and uploads run logs.
+Bot configuration is managed by the API.
+Scheduling writes run records to the run store; the run invoker claims due runs and invokes the runner, which executes the strategy, submits signed order requests, and uploads run logs.
 
 ### Bot lifecycle
 
@@ -420,7 +393,7 @@ Scheduling writes run records to the run store (DynamoDB); the run invoker claim
 | `disabled` | Config kept, schedule paused, no new runs |
 | `archived` | Read-only; hidden from default lists |
 
-Creating a bot does not enable it implicitly: the first creation returns `disabled` and the front-end enables explicitly once parameters are confirmed.
+Creating a bot does not enable it implicitly: the first creation returns `disabled` and the front-end enables explicitly once the configuration is confirmed.
 
 ### Endpoints
 
@@ -446,7 +419,6 @@ Creating a bot does not enable it implicitly: the first creation returns `disabl
   "algorithmId": "algorithm_5t1",
   "buildId": "build_882",
   "strategyName": "momentum_v2",
-  "parameters": { "fast": 8, "slow": 34 },
   "accounts": [{ "cexId": "binance", "accountId": "main" }],
   "schedule": { "kind": "interval", "everySeconds": 60 }
 }
@@ -462,7 +434,6 @@ The response is `201` with:
   "algorithmId": "algorithm_5t1",
   "buildId": "build_882",
   "strategyName": "momentum_v2",
-  "parameters": { "fast": 8, "slow": 34 },
   "accounts": [{ "cexId": "binance", "accountId": "main" }],
   "schedule": { "kind": "interval", "everySeconds": 60 },
   "state": "disabled",
@@ -476,15 +447,14 @@ Validation rules:
 - `algorithmId` must reference an `active` algorithm when the bot is created.
 - `buildId` must be `latest` or belong to `algorithmId` and be in state `ready`.
 - `strategyName` must exist in that build.
-- `parameters` must satisfy the strategy's preference schema.
 - Every referenced account must be a linked, active account of the owner.
 - `schedule.kind` is `interval` (`everySeconds` ≥ 10) or `cron` (`expression` in five-field cron syntax plus `timezone`, an IANA time-zone name such as `Europe/Zurich`).
 
-`PATCH /v1/bots/{botId}` accepts the same fields minus `algorithmId`, applies only the fields present in the body, and re-validates `parameters` when the build or strategy changes, failing with `400 validation_failed` on mismatch.
+`PATCH /v1/bots/{botId}` accepts the same fields minus `algorithmId` and applies only the fields present in the body.
 Bot mutations — `PATCH`, `enable`, `disable` — require `If-Match` with the current `version` and return the updated bot representation.
 Enabling re-checks the account references against current state and fails with `400 validation_failed` when a referenced account is no longer linked or active.
 
-A `buildId` of `latest` tracks the algorithm's `latestReadyBuildId`: every run resolves the current latest ready build and re-validates `parameters` against its preference schema, falling back to the previous build when validation fails.
+A `buildId` of `latest` tracks the algorithm's `latestReadyBuildId`: every run resolves the current latest ready build and falls back to the previous build when it no longer exposes the strategy.
 A concrete `buildId` pins the bot to that build.
 Runs record the `buildId` they executed.
 
@@ -522,10 +492,10 @@ Runs follow the run store lifecycle:
 }
 ```
 
-`error.code` distinguishes client errors (bad strategy name, undecodable context or portfolio, invalid request) from server errors (timeouts, panics, resource limits, artifact download failures) using the runner exit-code taxonomy, so the front-end can tell "fix your bot" from "platform problem".
+`error.code` distinguishes client errors (bad strategy name, undecodable context or portfolio, invalid request) from server errors (timeouts, panics, resource limits), so the front-end can tell "fix your bot" from "platform problem".
 
 `GET /v1/runs/{runId}/log` returns `302` to a pre-signed log URL when the log exists and `404` while the run is still pending or before upload completes.
-Pre-signed URLs expire with `S3_SIGNED_URL_EXPIRY_SECS` and are fetched by the browser directly from object storage, so the log bucket allows cross-origin reads from the allowlisted front-end origins.
+Pre-signed URLs are short-lived and are fetched by the browser directly from object storage, so the log bucket allows cross-origin reads from the allowlisted front-end origins.
 
 Run state changes are pushed on the `runs.{botId}` stream channel.
 
@@ -542,9 +512,9 @@ Retention is what bounds the run store, because scheduling materializes one reco
 A **backtest** is an ad-hoc, resource-bounded experiment: it runs one strategy from one build many times over archived market data with simulated execution friction and a seeded random generator, streaming per-simulation results as they finish and finishing with a collated result set.
 Backtests never touch live exchanges or real balances.
 
-Market input comes from the candle archive, so backtests are subject to the archive's correction contract: requested history must lie within the retention reach of the requested intervals, otherwise creation fails with `out_of_contract` rather than silently producing candles that later change.
+Market input comes from the candle archive, so backtests are subject to the archive's correction contract: requested history must lie within the retention reach of the requested intervals, otherwise creation fails rather than silently producing candles that later change.
 
-Backtest definitions and results are stored by the front-end API.
+Backtest definitions and results are managed by the API.
 Execution uses the sandbox runner's backtest subsystem, which already enforces worker limits, watchdog timeouts, and memory limits.
 
 ### Lifecycle
@@ -574,10 +544,9 @@ Execution uses the sandbox runner's backtest subsystem, which already enforces w
   "algorithmId": "algorithm_5t1",
   "buildId": "build_882",
   "strategyName": "momentum_v2",
-  "parameters": { "fast": 8, "slow": 34 },
-  "initialBalances": [{ "cexId": "binance", "accountId": "paper", "asset": "usdt", "total": "10000.000000000" }],
+  "initialBalances": [{ "cexId": "binance", "accountId": "paper", "asset": "tether_u_s_d", "total": "10000.000000000" }],
   "market": {
-    "tradingPairs": [{ "base": "btc", "quote": "usdt" }],
+    "tradingPairs": [{ "base": "bitcoin", "quote": "tether_u_s_d" }],
     "windows": ["1m", "5m"],
     "historicalCandleCount": 500,
     "from": "2026-06-01T00:00:00.000Z",
@@ -599,7 +568,7 @@ The response is `202` with `{ "backtestId": "backtest_31a", "state": "queued" }`
 
 Validation mirrors the runner's spec checks and fails fast with `validation_failed`:
 
-- `buildId` must be `ready`, and `strategyName` must exist in it; `parameters` must satisfy the strategy's preference schema.
+- `buildId` must be `ready`, and `strategyName` must exist in it.
 - `tradingPairs` and `windows` must be non-empty and are de-duplicated; windows must be supported aligned intervals.
 - `openCandleProgressMillis`, when given, must be smaller than the shortest requested window.
 - Every chance field is a decimal string in `[0, 1]`.
@@ -643,5 +612,5 @@ Using a real linked account's current balances is a front-end convenience: it co
 - [Infrastructure runbook](infra.md) for the service and dependency map
 - [Market data services](market-data-services.md) for the aggregation and correction contract
 - [Market data](market-data.md) for the ingest pipeline
-- [Environment variables](environment-variables.md) for the portfolio service and artifact limits referenced above
+- [Environment variables](environment-variables.md) for the portfolio service referenced above
 - [Health checks](health-checks.md) for the platform probe contract the API follows
