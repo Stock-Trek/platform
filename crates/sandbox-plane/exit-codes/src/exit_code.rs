@@ -81,10 +81,6 @@ impl ExitCode {
         Self::from_code(code).is_some_and(Self::is_client_error)
     }
 
-    pub fn is_invalid_request_code(code: i32) -> bool {
-        Self::is_client_error_code(code)
-    }
-
     pub const fn message(self) -> &'static str {
         match self {
             Self::Success => "success",
