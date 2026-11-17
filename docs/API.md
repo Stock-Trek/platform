@@ -122,7 +122,7 @@ Errors use RFC 9457 problem details:
 | `not_found` | 404 | Resource does not exist for this owner |
 | `conflict` | 409 | Version mismatch, duplicate resource, or resource state that forbids the action |
 | `stale` | 409 | Portfolio data is too old to authorize the action |
-| `out_of_contract` | 409 | Candle correction reach exceeded the retention contract |
+| `out_of_contract` | 409 | Requested history lies outside the candle archive's retention |
 | `payload_too_large` | 413 | Request, result, or referenced artifact exceeds a size limit |
 | `rate_limited` | 429 | Rate limit or quota exhausted |
 | `internal` | 500 | Unexpected server error |
@@ -542,7 +542,11 @@ Retention is what bounds the run store, because scheduling materializes one reco
 A **backtest** is an ad-hoc, resource-bounded experiment: it runs one strategy from one build many times over archived market data with simulated execution friction and a seeded random generator, streaming per-simulation results as they finish and finishing with a collated result set.
 Backtests never touch live exchanges or real balances.
 
-Market input comes from the candle archive, so backtests are subject to the archive's correction contract: requested history must lie within the retention reach of the requested intervals, otherwise creation fails with `out_of_contract` rather than silently producing candles that later change.
+Market input comes from the candle archive, so backtests can run over any history the archive retains.
+Archived candles are final, immutable snapshots: the aggregator's closed-candle correction contract bounds how long live candles can still be revised and says nothing about what a backtest may read.
+Creation fails with `out_of_contract` only when the archive genuinely lacks the requested window, either because it predates the platform's first data for the requested pairs or because it is older than the candle archive's retention, which defaults to 365 days with a 90-day floor (`MAINTAINER_RAW_RETENTION_SECS_CANDLES`).
+Gaps inside the requested range are data, not errors: candles the archive never received are simply absent from the market input, exactly as a live run experiences missing data, and the simulation's candle loss and lost order chances drop further candles on top of whatever the archive holds.
+For history deeper than candle retention, raise `MAINTAINER_RAW_RETENTION_SECS_CANDLES`; the aggregation and correction contract is described in [Market data services](market-data-services.md).
 
 Backtest definitions and results are stored by the front-end API.
 Execution uses the sandbox runner's backtest subsystem, which already enforces worker limits, watchdog timeouts, and memory limits.
