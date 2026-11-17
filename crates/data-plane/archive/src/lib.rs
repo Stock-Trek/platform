@@ -6,6 +6,7 @@ mod archive_partition;
 mod archive_record;
 mod archive_record_key;
 mod archive_recovery;
+mod archive_recovery_handoff;
 mod archive_sort_key;
 mod archived_market_event;
 mod batch;
@@ -15,9 +16,11 @@ mod iceberg;
 mod layout;
 mod ledger_entry;
 mod ledger_parquet;
+mod maintenance_budget;
 mod maintenance_candidate;
 mod maintenance_config;
 mod maintenance_executor;
+mod maintenance_metadata;
 mod maintenance_partition;
 mod maintenance_report;
 mod maintenance_runner;
@@ -50,6 +53,8 @@ mod archive_parquet_tests;
 #[cfg(test)]
 mod archive_record_tests;
 #[cfg(test)]
+mod archive_recovery_handoff_tests;
+#[cfg(test)]
 mod archive_recovery_tests;
 #[cfg(test)]
 mod compaction_id_tests;
@@ -57,6 +62,8 @@ mod compaction_id_tests;
 mod content_hash_tests;
 #[cfg(test)]
 mod ledger_entry_tests;
+#[cfg(test)]
+mod maintenance_budget_tests;
 #[cfg(test)]
 mod maintenance_candidate_tests;
 #[cfg(test)]
@@ -88,6 +95,7 @@ pub use archive_partition::ArchivePartition;
 pub use archive_record::ArchiveRecord;
 pub use archive_record_key::ArchiveRecordKey;
 pub use archive_recovery::{RecoveryDecision, RecoveryInput, RecoveryLayer};
+pub use archive_recovery_handoff::RecoveryHandoff;
 pub use archive_sort_key::ArchiveSortKey;
 pub use archived_market_event::ArchivedMarketEvent;
 pub use batch::ArchiveBatch;
@@ -103,13 +111,16 @@ pub use iceberg::{
 pub use layout::{ArchiveBucket, ArchiveHour, ArchivePath};
 pub use ledger_entry::{HOUR_MILLIS, LEDGER_FORMAT_VERSION, LedgerEntry};
 pub use ledger_parquet::LedgerParquet;
+pub use maintenance_budget::{BUDGET_WINDOW, MaintenanceBudget};
 pub use maintenance_candidate::{MaintenanceCandidate, MaintenanceFileKind, MaintenancePlan};
 pub use maintenance_config::{
-    DEFAULT_ORPHAN_GRACE, DEFAULT_RAW_RETENTION, DEFAULT_SNAPSHOT_RETENTION,
-    MIN_COMPACTED_SNAPSHOTS, MIN_ORPHAN_GRACE, MIN_RAW_RETENTION, MIN_SNAPSHOT_RETENTION,
-    MaintenanceConfig, MaintenanceRetention, PartitionTargets, RetentionPolicy,
+    DEFAULT_MAX_COMMITS_PER_HOUR, DEFAULT_MAX_REWRITE_BYTES_PER_HOUR, DEFAULT_ORPHAN_GRACE,
+    DEFAULT_RAW_RETENTION, DEFAULT_SNAPSHOT_RETENTION, MIN_COMPACTED_SNAPSHOTS, MIN_ORPHAN_GRACE,
+    MIN_RAW_RETENTION, MIN_SNAPSHOT_RETENTION, MaintenanceConfig, MaintenanceRetention,
+    PartitionTargets, RetentionPolicy,
 };
 pub use maintenance_executor::ArchiveMaintenanceExecutor;
+pub use maintenance_metadata::{BUDGET_ALERT_CODE, METADATA_GROWTH_ALERT_CODE};
 pub use maintenance_partition::MaintenancePartition;
 pub use maintenance_report::{MaintenanceBlock, MaintenanceRunReport, StageOutcome};
 pub use maintenance_runner::{MaintenanceRunner, MaintenanceStageExecutor};

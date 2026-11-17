@@ -2,7 +2,7 @@ use crate::{ArchiveKind, CompactionId, SourceManifest};
 use platform_errors::{PlatformError, PlatformResult};
 use platform_types::TimestampMilliseconds;
 
-pub const LEDGER_FORMAT_VERSION: u32 = 1;
+pub const LEDGER_FORMAT_VERSION: u32 = 2;
 pub const HOUR_MILLIS: i64 = 60 * 60 * 1_000;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -14,6 +14,7 @@ pub struct LedgerEntry {
     pub source_manifest_uri: String,
     pub source_count: i64,
     pub processed_at: TimestampMilliseconds,
+    pub partition_spec_id: i32,
 }
 
 impl LedgerEntry {
@@ -24,6 +25,7 @@ impl LedgerEntry {
         source_manifest_uri: String,
         source_count: i64,
         processed_at: TimestampMilliseconds,
+        partition_spec_id: i32,
     ) -> PlatformResult<Self> {
         let entry = Self {
             format_version: LEDGER_FORMAT_VERSION,
@@ -33,6 +35,7 @@ impl LedgerEntry {
             source_manifest_uri,
             source_count,
             processed_at,
+            partition_spec_id,
         };
         entry.validate()?;
         Ok(entry)
@@ -52,6 +55,7 @@ impl LedgerEntry {
                 format!("source manifest is too large: {error}"),
             ))
         })?;
+        let partition_spec_id = manifest.partition_spec_id;
         Self::new(
             manifest.compaction_id,
             kind,
@@ -59,14 +63,21 @@ impl LedgerEntry {
             source_manifest_uri,
             source_count,
             processed_at,
+            partition_spec_id,
         )
     }
 
     pub fn validate(&self) -> PlatformResult<()> {
-        if self.format_version == 0 || self.format_version > LEDGER_FORMAT_VERSION {
+        if self.format_version != LEDGER_FORMAT_VERSION {
             return Err(PlatformError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!("unsupported ledger format version {}", self.format_version),
+            )));
+        }
+        if self.partition_spec_id < 0 {
+            return Err(PlatformError::external(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "ledger entry has no partition spec id",
             )));
         }
         if self.source_manifest_uri.is_empty() {

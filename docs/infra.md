@@ -8,7 +8,7 @@ definitions are in [environment-variables.md](environment-variables.md) and prob
 
 | Area | Services | Required infrastructure |
 | --- | --- | --- |
-| Market data | Ingester, Backfiller, Aggregator, Archiver, Compactor, Rebuilder | NATS JetStream and KV, S3-compatible storage, Iceberg REST catalog and warehouse |
+| Market data | Ingester, Backfiller, Aggregator, Archiver, Compactor, Rebuilder, Maintainer | NATS JetStream and KV, S3-compatible storage, Iceberg REST catalog and warehouse |
 | Portfolio | Portfolio service, Portfolio registry, Exchange gateway | NATS JetStream and KV, DynamoDB, Valkey, Vault, SQS, exchange REST/WebSocket endpoints |
 | Auth | Auth service, Auth relay | Valkey, Vault, SQS, shared Ed25519 key and JWKS endpoint |
 | Build | Build orchestrator, Git webhook, Build agent | Lambda, S3, SQS, GitHub App credentials, SSM Parameter Store |

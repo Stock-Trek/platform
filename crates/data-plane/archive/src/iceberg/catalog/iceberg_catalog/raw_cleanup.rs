@@ -19,6 +19,7 @@ pub struct RawCleanupPlan {
     pub candidates: Vec<MaintenanceCandidate>,
     pub quarantined: Vec<CompactionId>,
     pub backlog: Option<Duration>,
+    pub partition_spec_changed: bool,
 }
 
 impl RawCleanupPlan {
@@ -74,6 +75,7 @@ impl RawCleanupPlan {
             candidates,
             quarantined: Vec::new(),
             backlog,
+            partition_spec_changed: false,
         }
     }
 
@@ -135,6 +137,10 @@ impl IcebergCatalog {
             .collect::<HashSet<_>>();
         let retained_raw = Self::reachable_data_files(&raw_table).await?;
         let entries = self.read_ledger_entries(&ledger_table, kind).await?;
+        let spec_id = ledger_table.metadata().default_partition_spec_id();
+        let partition_spec_changed = entries
+            .iter()
+            .any(|entry| entry.partition_spec_id != spec_id);
         let mut processed = HashMap::new();
         let mut quarantined = Vec::new();
         for entry in &entries {
@@ -170,6 +176,7 @@ impl IcebergCatalog {
             retention,
         );
         plan.quarantined = quarantined;
+        plan.partition_spec_changed = partition_spec_changed;
         Ok(plan)
     }
 

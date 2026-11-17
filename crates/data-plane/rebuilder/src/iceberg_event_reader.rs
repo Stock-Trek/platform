@@ -1,7 +1,7 @@
 use aws_sdk_s3::Client as S3Client;
 use platform_archive::{
     ArchiveBatch, ArchiveCatalog, ArchiveHandoff, ArchiveIcebergTable, ArchiveKind,
-    ArchiveParquetStream, IcebergDataFile, ParquetReader, S3,
+    ArchiveParquetStream, IcebergDataFile, ParquetReader, RecoveryHandoff, S3,
 };
 use platform_errors::{PlatformError, PlatformResult};
 use tracing::info;
@@ -147,8 +147,8 @@ impl IcebergEventReader {
                 ))
             }
             RebuildSourceLayer::Auto => {
-                let handoff = ArchiveHandoff::discover(catalog, ArchiveKind::Events).await?;
-                Ok((RebuildSourceLayer::Auto, handoff))
+                let recovery = RecoveryHandoff::discover(catalog, ArchiveKind::Events).await?;
+                Ok((RebuildSourceLayer::Auto, recovery.handoff))
             }
         }
     }

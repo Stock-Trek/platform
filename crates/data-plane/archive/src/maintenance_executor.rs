@@ -1,3 +1,4 @@
+use crate::maintenance_budget::MaintenanceBudget;
 use crate::maintenance_partition::MaintenancePartition;
 use crate::{
     ArchiveCatalog, CommitContext, MaintenanceConfig, MaintenancePlan, MaintenanceStage,
@@ -8,7 +9,7 @@ use parking_lot::Mutex;
 use platform_errors::{PlatformError, PlatformResult};
 use platform_lease::{CommitAuthorizer, LeaseGuard, LeaseRequest, LeaseStore};
 use platform_types::TimestampMilliseconds;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -16,7 +17,9 @@ use std::time::Duration;
 ///
 /// Plans and applies snapshot expiry, orphan cleanup, compacted and ledger
 /// rewriting, and raw cleanup against an [`ArchiveCatalog`], coordinating with
-/// compaction through partition-level leases.
+/// compaction through partition-level leases. The executor is long-lived: it
+/// tracks the hourly commit/byte budget and the per-table metadata baselines
+/// between maintenance cycles, so one instance must be reused across cycles.
 pub struct ArchiveMaintenanceExecutor {
     pub(crate) catalog: Arc<dyn ArchiveCatalog>,
     pub(crate) objects: Arc<dyn ObjectStore>,
@@ -26,6 +29,8 @@ pub struct ArchiveMaintenanceExecutor {
     pub(crate) output_prefix: String,
     pub(crate) owner_id: String,
     pub(crate) backlogs: Mutex<BTreeMap<MaintenanceStage, Duration>>,
+    pub(crate) budget: MaintenanceBudget,
+    pub(crate) metadata_counts: Mutex<HashMap<String, u64>>,
 }
 
 impl ArchiveMaintenanceExecutor {
@@ -38,6 +43,11 @@ impl ArchiveMaintenanceExecutor {
         output_prefix: impl Into<String>,
     ) -> PlatformResult<Self> {
         config.validate()?;
+        config.validate()?;
+        let budget = MaintenanceBudget::new(
+            config.max_commits_per_hour,
+            config.max_rewrite_bytes_per_hour,
+        );
         Ok(Self {
             catalog,
             objects,
@@ -47,6 +57,8 @@ impl ArchiveMaintenanceExecutor {
             output_prefix: output_prefix.into(),
             owner_id: platform_lease::Lease::new_owner_id(),
             backlogs: Mutex::new(BTreeMap::new()),
+            budget,
+            metadata_counts: Mutex::new(HashMap::new()),
         })
     }
 

@@ -227,6 +227,7 @@ impl CompactedRewriteCandidate {
         &self,
         table: &iceberg::table::Table,
     ) -> PlatformResult<Vec<LedgerEntry>> {
+        let spec_id = table.metadata().default_partition_spec_id();
         let mut by_id = BTreeMap::<CompactionId, LedgerEntry>::new();
         for file in &self.input_files {
             let input = table
@@ -242,6 +243,17 @@ impl CompactedRewriteCandidate {
                     return Err(PlatformError::config_invalid(
                         "ledger rewrite",
                         "ledger row has the wrong archive kind",
+                    ));
+                }
+                if entry.partition_spec_id != spec_id {
+                    return Err(PlatformError::config_invalid(
+                        "ledger rewrite",
+                        format!(
+                            "ledger row for {} was written under partition spec {} but the table now uses spec {}; a re-baseline is required before rewriting across specs",
+                            entry.compaction_id.as_str(),
+                            entry.partition_spec_id,
+                            spec_id
+                        ),
                     ));
                 }
                 if let Some(existing) = by_id.insert(entry.compaction_id, entry.clone())

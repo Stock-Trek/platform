@@ -39,6 +39,19 @@ pub trait ArchiveCatalog: Send + Sync {
         )))
     }
 
+    /// Counts the metadata objects of a table (metadata files, manifests,
+    /// manifest lists, and source manifests).
+    ///
+    /// Maintenance compares the counts between cycles to meter metadata
+    /// growth against the configured growth budget.
+    async fn metadata_file_count(
+        &self,
+        _table: ArchiveIcebergTable,
+        _client: &dyn ObjectStore,
+    ) -> PlatformResult<u64> {
+        Ok(0)
+    }
+
     async fn processed_source_files(
         &self,
         table: ArchiveIcebergTable,

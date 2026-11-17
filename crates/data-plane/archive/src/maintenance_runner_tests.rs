@@ -155,3 +155,32 @@ async fn a_held_lease_blocks_maintenance() {
     assert!(executor.stages.lock().is_empty());
     store.release(&lease).await.unwrap();
 }
+
+#[tokio::test]
+async fn concurrent_runners_never_run_twice() {
+    let store = Arc::new(InMemoryLeaseStore::new());
+    let first = Arc::new(FakeExecutor::default());
+    let second = Arc::new(FakeExecutor::default());
+    let left = MaintenanceRunner::new(MaintenanceConfig::default(), first.clone(), store.clone())
+        .unwrap()
+        .with_owner_id("maintenance-a");
+    let right = MaintenanceRunner::new(MaintenanceConfig::default(), second.clone(), store.clone())
+        .unwrap()
+        .with_owner_id("maintenance-b");
+
+    let (left_report, right_report) = tokio::join!(left.run(false), right.run(false));
+
+    let (winner, loser, winner_executor, loser_executor) = match (&left_report, &right_report) {
+        (Ok(left), Ok(right)) if left.acquired => (left, right, &first, &second),
+        (Ok(left), Ok(right)) if right.acquired => (right, left, &second, &first),
+        _ => panic!("exactly one runner must acquire the maintenance lease"),
+    };
+    assert!(winner.completed);
+    assert!(!loser.acquired);
+    assert_eq!(
+        loser.stages[0].blocked.as_ref().unwrap().code,
+        "lease_contended"
+    );
+    assert_eq!(winner_executor.stages.lock().len(), 4);
+    assert!(loser_executor.stages.lock().is_empty());
+}

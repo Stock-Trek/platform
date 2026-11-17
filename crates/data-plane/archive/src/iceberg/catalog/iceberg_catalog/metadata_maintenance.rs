@@ -11,6 +11,21 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 impl IcebergCatalog {
+    pub async fn metadata_file_count(
+        &self,
+        archive_table: crate::iceberg::ArchiveIcebergTable,
+        client: &dyn ObjectStore,
+    ) -> PlatformResult<u64> {
+        let table = self.ensure_table(archive_table).await?;
+        let directory = table
+            .metadata()
+            .metadata_location()
+            .map_err(|error| Self::catalog_error("read Iceberg metadata directory", error))?;
+        let (bucket, prefix) = Self::metadata_listing_prefix(&directory)?;
+        let objects = client.list_all(&bucket, &prefix).await?;
+        Ok(objects.len() as u64)
+    }
+
     pub async fn orphan_candidates(
         &self,
         archive_table: crate::iceberg::ArchiveIcebergTable,

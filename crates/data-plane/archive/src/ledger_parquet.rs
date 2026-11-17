@@ -1,5 +1,5 @@
 use crate::{ArchiveKind, CompactionId, LedgerEntry};
-use arrow_array::{ArrayRef, Int64Array, RecordBatch, StringArray, UInt32Array};
+use arrow_array::{ArrayRef, Int32Array, Int64Array, RecordBatch, StringArray, UInt32Array};
 use arrow_schema::{DataType, Field, Schema};
 use bytes::Bytes;
 use parquet::{
@@ -45,6 +45,9 @@ impl LedgerParquet {
             Arc::new(Int64Array::from_iter_values(
                 entries.iter().map(|entry| entry.processed_at.0),
             )),
+            Arc::new(Int32Array::from_iter_values(
+                entries.iter().map(|entry| entry.partition_spec_id),
+            )),
         ];
         let batch = RecordBatch::try_new(schema.clone(), columns)?;
         let mut buffer = Vec::new();
@@ -74,6 +77,7 @@ impl LedgerParquet {
             let manifests = Self::strings(&batch, "source_manifest_uri")?;
             let counts = Self::i64s(&batch, "source_count")?;
             let processed = Self::i64s(&batch, "processed_at_millis")?;
+            let spec_ids = Self::i32s(&batch, "partition_spec_id")?;
             for index in 0..batch.num_rows() {
                 let kind = ArchiveKind::from_segment(kinds.value(index))
                     .ok_or_else(|| Self::error("ledger row has an unknown archive kind"))?;
@@ -85,6 +89,7 @@ impl LedgerParquet {
                     source_manifest_uri: manifests.value(index).to_string(),
                     source_count: counts.value(index),
                     processed_at: TimestampMilliseconds(processed.value(index)),
+                    partition_spec_id: spec_ids.value(index),
                 };
                 entry.validate()?;
                 entries.push(entry);
@@ -103,6 +108,7 @@ impl LedgerParquet {
                 Field::new("source_manifest_uri", DataType::Utf8, false),
                 Field::new("source_count", DataType::Int64, false),
                 Field::new("processed_at_millis", DataType::Int64, false),
+                Field::new("partition_spec_id", DataType::Int32, false),
             ],
             HashMap::from([(
                 "ledger_format_version".to_string(),
@@ -129,6 +135,13 @@ impl LedgerParquet {
         batch
             .column_by_name(name)
             .and_then(|column| column.as_any().downcast_ref::<Int64Array>())
+            .ok_or_else(|| Self::error(&format!("ledger column {name} is missing")))
+    }
+
+    fn i32s<'a>(batch: &'a RecordBatch, name: &str) -> PlatformResult<&'a Int32Array> {
+        batch
+            .column_by_name(name)
+            .and_then(|column| column.as_any().downcast_ref::<Int32Array>())
             .ok_or_else(|| Self::error(&format!("ledger column {name} is missing")))
     }
 

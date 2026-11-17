@@ -11,7 +11,7 @@ fn manifest(kind: ArchiveKind) -> SourceManifest {
         &"b".repeat(64),
     )
     .unwrap();
-    SourceManifest::new(id, vec!["s3://bucket/raw/a.parquet".to_string()]).unwrap()
+    SourceManifest::new(id, 0, vec!["s3://bucket/raw/a.parquet".to_string()]).unwrap()
 }
 
 fn entry(kind: ArchiveKind) -> LedgerEntry {

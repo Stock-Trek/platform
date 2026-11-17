@@ -75,6 +75,32 @@ where
         stages: &[MaintenanceStage],
         dry_run: bool,
     ) -> PlatformResult<MaintenanceRunReport> {
+        let report = self.run_stages_inner(stages, dry_run).await;
+        match &report {
+            Ok(report) if !report.acquired => {
+                MarketDataMetrics::record_maintenance_run("skipped");
+            }
+            Ok(report) if report.dry_run => {
+                MarketDataMetrics::record_maintenance_run("dry_run");
+            }
+            Ok(report) if report.completed => {
+                MarketDataMetrics::record_maintenance_run("completed");
+            }
+            Ok(_) => {
+                MarketDataMetrics::record_maintenance_run("blocked");
+            }
+            Err(_) => {
+                MarketDataMetrics::record_maintenance_run("failed");
+            }
+        }
+        report
+    }
+
+    async fn run_stages_inner(
+        &self,
+        stages: &[MaintenanceStage],
+        dry_run: bool,
+    ) -> PlatformResult<MaintenanceRunReport> {
         self.ensure_ordered(stages)?;
         let ttl = self.lease_ttl();
         let max_work = self.config.longest_lease;

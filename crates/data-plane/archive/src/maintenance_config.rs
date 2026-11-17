@@ -10,6 +10,8 @@ pub const MIN_ORPHAN_GRACE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 pub const DEFAULT_RAW_RETENTION: Duration = Duration::from_secs(365 * 24 * 60 * 60);
 pub const DEFAULT_SNAPSHOT_RETENTION: Duration = Duration::from_secs(90 * 24 * 60 * 60);
 pub const DEFAULT_ORPHAN_GRACE: Duration = Duration::from_secs(14 * 24 * 60 * 60);
+pub const DEFAULT_MAX_COMMITS_PER_HOUR: u64 = 120;
+pub const DEFAULT_MAX_REWRITE_BYTES_PER_HOUR: u64 = 8 * 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MaintenanceConfig {
@@ -22,6 +24,8 @@ pub struct MaintenanceConfig {
     pub ledger_target: PartitionTarget,
     pub max_rewrite_commits_per_partition: usize,
     pub max_metadata_growth_percent: u8,
+    pub max_commits_per_hour: u64,
+    pub max_rewrite_bytes_per_hour: u64,
 }
 
 impl MaintenanceConfig {
@@ -114,6 +118,18 @@ impl MaintenanceConfig {
                 "metadata growth alert threshold must be positive",
             )));
         }
+        if self.max_commits_per_hour == 0 {
+            return Err(PlatformError::external(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "maintenance commit budget per hour must be positive",
+            )));
+        }
+        if self.max_rewrite_bytes_per_hour == 0 {
+            return Err(PlatformError::external(std::io::Error::new(
+                std::io::ErrorKind::InvalidInput,
+                "maintenance byte budget per hour must be positive",
+            )));
+        }
         Ok(())
     }
 
@@ -144,6 +160,8 @@ impl Default for MaintenanceConfig {
             ledger_target: PartitionTarget::default(),
             max_rewrite_commits_per_partition: 1,
             max_metadata_growth_percent: 10,
+            max_commits_per_hour: DEFAULT_MAX_COMMITS_PER_HOUR,
+            max_rewrite_bytes_per_hour: DEFAULT_MAX_REWRITE_BYTES_PER_HOUR,
         }
     }
 }

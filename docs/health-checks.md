@@ -33,6 +33,7 @@ down.
 | Archiver | `ARCHIVER` |
 | Compactor | `COMPACTOR` |
 | Rebuilder | `REBUILDER` |
+| Maintainer | `MAINTAINER` |
 
 The portfolio registry exposes `/healthz` and `/readyz` on both its admin and read listeners. Its
 readiness is true once those listeners are accepting requests.
