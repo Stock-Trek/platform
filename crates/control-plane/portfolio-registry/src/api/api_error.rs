@@ -1,61 +1,69 @@
 use http_body_util::Full;
-use hyper::{Response, StatusCode, body::Bytes, header::CONTENT_TYPE};
+use hyper::{
+    Method, Response, StatusCode,
+    body::Bytes,
+    header::{ALLOW, CONTENT_TYPE},
+};
 use serde_json::json;
 
 #[derive(Debug)]
 pub struct ApiError {
     status: StatusCode,
     message: String,
+    allow: Option<String>,
 }
 
 impl ApiError {
-    pub fn bad_request(message: impl Into<String>) -> Self {
+    fn new(status: StatusCode, message: impl Into<String>) -> Self {
         Self {
-            status: StatusCode::BAD_REQUEST,
+            status,
             message: message.into(),
+            allow: None,
         }
+    }
+
+    pub fn bad_request(message: impl Into<String>) -> Self {
+        Self::new(StatusCode::BAD_REQUEST, message)
     }
 
     pub fn unauthorized(message: impl Into<String>) -> Self {
-        Self {
-            status: StatusCode::UNAUTHORIZED,
-            message: message.into(),
-        }
+        Self::new(StatusCode::UNAUTHORIZED, message)
     }
 
-    pub fn method_not_allowed() -> Self {
+    pub fn method_not_allowed(allowed: &[Method]) -> Self {
+        let allow = allowed
+            .iter()
+            .map(Method::as_str)
+            .collect::<Vec<_>>()
+            .join(", ");
         Self {
             status: StatusCode::METHOD_NOT_ALLOWED,
             message: "method not allowed".to_string(),
+            allow: Some(allow),
         }
     }
 
     pub fn not_found() -> Self {
-        Self {
-            status: StatusCode::NOT_FOUND,
-            message: "not found".to_string(),
-        }
+        Self::new(StatusCode::NOT_FOUND, "not found")
     }
 
     pub fn payload_too_large() -> Self {
-        Self {
-            status: StatusCode::PAYLOAD_TOO_LARGE,
-            message: "request body is too large".to_string(),
-        }
+        Self::new(StatusCode::PAYLOAD_TOO_LARGE, "request body is too large")
     }
 
     pub fn internal(message: impl Into<String>) -> Self {
-        Self {
-            status: StatusCode::INTERNAL_SERVER_ERROR,
-            message: message.into(),
-        }
+        Self::new(StatusCode::INTERNAL_SERVER_ERROR, message)
     }
 
     pub fn response(self) -> Response<Full<Bytes>> {
         let body = json!({ "error": self.message }).to_string();
-        Response::builder()
+        let mut builder = Response::builder()
             .status(self.status)
-            .header(CONTENT_TYPE, "application/json")
+            .header(CONTENT_TYPE, "application/json");
+        if let Some(allow) = self.allow {
+            builder = builder.header(ALLOW, allow);
+        }
+        builder
             .body(Full::new(Bytes::from(body)))
             .unwrap_or_else(|_| Response::new(Full::new(Bytes::new())))
     }

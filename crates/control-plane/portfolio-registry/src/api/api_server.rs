@@ -33,6 +33,10 @@ impl ApiServer {
         })
     }
 
+    pub fn local_addr(&self) -> PlatformResult<SocketAddr> {
+        self.listener.local_addr().map_err(PlatformError::external)
+    }
+
     pub async fn serve(self) -> PlatformResult<()> {
         self.serve_with_shutdown(Runtime::shutdown_signal()).await
     }

@@ -31,14 +31,14 @@ impl ReadApi {
             return if request.method() == Method::GET {
                 Ok(empty_response(StatusCode::NO_CONTENT))
             } else {
-                Err(ApiError::method_not_allowed())
+                Err(ApiError::method_not_allowed(&[Method::GET]))
             };
         }
         if request.uri().path() != "/v1/accounts" {
             return Err(ApiError::not_found());
         }
         if request.method() != Method::GET {
-            return Err(ApiError::method_not_allowed());
+            return Err(ApiError::method_not_allowed(&[Method::GET]));
         }
         let jwt = bearer(&request)?;
         let claims = self
