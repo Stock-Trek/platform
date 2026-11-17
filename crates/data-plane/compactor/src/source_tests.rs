@@ -151,7 +151,7 @@ async fn an_inventory_gap_is_reconciled_without_skipping_or_duplicating_a_source
     lister.insert(object(&first, modified));
     let catalog = Arc::new(FakeCatalog::default());
     catalog.live(&first_uri);
-    let source = S3ArchiveSource::for_test(catalog.clone(), lister.clone(), bucket, "raw".into());
+    let source = S3ArchiveSource::new(catalog.clone(), lister.clone(), bucket, "raw".into(), 1, 0);
 
     let initial = source.pending_batches().await.unwrap();
     assert_eq!(batches(initial), vec![vec![first.clone()]]);

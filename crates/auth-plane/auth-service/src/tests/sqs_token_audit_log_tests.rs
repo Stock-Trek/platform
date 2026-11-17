@@ -14,7 +14,7 @@ struct SqsAuditFixture;
 
 impl SqsAuditFixture {
     fn audit(queue: &Arc<MockAuditQueue>, timeout: StdDuration) -> SqsTokenAuditLog {
-        SqsTokenAuditLog::with_queue(queue.clone(), timeout)
+        SqsTokenAuditLog::new(queue.clone(), timeout)
     }
 
     fn service(queue: &Arc<MockAuditQueue>) -> (AuthService, SqsTokenAuditLog) {

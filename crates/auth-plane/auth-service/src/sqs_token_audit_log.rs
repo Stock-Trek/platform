@@ -32,15 +32,7 @@ pub struct SqsTokenAuditLog {
 }
 
 impl SqsTokenAuditLog {
-    pub fn new(sqs: Sqs, timeout: Duration) -> Self {
-        Self {
-            queue: Arc::new(sqs),
-            timeout,
-        }
-    }
-
-    #[cfg(test)]
-    pub fn with_queue(queue: Arc<dyn AuditQueue>, timeout: Duration) -> Self {
+    pub fn new(queue: Arc<dyn AuditQueue>, timeout: Duration) -> Self {
         Self { queue, timeout }
     }
 

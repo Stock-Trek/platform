@@ -5,7 +5,7 @@ use platform_errors::{AuthError, PlatformError, PlatformResult};
 use platform_runtime::Runtime;
 use platform_sigv4::SigV4Config;
 use platform_time::RetryBackoff;
-use std::{future::Future, net::SocketAddr, sync::Arc, time::Duration};
+use std::{future::Future, sync::Arc, time::Duration};
 use tokio::{
     net::TcpListener,
     sync::{Semaphore, watch},
@@ -87,20 +87,13 @@ pub struct JwtServer {
 }
 
 impl JwtServer {
-    pub async fn bind_with_sigv4(
-        address: SocketAddr,
-        service: AuthService,
-        sigv4: SigV4Config,
-    ) -> PlatformResult<Self> {
-        let listener = TcpListener::bind(address)
-            .await
-            .map_err(PlatformError::external)?;
-        Ok(Self {
+    pub fn new(listener: TcpListener, service: AuthService, sigv4: SigV4Config) -> Self {
+        Self {
             listener,
             service: Arc::new(service),
             sigv4: Arc::new(sigv4),
             slots: Arc::new(Semaphore::new(MAX_CONNECTIONS)),
-        })
+        }
     }
 
     pub async fn serve(self) -> PlatformResult<()> {
@@ -167,11 +160,6 @@ impl JwtServer {
         let _ = shutdown_tx.send(true);
         Self::drain(&mut connections).await;
         result
-    }
-
-    #[cfg(test)]
-    pub fn local_addr(&self) -> PlatformResult<SocketAddr> {
-        self.listener.local_addr().map_err(PlatformError::external)
     }
 
     async fn drain(connections: &mut JoinSet<()>) {

@@ -24,7 +24,7 @@ impl AuthRelay {
             config.aws_timeouts,
             SqsConfig::new(config.audit_queue_url.clone()),
         );
-        let sink = SqsTokenAuditLog::new(sqs, config.audit_timeout);
+        let sink = SqsTokenAuditLog::new(Arc::new(sqs), config.audit_timeout);
         Ok(Self::new(
             store,
             Arc::new(sink),

@@ -52,7 +52,7 @@ impl ValkeyReplayStore {
         Ok(store)
     }
 
-    fn key(&self, replay_key: &ReplayKey) -> String {
+    pub(crate) fn key(&self, replay_key: &ReplayKey) -> String {
         format!(
             "{}:{}:{}",
             self.config.key_prefix(),
@@ -81,11 +81,6 @@ impl ValkeyReplayStore {
             .signed_duration_since(now)
             .num_milliseconds()
             .max(1)
-    }
-
-    #[cfg(test)]
-    pub fn key_for_test(&self, replay_key: &ReplayKey) -> String {
-        self.key(replay_key)
     }
 }
 
