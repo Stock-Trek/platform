@@ -46,6 +46,9 @@ Everything else is a projection of existing state: the ownership registry, the p
 Every request carries `Authorization: Bearer <jwt>`.
 Tokens are short-lived EdDSA (Ed25519) JWTs signed by the auth service; the API verifies them locally against the auth service JWKS (`/.well-known/jwks.json`) with a bounded key cache.
 The API backend is a configured SigV4 caller of the auth service and mints owner-scoped tokens on behalf of authenticated users.
+Tokens carry a single scope that grants access to every endpoint in this document; `forbidden` means the presented token does not carry it.
+`DELETE /v1/session` revokes the presented token server-side, and every authenticated request re-checks revocation, so locally verified tokens stop working immediately after invalidation.
+Because the client is a browser, the API answers CORS preflights from an allowlist of origins, accepts the `Authorization` and `Idempotency-Key` request headers, and varies cached responses on `Origin`.
 
 The JWT `owner` claim is the platform identity.
 Every resource in the API is scoped to the owner: a user can only ever see and act on their own accounts, algorithms, bots, runs, and backtests.
@@ -79,7 +82,8 @@ Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
 - `POST` endpoints that create resources or trigger work accept an `Idempotency-Key` header.
   Retries with the same key return the original response instead of creating a duplicate.
 - Mutable resources expose a `version` integer.
-  Mutations may be conditioned with `If-Match: <version>` and fail with `409 conflict` when the version does not match.
+  Mutations may be conditioned with `If-Match: <version>` and fail with `409 conflict` when the version does not match; endpoints that require it say so below.
+- Account identifiers may contain only lowercase letters, digits, `-`, and `_`, because they are embedded in stream channel names and URL paths.
 
 ## Errors
 
@@ -111,10 +115,12 @@ Errors use RFC 9457 problem details:
 | `unavailable` | 503 | Dependency is down; retry with backoff |
 
 `stale` mirrors the portfolio service staleness policy (`allow`, `degrade`, `reject`); in `degrade` mode accepted-but-stale actions are flagged in responses so the front-end can warn.
+`rate_limited` responses carry a `Retry-After` header with the number of seconds to wait before retrying.
 
 ## Streaming
 
-`GET /v1/stream` upgrades to a WebSocket after bearer authentication.
+Browsers cannot set `Authorization` on WebSocket upgrades, so stream connections authenticate with a short-lived single-use ticket: `POST /v1/stream/ticket` requires a bearer token and returns `{ "ticket": "...", "expiresAt": "..." }`, and `GET /v1/stream?ticket=...` upgrades to a WebSocket after the ticket is redeemed.
+Tickets are valid for one upgrade before `expiresAt`.
 The client subscribes to channels, the server pushes JSON frames with a per-channel monotonically increasing `sequence` so clients can detect gaps and resume:
 
 ```json
@@ -234,7 +240,7 @@ The read model is rebuilt from the portfolio update stream, so snapshots carry t
 }
 ```
 
-`GET /v1/portfolios` returns the same shape for every linked account at once, for dashboards.
+`GET /v1/portfolios` returns `{ "data": [ ...account snapshots... ], "nextCursor": null }` with one account snapshot per linked account, for dashboards.
 
 Live updates arrive on the `portfolio.{cexId}.{accountId}` stream channel.
 The channel frames carry the same body as the snapshot endpoint with the stream `sequence` in the envelope, and subscribing with `lastSequence` replays nothing (the read model is the resume point).
@@ -440,10 +446,10 @@ Validation rules:
 - `strategyName` must exist in that build.
 - `parameters` must satisfy the strategy's preference schema.
 - Every referenced account must be a linked, active account of the owner.
-- `schedule.kind` is `interval` (`everySeconds` ≥ 10) or `cron` (`expression` in RFC 9535 five-field syntax plus `timezone`).
+- `schedule.kind` is `interval` (`everySeconds` ≥ 10) or `cron` (`expression` in five-field cron syntax plus `timezone`, an IANA time-zone name such as `Europe/Zurich`).
 
-`PATCH /v1/bots/{botId}` accepts the same fields minus `algorithmId`; changing the build or strategy re-validates `parameters` and returns `422 validation_failed` on mismatch.
-Mutations require `If-Match` with the current `version`.
+`PATCH /v1/bots/{botId}` accepts the same fields minus `algorithmId`; changing the build or strategy re-validates `parameters` and fails with `400 validation_failed` on mismatch.
+Bot mutations require `If-Match` with the current `version`.
 
 ### Runs
 
@@ -554,7 +560,7 @@ Validation mirrors the runner's spec checks and fails fast with `validation_fail
 - `openCandleProgressMillis`, when given, must be smaller than the shortest requested window.
 - Every chance field is a decimal string in `[0, 1]`.
 - `count` and `maxConcurrent` are clamped to the runner's worker limits.
-- At most one backtest may be `queued` or `running` per owner; a further creation returns `429 rate_limited`.
+- No more than the per-owner concurrent backtest limit in [Limits](#limits) may be `queued` or `running` at once; a further creation returns `429 rate_limited` with `Retry-After`.
 
 ### Results and streaming
 
@@ -572,7 +578,7 @@ They are delivered twice: incrementally on the stream as each simulation finishe
 }
 ```
 
-`GET /v1/backtests/{backtestId}/stream` upgrades to a WebSocket.
+`GET /v1/backtests/{backtestId}/stream?ticket=...` upgrades to a WebSocket, using a stream ticket as described in [Streaming](#streaming).
 Frames are `{ "sequence": 7, "simulation": 13, "result": { ... } }` with `sequence` increasing per connection; a `complete` frame with no `simulation` field marks the collated result.
 The stream ends when the backtest reaches a terminal state; clients that reconnect mid-run receive only results not yet seen by their cursor.
 
