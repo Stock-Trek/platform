@@ -1,9 +1,8 @@
 # Infrastructure runbook
 
 Use this document to provision, validate, tear down, and recover the platform. Full variable
-definitions are in [environment-variables.md](environment-variables.md), probes in
-[health-checks.md](health-checks.md), and archive coordination in
-[archive-writer-coordination.md](../crates/data-plane/archive-writer-coordination.md).
+definitions are in [environment-variables.md](environment-variables.md) and probes in
+[health-checks.md](health-checks.md).
 
 ## Service and dependency map
 
@@ -51,6 +50,8 @@ which load from `SECRETS_SSM_PATH`.
   `AGGREGATOR_CHECKPOINT_INTERVAL_SECS` is lower than `AGGREGATOR_LEASE_TTL_SECS`.
 - Every lease TTL leaves a positive renewal interval after clock-skew margin, and soft work
   deadlines are shorter than the skew-adjusted TTL.
+- Archive writers fail startup when coordination configuration is missing or invalid. There is no
+  in-process or unconditional-commit fallback.
 - The aggregator pair ceiling, shard count, per-interval closed-candle caps, and memory budget pass
   the worst-case startup memory check. Rebuilder spill storage and record limits fit available disk
   and memory.
@@ -63,6 +64,16 @@ The archiver and compactor lease buckets must exist before startup with a positi
 at least `1`, no key-age expiry, and no key-count expiry. Services must never auto-create an
 unlimited-history bucket. Lease keys and release tombstones must never be removed by bucket age or
 size limits.
+
+A lease record contains its scope, owner, fencing token, absolute expiry, and release state. Lease
+keys are derived from a SHA-256 digest of the scope, so long or invalid object prefixes cannot
+create invalid KV keys. The first acquisition of a scope uses the configured initial token, which
+defaults to `1` and must be positive. Every later acquisition, including expired takeover and
+graceful release, uses `previous + 1`. Lease scopes include the archive deployment identity (bucket
+and archive prefix), so deployments sharing a lease bucket do not contend with each other. The
+archiver and compactor may share a lease bucket as long as their scope prefixes prevent key
+collisions. Lease updates use the observed KV revision; a revision race is retried by re-reading
+the key, never by overwriting it unconditionally.
 
 Portfolio streams are provisioned idempotently with file storage, limits retention, and three
 replicas by default. Set replicas explicitly below cluster size. Retention must exceed the maximum
@@ -81,9 +92,20 @@ consumer outage plus the disaster-recovery replay window.
   sum of per-interval caps. Correction reach is the shorter of the event-time cutoff and the newest
   `N_i` windows for each interval.
 - The ingester must not subscribe to both `@trade` and `@aggTrade` for the same symbol.
-- Archive writers use fenced leases. A worker that loses its lease or exceeds its soft deadline must
-  abort before the next conditional commit. Do not delete lease keys, tombstones, or claim records
-  while related outputs remain live.
+- Source claims are append-only for the lifetime of their compacted outputs. Snapshot retention,
+  lease expiry, or writer failure must not remove a claim while any output from its batch remains
+  live. The processed-source set is the union of claims reachable from the current table state.
+- The lease is never sufficient on its own. Every file registration still passes the conditional
+  Iceberg commit, which is the correctness boundary for duplicate claims and duplicate data.
+- Archive writers use fenced leases. Lease TTLs are configurable per archive kind, workers renew at
+  one third of the TTL, and each kind has a shorter soft work deadline. A worker renews and verifies
+  its token immediately before every conditional commit attempt, including retries. A worker that
+  loses its lease or exceeds its soft deadline must abort before the next conditional commit. Do not
+  delete lease keys, tombstones, or claim records while related outputs remain live.
+- The compactor leases each raw hourly prefix, so different hours and archive kinds compact in
+  parallel while work that would collide is serialized. Archiver recovery uses a separate lease for
+  each raw prefix and raw table. Normal raw flushes do not need a lease because their path-based
+  conditional commit is sufficient.
 
 ## Provisioning process
 
@@ -139,9 +161,12 @@ retained and evicted candles, and out-of-contract corrections.
 
 Archive writers log every lease acquisition, contention, loss, commit conflict, and already-applied
 outcome with table, scope, owner, fencing token, and source-batch digest. Conflict logs include the
-overlapping source URIs and output paths. Treat repeated compaction of the same sources, index
-fallback scans, lease-token regressions, and recovery pages that cannot finish inside the lease
-window as release-blocking.
+overlapping source URIs and output paths. Metrics cover lease acquisitions, contentions, and losses;
+conditional commit outcomes by table and outcome; compaction batches skipped because of an
+overlapping claim; and recovery objects registered, skipped as already live, and deferred by
+conflict. Lease loss and source-claim overlap are warnings, not silent retries. Treat repeated
+compaction of the same sources, index fallback scans, lease-token regressions, and recovery pages
+that cannot finish inside the lease window as release-blocking.
 
 ### Backup
 
@@ -250,7 +275,10 @@ authority, record that choice, and never silently fall back to missing raw objec
   recompaction after old snapshots expire, and delete only unreachable metadata after the safety
   window.
 - Recovery tests page a large backlog, register each object once, handle a cross-page conflict, skip
-  already-live paths on restart, and release the lease at the soft deadline.
+  already-live paths on restart, and release the lease at the soft deadline. A recovery scan that
+  exceeds `ARCHIVER_MAX_WORK_SECS` aborts without registering.
+- A compaction that exceeds `COMPACTOR_MAX_WORK_SECS` aborts without registering, and concurrent
+  normal flushes of the same object path append it once.
 - Inventory-gap reconciliation discovers an omitted object without skipping or duplicating it.
 - An end-to-end suite against the real REST catalog, S3-compatible storage, and NATS covers
   archiver flush, compactor claim, reload, ambiguous response, graceful handover, recovery, and
@@ -289,4 +317,3 @@ authority, record that choice, and never silently fall back to missing raw objec
 - [Archive retention and Iceberg maintenance options](archive-maintenance-options.md)
 - [Archive writer coordination cleanup](archive-writer-coordination-cleanup.md)
 - [Market data services](../crates/data-plane/README.md)
-- [Archive writer coordination](../crates/data-plane/archive-writer-coordination.md)
