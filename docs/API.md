@@ -45,7 +45,7 @@ Everything else is a projection of existing state: the ownership registry, the p
 
 Every request carries `Authorization: Bearer <jwt>`.
 Tokens are short-lived EdDSA (Ed25519) JWTs signed by the auth service; the API verifies them locally against the auth service JWKS (`/.well-known/jwks.json`) with a bounded key cache.
-The API backend is a configured SigV4 caller of the auth service and mints owner-scoped tokens on behalf of authenticated users.
+Token minting goes through the auth service, whose JWT requests require a valid SigV4 signature from an access key bound to the requested owner; the API signs minting requests with the login credential the user presented, so it cannot mint a token for an owner it has not authenticated.
 Tokens carry a single scope that grants access to every endpoint in this document; `forbidden` means the presented token does not carry it.
 `DELETE /v1/session` revokes the presented token server-side, and every authenticated request re-checks revocation, so locally verified tokens stop working immediately after invalidation.
 Because the client is a browser, the API answers CORS preflights from an allowlist of origins, accepts the `Authorization` and `Idempotency-Key` request headers, and varies cached responses on `Origin`.
@@ -58,6 +58,14 @@ Resource identifiers are not guessable, and every request re-checks ownership.
 | --- | --- | --- |
 | `POST` | `/v1/session` | Exchange a platform login credential for a short-lived API token |
 | `DELETE` | `/v1/session` | Invalidate the presented token |
+
+`POST /v1/session` takes the platform login credential, an owner-bound access key pair issued when the owner is onboarded:
+
+```json
+{ "accessKeyId": "AKIA23XQ", "secretAccessKey": "..." }
+```
+
+Invalid or unknown credentials fail with `401 unauthorized`, and failed attempts are rate limited per source address (see [Limits](#limits)).
 
 `POST /v1/session` returns `201` with:
 
@@ -73,7 +81,7 @@ Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
 - Timestamps are RFC 3339 UTC with millisecond precision, for example `2026-07-14T09:30:00.000Z`.
   Durations are integer seconds unless a field name ends in `_millis`.
 - Quantities and prices are decimal strings, for example `"1250.50"`, never JSON numbers.
-- Identifiers are opaque strings prefixed by type: `usr_`, `alg_`, `bld_`, `bot_`, `run_`, `bt_`.
+- Identifiers are opaque strings prefixed by type: `usr_`, `alg_`, `bld_`, `bot_`, `run_`, `bt_`, `ord_`.
 - Enum values are snake_case strings.
 - Exchange and asset identifiers use the platform's canonical codes: `CexId` values such as `binance` and `AssetId` codes such as `btc` and `usdt`.
   Trading pairs are `{"base": "btc", "quote": "usdt"}`.
@@ -81,6 +89,7 @@ Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
   Responses wrap arrays as `{ "data": [...], "nextCursor": "..." | null }`.
 - `POST` endpoints that create resources or trigger work accept an `Idempotency-Key` header.
   Retries with the same key return the original response instead of creating a duplicate.
+  Keys are scoped to the owner and endpoint and are remembered for 24 hours; a retry after that window may create a duplicate.
 - Mutable resources expose a `version` integer.
   Mutations may be conditioned with `If-Match: <version>` and fail with `409 conflict` when the version does not match; endpoints that require it say so below.
 - Account identifiers may contain only lowercase letters, digits, `-`, and `_`, because they are embedded in stream channel names and URL paths.
@@ -114,13 +123,14 @@ Errors use RFC 9457 problem details:
 | `internal` | 500 | Unexpected server error |
 | `unavailable` | 503 | Dependency is down; retry with backoff |
 
-`stale` mirrors the portfolio service staleness policy (`allow`, `degrade`, `reject`); in `degrade` mode accepted-but-stale actions are flagged in responses so the front-end can warn.
+`stale` mirrors the portfolio service staleness policy (`allow`, `degrade`, `reject`) and applies where an action authorizes against portfolio data: enabling a bot and triggering an ad-hoc run.
+In `degrade` mode accepted-but-stale actions are flagged in responses so the front-end can warn.
 `rate_limited` responses carry a `Retry-After` header with the number of seconds to wait before retrying.
 
 ## Streaming
 
 Browsers cannot set `Authorization` on WebSocket upgrades, so stream connections authenticate with a short-lived single-use ticket: `POST /v1/stream/ticket` requires a bearer token and returns `{ "ticket": "...", "expiresAt": "..." }`, and `GET /v1/stream?ticket=...` upgrades to a WebSocket after the ticket is redeemed.
-Tickets are valid for one upgrade before `expiresAt`.
+Tickets are valid for one upgrade before `expiresAt`, which is 60 seconds after issue.
 The client subscribes to channels, the server pushes JSON frames with a per-channel monotonically increasing `sequence` so clients can detect gaps and resume:
 
 ```json
@@ -129,6 +139,7 @@ The client subscribes to channels, the server pushes JSON frames with a per-chan
 ```
 
 The server pings every 30 seconds and closes connections that miss two pongs.
+On the `portfolio` channels, subscribing with `lastSequence` replays nothing (the read model is the resume point); on the `builds` and `runs` channels it only detects gaps, and missed state must be re-fetched over REST.
 Channels:
 
 | Channel | Frames |
@@ -143,6 +154,7 @@ Channels:
 | Limit | Value |
 | --- | --- |
 | Concurrent backtests per owner | 2 |
+| Failed session attempts per source address | 10 per 15 minutes |
 | Ad-hoc runs per hour per bot | 12 |
 | Concurrent stream subscriptions per connection | 32 |
 | Maximum request body size | 1 MiB |
@@ -201,7 +213,7 @@ Credentials are write-only: they are stored in Vault, never returned by any endp
 
 The response is `201` with the account representation.
 Linking is asynchronous downstream: the registry records the ownership mapping and the ownership stream wires the account into the portfolio connector.
-`connector` stays `disconnected` until the first snapshot arrives.
+`connector` stays `disconnected` until the first snapshot arrives; until then the portfolio endpoints return `asOf: null` with empty `assets` and `pendingOrders`, and the front-end shows feed health from `connector`.
 
 `DELETE /v1/accounts/{cexId}/{accountId}` unlinks the account.
 The response is `204`.
@@ -251,6 +263,7 @@ The channel frames carry the same body as the snapshot endpoint with the stream 
 
 - An **algorithm** is a Git repository containing trading strategy code.
   The build plane watches the repository through the GitHub App; pushes to watched refs trigger builds.
+  Owners connect a repository by granting the GitHub App access to it, so the API has no endpoint to create algorithms; they appear once the build plane registers the connection.
 - A **build** is one compile of a commit.
   It produces a compiled cwasm artifact in the artifact bucket together with its SHA-256, size, and the Wasmtime version required to run it.
   Artifact bytes are never proxied through the API; the runner fetches them directly.
@@ -318,7 +331,7 @@ Algorithm list items identify the connected repository:
 { "ref": "heads/main", "commit": "e1f3a9b" }
 ```
 
-`ref` uses the `heads/` or `tags/` form used by the build plane's source keys; `commit` pins an exact revision and defaults to the ref head.
+`ref` uses the `heads/` or `tags/` form used by the build plane's source keys and defaults to the algorithm's `defaultRef`; `commit` pins an exact revision and defaults to the ref head.
 The response is `202` with the build representation.
 Builds are idempotent per `(ref, commit)`: re-triggering an existing build returns that build.
 
@@ -442,14 +455,18 @@ The response is `201` with:
 
 Validation rules:
 
-- `buildId` must belong to `algorithmId` and be in state `ready`.
+- `buildId` must be `latest` or belong to `algorithmId` and be in state `ready`.
 - `strategyName` must exist in that build.
 - `parameters` must satisfy the strategy's preference schema.
 - Every referenced account must be a linked, active account of the owner.
 - `schedule.kind` is `interval` (`everySeconds` ≥ 10) or `cron` (`expression` in five-field cron syntax plus `timezone`, an IANA time-zone name such as `Europe/Zurich`).
 
 `PATCH /v1/bots/{botId}` accepts the same fields minus `algorithmId`; changing the build or strategy re-validates `parameters` and fails with `400 validation_failed` on mismatch.
-Bot mutations require `If-Match` with the current `version`.
+Bot mutations — `PATCH`, `enable`, `disable` — require `If-Match` with the current `version` and return the updated bot representation.
+
+A `buildId` of `latest` tracks the algorithm's `latestReadyBuildId`: every run resolves the current latest ready build and re-validates `parameters` against its preference schema, falling back to the previous build when validation fails.
+A concrete `buildId` pins the bot to that build.
+Runs record the `buildId` they executed.
 
 ### Runs
 
@@ -462,7 +479,9 @@ Runs follow the run store lifecycle:
 | `completed` | Finished successfully |
 | `failed` | Finished with an error; `error` carries details |
 
-`GET /v1/runs?botId=bot_4fd&status=failed&from=2026-07-13T00:00:00.000Z` returns:
+`from` and `to` bound `scheduledAt`.
+
+`GET /v1/runs?botId=bot_4fd&status=failed&from=2026-07-13T00:00:00.000Z&to=2026-07-14T00:00:00.000Z` returns:
 
 ```json
 {
@@ -471,6 +490,7 @@ Runs follow the run store lifecycle:
       "runId": "run_b7c",
       "botId": "bot_4fd",
       "algorithmId": "alg_5t1",
+      "buildId": "bld_882",
       "strategyName": "momentum_v2",
       "scheduledAt": "2026-07-14T09:31:00.000Z",
       "status": "failed",
@@ -490,6 +510,7 @@ Pre-signed URLs expire with `S3_SIGNED_URL_EXPIRY_SECS` and are fetched by the b
 Run state changes are pushed on the `runs.{botId}` stream channel.
 
 `POST /v1/bots/{botId}/runs` materializes a run scheduled now, subject to the ad-hoc run rate limit, and returns `202` with the run representation.
+Disabled and archived bots answer `409 conflict`; ad-hoc runs never bypass a paused schedule.
 
 ## Backtesting
 
@@ -559,8 +580,10 @@ Validation mirrors the runner's spec checks and fails fast with `validation_fail
 - `tradingPairs` and `windows` must be non-empty and are de-duplicated; windows must be supported aligned intervals.
 - `openCandleProgressMillis`, when given, must be smaller than the shortest requested window.
 - Every chance field is a decimal string in `[0, 1]`.
-- `count` and `maxConcurrent` are clamped to the runner's worker limits.
+- `count` is at least 1 and at most 1000; `maxConcurrent` is clamped to the runner's worker limits.
 - No more than the per-owner concurrent backtest limit in [Limits](#limits) may be `queued` or `running` at once; a further creation returns `429 rate_limited` with `Retry-After`.
+
+`from` and `to` bound the archived candles fetched for every requested pair and window, and each strategy sees the last `historicalCandleCount` closed candles before every simulation step.
 
 ### Results and streaming
 
@@ -580,13 +603,13 @@ They are delivered twice: incrementally on the stream as each simulation finishe
 
 `GET /v1/backtests/{backtestId}/stream?ticket=...` upgrades to a WebSocket, using a stream ticket as described in [Streaming](#streaming).
 Frames are `{ "sequence": 7, "simulation": 13, "result": { ... } }` with `sequence` increasing per connection; a `complete` frame with no `simulation` field marks the collated result.
-The stream ends when the backtest reaches a terminal state; clients that reconnect mid-run receive only results not yet seen by their cursor.
+The stream ends when the backtest reaches a terminal state; clients that reconnect mid-run receive only results not yet seen by their cursor, and clients that connect after the backtest finished receive the `complete` frame and the stream closes.
 
 `DELETE /v1/backtests/{backtestId}` cancels queued and running backtests (`204`) and is idempotent on terminal backtests.
 
 ### Initial balances
 
-`initialBalances` seeds the simulated portfolio.
+`initialBalances` seeds the simulated portfolio; its `cexId` and `accountId` are labels for the simulation and are not checked against linked accounts.
 When omitted, the backtest starts from a configurable default cash balance.
 Using a real linked account's current balances is a front-end convenience: it copies the read-model snapshot into the request, never grants the backtest access to the live account.
 
