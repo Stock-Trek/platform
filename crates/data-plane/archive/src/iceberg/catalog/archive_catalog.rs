@@ -1,7 +1,10 @@
 use crate::ObjectStore;
 use crate::iceberg::catalog::IcebergDataFile;
-use crate::iceberg::{ArchiveIcebergTable, ArchiveRegistration, CommitContext, RegisterOutcome};
-use crate::{ArchiveKind, CompactionId, LedgerEntry};
+use crate::iceberg::{
+    ArchiveIcebergTable, ArchiveRegistration, CommitContext, CompactedRewriteCandidate,
+    RawCleanupPlan, RegisterOutcome,
+};
+use crate::{ArchiveKind, CompactionId, LedgerEntry, MaintenanceCandidate, MaintenanceConfig};
 use async_trait::async_trait;
 use platform_errors::{PlatformError, PlatformResult};
 use platform_types::TimestampMilliseconds;
@@ -116,6 +119,59 @@ pub trait ArchiveCatalog: Send + Sync {
         _context: &CommitContext,
     ) -> PlatformResult<usize> {
         Ok(0)
+    }
+
+    /// Expires snapshots using the maintenance retention floors and defaults.
+    async fn expire_archive_snapshots(
+        &self,
+        _table: ArchiveIcebergTable,
+        _config: &MaintenanceConfig,
+        _context: &CommitContext,
+    ) -> PlatformResult<usize> {
+        Err(PlatformError::external(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "archive catalog cannot expire snapshots",
+        )))
+    }
+
+    /// Lists every unreachable file of the table with its age, without deleting.
+    async fn orphan_candidates(
+        &self,
+        _table: ArchiveIcebergTable,
+        _client: &dyn ObjectStore,
+    ) -> PlatformResult<Vec<MaintenanceCandidate>> {
+        Ok(Vec::new())
+    }
+
+    /// Rewrites one compacted or ledger partition into target-size outputs.
+    async fn rewrite_compacted(
+        &self,
+        _candidate: &CompactedRewriteCandidate,
+        _context: &CommitContext,
+    ) -> PlatformResult<usize> {
+        Err(PlatformError::external(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "archive catalog cannot rewrite compacted partitions",
+        )))
+    }
+
+    /// Builds the raw-deletion plan for one archive kind from the ledger.
+    async fn raw_cleanup_plan(
+        &self,
+        _kind: ArchiveKind,
+        _config: &MaintenanceConfig,
+        _now: TimestampMilliseconds,
+    ) -> PlatformResult<RawCleanupPlan> {
+        Err(PlatformError::external(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "archive catalog cannot plan raw cleanup",
+        )))
+    }
+
+    /// Lists the raw objects still referenced by any retained raw snapshot.
+    async fn raw_table_references(&self, kind: ArchiveKind) -> PlatformResult<HashSet<String>> {
+        self.registered_data_files(ArchiveIcebergTable::raw(kind))
+            .await
     }
 
     async fn compacted_snapshot(

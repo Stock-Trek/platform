@@ -96,19 +96,3 @@ fn clock_skew_must_be_shorter_than_every_ttl() {
         .is_ok()
     );
 }
-
-#[test]
-fn maintenance_safety_window_must_be_positive() {
-    assert!(CompactorConfig::from_vars(&Vars::env(&[])).is_ok());
-    assert!(
-        CompactorConfig::from_vars(&Vars::env(&[("COMPACTOR_MAINTENANCE_SAFETY_SECS", "0")]))
-            .is_err()
-    );
-    let config =
-        CompactorConfig::from_vars(&Vars::env(&[("COMPACTOR_MAINTENANCE_SAFETY_SECS", "60")]))
-            .unwrap();
-    assert_eq!(
-        config.maintenance_safety,
-        std::time::Duration::from_secs(60)
-    );
-}

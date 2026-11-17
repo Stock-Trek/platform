@@ -77,21 +77,27 @@ impl MaintenancePlan {
         &self,
         now: TimestampMilliseconds,
         grace: Duration,
+        floor: Duration,
     ) -> PlatformResult<Vec<MaintenanceCandidate>> {
-        if let Some(young) = self
+        let selected = self
             .candidates
             .iter()
-            .find(|candidate| !candidate.is_older_than(now, grace))
+            .filter(|candidate| candidate.is_older_than(now, grace))
+            .cloned()
+            .collect::<Vec<_>>();
+        if let Some(young) = selected
+            .iter()
+            .find(|candidate| !candidate.is_older_than(now, floor))
         {
             return Err(PlatformError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidInput,
                 format!(
-                    "refusing maintenance deletion for {} because it is younger than the grace period",
+                    "refusing maintenance deletion for {} because it is younger than the retention floor",
                     young.uri
                 ),
             )));
         }
-        Ok(self.candidates.clone())
+        Ok(selected)
     }
 
     pub fn oldest_age(&self, now: TimestampMilliseconds) -> Option<Duration> {

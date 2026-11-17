@@ -17,9 +17,13 @@ mod ledger_entry;
 mod ledger_parquet;
 mod maintenance_candidate;
 mod maintenance_config;
+mod maintenance_executor;
+mod maintenance_partition;
 mod maintenance_report;
 mod maintenance_runner;
 mod maintenance_stage;
+mod maintenance_stage_apply;
+mod maintenance_stage_plan;
 mod object_store;
 mod parquet_reader;
 mod parquet_row_counter;
@@ -57,6 +61,8 @@ mod ledger_entry_tests;
 mod maintenance_candidate_tests;
 #[cfg(test)]
 mod maintenance_config_tests;
+#[cfg(test)]
+mod maintenance_executor_tests;
 #[cfg(test)]
 mod maintenance_runner_tests;
 #[cfg(test)]
@@ -103,6 +109,8 @@ pub use maintenance_config::{
     MIN_COMPACTED_SNAPSHOTS, MIN_ORPHAN_GRACE, MIN_RAW_RETENTION, MIN_SNAPSHOT_RETENTION,
     MaintenanceConfig, MaintenanceRetention, PartitionTargets, RetentionPolicy,
 };
+pub use maintenance_executor::ArchiveMaintenanceExecutor;
+pub use maintenance_partition::MaintenancePartition;
 pub use maintenance_report::{MaintenanceBlock, MaintenanceRunReport, StageOutcome};
 pub use maintenance_runner::{MaintenanceRunner, MaintenanceStageExecutor};
 pub use maintenance_stage::{

@@ -19,4 +19,8 @@ impl ArchiveKind {
             _ => None,
         }
     }
+
+    pub fn all() -> [Self; 2] {
+        [Self::Events, Self::Candles]
+    }
 }

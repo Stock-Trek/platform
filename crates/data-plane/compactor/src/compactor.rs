@@ -12,7 +12,7 @@ use async_trait::async_trait;
 use aws_sdk_s3::Client as S3Client;
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveParquet, ArchiveRegistration, CommitContext,
-    CompactionId, IcebergDataFile, ObjectStore, RegisterOutcome, S3, S3ObjectStore, SourceBatch,
+    CompactionId, IcebergDataFile, MaintenancePartition, RegisterOutcome, S3, SourceBatch,
 };
 use platform_errors::{PlatformError, PlatformResult};
 use platform_lease::{Lease, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
@@ -53,7 +53,6 @@ pub trait BatchCompactor: Send + Sync {
 /// Raw objects are intentionally left in place.
 pub struct Compactor {
     client: S3Client,
-    objects: Arc<dyn ObjectStore>,
     catalog: Arc<dyn ArchiveCatalog>,
     bucket: String,
     output_prefix: String,
@@ -62,7 +61,6 @@ pub struct Compactor {
     lease_ttl_events: std::time::Duration,
     lease_ttl_candles: std::time::Duration,
     max_work: std::time::Duration,
-    maintenance_safety: std::time::Duration,
     lease_initial_token: u64,
     lease_clock_skew: std::time::Duration,
 }
@@ -75,7 +73,6 @@ impl Compactor {
     ) -> PlatformResult<Self> {
         let client = S3::s3_client().await;
         Ok(Self {
-            objects: Arc::new(S3ObjectStore::new(client.clone())),
             client,
             catalog,
             bucket: config.s3_bucket.clone(),
@@ -85,7 +82,6 @@ impl Compactor {
             lease_ttl_events: config.lease_ttl_for(platform_archive::ArchiveKind::Events),
             lease_ttl_candles: config.lease_ttl_for(platform_archive::ArchiveKind::Candles),
             max_work: config.max_work,
-            maintenance_safety: config.maintenance_safety,
             lease_initial_token: config.lease_initial_token,
             lease_clock_skew: config.lease_clock_skew,
         })
@@ -119,6 +115,38 @@ impl Compactor {
                 prefix = batch.prefix,
                 "compaction skipped because another compactor holds the lease"
             );
+            return Ok(CompactionStats {
+                source_files: batch.files.len(),
+                skipped: true,
+                ..CompactionStats::default()
+            });
+        };
+        let partition = MaintenancePartition::for_batch(batch);
+        let partition_request = LeaseRequest::new(
+            partition.lease_scope(&self.bucket, &self.output_prefix),
+            &owner_id,
+            lease_ttl,
+        )
+        .with_context("archive-compaction", &digest);
+        let Some(partition_guard) =
+            LeaseGuard::acquire(self.leases.clone(), partition_request, self.max_work).await?
+        else {
+            MarketDataMetrics::record_lease_skip("compactor-partition");
+            MarketDataMetrics::record_compaction_outcome(
+                batch.kind.label(),
+                "partition_lease_held",
+            );
+            info!(
+                table = table.name(),
+                scope = %scope_name,
+                owner = %owner_id,
+                source_batch_digest = %digest,
+                prefix = batch.prefix,
+                "compaction skipped because maintenance or another compactor holds the partition lease"
+            );
+            if let Err(error) = guard.release().await {
+                warn!(%error, prefix = batch.prefix, "failed to release compaction lease");
+            }
             return Ok(CompactionStats {
                 source_files: batch.files.len(),
                 skipped: true,
@@ -191,6 +219,9 @@ impl Compactor {
             self.compact_leased(batch, &mut guard).await
         }
         .await;
+        if let Err(error) = partition_guard.release().await {
+            warn!(%error, prefix = batch.prefix, "failed to release partition lease");
+        }
         if let Err(error) = guard.release().await {
             warn!(%error, prefix = batch.prefix, "failed to release compaction lease");
         }
@@ -362,30 +393,6 @@ impl Compactor {
             platform_archive::ArchiveKind::Candles,
         ] {
             self.consolidate_claim_index(kind).await?;
-        }
-        for table in ArchiveIcebergTable::all() {
-            let deleted = self
-                .catalog
-                .sweep_metadata(table, self.objects.as_ref(), self.maintenance_safety)
-                .await?;
-            if deleted > 0 {
-                info!(
-                    table = table.name(),
-                    deleted, "removed unreachable archive metadata"
-                );
-            }
-            if table.layer() != platform_archive::ArchiveTableLayer::Raw {
-                let deleted = self
-                    .catalog
-                    .sweep_orphans(table, self.objects.as_ref(), self.maintenance_safety)
-                    .await?;
-                if deleted > 0 {
-                    info!(
-                        table = table.name(),
-                        deleted, "removed unreachable archive data"
-                    );
-                }
-            }
         }
         Ok(())
     }

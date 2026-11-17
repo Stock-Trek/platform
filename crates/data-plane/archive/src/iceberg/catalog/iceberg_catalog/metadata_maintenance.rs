@@ -1,6 +1,9 @@
 use super::claim_index::ClaimIndex;
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
-use crate::{ArchiveKind, ArchiveTableLayer, Bucket, ObjectKey, ObjectStore, S3, S3Object};
+use crate::{
+    ArchiveKind, ArchiveTableLayer, Bucket, MaintenanceCandidate, MaintenanceFileKind, ObjectKey,
+    ObjectStore, S3, S3Object,
+};
 use iceberg::table::Table;
 use platform_errors::PlatformResult;
 use platform_types::TimestampMilliseconds;
@@ -8,6 +11,83 @@ use std::collections::HashSet;
 use std::time::Duration;
 
 impl IcebergCatalog {
+    pub async fn orphan_candidates(
+        &self,
+        archive_table: crate::iceberg::ArchiveIcebergTable,
+        client: &dyn ObjectStore,
+    ) -> PlatformResult<Vec<MaintenanceCandidate>> {
+        let table = self.ensure_table(archive_table).await?;
+        let (bucket, prefix) = Self::listing_prefix(table.metadata().location())?;
+        let objects = client.list_all(&bucket, &prefix).await?;
+        let mut reachable = Self::reachable_metadata(&table).await?;
+        reachable.extend(Self::reachable_data_files(&table).await?);
+        reachable.extend(
+            self.reachable_source_manifests(&table, archive_table)
+                .await?,
+        );
+        let mut candidates =
+            Self::orphan_file_candidates(&bucket, &objects, &reachable, archive_table, false);
+        let directory = table
+            .metadata()
+            .metadata_location()
+            .map_err(|error| Self::catalog_error("read Iceberg metadata directory", error))?;
+        let (metadata_bucket, metadata_prefix) = Self::metadata_listing_prefix(&directory)?;
+        let metadata_objects = client.list_all(&metadata_bucket, &metadata_prefix).await?;
+        candidates.extend(Self::orphan_file_candidates(
+            &metadata_bucket,
+            &metadata_objects,
+            &reachable,
+            archive_table,
+            true,
+        ));
+        candidates.sort_by(|left, right| left.uri.cmp(&right.uri));
+        Ok(candidates)
+    }
+
+    fn orphan_file_candidates(
+        bucket: &Bucket,
+        objects: &[S3Object],
+        reachable: &HashSet<String>,
+        archive_table: crate::iceberg::ArchiveIcebergTable,
+        metadata_directory: bool,
+    ) -> Vec<MaintenanceCandidate> {
+        objects
+            .iter()
+            .filter(|object| {
+                object.last_modified_millis().is_some()
+                    && !reachable.contains(&Self::object_uri(bucket, object))
+            })
+            .map(|object| {
+                let uri = Self::object_uri(bucket, object);
+                let file_kind = Self::candidate_file_kind(&uri, archive_table, metadata_directory);
+                MaintenanceCandidate::new(
+                    uri,
+                    archive_table.kind(),
+                    file_kind,
+                    TimestampMilliseconds(object.last_modified_millis().unwrap_or_default()),
+                )
+            })
+            .collect()
+    }
+
+    fn candidate_file_kind(
+        uri: &str,
+        archive_table: crate::iceberg::ArchiveIcebergTable,
+        metadata_directory: bool,
+    ) -> MaintenanceFileKind {
+        if metadata_directory {
+            if uri.contains("/source-manifests/") {
+                return MaintenanceFileKind::SourceManifest;
+            }
+            return MaintenanceFileKind::Metadata;
+        }
+        match archive_table.layer() {
+            ArchiveTableLayer::Raw => MaintenanceFileKind::Raw,
+            ArchiveTableLayer::Compacted => MaintenanceFileKind::Compacted,
+            ArchiveTableLayer::Ledger => MaintenanceFileKind::Ledger,
+        }
+    }
+
     pub async fn sweep_orphans(
         &self,
         table: &Table,

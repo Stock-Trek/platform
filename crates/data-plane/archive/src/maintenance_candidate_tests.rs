@@ -14,7 +14,7 @@ fn candidate(path: &str, modified: i64) -> MaintenanceCandidate {
 }
 
 #[test]
-fn plans_refuse_to_delete_inside_the_grace_period() {
+fn plans_select_only_candidates_older_than_grace() {
     let now = TimestampMilliseconds(1_000_000);
     let plan = MaintenancePlan::dry_run(
         MaintenanceStage::OrphanCleanup,
@@ -22,12 +22,31 @@ fn plans_refuse_to_delete_inside_the_grace_period() {
     );
 
     assert!(
-        plan.deletion_candidates(now, Duration::from_secs(60))
-            .is_err()
+        plan.deletion_candidates(now, Duration::from_secs(60), Duration::from_secs(7))
+            .unwrap()
+            .is_empty()
+    );
+    let selected = plan
+        .deletion_candidates(now, Duration::from_secs(1), Duration::from_secs(7))
+        .unwrap();
+    assert_eq!(selected.len(), 1);
+}
+
+#[test]
+fn plans_fail_closed_below_the_retention_floor() {
+    let now = TimestampMilliseconds(1_000_000);
+    let plan = MaintenancePlan::dry_run(
+        MaintenanceStage::OrphanCleanup,
+        vec![candidate("s3://bucket/new", 990_000)],
+    );
+
+    assert!(
+        plan.deletion_candidates(now, Duration::from_secs(1), Duration::from_secs(7))
+            .is_ok()
     );
     assert!(
-        plan.deletion_candidates(now, Duration::from_secs(1))
-            .is_ok()
+        plan.deletion_candidates(now, Duration::from_secs(1), Duration::from_secs(60))
+            .is_err()
     );
 }
 
