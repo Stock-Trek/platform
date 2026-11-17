@@ -154,7 +154,13 @@ source and output claims and blocks recompaction even after older snapshots expi
    tail; `archive` ignores checkpoints and rebuilds from the archive and raw tail; `earliest`
    replays the live source from the beginning; `latest` processes only messages published after
    startup.
-6. Deploy the build, control, and sandbox planes, then enable ingestion and order traffic. Verify
+6. Deploy the maintainer (`platform-maintainer`) after the archiver and compactor. It validates its
+   retention and budget configuration against the hard floors at startup, installs the S3 lifecycle
+   backstop unless `MAINTAINER_S3_LIFECYCLE_ENABLED=false`, and runs snapshot expiry, orphan
+   cleanup, compacted and ledger rewriting, and raw deletion in order on the configured interval.
+   Run its first cycle with `MAINTAINER_DRY_RUN=true` and inspect the run report before enabling
+   deletion.
+7. Deploy the build, control, and sandbox planes, then enable ingestion and order traffic. Verify
    readiness for every service; readiness becomes true only after dependencies connect, startup
    recovery completes, and production listeners bind.
 
@@ -285,6 +291,58 @@ that cannot finish inside the lease window as release-blocking.
 Compactor inventory polling is incremental with a periodic full reconcile. It emits listing,
 claim-index read, cache, poll-duration, fallback-scan, and backlog metrics.
 
+#### Archive maintenance dashboards
+
+The maintainer (`platform-maintainer`) runs snapshot expiry, orphan cleanup, compacted and ledger
+rewriting, and raw deletion in order on a fixed interval. Run and stage outcomes, stage lag, and
+partition file counts:
+
+```promql
+sum by (status) (increase(market_data_archive_maintenance_runs_total[24h]))
+sum by (stage, status) (increase(market_data_archive_maintenance_stage_outcomes_total[6h]))
+max by (stage) (market_data_archive_maintenance_stage_lag_seconds)
+market_data_archive_maintenance_metadata_files
+market_data_archive_maintenance_partition_files
+```
+
+Raw backlog age, recovery layer selections, and raw-expiry decisions:
+
+```promql
+max by (kind) (market_data_archive_maintenance_raw_backlog_seconds)
+sum by (layer, kind) (increase(market_data_archive_recovery_layer_total[24h]))
+sum by (decision, kind) (increase(market_data_archive_raw_expiry_decisions_total[24h]))
+```
+
+The raw backlog age is the age of the oldest processed ledger entry whose raw objects are still
+live; it must trend down. Recovery layer selections record every decision, and
+`compacted_plus_ledger` after raw expiry is the fail-closed path, not a fallback.
+
+#### Archive maintenance alerts
+
+Alert codes are carried by `market_data_archive_maintenance_alerts_total` with the blocking stage:
+
+```promql
+sum by (stage, code) (increase(market_data_archive_maintenance_alerts_total[6h])) > 0
+```
+
+Routing and paging rules:
+
+- Page immediately on `partition_spec_changed`. Raw deletion is paused until an operator
+  re-baselines after a ledger partition-spec change, and raw objects keep aging toward expiry while
+  the pause holds.
+- Page immediately on `source_manifest_quarantined`. A lost or corrupt source manifest quarantines
+  its batch and needs investigation before its raw objects can be cleaned up.
+- Page on `metadata_growth_exceeded` when it fires in consecutive cycles. Raw cleanup is paused
+  until metadata is rewritten under the growth budget.
+- Raise a ticket on `maintenance_budget_exhausted`. Back-pressure inside one hourly window is the
+  budget working as designed; page only when stages stay blocked across consecutive windows.
+- Raise a ticket on `partition_lease_contended`. Contention with the compactor for a partition
+  lease is expected and retried on the next cycle.
+
+Page when the raw backlog age exceeds one maintenance cycle or fails to fall over two consecutive
+maintenance cycles, and when no maintenance run reports `completed` within 24 hours. A blocked
+earlier stage stops later stages, so one blocked stage suppresses raw deletion until it clears.
+
 ### Backup
 
 Back up both portfolio streams and the read-model KV bucket on the same schedule as the rest of the
@@ -357,7 +415,10 @@ through the auth relay.
 
 1. Stop new order traffic, disable portfolio connectors, and drain order listeners.
 2. Stop ingestion and backfilling, then stop the aggregator after it checkpoints. Stop the
-   compactor, archiver, and rebuilder after in-flight work completes and leases are released.
+   compactor, archiver, and rebuilder after in-flight work completes and leases are released. Stop
+   the maintainer in the same window and keep its lease bucket intact until the process is stopped;
+   a stopped maintainer deletes nothing, so backups and teardown checks run against a frozen
+   archive.
 3. Run the auth relay until usage and audit queues drain. Stop auth and control services only after
    consumers and scheduled runs are idle.
 4. Back up NATS streams, checkpoints, and the read-model KV bucket before deleting or recreating

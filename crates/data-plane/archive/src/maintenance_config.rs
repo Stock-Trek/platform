@@ -165,7 +165,3 @@ impl Default for MaintenanceConfig {
         }
     }
 }
-
-pub type RetentionPolicy = MaintenanceConfig;
-pub type MaintenanceRetention = MaintenanceConfig;
-pub type PartitionTargets = PartitionTarget;

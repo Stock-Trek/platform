@@ -116,8 +116,7 @@ pub use maintenance_candidate::{MaintenanceCandidate, MaintenanceFileKind, Maint
 pub use maintenance_config::{
     DEFAULT_MAX_COMMITS_PER_HOUR, DEFAULT_MAX_REWRITE_BYTES_PER_HOUR, DEFAULT_ORPHAN_GRACE,
     DEFAULT_RAW_RETENTION, DEFAULT_SNAPSHOT_RETENTION, MIN_COMPACTED_SNAPSHOTS, MIN_ORPHAN_GRACE,
-    MIN_RAW_RETENTION, MIN_SNAPSHOT_RETENTION, MaintenanceConfig, MaintenanceRetention,
-    PartitionTargets, RetentionPolicy,
+    MIN_RAW_RETENTION, MIN_SNAPSHOT_RETENTION, MaintenanceConfig,
 };
 pub use maintenance_executor::ArchiveMaintenanceExecutor;
 pub use maintenance_metadata::{BUDGET_ALERT_CODE, METADATA_GROWTH_ALERT_CODE};
