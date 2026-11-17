@@ -155,6 +155,7 @@ The server never replays history on any channel.
 A first subscribe omits `lastSequence` and receives only frames published after the server accepts it.
 A `lastSequence` older than the channel's current head is answered with a single gap frame, `{ "channel": "portfolio.binance.main", "gap": { "afterSequence": 41 } }`, and live frames continue after it; the client recovers by re-fetching state over REST (a portfolio snapshot for `portfolio` channels, build and run detail for the others).
 A subscribe that would exceed the per-connection subscription limit is rejected with an error frame and the connection stays open.
+A subscribe to a channel the ticket's owner does not own is rejected the same way.
 The server pings every 30 seconds and closes connections that miss two pongs.
 Channels:
 
@@ -333,6 +334,7 @@ Algorithm list items identify the connected repository:
       "repository": { "provider": "github", "host": "github.com", "repo": "acme/momentum" },
       "defaultRef": "main",
       "state": "active",
+      "version": 3,
       "latestReadyBuildId": "bld_882"
     }
   ],
