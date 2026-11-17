@@ -1,23 +1,20 @@
 # Environment variables
 
-This document lists the environment variables read directly by platform processes. Each process
-reads and validates its configuration at startup, before doing any work.
+This document lists the environment variables read directly by platform processes.
+Each process reads and validates its configuration at startup, before doing any work.
 
-- Required variables must be present with a non-empty, valid value. A missing or invalid value
-  fails startup.
-- Optional variables are treated as unset when they are absent or empty. Some optional variables
-  fall back to a built-in default; the default is shown in a `Default` column or stated in the
-  variable's description.
+- Required variables must be present with a non-empty, valid value.
+  A missing or invalid value fails startup.
+- Optional variables are treated as unset when they are absent or empty.
+  Some optional variables fall back to a built-in default; the default is shown in a `Default` column or stated in the variable's description.
 - Values are read only from the process environment.
 
 Variables read by more than one process are listed once under [Shared variables](#shared-variables).
-The remaining sections list the additional variables read by each process. When a variable is only
-required in some configurations, the condition is stated in its description.
+The remaining sections list the additional variables read by each process.
+When a variable is only required in some configurations, the condition is stated in its description.
 
-> The AWS SDK also reads its standard environment variables (for example `AWS_REGION`,
-> `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_PROFILE`) through
-> its default region and credential chains. Those are not listed below because platform code does
-> not read them directly.
+> The AWS SDK also reads its standard environment variables (for example `AWS_REGION`, `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, and `AWS_PROFILE`) through its default region and credential chains.
+> Those are not listed below because platform code does not read them directly.
 
 ## Shared variables
 
@@ -125,30 +122,24 @@ See [Health checks](health-checks.md) for the probe contract and per-service hea
 | `PORTFOLIO_TOKEN_CACHE_FAILURE_THRESHOLD` | Consecutive Vault read failures that open the token store circuit breaker. Defaults to `5`. |
 | `PORTFOLIO_TOKEN_CACHE_OPEN_SECS` | Time the circuit breaker stays open before allowing a probe read. Defaults to `10`. |
 
-Signed order signing reads token records through the same bounded cache, request coalescing, and
-circuit breaker as the auth service. A cache hit performs no Vault read. Entries older than
-`PORTFOLIO_TOKEN_CACHE_FRESHNESS_SECS` are refreshed on the next lookup; while Vault is unavailable,
-the last entry may still be served until `PORTFOLIO_TOKEN_CACHE_MAX_STALE_SECS` after its last
-successful Vault read, after which signing fails closed. The breaker opens after
-`PORTFOLIO_TOKEN_CACHE_FAILURE_THRESHOLD` retryable read failures and allows one half-open probe
-after `PORTFOLIO_TOKEN_CACHE_OPEN_SECS`.
+Signed order signing reads token records through the same bounded cache, request coalescing, and circuit breaker as the auth service.
+A cache hit performs no Vault read.
+Entries older than `PORTFOLIO_TOKEN_CACHE_FRESHNESS_SECS` are refreshed on the next lookup; while Vault is unavailable, the last entry may still be served until `PORTFOLIO_TOKEN_CACHE_MAX_STALE_SECS` after its last successful Vault read, after which signing fails closed.
+The breaker opens after `PORTFOLIO_TOKEN_CACHE_FAILURE_THRESHOLD` retryable read failures and allows one half-open probe after `PORTFOLIO_TOKEN_CACHE_OPEN_SECS`.
 
-Signed order verification appends usage records to the durable Valkey queue instead of writing
-`last_used_at` and audit outbox entries synchronously. The queue URL, prefix, and capacity must
-match the auth service and auth relay so a single relay drains records from both services.
+Signed order verification appends usage records to the durable Valkey queue instead of writing `last_used_at` and audit outbox entries synchronously.
+The queue URL, prefix, and capacity must match the auth service and auth relay so a single relay drains records from both services.
 
-Replay protection fails closed when Valkey is unavailable. The replay key prefix must contain only
-colon-separated segments of ASCII letters, digits, `-`, and `_`. Signed request expiry controls
-each key's TTL, so Valkey removes stale nonces without a separate cleanup job.
+Replay protection fails closed when Valkey is unavailable.
+The replay key prefix must contain only colon-separated segments of ASCII letters, digits, `-`, and `_`.
+Signed request expiry controls each key's TTL, so Valkey removes stale nonces without a separate cleanup job.
 
-The ownership consumer replays the `portfolio.ownership.changed.v1.events` stream from its
-checkpoint on startup. When no checkpoint exists it starts at the earliest retained event and
-builds the local owner/account registry before accepting orders for those accounts.
+The ownership consumer replays the `portfolio.ownership.changed.v1.events` stream from its checkpoint on startup.
+When no checkpoint exists it starts at the earliest retained event and builds the local owner/account registry before accepting orders for those accounts.
 
 #### Optional stream settings
 
-The portfolio service and the portfolio registry both read the `PORTFOLIO_OWNERSHIP_STREAM_*`
-variables and must use the same values.
+The portfolio service and the portfolio registry both read the `PORTFOLIO_OWNERSHIP_STREAM_*` variables and must use the same values.
 
 The ownership stream is configured by:
 
@@ -389,9 +380,9 @@ No process-specific optional variables.
 
 ### Portfolio registry
 
-The portfolio registry is the control-plane writer for CEX account ownership. It serves an
-internal admin API for adding and removing mappings and an owner-scoped read API for listing the
-caller's accounts. Every mutation is audited and published through the ownership stream.
+The portfolio registry is the control-plane writer for CEX account ownership.
+It serves an internal admin API for adding and removing mappings and an owner-scoped read API for listing the caller's accounts.
+Every mutation is audited and published through the ownership stream.
 
 #### Required
 
@@ -408,14 +399,12 @@ caller's accounts. Every mutation is audited and published through the ownership
 
 #### Optional
 
-The registry also reads the `PORTFOLIO_OWNERSHIP_STREAM_*` variables listed under
-[Portfolio service](#portfolio-service). Configure them identically for the registry and the
-portfolio service.
+The registry also reads the `PORTFOLIO_OWNERSHIP_STREAM_*` variables listed under [Portfolio service](#portfolio-service).
+Configure them identically for the registry and the portfolio service.
 
 ### Run invoker
 
-The run invoker checks the DynamoDB run store for due algorithm runs and invokes the runner with
-their details.
+The run invoker checks the DynamoDB run store for due algorithm runs and invokes the runner with their details.
 
 #### Required
 
@@ -434,12 +423,10 @@ their details.
 
 ### Auth service
 
-The auth service issues short-lived EdDSA JWTs for owners with an active order-write token and
-publishes its public signing key at `/.well-known/jwks.json`. It
-verifies JWTs presented with order requests. Each replica must use the same private key so that
-tokens signed by one replica verify against the JWKS published by another. A JWT request must
-carry a valid SigV4 signature from a configured caller, and the requested owner must match the
-owner bound to the caller's access key.
+The auth service issues short-lived EdDSA JWTs for owners with an active order-write token and publishes its public signing key at `/.well-known/jwks.json`.
+It verifies JWTs presented with order requests.
+Each replica must use the same private key so that tokens signed by one replica verify against the JWKS published by another.
+A JWT request must carry a valid SigV4 signature from a configured caller, and the requested owner must match the owner bound to the caller's access key.
 
 #### Required
 
@@ -460,9 +447,8 @@ owner bound to the caller's access key.
 | `AUTH_SERVICE_VALKEY_TIMEOUT_SECS` | Connection and command timeout for the replay Valkey backend, in seconds. |
 | `AUTH_SERVICE_VALKEY_URL` | `redis://`, `rediss://`, `valkey://`, or `valkeys://` URL of the shared Valkey replay backend. |
 
-Authentication and signing append usage records to a durable Valkey stream instead of writing
-`last_used_at` and audit outbox entries synchronously. Requests fail closed if the queue reaches
-capacity so audit records are not silently dropped.
+Authentication and signing append usage records to a durable Valkey stream instead of writing `last_used_at` and audit outbox entries synchronously.
+Requests fail closed if the queue reaches capacity so audit records are not silently dropped.
 
 #### Optional token cache
 
@@ -475,22 +461,17 @@ capacity so audit records are not silently dropped.
 | `AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD` | `5` | Consecutive Vault read failures that open the token store circuit breaker. |
 | `AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS` | `10` | Time the circuit breaker stays open before allowing a probe read. |
 
-The auth service reads token records through a bounded in-memory cache with request coalescing
-and a circuit breaker. A cache hit performs no Vault read. Entries older than
-`AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS` are refreshed on the next lookup; while Vault is
-unavailable, the last entry may still be served until `AUTH_SERVICE_TOKEN_CACHE_MAX_STALE_SECS`
-after its last successful Vault read, after which requests fail closed. The breaker opens after
-`AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD` retryable read failures and allows one half-open probe
-after `AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS`. Token mutations made through the auth service refresh or
-invalidate the corresponding entry.
+The auth service reads token records through a bounded in-memory cache with request coalescing and a circuit breaker.
+A cache hit performs no Vault read.
+Entries older than `AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS` are refreshed on the next lookup; while Vault is unavailable, the last entry may still be served until `AUTH_SERVICE_TOKEN_CACHE_MAX_STALE_SECS` after its last successful Vault read, after which requests fail closed.
+The breaker opens after `AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD` retryable read failures and allows one half-open probe after `AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS`.
+Token mutations made through the auth service refresh or invalidate the corresponding entry.
 
 ### Auth relay
 
-The auth relay performs a single drain of pending token usage records, token audit events, and
-rotation materializations from the Vault token store to SQS, then exits. Run it from a cron job
-every few minutes so events are retried even when auth-service is idle or SQS is temporarily
-unavailable. Auth operations only append usage records to the durable queue; a failed drain leaves
-them pending for the next scheduled run.
+The auth relay performs a single drain of pending token usage records, token audit events, and rotation materializations from the Vault token store to SQS, then exits.
+Run it from a cron job every few minutes so events are retried even when auth-service is idle or SQS is temporarily unavailable.
+Auth operations only append usage records to the durable queue; a failed drain leaves them pending for the next scheduled run.
 
 #### Required
 
@@ -508,20 +489,17 @@ them pending for the next scheduled run.
 | `AUTH_RELAY_USAGE_QUEUE_CAPACITY` | Maximum number of queued usage records before requests fail closed. Must match the auth service. |
 | `AUTH_RELAY_USAGE_QUEUE_BATCH_SIZE` | Maximum number of usage records applied by one drain. |
 
-The auth relay also uses the shared AWS timeout variables listed under
-[Build orchestrator](#build-orchestrator).
+The auth relay also uses the shared AWS timeout variables listed under [Build orchestrator](#build-orchestrator).
 
 ## Sandbox plane
 
 ### CWASM invoker
 
-The native cwasm host reads these required variables when it starts. Missing, empty, and invalid
-values fail startup. Place-order actions are submitted without signatures to the portfolio service, which signs them with
-the auth-service token owned by the run request owner. The runner fetches and caches a bearer JWT
-from the auth service and sends it with every order request; the portfolio service rejects requests
-without an EdDSA JWT signed by a key in the auth service JWKS, which it caches locally. Auth
-operations append usage and audit records to the durable Valkey queue; the separate auth relay
-service applies them and delivers audit events to SQS.
+The native cwasm host reads these required variables when it starts.
+Missing, empty, and invalid values fail startup.
+Place-order actions are submitted without signatures to the portfolio service, which signs them with the auth-service token owned by the run request owner.
+The runner fetches and caches a bearer JWT from the auth service and sends it with every order request; the portfolio service rejects requests without an EdDSA JWT signed by a key in the auth service JWKS, which it caches locally.
+Auth operations append usage and audit records to the durable Valkey queue; the separate auth relay service applies them and delivers audit events to SQS.
 
 #### Required
 
@@ -539,14 +517,12 @@ service applies them and delivers audit events to SQS.
 | --- | --- | --- |
 | `CWASM_INVOKER_BACKTEST_MAX_WORKERS` | `4` | Maximum number of backtest simulation workers. Values are clamped to the range 1-32. An unparseable value uses the default. |
 
-The CWASM invoker also requires the shared `SIGV4_CREDENTIALS`, `SIGV4_REGION`, and `SIGV4_SERVICE`
-variables listed under [Shared variables](#shared-variables).
+The CWASM invoker also requires the shared `SIGV4_CREDENTIALS`, `SIGV4_REGION`, and `SIGV4_SERVICE` variables listed under [Shared variables](#shared-variables).
 
 ## Secrets
 
 Some values are read from AWS Systems Manager Parameter Store instead of the process environment.
-The backfiller and Git webhook load every parameter under `SECRETS_SSM_PATH` and look secrets up by
-their final path segment.
+The backfiller and Git webhook load every parameter under `SECRETS_SSM_PATH` and look secrets up by their final path segment.
 
 | Consumer | Parameter | Description |
 | --- | --- | --- |
@@ -554,11 +530,8 @@ their final path segment.
 | Backfiller | `BACKFILLER_EXCHANGE_<EXCHANGE>_<MODE>_API_KEY` | API key for the configured exchange and trading mode. |
 | Backfiller | `BACKFILLER_EXCHANGE_<EXCHANGE>_<MODE>_API_SECRET` | API secret or private signing key for the configured exchange and trading mode. |
 
-For the backfiller, `<EXCHANGE>` is the upper-case exchange name from `BACKFILLER_EXCHANGE` and
-`<MODE>` is `REAL` or `PAPER`, derived from `BACKFILLER_EXCHANGE_TRADING_MODE`. For Binance in real
-mode it reads `BACKFILLER_EXCHANGE_BINANCE_REAL_API_KEY` and
-`BACKFILLER_EXCHANGE_BINANCE_REAL_API_SECRET`; in paper mode it reads
-`BACKFILLER_EXCHANGE_BINANCE_PAPER_API_KEY` and `BACKFILLER_EXCHANGE_BINANCE_PAPER_API_SECRET`.
+For the backfiller, `<EXCHANGE>` is the upper-case exchange name from `BACKFILLER_EXCHANGE` and `<MODE>` is `REAL` or `PAPER`, derived from `BACKFILLER_EXCHANGE_TRADING_MODE`.
+For Binance in real mode it reads `BACKFILLER_EXCHANGE_BINANCE_REAL_API_KEY` and `BACKFILLER_EXCHANGE_BINANCE_REAL_API_SECRET`; in paper mode it reads `BACKFILLER_EXCHANGE_BINANCE_PAPER_API_KEY` and `BACKFILLER_EXCHANGE_BINANCE_PAPER_API_SECRET`.
 Every exchange uses the same pattern, so multiple exchanges can share one SSM path.
 
 These names are SSM parameter names, not environment variables.

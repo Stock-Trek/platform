@@ -2,11 +2,15 @@
 
 ## Ingester
 
-Data will be ingested via websocket by Ingester and sent to a NATS Jetstream instance. It stores sequence numbers with the events. It also detects missing events and adds gap markers for the Backfiller.
+Data will be ingested via websocket by Ingester and sent to a NATS Jetstream instance.
+It stores sequence numbers with the events.
+It also detects missing events and adds gap markers for the Backfiller.
 
-Sequence progress is persisted per stream in a NATS KV bucket derived from the configured subject prefix (for example, `market_ingester-sequences` for `INGESTER_NATS_SUBJECT_PREFIX=market`). On restart the ingester resumes from the last durable boundary, so events missed while it was down, or while its final publish was failing, still produce gap markers for the Backfiller.
+Sequence progress is persisted per stream in a NATS KV bucket derived from the configured subject prefix (for example, `market_ingester-sequences` for `INGESTER_NATS_SUBJECT_PREFIX=market`).
+On restart the ingester resumes from the last durable boundary, so events missed while it was down, or while its final publish was failing, still produce gap markers for the Backfiller.
 
-The websocket URL must not subscribe to both `@trade` and `@aggTrade` for the same symbol. They carry the same economic trades with independent sequence numbers, so the ingester rejects overlapping subscriptions at startup to avoid double-counting in candles and trade counts.
+The websocket URL must not subscribe to both `@trade` and `@aggTrade` for the same symbol.
+They carry the same economic trades with independent sequence numbers, so the ingester rejects overlapping subscriptions at startup to avoid double-counting in candles and trade counts.
 
 ## Backfiller
 
@@ -14,29 +18,55 @@ It listens for gap markers, fetches the missing data and pushes data into the sa
 
 ## Aggregator
 
-Aggregator consumes both market events and gap markers from NATS. A router hashes each exchange and trading pair onto a shard subject, and one shard writer owns every candle key on that shard. Gap markers close candle windows that ended before the gap was observed.
+Aggregator consumes both market events and gap markers from NATS.
+A router hashes each exchange and trading pair onto a shard subject, and one shard writer owns every candle key on that shard.
+Gap markers close candle windows that ended before the gap was observed.
 
-Each shard writer keeps the open candles up to date, sends updated open candles to NATS KV, and publishes closed candles to a Jetstream stream with a revision number. Source positions and keyed state are checkpointed before a message is acknowledged, so a restarted shard resumes from the first unprocessed message.
+Each shard writer keeps the open candles up to date, sends updated open candles to NATS KV, and publishes closed candles to a Jetstream stream with a revision number.
+Source positions and keyed state are checkpointed before a message is acknowledged, so a restarted shard resumes from the first unprocessed message.
 
-Idle flushing only closes windows that are already expired at the current event-time watermark. It never advances event time to the wall clock, so backfilled trades for older windows still find and revise the retained full closed candle instead of creating a partial correction candle.
+Idle flushing only closes windows that are already expired at the current event-time watermark.
+It never advances event time to the wall clock, so backfilled trades for older windows still find and revise the retained full closed candle instead of creating a partial correction candle.
 
 ### Closed-candle retention
 
-A closed candle is retained in shard state after it is published so that later inputs can still use the original full candle. A late or backfilled trade revises the retained candle and publishes a new deterministic revision, while a gap marker can mark it incomplete. Once the backfiller has supplied every source sequence covered by the gap while the candle is still in the correction contract, the affected candles are marked complete and republished, so a resolved gap does not leave a permanent incompleteness flag on retained candles. If the candle had already been discarded, the same input would either create a partial correction candle with only the newly arrived trades or fail to propagate the gap's incompleteness to the published closed candle.
+A closed candle is retained in shard state after it is published so that later inputs can still use the original full candle.
+A late or backfilled trade revises the retained candle and publishes a new deterministic revision, while a gap marker can mark it incomplete.
+Once the backfiller has supplied every source sequence covered by the gap while the candle is still in the correction contract, the affected candles are marked complete and republished, so a resolved gap does not leave a permanent incompleteness flag on retained candles.
+If the candle had already been discarded, the same input would either create a partial correction candle with only the newly arrived trades or fail to propagate the gap's incompleteness to the published closed candle.
 
-The implemented retention policy is an event-time correction cutoff combined with a hard per-key cap on hot closed candles. Shard state keeps only the newest `N_i` closed candles for each `CandleKey` whose interval is `i`, where each `N_i` is configured individually for that interval through `AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL` (for example separate caps for `1m`, `5m`, and `1h`). An input whose window end is older than `watermark - AGGREGATOR_CORRECTION_CUTOFF_MS` is rejected rather than partially applied, counted, and logged with the pair, interval, window bounds, watermark, and cutoff. A candle evicted by its interval's cap is outside the correction contract even when it is still inside the event-time cutoff. The effective correction reach for a key of interval `i` is therefore the shorter of the cutoff and its newest `N_i` windows. Eviction is driven by event time and input order, never wall-clock time or cache access order. The same rules are applied during live processing, checkpoint restore, archive rebuilds, and rebuilder replay, and a checkpoint restored under smaller caps is deterministically pruned before processing continues.
+The implemented retention policy is an event-time correction cutoff combined with a hard per-key cap on hot closed candles.
+Shard state keeps only the newest `N_i` closed candles for each `CandleKey` whose interval is `i`, where each `N_i` is configured individually for that interval through `AGGREGATOR_MAX_CLOSED_CANDLES_PER_INTERVAL` (for example separate caps for `1m`, `5m`, and `1h`).
+An input whose window end is older than `watermark - AGGREGATOR_CORRECTION_CUTOFF_MS` is rejected rather than partially applied, counted, and logged with the pair, interval, window bounds, watermark, and cutoff.
+A candle evicted by its interval's cap is outside the correction contract even when it is still inside the event-time cutoff.
+The effective correction reach for a key of interval `i` is therefore the shorter of the cutoff and its newest `N_i` windows.
+Eviction is driven by event time and input order, never wall-clock time or cache access order.
+The same rules are applied during live processing, checkpoint restore, archive rebuilds, and rebuilder replay, and a checkpoint restored under smaller caps is deterministically pruned before processing continues.
 
-- **Memory bound:** At most `N_i` closed candles per candle key of interval `i`, so the hot heap, checkpoint payload, and gap scan are bounded by the static pair ceiling times the sum of the per-interval caps. This is an absolute shard bound because the key count is fixed before startup by the finite `CexId` and `AssetId` enums and the configured window intervals; new or churning trading pairs can populate more of those keys over time but cannot raise the ceiling. A `CandleKey` is an exchange, an ordered base/quote asset pair, and a configured interval, so the key ceiling is the number of `CexId` values times the number of `AssetId` values squared times the number of configured intervals, while the retained-candle ceiling replaces the interval count with `Σ N_i`. The cutoff does not bound memory by itself but limits the event-time range over which the per-interval caps can be consumed.
-- **Correction correctness and reach:** Full correction and gap propagation are preserved inside the intersection of the cutoff and the newest `N_i` windows for each interval. Reach is `min(correction_cutoff, N_i × interval_i)` for a key of interval `i`, so it can be tuned independently for a 1-second, 1-minute, or daily candle rather than forcing one window count on every interval. Outside the reach, inputs are rejected and recorded in the out-of-contract metrics and structured warning rather than silently folded into a partial correction.
-- **Configuration validation:** At configuration load, the static pair ceiling, shard count, and per-interval caps are validated together so that `ceil(pair_ceiling / shard_count) × Σ N_i × estimated_bytes_per_candle` does not exceed `AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES`. The pair ceiling is `CexId` values times `AssetId` values squared, and it is the full static ceiling rather than just the pairs that have traded so far. If that worst case would run out of memory, startup fails with a clear error rather than accepting a configuration that can OOM later. Because later trading pairs only populate keys already included in that ceiling, no revalidation is needed when new keys first appear; the check is repeated on startup whenever a deployment changes the enum sets, configured intervals, any `N_i`, shard count, cutoff, or the budget, because those can change the ceiling or its per-shard share.
+- **Memory bound:** At most `N_i` closed candles per candle key of interval `i`, so the hot heap, checkpoint payload, and gap scan are bounded by the static pair ceiling times the sum of the per-interval caps.
+  This is an absolute shard bound because the key count is fixed before startup by the finite `CexId` and `AssetId` enums and the configured window intervals; new or churning trading pairs can populate more of those keys over time but cannot raise the ceiling.
+  A `CandleKey` is an exchange, an ordered base/quote asset pair, and a configured interval, so the key ceiling is the number of `CexId` values times the number of `AssetId` values squared times the number of configured intervals, while the retained-candle ceiling replaces the interval count with `Σ N_i`.
+  The cutoff does not bound memory by itself but limits the event-time range over which the per-interval caps can be consumed.
+- **Correction correctness and reach:** Full correction and gap propagation are preserved inside the intersection of the cutoff and the newest `N_i` windows for each interval.
+  Reach is `min(correction_cutoff, N_i × interval_i)` for a key of interval `i`, so it can be tuned independently for a 1-second, 1-minute, or daily candle rather than forcing one window count on every interval.
+  Outside the reach, inputs are rejected and recorded in the out-of-contract metrics and structured warning rather than silently folded into a partial correction.
+- **Configuration validation:** At configuration load, the static pair ceiling, shard count, and per-interval caps are validated together so that `ceil(pair_ceiling / shard_count) × Σ N_i × estimated_bytes_per_candle` does not exceed `AGGREGATOR_CLOSED_CANDLE_MEMORY_BUDGET_BYTES`.
+  The pair ceiling is `CexId` values times `AssetId` values squared, and it is the full static ceiling rather than just the pairs that have traded so far.
+  If that worst case would run out of memory, startup fails with a clear error rather than accepting a configuration that can OOM later.
+  Because later trading pairs only populate keys already included in that ceiling, no revalidation is needed when new keys first appear; the check is repeated on startup whenever a deployment changes the enum sets, configured intervals, any `N_i`, shard count, cutoff, or the budget, because those can change the ceiling or its per-shard share.
 - **Pros:** Provides a hard per-key memory bound together with an explicit, testable correction contract; lets operators choose different retention depths for fast and slow intervals instead of applying one cap to every window size; requires no cold tier or extra durability boundary; is far simpler to operate than hot state plus a cold store; protects against a single busy key and still evicts when the event-time watermark stalls because the `N_i`-window cap remains effective; and makes out-of-contract inputs observable instead of silently degrading correctness.
 - **Cons:** Cannot reduce the total shard bound below the fixed pair ceiling times `Σ N_i`, so every `N_i` must be chosen against every possible key and may need to be very small when the enum sets or interval list are large; cannot correct deeper than `N_i` windows for interval `i` even when the cutoff is large, so deep backfills beyond that history are lost; each `N_i` and the shared cutoff must be validated so that operators understand the per-interval reach differences; rejected inputs need a repair path and may discard data that could have been corrected; and eviction must remain driven by event time and input order so live processing, checkpoint restore, and archive rebuilds stay reproducible.
 
 ### Scaling contract
 
-The aggregator is horizontally scalable by shard, not by sharing a shard between writers. Candle ownership is determined by `(exchange, trading pair)`, so every candle key has exactly one writer for a given shard count. Changing `AGGREGATOR_SHARD_COUNT` changes that mapping and requires a rebuild rather than an in-place rolling change.
+The aggregator is horizontally scalable by shard, not by sharing a shard between writers.
+Candle ownership is determined by `(exchange, trading pair)`, so every candle key has exactly one writer for a given shard count.
+Changing `AGGREGATOR_SHARD_COUNT` changes that mapping and requires a rebuild rather than an in-place rolling change.
 
-A shard writer uses a fenced lease in the checkpoint bucket. Only the lease holder may write checkpoints and publish candle revisions. Checkpoints contain the next source sequence, the event-time watermark, the writer generation, and the serialized keyed state. A writer acknowledges source messages only after its checkpoint is durable.
+A shard writer uses a fenced lease in the checkpoint bucket.
+Only the lease holder may write checkpoints and publish candle revisions.
+Checkpoints contain the next source sequence, the event-time watermark, the writer generation, and the serialized keyed state.
+A writer acknowledges source messages only after its checkpoint is durable.
 
 On startup a writer applies `AGGREGATOR_REPLAY_START_POLICY`:
 
@@ -47,11 +77,19 @@ On startup a writer applies `AGGREGATOR_REPLAY_START_POLICY`:
 | `earliest` | Ignore persisted state and replay the live source from the beginning. |
 | `latest` | Ignore persisted state and process only messages published after startup. |
 
-`checkpoint` and `archive` require archive recovery to be configured because either policy may need to rebuild keyed state. The process fails at startup when the Iceberg catalog is not configured for those policies. `earliest` and `latest` explicitly discard persisted state and can run without an archive.
+`checkpoint` and `archive` require archive recovery to be configured because either policy may need to rebuild keyed state.
+The process fails at startup when the Iceberg catalog is not configured for those policies.
+`earliest` and `latest` explicitly discard persisted state and can run without an archive.
 
-A retryable checkpoint read failure is surfaced to the supervisor instead of silently falling back to the archive. If archive replay finds no events, the shard starts with explicit empty state and is not reported as a successful archive recovery.
+A retryable checkpoint read failure is surfaced to the supervisor instead of silently falling back to the archive.
+If archive replay finds no events, the shard starts with explicit empty state and is not reported as a successful archive recovery.
 
-Archive rebuilds replay raw events through the same deterministic candle processor as live traffic. Recovery reads the compacted event files and only the raw objects that are not represented by the compacted snapshot. Both raw and compacted objects are grouped by a fixed virtual routing bucket, so each shard only reads the objects it owns and every archived event is replayed by exactly one recovery worker. Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades. Recovery continues the highest state epoch recorded on the replayed events, so rebuilding the same inputs reproduces the same deterministic output ids. Regenerating candles under a changed configuration uses the rebuilder with a new configured epoch instead.
+Archive rebuilds replay raw events through the same deterministic candle processor as live traffic.
+Recovery reads the compacted event files and only the raw objects that are not represented by the compacted snapshot.
+Both raw and compacted objects are grouped by a fixed virtual routing bucket, so each shard only reads the objects it owns and every archived event is replayed by exactly one recovery worker.
+Events at or before the rebuilt watermark are then used only to advance the source position, so applying the archive and the live log cannot double-apply trades.
+Recovery continues the highest state epoch recorded on the replayed events, so rebuilding the same inputs reproduces the same deterministic output ids.
+Regenerating candles under a changed configuration uses the rebuilder with a new configured epoch instead.
 
 ### Configuration
 
@@ -93,27 +131,47 @@ Aggregator metrics are named `market_data_aggregator_*` and cover:
 
 ## Portfolio service
 
-The portfolio service keeps an in-memory view of the accounts a user tracks. Accounts are keyed by `CexId` and `AccountId`, and each account portfolio contains asset totals plus pending orders grouped by tag. Accounts can be tracked globally or for a specific owner.
+The portfolio service keeps an in-memory view of the accounts a user tracks.
+Accounts are keyed by `CexId` and `AccountId`, and each account portfolio contains asset totals plus pending orders grouped by tag.
+Accounts can be tracked globally or for a specific owner.
 
-Exchange delivery is behind the `PortfolioFeed` interface. `ExchangePortfolioFeed` keeps one connection per `CexId` and sends the complete account set for that exchange whenever tracked accounts change, so exchanges that support multiple users per websocket do not need one connection per account. The Binance connector in `exchange-gateway` provides the concrete exchange connection. Exchange updates are applied and published to the `portfolio.updates.v1` stream by `PublishingPortfolioUpdateSink`, then consumed by `PortfolioUpdateConsumer`, which checkpoints progress and persists account state in the read-model store. `OrderRequestServer` accepts unsigned order requests; `OrderRequestService` verifies the caller's bearer JWT and signs accepted orders with the owner's auth-service token, and `OrderRequestDelivery` forwards them to the configured destination.
+Exchange delivery is behind the `PortfolioFeed` interface.
+`ExchangePortfolioFeed` keeps one connection per `CexId` and sends the complete account set for that exchange whenever tracked accounts change, so exchanges that support multiple users per websocket do not need one connection per account.
+The Binance connector in `exchange-gateway` provides the concrete exchange connection.
+Exchange updates are applied and published to the `portfolio.updates.v1` stream by `PublishingPortfolioUpdateSink`, then consumed by `PortfolioUpdateConsumer`, which checkpoints progress and persists account state in the read-model store.
+`OrderRequestServer` accepts unsigned order requests; `OrderRequestService` verifies the caller's bearer JWT and signs accepted orders with the owner's auth-service token, and `OrderRequestDelivery` forwards them to the configured destination.
 
 Configuration:
 
-The service reads the variables documented under [Portfolio service](environment-variables.md#portfolio-service) in the environment variable reference. `RUST_LOG` selects the tracing filter.
+The service reads the variables documented under [Portfolio service](environment-variables.md#portfolio-service) in the environment variable reference.
+`RUST_LOG` selects the tracing filter.
 
 ## Archiver
 
-Archiver is a durable Jetstream consumer that periodically flushes de-duplicated data to parquet files bucketed by exchange event timestamp and sends it using Apache Iceberg to S3. Raw objects are also grouped by a fixed virtual routing bucket derived from the trading pair, so archive layout does not depend on the current aggregator shard count. It also listens to closed candles and archives those as well.
+Archiver is a durable Jetstream consumer that periodically flushes de-duplicated data to parquet files bucketed by exchange event timestamp and sends it using Apache Iceberg to S3.
+Raw objects are also grouped by a fixed virtual routing bucket derived from the trading pair, so archive layout does not depend on the current aggregator shard count.
+It also listens to closed candles and archives those as well.
 
 ## Compactor
 
 Compactor runs regularly, converting the raw archived S3 files into clean and tidy files, partitioning by symbol and routing bucket and sorting by timestamp.
 
-Each compacted Iceberg snapshot records the raw source object URIs it represents in the same commit as the compacted data files. That snapshot is the explicit compacted/raw handoff: recovery readers replay all live compacted files plus only the raw objects that are absent from the source-object set. A raw object is therefore either fully represented by compacted files or still in the raw tail, never both. Because the compacted files and source-object set are read from one snapshot, a concurrent compaction commit cannot create a gap or a duplicate.
+Each compacted Iceberg snapshot records the raw source object URIs it represents in the same commit as the compacted data files.
+That snapshot is the explicit compacted/raw handoff: recovery readers replay all live compacted files plus only the raw objects that are absent from the source-object set.
+A raw object is therefore either fully represented by compacted files or still in the raw tail, never both.
+Because the compacted files and source-object set are read from one snapshot, a concurrent compaction commit cannot create a gap or a duplicate.
 
 ## Rebuilder
 
-Rebuilder replays archived market events from Iceberg to deterministically regenerate candles after an aggregator configuration or code change. With `REBUILDER_SOURCE_LAYER=auto` it reads compacted event partitions plus the raw tail that has not been compacted yet, using the same handoff contract as aggregator recovery. Explicit `raw` and `compacted` modes read only that layer. Events are grouped by their decoded exchange and trading pair and replayed through the aggregator's pure candle processor using a new state epoch, so all streams for a pair (such as `@trade` and `@aggTrade`) update the same candles. The processor uses the same per-interval closed-candle caps and correction cutoff as live processing. The rebuilder streams bounded Parquet batches, stages replay events and regenerated candles in bounded spill runs, and uploads candle objects from staging files, so neither the event input nor the candle output is ever fully materialized in memory; `REBUILDER_SPILL_RECORDS` bounds the records staged in memory and the merge fan-in and run batch size, and `REBUILDER_SPILL_DIR` places the spill and staging files. Spilled record counts, temporary bytes written, and the largest spill run are reported on completion. Regenerated candles can be written either as raw hourly objects in the raw candle table or as candle-key partitions in the compacted candle table. The spill and merge design keeps peak memory proportional to the spill record limit, processor state, one Parquet batch, and one output object's write buffers.
+Rebuilder replays archived market events from Iceberg to deterministically regenerate candles after an aggregator configuration or code change.
+With `REBUILDER_SOURCE_LAYER=auto` it reads compacted event partitions plus the raw tail that has not been compacted yet, using the same handoff contract as aggregator recovery.
+Explicit `raw` and `compacted` modes read only that layer.
+Events are grouped by their decoded exchange and trading pair and replayed through the aggregator's pure candle processor using a new state epoch, so all streams for a pair (such as `@trade` and `@aggTrade`) update the same candles.
+The processor uses the same per-interval closed-candle caps and correction cutoff as live processing.
+The rebuilder streams bounded Parquet batches, stages replay events and regenerated candles in bounded spill runs, and uploads candle objects from staging files, so neither the event input nor the candle output is ever fully materialized in memory; `REBUILDER_SPILL_RECORDS` bounds the records staged in memory and the merge fan-in and run batch size, and `REBUILDER_SPILL_DIR` places the spill and staging files.
+Spilled record counts, temporary bytes written, and the largest spill run are reported on completion.
+Regenerated candles can be written either as raw hourly objects in the raw candle table or as candle-key partitions in the compacted candle table.
+The spill and merge design keeps peak memory proportional to the spill record limit, processor state, one Parquet batch, and one output object's write buffers.
 
 ### Configuration
 
