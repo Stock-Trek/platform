@@ -1,8 +1,8 @@
 # Health checks
 
 Long-running platform services require an HTTP listener for orchestrator probes. Configure it with
-`HEALTH_BIND_ADDR`, or with a service-specific `<SERVICE>_HEALTH_BIND_ADDR` that takes precedence
-over the shared value. A service refuses to start when neither variable is set.
+`HEALTH_BIND_ADDRESS`, or with a service-specific `<SERVICE>_HEALTH_BIND_ADDRESS` that takes
+precedence over the shared value. A service refuses to start when neither variable is set.
 
 The listener serves two endpoints:
 

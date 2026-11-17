@@ -42,8 +42,8 @@ Every process validates configuration at startup and fails closed on a missing, 
 unsafe value. Values come from the process environment except GitHub webhook and backfiller secrets,
 which load from `SECRETS_SSM_PATH`.
 
-- Every required variable is present and `HEALTH_BIND_ADDR` or the service-specific
-  `<SERVICE>_HEALTH_BIND_ADDR` is set.
+- Every required variable is present and `HEALTH_BIND_ADDRESS` or the service-specific
+  `<SERVICE>_HEALTH_BIND_ADDRESS` is set.
 - Iceberg URI, warehouse, and namespace are set wherever archive access or recovery is enabled.
   The aggregator requires them for `checkpoint` and `archive` replay policies.
 - `AGGREGATOR_SHARD_COUNT` is positive and no greater than the archive routing bucket count.

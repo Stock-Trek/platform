@@ -2,7 +2,7 @@ use platform_config::EnvVars;
 use platform_errors::{PlatformError, PlatformResult};
 use std::net::SocketAddr;
 
-pub const HEALTH_BIND_ADDR: &str = "HEALTH_BIND_ADDR";
+pub const HEALTH_BIND_ADDRESS: &str = "HEALTH_BIND_ADDRESS";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct HealthConfig {
@@ -23,7 +23,7 @@ impl HealthConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
-        Self::required(vars, HEALTH_BIND_ADDR)
+        Self::required(vars, HEALTH_BIND_ADDRESS)
     }
 
     pub fn from_service_env(service: &str) -> PlatformResult<Self> {
@@ -31,7 +31,7 @@ impl HealthConfig {
     }
 
     pub fn from_service_vars(vars: &EnvVars, service: &str) -> PlatformResult<Self> {
-        let name = format!("{service}_HEALTH_BIND_ADDR");
+        let name = format!("{service}_HEALTH_BIND_ADDRESS");
         match Self::optional(vars, &name)? {
             Some(config) => Ok(config),
             None => Self::from_vars(vars),
@@ -39,7 +39,8 @@ impl HealthConfig {
     }
 
     fn required(vars: &EnvVars, name: &str) -> PlatformResult<Self> {
-        Self::optional(vars, name)?.ok_or_else(|| PlatformError::config_missing(HEALTH_BIND_ADDR))
+        Self::optional(vars, name)?
+            .ok_or_else(|| PlatformError::config_missing(HEALTH_BIND_ADDRESS))
     }
 
     fn optional(vars: &EnvVars, name: &str) -> PlatformResult<Option<Self>> {
