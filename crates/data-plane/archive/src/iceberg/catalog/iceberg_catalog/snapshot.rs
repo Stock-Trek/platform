@@ -16,8 +16,8 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 pub(super) struct SnapshotCommit {
-    requirements: Vec<TableRequirement>,
-    updates: Vec<TableUpdate>,
+    pub(super) requirements: Vec<TableRequirement>,
+    pub(super) updates: Vec<TableUpdate>,
 }
 
 impl SnapshotCommit {

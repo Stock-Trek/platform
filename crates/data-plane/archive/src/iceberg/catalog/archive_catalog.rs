@@ -128,6 +128,18 @@ pub trait ArchiveCatalog: Send + Sync {
         ))
     }
 
+    async fn remove_raw_entries(
+        &self,
+        _table: ArchiveIcebergTable,
+        _entries: &HashSet<String>,
+        _context: &CommitContext,
+    ) -> PlatformResult<usize> {
+        Err(PlatformError::external(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "archive catalog cannot remove raw table entries",
+        )))
+    }
+
     async fn record_compaction(
         &self,
         kind: ArchiveKind,

@@ -69,7 +69,7 @@ impl IcebergCatalog {
         Ok(deleted)
     }
 
-    async fn reachable_data_files(table: &Table) -> PlatformResult<HashSet<String>> {
+    pub(super) async fn reachable_data_files(table: &Table) -> PlatformResult<HashSet<String>> {
         let mut reachable = HashSet::new();
         for snapshot in table.metadata().snapshots() {
             let manifests = table
@@ -101,8 +101,9 @@ impl IcebergCatalog {
         if !archive_table.is_ledger() {
             return Ok(HashSet::new());
         }
+        let files = Self::reachable_data_files(table).await?;
         Ok(self
-            .read_ledger_entries(table, archive_table.kind())
+            .read_ledger_entries_from_files(table, archive_table.kind(), files)
             .await?
             .into_iter()
             .map(|entry| entry.source_manifest_uri)

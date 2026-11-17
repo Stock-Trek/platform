@@ -4,4 +4,7 @@ mod iceberg_catalog;
 
 pub use archive_catalog::ArchiveCatalog;
 pub use data_file::{IcebergDataFile, IcebergFilePartition};
-pub use iceberg_catalog::IcebergCatalog;
+pub use iceberg_catalog::{
+    CompactedRewriteCandidate, CompactedRewritePlan, IcebergCatalog, RawCleanupOutcome,
+    RawCleanupPlan,
+};

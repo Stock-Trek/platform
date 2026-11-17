@@ -1,7 +1,10 @@
+use crate::ArchiveKind;
 use crate::iceberg::catalog::IcebergDataFile;
+use crate::iceberg::catalog::IcebergFilePartition;
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use crate::iceberg::catalog::iceberg_catalog::claim_index::{ClaimIndex, ClaimState};
 use futures::TryStreamExt;
+use iceberg::spec::{Literal, PrimitiveLiteral, Struct};
 use iceberg::table::Table;
 use platform_errors::PlatformResult;
 use platform_metrics::MarketDataMetrics;
@@ -88,13 +91,55 @@ impl IcebergCatalog {
             .await
             .map_err(|error| Self::catalog_error("read Iceberg table scan", error))?
         {
-            files.push(IcebergDataFile::new(
+            let partition = Self::file_partition(table, task.partition())?;
+            let file = IcebergDataFile::new(
                 task.data_file_path().to_string(),
                 i64::try_from(task.file_size_in_bytes()).unwrap_or(i64::MAX),
                 i64::try_from(task.record_count().unwrap_or_default()).unwrap_or(i64::MAX),
-            ));
+            );
+            files.push(match partition {
+                Some(partition) => IcebergDataFile::partitioned(
+                    file.file_path,
+                    file.file_size_in_bytes,
+                    file.record_count,
+                    partition,
+                ),
+                None => file,
+            });
         }
         files.sort_by(|left, right| left.file_path.cmp(&right.file_path));
         Ok(files)
+    }
+
+    fn file_partition(
+        table: &Table,
+        values: Option<&Struct>,
+    ) -> PlatformResult<Option<IcebergFilePartition>> {
+        let spec = table.metadata().default_partition_spec();
+        if spec.fields().is_empty() {
+            return Ok(None);
+        }
+        let Some(values) = values else {
+            return Ok(None);
+        };
+        let mut kind = None;
+        let mut hour_millis = None;
+        for (field, value) in spec.fields().iter().zip(values.fields()) {
+            let Some(Literal::Primitive(value)) = value else {
+                continue;
+            };
+            match (field.name.as_str(), value) {
+                ("archive_kind", PrimitiveLiteral::String(value)) => {
+                    kind = ArchiveKind::from_segment(value);
+                }
+                ("partition_hour_millis", PrimitiveLiteral::Long(value)) => {
+                    hour_millis = Some(*value);
+                }
+                _ => {}
+            }
+        }
+        Ok(kind
+            .zip(hour_millis)
+            .map(|(kind, hour_millis)| IcebergFilePartition::new(kind, hour_millis)))
     }
 }

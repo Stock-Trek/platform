@@ -218,6 +218,15 @@ impl ArchiveCatalog for IcebergCatalog {
         Ok((files, processed))
     }
 
+    async fn remove_raw_entries(
+        &self,
+        table: ArchiveIcebergTable,
+        entries: &HashSet<String>,
+        context: &CommitContext,
+    ) -> PlatformResult<usize> {
+        IcebergCatalog::remove_raw_entries(self, table, entries, context).await
+    }
+
     async fn record_compaction(
         &self,
         kind: ArchiveKind,
