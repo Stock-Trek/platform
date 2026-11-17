@@ -17,7 +17,6 @@ const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const BODY_READ_TIMEOUT: Duration = Duration::from_secs(10);
 const JWT_PATH: &str = "/jwt";
 const JWKS_PATH: &str = "/.well-known/jwks.json";
-const JWKS_ALIAS_PATH: &str = "/jwks";
 
 pub struct JwtServerRequest;
 
@@ -40,9 +39,7 @@ impl JwtServerRequest {
         sigv4: &SigV4Config,
         request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, JwtServerError> {
-        if request.method() == Method::GET
-            && matches!(request.uri().path(), JWKS_PATH | JWKS_ALIAS_PATH)
-        {
+        if request.method() == Method::GET && request.uri().path() == JWKS_PATH {
             return Ok(Self::json(StatusCode::OK, service.jwks()));
         }
         if request.method() != Method::POST || request.uri().path() != JWT_PATH {
