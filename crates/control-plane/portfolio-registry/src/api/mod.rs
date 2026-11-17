@@ -5,6 +5,8 @@ mod api_server;
 mod read_api;
 mod request;
 mod request_handler;
+#[cfg(test)]
+mod tests;
 
 pub use admin_api::AdminApi;
 pub use api_connection::ApiConnection;

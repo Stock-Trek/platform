@@ -41,15 +41,15 @@ impl AdminApi {
             return if request.method() == Method::GET {
                 Ok(empty_response(StatusCode::NO_CONTENT))
             } else {
-                Err(ApiError::method_not_allowed())
+                Err(ApiError::method_not_allowed(&[Method::GET]))
             };
         }
         if request.uri().path() != "/v1/ownership" {
             return Err(ApiError::not_found());
         }
-        self.authorize(&request)?;
         match *request.method() {
             Method::POST => {
+                self.authorize(&request)?;
                 let command: OwnershipRequest = read_json(request).await?;
                 let mapping = self
                     .service
@@ -64,6 +64,7 @@ impl AdminApi {
                 Ok(json_response(StatusCode::OK, &mapping))
             }
             Method::DELETE => {
+                self.authorize(&request)?;
                 let command: OwnershipRequest = read_json(request).await?;
                 let mapping = self
                     .service
@@ -77,7 +78,10 @@ impl AdminApi {
                     .map_err(Self::service_error)?;
                 Ok(json_response(StatusCode::OK, &mapping))
             }
-            _ => Err(ApiError::method_not_allowed()),
+            _ => Err(ApiError::method_not_allowed(&[
+                Method::POST,
+                Method::DELETE,
+            ])),
         }
     }
 
