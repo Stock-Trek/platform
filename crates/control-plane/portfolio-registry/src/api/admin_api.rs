@@ -1,5 +1,5 @@
 use crate::RegistryService;
-use crate::api::{ApiError, RequestHandler, bearer, empty_response, json_response, read_json};
+use crate::api::{ApiError, HealthRoute, RequestHandler, bearer, json_response, read_json};
 use async_trait::async_trait;
 use chrono::Utc;
 use http_body_util::Full;
@@ -37,12 +37,8 @@ impl AdminApi {
         &self,
         request: Request<Incoming>,
     ) -> Result<Response<Full<Bytes>>, ApiError> {
-        if matches!(request.uri().path(), "/healthz" | "/readyz") {
-            return if request.method() == Method::GET {
-                Ok(empty_response(StatusCode::NO_CONTENT))
-            } else {
-                Err(ApiError::method_not_allowed(&[Method::GET]))
-            };
+        if HealthRoute::matches(&request) {
+            return HealthRoute::dispatch(&request);
         }
         if request.uri().path() != "/v1/ownership" {
             return Err(ApiError::not_found());
