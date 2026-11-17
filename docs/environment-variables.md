@@ -406,7 +406,7 @@ their details.
 ### Auth service
 
 The auth service issues short-lived EdDSA JWTs for owners with an active order-write token and
-publishes its public signing key at `/.well-known/jwks.json` (also available as `/jwks`). It
+publishes its public signing key at `/.well-known/jwks.json`. It
 verifies JWTs presented with order requests. Each replica must use the same private key so that
 tokens signed by one replica verify against the JWKS published by another. A JWT request must
 carry a valid SigV4 signature from a configured caller, and the requested owner must match the
