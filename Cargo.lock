@@ -4356,6 +4356,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "platform-maintainer"
+version = "0.2.0"
+dependencies = [
+ "aws-sdk-s3",
+ "parking_lot",
+ "platform-archive",
+ "platform-config",
+ "platform-errors",
+ "platform-lease",
+ "platform-metrics",
+ "platform-runtime",
+ "platform-types",
+ "tokio",
+ "tracing",
+]
+
+[[package]]
 name = "platform-market-data"
 version = "0.2.0"
 dependencies = [

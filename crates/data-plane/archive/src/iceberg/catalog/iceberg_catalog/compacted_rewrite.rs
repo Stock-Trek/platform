@@ -115,7 +115,7 @@ impl CompactedRewritePlan {
 }
 
 impl CompactedRewriteCandidate {
-    async fn apply(
+    pub async fn apply(
         &self,
         catalog: &IcebergCatalog,
         context: &CommitContext,

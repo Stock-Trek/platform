@@ -207,6 +207,44 @@ impl ArchiveCatalog for IcebergCatalog {
         IcebergCatalog::expire_snapshots(self, table, older_than, retain_last, context).await
     }
 
+    async fn expire_archive_snapshots(
+        &self,
+        table: ArchiveIcebergTable,
+        config: &crate::MaintenanceConfig,
+        context: &CommitContext,
+    ) -> PlatformResult<usize> {
+        IcebergCatalog::expire_archive_snapshots(self, table, config, context).await
+    }
+
+    async fn orphan_candidates(
+        &self,
+        table: ArchiveIcebergTable,
+        client: &dyn ObjectStore,
+    ) -> PlatformResult<Vec<crate::MaintenanceCandidate>> {
+        IcebergCatalog::orphan_candidates(self, table, client).await
+    }
+
+    async fn rewrite_compacted(
+        &self,
+        candidate: &crate::CompactedRewriteCandidate,
+        context: &CommitContext,
+    ) -> PlatformResult<usize> {
+        candidate.apply(self, context).await
+    }
+
+    async fn raw_cleanup_plan(
+        &self,
+        kind: ArchiveKind,
+        config: &crate::MaintenanceConfig,
+        now: TimestampMilliseconds,
+    ) -> PlatformResult<crate::RawCleanupPlan> {
+        IcebergCatalog::plan_raw_cleanup(self, kind, config, now).await
+    }
+
+    async fn raw_table_references(&self, kind: ArchiveKind) -> PlatformResult<HashSet<String>> {
+        IcebergCatalog::raw_table_references(self, kind).await
+    }
+
     async fn compacted_snapshot(
         &self,
         table: ArchiveIcebergTable,

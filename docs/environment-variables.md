@@ -272,9 +272,36 @@ No process-specific optional variables.
 | --- | --- |
 | `COMPACTOR_LEASE_CLOCK_SKEW_SECS` | Clock-skew margin added to the compaction lease expiry, in seconds. Must be shorter than every lease TTL and leave room for each renewal interval. Defaults to `5`, capped at one quarter of the shortest TTL. |
 | `COMPACTOR_LEASE_INITIAL_TOKEN` | Initial compactor fencing token. Must be positive. Defaults to `1`. |
-| `COMPACTOR_MAINTENANCE_SAFETY_SECS` | Minimum age before unreachable archive metadata is deleted, in seconds. Must be positive. Defaults to `86400`. |
 | `COMPACTOR_LEASE_TTL_SECS_CANDLES` | Candle compaction lease TTL override, in seconds. |
 | `COMPACTOR_LEASE_TTL_SECS_EVENTS` | Event compaction lease TTL override, in seconds. |
+
+### Maintainer
+
+#### Required
+
+| Variable | Description |
+| --- | --- |
+| `MAINTAINER_LEASE_BUCKET` | NATS KV bucket holding the maintenance and partition coordination leases. |
+| `MAINTAINER_NATS_URL` | NATS server URL used for maintenance lease coordination. |
+| `MAINTAINER_OUTPUT_PREFIX` | Compacted output prefix used to derive partition lease scopes, matching `COMPACTOR_OUTPUT_PREFIX`. |
+| `MAINTAINER_S3_BUCKET` | S3 bucket holding the archive, matching `COMPACTOR_S3_BUCKET`. |
+
+#### Optional
+
+| Variable | Description |
+| --- | --- |
+| `MAINTAINER_DRY_RUN` | Whether maintenance plans stages and reports candidates without deleting or rewriting, parsed as a boolean. Defaults to `false`. |
+| `MAINTAINER_INTERVAL_SECS` | Interval between maintenance runs, in seconds. Defaults to `3600`. |
+| `MAINTAINER_MAX_METADATA_GROWTH_PERCENT` | Maximum metadata-log and manifest growth per partition between rewrites, as a percentage. Must be positive. Defaults to `10`. |
+| `MAINTAINER_MAX_PARTITION_BYTES` | Partition size target that triggers a compacted or ledger rewrite, in bytes. Must be positive. Defaults to `536870912`. |
+| `MAINTAINER_MAX_PARTITION_DATA_FILES` | Partition file-count target that triggers a compacted or ledger rewrite. Must be positive. Defaults to `100`. |
+| `MAINTAINER_MAX_WORK_SECS` | Longest maintenance lease window, in seconds. Must be positive. Defaults to `300`. |
+| `MAINTAINER_ORPHAN_GRACE_SECS` | Minimum age before unreferenced archive files are deleted, in seconds. Hard floor of `604800` (7 days). Defaults to `1209600` (14 days). |
+| `MAINTAINER_RAW_RETENTION_SECS_CANDLES` | Candle raw retention, in seconds, measured from the durable ledger handoff. Hard floor of `7776000` (90 days). Defaults to `31536000` (365 days). |
+| `MAINTAINER_RAW_RETENTION_SECS_EVENTS` | Event raw retention, in seconds, measured from the durable ledger handoff. Hard floor of `7776000` (90 days). Defaults to `31536000` (365 days). |
+| `MAINTAINER_S3_LIFECYCLE_ENABLED` | Whether the maintainer installs the baseline S3 lifecycle backstop (Intelligent-Tiering transition and incomplete-upload abort, no expiration) at startup, parsed as a boolean. Defaults to `true`. |
+| `MAINTAINER_SNAPSHOTS_TO_KEEP` | Snapshots always retained on every archive table regardless of age. Defaults to `10`. |
+| `MAINTAINER_SNAPSHOT_RETENTION_SECS` | Minimum age before archive snapshots expire, in seconds. Hard floor of `2592000` (30 days). Defaults to `7776000` (90 days). |
 
 ### Rebuilder
 

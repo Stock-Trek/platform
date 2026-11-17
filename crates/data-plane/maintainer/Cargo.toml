@@ -1,0 +1,21 @@
+[package]
+name = "platform-maintainer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+aws-sdk-s3 = { workspace = true }
+platform-archive = { workspace = true }
+platform-config = { workspace = true }
+platform-errors = { workspace = true, features = ["storage"] }
+platform-lease = { workspace = true }
+platform-metrics = { workspace = true }
+platform-runtime = { workspace = true }
+platform-types = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "signal", "time"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+parking_lot = { workspace = true }

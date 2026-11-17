@@ -258,6 +258,22 @@ impl MarketDataMetrics {
         gauge!("market_data_archive_maintenance_lease_token").set(fencing_token as f64);
     }
 
+    pub fn record_maintenance_partition_files(table: &str, files: u64) {
+        gauge!(
+            "market_data_archive_maintenance_partition_files",
+            "table" => table.to_string(),
+        )
+        .set(files as f64);
+    }
+
+    pub fn record_maintenance_raw_backlog(kind: &str, age: Duration) {
+        gauge!(
+            "market_data_archive_maintenance_raw_backlog_seconds",
+            "kind" => kind.to_string(),
+        )
+        .set(age.as_secs_f64());
+    }
+
     pub fn record_recovery_layer(layer: &'static str, kind: &'static str) {
         counter!(
             "market_data_archive_recovery_layer_total",

@@ -1,7 +1,10 @@
 use crate::iceberg::catalog::iceberg_catalog::IcebergCatalog;
 use crate::iceberg::catalog::iceberg_catalog::snapshot::SnapshotCommit;
-use crate::iceberg::{ArchiveIcebergTable, ArchiveTableLayer, CommitContext};
-use crate::{ArchiveKind, MaintenanceConfig, ObjectStore, S3};
+use crate::iceberg::{ArchiveCatalog, ArchiveIcebergTable, ArchiveTableLayer, CommitContext};
+use crate::{
+    ArchiveKind, CompactionId, MaintenanceCandidate, MaintenanceConfig, MaintenanceFileKind,
+    ObjectStore, S3,
+};
 use iceberg::spec::Operation;
 use platform_errors::{PlatformError, PlatformResult};
 use platform_types::TimestampMilliseconds;
@@ -13,6 +16,9 @@ pub struct RawCleanupPlan {
     pub kind: ArchiveKind,
     pub raw_entries: Vec<String>,
     pub objects: Vec<String>,
+    pub candidates: Vec<MaintenanceCandidate>,
+    pub quarantined: Vec<CompactionId>,
+    pub backlog: Option<Duration>,
 }
 
 impl RawCleanupPlan {
@@ -33,14 +39,27 @@ impl RawCleanupPlan {
         retention: Duration,
     ) -> Self {
         let retention_millis = i64::try_from(retention.as_millis()).unwrap_or(i64::MAX);
-        let mut objects = processed
-            .into_iter()
-            .filter(|(source, processed_at)| {
-                processed_at.0.saturating_add(retention_millis) <= now.0
-                    && !retained_raw.contains(source)
-            })
-            .map(|(source, _)| source)
-            .collect::<Vec<_>>();
+        let backlog = processed
+            .iter()
+            .filter(|(source, _)| current_raw.contains(*source))
+            .map(|(_, processed_at)| now.0.saturating_sub(processed_at.0))
+            .min()
+            .map(|millis| Duration::from_millis(u64::try_from(millis).unwrap_or(u64::MAX)));
+        let mut objects = Vec::new();
+        let mut candidates = Vec::new();
+        for (source, processed_at) in &processed {
+            let due = processed_at.0.saturating_add(retention_millis) <= now.0;
+            if due && !retained_raw.contains(source) {
+                objects.push(source.clone());
+                candidates.push(MaintenanceCandidate::new(
+                    source.clone(),
+                    kind,
+                    MaintenanceFileKind::Raw,
+                    *processed_at,
+                ));
+            }
+        }
+        candidates.sort_by(|left, right| left.uri.cmp(&right.uri));
         objects.sort();
         let mut raw_entries = objects
             .iter()
@@ -52,12 +71,15 @@ impl RawCleanupPlan {
             kind,
             raw_entries,
             objects,
+            candidates,
+            quarantined: Vec::new(),
+            backlog,
         }
     }
 
     pub async fn apply(
         &self,
-        catalog: &IcebergCatalog,
+        catalog: &dyn ArchiveCatalog,
         store: &dyn ObjectStore,
         context: &CommitContext,
         now: TimestampMilliseconds,
@@ -114,8 +136,22 @@ impl IcebergCatalog {
         let retained_raw = Self::reachable_data_files(&raw_table).await?;
         let entries = self.read_ledger_entries(&ledger_table, kind).await?;
         let mut processed = HashMap::new();
+        let mut quarantined = Vec::new();
         for entry in &entries {
-            let manifest = self.read_source_manifest(&ledger_table, entry).await?;
+            let manifest = match self.read_source_manifest(&ledger_table, entry).await {
+                Ok(manifest) => manifest,
+                Err(error) => {
+                    tracing::error!(
+                        kind = kind.label(),
+                        compaction_id = %entry.compaction_id.as_str(),
+                        manifest = %entry.source_manifest_uri,
+                        %error,
+                        "quarantining compaction batch because its source manifest is missing or corrupt"
+                    );
+                    quarantined.push(entry.compaction_id);
+                    continue;
+                }
+            };
             for source in manifest.sources {
                 processed
                     .entry(source)
@@ -125,14 +161,16 @@ impl IcebergCatalog {
                     .or_insert(entry.processed_at);
             }
         }
-        Ok(RawCleanupPlan::from_processed(
+        let mut plan = RawCleanupPlan::from_processed(
             kind,
             processed,
             &current_raw,
             &retained_raw,
             now,
             retention,
-        ))
+        );
+        plan.quarantined = quarantined;
+        Ok(plan)
     }
 
     pub async fn raw_table_references(&self, kind: ArchiveKind) -> PlatformResult<HashSet<String>> {

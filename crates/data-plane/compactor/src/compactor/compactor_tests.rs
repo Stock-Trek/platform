@@ -5,7 +5,7 @@ use aws_sdk_s3::config::{Credentials, Region};
 use parking_lot::Mutex;
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveKind, ArchiveRegistration, CommitContext,
-    ConflictDetails, IcebergDataFile, RegisterOutcome, S3ObjectStore, SourceBatch,
+    ConflictDetails, IcebergDataFile, MaintenancePartition, RegisterOutcome, SourceBatch,
 };
 use platform_errors::PlatformResult;
 use platform_lease::{InMemoryLeaseStore, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
@@ -64,7 +64,6 @@ impl Compactor {
             .build();
         let client = S3Client::from_conf(config);
         Self {
-            objects: Arc::new(S3ObjectStore::new(client.clone())),
             client,
             catalog,
             bucket: "archive".to_string(),
@@ -74,7 +73,6 @@ impl Compactor {
             lease_ttl_events: Duration::from_secs(30),
             lease_ttl_candles: Duration::from_secs(30),
             max_work: Duration::from_secs(20),
-            maintenance_safety: Duration::from_secs(24 * 60 * 60),
             lease_initial_token: 1,
             lease_clock_skew: Duration::ZERO,
         }
@@ -341,4 +339,33 @@ fn compaction_scopes_include_the_bucket_and_output_prefix_identity() {
     compactor.output_prefix = "other-compacted".to_string();
 
     assert_ne!(bucket_scope, compactor.lease_scope(&batch));
+}
+
+#[tokio::test]
+async fn maintenance_holding_the_partition_lease_makes_this_compactor_skip() {
+    let batch = FakeCatalog::batch();
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let compactor = Compactor::for_coordination(
+        Arc::new(FakeCatalog {
+            claimed: HashSet::new(),
+            outcome: None,
+            registrations: Mutex::new(Vec::new()),
+        }),
+        leases.clone(),
+    );
+    let partition = MaintenancePartition::for_batch(&batch);
+    let held = leases
+        .acquire(&LeaseRequest::new(
+            partition.lease_scope(&compactor.bucket, &compactor.output_prefix),
+            "archive-maintainer",
+            Duration::from_secs(600),
+        ))
+        .await
+        .unwrap()
+        .unwrap();
+
+    let stats = compactor.compact(&batch).await.unwrap();
+
+    assert!(stats.skipped);
+    assert!(leases.is_current(&held).await.unwrap());
 }
