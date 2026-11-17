@@ -10,11 +10,10 @@ It covers conventions shared by every resource group and the per-area endpoints:
 - [Errors](#errors)
 - [Streaming](#streaming)
 - [Limits](#limits)
-- [Accounts, portfolios, and orders](#accounts-portfolios-and-orders)
+- [Accounts and portfolios](#accounts-and-portfolios)
 - [Algorithms and builds](#algorithms-and-builds)
 - [Bots and runs](#bots-and-runs)
 - [Backtesting](#backtesting)
-- [Market data](#market-data)
 
 ## Overview
 
@@ -25,15 +24,14 @@ It owns the resources that no existing service owns today (bots, backtests) and 
 ```
 Browser ⇄ Front-end API ⇄ Auth plane        (sessions, JWT verification)
                        ⇄ Portfolio registry (account ownership)
-                       ⇄ Portfolio service  (read model, order signing)
+                       ⇄ Portfolio service  (read model)
                        ⇄ Build plane        (algorithms, build artifacts)
                        ⇄ Run store/invoker  (scheduled runs)
                        ⇄ Runner             (live runs, backtests)
-                       ⇄ Aggregator/archive (candles)
 ```
 
 The API introduces two new durable stores: a bot configuration store and a backtest store.
-Everything else is a projection of existing state: the ownership registry, the portfolio read model, build artifacts, the run store, and the candle archive.
+Everything else is a projection of existing state: the ownership registry, the portfolio read model, build artifacts, and the run store.
 
 ## Versioning and base URL
 
@@ -65,7 +63,6 @@ Resource identifiers are not guessable, and every request re-checks ownership.
 ```
 
 Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
-Tokens carry the scopes granted by the owner's active order-write token; order placement requires the order-write scope, everything else requires an authenticated session.
 
 ## Conventions
 
@@ -131,7 +128,6 @@ Channels:
 | Channel | Frames |
 | --- | --- |
 | `portfolio.{cexId}.{accountId}` | Portfolio snapshots and order updates |
-| `candles.{cexId}.{base}.{quote}.{interval}` | Open candle updates and closed candles |
 | `builds.{algorithmId}` | Build state changes |
 | `runs.{botId}` | Run state changes |
 | `backtests.{backtestId}` | Backtest progress and partial results |
@@ -146,12 +142,12 @@ Channels:
 | Maximum request body size | 1 MiB |
 | Referenced build artifact size | `S3_MAX_ARTIFACT_SIZE_BYTES` |
 
-## Accounts, portfolios, and orders
+## Accounts and portfolios
 
 ### Ownership model
 
 An owner (the JWT `owner` claim) controls zero or more exchange accounts.
-Ownership of `(cexId, accountId)` is recorded by the portfolio registry and drives order authorization everywhere: order requests for accounts an owner does not own are rejected with `not_owned` and treated as security incidents.
+Ownership of `(cexId, accountId)` is recorded by the portfolio registry and drives authorization everywhere: requests for accounts an owner does not own are rejected with `not_owned` and treated as security incidents.
 Ownership changes are audited and propagate through the ownership stream to the portfolio service connectors.
 
 Every linked account additionally needs exchange API credentials.
@@ -167,7 +163,7 @@ Credentials are write-only: they are stored in Vault, never returned by any endp
 | `DELETE` | `/v1/accounts/{cexId}/{accountId}` | Unlink the account |
 | `PUT` | `/v1/accounts/{cexId}/{accountId}/credentials` | Replace exchange credentials |
 | `GET` | `/v1/accounts/{cexId}/{accountId}/portfolio` | Portfolio snapshot for the account |
-| `POST` | `/v1/orders` | Submit an order for a linked account |
+| `GET` | `/v1/portfolios` | Portfolio snapshots for every linked account |
 
 ### Linking and listing accounts
 
@@ -242,38 +238,6 @@ The read model is rebuilt from the portfolio update stream, so snapshots carry t
 
 Live updates arrive on the `portfolio.{cexId}.{accountId}` stream channel.
 The channel frames carry the same body as the snapshot endpoint with the stream `sequence` in the envelope, and subscribing with `lastSequence` replays nothing (the read model is the resume point).
-
-### Orders
-
-Order submission reuses the platform order path: the front-end API accepts the order, wraps it as an unsigned order request, and the portfolio service verifies the caller's JWT, checks ownership and portfolio freshness, signs the request with the owner's auth-service token, and forwards it to the exchange.
-
-`POST /v1/orders`:
-
-```json
-{
-  "cexId": "binance",
-  "accountId": "main",
-  "symbol": { "base": "btc", "quote": "usdt" },
-  "side": "sell",
-  "type": "limit",
-  "quantity": "0.100000000",
-  "price": "104250.000000000",
-  "clientTag": "ord_9x2"
-}
-```
-
-The response is `202` with `{ "tag": "ord_9x2", "status": "pending" }`.
-There is no order store: accepted orders surface as pending orders in the portfolio snapshot and as exchange order updates on the portfolio stream channel.
-`clientTag` is the idempotency handle the exchange sees; omitting it lets the API generate one.
-
-Failure semantics are the platform's:
-
-- `not_owned` rejections mean the account is not linked to the caller; the API surfaces them as `403` and they are monitored as authorization incidents.
-- `stale` rejections mean portfolio data exceeded `PORTFOLIO_MAX_UPDATE_AGE_SECS`; with the `degrade` policy the API accepts the order and flags it, with `reject` it returns `409`.
-- Signature, replay, and availability failures fail closed and are surfaced as `503`.
-
-Orders are never edited or cancelled through this API in `/v1`: cancellation happens on the exchange, and the portfolio stream reflects the resulting state.
-A dedicated cancellation path can be added to `/v2` once the order pipeline exposes one.
 
 ## Algorithms and builds
 
@@ -619,85 +583,6 @@ The stream ends when the backtest reaches a terminal state; clients that reconne
 `initialBalances` seeds the simulated portfolio.
 When omitted, the backtest starts from a configurable default cash balance.
 Using a real linked account's current balances is a front-end convenience: it copies the read-model snapshot into the request, never grants the backtest access to the live account.
-
-## Market data
-
-### Model
-
-The market data plane ingests exchange trades, aggregates them into candles at a fixed set of aligned intervals, corrects candles when late or backfilled trades arrive, and archives everything to Iceberg.
-The front-end reads two views:
-
-- **Closed candles** from the archive, queryable history with revision tracking.
-- **Live candles** over the stream: open candle updates as they tick and closed candle events.
-
-Supported exchanges and assets are static platform enumerations (`CexId`, `AssetId`), so the reference endpoints are cheap and highly cacheable.
-Candle intervals are the platform's aligned windows (for example `1s`, `1m`, `5m`, `1h`, `1d`).
-
-### Endpoints
-
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/v1/exchanges` | Supported exchanges |
-| `GET` | `/v1/exchanges/{cexId}/assets` | Assets tradable on the exchange |
-| `GET` | `/v1/exchanges/{cexId}/pairs` | Trading pairs with candles available |
-| `GET` | `/v1/candles` | Closed candles for one pair and interval |
-| `GET` | `/v1/candles/{cexId}/{base}/{quote}/{interval}/latest` | Newest closed candle |
-
-`GET /v1/candles` query parameters: `cexId`, `base`, `quote`, `interval` (all required), plus `from`, `to` (RFC 3339, bounded by the retention contract), `limit` and `cursor`.
-Candles are returned oldest-first within a page:
-
-```json
-{
-  "data": [
-    {
-      "cexId": "binance",
-      "symbol": { "base": "btc", "quote": "usdt" },
-      "interval": "1m",
-      "windowOpen": "2026-07-14T09:29:00.000Z",
-      "windowClose": "2026-07-14T09:30:00.000Z",
-      "open": "103912.010000000",
-      "high": "103988.440000000",
-      "low": "103901.000000000",
-      "close": "103975.120000000",
-      "volume": "18.402000000",
-      "tradeCount": 512,
-      "revision": 1,
-      "complete": true
-    }
-  ],
-  "nextCursor": null
-}
-```
-
-### Corrections
-
-Candles are deterministic aggregates that can be revised:
-
-- A late or backfilled trade inside the correction contract republishes the candle with an increased `revision` and identical window bounds.
-- A gap in source data marks affected candles `complete: false` until every missing source sequence has been backfilled, after which they are republished `complete: true`.
-- Once a candle's window falls outside the correction reach (`min(correction cutoff, retained windows per interval)`), it is final: the API no longer serves new revisions for it.
-  Requests for history older than the reach fail with `out_of_contract` rather than returning candles that could still change.
-
-Front-ends must treat `(cexId, base, quote, interval, windowOpen)` as the identity and apply revisions by replacing the stored candle, not by appending.
-The `latest` endpoint and the stream both carry `revision` and `complete` for the same purpose.
-
-### Candle streaming
-
-The `candles.{cexId}.{base}.{quote}.{interval}` stream channel carries two frame types:
-
-```json
-{ "type": "open", "windowOpen": "2026-07-14T09:29:00.000Z", "progressMillis": 41250, "open": "...", "last": "..." }
-{ "type": "closed", "windowClose": "2026-07-14T09:30:00.000Z", "revision": 1, "complete": true, "candle": { "...": "..." } }
-```
-
-Open frames update the in-progress candle; the closed frame is the authoritative candle and may later be followed by higher-`revision` closed frames for the same window.
-Replay on resubscribe is not provided for candles: clients recover by refetching `GET /v1/candles` for the missed range and resuming the stream from the current window.
-
-### Data quality
-
-- `tradeCount` and `revision` let the front-end display confidence and update badges.
-- Exchange connectivity is the platform's concern; the API surfaces it only through candle freshness (time since the last closed candle) and the `complete` flag, not through connector state.
-- Candle values are decimal strings in the exchange's quote asset; `volume` is in the base asset.
 
 ## Related references
 
