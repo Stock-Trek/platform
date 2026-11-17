@@ -2,7 +2,6 @@ use platform_config::EnvVars;
 use platform_errors::{PlatformError, PlatformResult};
 use std::net::SocketAddr;
 
-pub const HEALTH_BIND_ADDR: &str = "HEALTH_BIND_ADDR";
 pub const HEALTH_BIND_ADDRESS: &str = "HEALTH_BIND_ADDRESS";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,7 +23,7 @@ impl HealthConfig {
     }
 
     pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
-        Self::required(vars, &[HEALTH_BIND_ADDR, HEALTH_BIND_ADDRESS])
+        Self::required(vars, HEALTH_BIND_ADDRESS)
     }
 
     pub fn from_service_env(service: &str) -> PlatformResult<Self> {
@@ -32,27 +31,23 @@ impl HealthConfig {
     }
 
     pub fn from_service_vars(vars: &EnvVars, service: &str) -> PlatformResult<Self> {
-        let name = format!("{service}_HEALTH_BIND_ADDR");
-        let alias = format!("{service}_HEALTH_BIND_ADDRESS");
-        match Self::first(vars, &[name.as_str(), alias.as_str()])? {
+        let name = format!("{service}_HEALTH_BIND_ADDRESS");
+        match Self::optional(vars, &name)? {
             Some(config) => Ok(config),
             None => Self::from_vars(vars),
         }
     }
 
-    fn required(vars: &EnvVars, names: &[&str]) -> PlatformResult<Self> {
-        Self::first(vars, names)?.ok_or_else(|| {
-            PlatformError::config_missing(names.first().copied().unwrap_or(HEALTH_BIND_ADDR))
-        })
+    fn required(vars: &EnvVars, name: &str) -> PlatformResult<Self> {
+        Self::optional(vars, name)?
+            .ok_or_else(|| PlatformError::config_missing(HEALTH_BIND_ADDRESS))
     }
 
-    fn first(vars: &EnvVars, names: &[&str]) -> PlatformResult<Option<Self>> {
-        for name in names {
-            if let Some(value) = vars.optional(name)? {
-                return Self::parse(name, &value).map(Some);
-            }
+    fn optional(vars: &EnvVars, name: &str) -> PlatformResult<Option<Self>> {
+        match vars.optional(name)? {
+            Some(value) => Self::parse(name, &value).map(Some),
+            None => Ok(None),
         }
-        Ok(None)
     }
 
     fn parse(name: &str, value: &str) -> PlatformResult<Self> {

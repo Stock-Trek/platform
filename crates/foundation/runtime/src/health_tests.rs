@@ -37,16 +37,6 @@ impl TestRequest {
 
 #[test]
 fn health_config_reads_the_shared_address() {
-    let vars = EnvVars::from_map([("HEALTH_BIND_ADDR", "127.0.0.1:8081")]);
-    let config = HealthConfig::from_vars(&vars).expect("config");
-    assert_eq!(
-        config.address(),
-        "127.0.0.1:8081".parse::<SocketAddr>().expect("address")
-    );
-}
-
-#[test]
-fn health_config_accepts_the_address_alias() {
     let vars = EnvVars::from_map([("HEALTH_BIND_ADDRESS", "127.0.0.1:8081")]);
     let config = HealthConfig::from_vars(&vars).expect("config");
     assert_eq!(
@@ -56,10 +46,22 @@ fn health_config_accepts_the_address_alias() {
 }
 
 #[test]
+fn health_config_rejects_the_retired_address_alias() {
+    let vars = EnvVars::from_map([("HEALTH_BIND_ADDR", "127.0.0.1:8081")]);
+    assert!(HealthConfig::from_vars(&vars).is_err());
+}
+
+#[test]
+fn health_config_rejects_the_retired_service_address_alias() {
+    let vars = EnvVars::from_map([("AGGREGATOR_HEALTH_BIND_ADDR", "127.0.0.1:8082")]);
+    assert!(HealthConfig::from_service_vars(&vars, "AGGREGATOR").is_err());
+}
+
+#[test]
 fn health_config_prefers_the_service_address() {
     let vars = EnvVars::from_map([
-        ("HEALTH_BIND_ADDR", "127.0.0.1:8081"),
-        ("AGGREGATOR_HEALTH_BIND_ADDR", "127.0.0.1:8082"),
+        ("HEALTH_BIND_ADDRESS", "127.0.0.1:8081"),
+        ("AGGREGATOR_HEALTH_BIND_ADDRESS", "127.0.0.1:8082"),
     ]);
     let config = HealthConfig::from_service_vars(&vars, "AGGREGATOR").expect("config");
     assert_eq!(
@@ -70,7 +72,7 @@ fn health_config_prefers_the_service_address() {
 
 #[test]
 fn health_config_uses_the_shared_address_as_a_fallback() {
-    let vars = EnvVars::from_map([("HEALTH_BIND_ADDR", "127.0.0.1:8081")]);
+    let vars = EnvVars::from_map([("HEALTH_BIND_ADDRESS", "127.0.0.1:8081")]);
     let config = HealthConfig::from_service_vars(&vars, "AGGREGATOR").expect("config");
     assert_eq!(
         config.address(),
@@ -80,7 +82,7 @@ fn health_config_uses_the_shared_address_as_a_fallback() {
 
 #[test]
 fn health_config_rejects_an_invalid_address() {
-    let vars = EnvVars::from_map([("HEALTH_BIND_ADDR", "not an address")]);
+    let vars = EnvVars::from_map([("HEALTH_BIND_ADDRESS", "not an address")]);
     assert!(HealthConfig::from_vars(&vars).is_err());
 }
 
