@@ -48,20 +48,9 @@ The design must preserve these invariants:
 - Maintenance stages have a defined order, a fencing lease, and partition-level coordination so maintenance cannot race compaction on the same partitions.
 - Recovery states and records which layer is authoritative after raw expiry.
 
-## Options
+## Recommended design: durable compaction ledger plus separate maintenance
 
-### Option 1: Scheduled expiry and lifecycle only
-
-Add an external maintenance job that calls `expire_snapshots`, removes unreferenced files, applies an S3 lifecycle rule to raw and compacted prefixes, and rewrites compacted files.
-
-This is the smallest implementation, but it is not safe on the current handoff.
-Expiring compacted snapshots loses the processed set immediately, and an age-based lifecycle can delete raw objects that compaction has not processed.
-It also cannot delete processed raw table entries or merge compacted files.
-This option only becomes viable after processed state is decoupled from snapshots.
-
-### Option 2: Durable compaction ledger plus separate maintenance
-
-This is the recommended near-term path.
+This is the recommended near-term design.
 Add an authoritative processed-source ledger stored independently of compacted snapshot history.
 A dedicated Iceberg table holds one row per compaction batch with the compaction id, archive kind, source-manifest URI, source count, and processed timestamp.
 The source manifest is an immutable Parquet file listing the batch's raw object URIs.
@@ -99,30 +88,28 @@ The lease and concurrent-maintenance tests are required, not optional hardening.
 
 This keeps the two-layer design, allows incremental delivery, and scales processed state by compaction batches rather than by every raw file in every snapshot.
 The costs are the extra ledger table, cross-table ordering, and the raw-table rewrite or rebuild needed to reclaim raw table metadata.
-Option 2 also leaves a clear migration path to Option 3: the ledger can be retired once the current snapshot of a single table becomes authoritative.
+It also leaves a clear migration path to making current table state authoritative: the ledger can be retired once the current snapshot of a single table becomes authoritative.
 
-### Option 3: Make current table state authoritative
+## Further steps
+
+These changes are not part of the initial implementation.
+Revisit them once ledger-based maintenance has been running long enough to prove the handoff invariants under expiry, orphan cleanup, and recovery.
+
+### Make current table state authoritative
 
 Rewrite the archive so one snapshot adds compacted files and removes the raw files they replace.
 The current snapshot becomes the live archive, and raw versus compacted becomes a file-layout property rather than a cross-table handoff.
 Standard Iceberg rewrite, snapshot expiry, and orphan removal then apply directly.
 
 A split-table variant keeps both tables but removes source files from the raw table in the same transaction family as the compacted commit.
-It still needs a handoff record between the commits, so it usually becomes Option 2 plus a raw-table rewrite.
+It still needs a handoff record between the commits, so it usually becomes the ledger design plus a raw-table rewrite.
 
 The single-table form has the strongest atomicity and the smallest live metadata surface.
-If the archive is expected to keep years of history, investing in Option 3 earlier can be cheaper than maintaining ledger-specific tooling forever.
+If the archive is expected to keep years of history, investing in this design earlier can be cheaper than maintaining ledger-specific tooling forever.
 The cost is a larger refactor of compaction, schemas, recovery, and rebuilder layer selection.
 Current iceberg-rust lacks a high-level single-table rewrite action, so it needs a custom transaction or manifest writer, or an external maintenance engine until upstream helpers cover the operation.
 
-### Option 4: Object-store lifecycle without Iceberg maintenance
-
-Use S3 lifecycle rules to expire raw objects by age or tag, and optionally move old compacted objects to colder storage.
-This bounds object storage cost without touching Iceberg metadata, snapshots, manifests, metadata, or compacted file counts.
-Age-based deletion can remove unprocessed raw data, and deleting a raw object does not remove its live raw table entry.
-This is acceptable only as a backstop for an explicitly processed set and a lag monitor.
-
-### Option 5: Periodic re-baseline and table swap
+### Periodic re-baseline and table swap
 
 Periodically rebuild the compacted tables from retained history, validate row counts and handoff invariants, swap the catalog to the new table generation, and delete the old generation after a grace period.
 A variant can retain only the compacted layer after raw expiry.
@@ -132,7 +119,7 @@ It complements routine maintenance rather than replacing it.
 
 ## Recommended direction
 
-Implement Option 2 as the near-term path.
+Implement the durable compaction ledger plus separate maintenance design as the near-term path.
 This gives safe snapshot expiry, bounded metadata, and configurable raw retention without a complete rewrite of the archive model or a custom high-level rewrite engine.
 
 Keep the custom surface area small and intentional.
@@ -145,10 +132,11 @@ Recovery must not silently fall back to raw objects, and it should record and ex
 Keep recovery logic able to treat the current snapshot of a future single table as authoritative once raw objects are gone.
 Avoid baking dual-table assumptions too deeply into schemas, metrics, or operational tooling.
 
-Add Option 5 as a scheduled re-baseline for disaster recovery and for reclaiming metadata that incremental maintenance cannot reduce.
-Choose Option 3 before building extensive ledger-specific tooling if a single-table rewrite is acceptable for the expected retention horizon.
+Treat making current table state authoritative and periodic re-baselining as further steps.
+Schedule a re-baseline for disaster recovery and for reclaiming metadata that incremental maintenance cannot reduce.
+Choose the single-table design before building extensive ledger-specific tooling if it is acceptable for the expected retention horizon.
 
-## Actionable plan for Option 2
+## Implementation plan for the recommended design
 
 1. Define the ledger schema, compaction id, source-manifest format, and raw and snapshot retention settings.
 2. Publish compacted files first, then the ledger row, and make retries detect an existing compaction id.
@@ -175,11 +163,24 @@ Choose Option 3 before building extensive ledger-specific tooling if a single-ta
 - Maintenance has a fencing lease and partition-level coordination with compaction, demonstrated by concurrent-maintenance tests.
 - Recovery after raw expiry uses the compacted layer plus the ledger as the sole authority, records that choice, and still produces the same records as before maintenance.
 
-## Open questions
+## Open questions and decisions
 
-1. What raw retention is required for audit, replay, or exchange obligations, and is colder object storage acceptable before deletion?
-2. How long must compacted history and snapshots remain for time travel, and can recovery rely on compacted files alone?
-3. Should the archive keep a separate raw layer after compaction, or can current table state become the only source of truth?
-4. Which rewrite and orphan-removal operations can use emerging upstream iceberg-rust actions or helper crates, and where must the service fall back to in-process implementations?
-5. Does the catalog support table renames or aliases for a re-baseline swap, and what validation is required before the old generation is deleted?
-6. Should raw-table cleanup use in-place rewrites or periodic rebuilds from the unprocessed tail, and what metadata-churn budget applies?
+Each decision is deliberately conservative because the archive is a primary data asset.
+
+1. **What raw retention is required for audit, replay, or exchange obligations, and is colder object storage acceptable before deletion?**
+   Retain raw objects for at least 90 days after their compacted representation and ledger entry are durable, and use 365 days as the default until audit, replay, and exchange obligations are confirmed. Make retention configurable per archive kind, but reject values below 90 days. Colder storage is acceptable after 30 days as a storage-class transition, such as S3 Intelligent-Tiering or Glacier Instant Retrieval, provided objects remain readable and retrievable. Do not attach an age-based expiration to raw objects; only the maintenance runner may delete them after the handoff, raw-table, and retention conditions are all satisfied.
+
+2. **How long must compacted history and snapshots remain for time travel, and can recovery rely on compacted files alone?**
+   Keep at least 10 compacted snapshots and 30 days of snapshot history as a hard floor, and use 90 days as the default when time-travel requirements are not yet confirmed. Never expire a snapshot or file that is still needed by an in-flight compaction or maintenance batch. Recovery cannot rely on compacted files alone while a raw tail exists. It must use compacted files plus the authoritative processed-source state, and after raw expiry it must record that it used the compacted layer plus the ledger rather than falling back to raw objects.
+
+3. **Should the archive keep a separate raw layer after compaction, or can current table state become the only source of truth?**
+   Keep the separate raw layer during the initial implementation and for the full raw-retention period. Do not make the current table the only source of truth until the single-table design in Further steps is implemented and proven to preserve the exactly-once handoff through crashes, snapshot expiry, orphan cleanup, and re-baseline. Recovery must keep using the dual-layer handoff until that cutover is complete.
+
+4. **Which rewrite and orphan-removal operations can use emerging upstream iceberg-rust actions or helper crates, and where must the service fall back to in-process implementations?**
+   Use upstream actions for snapshot expiry, orphan-file cleanup, metadata cleanup, and compacted-file rewriting whenever the pinned iceberg-rust version exposes an action with the required fencing, dry-run, and durability semantics. Fall back to in-process code only for the ledger and source-manifest work, raw-table entry removal or rebuild, and any rewrite not yet covered by an upstream transactional action. Keep those fallbacks behind thin interfaces, test them against the real REST catalog and S3, and do not perform ad hoc manifest surgery.
+
+5. **Does the catalog support table renames or aliases for a re-baseline swap, and what validation is required before the old generation is deleted?**
+   Require an atomic catalog rename or a stable alias for the preferred swap. If the catalog cannot provide one, use a new table generation with a controlled dual-read cutover. Before deleting the old generation, validate per-partition row counts and checksums, the exactly-one-copy handoff invariant, successful recovery from the new generation, and that every reader and writer uses it. Keep the old generation read-only for a rollback window of at least 30 days, and never delete it in the same run that performs the swap.
+
+6. **Should raw-table cleanup use in-place rewrites or periodic rebuilds from the unprocessed tail, and what metadata-churn budget applies?**
+   Default to periodic rebuilds from the unprocessed tail because they are bounded, restartable, and easier to validate against the ledger. Use in-place rewrites only for small, explicitly bounded partitions where a rebuild is too expensive, and require a dry run plus back-pressure. Budget at most one raw-table rewrite commit per partition per maintenance cycle, cap total maintenance commits and bytes per hour, and pause with an alert before metadata growth exceeds a configured weekly threshold, for example 10 percent, or before the metadata-log or manifest count reaches its alert limit.
