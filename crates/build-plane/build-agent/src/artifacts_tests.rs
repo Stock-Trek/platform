@@ -222,7 +222,9 @@ fn validates_user_generated_algorithm_sources() {
     let modules = root.path().join("mod.rs");
     std_fs::write(&modules, b"// module declarations\n").unwrap();
 
-    Artifacts::validate_user_generated(&[modules, algorithm]).unwrap();
+    let result = Artifacts::validate_user_generated(&[modules, algorithm]);
+
+    assert!(result.is_ok());
 }
 
 #[test]
@@ -237,7 +239,9 @@ fn accepts_mod_rs_alongside_algorithm_sources() {
     let modules = root.path().join("mod.rs");
     std_fs::write(&modules, b"pub mod algorithm;\n").unwrap();
 
-    Artifacts::validate_user_generated(&[algorithm, modules]).unwrap();
+    let result = Artifacts::validate_user_generated(&[algorithm, modules]);
+
+    assert!(result.is_ok());
 }
 
 #[test]

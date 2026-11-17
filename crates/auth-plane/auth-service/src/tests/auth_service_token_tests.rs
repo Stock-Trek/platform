@@ -55,8 +55,15 @@ async fn concurrent_duplicate_adds_only_create_one_token() {
 async fn deleting_a_missing_token_is_idempotent() {
     let service = TestFixture::service();
 
-    service.delete_token("ghost", Utc::now()).await.unwrap();
-    service.delete_token("ghost", Utc::now()).await.unwrap();
+    let first = service.delete_token("ghost", Utc::now()).await;
+    let second = service.delete_token("ghost", Utc::now()).await;
+
+    assert!(first.is_ok());
+    assert!(second.is_ok());
+    assert!(matches!(
+        service.token("ghost").await,
+        Err(PlatformError::Auth(AuthError::UnknownToken { .. }))
+    ));
 }
 
 #[tokio::test]
