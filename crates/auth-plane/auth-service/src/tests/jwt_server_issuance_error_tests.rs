@@ -14,7 +14,7 @@ use std::{
     sync::Arc,
     time::{Duration, SystemTime},
 };
-use tokio::task::JoinHandle;
+use tokio::{net::TcpListener, task::JoinHandle};
 
 const ACCESS_KEY: &str = "AKIDRUNNER";
 const STORE_ERROR: &str = "injected store failure";
@@ -84,11 +84,9 @@ impl Fixture {
         let service = AuthServiceBuilder::new()
             .store(Arc::new(FailingStore::new(retryable)))
             .build();
-        let server =
-            JwtServer::bind_with_sigv4("127.0.0.1:0".parse().unwrap(), service, Self::sigv4())
-                .await
-                .unwrap();
-        let address = server.local_addr().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = JwtServer::new(listener, service, Self::sigv4());
         let handle = tokio::spawn(server.serve());
         (format!("http://{address}/jwt"), handle)
     }

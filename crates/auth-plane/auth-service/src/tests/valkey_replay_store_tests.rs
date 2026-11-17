@@ -155,7 +155,7 @@ async fn keys_include_the_configured_prefix_and_nonce_identity() {
     let store = ValkeyReplayFixture::store(&url).await;
     let key = ValkeyReplayFixture::key("token-a", "nonce-a");
 
-    assert_eq!(store.key_for_test(&key), "test-replay:token-a:nonce-a");
+    assert_eq!(store.key(&key), "test-replay:token-a:nonce-a");
 }
 
 #[tokio::test]

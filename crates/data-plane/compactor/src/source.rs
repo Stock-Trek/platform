@@ -28,20 +28,21 @@ pub struct S3ArchiveSource {
 }
 
 impl S3ArchiveSource {
-    #[cfg(test)]
-    pub(crate) fn for_test(
+    pub fn new(
         catalog: Arc<dyn ArchiveCatalog>,
         lister: Arc<dyn ObjectLister>,
         bucket: Bucket,
         prefix: String,
+        min_source_files: usize,
+        settle_millis: i64,
     ) -> Self {
         Self {
             lister,
             catalog,
             bucket,
             prefix,
-            settle_millis: 0,
-            min_source_files: 1,
+            settle_millis,
+            min_source_files,
             inventory: Mutex::new(RawInventory::default()),
         }
     }
@@ -52,15 +53,14 @@ impl S3ArchiveSource {
     ) -> PlatformResult<Self> {
         let lister = Arc::new(S3ObjectLister::new(S3::s3_client().await));
         let settle_millis = i64::try_from(config.settle.as_millis()).unwrap_or(i64::MAX);
-        Ok(Self {
-            lister,
+        Ok(Self::new(
             catalog,
-            bucket: Bucket::new(config.s3_bucket.clone()),
-            prefix: config.s3_prefix.trim_matches('/').to_string(),
+            lister,
+            Bucket::new(config.s3_bucket.clone()),
+            config.s3_prefix.trim_matches('/').to_string(),
+            config.min_source_files,
             settle_millis,
-            min_source_files: config.min_source_files,
-            inventory: Mutex::new(RawInventory::default()),
-        })
+        ))
     }
 }
 

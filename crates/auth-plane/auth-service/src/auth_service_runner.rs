@@ -3,9 +3,10 @@ use crate::{
     VaultTokenStore, jwt_server::JwtServer, jwt_server_config::JwtServerConfig,
 };
 use chrono::Duration;
-use platform_errors::PlatformResult;
+use platform_errors::{PlatformError, PlatformResult};
 use platform_runtime::{HealthRunner, Service};
 use std::sync::Arc;
+use tokio::net::TcpListener;
 
 const SERVICE: Service = Service::new("platform-auth-service");
 
@@ -30,9 +31,10 @@ impl AuthServiceRunner {
             Arc::new(config.jwt_signing_key()?),
             usage,
         )?;
-        let server =
-            JwtServer::bind_with_sigv4(config.bind_address(), service, config.sigv4().clone())
-                .await?;
+        let listener = TcpListener::bind(config.bind_address())
+            .await
+            .map_err(PlatformError::external)?;
+        let server = JwtServer::new(listener, service, config.sigv4().clone());
         let health = HealthRunner::from_service_env("AUTH_SERVICE").await?;
         health.mark_ready();
         health.run(server.serve()).await

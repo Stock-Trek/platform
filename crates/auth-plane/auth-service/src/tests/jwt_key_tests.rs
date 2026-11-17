@@ -6,6 +6,7 @@ use crate::{
 use chrono::{Duration, Utc};
 use jsonwebtoken::{Algorithm, decode_header, jwk::JwkSet};
 use platform_sigv4::{SigV4Config, SigV4Registry};
+use tokio::net::TcpListener;
 
 const JWKS_ACCESS_KEY: &str = "AKIDJWKS";
 
@@ -134,14 +135,9 @@ fn signs_with_an_imported_pkcs8_pem_key() {
 #[tokio::test]
 async fn serves_jwks_at_the_well_known_endpoint() {
     let service = TestFixture::service();
-    let server = JwtServer::bind_with_sigv4(
-        "127.0.0.1:0".parse().unwrap(),
-        service.clone(),
-        Fixture::sigv4(),
-    )
-    .await
-    .unwrap();
-    let address = server.local_addr().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let server = JwtServer::new(listener, service.clone(), Fixture::sigv4());
     let task = tokio::spawn(server.serve());
 
     let response = reqwest::get(format!("http://{address}/.well-known/jwks.json"))

@@ -96,7 +96,7 @@ pub use memory_token_store_tests::MemoryTokenStore;
 pub use memory_token_usage_queue_tests::MemoryTokenUsageQueue;
 pub use order_jwt::OrderJwtClaims;
 pub use signed_order_request::SignedOrderRequest;
-pub use sqs_token_audit_log::SqsTokenAuditLog;
+pub use sqs_token_audit_log::{AuditQueue, SqsTokenAuditLog};
 pub use token_audit::{TokenAuditAction, TokenAuditEvent, TokenAuditLog};
 pub use token_audit_relay::TokenAuditRelay;
 pub use token_cache_config::TokenCacheConfig;

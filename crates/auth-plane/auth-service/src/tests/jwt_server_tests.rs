@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use std::{collections::BTreeMap, time::Duration, time::SystemTime};
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
-    net::TcpStream,
+    net::{TcpListener, TcpStream},
     task::JoinHandle,
     time::timeout,
 };
@@ -27,11 +27,9 @@ impl Fixture {
     async fn server() -> (String, JoinHandle<platform_errors::PlatformResult<()>>) {
         let service = TestFixture::service();
         TestFixture::add_token(&service, "token-a", OWNER).await;
-        let server =
-            JwtServer::bind_with_sigv4("127.0.0.1:0".parse().unwrap(), service, Self::sigv4())
-                .await
-                .unwrap();
-        let address = server.local_addr().unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = JwtServer::new(listener, service, Self::sigv4());
         let handle = tokio::spawn(server.serve());
         (format!("http://{address}/jwt"), handle)
     }
