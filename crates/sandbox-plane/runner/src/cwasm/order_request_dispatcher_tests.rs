@@ -265,7 +265,9 @@ async fn ignores_actions_that_do_not_place_orders() {
     let dispatcher = Fixture::dispatcher("http://127.0.0.1:1/order-requests");
     let action = serde_json::to_string(&ResolvedAction::CancelAllOrders { tag: None }).unwrap();
 
-    dispatcher.dispatch([action]).await.unwrap();
+    let result = dispatcher.dispatch([action]).await;
+
+    assert!(result.is_ok());
 }
 
 #[tokio::test]

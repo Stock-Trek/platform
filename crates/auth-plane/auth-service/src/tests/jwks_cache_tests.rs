@@ -198,5 +198,8 @@ async fn uses_a_stale_cache_when_the_jwks_endpoint_is_unavailable() {
     tokio::time::pause();
     tokio::time::advance(StdDuration::from_millis(10)).await;
 
-    cache.verify(issued.token(), now).await.unwrap();
+    let claims = cache.verify(issued.token(), now).await.unwrap();
+
+    assert_eq!(claims.token_id(), "token-a");
+    assert_eq!(claims.owner(), OWNER);
 }
