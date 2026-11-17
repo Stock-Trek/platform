@@ -1,4 +1,4 @@
-use crate::aws_ops::{post_policy::PresignedPost, request::BuildRequest};
+use crate::aws_ops::{post_policy::ArtifactPost, request::BuildRequest};
 use platform_messages::{BuildRequest as BuildRequestPayload, GitSource, SqsRefType};
 use std::{collections::BTreeMap, num::NonZeroU64};
 
@@ -14,7 +14,7 @@ fn request(commit_hash: Option<&str>, max_artifact_size_bytes: NonZeroU64) -> Bu
         ref_type: SqsRefType::Branch,
         commit_hash: commit_hash.map(str::to_string),
         signed_get_url: "https://example.com/source.zip".to_string(),
-        signed_post: PresignedPost::for_test(
+        signed_post: ArtifactPost::for_test(
             "https://example.com/upload".to_string(),
             BTreeMap::from([
                 ("key".to_string(), "artifacts/${filename}".to_string()),

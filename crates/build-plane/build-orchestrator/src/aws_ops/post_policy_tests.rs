@@ -1,4 +1,4 @@
-use crate::aws_ops::post_policy::{PresignedPost, PresignedPostSigner};
+use crate::aws_ops::post_policy::{ArtifactPost, ArtifactPostSigner};
 use aws_credential_types::Credentials;
 use base64::{Engine as _, engine::general_purpose::STANDARD as BASE64};
 use serde_json::{Value, json};
@@ -8,7 +8,7 @@ use std::{
     time::{Duration, SystemTime},
 };
 
-impl PresignedPost {
+impl ArtifactPost {
     pub fn for_test(
         url: String,
         fields: BTreeMap<String, String>,
@@ -31,7 +31,7 @@ fn signs_post_policy_with_session_token() {
         None,
         "test",
     );
-    let signer = PresignedPostSigner::new(
+    let signer = ArtifactPostSigner::new(
         "stock-trek-user-artifacts".to_string(),
         "us-east-1".to_string(),
         None,
