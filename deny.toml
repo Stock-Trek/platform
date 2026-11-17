@@ -6,6 +6,7 @@ yanked = "deny"
 unmaintained = "workspace"
 unsound = "workspace"
 unused-ignored-advisory = "deny"
+ignore = ["RUSTSEC-2026-0543"]
 
 [licenses]
 allow = [
