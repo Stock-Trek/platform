@@ -1,6 +1,6 @@
 use super::{AdminApi, ApiServer, ReadApi, RequestHandler};
 use crate::{MemoryOwnershipStore, RegistryService};
-use hyper::StatusCode;
+use hyper::{Method, StatusCode};
 use platform_auth_service::JwksCache;
 use std::{
     io::{Read, Write},
@@ -25,7 +25,7 @@ impl Fixture {
 
     async fn status_and_allow(
         handler: Arc<dyn RequestHandler>,
-        method: &'static str,
+        method: Method,
         path: &'static str,
         token: Option<&'static str>,
     ) -> (u16, Option<String>) {
@@ -42,10 +42,11 @@ impl Fixture {
                 })
                 .await
         });
-        let response =
-            tokio::task::spawn_blocking(move || Self::request(address, method, path, token))
-                .await
-                .expect("request");
+        let response = tokio::task::spawn_blocking(move || {
+            Self::request(address, method.as_str(), path, token)
+        })
+        .await
+        .expect("request");
         let _ = shutdown_tx.send(true);
         serving.await.expect("join").expect("serve");
         Self::parse(&response)
@@ -82,17 +83,49 @@ impl Fixture {
 }
 
 #[tokio::test]
+async fn admin_health_endpoints_accept_get_and_head() {
+    for path in ["/healthz", "/readyz"] {
+        for method in [Method::GET, Method::HEAD] {
+            let (status, allow) =
+                Fixture::status_and_allow(Fixture::admin(), method, path, None).await;
+            assert_eq!(status, StatusCode::NO_CONTENT.as_u16());
+            assert_eq!(allow, None);
+        }
+    }
+}
+
+#[tokio::test]
+async fn read_health_endpoints_accept_get_and_head() {
+    for path in ["/healthz", "/readyz"] {
+        for method in [Method::GET, Method::HEAD] {
+            let (status, allow) =
+                Fixture::status_and_allow(Fixture::read(), method, path, None).await;
+            assert_eq!(status, StatusCode::NO_CONTENT.as_u16());
+            assert_eq!(allow, None);
+        }
+    }
+}
+
+#[tokio::test]
 async fn admin_health_reports_allowed_methods() {
     let (status, allow) =
-        Fixture::status_and_allow(Fixture::admin(), "POST", "/healthz", None).await;
+        Fixture::status_and_allow(Fixture::admin(), Method::POST, "/healthz", None).await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED.as_u16());
-    assert_eq!(allow.as_deref(), Some("GET"));
+    assert_eq!(allow.as_deref(), Some("GET, HEAD"));
+}
+
+#[tokio::test]
+async fn read_health_reports_allowed_methods() {
+    let (status, allow) =
+        Fixture::status_and_allow(Fixture::read(), Method::DELETE, "/readyz", None).await;
+    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED.as_u16());
+    assert_eq!(allow.as_deref(), Some("GET, HEAD"));
 }
 
 #[tokio::test]
 async fn admin_ownership_reports_allowed_methods() {
     let (status, allow) =
-        Fixture::status_and_allow(Fixture::admin(), "GET", "/v1/ownership", None).await;
+        Fixture::status_and_allow(Fixture::admin(), Method::GET, "/v1/ownership", None).await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED.as_u16());
     assert_eq!(allow.as_deref(), Some("POST, DELETE"));
 }
@@ -100,15 +133,7 @@ async fn admin_ownership_reports_allowed_methods() {
 #[tokio::test]
 async fn read_accounts_reports_allowed_methods() {
     let (status, allow) =
-        Fixture::status_and_allow(Fixture::read(), "POST", "/v1/accounts", None).await;
-    assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED.as_u16());
-    assert_eq!(allow.as_deref(), Some("GET"));
-}
-
-#[tokio::test]
-async fn read_health_reports_allowed_methods() {
-    let (status, allow) =
-        Fixture::status_and_allow(Fixture::read(), "DELETE", "/readyz", None).await;
+        Fixture::status_and_allow(Fixture::read(), Method::POST, "/v1/accounts", None).await;
     assert_eq!(status, StatusCode::METHOD_NOT_ALLOWED.as_u16());
     assert_eq!(allow.as_deref(), Some("GET"));
 }
