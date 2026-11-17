@@ -3927,6 +3927,7 @@ dependencies = [
  "iceberg",
  "iceberg-catalog-rest",
  "iceberg-storage-opendal",
+ "parking_lot",
  "parquet",
  "platform-aws",
  "platform-config",

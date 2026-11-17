@@ -2,6 +2,7 @@ use super::S3ParquetSink;
 use async_trait::async_trait;
 use aws_sdk_s3::Client as S3Client;
 use aws_sdk_s3::config::{Credentials, Region};
+use parking_lot::Mutex;
 use platform_archive::{
     ArchiveCatalog, ArchiveIcebergTable, ArchiveRegistration, Bucket, CommitContext,
     ConflictDetails, IcebergDataFile, ObjectKey, ObjectStore, ParquetRowCounter, RegisterOutcome,
@@ -10,8 +11,8 @@ use platform_archive::{
 use platform_errors::PlatformResult;
 use platform_lease::{InMemoryLeaseStore, LeaseGuard, LeaseRequest, LeaseScope, LeaseStore};
 use std::collections::{HashSet, VecDeque};
+use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 struct FakeCatalog {
@@ -46,21 +47,19 @@ impl ArchiveCatalog for FakeCatalog {
             .into_iter()
             .collect::<Vec<_>>();
         outputs.sort();
-        self.batches.lock().unwrap().push(outputs.clone());
+        self.batches.lock().push(outputs.clone());
         let outcome = self
             .outcomes
             .lock()
-            .unwrap()
             .pop_front()
             .unwrap_or(RegisterOutcome::Applied);
         if let RegisterOutcome::Conflict(conflict) = &outcome {
             self.live
                 .lock()
-                .unwrap()
                 .extend(conflict.live_outputs.iter().cloned());
         }
         if matches!(outcome, RegisterOutcome::Applied) {
-            self.live.lock().unwrap().extend(outputs.iter().cloned());
+            self.live.lock().extend(outputs.iter().cloned());
         }
         Ok(outcome)
     }
@@ -69,7 +68,7 @@ impl ArchiveCatalog for FakeCatalog {
         &self,
         _table: ArchiveIcebergTable,
     ) -> PlatformResult<HashSet<String>> {
-        Ok(self.live.lock().unwrap().clone())
+        Ok(self.live.lock().clone())
     }
 
     async fn processed_source_files(
@@ -110,7 +109,7 @@ impl FakeObjectStore {
     }
 
     fn observed_continuations(&self) -> Vec<Option<String>> {
-        self.observed_continuations.lock().unwrap().clone()
+        self.observed_continuations.lock().clone()
     }
 }
 
@@ -126,13 +125,12 @@ impl ObjectStore for FakeObjectStore {
         let call = self.calls.fetch_add(1, Ordering::SeqCst) + 1;
         self.observed_continuations
             .lock()
-            .unwrap()
             .push(continuation_token.map(str::to_string));
         if call == self.delayed_call {
             tokio::time::sleep(self.delay).await;
         }
-        let objects = self.pages.lock().unwrap().pop_front().unwrap_or_default();
-        let next_continuation_token = if self.pages.lock().unwrap().is_empty() {
+        let objects = self.pages.lock().pop_front().unwrap_or_default();
+        let next_continuation_token = if self.pages.lock().is_empty() {
             None
         } else {
             Some(format!("page-{call}"))
@@ -268,7 +266,7 @@ async fn a_recovery_conflict_retries_only_the_uncommitted_files() {
     .unwrap();
 
     assert_eq!(catalog.calls.load(Ordering::SeqCst), 2);
-    let batches = catalog.batches.lock().unwrap();
+    let batches = catalog.batches.lock();
     assert_eq!(batches[0].len(), 2);
     assert_eq!(batches[1], vec!["s3://archive/raw/b.parquet".to_string()]);
 }
@@ -388,7 +386,7 @@ async fn recovery_pages_respect_both_file_and_byte_boundaries() {
 
     assert_eq!(catalog.calls.load(Ordering::SeqCst), 3);
     {
-        let batches = catalog.batches.lock().unwrap();
+        let batches = catalog.batches.lock();
         assert!(batches.iter().all(|batch| batch.len() == 1));
     }
 
@@ -422,7 +420,7 @@ async fn recovery_registers_each_object_once_across_listing_pages() {
     sink.recover_uncommitted().await.unwrap();
 
     assert_eq!(catalog.calls.load(Ordering::SeqCst), 3);
-    let batches = catalog.batches.lock().unwrap();
+    let batches = catalog.batches.lock();
     let mut registered = batches.iter().flatten().cloned().collect::<Vec<_>>();
     registered.sort();
     registered.dedup();
@@ -460,7 +458,7 @@ async fn recovery_registers_only_the_remainder_after_a_cross_page_conflict() {
     sink.recover_uncommitted().await.unwrap();
 
     assert_eq!(catalog.calls.load(Ordering::SeqCst), 3);
-    let batches = catalog.batches.lock().unwrap();
+    let batches = catalog.batches.lock();
     assert_eq!(batches[0].len(), 2);
     assert_eq!(
         batches[1],
@@ -483,7 +481,6 @@ async fn recovery_restart_skips_objects_that_are_already_live() {
     catalog
         .live
         .lock()
-        .unwrap()
         .insert(RecoveryFixture::location(&first));
     let leases = Arc::new(InMemoryLeaseStore::new());
     let mut sink = RecoveryFixture::sink_with(catalog.clone(), leases, objects);
@@ -492,7 +489,7 @@ async fn recovery_restart_skips_objects_that_are_already_live() {
     sink.recover_uncommitted().await.unwrap();
 
     assert_eq!(catalog.calls.load(Ordering::SeqCst), 1);
-    let batches = catalog.batches.lock().unwrap();
+    let batches = catalog.batches.lock();
     assert_eq!(
         batches[0],
         vec![RecoveryFixture::location(&RecoveryFixture::object("b"))]

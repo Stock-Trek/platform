@@ -3,9 +3,10 @@ use crate::{
     MaintenanceStageExecutor, StageOutcome,
 };
 use async_trait::async_trait;
+use parking_lot::Mutex;
 use platform_errors::PlatformResult;
 use platform_lease::{CommitAuthorizer, InMemoryLeaseStore, LeaseRequest, LeaseScope, LeaseStore};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Default)]
@@ -18,7 +19,7 @@ struct FakeExecutor {
 #[async_trait]
 impl MaintenanceStageExecutor for Arc<FakeExecutor> {
     async fn plan(&self, stage: MaintenanceStage) -> PlatformResult<MaintenancePlan> {
-        self.stages.lock().unwrap().push(stage);
+        self.stages.lock().push(stage);
         Ok(MaintenancePlan::dry_run(stage, Vec::new()))
     }
 
@@ -27,8 +28,8 @@ impl MaintenanceStageExecutor for Arc<FakeExecutor> {
         plan: MaintenancePlan,
         _authorizer: Arc<dyn CommitAuthorizer>,
     ) -> PlatformResult<StageOutcome> {
-        *self.applied.lock().unwrap() = true;
-        if let Some(block) = self.block.lock().unwrap().clone() {
+        *self.applied.lock() = true;
+        if let Some(block) = self.block.lock().clone() {
             return Ok(StageOutcome::blocked(
                 plan.stage,
                 plan.candidates.len(),
@@ -69,10 +70,10 @@ async fn dry_runs_plan_every_stage_without_applying() {
     assert!(report.completed);
     assert_eq!(report.stages.len(), MaintenanceStage::all().len());
     assert_eq!(
-        executor.stages.lock().unwrap().as_slice(),
+        executor.stages.lock().as_slice(),
         MaintenanceStage::all().as_slice()
     );
-    assert!(!*executor.applied.lock().unwrap());
+    assert!(!*executor.applied.lock());
 }
 
 #[tokio::test]
@@ -85,7 +86,7 @@ async fn apply_runs_in_stage_order() {
 
     assert!(report.completed);
     assert_eq!(report.stages.len(), 4);
-    assert!(*executor.applied.lock().unwrap());
+    assert!(*executor.applied.lock());
 }
 
 #[tokio::test]
@@ -123,7 +124,7 @@ async fn stages_must_be_unique_and_ordered() {
 #[tokio::test]
 async fn blocked_stages_stop_later_stages() {
     let executor = Arc::new(FakeExecutor::default());
-    *executor.block.lock().unwrap() = Some(MaintenanceBlock::new("missing", "required file", true));
+    *executor.block.lock() = Some(MaintenanceBlock::new("missing", "required file", true));
     let store = Arc::new(InMemoryLeaseStore::new());
     let runner = runner(executor.clone(), store).unwrap();
 
@@ -132,7 +133,7 @@ async fn blocked_stages_stop_later_stages() {
     assert!(!report.completed);
     assert_eq!(report.stages.len(), 1);
     assert!(report.stages[0].is_blocked());
-    assert_eq!(executor.stages.lock().unwrap().len(), 1);
+    assert_eq!(executor.stages.lock().len(), 1);
 }
 
 #[tokio::test]
@@ -151,6 +152,6 @@ async fn a_held_lease_blocks_maintenance() {
 
     assert!(!report.acquired);
     assert!(!report.completed);
-    assert!(executor.stages.lock().unwrap().is_empty());
+    assert!(executor.stages.lock().is_empty());
     store.release(&lease).await.unwrap();
 }

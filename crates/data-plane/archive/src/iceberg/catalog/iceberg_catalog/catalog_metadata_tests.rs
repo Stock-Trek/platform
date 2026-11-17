@@ -15,10 +15,11 @@ use iceberg::{
     },
     table::Table,
 };
+use parking_lot::Mutex;
 use platform_types::TimestampMilliseconds;
 use std::{
     collections::{HashMap, HashSet, VecDeque},
-    sync::{Arc, Mutex},
+    sync::Arc,
 };
 
 impl ClaimIndexPage {
@@ -138,11 +139,11 @@ impl FakeObjectStore {
     }
 
     fn observed_continuations(&self) -> Vec<Option<String>> {
-        self.observed_continuations.lock().unwrap().clone()
+        self.observed_continuations.lock().clone()
     }
 
     fn deleted(&self) -> Vec<String> {
-        self.deleted.lock().unwrap().clone()
+        self.deleted.lock().clone()
     }
 
     fn object(key: impl Into<String>, last_modified_millis: i64) -> S3Object {
@@ -165,16 +166,12 @@ impl ObjectStore for FakeObjectStore {
     ) -> platform_errors::PlatformResult<S3ObjectPage> {
         self.observed_continuations
             .lock()
-            .unwrap()
             .push(continuation_token.map(str::to_string));
-        let objects = self.pages.lock().unwrap().pop_front().unwrap_or_default();
-        let next_continuation_token = if self.pages.lock().unwrap().is_empty() {
+        let objects = self.pages.lock().pop_front().unwrap_or_default();
+        let next_continuation_token = if self.pages.lock().is_empty() {
             None
         } else {
-            Some(format!(
-                "page-{}",
-                self.observed_continuations.lock().unwrap().len()
-            ))
+            Some(format!("page-{}", self.observed_continuations.lock().len()))
         };
         Ok(S3ObjectPage {
             objects,
@@ -187,7 +184,7 @@ impl ObjectStore for FakeObjectStore {
         _bucket: &Bucket,
         key: &ObjectKey,
     ) -> platform_errors::PlatformResult<()> {
-        self.deleted.lock().unwrap().push(key.as_str().to_string());
+        self.deleted.lock().push(key.as_str().to_string());
         Ok(())
     }
 }
