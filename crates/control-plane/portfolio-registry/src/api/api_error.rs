@@ -51,6 +51,13 @@ impl ApiError {
         Self::new(StatusCode::PAYLOAD_TOO_LARGE, "request body is too large")
     }
 
+    pub fn request_timeout(message: impl Into<String>) -> Self {
+        Self {
+            status: StatusCode::REQUEST_TIMEOUT,
+            message: message.into(),
+        }
+    }
+
     pub fn internal(message: impl Into<String>) -> Self {
         Self::new(StatusCode::INTERNAL_SERVER_ERROR, message)
     }
