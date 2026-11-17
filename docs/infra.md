@@ -551,6 +551,5 @@ authority, record that choice, and never silently fall back to missing raw objec
 
 - [Environment variables](environment-variables.md)
 - [Health checks](health-checks.md)
-- [Archive retention and Iceberg maintenance plan](archive-maintenance-plan.md)
 - [Market data services](market-data-services.md)
 - [Front-end API](API.md)
