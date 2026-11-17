@@ -88,8 +88,10 @@ Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
   Trading pairs are `{"base": "btc", "quote": "usdt"}`.
 - List endpoints paginate with `limit` (default `50`, maximum `200`) and an opaque `cursor`.
   Responses wrap arrays as `{ "data": [...], "nextCursor": "..." | null }`.
+  Lists are newest first by creation time unless an endpoint says otherwise.
 - `POST` endpoints that create resources or trigger work accept an `Idempotency-Key` header.
   Retries with the same key return the original response instead of creating a duplicate.
+  Reusing a key with a different request body fails with `409 conflict`.
   Keys are scoped to the owner and endpoint and are remembered for 24 hours; a retry after that window may create a duplicate.
 - Mutable resources expose a `version` integer.
   Mutations may be conditioned with `If-Match: <version>` and fail with `409 conflict` when the version does not match; endpoints that require it say so below.
@@ -124,6 +126,8 @@ Errors use RFC 9457 problem details:
 | `internal` | 500 | Unexpected server error |
 | `unavailable` | 503 | Dependency is down; retry with backoff |
 
+Every response carries an `X-Request-Id` header: the API echoes a client-supplied `X-Request-Id` or generates one, and problem details repeat it as `requestId` so front-end error reports can be matched to server logs.
+
 `stale` mirrors the portfolio service staleness policy (`allow`, `degrade`, `reject`) and applies where an action authorizes against portfolio data: enabling a bot and triggering an ad-hoc run.
 In `degrade` mode accepted-but-stale actions are flagged in responses so the front-end can warn.
 `rate_limited` responses carry a `Retry-After` header with the number of seconds to wait before retrying.
@@ -132,15 +136,17 @@ In `degrade` mode accepted-but-stale actions are flagged in responses so the fro
 
 Browsers cannot set `Authorization` on WebSocket upgrades, so stream connections authenticate with a short-lived single-use ticket: `POST /v1/stream/ticket` requires a bearer token and returns `{ "ticket": "...", "expiresAt": "..." }`, and `GET /v1/stream?ticket=...` upgrades to a WebSocket after the ticket is redeemed.
 Tickets are valid for one upgrade before `expiresAt`, which is 60 seconds after issue.
-The client subscribes to channels, the server pushes JSON frames with a per-channel monotonically increasing `sequence` so clients can detect gaps and resume:
+The client subscribes to channels with `subscribe` actions and leaves them with `unsubscribe` actions; the server pushes JSON frames with a per-channel monotonically increasing `sequence`:
 
 ```json
 { "action": "subscribe", "channel": "portfolio.binance.main", "lastSequence": 41 }
 { "channel": "portfolio.binance.main", "sequence": 42, "data": { "...": "..." } }
 ```
 
+The server never replays history on any channel.
+A `lastSequence` older than the channel's current head is answered with a single gap frame, `{ "channel": "portfolio.binance.main", "gap": { "afterSequence": 41 } }`, and live frames continue after it; the client recovers by re-fetching state over REST (a portfolio snapshot for `portfolio` channels, build and run detail for the others).
+A subscribe that would exceed the per-connection subscription limit is rejected with an error frame and the connection stays open.
 The server pings every 30 seconds and closes connections that miss two pongs.
-On the `portfolio` channels, subscribing with `lastSequence` replays nothing (the read model is the resume point); on the `builds` and `runs` channels it only detects gaps, and missed state must be re-fetched over REST.
 Channels:
 
 | Channel | Frames |
@@ -148,7 +154,6 @@ Channels:
 | `portfolio.{cexId}.{accountId}` | Portfolio snapshots and order updates |
 | `builds.{algorithmId}` | Build state changes |
 | `runs.{botId}` | Run state changes |
-| `backtests.{backtestId}` | Backtest progress and partial results |
 
 ## Limits
 
@@ -157,6 +162,7 @@ Channels:
 | Concurrent backtests per owner | 2 |
 | Failed session attempts per source address | 10 per 15 minutes |
 | Ad-hoc runs per hour per bot | 12 |
+| API requests per owner | 120 per minute |
 | Concurrent stream subscriptions per connection | 32 |
 | Maximum request body size | 1 MiB |
 | Referenced build artifact size | `S3_MAX_ARTIFACT_SIZE_BYTES` |
@@ -256,7 +262,7 @@ The read model is rebuilt from the portfolio update stream, so snapshots carry t
 `GET /v1/portfolios` returns `{ "data": [ ...account snapshots... ], "nextCursor": null }` with one account snapshot per linked account, for dashboards.
 
 Live updates arrive on the `portfolio.{cexId}.{accountId}` stream channel.
-The channel frames carry the same body as the snapshot endpoint with the stream `sequence` in the envelope, and subscribing with `lastSequence` replays nothing (the read model is the resume point).
+The channel frames carry the same body as the snapshot endpoint with the stream `sequence` in the envelope, and the snapshot's `sequence` is the `lastSequence` to send on reconnect.
 
 ## Algorithms and builds
 
@@ -287,7 +293,7 @@ Algorithms and builds have independent lifecycles:
 | --- | --- |
 | `queued` | Accepted, waiting for the build agent |
 | `building` | Source fetched and compiling |
-| `ready` | Artifact stored with SHA-256 and Wasmtime version |
+| `ready` | Artifact stored with SHA-256 and Wasmtime version; strategies and preference schemas extracted |
 | `failed` | Compilation or packaging failed; `error` carries the reason |
 
 A build only becomes usable by bots when it is `ready`.
@@ -334,7 +340,7 @@ Algorithm list items identify the connected repository:
 
 `ref` uses the `heads/` or `tags/` form used by the build plane's source keys and defaults to the algorithm's `defaultRef`; `commit` pins an exact revision and defaults to the ref head.
 The response is `202` with the build representation.
-Builds are idempotent per `(ref, commit)`: re-triggering an existing build returns that build.
+Builds are idempotent per `(ref, commit)`: re-triggering an existing build returns that build, unless it is `failed`, in which case a new build is created so compilation can be retried.
 
 `GET .../builds/{buildId}` returns:
 
@@ -360,7 +366,7 @@ Build state changes are pushed on the `builds.{algorithmId}` stream channel.
 
 ### Strategies and preferences
 
-`GET .../strategies` enumerates the strategies compiled into a build by running the artifact's metadata command in the sandbox:
+`GET .../strategies` lists the strategies extracted from the build:
 
 ```json
 { "data": [ { "name": "momentum_v2", "description": "Window-cross momentum" } ], "nextCursor": null }
@@ -368,7 +374,7 @@ Build state changes are pushed on the `builds.{algorithmId}` stream channel.
 
 `GET .../strategies/{strategyName}/preferences` returns the JSON schema bots must satisfy in their `parameters` object.
 The schema is what the front-end renders as a parameter form.
-A build that fails to report metadata is treated as `failed`.
+Metadata is extracted once when the build finishes, by running the artifact's metadata command in the sandbox; a build that fails to report strategies and preference schemas is treated as `failed`, and these endpoints serve the stored metadata.
 
 ```json
 {
@@ -382,7 +388,7 @@ A build that fails to report metadata is treated as `failed`.
 ```
 
 Bots pick the build and strategy they run; they may pin an exact `buildId` or track an algorithm's `latestReadyBuildId`.
-Tracking upgrades happen only after the front-end has had a chance to validate parameters against the new build's preference schema, so bots re-validate on upgrade and fall back to the pinned build when validation fails.
+Tracking upgrades happen at run time, not at update time: the bot re-validates `parameters` against the new build's preference schema on every run and falls back to the previously used build when validation fails.
 
 ## Bots and runs
 
@@ -410,7 +416,7 @@ Creating a bot does not enable it implicitly: the first creation returns `disabl
 | Method | Path | Description |
 | --- | --- | --- |
 | `POST` | `/v1/bots` | Create a bot |
-| `GET` | `/v1/bots` | List bots |
+| `GET` | `/v1/bots` | List bots, filterable by `state` |
 | `GET` | `/v1/bots/{botId}` | Bot detail |
 | `PATCH` | `/v1/bots/{botId}` | Update configuration |
 | `POST` | `/v1/bots/{botId}/enable` | Enable the schedule |
@@ -462,7 +468,7 @@ Validation rules:
 - Every referenced account must be a linked, active account of the owner.
 - `schedule.kind` is `interval` (`everySeconds` ≥ 10) or `cron` (`expression` in five-field cron syntax plus `timezone`, an IANA time-zone name such as `Europe/Zurich`).
 
-`PATCH /v1/bots/{botId}` accepts the same fields minus `algorithmId`; changing the build or strategy re-validates `parameters` and fails with `400 validation_failed` on mismatch.
+`PATCH /v1/bots/{botId}` accepts the same fields minus `algorithmId`, applies only the fields present in the body, and re-validates `parameters` when the build or strategy changes, failing with `400 validation_failed` on mismatch.
 Bot mutations — `PATCH`, `enable`, `disable` — require `If-Match` with the current `version` and return the updated bot representation.
 
 A `buildId` of `latest` tracks the algorithm's `latestReadyBuildId`: every run resolves the current latest ready build and re-validates `parameters` against its preference schema, falling back to the previous build when validation fails.
@@ -506,7 +512,7 @@ Runs follow the run store lifecycle:
 `error.code` distinguishes client errors (bad strategy name, undecodable context or portfolio, invalid request) from server errors (timeouts, panics, resource limits, artifact download failures) using the runner exit-code taxonomy, so the front-end can tell "fix your bot" from "platform problem".
 
 `GET /v1/runs/{runId}/log` returns `302` to a pre-signed log URL when the log exists and `404` while the run is still pending or before upload completes.
-Pre-signed URLs expire with `S3_SIGNED_URL_EXPIRY_SECS` and are fetched by the browser directly from object storage.
+Pre-signed URLs expire with `S3_SIGNED_URL_EXPIRY_SECS` and are fetched by the browser directly from object storage, so the log bucket allows cross-origin reads from the allowlisted front-end origins.
 
 Run state changes are pushed on the `runs.{botId}` stream channel.
 
@@ -603,8 +609,8 @@ They are delivered twice: incrementally on the stream as each simulation finishe
 ```
 
 `GET /v1/backtests/{backtestId}/stream?ticket=...` upgrades to a WebSocket, using a stream ticket as described in [Streaming](#streaming).
-Frames are `{ "sequence": 7, "simulation": 13, "result": { ... } }` with `sequence` increasing per connection; a `complete` frame with no `simulation` field marks the collated result.
-The stream ends when the backtest reaches a terminal state; clients that reconnect mid-run receive only results not yet seen by their cursor, and clients that connect after the backtest finished receive the `complete` frame and the stream closes.
+Frames are `{ "sequence": 7, "simulation": 13, "result": { ... } }` with `sequence` increasing monotonically for the backtest across connections; a `complete` frame with no `simulation` field marks the collated result.
+The stream ends when the backtest reaches a terminal state; reconnecting clients pass `?cursor=<sequence>` for the last frame they saw and receive the stored results after it, and clients that connect after the backtest finished receive the `complete` frame and the stream closes.
 
 `DELETE /v1/backtests/{backtestId}` cancels queued and running backtests (`204`) and is idempotent on terminal backtests.
 

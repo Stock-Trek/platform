@@ -14,6 +14,7 @@ definitions are in [environment-variables.md](environment-variables.md) and prob
 | Build | Build orchestrator, Git webhook, Build agent | Lambda, S3, SQS, GitHub App credentials, SSM Parameter Store |
 | Control | Run invoker, Run store | Lambda, DynamoDB, S3 artifact and log buckets |
 | Sandbox | CWASM invoker, Runner | S3 artifacts, auth-service and portfolio order endpoints |
+| Front-end | Front-end API | Bot configuration and backtest stores, auth service (JWKS, minting, revocation), portfolio registry and service, build and control planes |
 
 All hosts need AWS region and credential chains, NTP synchronisation, TLS for every `https`/`wss`
 endpoint, and network access to every configured exchange.
@@ -552,3 +553,4 @@ authority, record that choice, and never silently fall back to missing raw objec
 - [Health checks](health-checks.md)
 - [Archive retention and Iceberg maintenance plan](archive-maintenance-plan.md)
 - [Market data services](market-data-services.md)
+- [Front-end API](API.md)
