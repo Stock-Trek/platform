@@ -65,6 +65,8 @@ struct FakeCatalog {
     state: Mutex<FakeCatalogState>,
     orphans: HashMap<ArchiveIcebergTable, Vec<MaintenanceCandidate>>,
     data_files: HashMap<ArchiveIcebergTable, Vec<IcebergDataFile>>,
+    metadata_files: Mutex<u64>,
+    metadata_growth: u64,
 }
 
 impl FakeCatalog {
@@ -109,6 +111,7 @@ impl FakeCatalog {
                 })
                 .collect(),
             quarantined: Vec::new(),
+            partition_spec_changed: false,
             backlog: Some(backlog),
         }
     }
@@ -215,12 +218,24 @@ impl ArchiveCatalog for FakeCatalog {
                 objects: Vec::new(),
                 candidates: Vec::new(),
                 quarantined: Vec::new(),
+                partition_spec_changed: false,
                 backlog: None,
             }))
     }
 
     async fn raw_table_references(&self, _kind: ArchiveKind) -> PlatformResult<HashSet<String>> {
         Ok(HashSet::new())
+    }
+
+    async fn metadata_file_count(
+        &self,
+        _table: ArchiveIcebergTable,
+        _client: &dyn ObjectStore,
+    ) -> PlatformResult<u64> {
+        let mut count = self.metadata_files.lock();
+        let current = *count;
+        *count += self.metadata_growth;
+        Ok(current)
     }
 
     async fn remove_raw_entries(
@@ -278,6 +293,8 @@ fn outcome(report: &crate::MaintenanceRunReport, stage: MaintenanceStage) -> Sta
 #[tokio::test]
 async fn applies_all_four_stages_in_order() -> PlatformResult<()> {
     let catalog = Arc::new(FakeCatalog {
+        metadata_files: Mutex::new(0),
+        metadata_growth: 0,
         state: Mutex::new(FakeCatalogState::default()),
         orphans: HashMap::new(),
         data_files: HashMap::from([(
@@ -313,6 +330,8 @@ async fn applies_all_four_stages_in_order() -> PlatformResult<()> {
 #[tokio::test]
 async fn dry_run_plans_without_applying() -> PlatformResult<()> {
     let catalog = Arc::new(FakeCatalog {
+        metadata_files: Mutex::new(0),
+        metadata_growth: 0,
         state: Mutex::new(FakeCatalogState::default()),
         orphans: HashMap::from([(
             ArchiveIcebergTable::RawEvents,
@@ -345,6 +364,8 @@ async fn dry_run_plans_without_applying() -> PlatformResult<()> {
 #[tokio::test]
 async fn rewrite_blocked_when_partition_lease_is_held() -> PlatformResult<()> {
     let catalog = Arc::new(FakeCatalog {
+        metadata_files: Mutex::new(0),
+        metadata_growth: 0,
         state: Mutex::new(FakeCatalogState::default()),
         orphans: HashMap::new(),
         data_files: HashMap::from([(
@@ -402,6 +423,8 @@ async fn raw_deletion_blocked_when_manifest_is_quarantined() -> PlatformResult<(
         CompactionId::for_batch(ArchiveKind::Events, TimestampMilliseconds::now(), DIGEST).unwrap(),
     );
     let catalog = Arc::new(FakeCatalog {
+        metadata_files: Mutex::new(0),
+        metadata_growth: 0,
         state: Mutex::new(FakeCatalogState {
             raw_plans: HashMap::from([(ArchiveKind::Events, plan)]),
             ..FakeCatalogState::default()
@@ -431,6 +454,8 @@ async fn raw_deletion_blocked_when_manifest_is_quarantined() -> PlatformResult<(
 async fn removes_entries_and_deletes_objects() -> PlatformResult<()> {
     let object = "s3://archive/raw/events/a.parquet";
     let catalog = Arc::new(FakeCatalog {
+        metadata_files: Mutex::new(0),
+        metadata_growth: 0,
         state: Mutex::new(FakeCatalogState {
             raw_plans: HashMap::from([(
                 ArchiveKind::Events,
@@ -456,8 +481,123 @@ async fn removes_entries_and_deletes_objects() -> PlatformResult<()> {
 }
 
 #[tokio::test]
+async fn raw_deletion_pauses_when_the_partition_spec_changes() -> PlatformResult<()> {
+    let mut plan = FakeCatalog::raw_plan(
+        &["s3://archive/raw/events/a.parquet"],
+        Duration::from_secs(400 * 24 * 60 * 60),
+    );
+    plan.partition_spec_changed = true;
+    let catalog = Arc::new(FakeCatalog {
+        metadata_files: Mutex::new(0),
+        metadata_growth: 0,
+        state: Mutex::new(FakeCatalogState {
+            raw_plans: HashMap::from([(ArchiveKind::Events, plan)]),
+            ..FakeCatalogState::default()
+        }),
+        orphans: HashMap::new(),
+        data_files: HashMap::new(),
+    });
+    let objects = FakeObjects::new();
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let maintenance = executor(catalog.clone(), objects.clone(), leases.clone())?;
+    let runner = MaintenanceRunner::new(MaintenanceConfig::default(), maintenance, leases.clone())?;
+
+    let report = runner.run(false).await?;
+
+    let raw = outcome(&report, MaintenanceStage::RawDeletion);
+    assert_eq!(raw.blocked.as_ref().unwrap().code, "partition_spec_changed");
+    assert!(raw.blocked.as_ref().unwrap().permanent);
+    assert_eq!(catalog.state.lock().removed_entries, 0);
+    assert!(objects.deleted().is_empty());
+    Ok(())
+}
+
+#[tokio::test]
+async fn raw_deletion_pauses_when_metadata_growth_exceeds_the_budget() -> PlatformResult<()> {
+    let config = MaintenanceConfig {
+        max_metadata_growth_percent: 1,
+        ..MaintenanceConfig::default()
+    };
+    let catalog = Arc::new(FakeCatalog {
+        metadata_files: Mutex::new(100),
+        metadata_growth: 50,
+        state: Mutex::new(FakeCatalogState::default()),
+        orphans: HashMap::new(),
+        data_files: HashMap::new(),
+    });
+    let objects = FakeObjects::new();
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let maintenance = crate::ArchiveMaintenanceExecutor::new(
+        catalog.clone(),
+        objects.clone(),
+        leases.clone(),
+        config.clone(),
+        BUCKET,
+        PREFIX,
+    )?
+    .with_owner_id("maintenance-a");
+    let runner = MaintenanceRunner::new(MaintenanceConfig::default(), maintenance, leases.clone())?;
+
+    runner.run(false).await?;
+    let report = runner.run(false).await?;
+
+    let raw = outcome(&report, MaintenanceStage::RawDeletion);
+    assert_eq!(
+        raw.blocked.as_ref().unwrap().code,
+        "metadata_growth_exceeded"
+    );
+    assert!(!raw.blocked.as_ref().unwrap().permanent);
+    assert_eq!(catalog.state.lock().removed_entries, 0);
+    Ok(())
+}
+
+#[tokio::test]
+async fn the_hourly_budget_blocks_snapshot_expiry() -> PlatformResult<()> {
+    let config = MaintenanceConfig {
+        max_commits_per_hour: 1,
+        ..MaintenanceConfig::default()
+    };
+    let catalog = Arc::new(FakeCatalog {
+        metadata_files: Mutex::new(0),
+        metadata_growth: 0,
+        state: Mutex::new(FakeCatalogState::default()),
+        orphans: HashMap::new(),
+        data_files: HashMap::from([(
+            ArchiveIcebergTable::CompactedEvents,
+            FakeCatalog::compacted_files(),
+        )]),
+    });
+    let objects = FakeObjects::new();
+    let leases = Arc::new(InMemoryLeaseStore::new());
+    let maintenance = crate::ArchiveMaintenanceExecutor::new(
+        catalog.clone(),
+        objects.clone(),
+        leases.clone(),
+        config,
+        BUCKET,
+        PREFIX,
+    )?
+    .with_owner_id("maintenance-a");
+    let runner = MaintenanceRunner::new(MaintenanceConfig::default(), maintenance, leases.clone())?;
+
+    let report = runner.run(false).await?;
+
+    let snapshots = outcome(&report, MaintenanceStage::ExpireSnapshots);
+    assert_eq!(
+        snapshots.blocked.as_ref().unwrap().code,
+        "maintenance_budget_exhausted"
+    );
+    assert!(!snapshots.blocked.as_ref().unwrap().permanent);
+    assert!(!report.completed);
+    assert_eq!(catalog.state.lock().expired, 1);
+    Ok(())
+}
+
+#[tokio::test]
 async fn stage_lag_reports_the_raw_backlog() -> PlatformResult<()> {
     let catalog = Arc::new(FakeCatalog {
+        metadata_files: Mutex::new(0),
+        metadata_growth: 0,
         state: Mutex::new(FakeCatalogState {
             raw_plans: HashMap::from([(
                 ArchiveKind::Events,

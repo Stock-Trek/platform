@@ -8,17 +8,23 @@ pub const SOURCE_MANIFEST_FORMAT_VERSION: u32 = 1;
 pub struct SourceManifest {
     pub format_version: u32,
     pub compaction_id: CompactionId,
+    pub partition_spec_id: i32,
     pub sources: Vec<String>,
 }
 
 impl SourceManifest {
-    pub fn new(compaction_id: CompactionId, sources: Vec<String>) -> PlatformResult<Self> {
+    pub fn new(
+        compaction_id: CompactionId,
+        partition_spec_id: i32,
+        sources: Vec<String>,
+    ) -> PlatformResult<Self> {
         let mut sources = sources;
         sources.sort();
         sources.dedup();
         let manifest = Self {
             format_version: SOURCE_MANIFEST_FORMAT_VERSION,
             compaction_id,
+            partition_spec_id,
             sources,
         };
         manifest.validate()?;
@@ -26,13 +32,19 @@ impl SourceManifest {
     }
 
     pub fn validate(&self) -> PlatformResult<()> {
-        if self.format_version == 0 || self.format_version > SOURCE_MANIFEST_FORMAT_VERSION {
+        if self.format_version != SOURCE_MANIFEST_FORMAT_VERSION {
             return Err(PlatformError::external(std::io::Error::new(
                 std::io::ErrorKind::InvalidData,
                 format!(
                     "unsupported source manifest format version {}",
                     self.format_version
                 ),
+            )));
+        }
+        if self.partition_spec_id < 0 {
+            return Err(PlatformError::external(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                "source manifest has no partition spec id",
             )));
         }
         if self.sources.is_empty() {

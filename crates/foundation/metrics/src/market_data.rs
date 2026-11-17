@@ -283,6 +283,30 @@ impl MarketDataMetrics {
         .increment(1);
     }
 
+    pub fn record_recovery_ledger_watermark(kind: &str, watermark_age_millis: i64) {
+        gauge!(
+            "market_data_archive_recovery_ledger_watermark_seconds",
+            "kind" => kind.to_string(),
+        )
+        .set((watermark_age_millis.max(0) / 1_000) as f64);
+    }
+
+    pub fn record_maintenance_metadata_files(table: &str, files: u64) {
+        gauge!(
+            "market_data_archive_maintenance_metadata_files",
+            "table" => table.to_string(),
+        )
+        .set(files as f64);
+    }
+
+    pub fn record_maintenance_run(status: &'static str) {
+        counter!(
+            "market_data_archive_maintenance_runs_total",
+            "status" => status,
+        )
+        .increment(1);
+    }
+
     pub fn record_raw_expiry_decision(decision: &'static str, kind: &'static str) {
         counter!(
             "market_data_archive_raw_expiry_decisions_total",

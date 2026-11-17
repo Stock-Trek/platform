@@ -137,6 +137,7 @@ impl ArchiveIcebergTable {
             Self::field(5, "source_manifest_uri", PrimitiveType::String, false),
             Self::field(6, "source_count", PrimitiveType::Long, false),
             Self::field(7, "processed_at_millis", PrimitiveType::Long, false),
+            Self::field(8, "partition_spec_id", PrimitiveType::Int, false),
         ])
     }
 

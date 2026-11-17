@@ -38,6 +38,7 @@ pub struct RecoveryDecision {
     pub processed: HashSet<String>,
     pub raw_fallback_allowed: bool,
     pub ledger_watermark: Option<TimestampMilliseconds>,
+    pub raw_expired: bool,
 }
 
 impl RecoveryInput {
@@ -85,6 +86,7 @@ impl RecoveryInput {
             processed,
             raw_fallback_allowed: false,
             ledger_watermark,
+            raw_expired: self.raw_expired,
         })
     }
 

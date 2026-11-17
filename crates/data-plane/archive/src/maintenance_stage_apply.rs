@@ -22,6 +22,10 @@ impl ArchiveMaintenanceExecutor {
                 .into_iter()
                 .find(|table| table.name() == candidate.uri)
                 .ok_or_else(|| Self::unknown_table(&candidate.uri))?;
+            if !self.reserve_budget(0) {
+                Self::record_budget_alert("expire_snapshots");
+                return Ok(Self::budget_block(plan.stage, plan.candidates.len()));
+            }
             applied += self
                 .catalog
                 .expire_archive_snapshots(table, self.config(), &context)
@@ -73,6 +77,15 @@ impl ArchiveMaintenanceExecutor {
         let context = self.context(authorizer);
         let mut applied = 0;
         for candidate in &candidates {
+            let bytes = candidate
+                .input_files
+                .iter()
+                .map(|file| u64::try_from(file.file_size_in_bytes).unwrap_or_default())
+                .sum::<u64>();
+            if !self.reserve_budget(bytes) {
+                Self::record_budget_alert("compacted_rewrite");
+                return Ok(Self::budget_block(plan.stage, plan.candidates.len()));
+            }
             match self.rewrite_partition(candidate, &context).await {
                 Some(outcome) => applied += outcome?,
                 None => {
@@ -129,6 +142,13 @@ impl ArchiveMaintenanceExecutor {
         plan: MaintenancePlan,
         authorizer: Arc<dyn CommitAuthorizer>,
     ) -> PlatformResult<StageOutcome> {
+        if let Some(block) = self.metadata_growth_block().await? {
+            return Ok(StageOutcome::blocked(
+                plan.stage,
+                plan.candidates.len(),
+                block,
+            ));
+        }
         let now = Self::now();
         let context = self.context(authorizer);
         let mut applied = 0;
@@ -137,6 +157,24 @@ impl ArchiveMaintenanceExecutor {
                 .catalog
                 .raw_cleanup_plan(kind, self.config(), now)
                 .await?;
+            if raw.partition_spec_changed {
+                MarketDataMetrics::record_maintenance_alert(
+                    "raw_deletion",
+                    "partition_spec_changed",
+                );
+                return Ok(StageOutcome::blocked(
+                    plan.stage,
+                    plan.candidates.len(),
+                    MaintenanceBlock::new(
+                        "partition_spec_changed",
+                        format!(
+                            "raw deletion paused because {} ledger batches were written under a different partition spec; a re-baseline is required before raw objects expire",
+                            kind.label()
+                        ),
+                        true,
+                    ),
+                ));
+            }
             if !raw.quarantined.is_empty() {
                 MarketDataMetrics::record_raw_expiry_decision("quarantine", kind.label());
                 MarketDataMetrics::record_maintenance_alert(
@@ -162,6 +200,10 @@ impl ArchiveMaintenanceExecutor {
             }
             if raw.is_empty() {
                 continue;
+            }
+            if !self.reserve_budget(0) {
+                Self::record_budget_alert("raw_deletion");
+                return Ok(Self::budget_block(plan.stage, plan.candidates.len()));
             }
             MarketDataMetrics::record_raw_expiry_decision("delete", kind.label());
             let outcome = raw

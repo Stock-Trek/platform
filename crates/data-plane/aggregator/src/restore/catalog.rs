@@ -8,7 +8,7 @@ use crate::restore::replay::S3ArchivedEventSource;
 use crate::shard_id::ShardId;
 use aws_sdk_s3::Client as S3Client;
 use platform_archive::{
-    ArchiveHandoff, ArchiveKind, ArchivePath, Bucket, IcebergCatalog, IcebergConfig, ObjectKey,
+    ArchiveKind, ArchivePath, Bucket, IcebergCatalog, IcebergConfig, ObjectKey, RecoveryHandoff,
     RoutingBucket, S3,
 };
 use platform_config::EnvVars;
@@ -127,7 +127,8 @@ impl S3ArchiveRecovery {
             .get_or_try_init(|| async {
                 let s3_client = S3::s3_client().await;
                 let catalog = IcebergCatalog::connect(&self.config.iceberg).await?;
-                let handoff = ArchiveHandoff::discover(&catalog, ArchiveKind::Events).await?;
+                let recovery = RecoveryHandoff::discover(&catalog, ArchiveKind::Events).await?;
+                let handoff = recovery.handoff;
                 let compacted_objects = handoff.compacted.len();
                 let raw_tail_objects = handoff.raw_tail.len();
                 let objects = handoff

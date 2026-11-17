@@ -115,6 +115,14 @@ impl ArchiveCatalog for IcebergCatalog {
         self.data_files_from_table(&table).await
     }
 
+    async fn metadata_file_count(
+        &self,
+        table: ArchiveIcebergTable,
+        client: &dyn ObjectStore,
+    ) -> PlatformResult<u64> {
+        IcebergCatalog::metadata_file_count(self, table, client).await
+    }
+
     async fn processed_source_files(
         &self,
         table: ArchiveIcebergTable,

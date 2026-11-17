@@ -26,7 +26,11 @@ impl IcebergCatalog {
         if self.ledger_contains(&table, kind, compaction_id).await? {
             return Ok(RegisterOutcome::AlreadyApplied);
         }
-        let manifest = SourceManifest::new(compaction_id, sources.to_vec())?;
+        let manifest = SourceManifest::new(
+            compaction_id,
+            table.metadata().default_partition_spec_id(),
+            sources.to_vec(),
+        )?;
         let manifest_uri = self.write_source_manifest(&table, &manifest).await?;
         let entry =
             LedgerEntry::from_manifest(kind, bucket_start, manifest_uri, &manifest, processed_at)?;

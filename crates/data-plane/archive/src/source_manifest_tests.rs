@@ -13,9 +13,12 @@ fn id() -> CompactionId {
     .unwrap()
 }
 
+const SPEC_ID: i32 = 0;
+
 fn manifest() -> SourceManifest {
     SourceManifest::new(
         id(),
+        SPEC_ID,
         vec![
             "s3://bucket/raw/b.parquet".to_string(),
             "s3://bucket/raw/a.parquet".to_string(),
@@ -28,6 +31,7 @@ fn manifest() -> SourceManifest {
 fn manifests_sort_and_deduplicate_sources() {
     let manifest = SourceManifest::new(
         id(),
+        SPEC_ID,
         vec![
             "s3://bucket/b".to_string(),
             "s3://bucket/a".to_string(),
@@ -41,12 +45,14 @@ fn manifests_sort_and_deduplicate_sources() {
     assert!(manifest.contains("s3://bucket/a"));
     assert!(!manifest.contains("s3://bucket/c"));
     assert_eq!(manifest.format_version, SOURCE_MANIFEST_FORMAT_VERSION);
+    assert_eq!(manifest.partition_spec_id, SPEC_ID);
 }
 
 #[test]
 fn manifests_reject_invalid_source_sets() {
-    assert!(SourceManifest::new(id(), Vec::new()).is_err());
-    assert!(SourceManifest::new(id(), vec![String::new()]).is_err());
+    assert!(SourceManifest::new(id(), SPEC_ID, Vec::new()).is_err());
+    assert!(SourceManifest::new(id(), SPEC_ID, vec![String::new()]).is_err());
+    assert!(SourceManifest::new(id(), -1, vec!["s3://bucket/a".to_string()]).is_err());
 
     let mut manifest = manifest();
     manifest.sources.reverse();

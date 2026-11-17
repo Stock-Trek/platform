@@ -292,9 +292,11 @@ No process-specific optional variables.
 | --- | --- |
 | `MAINTAINER_DRY_RUN` | Whether maintenance plans stages and reports candidates without deleting or rewriting, parsed as a boolean. Defaults to `false`. |
 | `MAINTAINER_INTERVAL_SECS` | Interval between maintenance runs, in seconds. Defaults to `3600`. |
+| `MAINTAINER_MAX_COMMITS_PER_HOUR` | Maximum maintenance commits per hour across every archive table and stage. Must be positive. Defaults to `120`. |
 | `MAINTAINER_MAX_METADATA_GROWTH_PERCENT` | Maximum metadata-log and manifest growth per partition between rewrites, as a percentage. Must be positive. Defaults to `10`. |
 | `MAINTAINER_MAX_PARTITION_BYTES` | Partition size target that triggers a compacted or ledger rewrite, in bytes. Must be positive. Defaults to `536870912`. |
 | `MAINTAINER_MAX_PARTITION_DATA_FILES` | Partition file-count target that triggers a compacted or ledger rewrite. Must be positive. Defaults to `100`. |
+| `MAINTAINER_MAX_REWRITE_BYTES_PER_HOUR` | Maximum rewrite input bytes reserved per hour across every archive table and stage. Must be positive. Defaults to `8589934592` (8 GiB). |
 | `MAINTAINER_MAX_WORK_SECS` | Longest maintenance lease window, in seconds. Must be positive. Defaults to `300`. |
 | `MAINTAINER_ORPHAN_GRACE_SECS` | Minimum age before unreferenced archive files are deleted, in seconds. Hard floor of `604800` (7 days). Defaults to `1209600` (14 days). |
 | `MAINTAINER_RAW_RETENTION_SECS_CANDLES` | Candle raw retention, in seconds, measured from the durable ledger handoff. Hard floor of `7776000` (90 days). Defaults to `31536000` (365 days). |

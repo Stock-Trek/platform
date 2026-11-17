@@ -1,7 +1,7 @@
 use platform_archive::{
-    ArchiveKind, DEFAULT_MAX_BYTES, DEFAULT_MAX_DATA_FILES, DEFAULT_ORPHAN_GRACE,
-    DEFAULT_RAW_RETENTION, DEFAULT_SNAPSHOT_RETENTION, MIN_COMPACTED_SNAPSHOTS, MaintenanceConfig,
-    PartitionTarget,
+    ArchiveKind, DEFAULT_MAX_BYTES, DEFAULT_MAX_COMMITS_PER_HOUR, DEFAULT_MAX_DATA_FILES,
+    DEFAULT_MAX_REWRITE_BYTES_PER_HOUR, DEFAULT_ORPHAN_GRACE, DEFAULT_RAW_RETENTION,
+    DEFAULT_SNAPSHOT_RETENTION, MIN_COMPACTED_SNAPSHOTS, MaintenanceConfig, PartitionTarget,
 };
 use platform_config::EnvVars;
 use platform_errors::{PlatformError, PlatformResult};
@@ -23,6 +23,8 @@ const MAINTAINER_ORPHAN_GRACE_SECS: &str = "MAINTAINER_ORPHAN_GRACE_SECS";
 const MAINTAINER_MAX_PARTITION_DATA_FILES: &str = "MAINTAINER_MAX_PARTITION_DATA_FILES";
 const MAINTAINER_MAX_PARTITION_BYTES: &str = "MAINTAINER_MAX_PARTITION_BYTES";
 const MAINTAINER_MAX_METADATA_GROWTH_PERCENT: &str = "MAINTAINER_MAX_METADATA_GROWTH_PERCENT";
+const MAINTAINER_MAX_COMMITS_PER_HOUR: &str = "MAINTAINER_MAX_COMMITS_PER_HOUR";
+const MAINTAINER_MAX_REWRITE_BYTES_PER_HOUR: &str = "MAINTAINER_MAX_REWRITE_BYTES_PER_HOUR";
 const MAINTAINER_MAX_WORK_SECS: &str = "MAINTAINER_MAX_WORK_SECS";
 
 #[derive(Debug, Clone)]
@@ -80,6 +82,16 @@ impl MaintainerConfig {
                 vars,
                 MAINTAINER_MAX_METADATA_GROWTH_PERCENT,
                 10,
+            )?,
+            max_commits_per_hour: Self::optional_u64(
+                vars,
+                MAINTAINER_MAX_COMMITS_PER_HOUR,
+                DEFAULT_MAX_COMMITS_PER_HOUR,
+            )?,
+            max_rewrite_bytes_per_hour: Self::optional_u64(
+                vars,
+                MAINTAINER_MAX_REWRITE_BYTES_PER_HOUR,
+                DEFAULT_MAX_REWRITE_BYTES_PER_HOUR,
             )?,
         };
         maintenance.validate()?;
