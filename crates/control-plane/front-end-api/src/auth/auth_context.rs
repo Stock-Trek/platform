@@ -44,10 +44,6 @@ impl AuthContext {
         &self.token
     }
 
-    pub fn scopes(&self) -> &[Scope] {
-        &self.scopes
-    }
-
     pub fn require(&self, scope: Scope) -> Result<(), Problem> {
         if self.scopes.contains(&scope) {
             Ok(())

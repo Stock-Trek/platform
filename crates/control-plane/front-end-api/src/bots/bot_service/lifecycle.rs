@@ -39,10 +39,14 @@ impl BotService {
         now: DateTime<Utc>,
     ) -> Result<Bot, Problem> {
         let owner = auth.owner();
-        self.limits.check(owner, QUOTA_BOTS, 1)?;
+        self.limits.check(owner, QUOTA_BOTS, 1, now)?;
         let schedule = request.schedule.clone().validated()?;
-        self.limits
-            .check(owner, QUOTA_SCHEDULED_RUNS_PER_DAY, schedule.runs_per_day())?;
+        self.limits.check(
+            owner,
+            QUOTA_SCHEDULED_RUNS_PER_DAY,
+            schedule.runs_per_day(),
+            now,
+        )?;
         self.validate_configuration(
             owner,
             &request.algorithm_id,
@@ -150,6 +154,7 @@ impl BotService {
             owner,
             QUOTA_SCHEDULED_RUNS_PER_DAY,
             bot.schedule.runs_per_day(),
+            now,
         )?;
         self.bots
             .update(owner, bot_id, now, |mut bot| {
@@ -182,12 +187,10 @@ impl BotService {
         &self,
         auth: &AuthContext,
         bot_id: &str,
-        if_match: Option<u64>,
         now: DateTime<Utc>,
     ) -> Result<Bot, Problem> {
         let owner = auth.owner();
         let bot = self.get(auth, bot_id)?;
-        Self::require_if_match(if_match, bot.version)?;
         if bot.state != BotState::Disabled || bot.active_run_id.is_some() {
             return Err(Problem::state_conflict(
                 "a bot must be disabled with no active run to be archived",

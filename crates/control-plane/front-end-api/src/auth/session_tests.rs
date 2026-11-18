@@ -1,6 +1,11 @@
 use super::{SessionApi, SessionService, SessionStore};
+use crate::accounts::AccountStore;
+use crate::algorithms::BuildStore;
 use crate::api::ApiRequest;
 use crate::auth::Scope;
+use crate::backtests::BacktestStore;
+use crate::bots::BotStore;
+use crate::limits::{LimitService, LimitSources};
 use chrono::{Duration, Utc};
 use http_body_util::Full;
 use hyper::{HeaderMap, Method, Uri, body::Bytes};
@@ -20,7 +25,13 @@ impl Fixture {
     fn new() -> Self {
         let store = Arc::new(SessionStore::new());
         store.register_login(Self::LOGIN_ID, Self::OWNER, Self::LOGIN_SECRET);
-        let sessions = Arc::new(SessionService::new(store.clone()));
+        let limits = Arc::new(LimitService::new(LimitSources {
+            accounts: Arc::new(AccountStore::new()),
+            builds: Arc::new(BuildStore::new()),
+            bots: Arc::new(BotStore::new()),
+            backtests: Arc::new(BacktestStore::new()),
+        }));
+        let sessions = Arc::new(SessionService::new(store.clone(), limits));
         Self {
             api: SessionApi::new(sessions.clone()),
             sessions,
@@ -43,7 +54,14 @@ impl Fixture {
                 hyper::header::HeaderValue::from_str(value).expect("value"),
             );
         }
-        ApiRequest::from_parts(method, uri, map, Bytes::from(body.to_string()))
+        ApiRequest::from_parts(
+            method,
+            uri,
+            map,
+            Bytes::from(body.to_string()),
+            None,
+            hyper::http::Extensions::new(),
+        )
     }
 
     fn login_tokens(&self) -> serde_json::Value {

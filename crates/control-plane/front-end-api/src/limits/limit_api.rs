@@ -3,7 +3,9 @@ use crate::api::Problem;
 use crate::api::Respond;
 use crate::auth::Scope;
 use crate::auth::SessionService;
-use crate::limits::LimitService;
+use crate::limits::{LimitService, QUOTA_STREAM_CONNECTIONS};
+use crate::streaming::StreamService;
+use chrono::Utc;
 use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::{Method, Response, StatusCode};
@@ -12,11 +14,20 @@ use std::sync::Arc;
 pub struct LimitsApi {
     limits: Arc<LimitService>,
     sessions: Arc<SessionService>,
+    streams: Arc<StreamService>,
 }
 
 impl LimitsApi {
-    pub fn new(limits: Arc<LimitService>, sessions: Arc<SessionService>) -> Self {
-        Self { limits, sessions }
+    pub fn new(
+        limits: Arc<LimitService>,
+        sessions: Arc<SessionService>,
+        streams: Arc<StreamService>,
+    ) -> Self {
+        Self {
+            limits,
+            sessions,
+            streams,
+        }
     }
 
     pub fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
@@ -31,7 +42,11 @@ impl LimitsApi {
 
     fn limits(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
-        let effective = self.limits.effective(auth.owner());
+        let owner = auth.owner();
+        let mut effective = self.limits.effective(owner, Utc::now());
+        if let Some(entry) = effective.get_mut(QUOTA_STREAM_CONNECTIONS) {
+            entry.used = self.streams.connection_count(owner);
+        }
         Ok(Respond::json(StatusCode::OK, &effective))
     }
 }

@@ -1,5 +1,6 @@
 mod api_connection;
 mod api_server;
+mod cors;
 mod idempotency;
 mod ids;
 mod page;
@@ -18,4 +19,4 @@ pub use problem::{Problem, QuotaDetail};
 pub use request::ApiRequest;
 pub use request_handler::RequestHandler;
 pub use respond::Respond;
-pub use router::FrontEndApi;
+pub use router::{FrontEndApi, FrontEndApiDeps};

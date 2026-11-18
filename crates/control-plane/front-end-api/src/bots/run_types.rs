@@ -25,18 +25,12 @@ impl RunState {
             _ => None,
         }
     }
-
-    pub fn is_terminal(&self) -> bool {
-        matches!(
-            self,
-            Self::Completed | Self::Failed | Self::Canceled | Self::Skipped
-        )
-    }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunTrigger {
+    #[allow(dead_code)]
     Schedule,
     AdHoc,
 }
@@ -44,14 +38,18 @@ pub enum RunTrigger {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SkipReason {
+    #[allow(dead_code)]
     Overlap,
+    #[allow(dead_code)]
     Misfire,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RunErrorKind {
+    #[allow(dead_code)]
     Client,
+    #[allow(dead_code)]
     Platform,
 }
 

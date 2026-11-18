@@ -1,27 +1,20 @@
-use crate::algorithms::{
-    AlgorithmState, AlgorithmSummary, BuildState, BuildSummary, Repository, Strategy,
-};
+use crate::algorithms::{BuildState, BuildSummary, Strategy};
 use crate::api::Id;
 use chrono::{DateTime, Duration, Utc};
 use parking_lot::Mutex;
 
 const LOG_TTL: Duration = Duration::hours(1);
 
-struct AlgorithmRow {
-    owner: String,
-    summary: AlgorithmSummary,
-}
-
-struct BuildRow {
-    owner: String,
-    build: BuildSummary,
-    strategies: Vec<Strategy>,
-    log: Option<String>,
+pub(super) struct BuildRow {
+    pub(super) owner: String,
+    pub(super) build: BuildSummary,
+    pub(super) strategies: Vec<Strategy>,
+    pub(super) log: Option<String>,
 }
 
 pub struct BuildStore {
-    algorithms: Mutex<Vec<AlgorithmRow>>,
-    builds: Mutex<Vec<BuildRow>>,
+    pub(super) algorithms: Mutex<Vec<super::algorithm_store::AlgorithmRow>>,
+    pub(super) builds: Mutex<Vec<BuildRow>>,
 }
 
 impl BuildStore {
@@ -30,60 +23,6 @@ impl BuildStore {
             algorithms: Mutex::new(Vec::new()),
             builds: Mutex::new(Vec::new()),
         }
-    }
-
-    pub fn register_algorithm(
-        &self,
-        owner: &str,
-        name: &str,
-        repo: &str,
-        default_ref: &str,
-    ) -> AlgorithmSummary {
-        // TODO: algorithms appear when the GitHub App connection is registered through the build plane.
-        let summary = AlgorithmSummary {
-            algorithm_id: Id::mint("algorithm"),
-            name: name.to_string(),
-            repository: Repository {
-                provider: "github".to_string(),
-                host: "github.com".to_string(),
-                repo: repo.to_string(),
-            },
-            default_ref: default_ref.to_string(),
-            state: AlgorithmState::Active,
-            version: 1,
-            latest_ready_build_id: None,
-        };
-        self.algorithms.lock().push(AlgorithmRow {
-            owner: owner.to_string(),
-            summary: summary.clone(),
-        });
-        summary
-    }
-
-    pub fn list_algorithms(&self, owner: &str) -> Vec<AlgorithmSummary> {
-        let rows = self.algorithms.lock();
-        rows.iter()
-            .filter(|row| row.owner == owner)
-            .map(|row| row.summary.clone())
-            .collect()
-    }
-
-    pub fn algorithm(&self, owner: &str, algorithm_id: &str) -> Option<AlgorithmSummary> {
-        self.algorithms
-            .lock()
-            .iter()
-            .find(|row| row.owner == owner && row.summary.algorithm_id == algorithm_id)
-            .map(|row| row.summary.clone())
-    }
-
-    pub fn archive_algorithm(&self, owner: &str, algorithm_id: &str) -> Option<AlgorithmSummary> {
-        let mut rows = self.algorithms.lock();
-        let row = rows
-            .iter_mut()
-            .find(|row| row.owner == owner && row.summary.algorithm_id == algorithm_id)?;
-        row.summary.state = AlgorithmState::Archived;
-        row.summary.version += 1;
-        Some(row.summary.clone())
     }
 
     pub fn create_build(
@@ -176,6 +115,7 @@ impl BuildStore {
         (build.state == BuildState::Ready).then_some(build)
     }
 
+    #[allow(dead_code)]
     pub fn mark_ready(
         &self,
         owner: &str,
@@ -184,7 +124,6 @@ impl BuildStore {
         strategies: Vec<Strategy>,
         now: DateTime<Utc>,
     ) -> Option<BuildSummary> {
-        // TODO: the build agent drives this transition through the build plane.
         let mut rows = self.builds.lock();
         let row = rows.iter_mut().find(|row| {
             row.owner == owner
@@ -250,8 +189,8 @@ impl BuildStore {
         })
     }
 
+    #[allow(dead_code)]
     pub fn attach_log(&self, owner: &str, algorithm_id: &str, build_id: &str, url: &str) {
-        // TODO: build logs are uploaded by the build agent to object storage.
         let mut builds = self.builds.lock();
         if let Some(row) = builds.iter_mut().find(|row| {
             row.owner == owner
@@ -261,6 +200,13 @@ impl BuildStore {
             row.log = Some(url.to_string());
             row.build.log_available = true;
         }
+    }
+
+    pub fn owns_build(&self, owner: &str, build_id: &str) -> bool {
+        self.builds
+            .lock()
+            .iter()
+            .any(|row| row.owner == owner && row.build.build_id == build_id)
     }
 
     pub fn delete_build(&self, owner: &str, algorithm_id: &str, build_id: &str) -> bool {

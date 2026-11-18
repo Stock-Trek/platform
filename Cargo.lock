@@ -4263,7 +4263,10 @@ name = "platform-front-end-api"
 version = "0.2.0"
 dependencies = [
  "async-trait",
+ "base64 0.23.1",
  "chrono",
+ "ed25519-compact",
+ "futures",
  "http-body-util",
  "hyper",
  "hyper-util",
@@ -4275,7 +4278,9 @@ dependencies = [
  "platform-types",
  "serde",
  "serde_json",
+ "sha1",
  "tokio",
+ "tokio-websockets",
  "tracing",
  "uuid",
 ]

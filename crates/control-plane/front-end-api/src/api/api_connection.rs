@@ -1,7 +1,8 @@
 use crate::api::RequestHandler;
-use hyper::{server::conn::http1, service::service_fn};
+use hyper::body::Incoming;
+use hyper::{Request, server::conn::http1, service::service_fn};
 use hyper_util::rt::{TokioIo, TokioTimer};
-use std::{convert::Infallible, sync::Arc, time::Duration};
+use std::{convert::Infallible, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::{net::TcpStream, sync::watch};
 
 const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(10);
@@ -11,6 +12,7 @@ pub struct ApiConnection;
 impl ApiConnection {
     pub async fn serve(
         stream: TcpStream,
+        peer: SocketAddr,
         handler: Arc<dyn RequestHandler>,
         mut shutdown: watch::Receiver<bool>,
     ) {
@@ -20,7 +22,7 @@ impl ApiConnection {
                 .header_read_timeout(HEADER_READ_TIMEOUT)
                 .serve_connection(
                     TokioIo::new(stream),
-                    service_fn(move |request| Self::handle(handler.clone(), request)),
+                    service_fn(move |request| Self::handle(handler.clone(), request, peer)),
                 ),
         );
         tokio::select! {
@@ -34,9 +36,10 @@ impl ApiConnection {
 
     async fn handle(
         handler: Arc<dyn RequestHandler>,
-        request: hyper::Request<hyper::body::Incoming>,
+        request: Request<Incoming>,
+        peer: SocketAddr,
     ) -> Result<hyper::Response<http_body_util::Full<hyper::body::Bytes>>, Infallible> {
-        Ok(handler.handle(request).await)
+        Ok(handler.handle(request, peer).await)
     }
 
     async fn wait_for_shutdown(shutdown: &mut watch::Receiver<bool>) {

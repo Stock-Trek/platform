@@ -98,6 +98,7 @@ impl BotApi {
 
     fn patch(&self, request: &ApiRequest, bot_id: &str) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Manage)?;
+        request.require_merge_patch_content_type()?;
         let patch: PatchBotRequest = request.json()?;
         let bot = self
             .bots
@@ -132,8 +133,7 @@ impl BotApi {
         bot_id: &str,
     ) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Manage)?;
-        self.bots
-            .archive(&auth, bot_id, request.if_match()?, Utc::now())?;
+        self.bots.archive(&auth, bot_id, Utc::now())?;
         Ok(Respond::empty(StatusCode::NO_CONTENT))
     }
 

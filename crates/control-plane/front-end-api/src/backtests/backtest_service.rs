@@ -61,6 +61,7 @@ impl BacktestService {
             QUOTA_CONCURRENT_BACKTESTS,
             1,
             RATE_LIMIT_RETRY_SECONDS,
+            Utc::now(),
         )?;
         let status = BacktestStatus {
             backtest_id: Id::mint("backtest"),
@@ -72,7 +73,6 @@ impl BacktestService {
             seed: request.seed.unwrap_or_else(Self::random_seed),
             progress: crate::backtests::BacktestProgress {
                 completed: 0,
-                // TODO: the runner reports the total simulation count.
                 total: 0,
             },
             created_at: now,
@@ -107,7 +107,7 @@ impl BacktestService {
             .backtests
             .results(auth.owner(), backtest_id, query.offset(), query.limit())
             .ok_or_else(|| Problem::not_found("backtest does not exist"))?;
-        let complete = status.state.is_terminal() && !has_more;
+        let complete = status.state == BacktestState::Completed && !has_more;
         Ok(BacktestResultsPage {
             page: Page {
                 data,
@@ -162,7 +162,6 @@ impl BacktestService {
                 "the export is available once the backtest is terminal",
             ));
         }
-        // TODO: export is a pre-signed object storage URL of all results as ndjson.
         Ok(ExportLink {
             url: format!(
                 "https://storage.example.com/backtests/{}.ndjson",

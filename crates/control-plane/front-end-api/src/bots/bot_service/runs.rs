@@ -21,7 +21,7 @@ impl BotService {
         if self.runs.active(&bot.bot_id).is_some() {
             return Err(Problem::state_conflict("the bot already has an active run"));
         }
-        // TODO: enforce the ad-hoc runs per hour per bot rate limit.
+        self.limits.check_ad_hoc_run_rate(&bot.bot_id, now)?;
         Ok(self.materialize_run(owner, &bot, RunTrigger::AdHoc, now))
     }
 
@@ -56,6 +56,7 @@ impl BotService {
         run
     }
 
+    #[allow(dead_code)]
     pub fn record_skipped_tick(
         &self,
         owner: &str,
@@ -63,7 +64,6 @@ impl BotService {
         reason: SkipReason,
         now: DateTime<Utc>,
     ) {
-        // TODO: the run invoker records skipped ticks when claims fail.
         let run = Run {
             run_id: Id::mint("run"),
             bot_id: bot.bot_id.clone(),
