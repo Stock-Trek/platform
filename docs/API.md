@@ -2,7 +2,7 @@
 
 This document is the contract for the API the browser front-end speaks to.
 It covers conventions shared by every resource group and the per-area endpoints.
-Implementation details that clients must not rely on are kept apart, under [Design notes](#design-notes-non-contract) at the end.
+Implementation details that clients must not rely on [can be found in the design notes](./API-design-notes.md).
 
 - [Overview](#overview)
 - [Versioning and base URL](#versioning-and-base-url)
@@ -15,7 +15,6 @@ Implementation details that clients must not rely on are kept apart, under [Desi
 - [Algorithms and builds](#algorithms-and-builds)
 - [Bots and runs](#bots-and-runs)
 - [Backtesting](#backtesting)
-- [Design notes (non-contract)](#design-notes-non-contract)
 
 ## Overview
 
@@ -287,7 +286,7 @@ Because identifiers are server-assigned and owner-scoped, a label that another u
 Every linked account additionally needs exchange API credentials.
 Credentials are write-only: they are never returned by any endpoint and are rotated by replacing them.
 
-### Endpoints
+### Account endpoints
 
 | Method   | Path                                   | Scope   | Description                                         |
 |----------|----------------------------------------|---------|-----------------------------------------------------|
@@ -322,12 +321,12 @@ Credentials are write-only: they are never returned by any endpoint and are rota
 
 `connector` reports the state of the feed for this account so the front-end can show its health:
 
-| `connector.state` | Meaning                                                      |
-|-------------------|--------------------------------------------------------------|
-| `connecting`      | Linked or re-credentialed; waiting for the first snapshot    |
-| `connected`       | Receiving updates                                            |
-| `disconnected`    | Feed interrupted; reconnecting                               |
-| `error`           | Needs the owner's attention; `reason` says why               |
+| `connector.state` | Meaning                                                   |
+|-------------------|-----------------------------------------------------------|
+| `connecting`      | Linked or re-credentialed; waiting for the first snapshot |
+| `connected`       | Receiving updates                                         |
+| `disconnected`    | Feed interrupted; reconnecting                            |
+| `error`           | Needs the owner's attention; `reason` says why            |
 
 `reason` is `null` unless the state is `error` or `disconnected`; values include `invalid_credentials`, `insufficient_permissions`, `exchange_unavailable`, and `unknown`.
 Clients must tolerate new values.
@@ -395,7 +394,7 @@ The snapshot's `streamSequence` is the `lastSequence` to send when subscribing o
 
 ## Algorithms and builds
 
-### Model
+### Algorithm and build model
 
 - An **algorithm** is a Git repository containing trading strategy code.
   Owners connect a repository by granting the GitHub App access to it, so the API has no endpoint to create algorithms; they appear once the connection is registered.
@@ -409,15 +408,15 @@ The snapshot's `streamSequence` is the `lastSequence` to send when subscribing o
   Builds appear when code is pushed, but nothing changes for live bots until an owner promotes a build explicitly.
   A push never deploys.
 
-### Lifecycle
+### Algorithm and build lifecycle
 
 Algorithms and builds have independent lifecycles:
 
-| Algorithm state | Meaning                                                                                                                                                                |
-|-----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `active`        | Builds can be triggered and strategies can be used by bots                                                                                                             |
+| Algorithm state | Meaning                                                                                                                                                               |
+|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `active`        | Builds can be triggered and strategies can be used by bots                                                                                                            |
 | `disconnected`  | GitHub access was revoked. No new builds. Existing builds stay usable: pinned bots and the promoted build keep working. Returns to `active` when access is re-granted |
-| `archived`      | Read-only; existing bots keep running, no new builds                                                                                                                   |
+| `archived`      | Read-only; existing bots keep running, no new builds                                                                                                                  |
 
 | Build state | Meaning                                                     |
 |-------------|-------------------------------------------------------------|
@@ -429,7 +428,7 @@ Algorithms and builds have independent lifecycles:
 A build only becomes usable by bots when it is `ready`.
 Archiving an algorithm is a soft delete: history stays queryable.
 
-### Endpoints
+### Algorithm endpoints
 
 | Method   | Path                                                       | Scope    | Description                                                |
 |----------|------------------------------------------------------------|----------|------------------------------------------------------------|
@@ -533,7 +532,7 @@ Strategies are extracted once when the build finishes; a build that fails to rep
 
 ## Bots and runs
 
-### Model
+### Bot and run model
 
 A **bot** is a user's persistent trading configuration: which compiled strategy runs, against which exchange accounts, and on what schedule.
 A **run** is one execution of a bot.
@@ -556,23 +555,23 @@ Creating a bot does not enable it: a new bot is `disabled`, and the front-end en
   Use the kill switch or cancel the run to interrupt it.
 - **Archive** (`DELETE`) requires the bot to be `disabled` with no active run; otherwise it fails with `409 state_conflict`.
 
-### Endpoints
+### Bot and run endpoints
 
-| Method   | Path                       | Scope    | Description                                      |
-|----------|----------------------------|----------|--------------------------------------------------|
-| `POST`   | `/v1/bots`                 | `manage` | Create a bot                                     |
-| `GET`    | `/v1/bots`                 | `read`   | List bots, filterable by `state`                 |
-| `GET`    | `/v1/bots/{botId}`         | `read`   | Bot detail                                       |
-| `PATCH`  | `/v1/bots/{botId}`         | `manage` | Update configuration (`If-Match` required)       |
-| `POST`   | `/v1/bots/{botId}/enable`  | `admin`  | Enable the schedule (`If-Match` required)        |
-| `POST`   | `/v1/bots/{botId}/disable` | `manage` | Pause the schedule (`If-Match` required)         |
-| `DELETE` | `/v1/bots/{botId}`         | `manage` | Archive the bot                                  |
-| `POST`   | `/v1/bots/{botId}/runs`    | `manage` | Trigger an immediate ad-hoc run                  |
-| `POST`   | `/v1/kill-switch`          | `manage` | Emergency stop: disable bots and cancel runs     |
-| `GET`    | `/v1/runs`                 | `read`   | List runs across bots, filterable                |
-| `GET`    | `/v1/runs/{runId}`         | `read`   | Run detail                                       |
-| `POST`   | `/v1/runs/{runId}/cancel`  | `manage` | Cancel a run                                     |
-| `GET`    | `/v1/runs/{runId}/log`     | `read`   | Run log                                          |
+| Method   | Path                       | Scope    | Description                                  |
+|----------|----------------------------|----------|----------------------------------------------|
+| `POST`   | `/v1/bots`                 | `manage` | Create a bot                                 |
+| `GET`    | `/v1/bots`                 | `read`   | List bots, filterable by `state`             |
+| `GET`    | `/v1/bots/{botId}`         | `read`   | Bot detail                                   |
+| `PATCH`  | `/v1/bots/{botId}`         | `manage` | Update configuration (`If-Match` required)   |
+| `POST`   | `/v1/bots/{botId}/enable`  | `admin`  | Enable the schedule (`If-Match` required)    |
+| `POST`   | `/v1/bots/{botId}/disable` | `manage` | Pause the schedule (`If-Match` required)     |
+| `DELETE` | `/v1/bots/{botId}`         | `manage` | Archive the bot                              |
+| `POST`   | `/v1/bots/{botId}/runs`    | `manage` | Trigger an immediate ad-hoc run              |
+| `POST`   | `/v1/kill-switch`          | `manage` | Emergency stop: disable bots and cancel runs |
+| `GET`    | `/v1/runs`                 | `read`   | List runs across bots, filterable            |
+| `GET`    | `/v1/runs/{runId}`         | `read`   | Run detail                                   |
+| `POST`   | `/v1/runs/{runId}/cancel`  | `manage` | Cancel a run                                 |
+| `GET`    | `/v1/runs/{runId}/log`     | `read`   | Run log                                      |
 
 `POST /v1/bots` example:
 
@@ -737,7 +736,7 @@ Retention, together with the scheduled-runs quota, bounds the run store, because
 
 ## Backtesting
 
-### Model
+### Backtest model
 
 A **backtest** is an ad-hoc, resource-bounded experiment: it runs one strategy from one build many times over archived market data with simulated execution friction and a seeded random generator, streaming per-simulation results as they finish and finishing with a collated result set.
 Backtests never touch live exchanges or real balances.
@@ -745,7 +744,7 @@ Backtests never touch live exchanges or real balances.
 Market input comes from the candle archive, so requested history must lie within the archive's retention reach for the requested intervals.
 Otherwise creation fails rather than silently producing candles that later change.
 
-### Lifecycle
+### Backtest lifecycle
 
 | State       | Meaning                                                                        |
 |-------------|--------------------------------------------------------------------------------|
@@ -755,7 +754,7 @@ Otherwise creation fails rather than silently producing candles that later chang
 | `failed`    | Rejected or aborted; `error` carries details. Results finished so far are kept |
 | `canceled`  | Canceled by the owner. Results finished so far are kept                        |
 
-### Endpoints
+### Backtest endpoints
 
 | Method   | Path                                        | Scope    | Description                                             |
 |----------|---------------------------------------------|----------|---------------------------------------------------------|
@@ -786,12 +785,12 @@ Live results arrive on the `backtests.{backtestId}` stream channel; see [Streami
 
 The response is `202` with `{ "backtestId": "backtest_31a", "state": "queued" }`.
 
-| Field                                    | Required | Meaning                                                                                                 |
-|------------------------------------------|----------|---------------------------------------------------------------------------------------------------------|
-| `algorithmId`, `buildId`, `strategyName` | yes      | The strategy to simulate. `buildId` is a concrete build, never a selector.                              |
-| `count`                                  | yes      | Number of simulations, 1 to 1000                                                                        |
-| `maxConcurrent`                          | no       | Parallelism, clamped to the runner's worker limits                                                      |
-| `seed`                                   | no       | Integer seed. If omitted, the server picks one and returns it in the status, so runs are reproducible   |
+| Field                                    | Required | Meaning                                                                                               |
+|------------------------------------------|----------|-------------------------------------------------------------------------------------------------------|
+| `algorithmId`, `buildId`, `strategyName` | yes      | The strategy to simulate. `buildId` is a concrete build, never a selector.                            |
+| `count`                                  | yes      | Number of simulations, 1 to 1000                                                                      |
+| `maxConcurrent`                          | no       | Parallelism, clamped to the runner's worker limits                                                    |
+| `seed`                                   | no       | Integer seed. If omitted, the server picks one and returns it in the status, so runs are reproducible |
 
 Validation fails fast with `validation_failed`:
 
