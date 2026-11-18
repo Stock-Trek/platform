@@ -1,0 +1,139 @@
+use crate::api::Problem;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+pub const MIN_INTERVAL_SECONDS: u32 = 10;
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum Schedule {
+    Interval {
+        every_seconds: u32,
+        misfire_grace_seconds: Option<u32>,
+    },
+    Cron {
+        expression: String,
+        timezone: String,
+        misfire_grace_seconds: Option<u32>,
+    },
+}
+
+impl Schedule {
+    pub fn validated(self) -> Result<Self, Problem> {
+        match &self {
+            Self::Interval {
+                every_seconds,
+                misfire_grace_seconds,
+            } => {
+                if *every_seconds < MIN_INTERVAL_SECONDS {
+                    return Err(Problem::validation_failed(
+                        "interval schedules need at least 10 seconds",
+                    ));
+                }
+                Ok(Self::Interval {
+                    every_seconds: *every_seconds,
+                    misfire_grace_seconds: Some(
+                        misfire_grace_seconds
+                            .unwrap_or_else(|| Self::interval_grace(*every_seconds)),
+                    ),
+                })
+            }
+            Self::Cron {
+                expression,
+                timezone,
+                misfire_grace_seconds,
+            } => {
+                // TODO: validate the five-field cron expression and the IANA time zone name.
+                let _ = (expression, timezone);
+                Ok(Self::Cron {
+                    expression: expression.clone(),
+                    timezone: timezone.clone(),
+                    misfire_grace_seconds: Some(misfire_grace_seconds.unwrap_or(60)),
+                })
+            }
+        }
+    }
+
+    fn interval_grace(every_seconds: u32) -> u32 {
+        every_seconds.min(60)
+    }
+
+    pub fn runs_per_day(&self) -> u64 {
+        match self {
+            Self::Interval { every_seconds, .. } => (86_400 / u64::from(*every_seconds)).max(1),
+            // TODO: expand cron expressions to compute the scheduled-runs quota.
+            Self::Cron { .. } => 1_440,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BotState {
+    Enabled,
+    Disabled,
+    Archived,
+}
+
+impl BotState {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "enabled" => Some(Self::Enabled),
+            "disabled" => Some(Self::Disabled),
+            "archived" => Some(Self::Archived),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Bot {
+    pub bot_id: String,
+    pub name: String,
+    pub algorithm_id: String,
+    pub build_id: String,
+    pub strategy_name: String,
+    pub account_ids: Vec<String>,
+    pub schedule: Schedule,
+    pub state: BotState,
+    pub active_run_id: Option<String>,
+    pub version: u64,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+    pub stream_sequence: u64,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateBotRequest {
+    pub name: String,
+    pub algorithm_id: String,
+    pub build_id: String,
+    pub strategy_name: String,
+    pub account_ids: Vec<String>,
+    pub schedule: Schedule,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PatchBotRequest {
+    pub name: Option<String>,
+    pub build_id: Option<String>,
+    pub strategy_name: Option<String>,
+    pub account_ids: Option<Vec<String>>,
+    pub schedule: Option<Schedule>,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct KillRequest {
+    pub account_ids: Option<Vec<String>>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct KillResponse {
+    pub disabled_bot_ids: Vec<String>,
+    pub canceled_run_ids: Vec<String>,
+}

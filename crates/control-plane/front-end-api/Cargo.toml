@@ -1,0 +1,24 @@
+[package]
+name = "platform-front-end-api"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[dependencies]
+async-trait = { workspace = true }
+chrono = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+platform-auth-service = { workspace = true }
+parking_lot = { workspace = true }
+platform-config = { workspace = true }
+platform-errors = { workspace = true, features = ["http"] }
+platform-runtime = { workspace = true }
+platform-types = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json = { workspace = true }
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "signal", "sync", "time"] }
+tracing = { workspace = true }
+uuid = { workspace = true, features = ["v4"] }
