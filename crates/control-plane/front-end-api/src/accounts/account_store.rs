@@ -4,6 +4,7 @@ use crate::api::Id;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use std::collections::HashMap;
+use stock_trek_types::cex::cex_id::CexId;
 
 const MIN_CREDENTIAL_LENGTH: usize = 16;
 const MAX_CREDENTIAL_LENGTH: usize = 256;
@@ -62,7 +63,7 @@ impl AccountStore {
     pub fn link(
         &self,
         owner: &str,
-        cex_id: &str,
+        cex_id: CexId,
         label: &str,
         api_key: &str,
         api_secret: &str,
@@ -77,7 +78,7 @@ impl AccountStore {
         }
         let summary = AccountSummary {
             account_id: Id::mint("account"),
-            cex_id: cex_id.to_string(),
+            cex_id,
             label: label.to_string(),
             active: true,
             connector: Connector::starting(now),

@@ -1,6 +1,8 @@
 use crate::api::Problem;
+use crate::api::timestamp::milliseconds;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
+use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -63,12 +65,12 @@ impl Connector {
 #[serde(rename_all = "camelCase")]
 pub struct AccountSummary {
     pub account_id: String,
-    pub cex_id: String,
+    pub cex_id: CexId,
     pub label: String,
     pub active: bool,
     pub connector: Connector,
     pub version: u64,
-    #[serde(with = "crate::api::timestamp::milliseconds")]
+    #[serde(with = "milliseconds")]
     pub updated_at: DateTime<Utc>,
 }
 
@@ -81,7 +83,7 @@ impl AccountSummary {
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct LinkAccountRequest {
-    pub cex_id: String,
+    pub cex_id: CexId,
     pub label: String,
     pub api_key: String,
     pub api_secret: String,

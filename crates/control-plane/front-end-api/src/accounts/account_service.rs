@@ -28,7 +28,7 @@ impl AccountService {
             .accounts
             .link(
                 auth.owner(),
-                &request.cex_id,
+                request.cex_id,
                 &request.label,
                 &request.api_key,
                 &request.api_secret,
@@ -120,7 +120,7 @@ impl AccountService {
         Ok(self
             .accounts
             .snapshot(owner, account_id)
-            .unwrap_or_else(|| PortfolioSnapshot::pending(&account.account_id, &account.cex_id)))
+            .unwrap_or_else(|| PortfolioSnapshot::pending(&account.account_id, account.cex_id)))
     }
 
     pub fn snapshots(&self, owner: &str) -> Vec<PortfolioSnapshot> {
