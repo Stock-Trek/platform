@@ -218,7 +218,7 @@ Every channel sequences its frames.
 | `portfolio.{accountId}`  | Portfolio snapshots and order updates                 | Bounded window                   |
 | `builds.{algorithmId}`   | Build state changes                                   | Bounded window                   |
 | `runs.{botId}`           | Run state changes                                     | Bounded window                   |
-| `backtests.{backtestId}` | One frame per finished simulation, then a final frame | Full, until the backtest expires |
+| `backtests.{backtestId}` | One frame per finished simulation, then a final frame | Full, for the backtest's lifetime |
 
 ### Resume and gaps
 
@@ -439,6 +439,7 @@ Archiving an algorithm is a soft delete: history stays queryable.
 | `GET`    | `/v1/algorithms/{algorithmId}/builds/{buildId}`            | `read`   | Build detail and state                                     |
 | `GET`    | `/v1/algorithms/{algorithmId}/builds/{buildId}/log`        | `read`   | Build log                                                  |
 | `GET`    | `/v1/algorithms/{algorithmId}/builds/{buildId}/strategies` | `read`   | Strategies exposed by the build                            |
+| `DELETE` | `/v1/algorithms/{algorithmId}/builds/{buildId}`            | `manage` | Delete the build, its artifact, and its log                |
 
 Algorithm list items identify the connected repository:
 
@@ -472,7 +473,7 @@ Algorithm list items identify the connected repository:
 `ref` uses the `heads/` or `tags/` form and defaults to the algorithm's `defaultRef`; `commit` pins an exact revision (abbreviations are resolved, see [Conventions](#conventions)) and defaults to the ref head.
 The response is `202` with the build representation.
 
-Builds are idempotent per `(ref, full commit ID)`: re-triggering an existing build returns that build, unless it is `failed`, in which case a new build is created so compilation can be retried.
+Builds are idempotent per `(ref, full commit ID)`: re-triggering an existing build returns that build, unless it is `failed` or deleted, in which case a new build is created so compilation can be retried.
 
 `GET .../builds/{buildId}` returns:
 
@@ -513,6 +514,15 @@ The API itself answers with `200` and a JSON body rather than a redirect, becaus
 ```
 
 Strategies are extracted once when the build finishes; a build that fails to report its strategies is treated as `failed`.
+
+### Deleting builds
+
+`DELETE /v1/algorithms/{algorithmId}/builds/{buildId}` deletes the build, its artifact, its log, and every backtest that ran it, and answers `204`.
+It fails with `409 state_conflict` while the build is `queued` or `building`, or if any bot still pins it.
+Backtests that reference the build are never a reason to refuse deletion: they are deleted along with it (see [Backtesting](#backtesting)).
+
+A deleted build and its backtests no longer exist: the build detail, log, and strategies endpoints answer `404 not_found`, and each of the build's backtests answers `404 not_found` on its status, results, and export endpoints, with its stream channel closed.
+The deleted build cannot be used again because new backtests and bots require a `ready` build.
 
 ## Bots and runs
 
@@ -721,6 +731,7 @@ Retention, together with the scheduled-runs quota, bounds the run store, because
 
 A **backtest** is an ad-hoc, resource-bounded experiment: it runs one strategy from one build many times over archived market data with simulated execution friction and a seeded random generator, streaming per-simulation results as they finish and finishing with a collated result set.
 Backtests never touch live exchanges or real balances.
+A backtest cannot be deleted directly, and it is always associated with the build it ran: deleting that build deletes the backtest with it.
 
 ### Backtest lifecycle
 
@@ -740,7 +751,6 @@ Backtests never touch live exchanges or real balances.
 | `GET`    | `/v1/backtests`                             | `read`   | List the owner's backtests, filterable by `state`       |
 | `GET`    | `/v1/backtests/{backtestId}`                | `read`   | Backtest status                                         |
 | `POST`   | `/v1/backtests/{backtestId}/cancel`         | `manage` | Cancel a queued or running backtest                     |
-| `DELETE` | `/v1/backtests/{backtestId}`                | `manage` | Delete a finished backtest and its results              |
 | `GET`    | `/v1/backtests/{backtestId}/results`        | `read`   | Results finished so far, paginated                      |
 | `GET`    | `/v1/backtests/{backtestId}/results/export` | `read`   | Pre-signed download of all results (finished backtests) |
 
@@ -789,12 +799,9 @@ No more than the per-owner concurrent backtest limit may be `queued` or `running
   "createdAt": "2026-07-14T09:00:00.000Z",
   "startedAt": "2026-07-14T09:00:04.000Z",
   "completedAt": null,
-  "expiresAt": null,
   "streamSequence": 37
 }
 ```
-
-`expiresAt` is set once the backtest is terminal and says when it will be deleted.
 
 ### Results and streaming
 
@@ -827,12 +834,10 @@ When the backtest reaches a terminal state the server sends one last frame, `{ "
 A client that subscribes after that point still receives the stored frames and the final frame.
 On `completed` the client can fetch the collated set over REST.
 
-### Canceling and deleting
+### Canceling
 
 `POST /v1/backtests/{backtestId}/cancel` cancels a queued or running backtest and returns `202` with the status representation (state `canceled` once workers have stopped).
 On a terminal backtest it is idempotent and returns the status unchanged with `200`.
 
-`DELETE /v1/backtests/{backtestId}` deletes a terminal backtest and its results and returns `204`; on a `queued` or `running` backtest it fails with `409 state_conflict`.
-
 A simulation result larger than the per-simulation limit fails the backtest with `error.code: "result_too_large"`; results finished before that remain readable.
-Backtests and their results are retained for 30 days after a backtest reaches a terminal state and are deleted afterwards; a deleted backtest disappears from lists and answers `404 not_found`.
+Backtests cannot be deleted on their own: once a backtest has run it stays associated with its build, and deleting that build deletes the backtest and its results with it, after which its status, results, and export endpoints answer `404 not_found`.

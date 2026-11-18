@@ -43,11 +43,14 @@ Everything else is a projection of existing state: the ownership registry, the p
 - Scheduling writes run records to the run store.
   The run invoker claims due runs and invokes the runner, which executes the strategy, submits signed order requests, and uploads run logs.
   The at-most-one-active-run rule and misfire handling are enforced where runs are claimed, not in the browser.
+- Deleting a build removes its artifact and log, and is refused while the build is incomplete or pinned by any bot.
+  Backtests that reference the build are deleted with it.
 - Cron schedules are expanded to compute the scheduled-runs quota.
 
 ## Backtests
 
 - Execution uses the sandbox runner's backtest subsystem, which already enforces worker limits, watchdog timeouts, and memory limits.
+- Backtests are never deleted directly: a backtest stays associated with the build it ran and is deleted, together with its results and stored stream frames, when that build is deleted.
 
 ## Streams
 
