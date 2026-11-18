@@ -119,13 +119,15 @@ impl SessionStore {
     }
 
     pub fn rotate_refresh(&self, token: &str, now: DateTime<Utc>) -> Option<SessionTokens> {
-        match self.refresh.rotate(token, now, |owner, family, family_expiry| {
-            let (replacement, session_id) =
-                self.mint_tokens(owner, &LOGIN_SCOPES, now, ACCESS_TTL, Some(family_expiry));
-            let mut state = self.state.lock();
-            Self::admit(&mut state, family, &session_id, &replacement);
-            replacement
-        }) {
+        match self
+            .refresh
+            .rotate(token, now, |owner, family, family_expiry| {
+                let (replacement, session_id) =
+                    self.mint_tokens(owner, &LOGIN_SCOPES, now, ACCESS_TTL, Some(family_expiry));
+                let mut state = self.state.lock();
+                Self::admit(&mut state, family, &session_id, &replacement);
+                replacement
+            }) {
             Rotation::Replayed(tokens) | Rotation::Rotated(tokens) => Some(tokens),
             Rotation::FamilyRevoked { family } => {
                 self.revoke_family_access(&family);

@@ -1,5 +1,6 @@
-use super::ticket_store::TicketStore;
+use super::ChannelRegistry;
 use super::StreamService;
+use super::ticket_store::TicketStore;
 use crate::accounts::{AccountService, AccountStore};
 use crate::algorithms::BuildStore;
 use crate::auth::SessionStore;
@@ -7,7 +8,6 @@ use crate::backtests::BacktestStore;
 use crate::bots::bot_types::{Bot, BotState, Schedule};
 use crate::bots::{BotService, BotStore, RunStore};
 use crate::limits::{LimitService, LimitSources};
-use super::ChannelRegistry;
 use chrono::{Duration, Utc};
 use std::sync::Arc;
 
@@ -90,7 +90,8 @@ impl ChannelFixture {
                 Utc::now(),
             )
             .expect("link");
-        let algorithm = builds.register_algorithm(Self::OWNER, "momentum", "acme/momentum", "heads/main");
+        let algorithm =
+            builds.register_algorithm(Self::OWNER, "momentum", "acme/momentum", "heads/main");
         bots.insert(
             Self::OWNER,
             Bot {
@@ -125,24 +126,36 @@ impl ChannelFixture {
 fn stream_channels_follow_the_documented_resource_ids() {
     let fixture = ChannelFixture::new();
     let owner = ChannelFixture::OWNER;
-    assert!(fixture
-        .service
-        .owns_channel(owner, &format!("portfolio.{}", fixture.account_id)));
-    assert!(fixture
-        .service
-        .owns_channel(owner, &format!("builds.{}", fixture.algorithm_id)));
-    assert!(fixture
-        .service
-        .owns_channel(owner, &format!("runs.{}", fixture.bot_id)));
-    assert!(!fixture
-        .service
-        .owns_channel(owner, &format!("runs.{}", fixture.algorithm_id)));
-    assert!(!fixture
-        .service
-        .owns_channel(owner, &format!("builds.{}", fixture.bot_id)));
-    assert!(!fixture
-        .service
-        .owns_channel("user_other", &format!("portfolio.{}", fixture.account_id)));
+    assert!(
+        fixture
+            .service
+            .owns_channel(owner, &format!("portfolio.{}", fixture.account_id))
+    );
+    assert!(
+        fixture
+            .service
+            .owns_channel(owner, &format!("builds.{}", fixture.algorithm_id))
+    );
+    assert!(
+        fixture
+            .service
+            .owns_channel(owner, &format!("runs.{}", fixture.bot_id))
+    );
+    assert!(
+        !fixture
+            .service
+            .owns_channel(owner, &format!("runs.{}", fixture.algorithm_id))
+    );
+    assert!(
+        !fixture
+            .service
+            .owns_channel(owner, &format!("builds.{}", fixture.bot_id))
+    );
+    assert!(
+        !fixture
+            .service
+            .owns_channel("user_other", &format!("portfolio.{}", fixture.account_id))
+    );
     assert!(!fixture.service.owns_channel(owner, "portfolio.unknown"));
     assert!(!fixture.service.owns_channel(owner, "unknown.channel"));
 }

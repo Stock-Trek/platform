@@ -23,7 +23,9 @@ impl CronExpression {
     }
 
     pub fn runs_per_day(expression: &str) -> u64 {
-        Self::matching_minutes(expression).unwrap_or(0).div_ceil(u64::from(REFERENCE_DAYS))
+        Self::matching_minutes(expression)
+            .unwrap_or(0)
+            .div_ceil(u64::from(REFERENCE_DAYS))
     }
 
     fn matching_minutes(expression: &str) -> Option<u64> {
@@ -43,7 +45,8 @@ impl CronExpression {
         for _ in 0..REFERENCE_DAYS {
             let day_matches = match (day_restricted, weekday_restricted) {
                 (true, true) => {
-                    days[day.day() as usize] || weekdays[day.weekday().num_days_from_sunday() as usize]
+                    days[day.day() as usize]
+                        || weekdays[day.weekday().num_days_from_sunday() as usize]
                 }
                 (true, false) => days[day.day() as usize],
                 (false, true) => weekdays[day.weekday().num_days_from_sunday() as usize],

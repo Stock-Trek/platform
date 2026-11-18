@@ -322,8 +322,9 @@ fn concurrent_rotations_return_the_same_replacement() {
         .map(|handle| handle.join().expect("rotation thread"))
         .collect();
     let first = &replacements[0];
-    assert!(replacements
-        .iter()
-        .all(|tokens| tokens.token == first.token
-            && tokens.refresh_token == first.refresh_token));
+    assert!(
+        replacements.iter().all(
+            |tokens| tokens.token == first.token && tokens.refresh_token == first.refresh_token
+        )
+    );
 }

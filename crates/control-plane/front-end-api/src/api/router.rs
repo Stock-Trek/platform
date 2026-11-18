@@ -1,7 +1,7 @@
 use crate::accounts::{AccountApi, AccountService, AccountStore};
 use crate::algorithms::{AlgorithmApi, BuildStore};
-use crate::api::cors::Cors;
 use crate::api::HealthRoute;
+use crate::api::cors::Cors;
 use crate::api::{ApiRequest, IdempotencyStore, Problem, RequestHandler};
 use crate::auth::{SessionApi, SessionService, SessionStore};
 use crate::backtests::{BacktestApi, BacktestService, BacktestStore};

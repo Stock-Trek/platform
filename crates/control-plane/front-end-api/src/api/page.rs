@@ -15,9 +15,9 @@ impl PageQuery {
         let limit = match request.query("limit") {
             None => DEFAULT_LIMIT,
             Some(value) => {
-                let parsed = value.parse::<usize>().map_err(|_| {
-                    Problem::validation_failed("limit must be a positive integer")
-                })?;
+                let parsed = value
+                    .parse::<usize>()
+                    .map_err(|_| Problem::validation_failed("limit must be a positive integer"))?;
                 if parsed == 0 {
                     return Err(Problem::validation_failed("limit must be at least 1"));
                 }

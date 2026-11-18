@@ -128,13 +128,8 @@ pub struct PatchBotRequest {
 }
 
 impl PatchBotRequest {
-    const REQUIRED_FIELDS: [&str; 5] = [
-        "name",
-        "buildId",
-        "strategyName",
-        "accountIds",
-        "schedule",
-    ];
+    const REQUIRED_FIELDS: [&str; 5] =
+        ["name", "buildId", "strategyName", "accountIds", "schedule"];
 
     pub fn merge_patch(value: &serde_json::Value) -> Result<Self, Problem> {
         for field in Self::REQUIRED_FIELDS {

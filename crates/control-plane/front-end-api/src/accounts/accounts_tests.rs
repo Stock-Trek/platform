@@ -10,10 +10,10 @@ use crate::bots::{BotService, BotStore, RunStore};
 use crate::limits::{LimitService, LimitSources};
 use chrono::{TimeZone, Utc};
 use serde_json::json;
+use std::sync::Arc;
 use stock_trek_types::cex::{
     asset_id::AssetId, cex_id::CexId, side::Side, tag::Tag, trading_pair::TradingPair,
 };
-use std::sync::Arc;
 
 struct Fixture;
 
@@ -158,9 +158,15 @@ async fn linking_stays_connecting_until_the_connector_validates() {
     let fixture = ServiceFixture::new();
     let summary = fixture.link();
     assert_eq!(summary.connector.state, ConnectorState::Connecting);
-    assert_eq!(fixture.connector(&summary.account_id), ConnectorState::Connecting);
+    assert_eq!(
+        fixture.connector(&summary.account_id),
+        ConnectorState::Connecting
+    );
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    assert_eq!(fixture.connector(&summary.account_id), ConnectorState::Connected);
+    assert_eq!(
+        fixture.connector(&summary.account_id),
+        ConnectorState::Connected
+    );
 }
 
 #[tokio::test(start_paused = true)]
@@ -178,5 +184,8 @@ async fn replacing_credentials_revalidates_in_the_background() {
         .expect("replace");
     assert_eq!(replaced.connector.state, ConnectorState::Connecting);
     tokio::time::sleep(std::time::Duration::from_secs(1)).await;
-    assert_eq!(fixture.connector(&summary.account_id), ConnectorState::Error);
+    assert_eq!(
+        fixture.connector(&summary.account_id),
+        ConnectorState::Error
+    );
 }
