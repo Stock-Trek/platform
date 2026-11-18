@@ -1,0 +1,79 @@
+use crate::api::Problem;
+use serde::Serialize;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Scope {
+    Read,
+    Manage,
+    Admin,
+}
+
+impl Scope {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "read" => Some(Self::Read),
+            "manage" => Some(Self::Manage),
+            "admin" => Some(Self::Admin),
+            _ => None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AuthContext {
+    owner: String,
+    token: String,
+    scopes: Vec<Scope>,
+}
+
+impl AuthContext {
+    pub fn new(owner: impl Into<String>, token: impl Into<String>, scopes: Vec<Scope>) -> Self {
+        Self {
+            owner: owner.into(),
+            token: token.into(),
+            scopes,
+        }
+    }
+
+    pub fn owner(&self) -> &str {
+        &self.owner
+    }
+
+    pub fn token(&self) -> &str {
+        &self.token
+    }
+
+    pub fn scopes(&self) -> &[Scope] {
+        &self.scopes
+    }
+
+    pub fn require(&self, scope: Scope) -> Result<(), Problem> {
+        if self.scopes.contains(&scope) {
+            Ok(())
+        } else {
+            Err(Problem::forbidden(format!(
+                "the token lacks the {} scope",
+                scope.as_str()
+            )))
+        }
+    }
+
+    pub fn require_admin(&self) -> Result<(), Problem> {
+        if self.scopes.contains(&Scope::Admin) {
+            Ok(())
+        } else {
+            Err(Problem::step_up_required())
+        }
+    }
+}
+
+impl Scope {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Read => "read",
+            Self::Manage => "manage",
+            Self::Admin => "admin",
+        }
+    }
+}

@@ -4259,6 +4259,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "platform-front-end-api"
+version = "0.2.0"
+dependencies = [
+ "async-trait",
+ "chrono",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "parking_lot",
+ "platform-auth-service",
+ "platform-config",
+ "platform-errors",
+ "platform-runtime",
+ "platform-types",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "platform-git"
 version = "0.2.0"
 dependencies = [

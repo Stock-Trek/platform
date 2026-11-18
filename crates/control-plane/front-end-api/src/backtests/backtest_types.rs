@@ -1,0 +1,106 @@
+use crate::api::Page;
+use chrono::{DateTime, Utc};
+use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BacktestState {
+    Queued,
+    Running,
+    Completed,
+    Failed,
+    Canceled,
+}
+
+impl BacktestState {
+    pub fn parse(value: &str) -> Option<Self> {
+        match value {
+            "queued" => Some(Self::Queued),
+            "running" => Some(Self::Running),
+            "completed" => Some(Self::Completed),
+            "failed" => Some(Self::Failed),
+            "canceled" => Some(Self::Canceled),
+            _ => None,
+        }
+    }
+
+    pub fn is_active(&self) -> bool {
+        matches!(self, Self::Queued | Self::Running)
+    }
+
+    pub fn is_terminal(&self) -> bool {
+        !self.is_active()
+    }
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CreateBacktestRequest {
+    pub algorithm_id: String,
+    pub build_id: String,
+    pub strategy_name: String,
+    pub seed: Option<i64>,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BacktestCreated {
+    pub backtest_id: String,
+    pub state: BacktestState,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BacktestError {
+    pub code: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BacktestProgress {
+    pub completed: u64,
+    pub total: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BacktestStatus {
+    pub backtest_id: String,
+    pub algorithm_id: String,
+    pub build_id: String,
+    pub strategy_name: String,
+    pub state: BacktestState,
+    pub error: Option<BacktestError>,
+    pub seed: i64,
+    pub progress: BacktestProgress,
+    pub created_at: DateTime<Utc>,
+    pub started_at: Option<DateTime<Utc>>,
+    pub completed_at: Option<DateTime<Utc>>,
+    pub stream_sequence: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BacktestResultItem {
+    pub sequence: u64,
+    pub simulation: u64,
+    pub result: serde_json::Value,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BacktestResultsPage {
+    #[serde(flatten)]
+    pub page: Page<BacktestResultItem>,
+    pub state: BacktestState,
+    pub complete: bool,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ExportLink {
+    pub url: String,
+    pub expires_at: DateTime<Utc>,
+    pub format: &'static str,
+}
