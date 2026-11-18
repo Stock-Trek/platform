@@ -1,5 +1,7 @@
 use crate::algorithms::BuildStore;
-use crate::algorithms::{BuildState, BuildSummary, TriggerBuildRequest};
+use crate::algorithms::{
+    AlgorithmState, AlgorithmSummary, BuildState, BuildSummary, TriggerBuildRequest,
+};
 use crate::api::{ApiRequest, IdempotencyStore, Page, PageQuery, Problem, Respond};
 use crate::auth::{AuthContext, Scope, SessionService};
 use crate::backtests::BacktestStore;
@@ -94,10 +96,13 @@ impl BuildApi {
             .apply(request, auth.owner(), "trigger-build", || {
                 let trigger: TriggerBuildRequest = request.json()?;
                 let owner = auth.owner();
-                self.algorithm(owner, algorithm_id)?;
-                let git_ref = trigger
-                    .git_ref
-                    .unwrap_or_else(|| self.default_ref(owner, algorithm_id));
+                let algorithm = self.algorithm(owner, algorithm_id)?;
+                if algorithm.state != AlgorithmState::Active {
+                    return Err(Problem::state_conflict(
+                        "builds can only be triggered while the algorithm is active",
+                    ));
+                }
+                let git_ref = trigger.git_ref.unwrap_or(algorithm.default_ref);
                 Self::validate_ref(&git_ref)?;
                 let commit = trigger.commit;
                 if let Some(commit) = &commit {
@@ -199,18 +204,10 @@ impl BuildApi {
             .ok_or_else(|| Problem::not_found("build does not exist"))
     }
 
-    fn algorithm(&self, owner: &str, algorithm_id: &str) -> Result<(), Problem> {
+    fn algorithm(&self, owner: &str, algorithm_id: &str) -> Result<AlgorithmSummary, Problem> {
         self.builds
             .algorithm(owner, algorithm_id)
             .ok_or_else(|| Problem::not_found("algorithm does not exist"))
-            .map(|_| ())
-    }
-
-    fn default_ref(&self, owner: &str, algorithm_id: &str) -> String {
-        self.builds
-            .algorithm(owner, algorithm_id)
-            .map(|algorithm| algorithm.default_ref)
-            .unwrap_or_default()
     }
 
     fn validate_ref(git_ref: &str) -> Result<(), Problem> {

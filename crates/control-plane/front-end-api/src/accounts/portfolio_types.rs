@@ -31,6 +31,7 @@ pub struct PendingOrder {
     pub order_type: OrderType,
     pub quantity: String,
     pub price: String,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub placed_at: DateTime<Utc>,
 }
 
@@ -46,6 +47,7 @@ pub struct PortfolioAsset {
 pub struct PortfolioSnapshot {
     pub account_id: String,
     pub cex_id: String,
+    #[serde(with = "crate::api::timestamp::milliseconds::option")]
     pub as_of: Option<DateTime<Utc>>,
     pub stream_sequence: u64,
     pub assets: Vec<PortfolioAsset>,

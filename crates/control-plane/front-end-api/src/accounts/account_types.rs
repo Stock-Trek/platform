@@ -29,6 +29,7 @@ pub enum ConnectorReason {
 pub struct Connector {
     pub state: ConnectorState,
     pub reason: Option<ConnectorReason>,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub since: DateTime<Utc>,
 }
 
@@ -67,6 +68,7 @@ pub struct AccountSummary {
     pub active: bool,
     pub connector: Connector,
     pub version: u64,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub updated_at: DateTime<Utc>,
 }
 

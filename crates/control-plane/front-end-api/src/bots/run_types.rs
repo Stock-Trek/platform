@@ -82,8 +82,10 @@ pub struct Run {
     pub build_id: Option<String>,
     pub strategy_name: Option<String>,
     pub trigger: RunTrigger,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub scheduled_at: DateTime<Utc>,
     pub state: RunState,
+    #[serde(with = "crate::api::timestamp::milliseconds::option")]
     pub completed_at: Option<DateTime<Utc>>,
     pub log_available: bool,
     #[serde(skip_serializing)]
@@ -96,6 +98,7 @@ pub struct Run {
 #[serde(rename_all = "camelCase")]
 pub struct RunLogLink {
     pub url: String,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,
 }
 

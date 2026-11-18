@@ -99,6 +99,7 @@ impl BotService {
         let owner = auth.owner();
         let bot = self.get(auth, bot_id)?;
         Self::require_if_match(if_match, bot.version)?;
+        Self::require_mutable(&bot)?;
         let build_id = request.build_id.clone().unwrap_or(bot.build_id.clone());
         let strategy_name = request
             .strategy_name
@@ -143,6 +144,7 @@ impl BotService {
         let owner = auth.owner();
         let bot = self.get(auth, bot_id)?;
         Self::require_if_match(if_match, bot.version)?;
+        Self::require_mutable(&bot)?;
         for account_id in &bot.account_ids {
             if !self.accounts.active(owner, account_id) {
                 return Err(Problem::state_conflict(
@@ -174,6 +176,7 @@ impl BotService {
         let owner = auth.owner();
         let bot = self.get(auth, bot_id)?;
         Self::require_if_match(if_match, bot.version)?;
+        Self::require_mutable(&bot)?;
         self.cancel_pending_runs(owner, &bot, now);
         self.bots
             .update(owner, bot_id, now, |mut bot| {
@@ -248,6 +251,13 @@ impl BotService {
                     "every account must be a linked, active account",
                 ));
             }
+        }
+        Ok(())
+    }
+
+    pub(super) fn require_mutable(bot: &Bot) -> Result<(), Problem> {
+        if bot.state == BotState::Archived {
+            return Err(Problem::state_conflict("an archived bot is read-only"));
         }
         Ok(())
     }

@@ -1,6 +1,6 @@
 use crate::accounts::AccountService;
 use crate::accounts::account_types::{CredentialsRequest, LinkAccountRequest};
-use crate::api::{ApiRequest, Page, Problem, Respond};
+use crate::api::{ApiRequest, Page, PageQuery, Problem, Respond};
 use crate::auth::{Scope, SessionService};
 use http_body_util::Full;
 use hyper::{Method, Response, StatusCode, body::Bytes};
@@ -54,7 +54,7 @@ impl AccountApi {
     }
 
     fn link(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
-        let auth = self.sessions.authorize_request(request, Scope::Admin)?;
+        let auth = self.sessions.authorize_admin(request)?;
         request.require_json_content_type()?;
         self.idempotency
             .apply(request, auth.owner(), "link-account", || {
@@ -72,13 +72,8 @@ impl AccountApi {
     fn list(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
         let accounts = self.accounts.list(auth.owner());
-        Ok(Respond::json(
-            StatusCode::OK,
-            &Page {
-                data: accounts,
-                next_cursor: None,
-            },
-        ))
+        let page = Page::of(accounts, &PageQuery::parse(request));
+        Ok(Respond::json(StatusCode::OK, &page))
     }
 
     fn get(
@@ -100,7 +95,8 @@ impl AccountApi {
         request: &ApiRequest,
         account_id: &str,
     ) -> Result<Response<Full<Bytes>>, Problem> {
-        let auth = self.sessions.authorize_request(request, Scope::Admin)?;
+        let auth = self.sessions.authorize_admin(request)?;
+        request.require_json_content_type()?;
         let credentials: CredentialsRequest = request.json()?;
         self.accounts
             .replace_credentials(&auth, account_id, &credentials, chrono::Utc::now())?;
@@ -112,7 +108,7 @@ impl AccountApi {
         request: &ApiRequest,
         account_id: &str,
     ) -> Result<Response<Full<Bytes>>, Problem> {
-        let auth = self.sessions.authorize_request(request, Scope::Admin)?;
+        let auth = self.sessions.authorize_admin(request)?;
         let force = request.query("force").is_some_and(|value| value == "true");
         match self
             .accounts
@@ -136,12 +132,7 @@ impl AccountApi {
     fn portfolios(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
         let snapshots = self.accounts.snapshots(auth.owner());
-        Ok(Respond::json(
-            StatusCode::OK,
-            &Page {
-                data: snapshots,
-                next_cursor: None,
-            },
-        ))
+        let page = Page::of(snapshots, &PageQuery::parse(request));
+        Ok(Respond::json(StatusCode::OK, &page))
     }
 }

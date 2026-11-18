@@ -1,9 +1,10 @@
 use crate::accounts::AccountStore;
 use crate::algorithms::BuildStore;
-use crate::api::{Problem, QuotaDetail};
+use crate::api::{MAX_REQUEST_BODY_BYTES, Problem, QuotaDetail};
 use crate::backtests::BacktestStore;
 use crate::bots::{BotState, BotStore};
 use crate::limits::throttle::Throttle;
+use crate::streaming::MAX_SUBSCRIPTIONS_PER_CONNECTION;
 use chrono::{DateTime, Duration, Utc};
 use serde::Serialize;
 use std::collections::BTreeMap;
@@ -15,11 +16,15 @@ pub const QUOTA_BOTS: &str = "bots";
 pub const QUOTA_SCHEDULED_RUNS_PER_DAY: &str = "scheduledRunsPerDay";
 pub const QUOTA_CONCURRENT_BACKTESTS: &str = "concurrentBacktests";
 pub const QUOTA_STREAM_CONNECTIONS: &str = "streamConnections";
+pub const QUOTA_STREAM_SUBSCRIPTIONS: &str = "concurrentStreamSubscriptions";
 pub const QUOTA_API_REQUESTS_PER_MINUTE: &str = "apiRequestsPerMinute";
 pub const QUOTA_AD_HOC_RUNS_PER_HOUR: &str = "adHocRunsPerHour";
+pub const QUOTA_MAX_REQUEST_BYTES: &str = "maxRequestBytes";
+pub const QUOTA_MAX_RESULT_BYTES: &str = "maxBacktestResultBytes";
 
 const REQUEST_RATE_WINDOW: Duration = Duration::minutes(1);
 const AD_HOC_RATE_WINDOW: Duration = Duration::hours(1);
+const MAX_RESULT_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -59,7 +64,11 @@ impl LimitService {
             QUOTA_SCHEDULED_RUNS_PER_DAY,
             QUOTA_CONCURRENT_BACKTESTS,
             QUOTA_STREAM_CONNECTIONS,
+            QUOTA_STREAM_SUBSCRIPTIONS,
             QUOTA_API_REQUESTS_PER_MINUTE,
+            QUOTA_AD_HOC_RUNS_PER_HOUR,
+            QUOTA_MAX_REQUEST_BYTES,
+            QUOTA_MAX_RESULT_BYTES,
         ] {
             entries.insert(quota, self.entry(owner, quota, now));
         }
@@ -130,8 +139,11 @@ impl LimitService {
             QUOTA_SCHEDULED_RUNS_PER_DAY => 20_000,
             QUOTA_CONCURRENT_BACKTESTS => 2,
             QUOTA_STREAM_CONNECTIONS => 5,
+            QUOTA_STREAM_SUBSCRIPTIONS => MAX_SUBSCRIPTIONS_PER_CONNECTION as u64,
             QUOTA_API_REQUESTS_PER_MINUTE => 600,
             QUOTA_AD_HOC_RUNS_PER_HOUR => 60,
+            QUOTA_MAX_REQUEST_BYTES => MAX_REQUEST_BODY_BYTES as u64,
+            QUOTA_MAX_RESULT_BYTES => MAX_RESULT_BYTES,
             _ => 0,
         }
     }
@@ -150,7 +162,15 @@ impl LimitService {
                 .map(|bot| bot.schedule.runs_per_day())
                 .sum(),
             QUOTA_CONCURRENT_BACKTESTS => self.sources.backtests.count_active(owner) as u64,
-            QUOTA_STREAM_CONNECTIONS | QUOTA_AD_HOC_RUNS_PER_HOUR => 0,
+            QUOTA_STREAM_CONNECTIONS | QUOTA_STREAM_SUBSCRIPTIONS => 0,
+            QUOTA_AD_HOC_RUNS_PER_HOUR => self
+                .sources
+                .bots
+                .all(owner)
+                .iter()
+                .map(|bot| self.ad_hoc_throttle.used(&bot.bot_id, now))
+                .sum(),
+            QUOTA_MAX_REQUEST_BYTES | QUOTA_MAX_RESULT_BYTES => 0,
             QUOTA_API_REQUESTS_PER_MINUTE => self.request_throttle.used(owner, now),
             _ => 0,
         }

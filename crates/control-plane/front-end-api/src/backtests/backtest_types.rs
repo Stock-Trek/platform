@@ -74,8 +74,11 @@ pub struct BacktestStatus {
     pub error: Option<BacktestError>,
     pub seed: i64,
     pub progress: BacktestProgress,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub created_at: DateTime<Utc>,
+    #[serde(with = "crate::api::timestamp::milliseconds::option")]
     pub started_at: Option<DateTime<Utc>>,
+    #[serde(with = "crate::api::timestamp::milliseconds::option")]
     pub completed_at: Option<DateTime<Utc>>,
     pub stream_sequence: u64,
 }
@@ -101,6 +104,7 @@ pub struct BacktestResultsPage {
 #[serde(rename_all = "camelCase")]
 pub struct ExportLink {
     pub url: String,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,
     pub format: &'static str,
 }

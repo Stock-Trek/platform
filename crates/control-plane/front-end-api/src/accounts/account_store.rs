@@ -34,6 +34,7 @@ impl Credentials {
     }
 }
 
+#[derive(Debug)]
 pub enum LinkConflict {
     LabelTaken,
 }

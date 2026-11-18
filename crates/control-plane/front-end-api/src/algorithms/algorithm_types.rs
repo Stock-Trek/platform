@@ -66,7 +66,9 @@ pub struct BuildSummary {
     pub state: BuildState,
     pub error: Option<String>,
     pub log_available: bool,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub created_at: DateTime<Utc>,
+    #[serde(with = "crate::api::timestamp::milliseconds::option")]
     pub completed_at: Option<DateTime<Utc>>,
     pub stream_sequence: u64,
 }
@@ -90,5 +92,6 @@ pub struct Strategy {
 #[serde(rename_all = "camelCase")]
 pub struct BuildLogLink {
     pub url: String,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,
 }

@@ -71,6 +71,7 @@ impl BotApi {
 
     fn create(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Manage)?;
+        request.require_json_content_type()?;
         self.idempotency
             .apply(request, auth.owner(), "create-bot", || {
                 let create: CreateBotRequest = request.json()?;
@@ -107,8 +108,7 @@ impl BotApi {
     }
 
     fn enable(&self, request: &ApiRequest, bot_id: &str) -> Result<Response<Full<Bytes>>, Problem> {
-        let auth = self.sessions.authorize_request(request, Scope::Read)?;
-        auth.require_admin()?;
+        let auth = self.sessions.authorize_admin(request)?;
         let bot = self
             .bots
             .enable(&auth, bot_id, request.if_match()?, Utc::now())?;
@@ -152,6 +152,9 @@ impl BotApi {
 
     fn kill(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Manage)?;
+        if !request.body().is_empty() {
+            request.require_json_content_type()?;
+        }
         let kill: Option<KillRequest> = request.json_optional()?;
         let response = self
             .bots
