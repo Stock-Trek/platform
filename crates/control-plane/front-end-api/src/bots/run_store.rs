@@ -95,6 +95,7 @@ impl RunStore {
         })
     }
 
+    #[allow(dead_code)]
     pub fn attach_log(&self, owner: &str, run_id: &str, url: &str, expires_at: DateTime<Utc>) {
         let mut rows = self.rows.lock();
         if let Some(row) = rows

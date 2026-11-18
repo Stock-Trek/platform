@@ -68,7 +68,7 @@ impl ApiServer {
                     let handler = self.handler.clone();
                     let shutdown = shutdown_rx.clone();
                     connections.spawn(async move {
-                        ApiConnection::serve(stream, handler, shutdown).await;
+                        ApiConnection::serve(stream, peer, handler, shutdown).await;
                         drop(permit);
                     });
                 }

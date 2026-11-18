@@ -7,8 +7,10 @@ use hyper::{
 };
 use serde::de::DeserializeOwned;
 use std::collections::HashMap;
+use std::net::SocketAddr;
 
 const MAX_BODY_BYTES: usize = 1024 * 1024;
+const VERSION_SEGMENT: &str = "v1";
 
 #[derive(Debug)]
 pub struct ApiRequest {
@@ -18,10 +20,15 @@ pub struct ApiRequest {
     query: HashMap<String, String>,
     headers: HeaderMap,
     body: Bytes,
+    peer: Option<SocketAddr>,
+    extensions: hyper::http::Extensions,
 }
 
 impl ApiRequest {
-    pub async fn parse(request: Request<Incoming>) -> Result<Self, Problem> {
+    pub async fn parse(
+        request: Request<Incoming>,
+        peer: Option<SocketAddr>,
+    ) -> Result<Self, Problem> {
         let (parts, body) = request.into_parts();
         let too_large = parts
             .headers
@@ -42,15 +49,28 @@ impl ApiRequest {
                     Problem::validation_failed(error.to_string())
                 }
             })?;
-        Ok(Self::from_parts(
+        let parsed = Self::from_parts(
             parts.method,
             parts.uri,
             parts.headers,
             collected.to_bytes(),
-        ))
+            peer,
+            parts.extensions,
+        );
+        if !parsed.versioned() {
+            return Err(Problem::not_found("no such endpoint"));
+        }
+        Ok(parsed)
     }
 
-    pub fn from_parts(method: Method, uri: hyper::Uri, headers: HeaderMap, body: Bytes) -> Self {
+    pub fn from_parts(
+        method: Method,
+        uri: hyper::Uri,
+        headers: HeaderMap,
+        body: Bytes,
+        peer: Option<SocketAddr>,
+        extensions: hyper::http::Extensions,
+    ) -> Self {
         let path = uri.path().to_string();
         let mut segments: Vec<String> = path
             .split('/')
@@ -65,7 +85,7 @@ impl ApiRequest {
                     .or_insert_with(|| value.to_string());
             }
         }
-        if segments.first().map(String::as_str) == Some("v1") {
+        if segments.first().map(String::as_str) == Some(VERSION_SEGMENT) {
             segments.remove(0);
         }
         Self {
@@ -75,7 +95,13 @@ impl ApiRequest {
             query,
             headers,
             body,
+            peer,
+            extensions,
         }
+    }
+
+    fn versioned(&self) -> bool {
+        self.path == "/v1" || self.path.starts_with("/v1/")
     }
 
     pub fn method(&self) -> &Method {
@@ -131,6 +157,18 @@ impl ApiRequest {
             .map(str::to_string)
     }
 
+    pub fn peer(&self) -> Option<SocketAddr> {
+        self.peer
+    }
+
+    pub fn headers(&self) -> &HeaderMap {
+        &self.headers
+    }
+
+    pub fn extensions(&self) -> &hyper::http::Extensions {
+        &self.extensions
+    }
+
     pub fn origin(&self) -> Option<&str> {
         self.header("origin")
     }
@@ -161,6 +199,17 @@ impl ApiRequest {
         } else {
             Err(Problem::validation_failed(
                 "requests must use a JSON content type",
+            ))
+        }
+    }
+
+    pub fn require_merge_patch_content_type(&self) -> Result<(), Problem> {
+        let content_type = self.header("content-type").unwrap_or_default();
+        if content_type.starts_with("application/merge-patch+json") {
+            Ok(())
+        } else {
+            Err(Problem::validation_failed(
+                "PATCH must use application/merge-patch+json",
             ))
         }
     }

@@ -2,7 +2,7 @@ use crate::api::Problem;
 use crate::api::{Page, PageQuery};
 use crate::auth::AuthContext;
 use crate::bots::RunStore;
-use crate::bots::{CancelResponse, Run, RunFilter, RunLogLink, RunPage, RunState};
+use crate::bots::{Run, RunFilter, RunLogLink, RunPage, RunState};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
@@ -61,7 +61,6 @@ impl RunService {
                 Ok(CancelOutcome::Canceled(canceled))
             }
             RunState::Running => {
-                // TODO: the runner honors the cancel request at the run's next safe point.
                 self.runs.update(owner, run_id, |mut run| {
                     run.cancel_requested = true;
                     run
@@ -76,11 +75,5 @@ impl RunService {
         self.runs
             .log(auth.owner(), run_id)
             .ok_or_else(|| Problem::not_found("no run log exists yet"))
-    }
-
-    pub fn cancel_response() -> CancelResponse {
-        CancelResponse {
-            cancel_requested: true,
-        }
     }
 }

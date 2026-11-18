@@ -55,6 +55,7 @@ pub struct Frame {
 }
 
 impl Frame {
+    #[allow(dead_code)]
     pub fn data(channel: &str, sequence: u64, data: Value) -> Self {
         Self {
             channel: channel.to_string(),
@@ -100,6 +101,7 @@ impl Frame {
         }
     }
 
+    #[allow(dead_code)]
     pub fn backtest_result(channel: &str, sequence: u64, simulation: u64, result: Value) -> Self {
         Self {
             channel: channel.to_string(),
@@ -114,6 +116,7 @@ impl Frame {
         }
     }
 
+    #[allow(dead_code)]
     pub fn backtest_final(channel: &str, sequence: u64, state: &str) -> Self {
         Self {
             channel: channel.to_string(),

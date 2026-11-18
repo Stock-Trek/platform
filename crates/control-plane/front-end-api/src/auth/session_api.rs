@@ -4,6 +4,7 @@ use crate::api::Respond;
 use crate::auth::Scope;
 use crate::auth::SessionService;
 use crate::auth::{LoginRequest, RefreshRequest, StepUpRequest};
+use chrono::Utc;
 use http_body_util::Full;
 use hyper::body::Bytes;
 use hyper::{Method, Response, StatusCode};
@@ -39,7 +40,9 @@ impl SessionApi {
 
     fn login(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let login: LoginRequest = request.json()?;
-        let tokens = self.sessions.login(&login)?;
+        let tokens =
+            self.sessions
+                .login(&login, request.peer().map(|peer| peer.ip()), Utc::now())?;
         Ok(Respond::json(StatusCode::CREATED, &tokens))
     }
 
@@ -52,7 +55,12 @@ impl SessionApi {
     fn step_up(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
         let step_up: StepUpRequest = request.json()?;
-        let tokens = self.sessions.step_up(&auth, &step_up)?;
+        let tokens = self.sessions.step_up(
+            &auth,
+            &step_up,
+            request.peer().map(|peer| peer.ip()),
+            Utc::now(),
+        )?;
         Ok(Respond::json(StatusCode::CREATED, &tokens))
     }
 

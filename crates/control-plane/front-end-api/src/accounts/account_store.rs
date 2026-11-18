@@ -1,13 +1,37 @@
 use crate::accounts::PortfolioSnapshot;
-use crate::accounts::{AccountSummary, Connector, ConnectorState};
+use crate::accounts::{AccountSummary, Connector, ConnectorReason};
 use crate::api::Id;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 
+const MIN_CREDENTIAL_LENGTH: usize = 16;
+const MAX_CREDENTIAL_LENGTH: usize = 256;
+
 pub struct Credentials {
     pub api_key: String,
     pub api_secret: String,
+}
+
+impl Credentials {
+    pub fn new(api_key: &str, api_secret: &str) -> Self {
+        Self {
+            api_key: api_key.to_string(),
+            api_secret: api_secret.to_string(),
+        }
+    }
+
+    fn connector(&self, now: DateTime<Utc>) -> Connector {
+        let key = self.api_key.chars().count();
+        let secret = self.api_secret.chars().count();
+        let key_ok = (MIN_CREDENTIAL_LENGTH..=MAX_CREDENTIAL_LENGTH).contains(&key);
+        let secret_ok = (MIN_CREDENTIAL_LENGTH..=MAX_CREDENTIAL_LENGTH).contains(&secret);
+        if key_ok && secret_ok {
+            Connector::connected(now)
+        } else {
+            Connector::failed(ConnectorReason::InvalidCredentials, now)
+        }
+    }
 }
 
 pub enum LinkConflict {
@@ -55,21 +79,14 @@ impl AccountStore {
             cex_id: cex_id.to_string(),
             label: label.to_string(),
             active: true,
-            connector: Connector {
-                state: ConnectorState::Connecting,
-                reason: None,
-                since: now,
-            },
+            connector: Connector::starting(now),
             version: 1,
             updated_at: now,
         };
         rows.push(AccountRow {
             owner: owner.to_string(),
             summary: summary.clone(),
-            credentials: Some(Credentials {
-                api_key: api_key.to_string(),
-                api_secret: api_secret.to_string(),
-            }),
+            credentials: Some(Credentials::new(api_key, api_secret)),
             linked_at: now,
         });
         drop(rows);
@@ -107,15 +124,25 @@ impl AccountStore {
         let row = rows
             .iter_mut()
             .find(|row| row.owner == owner && row.summary.account_id == account_id)?;
-        row.credentials = Some(Credentials {
-            api_key: api_key.to_string(),
-            api_secret: api_secret.to_string(),
-        });
-        row.summary.connector = Connector {
-            state: ConnectorState::Connecting,
-            reason: None,
-            since: now,
-        };
+        row.credentials = Some(Credentials::new(api_key, api_secret));
+        row.summary.connector = Connector::starting(now);
+        row.summary.version += 1;
+        row.summary.updated_at = now;
+        Some(row.summary.clone())
+    }
+
+    pub fn validate(
+        &self,
+        owner: &str,
+        account_id: &str,
+        now: DateTime<Utc>,
+    ) -> Option<AccountSummary> {
+        let mut rows = self.rows.lock();
+        let row = rows
+            .iter_mut()
+            .find(|row| row.owner == owner && row.summary.account_id == account_id)?;
+        let credentials = row.credentials.as_ref()?;
+        row.summary.connector = credentials.connector(now);
         row.summary.version += 1;
         row.summary.updated_at = now;
         Some(row.summary.clone())
@@ -152,12 +179,5 @@ impl AccountStore {
             .iter()
             .filter_map(|account| self.snapshot(owner, &account.account_id))
             .collect()
-    }
-
-    pub fn publish_snapshot(&self, snapshot: PortfolioSnapshot) {
-        // TODO: replace with the portfolio service read model stream.
-        self.snapshots
-            .lock()
-            .insert(snapshot.account_id.clone(), snapshot);
     }
 }

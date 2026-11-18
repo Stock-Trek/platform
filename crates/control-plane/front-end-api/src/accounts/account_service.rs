@@ -2,30 +2,20 @@ use crate::accounts::account_types::{
     AccountSummary, CredentialsRequest, ForceUnlinkResponse, LinkAccountRequest,
 };
 use crate::accounts::{AccountStore, LinkConflict, PortfolioSnapshot};
-use crate::algorithms::{AlgorithmSummary, BuildStore};
 use crate::api::Problem;
 use crate::auth::AuthContext;
-use crate::bots::{Bot, BotService, BotState};
+use crate::bots::{BotService, BotState};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
 pub struct AccountService {
     accounts: Arc<AccountStore>,
-    builds: Arc<BuildStore>,
     bots: Arc<BotService>,
 }
 
 impl AccountService {
-    pub fn new(
-        accounts: Arc<AccountStore>,
-        builds: Arc<BuildStore>,
-        bots: Arc<BotService>,
-    ) -> Self {
-        Self {
-            accounts,
-            builds,
-            bots,
-        }
+    pub fn new(accounts: Arc<AccountStore>, bots: Arc<BotService>) -> Self {
+        Self { accounts, bots }
     }
 
     pub fn link(
@@ -34,8 +24,8 @@ impl AccountService {
         request: &LinkAccountRequest,
         now: DateTime<Utc>,
     ) -> Result<AccountSummary, Problem> {
-        // TODO: the connector link flow validates credentials in the background.
-        self.accounts
+        let summary = self
+            .accounts
             .link(
                 auth.owner(),
                 &request.cex_id,
@@ -48,7 +38,19 @@ impl AccountService {
                 LinkConflict::LabelTaken => {
                     Problem::already_exists("an account already uses this label for the exchange")
                 }
-            })
+            })?;
+        self.validated(auth.owner(), summary, now)
+    }
+
+    fn validated(
+        &self,
+        owner: &str,
+        summary: AccountSummary,
+        now: DateTime<Utc>,
+    ) -> Result<AccountSummary, Problem> {
+        self.accounts
+            .validate(owner, &summary.account_id, now)
+            .ok_or_else(|| Problem::not_found("account does not exist"))
     }
 
     pub fn list(&self, owner: &str) -> Vec<AccountSummary> {
@@ -68,7 +70,8 @@ impl AccountService {
         request: &CredentialsRequest,
         now: DateTime<Utc>,
     ) -> Result<AccountSummary, Problem> {
-        self.accounts
+        let summary = self
+            .accounts
             .replace_credentials(
                 auth.owner(),
                 account_id,
@@ -76,7 +79,8 @@ impl AccountService {
                 &request.api_secret,
                 now,
             )
-            .ok_or_else(|| Problem::not_found("account does not exist"))
+            .ok_or_else(|| Problem::not_found("account does not exist"))?;
+        self.validated(auth.owner(), summary, now)
     }
 
     pub fn unlink(
@@ -88,14 +92,20 @@ impl AccountService {
     ) -> Result<Option<ForceUnlinkResponse>, Problem> {
         let owner = auth.owner();
         self.get(owner, account_id)?;
-        let enabled = self.enabled_referencing(owner, account_id);
-        if !enabled.is_empty() && !force {
+        let referencing = self
+            .bots
+            .referencing_accounts(owner, &[account_id.to_string()]);
+        let enabled = referencing
+            .iter()
+            .filter(|bot| bot.state == BotState::Enabled)
+            .count();
+        if enabled > 0 && !force {
             return Err(Problem::state_conflict(
                 "enabled bots reference the account; unlinking would break their authorization",
             ));
         }
-        let response = (!enabled.is_empty()).then(|| {
-            let killed = self.bots.disable_bots(owner, enabled.clone(), now);
+        let response = force.then(|| {
+            let killed = self.bots.disable_bots(owner, referencing, now);
             ForceUnlinkResponse {
                 disabled_bot_ids: killed.disabled_bot_ids,
                 canceled_run_ids: killed.canceled_run_ids,
@@ -103,14 +113,6 @@ impl AccountService {
         });
         self.accounts.unlink(owner, account_id);
         Ok(response)
-    }
-
-    fn enabled_referencing(&self, owner: &str, account_id: &str) -> Vec<Bot> {
-        self.bots
-            .referencing_accounts(owner, &[account_id.to_string()])
-            .into_iter()
-            .filter(|bot| bot.state == BotState::Enabled)
-            .collect()
     }
 
     pub fn snapshot(&self, owner: &str, account_id: &str) -> Result<PortfolioSnapshot, Problem> {
@@ -123,20 +125,5 @@ impl AccountService {
 
     pub fn snapshots(&self, owner: &str) -> Vec<PortfolioSnapshot> {
         self.accounts.snapshots(owner)
-    }
-
-    pub fn count(&self, owner: &str) -> usize {
-        self.accounts.count(owner)
-    }
-
-    pub fn register_algorithm(
-        &self,
-        auth: &AuthContext,
-        name: &str,
-        repo: &str,
-        default_ref: &str,
-    ) -> AlgorithmSummary {
-        self.builds
-            .register_algorithm(auth.owner(), name, repo, default_ref)
     }
 }

@@ -1,7 +1,4 @@
-use crate::api::ApiRequest;
-use crate::api::PageQuery;
-use crate::api::Problem;
-use crate::api::Respond;
+use crate::api::{ApiRequest, IdempotencyStore, PageQuery, Problem, Respond};
 use crate::auth::Scope;
 use crate::auth::SessionService;
 use crate::backtests::BacktestService;
@@ -15,13 +12,19 @@ use std::sync::Arc;
 pub struct BacktestApi {
     backtests: Arc<BacktestService>,
     sessions: Arc<SessionService>,
+    idempotency: Arc<IdempotencyStore>,
 }
 
 impl BacktestApi {
-    pub fn new(backtests: Arc<BacktestService>, sessions: Arc<SessionService>) -> Self {
+    pub fn new(
+        backtests: Arc<BacktestService>,
+        sessions: Arc<SessionService>,
+        idempotency: Arc<IdempotencyStore>,
+    ) -> Self {
         Self {
             backtests,
             sessions,
+            idempotency,
         }
     }
 
@@ -55,9 +58,12 @@ impl BacktestApi {
     fn create(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Manage)?;
         request.require_json_content_type()?;
-        let create: CreateBacktestRequest = request.json()?;
-        let created = self.backtests.create(&auth, &create, Utc::now())?;
-        Ok(Respond::json(StatusCode::ACCEPTED, &created))
+        self.idempotency
+            .apply(request, auth.owner(), "create-backtest", || {
+                let create: CreateBacktestRequest = request.json()?;
+                let created = self.backtests.create(&auth, &create, Utc::now())?;
+                Ok(Respond::json(StatusCode::ACCEPTED, &created))
+            })
     }
 
     fn list(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {

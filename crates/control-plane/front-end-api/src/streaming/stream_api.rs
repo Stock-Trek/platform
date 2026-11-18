@@ -3,10 +3,22 @@ use crate::auth::{Scope, SessionService};
 use crate::limits::{LimitService, QUOTA_STREAM_CONNECTIONS};
 use crate::streaming::StreamService;
 use crate::streaming::stream_types::StreamTicket;
+use crate::streaming::ws;
 use chrono::Utc;
 use http_body_util::Full;
-use hyper::{Method, Response, StatusCode, body::Bytes};
+use hyper::{
+    Method, Response, StatusCode,
+    body::Bytes,
+    header::{
+        CONNECTION, HeaderValue, SEC_WEBSOCKET_ACCEPT, SEC_WEBSOCKET_KEY, SEC_WEBSOCKET_VERSION,
+        UPGRADE,
+    },
+};
+use hyper_util::rt::TokioIo;
 use std::sync::Arc;
+
+const STREAM_CONNECTION_RETRY_SECONDS: u64 = 1;
+const WEBSOCKET_VERSION: &str = "13";
 
 pub struct StreamApi {
     streams: Arc<StreamService>,
@@ -60,16 +72,73 @@ impl StreamApi {
             .ok_or_else(|| {
                 Problem::unauthorized("the stream ticket is unknown, used, or expired")
             })?;
-        self.limits
-            .check(&owner, QUOTA_STREAM_CONNECTIONS, 1)
-            .map_err(|mut problem| {
-                if problem.status() == StatusCode::FORBIDDEN {
-                    problem = Problem::rate_limited(1);
+        let limit = self
+            .limits
+            .entry(&owner, QUOTA_STREAM_CONNECTIONS, Utc::now());
+        if self.streams.connection_count(&owner) + 1 > limit.limit {
+            return Err(Problem::rate_limited(STREAM_CONNECTION_RETRY_SECONDS));
+        }
+        let accept = Self::handshake(request)?;
+        Self::upgrade(request, accept, self.streams.clone(), owner)
+    }
+
+    fn handshake(request: &ApiRequest) -> Result<String, Problem> {
+        let headers = request.headers();
+        let websocket = headers
+            .get(UPGRADE)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value.eq_ignore_ascii_case("websocket"));
+        let version = headers
+            .get(SEC_WEBSOCKET_VERSION)
+            .and_then(|value| value.to_str().ok())
+            .is_some_and(|value| value == WEBSOCKET_VERSION);
+        let key = headers
+            .get(SEC_WEBSOCKET_KEY)
+            .and_then(|value| value.to_str().ok());
+        if !websocket || !version {
+            return Err(Problem::validation_failed(
+                "the request must be a version 13 WebSocket handshake",
+            ));
+        }
+        let key = key.ok_or_else(|| {
+            Problem::validation_failed("the WebSocket handshake needs a Sec-WebSocket-Key")
+        })?;
+        ws::accept_key(key)
+            .ok_or_else(|| Problem::validation_failed("the Sec-WebSocket-Key is malformed"))
+    }
+
+    fn upgrade(
+        request: &ApiRequest,
+        accept: String,
+        streams: Arc<StreamService>,
+        owner: String,
+    ) -> Result<Response<Full<Bytes>>, Problem> {
+        let on_upgrade = request
+            .extensions()
+            .get::<hyper::upgrade::OnUpgrade>()
+            .cloned()
+            .ok_or_else(Problem::unavailable)?;
+        let mut response = Response::new(Full::default());
+        *response.status_mut() = StatusCode::SWITCHING_PROTOCOLS;
+        let headers = response.headers_mut();
+        headers.insert(UPGRADE, HeaderValue::from_static("websocket"));
+        headers.insert(CONNECTION, HeaderValue::from_static("Upgrade"));
+        headers.insert(
+            SEC_WEBSOCKET_ACCEPT,
+            HeaderValue::from_str(&accept).expect("accept header"),
+        );
+        tokio::spawn(async move {
+            match on_upgrade.await {
+                Ok(upgraded) => {
+                    let io = TokioIo::new(upgraded);
+                    let ws = tokio_websockets::server::Builder::new().serve(io);
+                    ws::serve(ws, streams, owner).await;
                 }
-                problem
-            })?;
-        // TODO: upgrade the connection to WebSocket, then serve subscribe/unsubscribe
-        // actions, replay and gap frames, and ping every 30 seconds over it.
-        Err(Problem::unavailable())
+                Err(error) => {
+                    tracing::warn!(%error, "front-end api stream upgrade failed");
+                }
+            }
+        });
+        Ok(response)
     }
 }

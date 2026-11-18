@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 pub enum ConnectorState {
     Connecting,
     Connected,
+    #[allow(dead_code)]
     Disconnected,
     Error,
 }
@@ -15,8 +16,11 @@ pub enum ConnectorState {
 #[serde(rename_all = "snake_case")]
 pub enum ConnectorReason {
     InvalidCredentials,
+    #[allow(dead_code)]
     InsufficientPermissions,
+    #[allow(dead_code)]
     ExchangeUnavailable,
+    #[allow(dead_code)]
     Unknown,
 }
 
@@ -26,6 +30,32 @@ pub struct Connector {
     pub state: ConnectorState,
     pub reason: Option<ConnectorReason>,
     pub since: DateTime<Utc>,
+}
+
+impl Connector {
+    pub fn starting(now: DateTime<Utc>) -> Self {
+        Self {
+            state: ConnectorState::Connecting,
+            reason: None,
+            since: now,
+        }
+    }
+
+    pub fn connected(now: DateTime<Utc>) -> Self {
+        Self {
+            state: ConnectorState::Connected,
+            reason: None,
+            since: now,
+        }
+    }
+
+    pub fn failed(reason: ConnectorReason, now: DateTime<Utc>) -> Self {
+        Self {
+            state: ConnectorState::Error,
+            reason: Some(reason),
+            since: now,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -17,16 +17,6 @@ impl BotService {
         self.stop_bots(owner, bots, now)
     }
 
-    pub fn disable_referencing(
-        &self,
-        owner: &str,
-        account_ids: &[String],
-        now: DateTime<Utc>,
-    ) -> KillResponse {
-        let bots = self.bots.referencing_accounts(owner, account_ids);
-        self.stop_bots(owner, bots, now)
-    }
-
     pub fn referencing_accounts(&self, owner: &str, account_ids: &[String]) -> Vec<Bot> {
         self.bots.referencing_accounts(owner, account_ids)
     }

@@ -82,8 +82,8 @@ impl BacktestStore {
         Some((data, row.status.state, has_more))
     }
 
+    #[allow(dead_code)]
     pub fn append_result(&self, owner: &str, backtest_id: &str, item: BacktestResultItem) {
-        // TODO: results stream in from the sandbox runner's backtest subsystem.
         let mut rows = self.rows.lock();
         if let Some(row) = rows
             .iter_mut()

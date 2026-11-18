@@ -1,4 +1,5 @@
 use crate::api::Problem;
+use crate::bots::schedule::{CronExpression, TimezoneName};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -43,8 +44,8 @@ impl Schedule {
                 timezone,
                 misfire_grace_seconds,
             } => {
-                // TODO: validate the five-field cron expression and the IANA time zone name.
-                let _ = (expression, timezone);
+                CronExpression::validated(expression)?;
+                TimezoneName::validated(timezone)?;
                 Ok(Self::Cron {
                     expression: expression.clone(),
                     timezone: timezone.clone(),
@@ -61,7 +62,6 @@ impl Schedule {
     pub fn runs_per_day(&self) -> u64 {
         match self {
             Self::Interval { every_seconds, .. } => (86_400 / u64::from(*every_seconds)).max(1),
-            // TODO: expand cron expressions to compute the scheduled-runs quota.
             Self::Cron { .. } => 1_440,
         }
     }

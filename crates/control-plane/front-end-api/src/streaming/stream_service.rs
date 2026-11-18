@@ -1,3 +1,7 @@
+use crate::accounts::AccountService;
+use crate::algorithms::BuildStore;
+use crate::backtests::BacktestStore;
+use crate::bots::RunStore;
 use crate::streaming::channel_registry::{ChannelRegistry, SubscribeOutcome};
 use crate::streaming::stream_types::Frame;
 use crate::streaming::ticket_store::TicketStore;
@@ -17,14 +21,28 @@ pub struct StreamService {
     tickets: TicketStore,
     registry: Arc<ChannelRegistry>,
     connections: Mutex<HashMap<String, Connection>>,
+    accounts: Arc<AccountService>,
+    builds: Arc<BuildStore>,
+    runs: Arc<RunStore>,
+    backtests: Arc<BacktestStore>,
 }
 
 impl StreamService {
-    pub fn new(registry: Arc<ChannelRegistry>) -> Self {
+    pub fn new(
+        registry: Arc<ChannelRegistry>,
+        accounts: Arc<AccountService>,
+        builds: Arc<BuildStore>,
+        runs: Arc<RunStore>,
+        backtests: Arc<BacktestStore>,
+    ) -> Self {
         Self {
             tickets: TicketStore::new(),
             registry,
             connections: Mutex::new(HashMap::new()),
+            accounts,
+            builds,
+            runs,
+            backtests,
         }
     }
 
@@ -60,17 +78,12 @@ impl StreamService {
 
     pub fn owns_channel(&self, owner: &str, channel: &str) -> bool {
         match channel.split_once('.') {
-            Some(("portfolio" | "runs" | "builds" | "backtests", id)) => {
-                self.registry_owns(owner, id)
-            }
+            Some(("portfolio", id)) => self.accounts.get(owner, id).is_ok(),
+            Some(("runs", id)) => self.runs.get(owner, id).is_some(),
+            Some(("builds", id)) => self.builds.owns_build(owner, id),
+            Some(("backtests", id)) => self.backtests.status(owner, id).is_some(),
             _ => false,
         }
-    }
-
-    fn registry_owns(&self, owner: &str, id: &str) -> bool {
-        // TODO: ownership is checked against the resource stores; every id of the owner passes.
-        let _ = (owner, id);
-        true
     }
 
     pub fn subscribe(
@@ -78,24 +91,21 @@ impl StreamService {
         connection_id: &str,
         channel: &str,
         last_sequence: Option<u64>,
-    ) -> Result<Vec<Frame>, Frame> {
+    ) -> SubscribeOutcome {
         let mut connections = self.connections.lock();
-        let Some(connection) = connections.get_mut(connection_id) else {
-            return Ok(Vec::new());
-        };
+        if !connections.contains_key(connection_id) {
+            return SubscribeOutcome::UnknownChannel;
+        }
+        let connection = connections.get_mut(connection_id).expect("checked above");
         if connection.channels.len() >= MAX_SUBSCRIPTIONS {
-            return Err(Frame::error(channel, "quota_exceeded"));
+            return SubscribeOutcome::Gap(Frame::error(channel, "quota_exceeded"));
         }
         match self.registry.subscribe(channel, last_sequence) {
-            SubscribeOutcome::UnknownChannel => Err(Frame::error(channel, "not_found")),
-            SubscribeOutcome::Gap(frame) => {
+            SubscribeOutcome::Joined { replay, live } => {
                 connection.channels.push(channel.to_string());
-                Err(frame)
+                SubscribeOutcome::Joined { replay, live }
             }
-            SubscribeOutcome::Replay(frames) => {
-                connection.channels.push(channel.to_string());
-                Ok(frames)
-            }
+            outcome => outcome,
         }
     }
 

@@ -62,16 +62,6 @@ impl BotStore {
         Some(row.bot.clone())
     }
 
-    pub fn replace(&self, owner: &str, bot: Bot) {
-        let mut rows = self.rows.lock();
-        if let Some(row) = rows
-            .iter_mut()
-            .find(|row| row.owner == owner && row.bot.bot_id == bot.bot_id)
-        {
-            row.bot = bot;
-        }
-    }
-
     pub fn count(&self, owner: &str) -> usize {
         self.rows
             .lock()

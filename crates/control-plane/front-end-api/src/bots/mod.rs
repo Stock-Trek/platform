@@ -6,6 +6,7 @@ mod run_api;
 mod run_service;
 mod run_store;
 mod run_types;
+mod schedule;
 
 pub use bot_api::BotApi;
 pub use bot_service::BotService;

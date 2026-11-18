@@ -1,5 +1,6 @@
 use crate::api::ApiRequest;
 use crate::api::Problem;
+use chrono::{DateTime, Duration, Utc};
 use http_body_util::Full;
 use hyper::{Response, body::Bytes};
 use parking_lot::Mutex;
@@ -7,8 +8,11 @@ use std::collections::HashMap;
 use std::collections::hash_map::DefaultHasher;
 use std::hash::{Hash, Hasher};
 
+const RETENTION: Duration = Duration::hours(24);
+
 struct Record {
     body_hash: u64,
+    expires_at: DateTime<Utc>,
     status: hyper::StatusCode,
     headers: hyper::HeaderMap,
     body: Bytes,
@@ -17,8 +21,6 @@ struct Record {
 pub struct IdempotencyStore {
     records: Mutex<HashMap<String, Record>>,
 }
-
-// TODO: retain keys for 24 hours in a durable store and evict expired entries.
 
 impl IdempotencyStore {
     pub fn new() -> Self {
@@ -39,7 +41,9 @@ impl IdempotencyStore {
         };
         let scoped = format!("{owner}:{endpoint}:{key}");
         let body_hash = Self::hash(request.body());
+        let now = Utc::now();
         let mut records = self.records.lock();
+        records.retain(|_, record| record.expires_at > now);
         if let Some(record) = records.get(&scoped) {
             if record.body_hash == body_hash {
                 return Ok(Self::replay(record));
@@ -53,6 +57,7 @@ impl IdempotencyStore {
             scoped,
             Record {
                 body_hash,
+                expires_at: now + RETENTION,
                 status: parts.status,
                 headers: parts.headers.clone(),
                 body: bytes.clone(),

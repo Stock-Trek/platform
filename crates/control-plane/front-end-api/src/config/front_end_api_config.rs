@@ -5,12 +5,14 @@ use std::net::SocketAddr;
 
 const BIND_ADDRESS: &str = "FRONT_END_API_BIND_ADDR";
 const JWKS_URL: &str = "FRONT_END_API_JWKS_URL";
+const ALLOWED_ORIGINS: &str = "FRONT_END_API_ALLOWED_ORIGINS";
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrontEndApiConfig {
     log_filter: String,
     bind_address: SocketAddr,
     jwks_url: String,
+    allowed_origins: Vec<String>,
 }
 
 impl FrontEndApiConfig {
@@ -23,6 +25,7 @@ impl FrontEndApiConfig {
             log_filter: Config::log_filter(vars)?,
             bind_address: vars.required_parsed(BIND_ADDRESS)?,
             jwks_url: vars.required_url(JWKS_URL, &platform_types::UrlScheme::HTTP)?,
+            allowed_origins: vars.required_csv(ALLOWED_ORIGINS)?,
         })
     }
 
@@ -36,5 +39,9 @@ impl FrontEndApiConfig {
 
     pub fn jwks_url(&self) -> &str {
         &self.jwks_url
+    }
+
+    pub fn allowed_origins(&self) -> &[String] {
+        &self.allowed_origins
     }
 }

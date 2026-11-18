@@ -1,5 +1,7 @@
 use crate::api::Id;
 use crate::auth::Scope;
+use crate::auth::jwt::JwtSigner;
+use crate::auth::refresh_store::{RefreshStore, Rotation};
 use crate::auth::{SessionTokens, StepUpTokens};
 use chrono::{DateTime, Duration, Utc};
 use parking_lot::Mutex;
@@ -7,7 +9,6 @@ use std::collections::HashMap;
 
 pub const ACCESS_TTL: Duration = Duration::minutes(15);
 pub const REFRESH_TTL: Duration = Duration::hours(12);
-pub const REFRESH_REPLAY_GRACE: Duration = Duration::seconds(10);
 pub const STEP_UP_TTL: Duration = Duration::minutes(5);
 pub const LOGIN_SCOPES: [Scope; 2] = [Scope::Read, Scope::Manage];
 pub const STEP_UP_SCOPES: [Scope; 3] = [Scope::Read, Scope::Manage, Scope::Admin];
@@ -25,49 +26,28 @@ struct AccessSession {
     revoked: bool,
 }
 
-enum RefreshState {
-    Active,
-    Rotated {
-        replay: SessionTokens,
-        grace_until: DateTime<Utc>,
-    },
-    Revoked,
-}
-
-struct RefreshEntry {
-    owner: String,
-    family: String,
-    state: RefreshState,
-}
-
-enum Decision {
-    Unknown,
-    Expired,
-    Active { owner: String, family: String },
-    Replayed(SessionTokens),
-    Stolen,
-    Revoked,
-}
-
 #[derive(Default)]
 struct State {
     logins: HashMap<String, Login>,
     access: HashMap<String, AccessSession>,
-    refresh: HashMap<String, RefreshEntry>,
-    families: HashMap<String, DateTime<Utc>>,
 }
 
 pub struct SessionStore {
+    signer: JwtSigner,
     state: Mutex<State>,
+    refresh: RefreshStore,
 }
 
 impl SessionStore {
     pub fn new() -> Self {
         Self {
+            signer: JwtSigner::generate(),
             state: Mutex::new(State::default()),
+            refresh: RefreshStore::new(),
         }
     }
 
+    #[allow(dead_code)]
     pub fn register_login(&self, login_id: &str, owner: &str, secret: &str) {
         self.state.lock().logins.insert(
             login_id.to_string(),
@@ -79,7 +59,6 @@ impl SessionStore {
     }
 
     pub fn verify_login(&self, login_id: &str, secret: &str) -> Option<String> {
-        // TODO: delegate credential verification and owner resolution to the auth plane.
         let state = self.state.lock();
         let login = state.logins.get(login_id)?;
         (login.secret == secret).then(|| login.owner.clone())
@@ -93,72 +72,69 @@ impl SessionStore {
 
     pub fn issue_login(&self, owner: &str, now: DateTime<Utc>) -> SessionTokens {
         let family = Id::mint("family");
-        let tokens = Self::tokens(owner, &LOGIN_SCOPES, now, Some(now + REFRESH_TTL));
-        let mut state = self.state.lock();
-        state.families.insert(family.clone(), now + REFRESH_TTL);
-        Self::admit(&mut state, &family, &tokens);
+        let (tokens, session_id) = self.mint_tokens(
+            owner,
+            &LOGIN_SCOPES,
+            now,
+            ACCESS_TTL,
+            Some(now + REFRESH_TTL),
+        );
+        self.refresh.open_family(&family, now + REFRESH_TTL);
+        {
+            let mut state = self.state.lock();
+            Self::admit(&mut state, &family, &session_id, &tokens);
+        }
         if let Some(refresh_token) = tokens.refresh_token.clone() {
-            state.refresh.insert(
-                refresh_token,
-                RefreshEntry {
-                    owner: owner.to_string(),
-                    family,
-                    state: RefreshState::Active,
-                },
-            );
+            self.refresh.enroll(refresh_token, owner, &family);
         }
         tokens
     }
 
     pub fn access(&self, token: &str, now: DateTime<Utc>) -> Option<(String, Vec<Scope>)> {
-        // TODO: verify the EdDSA (Ed25519) JWT against the auth plane JWKS and check revocation there.
+        let claims = self.signer.verify_access(token)?;
+        let scopes = JwtSigner::scopes(&claims.scope)?;
         let state = self.state.lock();
-        let session = state.access.get(token)?;
-        if session.revoked || session.expires_at <= now {
+        let session = state.access.get(&claims.sid)?;
+        if session.revoked
+            || session.expires_at <= now
+            || claims.exp <= now.timestamp()
+            || session.owner != claims.sub
+            || session.scopes != scopes
+        {
             return None;
         }
         Some((session.owner.clone(), session.scopes.clone()))
     }
 
     pub fn rotate_refresh(&self, token: &str, now: DateTime<Utc>) -> Option<SessionTokens> {
-        let mut state = self.state.lock();
-        match Self::decision(&state, token, now) {
-            Decision::Unknown | Decision::Revoked => None,
-            Decision::Expired | Decision::Stolen => {
-                Self::revoke_family(&mut state, token);
+        match self.refresh.rotate(token, now) {
+            Rotation::Replayed(tokens) => Some(tokens),
+            Rotation::FamilyRevoked { family } => {
+                self.revoke_family_access(&family);
                 None
             }
-            Decision::Replayed(tokens) => Some(tokens),
-            Decision::Active { owner, family } => {
-                let family_expiry = *state.families.get(&family)?;
-                let replacement = Self::tokens(&owner, &LOGIN_SCOPES, now, Some(family_expiry));
-                Self::admit(&mut state, &family, &replacement);
+            Rotation::Active { owner, family } => {
+                let family_expiry = self.refresh.expiry(&family)?;
+                let (replacement, session_id) =
+                    self.mint_tokens(&owner, &LOGIN_SCOPES, now, ACCESS_TTL, Some(family_expiry));
+                {
+                    let mut state = self.state.lock();
+                    Self::admit(&mut state, &family, &session_id, &replacement);
+                }
                 if let Some(refresh_token) = replacement.refresh_token.clone() {
-                    state.refresh.insert(
-                        refresh_token,
-                        RefreshEntry {
-                            owner: owner.clone(),
-                            family: family.clone(),
-                            state: RefreshState::Active,
-                        },
-                    );
+                    self.refresh.enroll(refresh_token, &owner, &family);
                 }
-                if let Some(entry) = state.refresh.get_mut(token) {
-                    entry.state = RefreshState::Rotated {
-                        replay: replacement.clone(),
-                        grace_until: now + REFRESH_REPLAY_GRACE,
-                    };
-                }
+                self.refresh.mark_rotated(token, &replacement, now);
                 Some(replacement)
             }
+            Rotation::None => None,
         }
     }
 
     pub fn issue_step_up(&self, owner: &str, now: DateTime<Utc>) -> StepUpTokens {
-        let scopes = STEP_UP_SCOPES.to_vec();
-        let tokens = Self::tokens(owner, &scopes, now, None);
+        let (tokens, session_id) = self.mint_tokens(owner, &STEP_UP_SCOPES, now, STEP_UP_TTL, None);
         let mut state = self.state.lock();
-        Self::admit(&mut state, "", &tokens);
+        Self::admit(&mut state, "", &session_id, &tokens);
         StepUpTokens {
             token: tokens.token,
             expires_at: tokens.expires_at,
@@ -166,27 +142,61 @@ impl SessionStore {
     }
 
     pub fn revoke(&self, token: &str) {
-        let mut state = self.state.lock();
-        let Some(session) = state.access.get(token) else {
+        let Some(session_id) = self.signer.verify_session_id(token) else {
             return;
         };
-        let family = session.family.clone();
-        if let Some(session) = state.access.get_mut(token) {
+        let family = {
+            let mut state = self.state.lock();
+            let Some(session) = state.access.get_mut(&session_id) else {
+                return;
+            };
             session.revoked = true;
-        }
-        let Some(family) = family else {
-            return;
+            session.family.clone()
         };
-        for entry in state.refresh.values_mut() {
-            if entry.family == family {
-                entry.state = RefreshState::Revoked;
+        if let Some(family) = family {
+            self.refresh.revoke_family(&family);
+            self.revoke_family_access(&family);
+        }
+    }
+
+    fn revoke_family_access(&self, family: &str) {
+        let mut state = self.state.lock();
+        for session in state.access.values_mut() {
+            if session.family.as_deref() == Some(family) {
+                session.revoked = true;
             }
         }
     }
 
-    fn admit(state: &mut State, family: &str, tokens: &SessionTokens) {
+    fn mint_tokens(
+        &self,
+        owner: &str,
+        scopes: &[Scope],
+        now: DateTime<Utc>,
+        access_ttl: Duration,
+        refresh_expires_at: Option<DateTime<Utc>>,
+    ) -> (SessionTokens, String) {
+        let session_id = Id::mint("sess");
+        let expires_at = now + access_ttl;
+        let token = self
+            .signer
+            .mint_access_token(owner, scopes, &session_id, now, expires_at);
+        (
+            SessionTokens {
+                token,
+                expires_at,
+                refresh_token: refresh_expires_at.map(|_| Id::mint("rt")),
+                refresh_expires_at,
+                owner: owner.to_string(),
+                scope: scopes.to_vec(),
+            },
+            session_id,
+        )
+    }
+
+    fn admit(state: &mut State, family: &str, session_id: &str, tokens: &SessionTokens) {
         state.access.insert(
-            tokens.token.clone(),
+            session_id.to_string(),
             AccessSession {
                 owner: tokens.owner.clone(),
                 scopes: tokens.scope.clone(),
@@ -195,71 +205,5 @@ impl SessionStore {
                 revoked: false,
             },
         );
-    }
-
-    fn decision(state: &State, token: &str, now: DateTime<Utc>) -> Decision {
-        let Some(entry) = state.refresh.get(token) else {
-            return Decision::Unknown;
-        };
-        let Some(family_expiry) = state.families.get(&entry.family) else {
-            return Decision::Unknown;
-        };
-        if *family_expiry <= now {
-            return Decision::Expired;
-        }
-        match &entry.state {
-            RefreshState::Active => Decision::Active {
-                owner: entry.owner.clone(),
-                family: entry.family.clone(),
-            },
-            RefreshState::Rotated {
-                replay,
-                grace_until,
-            } => {
-                if *grace_until >= now {
-                    Decision::Replayed(replay.clone())
-                } else {
-                    Decision::Stolen
-                }
-            }
-            RefreshState::Revoked => Decision::Revoked,
-        }
-    }
-
-    fn revoke_family(state: &mut State, token: &str) {
-        let Some(entry) = state.refresh.get(token) else {
-            return;
-        };
-        let family = entry.family.clone();
-        state
-            .families
-            .insert(family.clone(), DateTime::<Utc>::UNIX_EPOCH);
-        for session in state.access.values_mut() {
-            if session.family.as_deref() == Some(family.as_str()) {
-                session.revoked = true;
-            }
-        }
-        for entry in state.refresh.values_mut() {
-            if entry.family == family {
-                entry.state = RefreshState::Revoked;
-            }
-        }
-    }
-
-    fn tokens(
-        owner: &str,
-        scopes: &[Scope],
-        now: DateTime<Utc>,
-        refresh_expires_at: Option<DateTime<Utc>>,
-    ) -> SessionTokens {
-        // TODO: mint EdDSA (Ed25519) access tokens through the auth plane.
-        SessionTokens {
-            token: Id::mint("at"),
-            expires_at: now + ACCESS_TTL,
-            refresh_token: refresh_expires_at.map(|_| Id::mint("rt")),
-            refresh_expires_at,
-            owner: owner.to_string(),
-            scope: scopes.to_vec(),
-        }
     }
 }
