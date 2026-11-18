@@ -741,9 +741,6 @@ Retention, together with the scheduled-runs quota, bounds the run store, because
 A **backtest** is an ad-hoc, resource-bounded experiment: it runs one strategy from one build many times over archived market data with simulated execution friction and a seeded random generator, streaming per-simulation results as they finish and finishing with a collated result set.
 Backtests never touch live exchanges or real balances.
 
-Market input comes from the candle archive, so requested history must lie within the archive's retention reach for the requested intervals.
-Otherwise creation fails rather than silently producing candles that later change.
-
 ### Backtest lifecycle
 
 | State       | Meaning                                                                        |
