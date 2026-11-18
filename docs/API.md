@@ -130,9 +130,8 @@ All identifiers are server-assigned and unguessable.
 - Identifiers are opaque, server-assigned strings prefixed by type: `user_`, `login_`, `account_`, `algorithm_`, `build_`, `bot_`, `run_`, `backtest_`.
 - Enum values are snake_case strings.
   The lifecycle field of every resource is called `state`, and filters on it use the same name.
-- Exchange codes are lowercase, such as `binance`.
-  Asset identifiers are the platform's canonical names, such as `bitcoin` and `tether_u_s_d`; they are defined by the platform, not derived from exchange tickers.
-  Trading pairs are `{"base": "bitcoin", "quote": "tether_u_s_d"}`.
+- Exchange codes, asset identifiers, sides, and trading pairs use the stock-trek type serialization, such as `Binance`, `Bitcoin`, and `TetherUSD`; they are defined by stock-trek, not derived from exchange tickers.
+  Trading pairs are `{"base": "Bitcoin", "quote": "TetherUSD"}`.
 - List endpoints paginate with `limit` (default `50`, maximum `200`) and an opaque `cursor`.
   A `limit` above the maximum is clamped.
   Responses wrap arrays as `{ "data": [...], "nextCursor": "..." | null }`.
@@ -305,7 +304,7 @@ Credentials are write-only: they are never returned by any endpoint and are rota
   "data": [
     {
       "accountId": "account_3kq",
-      "cexId": "binance",
+      "cexId": "Binance",
       "label": "main",
       "active": true,
       "connector": { "state": "connected", "reason": null, "since": "2026-07-14T09:01:12.000Z" },
@@ -332,7 +331,7 @@ Clients must tolerate new values.
 `POST /v1/accounts` links a new account:
 
 ```json
-{ "cexId": "binance", "label": "main", "apiKey": "...", "apiSecret": "..." }
+{ "cexId": "Binance", "label": "main", "apiKey": "...", "apiSecret": "..." }
 ```
 
 `label` is 1 to 64 characters and unique per owner and exchange; a duplicate fails with `409 already_exists`, which can only ever be one of the caller's own accounts.
@@ -363,18 +362,18 @@ The connector goes back to `connecting`.
 ```json
 {
   "accountId": "account_3kq",
-  "cexId": "binance",
+  "cexId": "Binance",
   "asOf": "2026-07-14T09:59:41.120Z",
   "streamSequence": 9182,
   "assets": [
-    { "asset": "bitcoin", "total": "1.250000000" },
-    { "asset": "tether_u_s_d", "total": "4210.770000000" }
+    { "asset": "Bitcoin", "total": "1.250000000" },
+    { "asset": "TetherUSD", "total": "4210.770000000" }
   ],
   "pendingOrders": [
     {
       "tag": "order_9x2",
-      "symbol": { "base": "bitcoin", "quote": "tether_u_s_d" },
-      "side": "sell",
+      "symbol": { "base": "Bitcoin", "quote": "TetherUSD" },
+      "side": "Sell",
       "type": "limit",
       "quantity": "0.100000000",
       "price": "104250.000000000",

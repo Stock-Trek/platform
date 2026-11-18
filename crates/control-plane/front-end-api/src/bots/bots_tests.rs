@@ -10,6 +10,7 @@ use crate::limits::{LimitService, LimitSources};
 use chrono::Utc;
 use hyper::{HeaderMap, Method, Uri, body::Bytes};
 use std::sync::Arc;
+use stock_trek_types::cex::cex_id::CexId;
 
 struct Fixture {
     service: BotService,
@@ -57,7 +58,7 @@ impl Fixture {
         let account = accounts
             .link(
                 Self::OWNER,
-                "binance",
+                CexId::Binance,
                 "main",
                 "0123456789abcdef",
                 "fedcba9876543210",
