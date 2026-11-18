@@ -518,9 +518,10 @@ Strategies are extracted once when the build finishes; a build that fails to rep
 ### Deleting builds
 
 `DELETE /v1/algorithms/{algorithmId}/builds/{buildId}` deletes the build, its artifact, and its log, and answers `204`.
-It fails with `409 state_conflict` while the build is `queued` or `building`, if any bot still pins it, or if any backtest references it.
+It fails with `409 state_conflict` while the build is `queued` or `building`, or if any bot still pins it.
+Backtests that reference the build are never a reason to refuse deletion: they are permanent records that deletion does not touch (see [Backtesting](#backtesting)).
 
-Backtests are permanent records that stay associated with their build (see [Backtesting](#backtesting)), so a build that backtests reference can never be deleted.
+A backtest of a deleted build keeps the `buildId` it ran, and its status and results stay readable, but the build itself no longer exists: the build detail, log, and strategies endpoints answer `404 not_found`, and the deleted build cannot be used again because new backtests and bots require a `ready` build.
 
 ## Bots and runs
 
@@ -729,7 +730,7 @@ Retention, together with the scheduled-runs quota, bounds the run store, because
 
 A **backtest** is an ad-hoc, resource-bounded experiment: it runs one strategy from one build many times over archived market data with simulated execution friction and a seeded random generator, streaming per-simulation results as they finish and finishing with a collated result set.
 Backtests never touch live exchanges or real balances.
-A backtest is a permanent record: it cannot be deleted, and it stays associated with the build it ran.
+A backtest is a permanent record: it cannot be deleted, and it stays associated with the build it ran, even after that build is deleted.
 
 ### Backtest lifecycle
 
@@ -838,4 +839,4 @@ On `completed` the client can fetch the collated set over REST.
 On a terminal backtest it is idempotent and returns the status unchanged with `200`.
 
 A simulation result larger than the per-simulation limit fails the backtest with `error.code: "result_too_large"`; results finished before that remain readable.
-Backtests and their results are never deleted: once a backtest has run it remains a permanent record associated with its build, and its results stay readable.
+Backtests and their results are never deleted: once a backtest has run it remains a permanent record associated with its build, and its results stay readable, even if that build is deleted later.
