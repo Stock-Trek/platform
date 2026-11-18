@@ -1,5 +1,5 @@
 use crate::streaming::StreamService;
-use crate::streaming::channel_registry::SubscribeOutcome;
+use crate::streaming::stream_service::Subscription;
 use crate::streaming::stream_types::{Frame, GapDetail, GapReason};
 use crate::streaming::ws::Connection;
 use serde::Deserialize;
@@ -57,20 +57,26 @@ impl Connection {
             return;
         }
         match service.subscribe(connection_id, &channel, action.last_sequence) {
-            SubscribeOutcome::Joined { replay, live } => {
+            Subscription::Joined {
+                replay,
+                live,
+                epoch,
+            } => {
                 let replay = replay.iter().map(Self::to_json).collect();
                 forwarders.spawn(Self::forward(
                     Arc::clone(service),
+                    connection_id.to_string(),
                     channel,
+                    epoch,
                     replay,
                     live,
                     outbound.clone(),
                 ));
             }
-            SubscribeOutcome::Gap(frame) => {
+            Subscription::Gap(frame) => {
                 let _ = outbound.send(Message::text(Self::to_json(&frame))).await;
             }
-            SubscribeOutcome::UnknownChannel => {
+            Subscription::UnknownChannel => {
                 let _ = outbound
                     .send(Message::text(Self::to_json(&Frame::error(
                         &channel,
@@ -81,15 +87,19 @@ impl Connection {
         }
     }
 
-    async fn forward(
+    pub(super) async fn forward(
         service: Arc<StreamService>,
+        connection_id: String,
         channel: String,
+        epoch: u64,
         replay: Vec<String>,
         mut live: broadcast::Receiver<Frame>,
         outbound: mpsc::Sender<Message>,
     ) {
         for frame in replay {
-            if outbound.send(Message::text(frame)).await.is_err() {
+            if !Self::current(&service, &connection_id, &channel, epoch)
+                || outbound.send(Message::text(frame)).await.is_err()
+            {
                 return;
             }
         }
@@ -98,15 +108,19 @@ impl Connection {
             match live.recv().await {
                 Ok(frame) => {
                     last = frame.sequence;
-                    if outbound
-                        .send(Message::text(Self::to_json(&frame)))
-                        .await
-                        .is_err()
+                    if !Self::current(&service, &connection_id, &channel, epoch)
+                        || outbound
+                            .send(Message::text(Self::to_json(&frame)))
+                            .await
+                            .is_err()
                     {
                         return;
                     }
                 }
                 Err(broadcast::error::RecvError::Lagged(_)) => {
+                    if !Self::current(&service, &connection_id, &channel, epoch) {
+                        return;
+                    }
                     let gap = Frame::gap(
                         &channel,
                         GapDetail {
@@ -126,6 +140,10 @@ impl Connection {
                 Err(broadcast::error::RecvError::Closed) => return,
             }
         }
+    }
+
+    fn current(service: &StreamService, connection_id: &str, channel: &str, epoch: u64) -> bool {
+        service.subscription_epoch(connection_id, channel) == Some(epoch)
     }
 
     pub(super) fn to_json(frame: &Frame) -> String {

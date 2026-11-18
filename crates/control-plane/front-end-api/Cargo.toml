@@ -14,7 +14,6 @@ futures = { workspace = true }
 http-body-util = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
-platform-auth-service = { workspace = true }
 parking_lot = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http"] }

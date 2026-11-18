@@ -5,9 +5,11 @@ use crate::api::{ApiRequest, PageQuery};
 use crate::auth::{AuthContext, Scope};
 use crate::backtests::BacktestStore;
 use crate::bots::bot_types::Schedule;
-use crate::bots::{Bot, BotState, BotStore, CreateBotRequest, PatchBotRequest, RunStore};
+use crate::bots::{
+    Bot, BotState, BotStore, CreateBotRequest, PatchBotRequest, Run, RunState, RunStore, RunTrigger,
+};
 use crate::limits::{LimitService, LimitSources};
-use chrono::Utc;
+use chrono::{DateTime, Duration, Utc};
 use hyper::{HeaderMap, Method, Uri, body::Bytes};
 use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
@@ -230,4 +232,57 @@ fn merge_patches_reject_explicit_nulls() {
     assert_eq!(patch.name.as_deref(), Some("renamed"));
     assert!(patch.build_id.is_none());
     assert!(patch.schedule.is_none());
+}
+
+#[test]
+fn retention_keeps_runs_within_their_state_specific_window() {
+    let store = RunStore::new();
+    let now = Utc::now();
+    let insert = |run_id: &str, state: RunState, completed_at: Option<DateTime<Utc>>| {
+        store.insert(
+            Fixture::OWNER,
+            Run {
+                run_id: run_id.to_string(),
+                bot_id: "bot_1".to_string(),
+                algorithm_id: "alg_1".to_string(),
+                build_id: Some("build_1".to_string()),
+                strategy_name: Some("momentum_v2".to_string()),
+                trigger: RunTrigger::Schedule,
+                scheduled_at: now,
+                state,
+                completed_at,
+                log_available: false,
+                cancel_requested: false,
+                error: None,
+                skip_reason: None,
+            },
+        );
+    };
+    insert(
+        "run_expired",
+        RunState::Completed,
+        Some(now - Duration::days(91)),
+    );
+    insert(
+        "run_recent",
+        RunState::Completed,
+        Some(now - Duration::days(89)),
+    );
+    insert(
+        "run_skipped_expired",
+        RunState::Skipped,
+        Some(now - Duration::days(8)),
+    );
+    insert(
+        "run_skipped_recent",
+        RunState::Skipped,
+        Some(now - Duration::days(6)),
+    );
+    insert("run_running", RunState::Running, None);
+    assert_eq!(store.apply_retention(now), 2);
+    assert!(store.get(Fixture::OWNER, "run_expired").is_none());
+    assert!(store.get(Fixture::OWNER, "run_recent").is_some());
+    assert!(store.get(Fixture::OWNER, "run_skipped_expired").is_none());
+    assert!(store.get(Fixture::OWNER, "run_skipped_recent").is_some());
+    assert!(store.get(Fixture::OWNER, "run_running").is_some());
 }

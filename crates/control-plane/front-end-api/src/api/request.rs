@@ -82,7 +82,7 @@ impl ApiRequest {
             if let Some((name, value)) = pair.split_once('=') {
                 query
                     .entry(name.to_string())
-                    .or_insert_with(|| value.to_string());
+                    .or_insert_with(|| Self::percent_decode(value));
             }
         }
         if segments.first().map(String::as_str) == Some(VERSION_SEGMENT) {
@@ -102,6 +102,28 @@ impl ApiRequest {
 
     fn versioned(&self) -> bool {
         self.path == "/v1" || self.path.starts_with("/v1/")
+    }
+
+    fn percent_decode(value: &str) -> String {
+        let bytes = value.as_bytes();
+        let mut decoded = Vec::with_capacity(bytes.len());
+        let mut index = 0;
+        while index < bytes.len() {
+            if bytes[index] == b'%' {
+                let hex = bytes
+                    .get(index + 1..index + 3)
+                    .and_then(|slice| std::str::from_utf8(slice).ok())
+                    .and_then(|hex| u8::from_str_radix(hex, 16).ok());
+                if let Some(byte) = hex {
+                    decoded.push(byte);
+                    index += 3;
+                    continue;
+                }
+            }
+            decoded.push(bytes[index]);
+            index += 1;
+        }
+        String::from_utf8_lossy(&decoded).into_owned()
     }
 
     pub fn method(&self) -> &Method {
@@ -149,12 +171,6 @@ impl ApiRequest {
                 Problem::validation_failed("If-Match must be a quoted version number")
             })?;
         Ok(Some(version))
-    }
-
-    pub fn request_id(&self) -> Option<String> {
-        self.header("x-request-id")
-            .filter(|value| !value.is_empty())
-            .map(str::to_string)
     }
 
     pub fn peer(&self) -> Option<SocketAddr> {

@@ -1,15 +1,20 @@
 use super::ChannelRegistry;
 use super::StreamService;
+use super::stream_service::Subscription;
+use super::stream_types::Frame;
 use super::ticket_store::TicketStore;
+use super::ws::Connection;
 use crate::accounts::{AccountService, AccountStore};
 use crate::algorithms::BuildStore;
 use crate::auth::SessionStore;
-use crate::backtests::BacktestStore;
+use crate::backtests::{BacktestProgress, BacktestState, BacktestStatus, BacktestStore};
 use crate::bots::bot_types::{Bot, BotState, Schedule};
 use crate::bots::{BotService, BotStore, RunStore};
 use crate::limits::{LimitService, LimitSources};
 use chrono::{Duration, Utc};
 use std::sync::Arc;
+use tokio::sync::mpsc;
+use tokio_websockets::Message;
 
 struct Fixture {
     store: Arc<SessionStore>,
@@ -50,6 +55,7 @@ struct ChannelFixture {
     account_id: String,
     algorithm_id: String,
     bot_id: String,
+    backtest_id: String,
 }
 
 impl ChannelFixture {
@@ -73,13 +79,6 @@ impl ChannelFixture {
             builds.clone(),
             limits,
         ));
-        let service = StreamService::new(
-            Arc::new(ChannelRegistry::new()),
-            Arc::new(AccountService::new(accounts.clone(), bot_service)),
-            builds.clone(),
-            bots.clone(),
-            backtests,
-        );
         let account = accounts
             .link(
                 Self::OWNER,
@@ -92,6 +91,26 @@ impl ChannelFixture {
             .expect("link");
         let algorithm =
             builds.register_algorithm(Self::OWNER, "momentum", "acme/momentum", "heads/main");
+        backtests.insert(
+            Self::OWNER,
+            BacktestStatus {
+                backtest_id: "bt_1".to_string(),
+                algorithm_id: algorithm.algorithm_id.clone(),
+                build_id: "build_1".to_string(),
+                strategy_name: "momentum_v2".to_string(),
+                state: BacktestState::Completed,
+                error: None,
+                seed: 7,
+                progress: BacktestProgress {
+                    completed: 2,
+                    total: 2,
+                },
+                created_at: Utc::now(),
+                started_at: Some(Utc::now()),
+                completed_at: Some(Utc::now()),
+                stream_sequence: 0,
+            },
+        );
         bots.insert(
             Self::OWNER,
             Bot {
@@ -113,11 +132,31 @@ impl ChannelFixture {
                 stream_sequence: 0,
             },
         );
+        let service = StreamService::new(
+            Arc::new(ChannelRegistry::new()),
+            Arc::new(AccountService::new(accounts.clone(), bot_service)),
+            builds,
+            bots,
+            backtests,
+        );
         Self {
             service,
             account_id: account.account_id,
             algorithm_id: algorithm.algorithm_id,
             bot_id: "bot_1".to_string(),
+            backtest_id: "bt_1".to_string(),
+        }
+    }
+
+    fn connect_and_subscribe(
+        service: &StreamService,
+        channel: &str,
+        last_sequence: Option<u64>,
+    ) -> Subscription {
+        service.connect("conn_1", Self::OWNER);
+        match service.subscribe("conn_1", channel, last_sequence) {
+            joined @ Subscription::Joined { .. } => joined,
+            Subscription::Gap(_) | Subscription::UnknownChannel => panic!("subscription must join"),
         }
     }
 }
@@ -213,4 +252,103 @@ fn unknown_tokens_have_no_session() {
     let fixture = Fixture::new();
     assert!(fixture.store.session_id("not-a-token").is_none());
     assert!(fixture.store.revoked("sess_unknown"));
+}
+
+#[test]
+fn a_channel_accepts_a_subscription_before_any_frame_is_published() {
+    let fixture = ChannelFixture::new();
+    let channel = format!("runs.{}", fixture.bot_id);
+    let Subscription::Joined {
+        replay, mut live, ..
+    } = ChannelFixture::connect_and_subscribe(&fixture.service, &channel, None)
+    else {
+        unreachable!()
+    };
+    assert!(replay.is_empty());
+    fixture.service.registry().publish(
+        &channel,
+        Frame::data(&channel, 0, serde_json::json!({ "runId": "run_1" })),
+    );
+    let frame = live.blocking_recv().expect("live frame");
+    assert_eq!(frame.sequence, 1);
+    assert_eq!(frame.channel, channel);
+}
+
+#[test]
+fn resubscribing_replaces_the_previous_subscription() {
+    let fixture = ChannelFixture::new();
+    let channel = format!("runs.{}", fixture.bot_id);
+    fixture.service.connect("conn_1", ChannelFixture::OWNER);
+    for expected in [1, 2] {
+        match fixture.service.subscribe("conn_1", &channel, None) {
+            Subscription::Joined { epoch, .. } => assert_eq!(epoch, expected),
+            Subscription::Gap(_) | Subscription::UnknownChannel => panic!("subscription must join"),
+        }
+    }
+    assert_eq!(
+        fixture.service.subscription_epoch("conn_1", &channel),
+        Some(2)
+    );
+    fixture.service.unsubscribe("conn_1", &channel);
+    assert_eq!(fixture.service.subscription_epoch("conn_1", &channel), None);
+}
+
+#[test]
+fn backtest_channels_replay_the_stored_frames_from_the_beginning() {
+    let fixture = ChannelFixture::new();
+    let channel = format!("backtests.{}", fixture.backtest_id);
+    fixture.service.registry().publish(
+        &channel,
+        Frame::backtest_result(&channel, 0, 1, serde_json::json!({ "pnl": 1 })),
+    );
+    fixture
+        .service
+        .registry()
+        .publish(&channel, Frame::backtest_final(&channel, 0, "completed"));
+    for last_sequence in [None, Some(0)] {
+        let Subscription::Joined { replay, .. } =
+            ChannelFixture::connect_and_subscribe(&fixture.service, &channel, last_sequence)
+        else {
+            unreachable!()
+        };
+        assert_eq!(replay.len(), 2);
+        assert_eq!(replay[0].sequence, 1);
+        assert_eq!(replay[1].sequence, 2);
+    }
+}
+
+#[tokio::test]
+async fn unsubscribing_stops_frame_forwarding() {
+    let fixture = ChannelFixture::new();
+    let service = Arc::new(fixture.service);
+    let channel = format!("runs.{}", fixture.bot_id);
+    let Subscription::Joined {
+        replay,
+        live,
+        epoch,
+    } = ChannelFixture::connect_and_subscribe(&service, &channel, None)
+    else {
+        unreachable!()
+    };
+    let replay = replay
+        .iter()
+        .map(|frame| serde_json::to_string(frame).expect("frame json"))
+        .collect();
+    let (outbound, mut outbound_rx) = mpsc::channel::<Message>(16);
+    let forwarder = tokio::spawn(Connection::forward(
+        Arc::clone(&service),
+        "conn_1".to_string(),
+        channel.clone(),
+        epoch,
+        replay,
+        live,
+        outbound,
+    ));
+    service.unsubscribe("conn_1", &channel);
+    service.registry().publish(
+        &channel,
+        Frame::data(&channel, 0, serde_json::json!({ "runId": "run_1" })),
+    );
+    forwarder.await.expect("forwarder stops");
+    assert!(outbound_rx.recv().await.is_none());
 }

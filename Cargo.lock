@@ -4271,7 +4271,6 @@ dependencies = [
  "hyper",
  "hyper-util",
  "parking_lot",
- "platform-auth-service",
  "platform-config",
  "platform-errors",
  "platform-runtime",

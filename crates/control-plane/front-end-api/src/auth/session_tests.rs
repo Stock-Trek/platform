@@ -3,9 +3,11 @@ use crate::accounts::AccountStore;
 use crate::algorithms::BuildStore;
 use crate::api::ApiRequest;
 use crate::auth::Scope;
+use crate::auth::jwt::{AUDIENCE, ISSUER, JwtSigner};
 use crate::backtests::BacktestStore;
 use crate::bots::BotStore;
 use crate::limits::{LimitService, LimitSources};
+use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{Duration, Utc};
 use http_body_util::Full;
 use hyper::{HeaderMap, Method, Uri, body::Bytes};
@@ -91,6 +93,12 @@ impl Fixture {
 
     fn bearer(&self, token: &str) -> String {
         format!("Bearer {token}")
+    }
+
+    fn claims(token: &str) -> serde_json::Value {
+        let payload = token.split('.').nth(1).expect("jwt payload");
+        let decoded = URL_SAFE_NO_PAD.decode(payload).expect("base64url claims");
+        serde_json::from_slice(&decoded).expect("claims json")
     }
 
     fn json(response: &hyper::Response<Full<Bytes>>) -> serde_json::Value {
@@ -294,11 +302,38 @@ fn unknown_paths_answer_not_found() {
 }
 
 #[test]
-fn scopes_are_parsed_and_required() {
-    assert_eq!(Scope::parse("read"), Some(Scope::Read));
-    assert_eq!(Scope::parse("manage"), Some(Scope::Manage));
-    assert_eq!(Scope::parse("admin"), Some(Scope::Admin));
-    assert_eq!(Scope::parse("other"), None);
+fn access_tokens_carry_the_owner_claim_and_scope_array() {
+    let fixture = Fixture::new();
+    let tokens = fixture.login_tokens();
+    let claims = Fixture::claims(tokens["token"].as_str().expect("access"));
+    assert_eq!(claims["iss"], ISSUER);
+    assert_eq!(claims["aud"], AUDIENCE);
+    assert_eq!(claims["sub"], Fixture::OWNER);
+    assert_eq!(claims["owner"], Fixture::OWNER);
+    assert!(claims["sid"].is_string());
+    assert_eq!(claims["scope"][0], "read");
+    assert_eq!(claims["scope"][1], "manage");
+}
+
+#[test]
+fn a_token_whose_owner_claim_differs_from_sub_is_rejected() {
+    let signer = JwtSigner::generate();
+    let now = Utc::now().timestamp();
+    let payload = serde_json::json!({
+        "iss": ISSUER,
+        "sub": "user_7gk2",
+        "owner": "user_other",
+        "aud": AUDIENCE,
+        "sid": "sess_9f2b",
+        "scope": ["read"],
+        "iat": now,
+        "exp": now + 60,
+    });
+    let token = signer.mint(&payload);
+    assert!(signer.verify_access(&token).is_none());
+    let mut payload = payload;
+    payload["owner"] = "user_7gk2".into();
+    assert!(signer.verify_access(&signer.mint(&payload)).is_some());
 }
 
 #[test]

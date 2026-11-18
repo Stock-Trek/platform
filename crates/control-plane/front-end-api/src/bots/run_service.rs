@@ -76,4 +76,8 @@ impl RunService {
             .log(auth.owner(), run_id)
             .ok_or_else(|| Problem::not_found("no run log exists yet"))
     }
+
+    pub fn apply_retention(&self, now: DateTime<Utc>) -> usize {
+        self.runs.apply_retention(now)
+    }
 }

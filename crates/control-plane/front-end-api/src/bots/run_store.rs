@@ -1,7 +1,10 @@
 use crate::bots::{Run, RunFilter, RunLogLink, RunState};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Duration, Utc};
 use parking_lot::Mutex;
 use std::collections::HashMap;
+
+const RUN_RETENTION: Duration = Duration::days(90);
+const SKIPPED_RETENTION: Duration = Duration::days(7);
 
 struct RunRow {
     owner: String,
@@ -112,6 +115,25 @@ impl RunStore {
 
     pub fn stream_sequence(&self, bot_id: &str) -> u64 {
         self.sequences.lock().get(bot_id).copied().unwrap_or(0)
+    }
+
+    pub fn apply_retention(&self, now: DateTime<Utc>) -> usize {
+        let mut rows = self.rows.lock();
+        let before = rows.len();
+        rows.retain(|row| Self::retained(&row.run, now));
+        before - rows.len()
+    }
+
+    fn retained(run: &Run, now: DateTime<Utc>) -> bool {
+        let Some(completed_at) = run.completed_at else {
+            return true;
+        };
+        let retention = match run.state {
+            RunState::Skipped => SKIPPED_RETENTION,
+            RunState::Pending | RunState::Running => return true,
+            RunState::Completed | RunState::Failed | RunState::Canceled => RUN_RETENTION,
+        };
+        now - completed_at < retention
     }
 
     fn matches(run: &Run, filter: &RunFilter) -> bool {

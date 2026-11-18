@@ -92,14 +92,13 @@ impl SessionStore {
 
     pub fn access(&self, token: &str, now: DateTime<Utc>) -> Option<(String, Vec<Scope>)> {
         let claims = self.signer.verify_access(token)?;
-        let scopes = JwtSigner::scopes(&claims.scope)?;
         let state = self.state.lock();
         let session = state.access.get(&claims.sid)?;
         if session.revoked
             || session.expires_at <= now
             || claims.exp <= now.timestamp()
             || session.owner != claims.sub
-            || session.scopes != scopes
+            || session.scopes != claims.scope
         {
             return None;
         }
