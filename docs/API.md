@@ -774,8 +774,6 @@ Live results arrive on the `backtests.{backtestId}` stream channel; see [Streami
   "algorithmId": "algorithm_5t1",
   "buildId": "build_882",
   "strategyName": "momentum_v2",
-  "count": 100,
-  "maxConcurrent": 4,
   "seed": 42
 }
 ```
@@ -785,8 +783,6 @@ The response is `202` with `{ "backtestId": "backtest_31a", "state": "queued" }`
 | Field                                    | Required | Meaning                                                                                               |
 |------------------------------------------|----------|-------------------------------------------------------------------------------------------------------|
 | `algorithmId`, `buildId`, `strategyName` | yes      | The strategy to simulate. `buildId` is a concrete build, never a selector.                            |
-| `count`                                  | yes      | Number of simulations, 1 to 1000                                                                      |
-| `maxConcurrent`                          | no       | Parallelism, clamped to the runner's worker limits                                                    |
 | `seed`                                   | no       | Integer seed. If omitted, the server picks one and returns it in the status, so runs are reproducible |
 
 Validation fails fast with `validation_failed`:
