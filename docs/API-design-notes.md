@@ -48,7 +48,6 @@ Everything else is a projection of existing state: the ownership registry, the p
 ## Backtests
 
 - Execution uses the sandbox runner's backtest subsystem, which already enforces worker limits, watchdog timeouts, and memory limits.
-- Market input is read from the candle archive, whose correction contract is why history beyond the archive's retention reach is refused.
 
 ## Streams
 
