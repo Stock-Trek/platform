@@ -72,10 +72,7 @@ impl BotService {
             canceled.push(run.run_id);
         }
         if !canceled.is_empty() {
-            self.bots.update(owner, &bot.bot_id, now, |mut bot| {
-                bot.active_run_id = None;
-                bot
-            });
+            self.bots.update(owner, &bot.bot_id, now, |bot| bot);
         }
         canceled
     }

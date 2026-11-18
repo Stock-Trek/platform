@@ -87,7 +87,7 @@ impl BotApi {
     fn list(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
         let state = Self::state_filter(request)?;
-        let page = self.bots.list(&auth, state, &PageQuery::parse(request));
+        let page = self.bots.list(&auth, state, &PageQuery::parse(request)?);
         Ok(Respond::json(StatusCode::OK, &page))
     }
 
@@ -100,7 +100,7 @@ impl BotApi {
     fn patch(&self, request: &ApiRequest, bot_id: &str) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Manage)?;
         request.require_merge_patch_content_type()?;
-        let patch: PatchBotRequest = request.json()?;
+        let patch = PatchBotRequest::merge_patch(&request.json::<serde_json::Value>()?)?;
         let bot = self
             .bots
             .patch(&auth, bot_id, request.if_match()?, &patch, Utc::now())?;

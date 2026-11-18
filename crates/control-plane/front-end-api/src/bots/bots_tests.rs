@@ -97,7 +97,7 @@ impl Fixture {
     }
 
     fn list_query(&self) -> PageQuery {
-        PageQuery::parse(&request(Method::GET, "/v1/bots", &[]))
+        PageQuery::parse(&request(Method::GET, "/v1/bots", &[])).expect("page query")
     }
 }
 
@@ -210,4 +210,24 @@ fn a_created_bot_starts_disabled_and_can_be_enabled() {
         .expect("enable");
     assert_eq!(enabled.state, BotState::Enabled);
     assert_eq!(enabled.version, bot.version + 1);
+}
+
+#[test]
+fn merge_patches_reject_explicit_nulls() {
+    for field in ["name", "buildId", "strategyName", "accountIds", "schedule"] {
+        let patch = PatchBotRequest::merge_patch(&serde_json::json!({ field: null }))
+            .expect_err("explicit nulls must be rejected");
+        assert_eq!(patch.status(), hyper::StatusCode::BAD_REQUEST);
+    }
+    let patch = PatchBotRequest::merge_patch(&serde_json::json!({
+        "name": "renamed",
+        "unknown": 1
+    }))
+    .expect_err("unknown fields must be rejected");
+    assert_eq!(patch.status(), hyper::StatusCode::BAD_REQUEST);
+    let patch = PatchBotRequest::merge_patch(&serde_json::json!({ "name": "renamed" }))
+        .expect("valid patch");
+    assert_eq!(patch.name.as_deref(), Some("renamed"));
+    assert!(patch.build_id.is_none());
+    assert!(patch.schedule.is_none());
 }

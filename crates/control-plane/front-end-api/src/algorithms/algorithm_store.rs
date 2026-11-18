@@ -53,6 +53,13 @@ impl BuildStore {
             .map(|row| row.summary.clone())
     }
 
+    pub fn owns_algorithm(&self, owner: &str, algorithm_id: &str) -> bool {
+        self.algorithms
+            .lock()
+            .iter()
+            .any(|row| row.owner == owner && row.summary.algorithm_id == algorithm_id)
+    }
+
     pub fn archive_algorithm(&self, owner: &str, algorithm_id: &str) -> Option<AlgorithmSummary> {
         let mut rows = self.algorithms.lock();
         let row = rows

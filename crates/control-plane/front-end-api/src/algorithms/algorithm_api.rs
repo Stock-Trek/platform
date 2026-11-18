@@ -50,7 +50,7 @@ impl AlgorithmApi {
     fn list(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
         let algorithms = self.builds.list_algorithms(auth.owner());
-        let page = crate::api::Page::of(algorithms, &crate::api::PageQuery::parse(request));
+        let page = crate::api::Page::of(algorithms, &crate::api::PageQuery::parse(request)?);
         Ok(Respond::json(StatusCode::OK, &page))
     }
 

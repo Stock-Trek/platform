@@ -1,7 +1,7 @@
 use crate::accounts::AccountService;
 use crate::algorithms::BuildStore;
 use crate::backtests::BacktestStore;
-use crate::bots::RunStore;
+use crate::bots::BotStore;
 use crate::streaming::channel_registry::{ChannelRegistry, SubscribeOutcome};
 use crate::streaming::stream_types::Frame;
 use crate::streaming::ticket_store::TicketStore;
@@ -25,7 +25,7 @@ pub struct StreamService {
     connections: Mutex<HashMap<String, Connection>>,
     accounts: Arc<AccountService>,
     builds: Arc<BuildStore>,
-    runs: Arc<RunStore>,
+    bots: Arc<BotStore>,
     backtests: Arc<BacktestStore>,
 }
 
@@ -34,7 +34,7 @@ impl StreamService {
         registry: Arc<ChannelRegistry>,
         accounts: Arc<AccountService>,
         builds: Arc<BuildStore>,
-        runs: Arc<RunStore>,
+        bots: Arc<BotStore>,
         backtests: Arc<BacktestStore>,
     ) -> Self {
         Self {
@@ -43,7 +43,7 @@ impl StreamService {
             connections: Mutex::new(HashMap::new()),
             accounts,
             builds,
-            runs,
+            bots,
             backtests,
         }
     }
@@ -96,8 +96,8 @@ impl StreamService {
     pub fn owns_channel(&self, owner: &str, channel: &str) -> bool {
         match channel.split_once('.') {
             Some(("portfolio", id)) => self.accounts.get(owner, id).is_ok(),
-            Some(("runs", id)) => self.runs.get(owner, id).is_some(),
-            Some(("builds", id)) => self.builds.owns_build(owner, id),
+            Some(("runs", id)) => self.bots.get(owner, id).is_some(),
+            Some(("builds", id)) => self.builds.owns_algorithm(owner, id),
             Some(("backtests", id)) => self.backtests.status(owner, id).is_some(),
             _ => false,
         }

@@ -48,11 +48,7 @@ impl BotService {
             skip_reason: None,
         };
         self.runs.insert(owner, run.clone());
-        self.bots.update(owner, &bot.bot_id, now, |mut bot| {
-            bot.active_run_id = Some(run.run_id.clone());
-            bot.stream_sequence += 1;
-            bot
-        });
+        self.bots.update(owner, &bot.bot_id, now, |bot| bot);
         run
     }
 

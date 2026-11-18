@@ -1,3 +1,4 @@
+use crate::api::Problem;
 use serde::Serialize;
 
 const DEFAULT_LIMIT: usize = 50;
@@ -10,16 +11,26 @@ pub struct PageQuery {
 }
 
 impl PageQuery {
-    pub fn parse(request: &crate::api::ApiRequest) -> Self {
-        let limit = request
-            .query("limit")
-            .and_then(|value| value.parse::<usize>().ok())
-            .unwrap_or(DEFAULT_LIMIT)
-            .min(MAX_LIMIT);
-        let cursor = request
-            .query("cursor")
-            .and_then(|value| value.parse::<usize>().ok());
-        Self { limit, cursor }
+    pub fn parse(request: &crate::api::ApiRequest) -> Result<Self, Problem> {
+        let limit = match request.query("limit") {
+            None => DEFAULT_LIMIT,
+            Some(value) => {
+                let parsed = value
+                    .parse::<usize>()
+                    .map_err(|_| Problem::validation_failed("limit must be a positive integer"))?;
+                if parsed == 0 {
+                    return Err(Problem::validation_failed("limit must be at least 1"));
+                }
+                parsed.min(MAX_LIMIT)
+            }
+        };
+        let cursor = match request.query("cursor") {
+            None => None,
+            Some(value) => Some(value.parse::<usize>().map_err(|_| {
+                Problem::validation_failed("cursor must be a non-negative integer")
+            })?),
+        };
+        Ok(Self { limit, cursor })
     }
 
     pub fn limit(&self) -> usize {
