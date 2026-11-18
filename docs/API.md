@@ -1,7 +1,8 @@
 # Front-end API
 
-This document defines the API that the browser front-end speaks to.
-It covers conventions shared by every resource group and the per-area endpoints:
+This document is the contract for the API the browser front-end speaks to.
+It covers conventions shared by every resource group and the per-area endpoints.
+Implementation details that clients must not rely on are kept apart, under [Design notes](#design-notes-non-contract) at the end.
 
 - [Overview](#overview)
 - [Versioning and base URL](#versioning-and-base-url)
@@ -14,90 +15,144 @@ It covers conventions shared by every resource group and the per-area endpoints:
 - [Algorithms and builds](#algorithms-and-builds)
 - [Bots and runs](#bots-and-runs)
 - [Backtesting](#backtesting)
+- [Design notes (non-contract)](#design-notes-non-contract)
 
 ## Overview
 
 The front-end talks to exactly one platform component: the front-end API.
-The API is a new service that composes the existing planes and hides their internals from the browser.
-It owns the resources that no existing service owns today (bots, backtests) and exposes reads and actions over the stores and streams that already exist.
+It exposes the resources a user manages (accounts, portfolios, algorithms, builds, bots, runs, and backtests) and hides the services behind them.
 
-```
-Browser ⇄ Front-end API ⇄ Auth plane        (sessions, JWT verification)
-                       ⇄ Portfolio registry (account ownership)
-                       ⇄ Portfolio service  (read model)
-                       ⇄ Build plane        (algorithms, build artifacts)
-                       ⇄ Run store/invoker  (scheduled runs)
-                       ⇄ Runner             (live runs, backtests)
-```
-
-The API introduces two new durable stores: a bot configuration store and a backtest store.
-Everything else is a projection of existing state: the ownership registry, the portfolio read model, build artifacts, and the run store.
+Everything before Design notes is contract.
+The design notes explain how the API is built and may change without a version bump.
 
 ## Versioning and base URL
 
 - HTTPS only.
   All resources live under a fixed major version prefix: `/v1`.
-- Changes within `/v1` are additive: new fields may appear in responses, new endpoints may appear.
+- Changes within `/v1` are additive: new fields, endpoints, enum values, error codes, and stream frame types may appear.
   Removing or renaming fields, or changing semantics, requires `/v2`.
 - Clients build request bodies from the fields this document defines and never echo response representations back.
-  Unknown fields in requests are rejected with `validation_failed`; unknown fields in responses are ignored by clients.
+  Unknown fields in requests are rejected with `validation_failed`.
+- Clients ignore unknown response fields and tolerate unknown enum values and error codes: an unknown value is displayed generically, and an unknown `code` is handled by its HTTP status.
 
 ## Authentication and sessions
 
 Every request carries `Authorization: Bearer <jwt>`.
-Tokens are short-lived EdDSA (Ed25519) JWTs signed by the auth service; the API verifies them locally against the auth service JWKS (`/.well-known/jwks.json`) with a bounded key cache.
-Token minting goes through the auth service, which only mints a token for an owner it can authenticate: every minting request must be signed with the login credential bound to the requested owner, and the API signs with the login credential the user presented, so it cannot mint a token for an owner it has not authenticated.
-The request-signing scheme used between the API and the auth service is an internal platform detail and never reaches the browser.
-Tokens carry a single scope that grants access to every endpoint in this document; `forbidden` means the presented token does not carry it.
-`DELETE /v1/session` revokes the presented token server-side, and every authenticated request re-checks revocation, so locally verified tokens stop working immediately after invalidation.
-Because the client is a browser, the API answers CORS preflights from an allowlist of origins, accepts the `Authorization` and `Idempotency-Key` request headers, and varies cached responses on `Origin`.
+Access tokens are short-lived (15 minutes) EdDSA (Ed25519) JWTs.
+The JWT `owner` claim is the platform identity, and every resource in the API is scoped to it.
 
-The JWT `owner` claim is the platform identity.
-Every resource in the API is scoped to the owner: a user can only ever see and act on their own accounts, algorithms, bots, runs, and backtests.
-Server-assigned identifiers (`algorithm_`, `build_`, `bot_`, `run_`, `backtest_`) are not guessable; account identifiers are chosen by the owner, so every request re-checks ownership.
+The owner's platform login credential (`loginId` and `loginSecret`) is used only to log in and to step up.
+The front-end never stores it.
+Between those moments the session is kept alive with a rotating refresh token.
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/v1/session` | Exchange a platform login credential for a short-lived API token |
-| `DELETE` | `/v1/session` | Invalidate the presented token |
+| Method   | Path                  | Description                                                   |
+|----------|-----------------------|---------------------------------------------------------------|
+| `POST`   | `/v1/session`         | Exchange the login credential for an access and refresh token |
+| `POST`   | `/v1/session/refresh` | Rotate the refresh token and obtain a new access token        |
+| `POST`   | `/v1/session/step-up` | Re-authenticate to obtain a short-lived elevated token        |
+| `DELETE` | `/v1/session`         | End the session                                               |
 
-`POST /v1/session` takes the owner's platform login credential, an owner-bound credential pair issued by the platform when the owner is onboarded.
+`POST /v1/session` takes the login credential:
 
 ```json
 { "loginId": "login_9f2b", "loginSecret": "..." }
 ```
 
-Invalid or unknown credentials fail with `401 unauthorized`, and failed attempts are rate limited per source address (see [Limits](#limits)).
-
-`POST /v1/session` returns `201` with:
+and returns `201`:
 
 ```json
-{ "token": "eyJ...", "expiresAt": "2026-07-14T10:30:00.000Z", "owner": "user_7gk2" }
+{
+  "token": "eyJ...",
+  "expiresAt": "2026-07-14T10:30:00.000Z",
+  "refreshToken": "rt_...",
+  "refreshExpiresAt": "2026-07-14T21:30:00.000Z",
+  "owner": "user_7gk2",
+  "scope": ["read", "manage"]
+}
 ```
 
-Tokens are refreshed by calling `POST /v1/session` again before `expiresAt`.
+Invalid or unknown credentials fail with `401 unauthorized`.
+Failed attempts are throttled per source address and per `loginId` (see [Limits](#limits)), so distributed guessing against one login is also slowed.
+
+### Refresh
+
+`POST /v1/session/refresh` takes `{ "refreshToken": "rt_..." }`, needs no bearer token, and returns the same body as login with a new access token and a new refresh token.
+
+- Refresh tokens are single-use and rotate on every call.
+  The session has an absolute lifetime of 12 hours (`refreshExpiresAt`), after which the user logs in again.
+- A token that was just rotated is accepted again for 10 seconds and returns the same response, so two browser tabs refreshing together do not break the session.
+- Any later reuse of a rotated token is treated as theft: the whole session is revoked and the call fails with `401 unauthorized`.
+- The front-end keeps the refresh token in memory only.
+
+### Scopes and step-up
+
+Tokens carry scopes.
+A token missing the scope an endpoint needs is rejected with `403 forbidden`.
+
+| Scope    | Grants                                                                                         |
+|----------|------------------------------------------------------------------------------------------------|
+| `read`   | Every `GET`, stream tickets, and stream subscriptions                                          |
+| `manage` | Managing algorithms, builds, bots, runs, and backtests, plus the kill switch                   |
+| `admin`  | Sensitive operations: link, unlink, or re-credential an account; enable a bot; promote a build |
+
+Login issues `read` and `manage` only.
+`admin` is available only through step-up.
+
+`POST /v1/session/step-up` requires a bearer token and takes `{ "loginSecret": "..." }`.
+It returns `201` with `{ "token": "...", "expiresAt": "..." }`: an access token that additionally carries `admin` for 5 minutes.
+A sensitive operation called without `admin` fails with `403 step_up_required`, which tells the front-end to prompt for the password and retry.
+
+### Revocation
+
+`DELETE /v1/session` revokes the presented access token and the whole refresh-token family, and returns `204`.
+Every authenticated request re-checks revocation, so locally verified tokens stop working immediately after invalidation.
+Open stream connections of a revoked session are closed with WebSocket close code `4401`.
+
+### Browser access (CORS)
+
+The API answers CORS preflights from an allowlist of origins and varies cached responses on `Origin`.
+
+- Allowed request headers: `Authorization`, `Content-Type`, `Idempotency-Key`, `If-Match`, `X-Request-Id`.
+- Exposed response headers: `X-Request-Id`, `Retry-After`, `ETag`, `Location`.
+
+### Owner scoping
+
+A user can only ever see and act on their own accounts, algorithms, bots, runs, and backtests.
+A resource that exists but belongs to another owner is indistinguishable from a missing one: both answer `404 not_found`.
+Attempts to touch another owner's resources are logged and alerted on server-side but are not revealed to the caller.
+All identifiers are server-assigned and unguessable.
 
 ## Conventions
 
 - Request and response bodies are UTF-8 JSON with `Content-Type: application/json`.
 - Timestamps are RFC 3339 UTC with millisecond precision, for example `2026-07-14T09:30:00.000Z`.
-  Durations are integer seconds unless a field name ends in `_millis`.
+  Durations are integer seconds unless a field name ends in `Millis`.
 - Quantities and prices are decimal strings, for example `"1250.50"`, never JSON numbers.
-- Identifiers are opaque strings prefixed by type: `user_`, `login_`, `algorithm_`, `build_`, `bot_`, `run_`, `backtest_`, `order_`.
+- Identifiers are opaque, server-assigned strings prefixed by type: `user_`, `login_`, `account_`, `algorithm_`, `build_`, `bot_`, `run_`, `backtest_`.
 - Enum values are snake_case strings.
-- Exchange and asset identifiers use the platform's canonical names: exchange codes such as `binance` and asset names such as `bitcoin` and `tether_u_s_d`.
+  The lifecycle field of every resource is called `state`, and filters on it use the same name.
+- Exchange codes are lowercase, such as `binance`.
+  Asset identifiers are the platform's canonical names, such as `bitcoin` and `tether_u_s_d`; they are defined by the platform, not derived from exchange tickers.
   Trading pairs are `{"base": "bitcoin", "quote": "tether_u_s_d"}`.
 - List endpoints paginate with `limit` (default `50`, maximum `200`) and an opaque `cursor`.
-  A `limit` above the maximum is clamped to the maximum.
+  A `limit` above the maximum is clamped.
   Responses wrap arrays as `{ "data": [...], "nextCursor": "..." | null }`.
   Lists are newest first by creation time unless an endpoint says otherwise.
 - `POST` endpoints that create resources or trigger work accept an `Idempotency-Key` header.
   Retries with the same key return the original response instead of creating a duplicate.
-  Reusing a key with a different request body fails with `409 conflict`.
-  Keys are scoped to the owner and endpoint and are remembered indefinitely.
-- Mutable resources expose a `version` integer.
-  Mutations may be conditioned with `If-Match: <version>` and fail with `409 conflict` when the version does not match; endpoints that require it say so below.
-- Account identifiers may contain only lowercase letters, digits, `-`, and `_`, because they are embedded in stream channel names and URL paths.
+  Reusing a key with a different request body fails with `409 idempotency_conflict`.
+  Keys are scoped to the owner and endpoint and are retained for 24 hours; after that an identical request is treated as new.
+  Only a hash of the request body is retained, never the body itself, so credentials are not kept.
+- Mutable resources expose a `version` integer and the same value as an `ETag` header (`ETag: "7"`).
+  Endpoints that require `If-Match` say so.
+  A missing header fails with `428 precondition_required` and a stale one with `412 precondition_failed`.
+- `PATCH` uses JSON Merge Patch (`Content-Type: application/merge-patch+json`): fields present are applied, absent fields are left alone, and arrays are replaced.
+  Tagged-union objects (`schedule`, `build`) are always replaced as a whole rather than merged.
+  Required fields cannot be set to `null`.
+- Commit identifiers in responses are always full object IDs.
+  Requests may give an abbreviation of at least 7 characters, which the server resolves; an ambiguous or unknown one fails with `validation_failed`.
+- Representations backed by a stream channel carry `streamSequence`: the channel's sequence at the moment of the read.
+  It is the value to pass as `lastSequence` when subscribing (see [Streaming](#streaming)).
 
 ## Errors
 
@@ -105,95 +160,144 @@ Errors use RFC 9457 problem details:
 
 ```json
 {
-  "type": "https://api.example.com/errors/not-owned",
-  "title": "Resource is owned by another user",
-  "status": 403,
-  "detail": "Account binance:main is not linked to this owner",
-  "code": "not_owned"
+  "type": "https://api.example.com/errors/not-found",
+  "title": "Resource not found",
+  "status": 404,
+  "detail": "Account account_3kq does not exist",
+  "code": "not_found",
+  "requestId": "req_01j..."
 }
 ```
 
-| `code` | Status | Meaning |
-| --- | --- | --- |
-| `validation_failed` | 400 | Request body or parameters are malformed |
-| `unauthorized` | 401 | Missing, expired, or invalid token |
-| `forbidden` | 403 | Token lacks the required scope |
-| `not_owned` | 403 | Resource exists but belongs to another owner |
-| `not_found` | 404 | Resource does not exist for this owner |
-| `conflict` | 409 | Version mismatch, duplicate resource, or resource state that forbids the action |
-| `payload_too_large` | 413 | Request or result exceeds a size limit |
-| `rate_limited` | 429 | Rate limit or quota exhausted |
-| `internal` | 500 | Unexpected server error |
-| `unavailable` | 503 | Dependency is down; retry with backoff |
+| `code`                  | Status | Meaning                                                                     |
+|-------------------------|--------|-----------------------------------------------------------------------------|
+| `validation_failed`     | 400    | Request body or parameters are malformed or invalid                         |
+| `unauthorized`          | 401    | Missing, expired, revoked, or invalid token or credential                   |
+| `forbidden`             | 403    | Token lacks the required scope                                              |
+| `step_up_required`      | 403    | The operation needs a recent step-up (`admin` scope)                        |
+| `quota_exceeded`        | 403    | A per-owner resource-count or schedule quota would be exceeded (see Limits) |
+| `not_found`             | 404    | Resource does not exist for this owner                                      |
+| `already_exists`        | 409    | A resource with the same unique attributes already exists for this owner    |
+| `state_conflict`        | 409    | The resource's current state forbids the action                             |
+| `idempotency_conflict`  | 409    | Idempotency key reused with a different request body                        |
+| `precondition_failed`   | 412    | `If-Match` does not match the current version                               |
+| `payload_too_large`     | 413    | Request exceeds a size limit                                                |
+| `precondition_required` | 428    | The endpoint requires `If-Match` and it was not sent                        |
+| `rate_limited`          | 429    | Rate limit exhausted                                                        |
+| `internal`              | 500    | Unexpected server error                                                     |
+| `unavailable`           | 503    | A dependency is down; retry with backoff                                    |
 
-Every response carries an `X-Request-Id` header: the API echoes a client-supplied `X-Request-Id` or generates one, and problem details repeat it as `requestId` so front-end error reports can be matched to server logs.
+The API echoes a client-supplied `X-Request-Id` or generates one, returns it in the `X-Request-Id` header of every response, and repeats it in problem details as `requestId`, so front-end error reports can be matched to server logs.
+`rate_limited` responses carry a `Retry-After` header with the number of seconds to wait.
 
-`rate_limited` responses carry a `Retry-After` header with the number of seconds to wait before retrying.
+Run failures are reported inside run representations, not as HTTP errors; see [Bots and runs](#bots-and-runs).
 
 ## Streaming
 
-Browsers cannot set `Authorization` on WebSocket upgrades, so stream connections authenticate with a short-lived single-use ticket: `POST /v1/stream/ticket` requires a bearer token and returns `{ "ticket": "...", "expiresAt": "..." }`, and `GET /v1/stream?ticket=...` upgrades to a WebSocket after the ticket is redeemed.
-Tickets are valid for one upgrade before `expiresAt`, which is 60 seconds after issue.
-The client subscribes to channels with `subscribe` actions and leaves them with `unsubscribe` actions; the server pushes JSON frames with a per-channel monotonically increasing `sequence`:
+Browsers cannot set `Authorization` on WebSocket upgrades, so stream connections authenticate with a short-lived single-use ticket.
+`POST /v1/stream/ticket` requires a `read` bearer token and returns `{ "ticket": "...", "expiresAt": "..." }`; `GET /v1/stream?ticket=...` upgrades to a WebSocket once the ticket is redeemed.
+A ticket is valid for one upgrade and expires 60 seconds after issue.
+
+| Method | Path                | Description                         |
+|--------|---------------------|-------------------------------------|
+| `POST` | `/v1/stream/ticket` | Issue a single-use stream ticket    |
+| `GET`  | `/v1/stream`        | WebSocket for channel subscriptions |
+
+The client subscribes with `subscribe` actions and leaves with `unsubscribe` actions.
+The server pushes JSON frames carrying a per-channel, monotonically increasing `sequence`.
+Every channel sequences its frames.
 
 ```json
-{ "action": "subscribe", "channel": "portfolio.binance.main", "lastSequence": 41 }
-{ "channel": "portfolio.binance.main", "sequence": 42, "data": { "...": "..." } }
+{ "action": "subscribe", "channel": "portfolio.account_3kq", "lastSequence": 41 }
+{ "channel": "portfolio.account_3kq", "sequence": 42, "data": { "...": "..." } }
 ```
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/v1/stream/ticket` | Issue a single-use stream ticket |
-| `GET` | `/v1/stream` | WebSocket for channel subscriptions |
+### Channels
 
-The server never replays history on any channel.
-A first subscribe omits `lastSequence` and receives only frames published after the server accepts it.
-A `lastSequence` older than the channel's current head is answered with a single gap frame, `{ "channel": "portfolio.binance.main", "gap": { "afterSequence": 41 } }`, and live frames continue after it; the client recovers by re-fetching state over REST (a portfolio snapshot for `portfolio` channels, build and run detail for the others).
-A subscribe that would exceed the per-connection subscription limit is rejected with an error frame and the connection stays open.
-A subscribe to a channel the ticket's owner does not own is rejected the same way.
-The server pings every 30 seconds and closes connections that miss two pongs.
-Channels:
+| Channel                  | Frames                                                | Replay                           |
+|--------------------------|-------------------------------------------------------|----------------------------------|
+| `portfolio.{accountId}`  | Portfolio snapshots and order updates                 | Bounded window                   |
+| `builds.{algorithmId}`   | Build state changes and promotions                    | Bounded window                   |
+| `runs.{botId}`           | Run state changes                                     | Bounded window                   |
+| `backtests.{backtestId}` | One frame per finished simulation, then a final frame | Full, until the backtest expires |
 
-| Channel | Frames |
-| --- | --- |
-| `portfolio.{cexId}.{accountId}` | Portfolio snapshots and order updates |
-| `builds.{algorithmId}` | Build state changes |
-| `runs.{botId}` | Run state changes |
+### Resume and gaps
+
+- A first subscribe omits `lastSequence`.
+  On the first three channel types it receives only frames published after the server accepts it.
+  On a `backtests` channel it receives the stored frames from the beginning.
+- To subscribe without missing anything, a client reads state over REST and subscribes with `lastSequence` set to the `streamSequence` of that read.
+  Each non-backtest channel keeps a bounded replay window (the most recent 256 frames); frames after `lastSequence` that are inside the window are replayed, closing the race between the read and the subscribe.
+- If `lastSequence` is older than the window, or newer than the channel's head (for example after a sequencer reset), the server sends one gap frame and then continues live: `{ "channel": "portfolio.account_3kq", "gap": { "afterSequence": 41, "headSequence": 9300, "reason": "expired" } }`.
+  `reason` is `expired` or `ahead_of_head`.
+  The client recovers by re-reading state over REST.
+- A subscribe that would exceed the per-connection subscription limit is answered with an error frame, `{ "error": { "code": "quota_exceeded", "channel": "..." } }`, and the connection stays open.
+- A subscribe to a channel the ticket's owner does not own is answered the same way with `"code": "not_found"`.
+- The server pings every 30 seconds and closes connections that miss two pongs.
 
 ## Limits
 
-| Limit | Value |
-| --- | --- |
-| Concurrent backtests per owner | 2 |
-| Failed session attempts per source address | 10 per 15 minutes |
-| Ad-hoc runs per hour per bot | 12 |
-| API requests per owner | 120 per minute |
-| Concurrent stream subscriptions per connection | 32 |
-| Maximum request body size | 1 MiB |
-| Maximum backtest result size per simulation | 64 KiB |
+Every limit below that applies to an authenticated owner comes from the owner's tier, through a backend matrix of tier to limit values, and a tier can change at any time.
+The login throttles apply before an owner is identified, so they are the same for everyone.
+If a tier change lowers a limit below current usage, existing resources keep working and only new creations and enables are refused.
+
+`GET /v1/limits` (scope `read`) returns the owner's effective limits, one entry per tier-based limit in the table below (a few are shown):
+
+```json
+{
+  "linkedAccounts": { "limit": 20, "used": 2 },
+  "algorithms": { "limit": 100, "used": 4 },
+  "bots": { "limit": 50, "used": 3 },
+  "scheduledRunsPerDay": { "limit": 20000, "used": 8640 },
+  "concurrentBacktests": { "limit": 2, "used": 0 },
+  "streamConnections": { "limit": 5, "used": 1 }
+}
+```
+
+A `quota_exceeded` error names the quota in its problem details (`quota`, `limit`, `used`) so the front-end can explain it.
+
+| Limit                                          | Source | When exceeded                          |
+|------------------------------------------------|--------|----------------------------------------|
+| API requests per owner, per minute             | Tier   | `429 rate_limited`                     |
+| Failed session attempts per source address     | Fixed  | `429 rate_limited`                     |
+| Failed session attempts per `loginId`          | Fixed  | `429 rate_limited`                     |
+| Stream connections per owner                   | Tier   | `429 rate_limited`                     |
+| Concurrent stream subscriptions per connection | Tier   | Error frame with `quota_exceeded`      |
+| Linked accounts per owner                      | Tier   | `403 quota_exceeded`                   |
+| Algorithms per owner                           | Tier   | `403 quota_exceeded`                   |
+| Bots per owner (not archived)                  | Tier   | `403 quota_exceeded`                   |
+| Scheduled runs per owner per day               | Tier   | `403 quota_exceeded`                   |
+| Ad-hoc runs per hour per bot                   | Tier   | `429 rate_limited`                     |
+| Concurrent backtests per owner                 | Tier   | `429 rate_limited`                     |
+| Maximum request body size                      | Tier   | `413 payload_too_large`                |
+| Maximum backtest result size per simulation    | Tier   | Backtest fails with `result_too_large` |
+
+The scheduled-runs quota is computed from each enabled bot's schedule, so a bot with a 10-second interval uses 8,640 of the daily scheduled-runs quota.
+Creating or enabling a bot that would exceed it fails with `403 quota_exceeded`.
+Count limits also fail with `403 quota_exceeded`; request-rate limits fail with `429 rate_limited`.
 
 ## Accounts and portfolios
 
 ### Ownership model
 
 An owner (the JWT `owner` claim) controls zero or more exchange accounts.
-Ownership of `(cexId, accountId)` is recorded by the portfolio registry and drives authorization everywhere: requests for accounts an owner does not own are rejected with `not_owned` and treated as security incidents.
-Ownership changes are audited and propagate through the ownership stream to the portfolio service connectors.
+Each linked account has a server-assigned `accountId` and an owner-chosen `label`.
+Because identifiers are server-assigned and owner-scoped, a label that another user has also used reveals nothing and cannot collide with theirs.
 
 Every linked account additionally needs exchange API credentials.
-Credentials are write-only: they are stored in Vault, never returned by any endpoint, and rotated by replacing them.
+Credentials are write-only: they are never returned by any endpoint and are rotated by replacing them.
 
 ### Endpoints
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/v1/accounts` | List the owner's linked exchange accounts |
-| `POST` | `/v1/accounts` | Link an exchange account and submit its credentials |
-| `GET` | `/v1/accounts/{cexId}/{accountId}` | Account detail and connector status |
-| `DELETE` | `/v1/accounts/{cexId}/{accountId}` | Unlink the account |
-| `PUT` | `/v1/accounts/{cexId}/{accountId}/credentials` | Replace exchange credentials |
-| `GET` | `/v1/accounts/{cexId}/{accountId}/portfolio` | Portfolio snapshot for the account |
-| `GET` | `/v1/portfolios` | Portfolio snapshots for every linked account |
+| Method   | Path                                   | Scope   | Description                                         |
+|----------|----------------------------------------|---------|-----------------------------------------------------|
+| `GET`    | `/v1/accounts`                         | `read`  | List the owner's linked exchange accounts           |
+| `POST`   | `/v1/accounts`                         | `admin` | Link an exchange account and submit its credentials |
+| `GET`    | `/v1/accounts/{accountId}`             | `read`  | Account detail and connector status                 |
+| `DELETE` | `/v1/accounts/{accountId}`             | `admin` | Unlink the account                                  |
+| `PUT`    | `/v1/accounts/{accountId}/credentials` | `admin` | Replace exchange credentials                        |
+| `GET`    | `/v1/accounts/{accountId}/portfolio`   | `read`  | Portfolio snapshot for the account                  |
+| `GET`    | `/v1/portfolios`                       | `read`  | Portfolio snapshots for every linked account        |
 
 ### Linking and listing accounts
 
@@ -203,10 +307,11 @@ Credentials are write-only: they are stored in Vault, never returned by any endp
 {
   "data": [
     {
+      "accountId": "account_3kq",
       "cexId": "binance",
-      "accountId": "main",
+      "label": "main",
       "active": true,
-      "connector": "connected",
+      "connector": { "state": "connected", "reason": null, "since": "2026-07-14T09:01:12.000Z" },
       "version": 7,
       "updatedAt": "2026-07-14T09:00:00.000Z"
     }
@@ -215,37 +320,55 @@ Credentials are write-only: they are stored in Vault, never returned by any endp
 }
 ```
 
-`connector` reports the portfolio connector state for the exchange (`connected`, `disconnected`) so the front-end can show feed health.
+`connector` reports the state of the feed for this account so the front-end can show its health:
+
+| `connector.state` | Meaning                                                      |
+|-------------------|--------------------------------------------------------------|
+| `connecting`      | Linked or re-credentialed; waiting for the first snapshot    |
+| `connected`       | Receiving updates                                            |
+| `disconnected`    | Feed interrupted; reconnecting                               |
+| `error`           | Needs the owner's attention; `reason` says why               |
+
+`reason` is `null` unless the state is `error` or `disconnected`; values include `invalid_credentials`, `insufficient_permissions`, `exchange_unavailable`, and `unknown`.
+Clients must tolerate new values.
 
 `POST /v1/accounts` links a new account:
 
 ```json
-{ "cexId": "binance", "accountId": "main", "apiKey": "...", "apiSecret": "..." }
+{ "cexId": "binance", "label": "main", "apiKey": "...", "apiSecret": "..." }
 ```
 
+`label` is 1 to 64 characters and unique per owner and exchange; a duplicate fails with `409 already_exists`, which only ever refers to the caller's own accounts.
 The response is `201` with the account representation.
-Linking is asynchronous downstream: the registry records the ownership mapping and the ownership stream wires the account into the portfolio connector.
-`connector` stays `disconnected` until the first snapshot arrives; until then the portfolio endpoints return `asOf: null` with empty `assets` and `pendingOrders`, and the front-end shows feed health from `connector`.
 
-`DELETE /v1/accounts/{cexId}/{accountId}` unlinks the account.
-The response is `204`.
-Bots that still reference the account keep running but their order requests fail authorization, so the API responds with `409 conflict` if any enabled bot references the account unless the request carries `?force=true`.
+Linking is asynchronous: the account starts as `connecting`, credentials are validated in the background, and a bad key surfaces as `connector.state: "error"` with `reason: "invalid_credentials"`.
+Until the first snapshot arrives, the portfolio endpoints return `asOf: null` with empty `assets` and `pendingOrders`.
 
-`PUT .../credentials` replaces the stored credentials and triggers connector credential rotation.
-The response is `204`.
-The body is identical to the credential fields of `POST /v1/accounts`.
+`DELETE /v1/accounts/{accountId}` unlinks the account and answers `204`.
+If any enabled bot references the account it fails with `409 state_conflict`, because those bots' orders would fail authorization.
+With `?force=true` the unlink goes ahead and the API first disables every bot referencing the account and cancels their pending runs; running runs receive a cancel request.
+The response is then `200`:
+
+```json
+{ "disabledBotIds": ["bot_4fd"], "canceledRunIds": ["run_c01"] }
+```
+
+Disabled bots keep their reference but cannot be enabled until it is replaced.
+
+`PUT /v1/accounts/{accountId}/credentials` replaces the stored credentials and answers `204`.
+The body is `{ "apiKey": "...", "apiSecret": "..." }`.
+The connector goes back to `connecting`.
 
 ### Portfolio snapshots
 
-`GET /v1/accounts/{cexId}/{accountId}/portfolio` returns the current read-model view for one account.
-The read model is rebuilt from the portfolio update stream, so snapshots carry the stream sequence they were built from:
+`GET /v1/accounts/{accountId}/portfolio` returns the current view for one account:
 
 ```json
 {
+  "accountId": "account_3kq",
   "cexId": "binance",
-  "accountId": "main",
   "asOf": "2026-07-14T09:59:41.120Z",
-  "sequence": 9182,
+  "streamSequence": 9182,
   "assets": [
     { "asset": "bitcoin", "total": "1.250000000" },
     { "asset": "tether_u_s_d", "total": "4210.770000000" }
@@ -264,54 +387,61 @@ The read model is rebuilt from the portfolio update stream, so snapshots carry t
 }
 ```
 
-`GET /v1/portfolios` returns `{ "data": [ ...account snapshots... ], "nextCursor": null }` with one account snapshot per linked account, for dashboards.
+`GET /v1/portfolios` returns `{ "data": [ ...account snapshots... ], "nextCursor": null }` with one snapshot per linked account, for dashboards.
 
-Live updates arrive on the `portfolio.{cexId}.{accountId}` stream channel.
-The channel frames carry the same body as the snapshot endpoint with the stream `sequence` in the envelope, and the snapshot's `sequence` is the `lastSequence` to send on reconnect.
+Live updates arrive on the `portfolio.{accountId}` channel.
+Frames carry the snapshot body without `streamSequence`, with `sequence` in the envelope.
+The snapshot's `streamSequence` is the `lastSequence` to send when subscribing or reconnecting.
 
 ## Algorithms and builds
 
 ### Model
 
 - An **algorithm** is a Git repository containing trading strategy code.
-  The build plane watches the repository through the GitHub App; pushes to watched refs trigger builds.
-  Owners connect a repository by granting the GitHub App access to it, so the API has no endpoint to create algorithms; they appear once the build plane registers the connection.
+  Owners connect a repository by granting the GitHub App access to it, so the API has no endpoint to create algorithms; they appear once the connection is registered.
+  Pushes to watched refs trigger builds.
 - A **build** is one compile of a commit.
   It produces the executable artifact used by runs and backtests.
 - A **strategy** is a named algorithm inside a build.
   One build may expose several strategies.
   Strategy names are unique within a build; duplicate names fail the build.
+- The **promoted build** is the single build of an algorithm that tracking bots run.
+  Builds appear when code is pushed, but nothing changes for live bots until an owner promotes a build explicitly.
+  A push never deploys.
 
 ### Lifecycle
 
 Algorithms and builds have independent lifecycles:
 
-| Algorithm state | Meaning |
-| --- | --- |
-| `active` | Builds can be triggered and strategies can be used by bots |
-| `archived` | Read-only; existing bots keep running, no new builds |
+| Algorithm state | Meaning                                                                                                                                                                |
+|-----------------|------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `active`        | Builds can be triggered and strategies can be used by bots                                                                                                             |
+| `disconnected`  | GitHub access was revoked. No new builds. Existing builds stay usable: pinned bots and the promoted build keep working. Returns to `active` when access is re-granted |
+| `archived`      | Read-only; existing bots keep running, no new builds                                                                                                                   |
 
-| Build state | Meaning |
-| --- | --- |
-| `queued` | Accepted, waiting for the build agent |
-| `building` | Source fetched and compiling |
-| `ready` | Compilation finished; strategies extracted |
-| `failed` | Compilation or packaging failed; `error` carries the reason |
+| Build state | Meaning                                                     |
+|-------------|-------------------------------------------------------------|
+| `queued`    | Accepted, waiting for the build agent                       |
+| `building`  | Source fetched and compiling                                |
+| `ready`     | Compilation finished; strategies extracted                  |
+| `failed`    | Compilation or packaging failed; `error` carries the reason |
 
 A build only becomes usable by bots when it is `ready`.
 Archiving an algorithm is a soft delete: history stays queryable.
 
 ### Endpoints
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `GET` | `/v1/algorithms` | List algorithms connected to the owner |
-| `GET` | `/v1/algorithms/{algorithmId}` | Algorithm detail |
-| `DELETE` | `/v1/algorithms/{algorithmId}` | Archive the algorithm |
-| `GET` | `/v1/algorithms/{algorithmId}/builds` | List builds, newest first, filterable by `ref` and `status` |
-| `POST` | `/v1/algorithms/{algorithmId}/builds` | Trigger a build for a ref or commit |
-| `GET` | `/v1/algorithms/{algorithmId}/builds/{buildId}` | Build detail and status |
-| `GET` | `/v1/algorithms/{algorithmId}/builds/{buildId}/strategies` | Strategies exposed by the build |
+| Method   | Path                                                       | Scope    | Description                                                |
+|----------|------------------------------------------------------------|----------|------------------------------------------------------------|
+| `GET`    | `/v1/algorithms`                                           | `read`   | List algorithms connected to the owner                     |
+| `GET`    | `/v1/algorithms/{algorithmId}`                             | `read`   | Algorithm detail                                           |
+| `DELETE` | `/v1/algorithms/{algorithmId}`                             | `manage` | Archive the algorithm                                      |
+| `POST`   | `/v1/algorithms/{algorithmId}/promote`                     | `admin`  | Promote a ready build for tracking bots                    |
+| `GET`    | `/v1/algorithms/{algorithmId}/builds`                      | `read`   | List builds, newest first, filterable by `ref` and `state` |
+| `POST`   | `/v1/algorithms/{algorithmId}/builds`                      | `manage` | Trigger a build for a ref or commit                        |
+| `GET`    | `/v1/algorithms/{algorithmId}/builds/{buildId}`            | `read`   | Build detail and state                                     |
+| `GET`    | `/v1/algorithms/{algorithmId}/builds/{buildId}/log`        | `read`   | Build log                                                  |
+| `GET`    | `/v1/algorithms/{algorithmId}/builds/{buildId}/strategies` | `read`   | Strategies exposed by the build                            |
 
 Algorithm list items identify the connected repository:
 
@@ -325,12 +455,16 @@ Algorithm list items identify the connected repository:
       "defaultRef": "main",
       "state": "active",
       "version": 3,
+      "promotedBuildId": "build_870",
       "latestReadyBuildId": "build_882"
     }
   ],
   "nextCursor": null
 }
 ```
+
+`promotedBuildId` is `null` until the first promotion.
+`latestReadyBuildId` is informational only: it is what a promotion would most likely target, not what bots run.
 
 ### Triggering builds
 
@@ -340,9 +474,10 @@ Algorithm list items identify the connected repository:
 { "ref": "heads/main", "commit": "e1f3a9b" }
 ```
 
-`ref` uses the `heads/` or `tags/` form and defaults to the algorithm's `defaultRef`; `commit` pins an exact revision and defaults to the ref head.
+`ref` uses the `heads/` or `tags/` form and defaults to the algorithm's `defaultRef`; `commit` pins an exact revision (abbreviations are resolved, see [Conventions](#conventions)) and defaults to the ref head.
 The response is `202` with the build representation.
-Builds are idempotent per `(ref, commit)`: re-triggering an existing build returns that build, unless it is `failed`, in which case a new build is created so compilation can be retried.
+
+Builds are idempotent per `(ref, full commit ID)`: re-triggering an existing build returns that build, unless it is `failed`, in which case a new build is created so compilation can be retried.
 
 `GET .../builds/{buildId}` returns:
 
@@ -351,15 +486,28 @@ Builds are idempotent per `(ref, commit)`: re-triggering an existing build retur
   "buildId": "build_882",
   "algorithmId": "algorithm_5t1",
   "ref": "heads/main",
-  "commit": "e1f3a9b",
+  "commit": "e1f3a9b7c20d4e8f6a1b3c5d7e9f0a2b4c6d8e0f",
   "state": "ready",
   "error": null,
+  "logAvailable": true,
   "createdAt": "2026-07-14T08:12:00.000Z",
-  "completedAt": "2026-07-14T08:14:31.000Z"
+  "completedAt": "2026-07-14T08:14:31.000Z",
+  "streamSequence": 18
 }
 ```
 
-Build state changes are pushed on the `builds.{algorithmId}` stream channel.
+Build state changes are pushed on the `builds.{algorithmId}` channel.
+
+### Build and run logs
+
+`GET .../builds/{buildId}/log` returns `200` with `{ "url": "https://...", "expiresAt": "..." }`, a short-lived pre-signed URL the browser fetches directly.
+It returns `404 not_found` when no log exists.
+`logAvailable` on the build tells the front-end whether to offer the link, so it does not need a failed request to find out.
+The log is how a `failed` build is diagnosed.
+Run logs work the same way (see [Bots and runs](#bots-and-runs)).
+
+The storage behind the pre-signed URL allows cross-origin reads from the allowlisted front-end origins.
+The API itself answers with `200` and a JSON body rather than a redirect, because browsers send an opaque `Origin` on cross-origin redirects.
 
 ### Strategies
 
@@ -371,8 +519,17 @@ Build state changes are pushed on the `builds.{algorithmId}` stream channel.
 
 Strategies are extracted once when the build finishes; a build that fails to report its strategies is treated as `failed`.
 
-Bots pick the build and strategy they run; they may pin an exact `buildId` or track an algorithm's `latestReadyBuildId`.
-Tracking upgrades happen at run time, not at update time: every run checks that the newly resolved build still exposes the strategy and falls back to the previously used build when it does not.
+### Promoting a build
+
+`POST /v1/algorithms/{algorithmId}/promote` takes `{ "buildId": "build_882" }`, requires `admin` and `If-Match` with the algorithm's current `version`, and returns the updated algorithm with `200`.
+
+- The build must belong to the algorithm and be `ready`.
+- If any enabled bot that tracks the promoted build runs a strategy the new build does not expose, the promotion fails with `409 state_conflict` and the problem details list `affectedBotIds`.
+  The owner updates or disables those bots first.
+  Promotion never silently breaks a live bot.
+- Tracking bots pick the new build up at their next run.
+  Every run records the build it executed.
+- Promotions are announced on the `builds.{algorithmId}` channel.
 
 ## Bots and runs
 
@@ -380,36 +537,42 @@ Tracking upgrades happen at run time, not at update time: every run checks that 
 
 A **bot** is a user's persistent trading configuration: which compiled strategy runs, against which exchange accounts, and on what schedule.
 A **run** is one execution of a bot.
-Scheduling works by materializing runs: every due schedule tick exists as a run record with its own status, error, and log, so history is inspectable and retries are explicit.
 
-Bot configuration is managed by the API.
-Scheduling writes run records to the run store; the run invoker claims due runs and invokes the runner, which executes the strategy, submits signed order requests, and uploads run logs.
+Scheduling works by materializing runs: every due schedule tick exists as a run record with its own state, error, and log, so history is inspectable and retries are explicit.
 
 ### Bot lifecycle
 
-| State | Meaning |
-| --- | --- |
-| `enabled` | Schedule produces runs; the bot may place orders |
-| `disabled` | Config kept, schedule paused, no new runs |
-| `archived` | Read-only; hidden from default lists |
+| State      | Meaning                                          |
+|------------|--------------------------------------------------|
+| `enabled`  | Schedule produces runs; the bot may place orders |
+| `disabled` | Config kept, schedule paused, no new runs        |
+| `archived` | Read-only; hidden from default lists             |
 
-Creating a bot does not enable it implicitly: the first creation returns `disabled` and the front-end enables explicitly once the configuration is confirmed.
+Creating a bot does not enable it: a new bot is `disabled`, and the front-end enables it explicitly (which needs `admin`) once the configuration is confirmed.
+
+- **Enable** re-validates the account references and the scheduled-runs quota.
+- **Disable** cancels the bot's `pending` runs.
+  A run that is already `running` is not interrupted and finishes normally; the bot's `activeRunId` shows it.
+  Use the kill switch or cancel the run to interrupt it.
+- **Archive** (`DELETE`) requires the bot to be `disabled` with no active run; otherwise it fails with `409 state_conflict`.
 
 ### Endpoints
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/v1/bots` | Create a bot |
-| `GET` | `/v1/bots` | List bots, filterable by `state` |
-| `GET` | `/v1/bots/{botId}` | Bot detail |
-| `PATCH` | `/v1/bots/{botId}` | Update configuration |
-| `POST` | `/v1/bots/{botId}/enable` | Enable the schedule |
-| `POST` | `/v1/bots/{botId}/disable` | Pause the schedule |
-| `DELETE` | `/v1/bots/{botId}` | Archive the bot |
-| `POST` | `/v1/bots/{botId}/runs` | Trigger an immediate ad-hoc run |
-| `GET` | `/v1/runs` | List runs across bots, filterable |
-| `GET` | `/v1/runs/{runId}` | Run detail |
-| `GET` | `/v1/runs/{runId}/log` | Run log |
+| Method   | Path                       | Scope    | Description                                      |
+|----------|----------------------------|----------|--------------------------------------------------|
+| `POST`   | `/v1/bots`                 | `manage` | Create a bot                                     |
+| `GET`    | `/v1/bots`                 | `read`   | List bots, filterable by `state`                 |
+| `GET`    | `/v1/bots/{botId}`         | `read`   | Bot detail                                       |
+| `PATCH`  | `/v1/bots/{botId}`         | `manage` | Update configuration (`If-Match` required)       |
+| `POST`   | `/v1/bots/{botId}/enable`  | `admin`  | Enable the schedule (`If-Match` required)        |
+| `POST`   | `/v1/bots/{botId}/disable` | `manage` | Pause the schedule (`If-Match` required)         |
+| `DELETE` | `/v1/bots/{botId}`         | `manage` | Archive the bot                                  |
+| `POST`   | `/v1/bots/{botId}/runs`    | `manage` | Trigger an immediate ad-hoc run                  |
+| `POST`   | `/v1/kill-switch`          | `manage` | Emergency stop: disable bots and cancel runs     |
+| `GET`    | `/v1/runs`                 | `read`   | List runs across bots, filterable                |
+| `GET`    | `/v1/runs/{runId}`         | `read`   | Run detail                                       |
+| `POST`   | `/v1/runs/{runId}/cancel`  | `manage` | Cancel a run                                     |
+| `GET`    | `/v1/runs/{runId}/log`     | `read`   | Run log                                          |
 
 `POST /v1/bots` example:
 
@@ -417,61 +580,84 @@ Creating a bot does not enable it implicitly: the first creation returns `disabl
 {
   "name": "momentum-main",
   "algorithmId": "algorithm_5t1",
-  "buildId": "build_882",
+  "build": { "kind": "track_promoted" },
   "strategyName": "momentum_v2",
-  "accounts": [{ "cexId": "binance", "accountId": "main" }],
+  "accountIds": ["account_3kq"],
   "schedule": { "kind": "interval", "everySeconds": 60 }
 }
 ```
+
+`build` is a tagged selector: `{ "kind": "pinned", "buildId": "build_882" }` runs exactly that build, and `{ "kind": "track_promoted" }` runs whatever build the algorithm currently has promoted.
 
 The response is `201` with:
 
 ```json
 {
   "botId": "bot_4fd",
-  "owner": "user_7gk2",
   "name": "momentum-main",
   "algorithmId": "algorithm_5t1",
-  "buildId": "build_882",
+  "build": { "kind": "track_promoted" },
+  "resolvedBuildId": "build_870",
   "strategyName": "momentum_v2",
-  "accounts": [{ "cexId": "binance", "accountId": "main" }],
-  "schedule": { "kind": "interval", "everySeconds": 60 },
+  "accountIds": ["account_3kq"],
+  "schedule": { "kind": "interval", "everySeconds": 60, "misfireGraceSeconds": 60 },
   "state": "disabled",
+  "activeRunId": null,
   "version": 1,
-  "createdAt": "2026-07-14T09:00:00.000Z"
+  "createdAt": "2026-07-14T09:00:00.000Z",
+  "updatedAt": "2026-07-14T09:00:00.000Z",
+  "streamSequence": 0
 }
 ```
+
+`resolvedBuildId` is the build the next run would execute.
+`activeRunId` is the bot's pending or running run, if any.
 
 Validation rules:
 
 - `algorithmId` must reference an `active` algorithm when the bot is created.
-- `buildId` must be `latest` or belong to `algorithmId` and be in state `ready`.
-- `strategyName` must exist in that build.
+- A `pinned` build must belong to `algorithmId` and be `ready`.
+  `track_promoted` requires the algorithm to have a promoted build.
+- `strategyName` must exist in the pinned or currently promoted build.
 - Every referenced account must be a linked, active account of the owner.
-- `schedule.kind` is `interval` (`everySeconds` ≥ 10) or `cron` (`expression` in five-field cron syntax plus `timezone`, an IANA time-zone name such as `Europe/Zurich`).
+- `schedule.kind` is `interval` (`everySeconds` of at least 10) or `cron` (`expression` in five-field cron syntax plus `timezone`, an IANA time-zone name such as `Europe/Zurich`).
+  Both accept an optional `misfireGraceSeconds` (default: the interval or 60 seconds, whichever is smaller; 60 for cron).
+- The bot count and scheduled-runs quotas in [Limits](#limits) apply.
 
-`PATCH /v1/bots/{botId}` accepts the same fields minus `algorithmId` and applies only the fields present in the body.
-Bot mutations — `PATCH`, `enable`, `disable` — require `If-Match` with the current `version` and return the updated bot representation.
-Enabling re-checks the account references against current state and fails with `400 validation_failed` when a referenced account is no longer linked or active.
+`PATCH /v1/bots/{botId}` accepts the same fields minus `algorithmId`.
+Bot mutations (`PATCH`, `enable`, `disable`) require `If-Match` and return the updated bot representation.
+Enabling fails with `409 state_conflict` when a referenced account is no longer linked or active, and with `403 quota_exceeded` when it would exceed the scheduled-runs quota.
 
-A `buildId` of `latest` tracks the algorithm's `latestReadyBuildId`: every run resolves the current latest ready build and falls back to the previous build when it no longer exposes the strategy.
-A concrete `buildId` pins the bot to that build.
-Runs record the `buildId` they executed.
+A tracking bot never silently runs an older build.
+If the strategy is missing from the build a run resolves, the run fails with `strategy_not_found` (a client error), and promotion is blocked beforehand where it can be detected.
+
+### Scheduling, overlap, and missed ticks
+
+- A bot has at most one non-terminal run (`pending` or `running`).
+  A tick that falls due while a run is active is recorded as a `skipped` run with `skipReason: "overlap"`.
+  It is never queued behind the active run, so a slow run cannot cause a burst of double orders afterwards.
+- A tick that could not start within `misfireGraceSeconds` of its due time (for example after a platform outage) is recorded as `skipped` with `skipReason: "misfire"`.
+  Missed ticks are never backfilled; the schedule resumes with the next tick.
+- Ad-hoc runs follow the same exclusion: `POST /v1/bots/{botId}/runs` fails with `409 state_conflict` while a run is active.
+- Cron expressions are evaluated in the bot's `timezone`.
+  A local time skipped by a daylight-saving change fires once at the first instant after the gap.
+  A local time that occurs twice fires only the first time.
 
 ### Runs
 
-Runs follow the run store lifecycle:
-
-| State | Meaning |
-| --- | --- |
-| `pending` | Materialized, waiting for the invoker |
-| `running` | Claimed and executing in the runner |
-| `completed` | Finished successfully |
-| `failed` | Finished with an error; `error` carries details |
+| State       | Meaning                                                   |
+|-------------|-----------------------------------------------------------|
+| `pending`   | Materialized, waiting to start                            |
+| `running`   | Claimed and executing                                     |
+| `completed` | Finished successfully                                     |
+| `failed`    | Finished with an error; `error` carries details           |
+| `canceled`  | Canceled before or during execution                       |
+| `skipped`   | Tick not executed; `skipReason` is `overlap` or `misfire` |
 
 `from` and `to` bound `scheduledAt`.
+Run lists accept `botId`, `state`, `from`, and `to`, and include the `streamSequence` of the `runs.{botId}` channel when filtered by `botId`.
 
-`GET /v1/runs?botId=bot_4fd&status=failed&from=2026-07-13T00:00:00.000Z&to=2026-07-14T00:00:00.000Z` returns:
+`GET /v1/runs?botId=bot_4fd&state=failed&from=2026-07-13T00:00:00.000Z&to=2026-07-14T00:00:00.000Z` returns:
 
 ```json
 {
@@ -480,30 +666,74 @@ Runs follow the run store lifecycle:
       "runId": "run_b7c",
       "botId": "bot_4fd",
       "algorithmId": "algorithm_5t1",
-      "buildId": "build_882",
+      "buildId": "build_870",
+      "buildResolution": "promoted",
       "strategyName": "momentum_v2",
+      "trigger": "schedule",
       "scheduledAt": "2026-07-14T09:31:00.000Z",
-      "status": "failed",
+      "state": "failed",
       "completedAt": "2026-07-14T09:31:44.000Z",
-      "error": { "code": "strategy_not_found", "message": "strategy not found" }
+      "logAvailable": true,
+      "error": { "kind": "client", "code": "strategy_not_found", "message": "strategy not found" }
     }
   ],
-  "nextCursor": null
+  "nextCursor": null,
+  "streamSequence": 412
 }
 ```
 
-`error.code` distinguishes client errors (bad strategy name, undecodable context or portfolio, invalid request) from server errors (timeouts, panics, resource limits), so the front-end can tell "fix your bot" from "platform problem".
+`trigger` is `schedule` or `ad_hoc`.
+`buildResolution` is `pinned` or `promoted`, and `buildId` is the build the run actually executed.
+Skipped runs have no `buildId` and carry `skipReason`.
 
-`GET /v1/runs/{runId}/log` returns `302` to a pre-signed log URL when the log exists and `404` while the run is still pending or before upload completes.
-Pre-signed URLs are short-lived and are fetched by the browser directly from object storage, so the log bucket allows cross-origin reads from the allowlisted front-end origins.
+`error.kind` tells the front-end "fix your bot" from "platform problem", and `error.code` says exactly what happened:
 
-Run state changes are pushed on the `runs.{botId}` stream channel.
+| `error.kind` | Codes                                                                           |
+|--------------|---------------------------------------------------------------------------------|
+| `client`     | `strategy_not_found`, `invalid_context`, `invalid_portfolio`, `invalid_request` |
+| `platform`   | `timeout`, `panic`, `resource_limit`, `internal`                                |
+
+Clients tolerate new codes and fall back on `kind`.
+
+`GET /v1/runs/{runId}/log` returns `200` with `{ "url": "https://...", "expiresAt": "..." }`, a short-lived pre-signed URL the browser fetches directly, and `404 not_found` when no log exists yet.
+`logAvailable` on the run says whether it does.
+
+`POST /v1/runs/{runId}/cancel` cancels a run:
+
+- A `pending` run becomes `canceled` immediately.
+- A `running` run gets a cancel request: the response is `202` with `cancelRequested: true`, and the run ends as `canceled` at its next safe point, or finishes normally if it was already completing.
+- Orders a run has already submitted are not affected.
+- Canceling a terminal run is idempotent and returns it unchanged with `200`.
 
 `POST /v1/bots/{botId}/runs` materializes a run scheduled now, subject to the ad-hoc run rate limit, and returns `202` with the run representation.
-Disabled and archived bots answer `409 conflict`; ad-hoc runs never bypass a paused schedule.
+Disabled and archived bots answer `409 state_conflict`; ad-hoc runs never bypass a paused schedule.
 
-Runs and their logs are retained for 90 days after a run reaches a terminal state and are deleted afterwards; a deleted run disappears from lists and answers `not_found`.
-Retention is what bounds the run store, because scheduling materializes one record per tick.
+Run state changes are pushed on the `runs.{botId}` channel.
+
+### Kill switch
+
+`POST /v1/kill-switch` is the emergency stop.
+It needs only `manage` (no step-up and no `If-Match`, so it works instantly) and is idempotent by nature:
+
+```json
+{ "accountIds": ["account_3kq"] }
+```
+
+`accountIds` is optional.
+Without it the kill switch applies to every bot of the owner; with it, to bots referencing any of those accounts.
+It disables the affected bots, cancels their pending runs, and sends a cancel request to their running runs.
+Orders that were already submitted are left as they are.
+The response is `202`:
+
+```json
+{ "disabledBotIds": ["bot_4fd"], "canceledRunIds": ["run_c01"] }
+```
+
+### Retention
+
+Runs and their logs are retained for 90 days after a run reaches a terminal state and are deleted afterwards; `skipped` runs are retained for 7 days.
+A deleted run disappears from lists and answers `404 not_found`.
+Retention, together with the scheduled-runs quota, bounds the run store, because scheduling materializes one record per tick.
 
 ## Backtesting
 
@@ -512,30 +742,34 @@ Retention is what bounds the run store, because scheduling materializes one reco
 A **backtest** is an ad-hoc, resource-bounded experiment: it runs one strategy from one build many times over archived market data with simulated execution friction and a seeded random generator, streaming per-simulation results as they finish and finishing with a collated result set.
 Backtests never touch live exchanges or real balances.
 
-Market input comes from the candle archive, so backtests are subject to the archive's correction contract: requested history must lie within the retention reach of the requested intervals, otherwise creation fails rather than silently producing candles that later change.
-
-Backtest definitions and results are managed by the API.
-Execution uses the sandbox runner's backtest subsystem, which already enforces worker limits, watchdog timeouts, and memory limits.
+Market input comes from the candle archive, so requested history must lie within the archive's retention reach for the requested intervals.
+Otherwise creation fails rather than silently producing candles that later change.
 
 ### Lifecycle
 
-| State | Meaning |
-| --- | --- |
-| `queued` | Accepted, waiting for a worker |
-| `running` | Simulations executing; partial results may be streaming |
-| `completed` | All simulations finished; final results available |
-| `failed` | Rejected or aborted; `error` carries details |
+| State       | Meaning                                                                        |
+|-------------|--------------------------------------------------------------------------------|
+| `queued`    | Accepted, waiting for a worker                                                 |
+| `running`   | Simulations executing; partial results may be streaming                        |
+| `completed` | All simulations finished; final results available                              |
+| `failed`    | Rejected or aborted; `error` carries details. Results finished so far are kept |
+| `canceled`  | Canceled by the owner. Results finished so far are kept                        |
 
 ### Endpoints
 
-| Method | Path | Description |
-| --- | --- | --- |
-| `POST` | `/v1/backtests` | Create and start a backtest |
-| `GET` | `/v1/backtests` | List the owner's backtests |
-| `GET` | `/v1/backtests/{backtestId}` | Backtest status |
-| `DELETE` | `/v1/backtests/{backtestId}` | Cancel a queued or running backtest |
-| `GET` | `/v1/backtests/{backtestId}/results` | Final collated results |
-| `GET` | `/v1/backtests/{backtestId}/stream` | WebSocket of incremental results |
+| Method   | Path                                        | Scope    | Description                                             |
+|----------|---------------------------------------------|----------|---------------------------------------------------------|
+| `POST`   | `/v1/backtests`                             | `manage` | Create and start a backtest                             |
+| `GET`    | `/v1/backtests`                             | `read`   | List the owner's backtests, filterable by `state`       |
+| `GET`    | `/v1/backtests/{backtestId}`                | `read`   | Backtest status                                         |
+| `POST`   | `/v1/backtests/{backtestId}/cancel`         | `manage` | Cancel a queued or running backtest                     |
+| `DELETE` | `/v1/backtests/{backtestId}`                | `manage` | Delete a finished backtest and its results              |
+| `GET`    | `/v1/backtests/{backtestId}/results`        | `read`   | Results finished so far, paginated                      |
+| `GET`    | `/v1/backtests/{backtestId}/results/export` | `read`   | Pre-signed download of all results (finished backtests) |
+
+Live results arrive on the `backtests.{backtestId}` stream channel; see [Streaming](#streaming).
+
+### Creating a backtest
 
 `POST /v1/backtests` example:
 
@@ -544,73 +778,88 @@ Execution uses the sandbox runner's backtest subsystem, which already enforces w
   "algorithmId": "algorithm_5t1",
   "buildId": "build_882",
   "strategyName": "momentum_v2",
-  "initialBalances": [{ "cexId": "binance", "accountId": "paper", "asset": "tether_u_s_d", "total": "10000.000000000" }],
-  "market": {
-    "tradingPairs": [{ "base": "bitcoin", "quote": "tether_u_s_d" }],
-    "windows": ["1m", "5m"],
-    "historicalCandleCount": 500,
-    "from": "2026-06-01T00:00:00.000Z",
-    "to": "2026-07-01T00:00:00.000Z"
-  },
-  "simulation": {
-    "count": 100,
-    "maxConcurrent": 4,
-    "randomSeed": 7,
-    "candleLossChance": "0.01",
-    "slippageChance": "0.02",
-    "slippageProportion": "0.001",
-    "lostOrderChance": "0.005"
-  }
+  "count": 100,
+  "maxConcurrent": 4,
+  "seed": 42
 }
 ```
 
 The response is `202` with `{ "backtestId": "backtest_31a", "state": "queued" }`.
 
-Validation mirrors the runner's spec checks and fails fast with `validation_failed`:
+| Field                                    | Required | Meaning                                                                                                 |
+|------------------------------------------|----------|---------------------------------------------------------------------------------------------------------|
+| `algorithmId`, `buildId`, `strategyName` | yes      | The strategy to simulate. `buildId` is a concrete build, never a selector.                              |
+| `count`                                  | yes      | Number of simulations, 1 to 1000                                                                        |
+| `maxConcurrent`                          | no       | Parallelism, clamped to the runner's worker limits                                                      |
+| `seed`                                   | no       | Integer seed. If omitted, the server picks one and returns it in the status, so runs are reproducible   |
+
+Validation fails fast with `validation_failed`:
 
 - `buildId` must be `ready`, and `strategyName` must exist in it.
-- `tradingPairs` and `windows` must be non-empty and are de-duplicated; windows must be supported aligned intervals.
-- `openCandleProgressMillis`, when given, must be smaller than the shortest requested window.
-- Every chance field is a decimal string in `[0, 1]`.
-- `count` is at least 1 and at most 1000; `maxConcurrent` is clamped to the runner's worker limits.
-- No more than the per-owner concurrent backtest limit in [Limits](#limits) may be `queued` or `running` at once; a further creation returns `429 rate_limited` with `Retry-After`.
-- A simulation result larger than the per-simulation limit in [Limits](#limits) fails the backtest.
 
-`from` and `to` bound the archived candles fetched for every requested pair and window, and each strategy sees the last `historicalCandleCount` closed candles before every simulation step.
+No more than the per-owner concurrent backtest limit may be `queued` or `running` at once; a further creation returns `429 rate_limited` with `Retry-After`.
 
-### Results and streaming
+### Status
 
-Per-simulation results are JSON objects produced by the strategy's simulation runtime.
-They are delivered twice: incrementally on the stream as each simulation finishes, and collated as an array at completion.
-
-`GET /v1/backtests/{backtestId}/results` returns the collated array; `results` stays empty until the backtest reaches `completed`:
+`GET /v1/backtests/{backtestId}` returns:
 
 ```json
 {
   "backtestId": "backtest_31a",
-  "state": "completed",
-  "simulationCount": 100,
-  "results": [ { "simulation": 0, "finalEquity": "10412.500000000", "...": "..." } ]
+  "algorithmId": "algorithm_5t1",
+  "buildId": "build_882",
+  "strategyName": "momentum_v2",
+  "state": "running",
+  "error": null,
+  "seed": 42,
+  "progress": { "completed": 37, "total": 100 },
+  "createdAt": "2026-07-14T09:00:00.000Z",
+  "startedAt": "2026-07-14T09:00:04.000Z",
+  "completedAt": null,
+  "expiresAt": null,
+  "streamSequence": 37
 }
 ```
 
-`GET /v1/backtests/{backtestId}/stream?ticket=...` upgrades to a WebSocket, using a stream ticket as described in [Streaming](#streaming).
-Frames are `{ "sequence": 7, "simulation": 13, "result": { ... } }` with `sequence` increasing monotonically for the backtest across connections; a `complete` frame with no `simulation` field marks completion and carries no results; clients then fetch the collated set over REST.
-The stream ends when the backtest reaches a terminal state; reconnecting clients pass `?cursor=<sequence>` for the last frame they saw and receive the stored results after it, and clients that connect after the backtest finished receive the `complete` frame and the stream closes.
+`expiresAt` is set once the backtest is terminal and says when it will be deleted.
 
-`DELETE /v1/backtests/{backtestId}` cancels queued and running backtests (`204`) and is idempotent on terminal backtests.
-Backtests and their results are retained for 30 days after a backtest reaches a terminal state and are deleted afterwards; a deleted backtest disappears from lists and answers `not_found`.
+### Results and streaming
 
-### Initial balances
+Per-simulation results are JSON objects produced by the strategy's simulation runtime.
+Each finished simulation is assigned the next `sequence` of the backtest, and it is delivered twice: incrementally on the stream, and through the paginated results endpoint.
 
-`initialBalances` seeds the simulated portfolio; its `cexId` and `accountId` are labels for the simulation and are not checked against linked accounts.
-When omitted, the backtest starts from a configurable default cash balance.
-Using a real linked account's current balances is a front-end convenience: it copies the read-model snapshot into the request, never grants the backtest access to the live account.
+`GET /v1/backtests/{backtestId}/results` is readable in every state and returns the results finished so far.
+This is the one list that is oldest first, in `sequence` order, so `cursor` pages forward through a growing set:
 
-## Related references
+```json
+{
+  "data": [
+    { "sequence": 1, "simulation": 13, "result": { "finalEquity": "10412.500000000", "...": "..." } }
+  ],
+  "nextCursor": null,
+  "state": "completed",
+  "complete": true
+}
+```
 
-- [Infrastructure runbook](infra.md) for the service and dependency map
-- [Market data services](market-data-services.md) for the aggregation and correction contract
-- [Market data](market-data.md) for the ingest pipeline
-- [Environment variables](environment-variables.md) for the portfolio service referenced above
-- [Health checks](health-checks.md) for the platform probe contract the API follows
+`complete` is `true` only when the backtest is `completed`; for `failed` and `canceled` backtests the results finished so far stay readable and `complete` stays `false`.
+The full set can be large, so clients page through it or use the export instead.
+
+`GET .../results/export` returns `200` with `{ "url": "https://...", "expiresAt": "...", "format": "ndjson" }`, a short-lived pre-signed URL of all results as newline-delimited JSON.
+It fails with `409 state_conflict` until the backtest is terminal.
+
+On the `backtests.{backtestId}` channel, frames are `{ "channel": "backtests.backtest_31a", "sequence": 7, "simulation": 13, "result": { ... } }`, and the frame's `sequence` equals the item's `sequence` in the results endpoint.
+Unlike other channels, this one replays: a subscribe without `lastSequence` receives the stored frames from the start, and one with `lastSequence` receives the stored frames after it.
+When the backtest reaches a terminal state the server sends one last frame, `{ "channel": "...", "sequence": 101, "complete": true, "state": "completed" }`, which carries no result, and no frames follow it.
+A client that subscribes after that point still receives the stored frames and the final frame.
+On `completed` the client can fetch the collated set over REST.
+
+### Canceling and deleting
+
+`POST /v1/backtests/{backtestId}/cancel` cancels a queued or running backtest and returns `202` with the status representation (state `canceled` once workers have stopped).
+On a terminal backtest it is idempotent and returns the status unchanged with `200`.
+
+`DELETE /v1/backtests/{backtestId}` deletes a terminal backtest and its results and returns `204`; on a `queued` or `running` backtest it fails with `409 state_conflict`.
+
+A simulation result larger than the per-simulation limit fails the backtest with `error.code: "result_too_large"`; results finished before that remain readable.
+Backtests and their results are retained for 30 days after a backtest reaches a terminal state and are deleted afterwards; a deleted backtest disappears from lists and answers `404 not_found`.
