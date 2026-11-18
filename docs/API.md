@@ -91,7 +91,7 @@ A token missing the scope an endpoint needs is rejected with `403 forbidden`.
 | Scope    | Grants                                                                                         |
 |----------|------------------------------------------------------------------------------------------------|
 | `read`   | Every `GET`, stream tickets, and stream subscriptions                                          |
-| `manage` | Managing algorithms, builds, bots, runs, and backtests, plus the kill switch                   |
+| `manage` | Managing algorithms, builds, bots, runs, and backtests, plus the kill endpoint               |
 | `admin`  | Sensitive operations: link, unlink, or re-credential an account; enable a bot |
 
 Login issues `read` and `manage` only.
@@ -536,7 +536,7 @@ Creating a bot does not enable it: a new bot is `disabled`, and the front-end en
 - **Enable** re-validates the account references and the scheduled-runs quota.
 - **Disable** cancels the bot's `pending` runs.
   A run that is already `running` is not interrupted and finishes normally; the bot's `activeRunId` shows it.
-  Use the kill switch or cancel the run to interrupt it.
+  Use the kill endpoint or cancel the run to interrupt it.
 - **Archive** (`DELETE`) requires the bot to be `disabled` with no active run; otherwise it fails with `409 state_conflict`.
 
 ### Bot and run endpoints
@@ -551,7 +551,7 @@ Creating a bot does not enable it: a new bot is `disabled`, and the front-end en
 | `POST`   | `/v1/bots/{botId}/disable` | `manage` | Pause the schedule (`If-Match` required)     |
 | `DELETE` | `/v1/bots/{botId}`         | `manage` | Archive the bot                              |
 | `POST`   | `/v1/bots/{botId}/runs`    | `manage` | Trigger an immediate ad-hoc run              |
-| `POST`   | `/v1/kill-switch`          | `manage` | Emergency stop: disable bots and cancel runs |
+| `POST`   | `/v1/kill`                 | `manage` | Emergency stop: disable bots and cancel runs |
 | `GET`    | `/v1/runs`                 | `read`   | List runs across bots, filterable            |
 | `GET`    | `/v1/runs/{runId}`         | `read`   | Run detail                                   |
 | `POST`   | `/v1/runs/{runId}/cancel`  | `manage` | Cancel a run                                 |
@@ -690,9 +690,9 @@ Disabled and archived bots answer `409 state_conflict`; ad-hoc runs never bypass
 
 Run state changes are pushed on the `runs.{botId}` channel.
 
-### Kill switch
+### Kill
 
-`POST /v1/kill-switch` is the emergency stop.
+`POST /v1/kill` is the emergency stop.
 It needs only `manage` (no step-up and no `If-Match`, so it works instantly) and is idempotent by nature:
 
 ```json
@@ -700,7 +700,7 @@ It needs only `manage` (no step-up and no `If-Match`, so it works instantly) and
 ```
 
 `accountIds` is optional.
-Without it the kill switch applies to every bot of the owner; with it, to bots referencing any of those accounts.
+Without it the kill endpoint applies to every bot of the owner; with it, to bots referencing any of those accounts.
 It disables the affected bots, cancels their pending runs, and sends a cancel request to their running runs.
 Orders that were already submitted are left as they are.
 The response is `202`:
