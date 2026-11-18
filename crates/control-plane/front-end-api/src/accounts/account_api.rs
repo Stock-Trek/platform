@@ -72,7 +72,7 @@ impl AccountApi {
     fn list(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
         let accounts = self.accounts.list(auth.owner());
-        let page = Page::of(accounts, &PageQuery::parse(request));
+        let page = Page::of(accounts, &PageQuery::parse(request)?);
         Ok(Respond::json(StatusCode::OK, &page))
     }
 
@@ -132,7 +132,7 @@ impl AccountApi {
     fn portfolios(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
         let snapshots = self.accounts.snapshots(auth.owner());
-        let page = Page::of(snapshots, &PageQuery::parse(request));
+        let page = Page::of(snapshots, &PageQuery::parse(request)?);
         Ok(Respond::json(StatusCode::OK, &page))
     }
 }

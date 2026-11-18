@@ -1,5 +1,5 @@
 use crate::accounts::AccountStore;
-use crate::algorithms::{AlgorithmState, BuildStore};
+use crate::algorithms::BuildStore;
 use crate::api::{Id, Page, PageQuery, Problem};
 use crate::auth::AuthContext;
 use crate::bots::{Bot, BotState, BotStore, CreateBotRequest, PatchBotRequest, RunStore};
@@ -70,7 +70,7 @@ impl BotService {
             stream_sequence: 0,
         };
         self.bots.insert(owner, bot.clone());
-        Ok(bot)
+        Ok(self.projected(bot))
     }
 
     pub fn list(
@@ -79,13 +79,26 @@ impl BotService {
         state: Option<BotState>,
         query: &PageQuery,
     ) -> Page<Bot> {
-        Page::of(self.bots.list(auth.owner(), state), query)
+        let bots = self
+            .bots
+            .list(auth.owner(), state)
+            .into_iter()
+            .map(|bot| self.projected(bot))
+            .collect();
+        Page::of(bots, query)
     }
 
     pub fn get(&self, auth: &AuthContext, bot_id: &str) -> Result<Bot, Problem> {
         self.bots
             .get(auth.owner(), bot_id)
+            .map(|bot| self.projected(bot))
             .ok_or_else(|| Problem::not_found("bot does not exist"))
+    }
+
+    fn projected(&self, mut bot: Bot) -> Bot {
+        bot.active_run_id = self.runs.active(&bot.bot_id).map(|run| run.run_id);
+        bot.stream_sequence = self.runs.stream_sequence(&bot.bot_id);
+        bot
     }
 
     pub fn patch(
@@ -131,6 +144,7 @@ impl BotService {
                 bot.schedule = schedule;
                 bot
             })
+            .map(|bot| self.projected(bot))
             .ok_or_else(|| Problem::not_found("bot does not exist"))
     }
 
@@ -163,6 +177,7 @@ impl BotService {
                 bot.state = BotState::Enabled;
                 bot
             })
+            .map(|bot| self.projected(bot))
             .ok_or_else(|| Problem::not_found("bot does not exist"))
     }
 
@@ -183,6 +198,7 @@ impl BotService {
                 bot.state = BotState::Disabled;
                 bot
             })
+            .map(|bot| self.projected(bot))
             .ok_or_else(|| Problem::not_found("bot does not exist"))
     }
 
@@ -194,7 +210,7 @@ impl BotService {
     ) -> Result<Bot, Problem> {
         let owner = auth.owner();
         let bot = self.get(auth, bot_id)?;
-        if bot.state != BotState::Disabled || bot.active_run_id.is_some() {
+        if bot.state != BotState::Disabled || self.runs.active(&bot.bot_id).is_some() {
             return Err(Problem::state_conflict(
                 "a bot must be disabled with no active run to be archived",
             ));
@@ -204,69 +220,7 @@ impl BotService {
                 bot.state = BotState::Archived;
                 bot
             })
+            .map(|bot| self.projected(bot))
             .ok_or_else(|| Problem::not_found("bot does not exist"))
-    }
-
-    fn validate_configuration(
-        &self,
-        owner: &str,
-        algorithm_id: &str,
-        build_id: &str,
-        strategy_name: &str,
-        account_ids: &[String],
-    ) -> Result<(), Problem> {
-        let algorithm = self
-            .builds
-            .algorithm(owner, algorithm_id)
-            .ok_or_else(|| Problem::validation_failed("algorithmId must reference an algorithm"))?;
-        if algorithm.state != AlgorithmState::Active {
-            return Err(Problem::validation_failed(
-                "algorithmId must reference an active algorithm",
-            ));
-        }
-        if self
-            .builds
-            .ready_build(owner, algorithm_id, build_id)
-            .is_none()
-        {
-            return Err(Problem::validation_failed(
-                "buildId must be a ready build of the algorithm",
-            ));
-        }
-        let strategies = self
-            .builds
-            .strategies(owner, algorithm_id, build_id)
-            .unwrap_or_default();
-        if !strategies
-            .iter()
-            .any(|strategy| strategy.name == strategy_name)
-        {
-            return Err(Problem::validation_failed(
-                "strategyName must exist in the build",
-            ));
-        }
-        for account_id in account_ids {
-            if !self.accounts.active(owner, account_id) {
-                return Err(Problem::validation_failed(
-                    "every account must be a linked, active account",
-                ));
-            }
-        }
-        Ok(())
-    }
-
-    pub(super) fn require_mutable(bot: &Bot) -> Result<(), Problem> {
-        if bot.state == BotState::Archived {
-            return Err(Problem::state_conflict("an archived bot is read-only"));
-        }
-        Ok(())
-    }
-
-    pub(super) fn require_if_match(if_match: Option<u64>, version: u64) -> Result<(), Problem> {
-        match if_match {
-            None => Err(Problem::precondition_required()),
-            Some(received) if received == version => Ok(()),
-            Some(_) => Err(Problem::precondition_failed()),
-        }
     }
 }

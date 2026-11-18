@@ -202,13 +202,6 @@ impl BuildStore {
         }
     }
 
-    pub fn owns_build(&self, owner: &str, build_id: &str) -> bool {
-        self.builds
-            .lock()
-            .iter()
-            .any(|row| row.owner == owner && row.build.build_id == build_id)
-    }
-
     pub fn delete_build(&self, owner: &str, algorithm_id: &str, build_id: &str) -> bool {
         let mut builds = self.builds.lock();
         let before = builds.len();

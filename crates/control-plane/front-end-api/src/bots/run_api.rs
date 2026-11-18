@@ -47,7 +47,7 @@ impl RunApi {
     fn list(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
         let filter = Self::filter(request)?;
-        let page = self.runs.list(&auth, &filter, &PageQuery::parse(request));
+        let page = self.runs.list(&auth, &filter, &PageQuery::parse(request)?);
         Ok(Respond::json(StatusCode::OK, &page))
     }
 

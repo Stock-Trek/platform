@@ -7,6 +7,9 @@ use crate::auth::AuthContext;
 use crate::bots::{BotService, BotState};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
+use std::time::Duration;
+
+const CONNECTOR_DELAY: Duration = Duration::from_millis(100);
 
 pub struct AccountService {
     accounts: Arc<AccountStore>,
@@ -39,18 +42,8 @@ impl AccountService {
                     Problem::already_exists("an account already uses this label for the exchange")
                 }
             })?;
-        self.validated(auth.owner(), summary, now)
-    }
-
-    fn validated(
-        &self,
-        owner: &str,
-        summary: AccountSummary,
-        now: DateTime<Utc>,
-    ) -> Result<AccountSummary, Problem> {
-        self.accounts
-            .validate(owner, &summary.account_id, now)
-            .ok_or_else(|| Problem::not_found("account does not exist"))
+        self.validate_in_background(auth.owner(), &summary.account_id);
+        Ok(summary)
     }
 
     pub fn list(&self, owner: &str) -> Vec<AccountSummary> {
@@ -80,7 +73,18 @@ impl AccountService {
                 now,
             )
             .ok_or_else(|| Problem::not_found("account does not exist"))?;
-        self.validated(auth.owner(), summary, now)
+        self.validate_in_background(auth.owner(), account_id);
+        Ok(summary)
+    }
+
+    fn validate_in_background(&self, owner: &str, account_id: &str) {
+        let accounts = Arc::clone(&self.accounts);
+        let owner = owner.to_string();
+        let account_id = account_id.to_string();
+        tokio::spawn(async move {
+            tokio::time::sleep(CONNECTOR_DELAY).await;
+            accounts.validate(&owner, &account_id, Utc::now());
+        });
     }
 
     pub fn unlink(

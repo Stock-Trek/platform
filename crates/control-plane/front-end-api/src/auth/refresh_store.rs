@@ -22,7 +22,7 @@ struct RefreshEntry {
 
 pub enum Rotation {
     None,
-    Active { owner: String, family: String },
+    Rotated(SessionTokens),
     Replayed(SessionTokens),
     FamilyRevoked { family: String },
 }
@@ -51,10 +51,6 @@ impl RefreshStore {
             .insert(family.to_string(), expires_at);
     }
 
-    pub fn expiry(&self, family: &str) -> Option<DateTime<Utc>> {
-        self.state.lock().families.get(family).copied()
-    }
-
     pub fn enroll(&self, token: String, owner: &str, family: &str) {
         self.state.lock().entries.insert(
             token,
@@ -66,48 +62,57 @@ impl RefreshStore {
         );
     }
 
-    pub fn rotate(&self, token: &str, now: DateTime<Utc>) -> Rotation {
+    pub fn rotate(
+        &self,
+        token: &str,
+        now: DateTime<Utc>,
+        mint: impl FnOnce(&str, &str, DateTime<Utc>) -> SessionTokens,
+    ) -> Rotation {
         let mut state = self.state.lock();
         let Some(entry) = state.entries.get(token) else {
             return Rotation::None;
         };
-        let Some(family_expiry) = state.families.get(&entry.family).copied() else {
+        let family = entry.family.clone();
+        let owner = entry.owner.clone();
+        let Some(family_expiry) = state.families.get(&family).copied() else {
             return Rotation::None;
         };
         if family_expiry <= now {
-            let family = entry.family.clone();
             Self::revoke(&mut state, &family);
             return Rotation::FamilyRevoked { family };
         }
-        match &entry.state {
-            RefreshState::Active => Rotation::Active {
-                owner: entry.owner.clone(),
-                family: entry.family.clone(),
-            },
-            RefreshState::Rotated {
-                replay,
-                grace_until,
-            } => {
-                if *grace_until >= now {
-                    Rotation::Replayed(replay.clone())
-                } else {
-                    let family = entry.family.clone();
-                    Self::revoke(&mut state, &family);
-                    Rotation::FamilyRevoked { family }
-                }
+        if let RefreshState::Rotated {
+            replay,
+            grace_until,
+        } = &entry.state
+        {
+            if *grace_until >= now {
+                return Rotation::Replayed(replay.clone());
             }
-            RefreshState::Revoked => Rotation::None,
+            Self::revoke(&mut state, &family);
+            return Rotation::FamilyRevoked { family };
         }
-    }
-
-    pub fn mark_rotated(&self, token: &str, replacement: &SessionTokens, now: DateTime<Utc>) {
-        let mut state = self.state.lock();
+        if matches!(&entry.state, RefreshState::Revoked) {
+            return Rotation::None;
+        }
+        let replacement = mint(&owner, &family, family_expiry);
+        if let Some(refresh_token) = replacement.refresh_token.clone() {
+            state.entries.insert(
+                refresh_token,
+                RefreshEntry {
+                    owner,
+                    family: family.clone(),
+                    state: RefreshState::Active,
+                },
+            );
+        }
         if let Some(entry) = state.entries.get_mut(token) {
             entry.state = RefreshState::Rotated {
                 replay: replacement.clone(),
                 grace_until: now + REFRESH_REPLAY_GRACE,
             };
         }
+        Rotation::Rotated(replacement)
     }
 
     pub fn revoke_family(&self, family: &str) {

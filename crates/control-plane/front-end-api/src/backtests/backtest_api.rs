@@ -71,7 +71,7 @@ impl BacktestApi {
         let state = Self::state_filter(request)?;
         let page = self
             .backtests
-            .list(&auth, state, &PageQuery::parse(request));
+            .list(&auth, state, &PageQuery::parse(request)?);
         Ok(Respond::json(StatusCode::OK, &page))
     }
 
@@ -108,7 +108,7 @@ impl BacktestApi {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
         let page = self
             .backtests
-            .results(&auth, backtest_id, &PageQuery::parse(request))?;
+            .results(&auth, backtest_id, &PageQuery::parse(request)?)?;
         Ok(Respond::json(StatusCode::OK, &page))
     }
 

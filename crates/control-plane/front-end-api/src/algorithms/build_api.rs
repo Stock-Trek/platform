@@ -81,7 +81,7 @@ impl BuildApi {
         let listed = self
             .builds
             .builds(owner, algorithm_id, git_ref.as_deref(), state);
-        let page = Page::of(listed, &PageQuery::parse(request));
+        let page = Page::of(listed, &PageQuery::parse(request)?);
         Ok(Respond::json(StatusCode::OK, &page))
     }
 
@@ -173,7 +173,7 @@ impl BuildApi {
             .builds
             .strategies(owner, algorithm_id, build_id)
             .unwrap_or_default();
-        let page = Page::of(strategies, &PageQuery::parse(request));
+        let page = Page::of(strategies, &PageQuery::parse(request)?);
         Ok(Respond::json(StatusCode::OK, &page))
     }
 

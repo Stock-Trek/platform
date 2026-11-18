@@ -300,3 +300,30 @@ fn scopes_are_parsed_and_required() {
     assert_eq!(Scope::parse("admin"), Some(Scope::Admin));
     assert_eq!(Scope::parse("other"), None);
 }
+
+#[test]
+fn concurrent_rotations_return_the_same_replacement() {
+    let store = Arc::new(SessionStore::new());
+    let now = Utc::now();
+    let tokens = store.issue_login(Fixture::OWNER, now);
+    let refresh_token = tokens.refresh_token.expect("refresh");
+    let mut handles = Vec::new();
+    for _ in 0..4 {
+        let store = store.clone();
+        let token = refresh_token.clone();
+        handles.push(std::thread::spawn(move || {
+            store
+                .rotate_refresh(&token, now + Duration::seconds(1))
+                .expect("rotation")
+        }));
+    }
+    let replacements: Vec<_> = handles
+        .into_iter()
+        .map(|handle| handle.join().expect("rotation thread"))
+        .collect();
+    let first = &replacements[0];
+    assert!(replacements
+        .iter()
+        .all(|tokens| tokens.token == first.token
+            && tokens.refresh_token == first.refresh_token));
+}

@@ -1,5 +1,5 @@
 use crate::api::Problem;
-use crate::bots::schedule::{CronExpression, TimezoneName};
+use crate::bots::cron::{CronExpression, TimezoneName};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
@@ -62,7 +62,7 @@ impl Schedule {
     pub fn runs_per_day(&self) -> u64 {
         match self {
             Self::Interval { every_seconds, .. } => (86_400 / u64::from(*every_seconds)).max(1),
-            Self::Cron { .. } => 1_440,
+            Self::Cron { expression, .. } => CronExpression::runs_per_day(expression),
         }
     }
 }
@@ -125,6 +125,28 @@ pub struct PatchBotRequest {
     pub strategy_name: Option<String>,
     pub account_ids: Option<Vec<String>>,
     pub schedule: Option<Schedule>,
+}
+
+impl PatchBotRequest {
+    const REQUIRED_FIELDS: [&str; 5] = [
+        "name",
+        "buildId",
+        "strategyName",
+        "accountIds",
+        "schedule",
+    ];
+
+    pub fn merge_patch(value: &serde_json::Value) -> Result<Self, Problem> {
+        for field in Self::REQUIRED_FIELDS {
+            if value.get(field).is_some_and(|field| field.is_null()) {
+                return Err(Problem::validation_failed(format!(
+                    "{field} cannot be set to null"
+                )));
+            }
+        }
+        serde_json::from_value(value.clone())
+            .map_err(|error| Problem::validation_failed(error.to_string()))
+    }
 }
 
 #[derive(Debug, Deserialize)]

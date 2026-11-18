@@ -1,10 +1,19 @@
-use crate::accounts::account_types::{AccountSummary, LinkAccountRequest};
+use crate::accounts::account_types::{
+    AccountSummary, ConnectorState, CredentialsRequest, LinkAccountRequest,
+};
 use crate::accounts::portfolio_types::{OrderType, PendingOrder, PortfolioSnapshot};
+use crate::accounts::{AccountService, AccountStore};
+use crate::algorithms::BuildStore;
+use crate::auth::{AuthContext, Scope};
+use crate::backtests::BacktestStore;
+use crate::bots::{BotService, BotStore, RunStore};
+use crate::limits::{LimitService, LimitSources};
 use chrono::{TimeZone, Utc};
 use serde_json::json;
 use stock_trek_types::cex::{
     asset_id::AssetId, cex_id::CexId, side::Side, tag::Tag, trading_pair::TradingPair,
 };
+use std::sync::Arc;
 
 struct Fixture;
 
@@ -89,4 +98,85 @@ fn pending_orders_serialize_stock_trek_types() {
 fn account_summaries_carry_the_stock_trek_exchange() {
     let encoded = serde_json::to_value(Fixture::account_summary()).expect("encode");
     assert_eq!(encoded["cexId"], "Binance");
+}
+
+struct ServiceFixture {
+    service: AccountService,
+    store: Arc<AccountStore>,
+    auth: AuthContext,
+}
+
+impl ServiceFixture {
+    const OWNER: &'static str = "user_7gk2";
+    const VALID_KEY: &'static str = "0123456789abcdef";
+    const VALID_SECRET: &'static str = "fedcba9876543210";
+
+    fn new() -> Self {
+        let store = Arc::new(AccountStore::new());
+        let bots = Arc::new(BotService::new(
+            Arc::new(BotStore::new()),
+            Arc::new(RunStore::new()),
+            store.clone(),
+            Arc::new(BuildStore::new()),
+            Arc::new(LimitService::new(LimitSources {
+                accounts: store.clone(),
+                builds: Arc::new(BuildStore::new()),
+                bots: Arc::new(BotStore::new()),
+                backtests: Arc::new(BacktestStore::new()),
+            })),
+        ));
+        Self {
+            service: AccountService::new(store.clone(), bots),
+            store,
+            auth: AuthContext::new(Self::OWNER, "token", vec![Scope::Read, Scope::Manage]),
+        }
+    }
+
+    fn link(&self) -> AccountSummary {
+        let request = LinkAccountRequest {
+            cex_id: CexId::Binance,
+            label: "main".to_string(),
+            api_key: Self::VALID_KEY.to_string(),
+            api_secret: Self::VALID_SECRET.to_string(),
+        };
+        self.service
+            .link(&self.auth, &request, Utc::now())
+            .expect("link")
+    }
+
+    fn connector(&self, account_id: &str) -> ConnectorState {
+        self.store
+            .get(Self::OWNER, account_id)
+            .expect("stored")
+            .connector
+            .state
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn linking_stays_connecting_until_the_connector_validates() {
+    let fixture = ServiceFixture::new();
+    let summary = fixture.link();
+    assert_eq!(summary.connector.state, ConnectorState::Connecting);
+    assert_eq!(fixture.connector(&summary.account_id), ConnectorState::Connecting);
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    assert_eq!(fixture.connector(&summary.account_id), ConnectorState::Connected);
+}
+
+#[tokio::test(start_paused = true)]
+async fn replacing_credentials_revalidates_in_the_background() {
+    let fixture = ServiceFixture::new();
+    let summary = fixture.link();
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    let request = CredentialsRequest {
+        api_key: "too-short".to_string(),
+        api_secret: ServiceFixture::VALID_SECRET.to_string(),
+    };
+    let replaced = fixture
+        .service
+        .replace_credentials(&fixture.auth, &summary.account_id, &request, Utc::now())
+        .expect("replace");
+    assert_eq!(replaced.connector.state, ConnectorState::Connecting);
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    assert_eq!(fixture.connector(&summary.account_id), ConnectorState::Error);
 }
