@@ -92,7 +92,7 @@ A token missing the scope an endpoint needs is rejected with `403 forbidden`.
 |----------|------------------------------------------------------------------------------------------------|
 | `read`   | Every `GET`, stream tickets, and stream subscriptions                                          |
 | `manage` | Managing algorithms, builds, bots, runs, and backtests, plus the kill switch                   |
-| `admin`  | Sensitive operations: link, unlink, or re-credential an account; enable a bot; promote a build |
+| `admin`  | Sensitive operations: link, unlink, or re-credential an account; enable a bot |
 
 Login issues `read` and `manage` only.
 `admin` is available only through step-up.
@@ -146,7 +146,7 @@ All identifiers are server-assigned and unguessable.
   Endpoints that require `If-Match` say so.
   A missing header fails with `428 precondition_required` and a stale one with `412 precondition_failed`.
 - `PATCH` uses JSON Merge Patch (`Content-Type: application/merge-patch+json`): fields present are applied, absent fields are left alone, and arrays are replaced.
-  Tagged-union objects (`schedule`, `build`) are always replaced as a whole rather than merged.
+  Tagged-union objects (`schedule`) are always replaced as a whole rather than merged.
   Required fields cannot be set to `null`.
 - Commit identifiers in responses are always full object IDs.
   Requests may give an abbreviation of at least 7 characters, which the server resolves; an ambiguous or unknown one fails with `validation_failed`.
@@ -216,7 +216,7 @@ Every channel sequences its frames.
 | Channel                  | Frames                                                | Replay                           |
 |--------------------------|-------------------------------------------------------|----------------------------------|
 | `portfolio.{accountId}`  | Portfolio snapshots and order updates                 | Bounded window                   |
-| `builds.{algorithmId}`   | Build state changes and promotions                    | Bounded window                   |
+| `builds.{algorithmId}`   | Build state changes                                   | Bounded window                   |
 | `runs.{botId}`           | Run state changes                                     | Bounded window                   |
 | `backtests.{backtestId}` | One frame per finished simulation, then a final frame | Full, until the backtest expires |
 
@@ -404,9 +404,8 @@ The snapshot's `streamSequence` is the `lastSequence` to send when subscribing o
 - A **strategy** is a named algorithm inside a build.
   One build may expose several strategies.
   Strategy names are unique within a build; duplicate names fail the build.
-- The **promoted build** is the single build of an algorithm that tracking bots run.
-  Builds appear when code is pushed, but nothing changes for live bots until an owner promotes a build explicitly.
-  A push never deploys.
+- A build is usable by a bot as soon as it is `ready`; bots pin a concrete build.
+  A push never changes what a bot runs: the owner updates the bot to a new build explicitly.
 
 ### Algorithm and build lifecycle
 
@@ -415,7 +414,7 @@ Algorithms and builds have independent lifecycles:
 | Algorithm state | Meaning                                                                                                                                                               |
 |-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
 | `active`        | Builds can be triggered and strategies can be used by bots                                                                                                            |
-| `disconnected`  | GitHub access was revoked. No new builds. Existing builds stay usable: pinned bots and the promoted build keep working. Returns to `active` when access is re-granted |
+| `disconnected`  | GitHub access was revoked. No new builds. Existing builds stay usable: pinned bots keep working. Returns to `active` when access is re-granted |
 | `archived`      | Read-only; existing bots keep running, no new builds                                                                                                                  |
 
 | Build state | Meaning                                                     |
@@ -435,7 +434,6 @@ Archiving an algorithm is a soft delete: history stays queryable.
 | `GET`    | `/v1/algorithms`                                           | `read`   | List algorithms connected to the owner                     |
 | `GET`    | `/v1/algorithms/{algorithmId}`                             | `read`   | Algorithm detail                                           |
 | `DELETE` | `/v1/algorithms/{algorithmId}`                             | `manage` | Archive the algorithm                                      |
-| `POST`   | `/v1/algorithms/{algorithmId}/promote`                     | `admin`  | Promote a ready build for tracking bots                    |
 | `GET`    | `/v1/algorithms/{algorithmId}/builds`                      | `read`   | List builds, newest first, filterable by `ref` and `state` |
 | `POST`   | `/v1/algorithms/{algorithmId}/builds`                      | `manage` | Trigger a build for a ref or commit                        |
 | `GET`    | `/v1/algorithms/{algorithmId}/builds/{buildId}`            | `read`   | Build detail and state                                     |
@@ -454,7 +452,6 @@ Algorithm list items identify the connected repository:
       "defaultRef": "main",
       "state": "active",
       "version": 3,
-      "promotedBuildId": "build_870",
       "latestReadyBuildId": "build_882"
     }
   ],
@@ -462,8 +459,7 @@ Algorithm list items identify the connected repository:
 }
 ```
 
-`promotedBuildId` is `null` until the first promotion.
-`latestReadyBuildId` is informational only: it is what a promotion would most likely target, not what bots run.
+`latestReadyBuildId` is informational only: the newest ready build of the algorithm, not necessarily what any bot runs.
 
 ### Triggering builds
 
@@ -518,18 +514,6 @@ The API itself answers with `200` and a JSON body rather than a redirect, becaus
 
 Strategies are extracted once when the build finishes; a build that fails to report its strategies is treated as `failed`.
 
-### Promoting a build
-
-`POST /v1/algorithms/{algorithmId}/promote` takes `{ "buildId": "build_882" }`, requires `admin` and `If-Match` with the algorithm's current `version`, and returns the updated algorithm with `200`.
-
-- The build must belong to the algorithm and be `ready`.
-- If any enabled bot that tracks the promoted build runs a strategy the new build does not expose, the promotion fails with `409 state_conflict` and the problem details list `affectedBotIds`.
-  The owner updates or disables those bots first.
-  Promotion never silently breaks a live bot.
-- Tracking bots pick the new build up at their next run.
-  Every run records the build it executed.
-- Promotions are announced on the `builds.{algorithmId}` channel.
-
 ## Bots and runs
 
 ### Bot and run model
@@ -579,14 +563,15 @@ Creating a bot does not enable it: a new bot is `disabled`, and the front-end en
 {
   "name": "momentum-main",
   "algorithmId": "algorithm_5t1",
-  "build": { "kind": "track_promoted" },
+  "buildId": "build_870",
   "strategyName": "momentum_v2",
   "accountIds": ["account_3kq"],
   "schedule": { "kind": "interval", "everySeconds": 60 }
 }
 ```
 
-`build` is a tagged selector: `{ "kind": "pinned", "buildId": "build_882" }` runs exactly that build, and `{ "kind": "track_promoted" }` runs whatever build the algorithm currently has promoted.
+`buildId` is the concrete build the bot runs.
+It must be a `ready` build of the bot's algorithm, and the bot never changes build on its own: to run a new build, update the bot.
 
 The response is `201` with:
 
@@ -595,8 +580,7 @@ The response is `201` with:
   "botId": "bot_4fd",
   "name": "momentum-main",
   "algorithmId": "algorithm_5t1",
-  "build": { "kind": "track_promoted" },
-  "resolvedBuildId": "build_870",
+  "buildId": "build_870",
   "strategyName": "momentum_v2",
   "accountIds": ["account_3kq"],
   "schedule": { "kind": "interval", "everySeconds": 60, "misfireGraceSeconds": 60 },
@@ -609,15 +593,13 @@ The response is `201` with:
 }
 ```
 
-`resolvedBuildId` is the build the next run would execute.
 `activeRunId` is the bot's pending or running run, if any.
 
 Validation rules:
 
 - `algorithmId` must reference an `active` algorithm when the bot is created.
-- A `pinned` build must belong to `algorithmId` and be `ready`.
-  `track_promoted` requires the algorithm to have a promoted build.
-- `strategyName` must exist in the pinned or currently promoted build.
+- `buildId` must belong to `algorithmId` and be `ready`.
+- `strategyName` must exist in the build.
 - Every referenced account must be a linked, active account of the owner.
 - `schedule.kind` is `interval` (`everySeconds` of at least 10) or `cron` (`expression` in five-field cron syntax plus `timezone`, an IANA time-zone name such as `Europe/Zurich`).
   Both accept an optional `misfireGraceSeconds` (default: the interval or 60 seconds, whichever is smaller; 60 for cron).
@@ -627,8 +609,8 @@ Validation rules:
 Bot mutations (`PATCH`, `enable`, `disable`) require `If-Match` and return the updated bot representation.
 Enabling fails with `409 state_conflict` when a referenced account is no longer linked or active, and with `403 quota_exceeded` when it would exceed the scheduled-runs quota.
 
-A tracking bot never silently runs an older build.
-If the strategy is missing from the build a run resolves, the run fails with `strategy_not_found` (a client error), and promotion is blocked beforehand where it can be detected.
+A bot always runs exactly the build it pins, and every run records the build it executed.
+Updating `buildId` re-validates `strategyName` against the new build, so a bot never starts a run whose strategy is missing.
 
 ### Scheduling, overlap, and missed ticks
 
@@ -666,14 +648,13 @@ Run lists accept `botId`, `state`, `from`, and `to`, and include the `streamSequ
       "botId": "bot_4fd",
       "algorithmId": "algorithm_5t1",
       "buildId": "build_870",
-      "buildResolution": "promoted",
       "strategyName": "momentum_v2",
       "trigger": "schedule",
       "scheduledAt": "2026-07-14T09:31:00.000Z",
       "state": "failed",
       "completedAt": "2026-07-14T09:31:44.000Z",
       "logAvailable": true,
-      "error": { "kind": "client", "code": "strategy_not_found", "message": "strategy not found" }
+      "error": { "kind": "platform", "code": "timeout", "message": "run exceeded its time limit" }
     }
   ],
   "nextCursor": null,
@@ -682,14 +663,14 @@ Run lists accept `botId`, `state`, `from`, and `to`, and include the `streamSequ
 ```
 
 `trigger` is `schedule` or `ad_hoc`.
-`buildResolution` is `pinned` or `promoted`, and `buildId` is the build the run actually executed.
+`buildId` is the build the run actually executed.
 Skipped runs have no `buildId` and carry `skipReason`.
 
 `error.kind` tells the front-end "fix your bot" from "platform problem", and `error.code` says exactly what happened:
 
 | `error.kind` | Codes                                                                           |
 |--------------|---------------------------------------------------------------------------------|
-| `client`     | `strategy_not_found`, `invalid_context`, `invalid_portfolio`, `invalid_request` |
+| `client`     | `invalid_context`, `invalid_portfolio`, `invalid_request` |
 | `platform`   | `timeout`, `panic`, `resource_limit`, `internal`                                |
 
 Clients tolerate new codes and fall back on `kind`.
@@ -782,7 +763,7 @@ The response is `202` with `{ "backtestId": "backtest_31a", "state": "queued" }`
 
 | Field                                    | Required | Meaning                                                                                               |
 |------------------------------------------|----------|-------------------------------------------------------------------------------------------------------|
-| `algorithmId`, `buildId`, `strategyName` | yes      | The strategy to simulate. `buildId` is a concrete build, never a selector.                            |
+| `algorithmId`, `buildId`, `strategyName` | yes      | The strategy to simulate. `buildId` is a concrete build.                                              |
 | `seed`                                   | no       | Integer seed. If omitted, the server picks one and returns it in the status, so runs are reproducible |
 
 Validation fails fast with `validation_failed`:
