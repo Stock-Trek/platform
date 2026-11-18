@@ -3,7 +3,7 @@ use crate::api::Problem;
 use crate::api::Respond;
 use crate::auth::Scope;
 use crate::auth::SessionService;
-use crate::limits::{LimitService, QUOTA_STREAM_CONNECTIONS};
+use crate::limits::{LimitService, QUOTA_STREAM_CONNECTIONS, QUOTA_STREAM_SUBSCRIPTIONS};
 use crate::streaming::StreamService;
 use chrono::Utc;
 use http_body_util::Full;
@@ -46,6 +46,9 @@ impl LimitsApi {
         let mut effective = self.limits.effective(owner, Utc::now());
         if let Some(entry) = effective.get_mut(QUOTA_STREAM_CONNECTIONS) {
             entry.used = self.streams.connection_count(owner);
+        }
+        if let Some(entry) = effective.get_mut(QUOTA_STREAM_SUBSCRIPTIONS) {
+            entry.used = self.streams.subscription_count(owner);
         }
         Ok(Respond::json(StatusCode::OK, &effective))
     }

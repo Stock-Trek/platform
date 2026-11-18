@@ -8,6 +8,7 @@ use std::collections::HashSet;
 #[derive(Serialize)]
 struct TicketClaims {
     sub: String,
+    sid: String,
     jti: String,
     iat: i64,
     exp: i64,
@@ -17,7 +18,9 @@ struct TicketClaims {
 #[serde(deny_unknown_fields)]
 struct VerifiedTicketClaims {
     sub: String,
+    sid: String,
     jti: String,
+    iat: i64,
     exp: i64,
 }
 
@@ -34,10 +37,16 @@ impl TicketStore {
         }
     }
 
-    pub fn issue(&self, owner: &str, now: DateTime<Utc>) -> (String, DateTime<Utc>) {
+    pub fn issue(
+        &self,
+        owner: &str,
+        session_id: &str,
+        now: DateTime<Utc>,
+    ) -> (String, DateTime<Utc>) {
         let expires_at = now + Duration::seconds(TICKET_TTL_SECONDS as i64);
         let claims = TicketClaims {
             sub: owner.to_string(),
+            sid: session_id.to_string(),
             jti: uuid::Uuid::new_v4().simple().to_string(),
             iat: now.timestamp(),
             exp: expires_at.timestamp(),
@@ -47,14 +56,14 @@ impl TicketStore {
         (ticket, expires_at)
     }
 
-    pub fn redeem(&self, ticket: &str, now: DateTime<Utc>) -> Option<String> {
+    pub fn redeem(&self, ticket: &str, now: DateTime<Utc>) -> Option<(String, String)> {
         let claims = self.signer.verify::<VerifiedTicketClaims>(ticket)?;
-        if claims.exp <= now.timestamp() {
+        if claims.exp <= now.timestamp() || claims.iat > claims.exp {
             return None;
         }
         self.outstanding
             .lock()
             .remove(&claims.jti)
-            .then_some(claims.sub)
+            .then_some((claims.sub, claims.sid))
     }
 }

@@ -39,6 +39,7 @@ impl SessionApi {
     }
 
     fn login(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
+        request.require_json_content_type()?;
         let login: LoginRequest = request.json()?;
         let tokens =
             self.sessions
@@ -47,6 +48,7 @@ impl SessionApi {
     }
 
     fn refresh(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
+        request.require_json_content_type()?;
         let refresh: RefreshRequest = request.json()?;
         let tokens = self.sessions.refresh(&refresh)?;
         Ok(Respond::json(StatusCode::CREATED, &tokens))
@@ -54,6 +56,7 @@ impl SessionApi {
 
     fn step_up(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
+        request.require_json_content_type()?;
         let step_up: StepUpRequest = request.json()?;
         let tokens = self.sessions.step_up(
             &auth,

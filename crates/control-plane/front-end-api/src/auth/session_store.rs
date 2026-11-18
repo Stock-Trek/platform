@@ -106,6 +106,18 @@ impl SessionStore {
         Some((session.owner.clone(), session.scopes.clone()))
     }
 
+    pub fn session_id(&self, token: &str) -> Option<String> {
+        self.signer.verify_session_id(token)
+    }
+
+    pub fn revoked(&self, session_id: &str) -> bool {
+        let state = self.state.lock();
+        state
+            .access
+            .get(session_id)
+            .is_none_or(|session| session.revoked)
+    }
+
     pub fn rotate_refresh(&self, token: &str, now: DateTime<Utc>) -> Option<SessionTokens> {
         match self.refresh.rotate(token, now) {
             Rotation::Replayed(tokens) => Some(tokens),

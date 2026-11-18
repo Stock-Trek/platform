@@ -8,6 +8,9 @@ mod run_store;
 mod run_types;
 mod schedule;
 
+#[cfg(test)]
+mod bots_tests;
+
 pub use bot_api::BotApi;
 pub use bot_service::BotService;
 pub use bot_store::BotStore;

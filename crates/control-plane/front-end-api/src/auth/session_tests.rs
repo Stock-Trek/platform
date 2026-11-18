@@ -48,6 +48,12 @@ impl Fixture {
     ) -> ApiRequest {
         let uri: Uri = path.parse().expect("uri");
         let mut map = HeaderMap::new();
+        if !body.is_empty() {
+            map.insert(
+                hyper::header::CONTENT_TYPE,
+                hyper::header::HeaderValue::from_static("application/json"),
+            );
+        }
         for (name, value) in headers {
             map.insert(
                 hyper::header::HeaderName::from_bytes(name.as_bytes()).expect("name"),

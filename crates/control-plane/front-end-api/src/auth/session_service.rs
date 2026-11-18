@@ -108,6 +108,20 @@ impl SessionService {
         Ok(auth)
     }
 
+    pub fn authorize_admin(&self, request: &ApiRequest) -> Result<AuthContext, Problem> {
+        let auth = self.authorize_request(request, Scope::Manage)?;
+        auth.require_admin()?;
+        Ok(auth)
+    }
+
+    pub fn session_id(&self, token: &str) -> Option<String> {
+        self.store.session_id(token)
+    }
+
+    pub fn revoked(&self, session_id: &str) -> bool {
+        self.store.revoked(session_id)
+    }
+
     fn throttle_keys(source: Option<IpAddr>, login_id: Option<&str>) -> Vec<String> {
         let mut keys = Vec::new();
         if let Some(source) = source {

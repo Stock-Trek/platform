@@ -31,7 +31,10 @@ impl BotStore {
             .iter()
             .filter(|row| row.owner == owner)
             .map(|row| &row.bot)
-            .filter(|bot| state.is_none_or(|state| bot.state == state))
+            .filter(|bot| match state {
+                Some(state) => bot.state == state,
+                None => bot.state != BotState::Archived,
+            })
             .collect();
         listed.sort_by_key(|row| std::cmp::Reverse(row.created_at));
         listed.into_iter().cloned().collect()

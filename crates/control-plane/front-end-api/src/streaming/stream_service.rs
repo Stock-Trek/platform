@@ -12,6 +12,8 @@ use std::sync::Arc;
 
 const MAX_SUBSCRIPTIONS: usize = 32;
 
+pub const MAX_SUBSCRIPTIONS_PER_CONNECTION: usize = MAX_SUBSCRIPTIONS;
+
 struct Connection {
     owner: String,
     channels: Vec<String>,
@@ -46,11 +48,16 @@ impl StreamService {
         }
     }
 
-    pub fn issue_ticket(&self, owner: &str, now: DateTime<Utc>) -> (String, DateTime<Utc>) {
-        self.tickets.issue(owner, now)
+    pub fn issue_ticket(
+        &self,
+        owner: &str,
+        session_id: &str,
+        now: DateTime<Utc>,
+    ) -> (String, DateTime<Utc>) {
+        self.tickets.issue(owner, session_id, now)
     }
 
-    pub fn redeem_ticket(&self, ticket: &str, now: DateTime<Utc>) -> Option<String> {
+    pub fn redeem_ticket(&self, ticket: &str, now: DateTime<Utc>) -> Option<(String, String)> {
         self.tickets.redeem(ticket, now)
     }
 
@@ -74,6 +81,16 @@ impl StreamService {
             .values()
             .filter(|connection| connection.owner == owner)
             .count() as u64
+    }
+
+    pub fn subscription_count(&self, owner: &str) -> u64 {
+        self.connections
+            .lock()
+            .values()
+            .filter(|connection| connection.owner == owner)
+            .map(|connection| connection.channels.len() as u64)
+            .max()
+            .unwrap_or(0)
     }
 
     pub fn owns_channel(&self, owner: &str, channel: &str) -> bool {

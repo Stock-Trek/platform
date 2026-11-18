@@ -99,7 +99,9 @@ pub struct Bot {
     pub state: BotState,
     pub active_run_id: Option<String>,
     pub version: u64,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub created_at: DateTime<Utc>,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub updated_at: DateTime<Utc>,
     pub stream_sequence: u64,
 }

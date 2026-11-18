@@ -9,6 +9,7 @@ pub const REPLAY_WINDOW: usize = 256;
 #[serde(rename_all = "camelCase")]
 pub struct StreamTicket {
     pub ticket: String,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,
 }
 

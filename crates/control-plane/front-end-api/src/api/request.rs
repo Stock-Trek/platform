@@ -9,7 +9,7 @@ use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-const MAX_BODY_BYTES: usize = 1024 * 1024;
+pub const MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
 const VERSION_SEGMENT: &str = "v1";
 
 #[derive(Debug)]
@@ -35,11 +35,11 @@ impl ApiRequest {
             .get(CONTENT_LENGTH)
             .and_then(|value| value.to_str().ok())
             .and_then(|value| value.parse::<usize>().ok())
-            .is_some_and(|length| length > MAX_BODY_BYTES);
+            .is_some_and(|length| length > MAX_REQUEST_BODY_BYTES);
         if too_large {
             return Err(Problem::payload_too_large());
         }
-        let collected = Limited::new(body, MAX_BODY_BYTES)
+        let collected = Limited::new(body, MAX_REQUEST_BODY_BYTES)
             .collect()
             .await
             .map_err(|error| {

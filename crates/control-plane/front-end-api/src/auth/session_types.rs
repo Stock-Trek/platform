@@ -25,10 +25,14 @@ pub struct StepUpRequest {
 #[serde(rename_all = "camelCase")]
 pub struct SessionTokens {
     pub token: String,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub refresh_token: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(
+        skip_serializing_if = "Option::is_none",
+        with = "crate::api::timestamp::milliseconds::option"
+    )]
     pub refresh_expires_at: Option<DateTime<Utc>>,
     pub owner: String,
     pub scope: Vec<Scope>,
@@ -38,5 +42,6 @@ pub struct SessionTokens {
 #[serde(rename_all = "camelCase")]
 pub struct StepUpTokens {
     pub token: String,
+    #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,
 }

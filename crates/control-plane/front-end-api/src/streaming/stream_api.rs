@@ -55,7 +55,13 @@ impl StreamApi {
 
     fn ticket(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         let auth = self.sessions.authorize_request(request, Scope::Read)?;
-        let (ticket, expires_at) = self.streams.issue_ticket(auth.owner(), Utc::now());
+        let session_id = self
+            .sessions
+            .session_id(auth.token())
+            .ok_or_else(|| Problem::unauthorized("the token is missing, expired, or revoked"))?;
+        let (ticket, expires_at) = self
+            .streams
+            .issue_ticket(auth.owner(), &session_id, Utc::now());
         Ok(Respond::json(
             StatusCode::OK,
             &StreamTicket { ticket, expires_at },
@@ -66,12 +72,12 @@ impl StreamApi {
         let ticket = request
             .query("ticket")
             .ok_or_else(|| Problem::unauthorized("a stream ticket is required"))?;
-        let owner = self
-            .streams
-            .redeem_ticket(ticket, Utc::now())
-            .ok_or_else(|| {
-                Problem::unauthorized("the stream ticket is unknown, used, or expired")
-            })?;
+        let (owner, session_id) =
+            self.streams
+                .redeem_ticket(ticket, Utc::now())
+                .ok_or_else(|| {
+                    Problem::unauthorized("the stream ticket is unknown, used, or expired")
+                })?;
         let limit = self
             .limits
             .entry(&owner, QUOTA_STREAM_CONNECTIONS, Utc::now());
@@ -79,7 +85,14 @@ impl StreamApi {
             return Err(Problem::rate_limited(STREAM_CONNECTION_RETRY_SECONDS));
         }
         let accept = Self::handshake(request)?;
-        Self::upgrade(request, accept, self.streams.clone(), owner)
+        Self::upgrade(
+            request,
+            accept,
+            self.streams.clone(),
+            self.sessions.clone(),
+            owner,
+            session_id,
+        )
     }
 
     fn handshake(request: &ApiRequest) -> Result<String, Problem> {
@@ -103,7 +116,7 @@ impl StreamApi {
         let key = key.ok_or_else(|| {
             Problem::validation_failed("the WebSocket handshake needs a Sec-WebSocket-Key")
         })?;
-        ws::accept_key(key)
+        ws::Connection::accept_key(key)
             .ok_or_else(|| Problem::validation_failed("the Sec-WebSocket-Key is malformed"))
     }
 
@@ -111,7 +124,9 @@ impl StreamApi {
         request: &ApiRequest,
         accept: String,
         streams: Arc<StreamService>,
+        sessions: Arc<SessionService>,
         owner: String,
+        session_id: String,
     ) -> Result<Response<Full<Bytes>>, Problem> {
         let on_upgrade = request
             .extensions()
@@ -132,7 +147,7 @@ impl StreamApi {
                 Ok(upgraded) => {
                     let io = TokioIo::new(upgraded);
                     let ws = tokio_websockets::server::Builder::new().serve(io);
-                    ws::serve(ws, streams, owner).await;
+                    ws::Connection::serve(ws, streams, sessions, owner, session_id).await;
                 }
                 Err(error) => {
                     tracing::warn!(%error, "front-end api stream upgrade failed");
