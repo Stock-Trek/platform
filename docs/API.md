@@ -2,7 +2,7 @@
 
 This document is the contract for the API the browser front-end speaks to.
 It covers conventions shared by every resource group and the per-area endpoints.
-Implementation details that clients must not rely on [can be found in the design notes](./API-design-notes.md).
+Implementation details that clients must not rely on are in the [design notes](./API-design-notes.md).
 
 - [Overview](#overview)
 - [Versioning and base URL](#versioning-and-base-url)
@@ -21,7 +21,7 @@ Implementation details that clients must not rely on [can be found in the design
 The front-end talks to exactly one platform component: the front-end API.
 It exposes the resources a user manages (accounts, portfolios, algorithms, builds, bots, runs, and backtests) and hides the services behind them.
 
-Everything before Design notes is contract.
+Everything in this document is contract.
 The design notes explain how the API is built and may change without a version bump.
 
 ## Versioning and base URL
@@ -71,7 +71,7 @@ and returns `201`:
 ```
 
 Invalid or unknown credentials fail with `401 unauthorized`.
-Failed attempts are throttled per source address and per `loginId` (see [Limits](#limits)), so distributed guessing against one login is also slowed.
+Failed attempts are throttled per source address and per `loginId` (see [Limits](#limits)), which also slows distributed guessing against one login.
 
 ### Refresh
 
@@ -88,11 +88,11 @@ Failed attempts are throttled per source address and per `loginId` (see [Limits]
 Tokens carry scopes.
 A token missing the scope an endpoint needs is rejected with `403 forbidden`.
 
-| Scope    | Grants                                                                                         |
-|----------|------------------------------------------------------------------------------------------------|
-| `read`   | Every `GET`, stream tickets, and stream subscriptions                                          |
-| `manage` | Managing algorithms, builds, bots, runs, and backtests, plus the kill endpoint               |
-| `admin`  | Sensitive operations: link, unlink, or re-credential an account; enable a bot |
+| Scope    | Grants                                                                         |
+|----------|--------------------------------------------------------------------------------|
+| `read`   | Every `GET`, stream tickets, and stream subscriptions                          |
+| `manage` | Managing algorithms, builds, bots, runs, and backtests, plus the kill endpoint |
+| `admin`  | Sensitive operations: link, unlink, or re-credential an account; enable a bot  |
 
 Login issues `read` and `manage` only.
 `admin` is available only through step-up.
@@ -118,7 +118,7 @@ The API answers CORS preflights from an allowlist of origins and varies cached r
 
 A user can only ever see and act on their own accounts, algorithms, bots, runs, and backtests.
 A resource that exists but belongs to another owner is indistinguishable from a missing one: both answer `404 not_found`.
-Attempts to touch another owner's resources are logged and alerted on server-side but are not revealed to the caller.
+Attempts to touch another owner's resources are logged and alerted on server-side, but the caller is told nothing.
 All identifiers are server-assigned and unguessable.
 
 ## Conventions
@@ -168,25 +168,25 @@ Errors use RFC 9457 problem details:
 }
 ```
 
-| `code`                  | Status | Meaning                                                                     |
-|-------------------------|--------|-----------------------------------------------------------------------------|
-| `validation_failed`     | 400    | Request body or parameters are malformed or invalid                         |
-| `unauthorized`          | 401    | Missing, expired, revoked, or invalid token or credential                   |
-| `forbidden`             | 403    | Token lacks the required scope                                              |
-| `step_up_required`      | 403    | The operation needs a recent step-up (`admin` scope)                        |
-| `quota_exceeded`        | 403    | A per-owner resource-count or schedule quota would be exceeded (see Limits) |
-| `not_found`             | 404    | Resource does not exist for this owner                                      |
-| `already_exists`        | 409    | A resource with the same unique attributes already exists for this owner    |
-| `state_conflict`        | 409    | The resource's current state forbids the action                             |
-| `idempotency_conflict`  | 409    | Idempotency key reused with a different request body                        |
-| `precondition_failed`   | 412    | `If-Match` does not match the current version                               |
-| `payload_too_large`     | 413    | Request exceeds a size limit                                                |
-| `precondition_required` | 428    | The endpoint requires `If-Match` and it was not sent                        |
-| `rate_limited`          | 429    | Rate limit exhausted                                                        |
-| `internal`              | 500    | Unexpected server error                                                     |
-| `unavailable`           | 503    | A dependency is down; retry with backoff                                    |
+| `code`                  | Status | Meaning                                                                                |
+|-------------------------|--------|----------------------------------------------------------------------------------------|
+| `validation_failed`     | 400    | Request body or parameters are malformed or invalid                                    |
+| `unauthorized`          | 401    | Missing, expired, revoked, or invalid token or credential                              |
+| `forbidden`             | 403    | Token lacks the required scope                                                         |
+| `step_up_required`      | 403    | The operation needs a recent step-up (`admin` scope)                                   |
+| `quota_exceeded`        | 403    | A per-owner resource-count or schedule quota would be exceeded (see [Limits](#limits)) |
+| `not_found`             | 404    | Resource does not exist for this owner                                                 |
+| `already_exists`        | 409    | A resource with the same unique attributes already exists for this owner               |
+| `state_conflict`        | 409    | The resource's current state forbids the action                                        |
+| `idempotency_conflict`  | 409    | Idempotency key reused with a different request body                                   |
+| `precondition_failed`   | 412    | `If-Match` does not match the current version                                          |
+| `payload_too_large`     | 413    | Request exceeds a size limit                                                           |
+| `precondition_required` | 428    | The endpoint requires `If-Match` and it was not sent                                   |
+| `rate_limited`          | 429    | Rate limit exhausted                                                                   |
+| `internal`              | 500    | Unexpected server error                                                                |
+| `unavailable`           | 503    | A dependency is down; retry with backoff                                               |
 
-The API echoes a client-supplied `X-Request-Id` or generates one, returns it in the `X-Request-Id` header of every response, and repeats it in problem details as `requestId`, so front-end error reports can be matched to server logs.
+The API echoes a client-supplied `X-Request-Id`, or generates one, and returns it in the `X-Request-Id` header of every response and as `requestId` in problem details, so front-end error reports can be matched to server logs.
 `rate_limited` responses carry a `Retry-After` header with the number of seconds to wait.
 
 Run failures are reported inside run representations, not as HTTP errors; see [Bots and runs](#bots-and-runs).
@@ -203,8 +203,7 @@ A ticket is valid for one upgrade and expires 60 seconds after issue.
 | `GET`  | `/v1/stream`        | WebSocket for channel subscriptions |
 
 The client subscribes with `subscribe` actions and leaves with `unsubscribe` actions.
-The server pushes JSON frames carrying a per-channel, monotonically increasing `sequence`.
-Every channel sequences its frames.
+The server pushes JSON frames, each carrying a per-channel, monotonically increasing `sequence`.
 
 ```json
 { "action": "subscribe", "channel": "portfolio.account_3kq", "lastSequence": 41 }
@@ -213,17 +212,17 @@ Every channel sequences its frames.
 
 ### Channels
 
-| Channel                  | Frames                                                | Replay                           |
-|--------------------------|-------------------------------------------------------|----------------------------------|
-| `portfolio.{accountId}`  | Portfolio snapshots and order updates                 | Bounded window                   |
-| `builds.{algorithmId}`   | Build state changes                                   | Bounded window                   |
-| `runs.{botId}`           | Run state changes                                     | Bounded window                   |
+| Channel                  | Frames                                                | Replay                            |
+|--------------------------|-------------------------------------------------------|-----------------------------------|
+| `portfolio.{accountId}`  | Portfolio snapshots and order updates                 | Bounded window                    |
+| `builds.{algorithmId}`   | Build state changes                                   | Bounded window                    |
+| `runs.{botId}`           | Run state changes                                     | Bounded window                    |
 | `backtests.{backtestId}` | One frame per finished simulation, then a final frame | Full, for the backtest's lifetime |
 
 ### Resume and gaps
 
 - A first subscribe omits `lastSequence`.
-  On the first three channel types it receives only frames published after the server accepts it.
+  On the non-backtest channels it receives only frames published after the server accepts it.
   On a `backtests` channel it receives the stored frames from the beginning.
 - To subscribe without missing anything, a client reads state over REST and subscribes with `lastSequence` set to the `streamSequence` of that read.
   Each non-backtest channel keeps a bounded replay window (the most recent 256 frames); frames after `lastSequence` that are inside the window are replayed, closing the race between the read and the subscribe.
@@ -236,7 +235,7 @@ Every channel sequences its frames.
 
 ## Limits
 
-Every limit below that applies to an authenticated owner comes from the owner's tier, through a backend matrix of tier to limit values, and a tier can change at any time.
+Every limit below that applies to an authenticated owner comes from the owner's tier, which can change at any time.
 The login throttles apply before an owner is identified, so they are the same for everyone.
 If a tier change lowers a limit below current usage, existing resources keep working and only new creations and enables are refused.
 
@@ -271,9 +270,8 @@ A `quota_exceeded` error names the quota in its problem details (`quota`, `limit
 | Maximum request body size                      | Tier   | `413 payload_too_large`                |
 | Maximum backtest result size per simulation    | Tier   | Backtest fails with `result_too_large` |
 
-The scheduled-runs quota is computed from each enabled bot's schedule, so a bot with a 10-second interval uses 8,640 of the daily scheduled-runs quota.
+The scheduled-runs quota is computed from each enabled bot's schedule, so a bot with a 10-second interval uses 8,640 of the daily quota.
 Creating or enabling a bot that would exceed it fails with `403 quota_exceeded`.
-Count limits also fail with `403 quota_exceeded`; request-rate limits fail with `429 rate_limited`.
 
 ## Accounts and portfolios
 
@@ -281,7 +279,7 @@ Count limits also fail with `403 quota_exceeded`; request-rate limits fail with 
 
 An owner (the JWT `owner` claim) controls zero or more exchange accounts.
 Each linked account has a server-assigned `accountId` and an owner-chosen `label`.
-Because identifiers are server-assigned and owner-scoped, a label that another user has also used reveals nothing and cannot collide with theirs.
+Labels are unique per owner and exchange, so a label another user has also used neither collides nor reveals anything.
 
 Every linked account additionally needs exchange API credentials.
 Credentials are write-only: they are never returned by any endpoint and are rotated by replacing them.
@@ -337,7 +335,7 @@ Clients must tolerate new values.
 { "cexId": "binance", "label": "main", "apiKey": "...", "apiSecret": "..." }
 ```
 
-`label` is 1 to 64 characters and unique per owner and exchange; a duplicate fails with `409 already_exists`, which only ever refers to the caller's own accounts.
+`label` is 1 to 64 characters and unique per owner and exchange; a duplicate fails with `409 already_exists`, which can only ever be one of the caller's own accounts.
 The response is `201` with the account representation.
 
 Linking is asynchronous: the account starts as `connecting`, credentials are validated in the background, and a bad key surfaces as `connector.state: "error"` with `reason: "invalid_credentials"`.
@@ -345,7 +343,7 @@ Until the first snapshot arrives, the portfolio endpoints return `asOf: null` wi
 
 `DELETE /v1/accounts/{accountId}` unlinks the account and answers `204`.
 If any enabled bot references the account it fails with `409 state_conflict`, because those bots' orders would fail authorization.
-With `?force=true` the unlink goes ahead and the API first disables every bot referencing the account and cancels their pending runs; running runs receive a cancel request.
+With `?force=true` the unlink goes ahead: the API first disables every bot referencing the account, cancels their pending runs, and sends a cancel request to their running runs.
 The response is then `200`:
 
 ```json
@@ -399,23 +397,23 @@ The snapshot's `streamSequence` is the `lastSequence` to send when subscribing o
 - An **algorithm** is a Git repository containing trading strategy code.
   Owners connect a repository by granting the GitHub App access to it, so the API has no endpoint to create algorithms; they appear once the connection is registered.
   Pushes to watched refs trigger builds.
+  Archiving an algorithm is a soft delete: history stays queryable.
 - A **build** is one compile of a commit.
   It produces the executable artifact used by runs and backtests.
+  Bots pin a concrete build: a push never changes what a bot runs, the owner updates the bot to a new build explicitly.
 - A **strategy** is a named algorithm inside a build.
   One build may expose several strategies.
   Strategy names are unique within a build; duplicate names fail the build.
-- A build is usable by a bot as soon as it is `ready`; bots pin a concrete build.
-  A push never changes what a bot runs: the owner updates the bot to a new build explicitly.
 
 ### Algorithm and build lifecycle
 
 Algorithms and builds have independent lifecycles:
 
-| Algorithm state | Meaning                                                                                                                                                               |
-|-----------------|-----------------------------------------------------------------------------------------------------------------------------------------------------------------------|
-| `active`        | Builds can be triggered and strategies can be used by bots                                                                                                            |
-| `disconnected`  | GitHub access was revoked. No new builds. Existing builds stay usable: pinned bots keep working. Returns to `active` when access is re-granted |
-| `archived`      | Read-only; existing bots keep running, no new builds                                                                                                                  |
+| Algorithm state | Meaning                                                                                                           |
+|-----------------|-------------------------------------------------------------------------------------------------------------------|
+| `active`        | Builds can be triggered and strategies can be used by bots                                                        |
+| `disconnected`  | GitHub access was revoked; no new builds. Pinned bots keep working. Returns to `active` when access is re-granted |
+| `archived`      | Read-only; existing bots keep running, no new builds                                                              |
 
 | Build state | Meaning                                                     |
 |-------------|-------------------------------------------------------------|
@@ -424,8 +422,7 @@ Algorithms and builds have independent lifecycles:
 | `ready`     | Compilation finished; strategies extracted                  |
 | `failed`    | Compilation or packaging failed; `error` carries the reason |
 
-A build only becomes usable by bots when it is `ready`.
-Archiving an algorithm is a soft delete: history stays queryable.
+A build is usable by bots only when it is `ready`.
 
 ### Algorithm endpoints
 
@@ -502,8 +499,8 @@ It returns `404 not_found` when no log exists.
 The log is how a `failed` build is diagnosed.
 Run logs work the same way (see [Bots and runs](#bots-and-runs)).
 
+The API answers with `200` and a JSON body rather than a redirect, because browsers send an opaque `Origin` on cross-origin redirects.
 The storage behind the pre-signed URL allows cross-origin reads from the allowlisted front-end origins.
-The API itself answers with `200` and a JSON body rather than a redirect, because browsers send an opaque `Origin` on cross-origin redirects.
 
 ### Strategies
 
@@ -518,11 +515,10 @@ Strategies are extracted once when the build finishes; a build that fails to rep
 ### Deleting builds
 
 `DELETE /v1/algorithms/{algorithmId}/builds/{buildId}` deletes the build, its artifact, its log, and every backtest that ran it, and answers `204`.
-It fails with `409 state_conflict` while the build is `queued` or `building`, or if any bot still pins it.
-Backtests that reference the build are never a reason to refuse deletion: they are deleted along with it (see [Backtesting](#backtesting)).
+It fails with `409 state_conflict` while the build is `queued` or `building`, or if any bot still pins it; backtests never block deletion, they go with the build.
 
-A deleted build and its backtests no longer exist: the build detail, log, and strategies endpoints answer `404 not_found`, and each of the build's backtests answers `404 not_found` on its status, results, and export endpoints, with its stream channel closed.
-The deleted build cannot be used again because new backtests and bots require a `ready` build.
+A deleted build is gone: its detail, log, and strategies endpoints answer `404 not_found`, as do the status, results, and export endpoints of each of its backtests (see [Backtesting](#backtesting)).
+It cannot be used again, because bots and backtests require a `ready` build.
 
 ## Bots and runs
 
@@ -531,7 +527,7 @@ The deleted build cannot be used again because new backtests and bots require a 
 A **bot** is a user's persistent trading configuration: which compiled strategy runs, against which exchange accounts, and on what schedule.
 A **run** is one execution of a bot.
 
-Scheduling works by materializing runs: every due schedule tick exists as a run record with its own state, error, and log, so history is inspectable and retries are explicit.
+Scheduling works by materializing runs: every due tick becomes a run record with its own state, error, and log, so history is inspectable and retries are explicit.
 
 ### Bot lifecycle
 
@@ -676,12 +672,12 @@ Run lists accept `botId`, `state`, `from`, and `to`, and include the `streamSequ
 `buildId` is the build the run actually executed.
 Skipped runs have no `buildId` and carry `skipReason`.
 
-`error.kind` tells the front-end "fix your bot" from "platform problem", and `error.code` says exactly what happened:
+`error.kind` separates bot problems from platform problems, and `error.code` says exactly what happened:
 
-| `error.kind` | Codes                                                                           |
-|--------------|---------------------------------------------------------------------------------|
+| `error.kind` | Codes                                                     |
+|--------------|-----------------------------------------------------------|
 | `client`     | `invalid_context`, `invalid_portfolio`, `invalid_request` |
-| `platform`   | `timeout`, `panic`, `resource_limit`, `internal`                                |
+| `platform`   | `timeout`, `panic`, `resource_limit`, `internal`          |
 
 Clients tolerate new codes and fall back on `kind`.
 
@@ -721,38 +717,40 @@ The response is `202`:
 
 ### Retention
 
-Runs and their logs are retained for 90 days after a run reaches a terminal state and are deleted afterwards; `skipped` runs are retained for 7 days.
+Runs and their logs are retained for 90 days after the run reaches a terminal state, and `skipped` runs for 7 days; after that they are deleted.
 A deleted run disappears from lists and answers `404 not_found`.
-Retention, together with the scheduled-runs quota, bounds the run store, because scheduling materializes one record per tick.
+Retention and the scheduled-runs quota together bound the run store, since scheduling materializes one record per tick.
 
 ## Backtesting
 
 ### Backtest model
 
-A **backtest** is an ad-hoc, resource-bounded experiment: it runs one strategy from one build many times over archived market data with simulated execution friction and a seeded random generator, streaming per-simulation results as they finish and finishing with a collated result set.
+A **backtest** is an ad-hoc, resource-bounded experiment: it runs one strategy from one build many times over archived market data, with simulated execution friction and a seeded random generator.
+Results stream per simulation as they finish, and the finished set is collated at the end.
 Backtests never touch live exchanges or real balances.
-A backtest cannot be deleted directly, and it is always associated with the build it ran: deleting that build deletes the backtest with it.
 
 ### Backtest lifecycle
 
-| State       | Meaning                                                                        |
-|-------------|--------------------------------------------------------------------------------|
-| `queued`    | Accepted, waiting for a worker                                                 |
-| `running`   | Simulations executing; partial results may be streaming                        |
-| `completed` | All simulations finished; final results available                              |
-| `failed`    | Rejected or aborted; `error` carries details. Results finished so far are kept |
-| `canceled`  | Canceled by the owner. Results finished so far are kept                        |
+| State       | Meaning                                                 |
+|-------------|---------------------------------------------------------|
+| `queued`    | Accepted, waiting for a worker                          |
+| `running`   | Simulations executing; partial results may be streaming |
+| `completed` | All simulations finished; final results available       |
+| `failed`    | Rejected or aborted; `error` carries details            |
+| `canceled`  | Canceled by the owner                                   |
+
+Results finished before a `failed` or `canceled` end are kept.
 
 ### Backtest endpoints
 
-| Method   | Path                                        | Scope    | Description                                             |
-|----------|---------------------------------------------|----------|---------------------------------------------------------|
-| `POST`   | `/v1/backtests`                             | `manage` | Create and start a backtest                             |
-| `GET`    | `/v1/backtests`                             | `read`   | List the owner's backtests, filterable by `state`       |
-| `GET`    | `/v1/backtests/{backtestId}`                | `read`   | Backtest status                                         |
-| `POST`   | `/v1/backtests/{backtestId}/cancel`         | `manage` | Cancel a queued or running backtest                     |
-| `GET`    | `/v1/backtests/{backtestId}/results`        | `read`   | Results finished so far, paginated                      |
-| `GET`    | `/v1/backtests/{backtestId}/results/export` | `read`   | Pre-signed download of all results (finished backtests) |
+| Method | Path                                        | Scope    | Description                                             |
+|--------|---------------------------------------------|----------|---------------------------------------------------------|
+| `POST` | `/v1/backtests`                             | `manage` | Create and start a backtest                             |
+| `GET`  | `/v1/backtests`                             | `read`   | List the owner's backtests, filterable by `state`       |
+| `GET`  | `/v1/backtests/{backtestId}`                | `read`   | Backtest status                                         |
+| `POST` | `/v1/backtests/{backtestId}/cancel`         | `manage` | Cancel a queued or running backtest                     |
+| `GET`  | `/v1/backtests/{backtestId}/results`        | `read`   | Results finished so far, paginated                      |
+| `GET`  | `/v1/backtests/{backtestId}/results/export` | `read`   | Pre-signed download of all results (finished backtests) |
 
 Live results arrive on the `backtests.{backtestId}` stream channel; see [Streaming](#streaming).
 
@@ -771,10 +769,12 @@ Live results arrive on the `backtests.{backtestId}` stream channel; see [Streami
 
 The response is `202` with `{ "backtestId": "backtest_31a", "state": "queued" }`.
 
-| Field                                    | Required | Meaning                                                                                               |
-|------------------------------------------|----------|-------------------------------------------------------------------------------------------------------|
-| `algorithmId`, `buildId`, `strategyName` | yes      | The strategy to simulate. `buildId` is a concrete build.                                              |
-| `seed`                                   | no       | Integer seed. If omitted, the server picks one and returns it in the status, so runs are reproducible |
+| Field                                    | Required | Meaning                                                  |
+|------------------------------------------|----------|----------------------------------------------------------|
+| `algorithmId`, `buildId`, `strategyName` | yes      | The strategy to simulate. `buildId` is a concrete build. |
+| `seed`                                   | no       | Integer seed; if omitted, the server picks one           |
+
+The seed is always returned in the status, so a backtest can be repeated exactly.
 
 Validation fails fast with `validation_failed`:
 
@@ -806,10 +806,10 @@ No more than the per-owner concurrent backtest limit may be `queued` or `running
 ### Results and streaming
 
 Per-simulation results are JSON objects produced by the strategy's simulation runtime.
-Each finished simulation is assigned the next `sequence` of the backtest, and it is delivered twice: incrementally on the stream, and through the paginated results endpoint.
+Each finished simulation takes the next `sequence` of the backtest and is delivered both on the stream and through the paginated results endpoint.
 
 `GET /v1/backtests/{backtestId}/results` is readable in every state and returns the results finished so far.
-This is the one list that is oldest first, in `sequence` order, so `cursor` pages forward through a growing set:
+This is the only list that runs oldest first, in `sequence` order, so `cursor` pages forward through a growing set:
 
 ```json
 {
@@ -822,16 +822,16 @@ This is the one list that is oldest first, in `sequence` order, so `cursor` page
 }
 ```
 
-`complete` is `true` only when the backtest is `completed`; for `failed` and `canceled` backtests the results finished so far stay readable and `complete` stays `false`.
+`complete` is `true` only when the backtest is `completed`; for `failed` and `canceled` backtests the results stay readable and `complete` stays `false`.
 The full set can be large, so clients page through it or use the export instead.
+A result larger than the per-simulation limit fails the backtest with `error.code: "result_too_large"`; results finished before it stay readable.
 
 `GET .../results/export` returns `200` with `{ "url": "https://...", "expiresAt": "...", "format": "ndjson" }`, a short-lived pre-signed URL of all results as newline-delimited JSON.
 It fails with `409 state_conflict` until the backtest is terminal.
 
 On the `backtests.{backtestId}` channel, frames are `{ "channel": "backtests.backtest_31a", "sequence": 7, "simulation": 13, "result": { ... } }`, and the frame's `sequence` equals the item's `sequence` in the results endpoint.
-Unlike other channels, this one replays: a subscribe without `lastSequence` receives the stored frames from the start, and one with `lastSequence` receives the stored frames after it.
-When the backtest reaches a terminal state the server sends one last frame, `{ "channel": "...", "sequence": 101, "complete": true, "state": "completed" }`, which carries no result, and no frames follow it.
-A client that subscribes after that point still receives the stored frames and the final frame.
+When the backtest reaches a terminal state the server sends one final frame, `{ "channel": "...", "sequence": 101, "complete": true, "state": "completed" }`, which carries no result; no frames follow it.
+This channel replays from the start (see [Streaming](#streaming)), so a client that subscribes afterwards still receives every result and the final frame.
 On `completed` the client can fetch the collated set over REST.
 
 ### Canceling
@@ -839,5 +839,8 @@ On `completed` the client can fetch the collated set over REST.
 `POST /v1/backtests/{backtestId}/cancel` cancels a queued or running backtest and returns `202` with the status representation (state `canceled` once workers have stopped).
 On a terminal backtest it is idempotent and returns the status unchanged with `200`.
 
-A simulation result larger than the per-simulation limit fails the backtest with `error.code: "result_too_large"`; results finished before that remain readable.
-Backtests cannot be deleted on their own: once a backtest has run it stays associated with its build, and deleting that build deletes the backtest and its results with it, after which its status, results, and export endpoints answer `404 not_found`.
+### Deletion
+
+Backtests have no delete endpoint.
+Each stays attached to the build it ran, and deleting that build deletes the backtest, its results, and its stored stream frames with it.
+Afterwards its status, results, and export endpoints answer `404 not_found`, and its channel is closed.
