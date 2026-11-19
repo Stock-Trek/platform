@@ -1,6 +1,5 @@
 use crate::accounts::{AccountApi, AccountService, AccountStore};
 use crate::algorithms::{AlgorithmApi, BuildStore};
-use crate::api::HealthRoute;
 use crate::api::cors::Cors;
 use crate::api::{ApiRequest, IdempotencyStore, Problem, RequestHandler};
 use crate::auth::{SessionApi, SessionService, SessionStore};
@@ -130,9 +129,6 @@ impl RequestHandler for FrontEndApi {
         request: Request<hyper::body::Incoming>,
         peer: SocketAddr,
     ) -> Response<Full<Bytes>> {
-        if HealthRoute::matches(request.uri().path()) {
-            return HealthRoute::dispatch(request.method());
-        }
         let header_request_id = Self::header_request_id(request.headers());
         let request_id = header_request_id
             .clone()

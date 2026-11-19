@@ -42,8 +42,7 @@ impl Fixture {
             bots: bots.clone(),
             backtests: Arc::new(BacktestStore::new(Arc::clone(&registry))),
         }));
-        let algorithm =
-            builds.register_algorithm(Self::OWNER, "momentum", "acme/momentum", "heads/main");
+        let algorithm = builds.register_algorithm(Self::OWNER, "momentum", "acme/momentum", "main");
         let build = builds
             .create_build(
                 Self::OWNER,

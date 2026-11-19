@@ -28,8 +28,7 @@ impl Fixture {
     fn new() -> Self {
         let registry = Arc::new(ChannelRegistry::new());
         let builds = Arc::new(BuildStore::new(Arc::clone(&registry)));
-        let algorithm =
-            builds.register_algorithm(Self::OWNER, "momentum", "acme/momentum", "heads/main");
+        let algorithm = builds.register_algorithm(Self::OWNER, "momentum", "acme/momentum", "main");
         let build = builds
             .create_build(
                 Self::OWNER,

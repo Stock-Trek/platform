@@ -27,6 +27,7 @@ It is cleared when the service begins shutting down.
 | Service | Service-specific variable prefix |
 | --- | --- |
 | Auth service | `AUTH_SERVICE` |
+| Front-end API | `FRONT_END_API` |
 | Portfolio service | `PORTFOLIO_SERVICE` |
 | Ingester | `INGESTER` |
 | Backfiller | `BACKFILLER` |
