@@ -56,6 +56,7 @@ impl FrontEndApi {
         let accounts = Arc::new(AccountService::new(
             Arc::clone(&accounts_store),
             Arc::clone(&bots),
+            Arc::clone(&limits),
         ));
         let runs = Arc::new(RunService::new(Arc::clone(&runs_store)));
         let backtests = Arc::new(BacktestService::new(
@@ -138,7 +139,7 @@ impl RequestHandler for FrontEndApi {
             Err(problem) => return problem.response(&request_id),
         };
         let outcome = match *parsed.method() {
-            Method::OPTIONS => Ok(self.cors.preflight(&parsed)),
+            Method::OPTIONS => Ok(self.cors.preflight(&parsed, &request_id)),
             _ => self.route(&parsed),
         };
         let mut response = match outcome {

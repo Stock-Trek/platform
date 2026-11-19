@@ -124,6 +124,7 @@ fn account_summaries_never_return_credential_metadata() {
 struct ServiceFixture {
     service: AccountService,
     store: Arc<AccountStore>,
+    limits: Arc<LimitService>,
     auth: AuthContext,
 }
 
@@ -135,21 +136,24 @@ impl ServiceFixture {
     fn new() -> Self {
         let registry = || Arc::new(ChannelRegistry::new());
         let store = Arc::new(AccountStore::new());
-        let bots = Arc::new(BotService::new(
-            Arc::new(BotStore::new()),
+        let bots = Arc::new(BotStore::new());
+        let limits = Arc::new(LimitService::new(LimitSources {
+            accounts: store.clone(),
+            builds: Arc::new(BuildStore::new(registry())),
+            bots: bots.clone(),
+            backtests: Arc::new(BacktestStore::new(registry())),
+        }));
+        let bot_service = Arc::new(BotService::new(
+            bots,
             Arc::new(RunStore::new(registry())),
             store.clone(),
             Arc::new(BuildStore::new(registry())),
-            Arc::new(LimitService::new(LimitSources {
-                accounts: store.clone(),
-                builds: Arc::new(BuildStore::new(registry())),
-                bots: Arc::new(BotStore::new()),
-                backtests: Arc::new(BacktestStore::new(registry())),
-            })),
+            limits.clone(),
         ));
         Self {
-            service: AccountService::new(store.clone(), bots),
+            service: AccountService::new(store.clone(), bot_service, limits.clone()),
             store,
+            limits,
             auth: AuthContext::new(Self::OWNER, "token", vec![Scope::Read, Scope::Manage]),
         }
     }
@@ -173,6 +177,35 @@ impl ServiceFixture {
             .connector
             .state
     }
+
+    fn link_with_label(&self, label: &str) -> Result<AccountSummary, crate::api::Problem> {
+        let request = LinkAccountRequest {
+            cex_id: CexId::Binance,
+            label: label.to_string(),
+            api_key: Self::VALID_KEY.to_string(),
+            api_secret: Self::VALID_SECRET.to_string(),
+        };
+        self.service.link(&self.auth, &request, Utc::now())
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn linking_past_the_account_quota_fails_with_quota_exceeded() {
+    let fixture = ServiceFixture::new();
+    for index in 0..20 {
+        let label = format!("account-{index}");
+        fixture
+            .link_with_label(&label)
+            .unwrap_or_else(|_| panic!("link {label} must succeed"));
+    }
+    let problem = fixture
+        .link_with_label("one-too-many")
+        .expect_err("the linked-accounts quota holds");
+    assert_eq!(problem.status(), hyper::StatusCode::FORBIDDEN);
+    assert_eq!(fixture.limits.effective(ServiceFixture::OWNER, Utc::now())
+        .get(crate::limits::QUOTA_LINKED_ACCOUNTS)
+        .map(|entry| entry.used),
+        Some(20));
 }
 
 #[tokio::test(start_paused = true)]

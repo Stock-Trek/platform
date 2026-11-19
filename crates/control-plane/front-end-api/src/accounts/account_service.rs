@@ -5,6 +5,7 @@ use crate::accounts::{AccountStore, Credentials, LinkConflict, PortfolioSnapshot
 use crate::api::Problem;
 use crate::auth::AuthContext;
 use crate::bots::{BotService, BotState};
+use crate::limits::{LimitService, QUOTA_LINKED_ACCOUNTS};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 use std::time::Duration;
@@ -14,11 +15,20 @@ const CONNECTOR_DELAY: Duration = Duration::from_millis(100);
 pub struct AccountService {
     accounts: Arc<AccountStore>,
     bots: Arc<BotService>,
+    limits: Arc<LimitService>,
 }
 
 impl AccountService {
-    pub fn new(accounts: Arc<AccountStore>, bots: Arc<BotService>) -> Self {
-        Self { accounts, bots }
+    pub fn new(
+        accounts: Arc<AccountStore>,
+        bots: Arc<BotService>,
+        limits: Arc<LimitService>,
+    ) -> Self {
+        Self {
+            accounts,
+            bots,
+            limits,
+        }
     }
 
     pub fn link(
@@ -27,6 +37,8 @@ impl AccountService {
         request: &LinkAccountRequest,
         now: DateTime<Utc>,
     ) -> Result<AccountSummary, Problem> {
+        self.limits
+            .check(auth.owner(), QUOTA_LINKED_ACCOUNTS, 1, now)?;
         let credentials = Credentials::new(&request.api_key, &request.api_secret);
         let summary = self
             .accounts

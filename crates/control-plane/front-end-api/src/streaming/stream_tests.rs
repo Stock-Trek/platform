@@ -81,7 +81,7 @@ impl ChannelFixture {
             Arc::clone(&runs_store),
             accounts.clone(),
             builds.clone(),
-            limits,
+            limits.clone(),
         ));
         let account = accounts
             .link(
@@ -137,7 +137,11 @@ impl ChannelFixture {
         );
         let service = StreamService::new(
             Arc::clone(&registry),
-            Arc::new(AccountService::new(accounts.clone(), bot_service)),
+            Arc::new(AccountService::new(
+                accounts.clone(),
+                bot_service,
+                limits.clone(),
+            )),
             builds,
             Arc::clone(&bots),
             backtests,

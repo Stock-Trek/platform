@@ -107,7 +107,7 @@ impl BacktestService {
             .backtests
             .results(auth.owner(), backtest_id, query.offset(), query.limit())
             .ok_or_else(|| Problem::not_found("backtest does not exist"))?;
-        let complete = status.state == BacktestState::Completed && !has_more;
+        let complete = status.state == BacktestState::Completed;
         Ok(BacktestResultsPage {
             page: Page {
                 data,

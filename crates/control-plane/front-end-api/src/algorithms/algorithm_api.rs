@@ -78,7 +78,11 @@ impl AlgorithmApi {
             .builds
             .archive_algorithm(auth.owner(), algorithm_id)
             .ok_or_else(|| Problem::not_found("algorithm does not exist"))?;
-        Ok(Respond::json(StatusCode::OK, &algorithm))
+        Ok(Respond::json_with_etag(
+            StatusCode::OK,
+            &algorithm,
+            algorithm.version,
+        ))
     }
 
     fn algorithm(
