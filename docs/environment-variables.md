@@ -29,7 +29,7 @@ When a variable is only required in some configurations, the condition is stated
 | `BUILD_AGENT_TIMEOUT_SECS` | Build orchestrator, Build agent | Maximum time the build agent may spend on a build, in seconds. |
 | `DEADLINE_BUFFER_SECS` | Build orchestrator, Git webhook | Time reserved for cleanup before the Lambda invocation deadline, in seconds. |
 | `GITHUB_ENTERPRISE_ALLOWED_HOSTS` | Build orchestrator, Git webhook | Comma-separated allowlist of GitHub hosts for outbound HTTPS requests, with optional ports (for example `ghe.example.com` or `ghe.example.com:8443`). `github.com` is always allowed. |
-| `HEALTH_BIND_ADDRESS` | Auth service, Portfolio service, Ingester, Backfiller, Aggregator, Archiver, Compactor, Rebuilder | Socket address for the HTTP health listener. Each listed service also accepts `<SERVICE>_HEALTH_BIND_ADDRESS` (for example `AGGREGATOR_HEALTH_BIND_ADDRESS`), which takes precedence over this shared value. Startup fails when neither is set. |
+| `HEALTH_BIND_ADDRESS` | Auth service, Portfolio service, Front-end API, Ingester, Backfiller, Aggregator, Archiver, Compactor, Rebuilder | Socket address for the HTTP health listener. Each listed service also accepts `<SERVICE>_HEALTH_BIND_ADDRESS` (for example `AGGREGATOR_HEALTH_BIND_ADDRESS`), which takes precedence over this shared value. Startup fails when neither is set. |
 | `ICEBERG_CATALOG_URI` | Archiver, Compactor, Rebuilder; Aggregator for `checkpoint`/`archive` | Iceberg REST catalog URI using the `http` or `https` scheme. Required by the archiver, compactor, and rebuilder, and by the aggregator when `AGGREGATOR_REPLAY_START_POLICY` is `checkpoint` or `archive`, where archive recovery reads the compacted/raw Iceberg handoff. |
 | `ICEBERG_CATALOG_WAREHOUSE` | Archiver, Compactor, Rebuilder, Aggregator | Iceberg warehouse URI. Must use the `s3://` scheme. Required when `ICEBERG_CATALOG_URI` is configured. |
 | `ICEBERG_NAMESPACE` | Archiver, Compactor, Rebuilder, Aggregator | Iceberg namespace. Required when `ICEBERG_CATALOG_URI` is configured. |
@@ -377,6 +377,15 @@ No process-specific optional variables.
 No process-specific optional variables.
 
 ## Control plane
+
+### Front-end API
+
+#### Required
+
+| Variable | Description |
+| --- | --- |
+| `FRONT_END_API_ALLOWED_ORIGINS` | Comma-separated list of origins allowed by the CORS policy, for example `https://app.example.com`. Requests from other origins are rejected. |
+| `FRONT_END_API_BIND_ADDR` | Socket address on which the front-end API accepts requests. |
 
 ### Portfolio registry
 
