@@ -1,19 +1,13 @@
+use crate::algorithms::commit_resolution::CommitError;
 use crate::algorithms::{BuildState, BuildSummary, Strategy};
 use crate::api::Id;
 use crate::streaming::channel_registry::ChannelRegistry;
 use crate::streaming::stream_types::Frame;
 use chrono::{DateTime, Duration, Utc};
 use parking_lot::Mutex;
-use sha1::{Digest, Sha1};
 use std::sync::Arc;
 
 const LOG_TTL: Duration = Duration::hours(1);
-const FULL_COMMIT_LENGTH: usize = 40;
-
-#[derive(Debug)]
-pub enum CommitError {
-    Unresolved,
-}
 
 pub(super) struct BuildRow {
     pub(super) owner: String,
@@ -102,30 +96,7 @@ impl BuildStore {
             .iter_mut()
             .find(|row| row.summary.algorithm_id == algorithm_id)
             .ok_or(CommitError::Unresolved)?;
-        let full = match commit {
-            None => Self::head_commit(algorithm_id, git_ref),
-            Some(candidate) if candidate.len() == FULL_COMMIT_LENGTH => candidate.to_string(),
-            Some(candidate) => {
-                let matches: Vec<&String> = row
-                    .known_commits
-                    .iter()
-                    .filter(|full| full.starts_with(candidate))
-                    .collect();
-                match matches.as_slice() {
-                    [full] => (*full).clone(),
-                    _ => return Err(CommitError::Unresolved),
-                }
-            }
-        };
-        if !row.known_commits.contains(&full) {
-            row.known_commits.push(full.clone());
-        }
-        Ok(full)
-    }
-
-    fn head_commit(algorithm_id: &str, git_ref: &str) -> String {
-        let digest = Sha1::digest(format!("{algorithm_id} {git_ref}").as_bytes());
-        digest.iter().map(|byte| format!("{byte:02x}")).collect()
+        row.known_commits.resolve(commit, algorithm_id, git_ref)
     }
 
     fn find_build(
