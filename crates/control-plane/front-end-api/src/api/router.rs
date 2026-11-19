@@ -165,8 +165,4 @@ impl FrontEndApi {
             .filter(|value| !value.is_empty())
             .map(str::to_string)
     }
-
-    pub fn apply_retention(&self, now: chrono::DateTime<chrono::Utc>) -> usize {
-        self.runs.apply_retention(now)
-    }
 }

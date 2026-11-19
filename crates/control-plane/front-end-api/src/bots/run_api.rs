@@ -77,10 +77,6 @@ impl RunApi {
         Ok(Respond::json(StatusCode::OK, &log))
     }
 
-    pub fn apply_retention(&self, now: chrono::DateTime<chrono::Utc>) -> usize {
-        self.runs.apply_retention(now)
-    }
-
     fn filter(request: &ApiRequest) -> Result<RunFilter, Problem> {
         Ok(RunFilter {
             bot_id: request.query("botId").map(str::to_string),
