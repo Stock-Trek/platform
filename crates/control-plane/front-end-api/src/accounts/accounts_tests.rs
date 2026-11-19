@@ -202,10 +202,14 @@ async fn linking_past_the_account_quota_fails_with_quota_exceeded() {
         .link_with_label("one-too-many")
         .expect_err("the linked-accounts quota holds");
     assert_eq!(problem.status(), hyper::StatusCode::FORBIDDEN);
-    assert_eq!(fixture.limits.effective(ServiceFixture::OWNER, Utc::now())
-        .get(crate::limits::QUOTA_LINKED_ACCOUNTS)
-        .map(|entry| entry.used),
-        Some(20));
+    assert_eq!(
+        fixture
+            .limits
+            .effective(ServiceFixture::OWNER, Utc::now())
+            .get(crate::limits::QUOTA_LINKED_ACCOUNTS)
+            .map(|entry| entry.used),
+        Some(20)
+    );
 }
 
 #[tokio::test(start_paused = true)]

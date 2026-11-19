@@ -426,13 +426,17 @@ fn deleting_the_latest_ready_build_repoints_latest_ready_build_id() {
     let first = fixture.trigger_ready_build("heads/one");
     let second = fixture.trigger_ready_build("heads/two");
     assert_eq!(fixture.latest_ready().as_deref(), Some(second.as_str()));
-    assert!(fixture
-        .builds
-        .delete_build(Fixture::OWNER, &fixture.algorithm_id, &second));
+    assert!(
+        fixture
+            .builds
+            .delete_build(Fixture::OWNER, &fixture.algorithm_id, &second)
+    );
     assert_eq!(fixture.latest_ready().as_deref(), Some(first.as_str()));
-    assert!(fixture
-        .builds
-        .delete_build(Fixture::OWNER, &fixture.algorithm_id, &first));
+    assert!(
+        fixture
+            .builds
+            .delete_build(Fixture::OWNER, &fixture.algorithm_id, &first)
+    );
     assert_eq!(
         fixture.latest_ready().as_deref(),
         Some(fixture.initial_build_id.as_str())
@@ -458,6 +462,8 @@ fn archiving_an_algorithm_returns_its_version_as_an_etag() {
         .to_str()
         .expect("ascii etag")
         .to_string();
-    let version = Fixture::json(&response)["version"].as_i64().expect("version");
+    let version = Fixture::json(&response)["version"]
+        .as_i64()
+        .expect("version");
     assert_eq!(etag, format!("\"{version}\""));
 }

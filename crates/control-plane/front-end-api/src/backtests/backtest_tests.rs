@@ -1,6 +1,6 @@
 use super::{
-    BacktestProgress, BacktestResultsPage, BacktestState, BacktestStatus, BacktestStore,
-    BacktestService,
+    BacktestProgress, BacktestResultsPage, BacktestService, BacktestState, BacktestStatus,
+    BacktestStore,
 };
 use crate::accounts::AccountStore;
 use crate::algorithms::BuildStore;
