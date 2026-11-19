@@ -1,6 +1,7 @@
 use crate::api::Problem;
 use crate::api::timestamp::milliseconds;
 use chrono::{DateTime, Utc};
+use platform_exchange_types::encrypt::EncryptionAlgorithm;
 use serde::{Deserialize, Serialize};
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -67,6 +68,7 @@ pub struct AccountSummary {
     pub account_id: String,
     pub cex_id: CexId,
     pub label: String,
+    pub encryption_algorithm: EncryptionAlgorithm,
     pub active: bool,
     pub connector: Connector,
     pub version: u64,
@@ -87,6 +89,7 @@ pub struct LinkAccountRequest {
     pub label: String,
     pub api_key: String,
     pub api_secret: String,
+    pub encryption_algorithm: EncryptionAlgorithm,
 }
 
 impl LinkAccountRequest {
@@ -107,6 +110,7 @@ impl LinkAccountRequest {
 pub struct CredentialsRequest {
     pub api_key: String,
     pub api_secret: String,
+    pub encryption_algorithm: EncryptionAlgorithm,
 }
 
 #[derive(Debug, Serialize)]

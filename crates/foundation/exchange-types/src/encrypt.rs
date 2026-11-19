@@ -7,11 +7,13 @@ use rsa::{
     pkcs8::DecodePrivateKey, sha2::Sha256,
 };
 use secrecy::{ExposeSecret, SecretSlice};
+use serde::{Deserialize, Serialize};
 use sha2::Sha512;
 use strum::{Display, EnumString};
 
-#[derive(Debug, Display, EnumString, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Display, EnumString, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[strum(serialize_all = "snake_case")]
+#[serde(rename_all = "snake_case")]
 pub enum EncryptionAlgorithm {
     Null,
     EcdsaP256,

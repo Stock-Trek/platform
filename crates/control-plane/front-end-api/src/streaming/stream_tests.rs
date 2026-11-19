@@ -4,7 +4,7 @@ use super::stream_service::Subscription;
 use super::stream_types::Frame;
 use super::ticket_store::TicketStore;
 use super::ws::Connection;
-use crate::accounts::{AccountService, AccountStore};
+use crate::accounts::{AccountService, AccountStore, Credentials};
 use crate::algorithms::BuildStore;
 use crate::auth::SessionStore;
 use crate::backtests::{BacktestProgress, BacktestState, BacktestStatus, BacktestStore};
@@ -12,6 +12,7 @@ use crate::bots::bot_types::{Bot, BotState, Schedule};
 use crate::bots::{BotService, BotStore, RunStore};
 use crate::limits::{LimitService, LimitSources};
 use chrono::{Duration, Utc};
+use platform_exchange_types::encrypt::EncryptionAlgorithm;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_websockets::Message;
@@ -88,8 +89,11 @@ impl ChannelFixture {
                 Self::OWNER,
                 stock_trek_types::cex::cex_id::CexId::Binance,
                 "main",
-                "0123456789abcdef",
-                "fedcba9876543210",
+                Credentials::new(
+                    "0123456789abcdef",
+                    "fedcba9876543210",
+                    EncryptionAlgorithm::HmacSha256,
+                ),
                 Utc::now(),
             )
             .expect("link");

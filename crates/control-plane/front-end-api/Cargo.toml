@@ -17,6 +17,7 @@ hyper-util = { workspace = true }
 parking_lot = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true, features = ["http"] }
+platform-exchange-types = { workspace = true }
 platform-runtime = { workspace = true }
 platform-types = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
