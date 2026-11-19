@@ -13,13 +13,13 @@ use crate::limits::{LimitService, LimitSources};
 use crate::streaming::ChannelRegistry;
 use chrono::{DateTime, Duration, Utc};
 use hyper::{HeaderMap, Method, Uri, body::Bytes};
-use platform_exchange_types::encrypt::EncryptionAlgorithm;
 use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
 
 struct Fixture {
     service: BotService,
     accounts: Arc<AccountStore>,
+    builds: Arc<BuildStore>,
     auth: AuthContext,
     algorithm_id: String,
     build_id: String,
@@ -67,17 +67,14 @@ impl Fixture {
                 Self::OWNER,
                 CexId::Binance,
                 "main",
-                Credentials::new(
-                    "0123456789abcdef",
-                    "fedcba9876543210",
-                    EncryptionAlgorithm::HmacSha256,
-                ),
+                Credentials::new("0123456789abcdef", "fedcba9876543210"),
                 Utc::now(),
             )
             .expect("link");
         Self {
-            service: BotService::new(bots, runs, accounts.clone(), builds, limits),
+            service: BotService::new(bots, runs, accounts.clone(), builds.clone(), limits),
             accounts,
+            builds,
             auth: AuthContext::new(
                 Self::OWNER,
                 "token",
@@ -295,4 +292,96 @@ fn active_runs_are_retained_indefinitely() {
         retained_run("run_pending", RunState::Pending, None),
     );
     assert!(runs.get(Fixture::OWNER, "run_pending").is_some());
+}
+
+#[test]
+fn creating_a_bot_requires_an_active_algorithm() {
+    let fixture = Fixture::new();
+    fixture
+        .builds
+        .archive_algorithm(Fixture::OWNER, &fixture.algorithm_id)
+        .expect("archive algorithm");
+    let request = CreateBotRequest {
+        name: "momentum".to_string(),
+        algorithm_id: fixture.algorithm_id.clone(),
+        build_id: fixture.build_id.clone(),
+        strategy_name: Fixture::STRATEGY.to_string(),
+        account_ids: vec![fixture.account_id.clone()],
+        schedule: Schedule::Interval {
+            every_seconds: 60,
+            misfire_grace_seconds: None,
+        },
+    };
+    let problem = fixture
+        .service
+        .create(&fixture.auth, &request, Utc::now())
+        .expect_err("creation must fail");
+    assert_eq!(problem.status(), hyper::StatusCode::BAD_REQUEST);
+}
+
+#[test]
+fn a_bot_of_an_archived_algorithm_keeps_accepting_patches() {
+    let fixture = Fixture::new();
+    let bot = fixture.create();
+    fixture
+        .builds
+        .archive_algorithm(Fixture::OWNER, &fixture.algorithm_id)
+        .expect("archive algorithm");
+    let patched = fixture
+        .service
+        .patch(
+            &fixture.auth,
+            &bot.bot_id,
+            Some(bot.version),
+            &PatchBotRequest {
+                name: Some("renamed".to_string()),
+                build_id: None,
+                strategy_name: None,
+                account_ids: None,
+                schedule: None,
+            },
+            Utc::now(),
+        )
+        .expect("patch");
+    assert_eq!(patched.name, "renamed");
+    assert_eq!(patched.version, bot.version + 1);
+}
+
+#[test]
+fn an_enabled_bots_schedule_change_counts_against_the_quota() {
+    let fixture = Fixture::new();
+    let bot = fixture.create();
+    let enabled = fixture
+        .service
+        .enable(&fixture.auth, &bot.bot_id, Some(bot.version), Utc::now())
+        .expect("enable");
+    let patched = fixture
+        .service
+        .patch(
+            &fixture.auth,
+            &bot.bot_id,
+            Some(enabled.version),
+            &PatchBotRequest {
+                name: None,
+                build_id: None,
+                strategy_name: None,
+                account_ids: None,
+                schedule: Some(Schedule::Interval {
+                    every_seconds: 10,
+                    misfire_grace_seconds: None,
+                }),
+            },
+            Utc::now(),
+        )
+        .expect("denser schedule within the quota");
+    match &patched.schedule {
+        Schedule::Interval {
+            every_seconds,
+            misfire_grace_seconds,
+        } => {
+            assert_eq!(*every_seconds, 10);
+            assert_eq!(*misfire_grace_seconds, Some(10));
+        }
+        Schedule::Cron { .. } => panic!("interval schedule expected"),
+    }
 }

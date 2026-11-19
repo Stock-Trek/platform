@@ -47,7 +47,7 @@ impl BotService {
             schedule.runs_per_day(),
             now,
         )?;
-        self.validate_configuration(
+        self.validate_creation(
             owner,
             &request.algorithm_id,
             &request.build_id,
@@ -126,6 +126,15 @@ impl BotService {
             Some(schedule) => schedule.clone().validated()?,
             None => bot.schedule.clone(),
         };
+        if bot.state == BotState::Enabled && request.schedule.is_some() {
+            self.limits.check_replacement(
+                owner,
+                QUOTA_SCHEDULED_RUNS_PER_DAY,
+                bot.schedule.runs_per_day(),
+                schedule.runs_per_day(),
+                now,
+            )?;
+        }
         self.validate_configuration(
             owner,
             &bot.algorithm_id,

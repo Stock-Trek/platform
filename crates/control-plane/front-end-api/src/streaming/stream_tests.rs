@@ -12,7 +12,6 @@ use crate::bots::bot_types::{Bot, BotState, Schedule};
 use crate::bots::{BotService, BotStore, RunStore};
 use crate::limits::{LimitService, LimitSources};
 use chrono::{Duration, Utc};
-use platform_exchange_types::encrypt::EncryptionAlgorithm;
 use std::sync::Arc;
 use tokio::sync::mpsc;
 use tokio_websockets::Message;
@@ -89,11 +88,7 @@ impl ChannelFixture {
                 Self::OWNER,
                 stock_trek_types::cex::cex_id::CexId::Binance,
                 "main",
-                Credentials::new(
-                    "0123456789abcdef",
-                    "fedcba9876543210",
-                    EncryptionAlgorithm::HmacSha256,
-                ),
+                Credentials::new("0123456789abcdef", "fedcba9876543210"),
                 Utc::now(),
             )
             .expect("link");

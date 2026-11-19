@@ -139,7 +139,20 @@ impl BacktestStore {
     }
 
     pub fn delete_for_build(&self, build_id: &str) {
-        self.rows.lock().retain(|row| row.build_id != build_id);
+        let mut rows = self.rows.lock();
+        let mut removed = Vec::new();
+        rows.retain(|row| {
+            if row.build_id == build_id {
+                removed.push(row.status.backtest_id.clone());
+                false
+            } else {
+                true
+            }
+        });
+        drop(rows);
+        for backtest_id in removed {
+            self.registry.forget(&Self::channel(&backtest_id));
+        }
     }
 
     fn channel(backtest_id: &str) -> String {

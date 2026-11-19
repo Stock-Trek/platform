@@ -65,3 +65,51 @@ fn limits_are_scoped_per_owner() {
         Some(0)
     );
 }
+
+#[test]
+fn a_replacement_frees_the_quota_it_replaces() {
+    let bots = BotStore::new();
+    for bot_id in ["bot_1", "bot_2"] {
+        bots.insert(
+            "user_7gk2",
+            crate::bots::Bot {
+                bot_id: bot_id.to_string(),
+                name: bot_id.to_string(),
+                algorithm_id: "algorithm_1".to_string(),
+                build_id: "build_1".to_string(),
+                strategy_name: "momentum_v2".to_string(),
+                account_ids: vec!["account_1".to_string()],
+                schedule: crate::bots::bot_types::Schedule::Interval {
+                    every_seconds: 10,
+                    misfire_grace_seconds: None,
+                },
+                state: crate::bots::BotState::Enabled,
+                active_run_id: None,
+                version: 1,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+                stream_sequence: 0,
+            },
+        );
+    }
+    let registry = Arc::new(ChannelRegistry::new());
+    let service = LimitService::new(LimitSources {
+        accounts: AccountStore::new().into(),
+        builds: BuildStore::new(registry.clone()).into(),
+        bots: bots.into(),
+        backtests: BacktestStore::new(registry).into(),
+    });
+    let now = Utc::now();
+    service
+        .check("user_7gk2", QUOTA_SCHEDULED_RUNS_PER_DAY, 10_000, now)
+        .expect_err("usage above the limit fails");
+    service
+        .check_replacement(
+            "user_7gk2",
+            QUOTA_SCHEDULED_RUNS_PER_DAY,
+            8_640,
+            10_000,
+            now,
+        )
+        .expect("replacing a bot's own contribution frees room");
+}

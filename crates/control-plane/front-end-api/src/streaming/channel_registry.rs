@@ -42,7 +42,6 @@ impl ChannelRegistry {
         }
     }
 
-    #[allow(dead_code)]
     pub fn publish(&self, channel: &str, frame: Frame) -> u64 {
         let mut channels = self.channels.lock();
         let state = channels
@@ -127,7 +126,15 @@ impl ChannelRegistry {
         }
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
+    pub fn frames(&self, channel: &str) -> Vec<Frame> {
+        self.channels
+            .lock()
+            .get(channel)
+            .map(|state| state.frames.iter().cloned().collect())
+            .unwrap_or_default()
+    }
+
     pub fn forget(&self, channel: &str) {
         self.channels.lock().remove(channel);
     }

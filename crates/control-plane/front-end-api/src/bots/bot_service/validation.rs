@@ -4,7 +4,7 @@ use crate::api::Problem;
 use crate::bots::{Bot, BotState};
 
 impl BotService {
-    pub(super) fn validate_configuration(
+    pub(super) fn validate_creation(
         &self,
         owner: &str,
         algorithm_id: &str,
@@ -21,6 +21,17 @@ impl BotService {
                 "algorithmId must reference an active algorithm",
             ));
         }
+        self.validate_configuration(owner, algorithm_id, build_id, strategy_name, account_ids)
+    }
+
+    pub(super) fn validate_configuration(
+        &self,
+        owner: &str,
+        algorithm_id: &str,
+        build_id: &str,
+        strategy_name: &str,
+        account_ids: &[String],
+    ) -> Result<(), Problem> {
         if self
             .builds
             .ready_build(owner, algorithm_id, build_id)

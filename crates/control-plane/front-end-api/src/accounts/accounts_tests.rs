@@ -10,7 +10,6 @@ use crate::bots::{BotService, BotStore, RunStore};
 use crate::limits::{LimitService, LimitSources};
 use crate::streaming::ChannelRegistry;
 use chrono::{TimeZone, Utc};
-use platform_exchange_types::encrypt::EncryptionAlgorithm;
 use serde_json::json;
 use std::sync::Arc;
 use stock_trek_types::cex::{
@@ -29,8 +28,7 @@ impl Fixture {
             "cexId": cex_id,
             "label": "main",
             "apiKey": "0123456789abcdef",
-            "apiSecret": "fedcba9876543210",
-            "encryptionAlgorithm": "hmac_sha256"
+            "apiSecret": "fedcba9876543210"
         }))
     }
 
@@ -51,7 +49,6 @@ impl Fixture {
             account_id: "account_3kq".to_string(),
             cex_id: CexId::Binance,
             label: "main".to_string(),
-            encryption_algorithm: EncryptionAlgorithm::HmacSha256,
             active: true,
             connector: crate::accounts::Connector::connected(Self::at()),
             version: 1,
@@ -67,35 +64,13 @@ fn link_requests_accept_stock_trek_exchange_names() {
 }
 
 #[test]
-fn link_requests_reuse_the_shared_encryption_algorithm() {
-    for (name, algorithm) in [
-        ("hmac_sha256", EncryptionAlgorithm::HmacSha256),
-        ("hmac_sha512", EncryptionAlgorithm::HmacSha512),
-        ("rsa_sha256", EncryptionAlgorithm::RsaSha256),
-        ("ed25519", EncryptionAlgorithm::Ed25519),
-        ("ecdsa_p256", EncryptionAlgorithm::EcdsaP256),
-        ("ecdsa_p384", EncryptionAlgorithm::EcdsaP384),
-    ] {
-        let request = serde_json::from_value::<LinkAccountRequest>(json!({
-            "cexId": "Binance",
-            "label": "main",
-            "apiKey": "0123456789abcdef",
-            "apiSecret": "fedcba9876543210",
-            "encryptionAlgorithm": name
-        }))
-        .expect("decode");
-        assert_eq!(request.encryption_algorithm, algorithm);
-    }
-}
-
-#[test]
-fn link_requests_reject_unknown_encryption_algorithms() {
+fn link_requests_reject_unknown_fields() {
     let request = serde_json::from_value::<LinkAccountRequest>(json!({
         "cexId": "Binance",
         "label": "main",
         "apiKey": "0123456789abcdef",
         "apiSecret": "fedcba9876543210",
-        "encryptionAlgorithm": "rot13"
+        "encryptionAlgorithm": "hmac_sha256"
     }));
     assert!(request.is_err());
 }
@@ -139,9 +114,11 @@ fn account_summaries_carry_the_stock_trek_exchange() {
 }
 
 #[test]
-fn account_summaries_serialize_the_shared_encryption_algorithm_variant() {
+fn account_summaries_never_return_credential_metadata() {
     let encoded = serde_json::to_value(Fixture::account_summary()).expect("encode");
-    assert_eq!(encoded["encryptionAlgorithm"], "hmac_sha256");
+    assert!(encoded.get("apiKey").is_none());
+    assert!(encoded.get("apiSecret").is_none());
+    assert!(encoded.get("encryptionAlgorithm").is_none());
 }
 
 struct ServiceFixture {
@@ -183,7 +160,6 @@ impl ServiceFixture {
             label: "main".to_string(),
             api_key: Self::VALID_KEY.to_string(),
             api_secret: Self::VALID_SECRET.to_string(),
-            encryption_algorithm: EncryptionAlgorithm::HmacSha256,
         };
         self.service
             .link(&self.auth, &request, Utc::now())
@@ -223,7 +199,6 @@ async fn replacing_credentials_revalidates_in_the_background() {
     let request = CredentialsRequest {
         api_key: "too-short".to_string(),
         api_secret: ServiceFixture::VALID_SECRET.to_string(),
-        encryption_algorithm: EncryptionAlgorithm::Ed25519,
     };
     let replaced = fixture
         .service
@@ -238,20 +213,21 @@ async fn replacing_credentials_revalidates_in_the_background() {
 }
 
 #[tokio::test(start_paused = true)]
-async fn replaced_credentials_carry_the_shared_encryption_algorithm() {
+async fn replaced_credentials_follow_the_same_lifecycle() {
     let fixture = ServiceFixture::new();
     let summary = fixture.link();
     let request = CredentialsRequest {
         api_key: ServiceFixture::VALID_KEY.to_string(),
         api_secret: ServiceFixture::VALID_SECRET.to_string(),
-        encryption_algorithm: EncryptionAlgorithm::RsaSha256,
     };
     let replaced = fixture
         .service
         .replace_credentials(&fixture.auth, &summary.account_id, &request, Utc::now())
         .expect("replace");
+    assert_eq!(replaced.connector.state, ConnectorState::Connecting);
+    tokio::time::sleep(std::time::Duration::from_secs(1)).await;
     assert_eq!(
-        replaced.encryption_algorithm,
-        EncryptionAlgorithm::RsaSha256
+        fixture.connector(&summary.account_id),
+        ConnectorState::Connected
     );
 }

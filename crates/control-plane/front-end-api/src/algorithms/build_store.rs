@@ -5,9 +5,19 @@ use crate::streaming::channel_registry::ChannelRegistry;
 use crate::streaming::stream_types::Frame;
 use chrono::{DateTime, Duration, Utc};
 use parking_lot::Mutex;
+use serde_json::Value;
 use std::sync::Arc;
 
 const LOG_TTL: Duration = Duration::hours(1);
+
+fn frame_payload(build: &BuildSummary) -> Value {
+    let mut payload = serde_json::to_value(build).expect("build serializes");
+    payload
+        .as_object_mut()
+        .expect("object")
+        .remove("streamSequence");
+    payload
+}
 
 pub(super) struct BuildRow {
     pub(super) owner: String,
@@ -66,11 +76,7 @@ impl BuildStore {
             log: None,
         });
         let channel = Self::channel(algorithm_id);
-        let frame = Frame::data(
-            &channel,
-            0,
-            serde_json::to_value(&build).expect("build serializes"),
-        );
+        let frame = Frame::data(&channel, 0, frame_payload(&build));
         build.stream_sequence = self.registry.publish(&channel, frame);
         if let Some(row) = builds
             .iter_mut()
@@ -177,11 +183,7 @@ impl BuildStore {
         let mut ready = row.build.clone();
         drop(rows);
         let channel = Self::channel(algorithm_id);
-        let frame = Frame::data(
-            &channel,
-            0,
-            serde_json::to_value(&ready).expect("build serializes"),
-        );
+        let frame = Frame::data(&channel, 0, frame_payload(&ready));
         ready.stream_sequence = self.registry.publish(&channel, frame);
         let mut builds = self.builds.lock();
         if let Some(row) = builds.iter_mut().find(|row| row.build.build_id == build_id) {
