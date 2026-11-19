@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "platform-maintainer"
+path = "../../../bin/maintainer/main.rs"
+
 [dependencies]
 aws-sdk-s3 = { workspace = true }
 platform-archive = { workspace = true }

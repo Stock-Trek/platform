@@ -1,5 +1,5 @@
 use crate::supervisor::Supervisor;
-use platform_aggregator::{
+use crate::{
     AggregatorConfig, ArchivedEventSource, NatsCandleSink, NatsShardSource, ProcessorRunner,
     RestoreOptions, S3ArchiveRecovery, ShardId, StateStore,
 };

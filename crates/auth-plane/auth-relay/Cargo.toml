@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "platform-auth-relay"
+path = "../../../bin/auth-relay/main.rs"
+
 [dependencies]
 aws-sdk-sqs = { workspace = true, features = ["default-https-client", "rt-tokio"] }
 platform-auth-service = { workspace = true }

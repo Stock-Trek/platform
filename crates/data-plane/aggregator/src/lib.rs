@@ -1,5 +1,6 @@
 //! Market-data candle aggregation service.
 
+mod app;
 mod candle_sink;
 mod checkpoint_record;
 mod config;
@@ -12,8 +13,11 @@ mod processor;
 mod restore;
 mod runner;
 mod shard_id;
+mod shard_writer;
 mod source_record;
 mod state;
+mod supervisor;
+mod tasks;
 
 #[cfg(test)]
 mod candle_sink_tests;
@@ -26,10 +30,9 @@ mod market_source_tests;
 #[cfg(test)]
 mod shard_id_tests;
 #[cfg(test)]
-mod supervisor;
-#[cfg(test)]
 mod supervisor_tests;
 
+pub use app::AggregatorApp;
 pub use candle_sink::{ClosedCandlePublisher, NatsCandleSink, OpenCandleStore};
 pub use checkpoint_record::{CheckpointRecord, NatsStateStore, StateStore};
 pub use config::{AggregatorConfig, ReplayStartPolicy};

@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "platform-build-agent"
+path = "../../../bin/build-agent/main.rs"
+
 [dependencies]
 parking_lot = { workspace = true }
 platform-config = { workspace = true }

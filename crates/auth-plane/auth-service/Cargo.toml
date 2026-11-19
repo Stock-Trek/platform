@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "platform-auth-service"
+path = "../../../bin/auth-service/main.rs"
+
 [features]
 test-utils = []
 

@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "platform-build-orchestrator"
+path = "../../../bin/build-orchestrator/main.rs"
+
 [dependencies]
 platform-aws = { workspace = true }
 platform-config = { workspace = true }

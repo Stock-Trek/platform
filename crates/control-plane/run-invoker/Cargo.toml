@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "platform-run-invoker"
+path = "../../../bin/run-invoker/main.rs"
+
 [dependencies]
 aws-credential-types = { workspace = true }
 aws-sdk-lambda = { workspace = true, default-features = false, features = ["default-https-client", "rt-tokio"] }

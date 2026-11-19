@@ -1,6 +1,6 @@
 use crate::shard_writer::ShardWriter;
 use crate::supervisor::Supervisor;
-use platform_aggregator::{
+use crate::{
     AggregatorConfig, NatsCandleSink, NatsMarketSource, NatsRouter, NatsStateStore,
     S3ArchiveRecovery, StateStore,
 };

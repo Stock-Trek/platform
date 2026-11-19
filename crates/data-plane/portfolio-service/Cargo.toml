@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "platform-portfolio-service"
+path = "../../../bin/portfolio-service/main.rs"
+
 [dependencies]
 async-trait = { workspace = true }
 chrono = { workspace = true }

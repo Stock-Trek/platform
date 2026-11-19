@@ -1,52 +1,17 @@
-//! Native host binary for the runner.
-//!
-//! The guest that this binary invokes is the compiled runner itself, which is
-//! not able to talk to the network on its own. Instead, it expects a run
-//! request on stdin with the following shape:
-//!
-//! ```json
-//! {
-//!   "cwasmGetUrl": "<presigned S3 GET url>",
-//!   "cwasmSha256": "<artifact sha256>",
-//!   "cwasmSize": 123456,
-//!   "wasmtimeVersion": "50.0.2",
-//!   "orderRequestUrl": "<order request service url>",
-//!   "owner": "<algorithm owner>",
-//!   "command": "metadata",
-//!   "strategyName": "MyStrategy"
-//! }
-//! ```
-//!
-//! The URL points at a runner cwasm artifact built for wasm32-wasip1 (see
-//! build-plane for details). This host downloads it, verifies the pinned
-//! SHA-256, size and Wasmtime version, loads it into an embedded Wasmtime
-//! engine, provides native implementations of those imports and invokes the
-//! algorithm in-process. Every value queued by the algorithm is written to
-//! stdout as a single JSON line, e.g.:
-//!
-//! ```json
-//! {"type":"metadata","payload":{"name":"MyStrategy","description":"..."}}
-//! ```
-//!
-//! The algorithm's own stdout and stderr are routed to stderr so guest output
-//! cannot spoof or corrupt the structured result stream.
-
-use platform_exit_codes::ExitCode;
-use platform_runner::{
-    Command, RunRequest,
-    cwasm::{
-        Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher, WasmRunner,
-        backtest,
-    },
+use crate::cwasm::{
+    Cwasm, CwasmIntegrity, GuestActions, InvokerConfig, OrderRequestDispatcher, WasmRunner,
+    backtest,
 };
+use crate::{Command, RunRequest};
+use platform_exit_codes::ExitCode;
 use std::io::{self, Read};
 
 const MAX_RUN_REQUEST_BYTES: u64 = 1024 * 1024;
 
-struct CwasmInvoker;
+pub struct CwasmInvoker;
 
 impl CwasmInvoker {
-    fn run() -> i32 {
+    pub fn run() -> i32 {
         let body = match Self::read_request() {
             Ok(body) => body,
             Err(code) => return code.code(),
@@ -177,8 +142,4 @@ impl CwasmInvoker {
     fn parse_request(body: &str) -> Result<RunRequest, serde_json::Error> {
         serde_json::from_str(body)
     }
-}
-
-fn main() {
-    std::process::exit(CwasmInvoker::run());
 }

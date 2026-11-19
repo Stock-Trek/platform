@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "platform-ingester"
+path = "../../../bin/ingester/main.rs"
+
 [dependencies]
 async-trait = { workspace = true }
 iris = { workspace = true }

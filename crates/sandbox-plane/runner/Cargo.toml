@@ -8,6 +8,10 @@ publish = false
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[[bin]]
+name = "cwasm-invoker"
+path = "../../../bin/runner/main.rs"
+
 [dependencies]
 platform-exit-codes = { workspace = true }
 prost = { workspace = true }
