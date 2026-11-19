@@ -1,4 +1,5 @@
 use super::BuildStore;
+use super::algorithm_api::AlgorithmApi;
 use super::build_api::BuildApi;
 use crate::accounts::AccountStore;
 use crate::algorithms::Strategy;
@@ -20,6 +21,10 @@ struct Fixture {
     registry: Arc<ChannelRegistry>,
     bearer: String,
     algorithm_id: String,
+    sessions: Arc<SessionService>,
+    bots: Arc<BotStore>,
+    idempotency: Arc<IdempotencyStore>,
+    initial_build_id: String,
 }
 
 impl Fixture {
@@ -61,20 +66,36 @@ impl Fixture {
         }));
         let sessions = Arc::new(SessionService::new(store.clone(), limits));
         let tokens = store.issue_login(Self::OWNER, Utc::now());
+        let bots = Arc::new(BotStore::new());
+        let idempotency = Arc::new(IdempotencyStore::new());
         Self {
             api: BuildApi::new(
                 builds.clone(),
-                sessions,
-                Arc::new(BotStore::new()),
+                sessions.clone(),
+                bots.clone(),
                 backtests.clone(),
-                Arc::new(IdempotencyStore::new()),
+                idempotency.clone(),
             ),
             builds,
             backtests,
             registry,
             bearer: format!("Bearer {}", tokens.token),
             algorithm_id: algorithm.algorithm_id,
+            sessions,
+            bots,
+            idempotency,
+            initial_build_id: build.build_id,
         }
+    }
+
+    fn algorithm_api(&self) -> AlgorithmApi {
+        AlgorithmApi::new(
+            self.builds.clone(),
+            self.sessions.clone(),
+            self.bots.clone(),
+            self.backtests.clone(),
+            self.idempotency.clone(),
+        )
     }
 
     fn request(&self, method: Method, path: &str, body: &str) -> ApiRequest {
@@ -114,6 +135,41 @@ impl Fixture {
 
     fn trigger(&self) -> String {
         format!("/v1/algorithms/{}/builds", self.algorithm_id)
+    }
+
+    fn trigger_ready_build(&self, git_ref: &str) -> String {
+        let response = self
+            .api
+            .route(
+                &self.request(
+                    Method::POST,
+                    &self.trigger(),
+                    &format!(r#"{{"ref": "{git_ref}"}}"#),
+                ),
+                &self.algorithm_id,
+            )
+            .expect("trigger");
+        let build_id = Fixture::json(&response)["buildId"]
+            .as_str()
+            .expect("build id")
+            .to_string();
+        self.builds
+            .mark_ready(
+                Fixture::OWNER,
+                &self.algorithm_id,
+                &build_id,
+                Vec::new(),
+                Utc::now(),
+            )
+            .expect("ready");
+        build_id
+    }
+
+    fn latest_ready(&self) -> Option<String> {
+        self.builds
+            .algorithm(Fixture::OWNER, &self.algorithm_id)
+            .expect("algorithm")
+            .latest_ready_build_id
     }
     fn json(response: &hyper::Response<Full<Bytes>>) -> serde_json::Value {
         serde_json::from_slice(
@@ -362,4 +418,52 @@ fn deleting_a_build_closes_its_backtest_channels() {
     assert_eq!(response.status(), hyper::StatusCode::NO_CONTENT);
     assert!(fixture.registry.frames(channel).is_empty());
     assert_eq!(fixture.registry.sequence(channel), 0);
+}
+
+#[test]
+fn deleting_the_latest_ready_build_repoints_latest_ready_build_id() {
+    let fixture = Fixture::new();
+    let first = fixture.trigger_ready_build("heads/one");
+    let second = fixture.trigger_ready_build("heads/two");
+    assert_eq!(fixture.latest_ready().as_deref(), Some(second.as_str()));
+    assert!(
+        fixture
+            .builds
+            .delete_build(Fixture::OWNER, &fixture.algorithm_id, &second)
+    );
+    assert_eq!(fixture.latest_ready().as_deref(), Some(first.as_str()));
+    assert!(
+        fixture
+            .builds
+            .delete_build(Fixture::OWNER, &fixture.algorithm_id, &first)
+    );
+    assert_eq!(
+        fixture.latest_ready().as_deref(),
+        Some(fixture.initial_build_id.as_str())
+    );
+}
+
+#[test]
+fn archiving_an_algorithm_returns_its_version_as_an_etag() {
+    let fixture = Fixture::new();
+    let response = fixture
+        .algorithm_api()
+        .route(&fixture.request(
+            Method::DELETE,
+            &format!("/v1/algorithms/{}", fixture.algorithm_id),
+            "",
+        ))
+        .expect("archive");
+    assert_eq!(response.status(), hyper::StatusCode::OK);
+    let etag = response
+        .headers()
+        .get("etag")
+        .expect("the archive carries an etag")
+        .to_str()
+        .expect("ascii etag")
+        .to_string();
+    let version = Fixture::json(&response)["version"]
+        .as_i64()
+        .expect("version");
+    assert_eq!(etag, format!("\"{version}\""));
 }

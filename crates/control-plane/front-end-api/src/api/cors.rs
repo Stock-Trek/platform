@@ -32,7 +32,7 @@ impl Cors {
         }
     }
 
-    pub fn preflight(&self, request: &ApiRequest) -> Response<Full<Bytes>> {
+    pub fn preflight(&self, request: &ApiRequest, request_id: &str) -> Response<Full<Bytes>> {
         match self.allowed(request.origin()) {
             Some(origin) => {
                 let mut response = Respond::empty(StatusCode::NO_CONTENT);
@@ -47,7 +47,7 @@ impl Cors {
                 headers.insert(VARY, HeaderValue::from_static("Origin"));
                 response
             }
-            None => Problem::forbidden("the origin is not allowed").response(""),
+            None => Problem::forbidden("the origin is not allowed").response(request_id),
         }
     }
 

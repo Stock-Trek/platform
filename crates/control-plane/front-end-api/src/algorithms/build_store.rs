@@ -264,6 +264,28 @@ impl BuildStore {
                 && row.build.algorithm_id == algorithm_id
                 && row.build.build_id == build_id)
         });
-        builds.len() != before
+        let deleted = builds.len() != before;
+        let latest_ready = deleted.then(|| {
+            builds
+                .iter()
+                .filter(|row| {
+                    row.owner == owner
+                        && row.build.algorithm_id == algorithm_id
+                        && row.build.state == BuildState::Ready
+                })
+                .max_by_key(|row| row.build.created_at)
+                .map(|row| row.build.build_id.clone())
+        });
+        drop(builds);
+        if let Some(latest_ready) = latest_ready {
+            let mut rows = self.algorithms.lock();
+            if let Some(row) = rows
+                .iter_mut()
+                .find(|row| row.summary.algorithm_id == algorithm_id)
+            {
+                row.summary.latest_ready_build_id = latest_ready;
+            }
+        }
+        deleted
     }
 }
