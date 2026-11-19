@@ -4,7 +4,7 @@ use crate::accounts::AccountStore;
 use crate::algorithms::Strategy;
 use crate::api::{ApiRequest, IdempotencyStore};
 use crate::auth::{SessionService, SessionStore};
-use crate::backtests::BacktestStore;
+use crate::backtests::{BacktestProgress, BacktestState, BacktestStatus, BacktestStore};
 use crate::bots::BotStore;
 use crate::limits::{LimitService, LimitSources};
 use crate::streaming::ChannelRegistry;
@@ -16,6 +16,8 @@ use std::sync::Arc;
 struct Fixture {
     api: BuildApi,
     builds: Arc<BuildStore>,
+    backtests: Arc<BacktestStore>,
+    registry: Arc<ChannelRegistry>,
     bearer: String,
     algorithm_id: String,
 }
@@ -28,6 +30,7 @@ impl Fixture {
     fn new() -> Self {
         let registry = Arc::new(ChannelRegistry::new());
         let builds = Arc::new(BuildStore::new(Arc::clone(&registry)));
+        let backtests = Arc::new(BacktestStore::new(Arc::clone(&registry)));
         let algorithm = builds.register_algorithm(Self::OWNER, "momentum", "acme/momentum", "main");
         let build = builds
             .create_build(
@@ -63,10 +66,12 @@ impl Fixture {
                 builds.clone(),
                 sessions,
                 Arc::new(BotStore::new()),
-                Arc::new(BacktestStore::new(Arc::new(ChannelRegistry::new()))),
+                backtests.clone(),
                 Arc::new(IdempotencyStore::new()),
             ),
             builds,
+            backtests,
+            registry,
             bearer: format!("Bearer {}", tokens.token),
             algorithm_id: algorithm.algorithm_id,
         }
@@ -267,4 +272,94 @@ fn builds_require_authentication() {
             .len(),
         1
     );
+}
+
+#[test]
+fn build_frames_carry_the_state_change_without_a_stream_sequence() {
+    let registry = Arc::new(ChannelRegistry::new());
+    let builds = Arc::new(BuildStore::new(Arc::clone(&registry)));
+    let algorithm = builds.register_algorithm("user_7gk2", "momentum", "acme/momentum", "main");
+    let build = builds
+        .create_build(
+            "user_7gk2",
+            &algorithm.algorithm_id,
+            "heads/main",
+            None,
+            Utc::now(),
+        )
+        .expect("build");
+    let frames = registry.frames(&format!("builds.{}", algorithm.algorithm_id));
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].sequence, build.stream_sequence);
+    let data = frames[0].data.as_ref().expect("data frame");
+    assert!(data.get("streamSequence").is_none());
+    assert_eq!(data["state"], "queued");
+}
+
+#[test]
+fn deleting_a_build_closes_its_backtest_channels() {
+    let fixture = Fixture::new();
+    let response = fixture
+        .api
+        .route(
+            &fixture.request(Method::POST, &fixture.trigger(), r#"{}"#),
+            &fixture.algorithm_id,
+        )
+        .expect("trigger");
+    assert_eq!(response.status(), hyper::StatusCode::ACCEPTED);
+    let build_id = Fixture::json(&response)["buildId"]
+        .as_str()
+        .expect("build id")
+        .to_string();
+    fixture
+        .builds
+        .mark_ready(
+            Fixture::OWNER,
+            &fixture.algorithm_id,
+            &build_id,
+            Vec::new(),
+            Utc::now(),
+        )
+        .expect("ready");
+    let backtest = BacktestStatus {
+        backtest_id: "backtest_1".to_string(),
+        algorithm_id: fixture.algorithm_id.clone(),
+        build_id: build_id.clone(),
+        strategy_name: "momentum_v2".to_string(),
+        state: BacktestState::Running,
+        error: None,
+        seed: 7,
+        progress: BacktestProgress {
+            completed: 0,
+            total: 1,
+        },
+        created_at: Utc::now(),
+        started_at: None,
+        completed_at: None,
+        stream_sequence: 0,
+    };
+    fixture.backtests.insert(Fixture::OWNER, backtest);
+    fixture
+        .backtests
+        .update(Fixture::OWNER, "backtest_1", |mut status| {
+            status.state = BacktestState::Completed;
+            status.completed_at = Some(Utc::now());
+            status
+        });
+    let channel = "backtests.backtest_1";
+    assert_eq!(fixture.registry.frames(channel).len(), 1);
+    let response = fixture
+        .api
+        .route(
+            &fixture.request(
+                Method::DELETE,
+                &format!("/v1/algorithms/{}/builds/{build_id}", fixture.algorithm_id),
+                "",
+            ),
+            &fixture.algorithm_id,
+        )
+        .expect("delete");
+    assert_eq!(response.status(), hyper::StatusCode::NO_CONTENT);
+    assert!(fixture.registry.frames(channel).is_empty());
+    assert_eq!(fixture.registry.sequence(channel), 0);
 }

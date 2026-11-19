@@ -94,6 +94,26 @@ impl LimitService {
         }
     }
 
+    pub fn check_replacement(
+        &self,
+        owner: &str,
+        quota: &'static str,
+        current: u64,
+        requested: u64,
+        now: DateTime<Utc>,
+    ) -> Result<(), Problem> {
+        let entry = self.entry(owner, quota, now);
+        if entry.used.saturating_sub(current) + requested <= entry.limit {
+            Ok(())
+        } else {
+            Err(Problem::quota_exceeded(QuotaDetail {
+                quota,
+                limit: entry.limit,
+                used: entry.used,
+            }))
+        }
+    }
+
     pub fn check_rate(
         &self,
         owner: &str,

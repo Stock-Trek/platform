@@ -1,9 +1,14 @@
 use crate::auth::SessionTokens;
 use chrono::{DateTime, Duration, Utc};
 use parking_lot::Mutex;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
 pub const REFRESH_REPLAY_GRACE: Duration = Duration::seconds(10);
+
+fn digest(token: &str) -> String {
+    hex::encode(Sha256::digest(token.as_bytes()))
+}
 
 enum RefreshState {
     Active,
@@ -53,7 +58,7 @@ impl RefreshStore {
 
     pub fn enroll(&self, token: String, owner: &str, family: &str) {
         self.state.lock().entries.insert(
-            token,
+            digest(&token),
             RefreshEntry {
                 owner: owner.to_string(),
                 family: family.to_string(),
@@ -69,7 +74,7 @@ impl RefreshStore {
         mint: impl FnOnce(&str, &str, DateTime<Utc>) -> SessionTokens,
     ) -> Rotation {
         let mut state = self.state.lock();
-        let Some(entry) = state.entries.get(token) else {
+        let Some(entry) = state.entries.get(&digest(token)) else {
             return Rotation::None;
         };
         let family = entry.family.clone();
@@ -96,9 +101,10 @@ impl RefreshStore {
             return Rotation::None;
         }
         let replacement = mint(&owner, &family, family_expiry);
+        let presented = digest(token);
         if let Some(refresh_token) = replacement.refresh_token.clone() {
             state.entries.insert(
-                refresh_token,
+                digest(&refresh_token),
                 RefreshEntry {
                     owner,
                     family: family.clone(),
@@ -106,7 +112,7 @@ impl RefreshStore {
                 },
             );
         }
-        if let Some(entry) = state.entries.get_mut(token) {
+        if let Some(entry) = state.entries.get_mut(&presented) {
             entry.state = RefreshState::Rotated {
                 replay: replacement.clone(),
                 grace_until: now + REFRESH_REPLAY_GRACE,

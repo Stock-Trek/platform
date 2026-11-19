@@ -3,7 +3,6 @@ use crate::accounts::{AccountSummary, Connector, ConnectorReason};
 use crate::api::Id;
 use chrono::{DateTime, Utc};
 use parking_lot::Mutex;
-use platform_exchange_types::encrypt::EncryptionAlgorithm;
 use std::collections::HashMap;
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -13,16 +12,13 @@ const MAX_CREDENTIAL_LENGTH: usize = 256;
 pub struct Credentials {
     pub api_key: String,
     pub api_secret: String,
-    #[allow(dead_code)]
-    pub encryption_algorithm: EncryptionAlgorithm,
 }
 
 impl Credentials {
-    pub fn new(api_key: &str, api_secret: &str, encryption_algorithm: EncryptionAlgorithm) -> Self {
+    pub fn new(api_key: &str, api_secret: &str) -> Self {
         Self {
             api_key: api_key.to_string(),
             api_secret: api_secret.to_string(),
-            encryption_algorithm,
         }
     }
 
@@ -83,7 +79,6 @@ impl AccountStore {
             account_id: Id::mint("account"),
             cex_id,
             label: label.to_string(),
-            encryption_algorithm: credentials.encryption_algorithm,
             active: true,
             connector: Connector::starting(now),
             version: 1,
@@ -129,7 +124,6 @@ impl AccountStore {
         let row = rows
             .iter_mut()
             .find(|row| row.owner == owner && row.summary.account_id == account_id)?;
-        row.summary.encryption_algorithm = credentials.encryption_algorithm;
         row.credentials = Some(credentials);
         row.summary.connector = Connector::starting(now);
         row.summary.version += 1;

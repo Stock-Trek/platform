@@ -27,11 +27,7 @@ impl AccountService {
         request: &LinkAccountRequest,
         now: DateTime<Utc>,
     ) -> Result<AccountSummary, Problem> {
-        let credentials = Credentials::new(
-            &request.api_key,
-            &request.api_secret,
-            request.encryption_algorithm,
-        );
+        let credentials = Credentials::new(&request.api_key, &request.api_secret);
         let summary = self
             .accounts
             .link(
@@ -72,11 +68,7 @@ impl AccountService {
             .replace_credentials(
                 auth.owner(),
                 account_id,
-                Credentials::new(
-                    &request.api_key,
-                    &request.api_secret,
-                    request.encryption_algorithm,
-                ),
+                Credentials::new(&request.api_key, &request.api_secret),
                 now,
             )
             .ok_or_else(|| Problem::not_found("account does not exist"))?;
