@@ -24,7 +24,7 @@ pub const QUOTA_MAX_RESULT_BYTES: &str = "maxBacktestResultBytes";
 
 const REQUEST_RATE_WINDOW: Duration = Duration::minutes(1);
 const AD_HOC_RATE_WINDOW: Duration = Duration::hours(1);
-const MAX_RESULT_BYTES: u64 = 1024 * 1024;
+pub const MAX_RESULT_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]

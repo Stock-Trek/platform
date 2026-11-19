@@ -1,10 +1,12 @@
 use crate::algorithms::build_store::BuildStore;
+use crate::algorithms::commit_resolution::KnownCommits;
 use crate::algorithms::{AlgorithmState, AlgorithmSummary, Repository};
 use crate::api::Id;
 
 pub(super) struct AlgorithmRow {
     pub(super) owner: String,
     pub(super) summary: AlgorithmSummary,
+    pub(super) known_commits: KnownCommits,
 }
 
 impl BuildStore {
@@ -32,6 +34,7 @@ impl BuildStore {
         self.algorithms.lock().push(AlgorithmRow {
             owner: owner.to_string(),
             summary: summary.clone(),
+            known_commits: KnownCommits::new(),
         });
         summary
     }

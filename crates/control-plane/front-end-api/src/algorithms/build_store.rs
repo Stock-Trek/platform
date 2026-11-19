@@ -1,7 +1,11 @@
+use crate::algorithms::commit_resolution::CommitError;
 use crate::algorithms::{BuildState, BuildSummary, Strategy};
 use crate::api::Id;
+use crate::streaming::channel_registry::ChannelRegistry;
+use crate::streaming::stream_types::Frame;
 use chrono::{DateTime, Duration, Utc};
 use parking_lot::Mutex;
+use std::sync::Arc;
 
 const LOG_TTL: Duration = Duration::hours(1);
 
@@ -15,13 +19,15 @@ pub(super) struct BuildRow {
 pub struct BuildStore {
     pub(super) algorithms: Mutex<Vec<super::algorithm_store::AlgorithmRow>>,
     pub(super) builds: Mutex<Vec<BuildRow>>,
+    registry: Arc<ChannelRegistry>,
 }
 
 impl BuildStore {
-    pub fn new() -> Self {
+    pub fn new(registry: Arc<ChannelRegistry>) -> Self {
         Self {
             algorithms: Mutex::new(Vec::new()),
             builds: Mutex::new(Vec::new()),
+            registry,
         }
     }
 
@@ -30,18 +36,21 @@ impl BuildStore {
         owner: &str,
         algorithm_id: &str,
         git_ref: &str,
-        commit: &str,
+        commit: Option<&str>,
         now: DateTime<Utc>,
-    ) -> BuildSummary {
-        let existing = self.find_build(owner, algorithm_id, git_ref, commit);
-        if let Some(build) = existing.filter(|build| build.state != BuildState::Failed) {
-            return build;
+    ) -> Result<BuildSummary, CommitError> {
+        let full_commit = self.resolve_commit(algorithm_id, git_ref, commit)?;
+        if let Some(build) = self
+            .find_build(owner, algorithm_id, git_ref, &full_commit)
+            .filter(|build| build.state != BuildState::Failed)
+        {
+            return Ok(build);
         }
-        let build = BuildSummary {
+        let mut build = BuildSummary {
             build_id: Id::mint("build"),
             algorithm_id: algorithm_id.to_string(),
             git_ref: git_ref.to_string(),
-            commit: commit.to_string(),
+            commit: full_commit,
             state: BuildState::Queued,
             error: None,
             log_available: false,
@@ -49,13 +58,45 @@ impl BuildStore {
             completed_at: None,
             stream_sequence: 0,
         };
-        self.builds.lock().push(BuildRow {
+        let mut builds = self.builds.lock();
+        builds.push(BuildRow {
             owner: owner.to_string(),
             build: build.clone(),
             strategies: Vec::new(),
             log: None,
         });
-        build
+        let channel = Self::channel(algorithm_id);
+        let frame = Frame::data(
+            &channel,
+            0,
+            serde_json::to_value(&build).expect("build serializes"),
+        );
+        build.stream_sequence = self.registry.publish(&channel, frame);
+        if let Some(row) = builds
+            .iter_mut()
+            .find(|row| row.build.build_id == build.build_id)
+        {
+            row.build.stream_sequence = build.stream_sequence;
+        }
+        Ok(build)
+    }
+
+    fn channel(algorithm_id: &str) -> String {
+        format!("builds.{algorithm_id}")
+    }
+
+    fn resolve_commit(
+        &self,
+        algorithm_id: &str,
+        git_ref: &str,
+        commit: Option<&str>,
+    ) -> Result<String, CommitError> {
+        let mut rows = self.algorithms.lock();
+        let row = rows
+            .iter_mut()
+            .find(|row| row.summary.algorithm_id == algorithm_id)
+            .ok_or(CommitError::Unresolved)?;
+        row.known_commits.resolve(commit, algorithm_id, git_ref)
     }
 
     fn find_build(
@@ -132,10 +173,21 @@ impl BuildStore {
         })?;
         row.build.state = BuildState::Ready;
         row.build.completed_at = Some(now);
-        row.build.stream_sequence += 1;
         row.strategies = strategies;
-        let ready = row.build.clone();
+        let mut ready = row.build.clone();
         drop(rows);
+        let channel = Self::channel(algorithm_id);
+        let frame = Frame::data(
+            &channel,
+            0,
+            serde_json::to_value(&ready).expect("build serializes"),
+        );
+        ready.stream_sequence = self.registry.publish(&channel, frame);
+        let mut builds = self.builds.lock();
+        if let Some(row) = builds.iter_mut().find(|row| row.build.build_id == build_id) {
+            row.build.stream_sequence = ready.stream_sequence;
+        }
+        drop(builds);
         self.record_ready_build(algorithm_id, &ready);
         Some(ready)
     }

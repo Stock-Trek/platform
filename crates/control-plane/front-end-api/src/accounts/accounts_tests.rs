@@ -8,6 +8,7 @@ use crate::auth::{AuthContext, Scope};
 use crate::backtests::BacktestStore;
 use crate::bots::{BotService, BotStore, RunStore};
 use crate::limits::{LimitService, LimitSources};
+use crate::streaming::ChannelRegistry;
 use chrono::{TimeZone, Utc};
 use serde_json::json;
 use std::sync::Arc;
@@ -112,17 +113,18 @@ impl ServiceFixture {
     const VALID_SECRET: &'static str = "fedcba9876543210";
 
     fn new() -> Self {
+        let registry = || Arc::new(ChannelRegistry::new());
         let store = Arc::new(AccountStore::new());
         let bots = Arc::new(BotService::new(
             Arc::new(BotStore::new()),
-            Arc::new(RunStore::new()),
+            Arc::new(RunStore::new(registry())),
             store.clone(),
-            Arc::new(BuildStore::new()),
+            Arc::new(BuildStore::new(registry())),
             Arc::new(LimitService::new(LimitSources {
                 accounts: store.clone(),
-                builds: Arc::new(BuildStore::new()),
+                builds: Arc::new(BuildStore::new(registry())),
                 bots: Arc::new(BotStore::new()),
-                backtests: Arc::new(BacktestStore::new()),
+                backtests: Arc::new(BacktestStore::new(registry())),
             })),
         ));
         Self {

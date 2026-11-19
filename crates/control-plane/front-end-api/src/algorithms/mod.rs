@@ -3,6 +3,7 @@ mod algorithm_store;
 mod algorithm_types;
 mod build_api;
 mod build_store;
+pub(crate) mod commit_resolution;
 
 #[cfg(test)]
 mod build_tests;

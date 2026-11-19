@@ -7,6 +7,7 @@ use crate::auth::jwt::{AUDIENCE, ISSUER, JwtSigner};
 use crate::backtests::BacktestStore;
 use crate::bots::BotStore;
 use crate::limits::{LimitService, LimitSources};
+use crate::streaming::ChannelRegistry;
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use chrono::{Duration, Utc};
 use http_body_util::Full;
@@ -27,11 +28,12 @@ impl Fixture {
     fn new() -> Self {
         let store = Arc::new(SessionStore::new());
         store.register_login(Self::LOGIN_ID, Self::OWNER, Self::LOGIN_SECRET);
+        let registry = || Arc::new(ChannelRegistry::new());
         let limits = Arc::new(LimitService::new(LimitSources {
             accounts: Arc::new(AccountStore::new()),
-            builds: Arc::new(BuildStore::new()),
+            builds: Arc::new(BuildStore::new(registry())),
             bots: Arc::new(BotStore::new()),
-            backtests: Arc::new(BacktestStore::new()),
+            backtests: Arc::new(BacktestStore::new(registry())),
         }));
         let sessions = Arc::new(SessionService::new(store.clone(), limits));
         Self {

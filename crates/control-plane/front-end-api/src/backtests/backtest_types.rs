@@ -31,6 +31,16 @@ impl BacktestState {
     pub fn is_terminal(&self) -> bool {
         !self.is_active()
     }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Queued => "queued",
+            Self::Running => "running",
+            Self::Completed => "completed",
+            Self::Failed => "failed",
+            Self::Canceled => "canceled",
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]

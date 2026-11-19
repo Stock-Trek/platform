@@ -13,7 +13,7 @@ use hyper::{Method, Response, StatusCode};
 use std::sync::Arc;
 
 const MIN_COMMIT_LENGTH: usize = 7;
-const MAX_COMMIT_LENGTH: usize = 64;
+const MAX_COMMIT_LENGTH: usize = 40;
 
 pub struct BuildApi {
     builds: Arc<BuildStore>,
@@ -108,10 +108,14 @@ impl BuildApi {
                 if let Some(commit) = &commit {
                     Self::validate_commit(commit)?;
                 }
-                let commit = commit.unwrap_or_else(|| format!("{git_ref}-HEAD"));
-                let build =
-                    self.builds
-                        .create_build(owner, algorithm_id, &git_ref, &commit, Utc::now());
+                let build = self
+                    .builds
+                    .create_build(owner, algorithm_id, &git_ref, commit.as_deref(), Utc::now())
+                    .map_err(|_| {
+                        Problem::validation_failed(
+                            "commit does not resolve to a known full commit identifier",
+                        )
+                    })?;
                 Ok(Respond::json(StatusCode::ACCEPTED, &build))
             })
     }
