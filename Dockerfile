@@ -3,7 +3,7 @@
 FROM rustserverless/lambda-rust@sha256:f0bbeb9b20b4d9bd172a7cae3171b4058bce33932f7ccb61f00995da40401901 AS base
 
 ARG TARGETARCH
-ARG WASMTIME_VERSION="50.0.1"
+ARG WASMTIME_VERSION="50.0.2"
 ARG CARGO_LAMBDA_VERSION="v1.0.3"
 ARG ZIG_VERSION="0.14.0"
 
@@ -17,8 +17,8 @@ ENV PATH="/cargo/bin:${PATH}"
 
 # wasmtime
 RUN case "${TARGETARCH}" in \
-      amd64) wasmtime_arch="x86_64"; wasmtime_sha256="685466455dd42a14774a86c36c8f2e45cbb9bd6d92a850139315df60a75498a5" ;; \
-      arm64) wasmtime_arch="aarch64"; wasmtime_sha256="d737e077416d78fbfb0a008229ec27d6a0fd5a4924874b8c38b293c850cf4094" ;; \
+      amd64) wasmtime_arch="x86_64"; wasmtime_sha256="5db0ca8e838ab95a51ba9acdf11f42888bcd0092dda45a86129ae540c4fa952c" ;; \
+      arm64) wasmtime_arch="aarch64"; wasmtime_sha256="c3665e79d97a8d42484f3d0320c2911441ca87c58daab3f360ff1cf8770b9960" ;; \
       *) echo "unsupported architecture: ${TARGETARCH}" >&2; exit 1 ;; \
     esac \
  && wasmtime_archive="wasmtime-v${WASMTIME_VERSION}-${wasmtime_arch}-linux.tar.xz" \
