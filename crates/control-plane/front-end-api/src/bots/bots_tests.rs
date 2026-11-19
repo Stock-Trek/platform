@@ -1,5 +1,5 @@
 use super::BotService;
-use crate::accounts::AccountStore;
+use crate::accounts::{AccountStore, Credentials};
 use crate::algorithms::{BuildStore, Strategy};
 use crate::api::{ApiRequest, PageQuery};
 use crate::auth::{AuthContext, Scope};
@@ -13,6 +13,7 @@ use crate::limits::{LimitService, LimitSources};
 use crate::streaming::ChannelRegistry;
 use chrono::{DateTime, Duration, Utc};
 use hyper::{HeaderMap, Method, Uri, body::Bytes};
+use platform_exchange_types::encrypt::EncryptionAlgorithm;
 use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
 
@@ -67,8 +68,11 @@ impl Fixture {
                 Self::OWNER,
                 CexId::Binance,
                 "main",
-                "0123456789abcdef",
-                "fedcba9876543210",
+                Credentials::new(
+                    "0123456789abcdef",
+                    "fedcba9876543210",
+                    EncryptionAlgorithm::HmacSha256,
+                ),
                 Utc::now(),
             )
             .expect("link");

@@ -1,7 +1,7 @@
 use crate::accounts::account_types::{
     AccountSummary, CredentialsRequest, ForceUnlinkResponse, LinkAccountRequest,
 };
-use crate::accounts::{AccountStore, LinkConflict, PortfolioSnapshot};
+use crate::accounts::{AccountStore, Credentials, LinkConflict, PortfolioSnapshot};
 use crate::api::Problem;
 use crate::auth::AuthContext;
 use crate::bots::{BotService, BotState};
@@ -27,14 +27,18 @@ impl AccountService {
         request: &LinkAccountRequest,
         now: DateTime<Utc>,
     ) -> Result<AccountSummary, Problem> {
+        let credentials = Credentials::new(
+            &request.api_key,
+            &request.api_secret,
+            request.encryption_algorithm,
+        );
         let summary = self
             .accounts
             .link(
                 auth.owner(),
                 request.cex_id,
                 &request.label,
-                &request.api_key,
-                &request.api_secret,
+                credentials,
                 now,
             )
             .map_err(|error| match error {
@@ -68,8 +72,11 @@ impl AccountService {
             .replace_credentials(
                 auth.owner(),
                 account_id,
-                &request.api_key,
-                &request.api_secret,
+                Credentials::new(
+                    &request.api_key,
+                    &request.api_secret,
+                    request.encryption_algorithm,
+                ),
                 now,
             )
             .ok_or_else(|| Problem::not_found("account does not exist"))?;

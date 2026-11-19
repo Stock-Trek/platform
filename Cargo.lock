@@ -4273,6 +4273,7 @@ dependencies = [
  "parking_lot",
  "platform-config",
  "platform-errors",
+ "platform-exchange-types",
  "platform-runtime",
  "platform-types",
  "serde",
