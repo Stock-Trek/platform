@@ -2,7 +2,7 @@ use crate::headers::{ALGORITHM, AUTHORIZATION};
 use platform_errors::{PlatformError, PlatformResult};
 use std::collections::BTreeSet;
 
-pub struct ParsedAuthorization {
+pub(crate) struct ParsedAuthorization {
     pub access_key_id: String,
     pub date: String,
     pub region: String,
@@ -12,7 +12,7 @@ pub struct ParsedAuthorization {
 }
 
 impl ParsedAuthorization {
-    pub fn parse(value: &str) -> PlatformResult<Self> {
+    pub(crate) fn parse(value: &str) -> PlatformResult<Self> {
         let rest = value
             .strip_prefix(ALGORITHM)
             .and_then(|value| value.strip_prefix(' '))
@@ -64,7 +64,7 @@ impl ParsedAuthorization {
         })
     }
 
-    pub fn invalid(message: impl Into<String>) -> PlatformError {
+    pub(crate) fn invalid(message: impl Into<String>) -> PlatformError {
         PlatformError::auth_invalid_jwt(message)
     }
 

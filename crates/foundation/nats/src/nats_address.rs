@@ -3,7 +3,7 @@ use platform_errors::{NatsError, PlatformError, PlatformResult};
 use platform_types::UrlScheme;
 use url::Url;
 
-pub const DEFAULT_NATS_PORT: u16 = 4222;
+pub(crate) const DEFAULT_NATS_PORT: u16 = 4222;
 const CONNECT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
 #[derive(Debug, Clone)]

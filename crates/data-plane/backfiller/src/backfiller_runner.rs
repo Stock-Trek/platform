@@ -10,7 +10,7 @@ use platform_nats::EventPublisher;
 use std::sync::Arc;
 use tracing::info;
 
-pub struct BackfillerRunner<S, F, P> {
+pub(crate) struct BackfillerRunner<S, F, P> {
     config: BackfillerConfig,
     source: S,
     fetcher: F,
@@ -23,7 +23,7 @@ where
     F: MissingEventFetcher,
     P: EventPublisher,
 {
-    pub fn new(config: BackfillerConfig, source: S, fetcher: F, publisher: P) -> Self {
+    pub(crate) fn new(config: BackfillerConfig, source: S, fetcher: F, publisher: P) -> Self {
         Self {
             config,
             source,
@@ -32,7 +32,7 @@ where
         }
     }
 
-    pub async fn run<R>(self, retries: R) -> PlatformResult<()>
+    pub(crate) async fn run<R>(self, retries: R) -> PlatformResult<()>
     where
         R: GapRetryStore + 'static,
     {

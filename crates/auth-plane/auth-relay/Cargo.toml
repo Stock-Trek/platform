@@ -24,3 +24,6 @@ parking_lot = { workspace = true }
 async-trait = { workspace = true }
 chrono = { workspace = true }
 platform-auth-service = { workspace = true, features = ["test-utils"] }
+
+[lints]
+workspace = true

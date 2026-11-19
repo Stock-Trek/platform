@@ -1,2 +1,2 @@
-pub mod event_converter;
-pub mod github;
+pub(crate) mod event_converter;
+pub(crate) mod github;

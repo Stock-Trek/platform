@@ -1,20 +1,20 @@
 use aws_sdk_lambda::{Client as LambdaClient, primitives::Blob, types::InvocationType};
 use platform_errors::PlatformResult;
 
-pub struct Runner {
+pub(crate) struct Runner {
     client: LambdaClient,
     function_name: String,
 }
 
 impl Runner {
-    pub fn new(client: LambdaClient, function_name: String) -> Self {
+    pub(crate) fn new(client: LambdaClient, function_name: String) -> Self {
         Self {
             client,
             function_name,
         }
     }
 
-    pub async fn invoke(&self, request: &str) -> PlatformResult<()> {
+    pub(crate) async fn invoke(&self, request: &str) -> PlatformResult<()> {
         self.client
             .invoke()
             .function_name(&self.function_name)

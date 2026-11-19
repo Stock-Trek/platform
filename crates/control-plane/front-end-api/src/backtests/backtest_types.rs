@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum BacktestState {
+pub(crate) enum BacktestState {
     Queued,
     Running,
     Completed,
@@ -13,7 +13,7 @@ pub enum BacktestState {
 }
 
 impl BacktestState {
-    pub fn parse(value: &str) -> Option<Self> {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
         match value {
             "queued" => Some(Self::Queued),
             "running" => Some(Self::Running),
@@ -24,15 +24,15 @@ impl BacktestState {
         }
     }
 
-    pub fn is_active(&self) -> bool {
+    pub(crate) fn is_active(&self) -> bool {
         matches!(self, Self::Queued | Self::Running)
     }
 
-    pub fn is_terminal(&self) -> bool {
+    pub(crate) fn is_terminal(&self) -> bool {
         !self.is_active()
     }
 
-    pub fn as_str(&self) -> &'static str {
+    pub(crate) fn as_str(&self) -> &'static str {
         match self {
             Self::Queued => "queued",
             Self::Running => "running",
@@ -45,7 +45,7 @@ impl BacktestState {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct CreateBacktestRequest {
+pub(crate) struct CreateBacktestRequest {
     pub algorithm_id: String,
     pub build_id: String,
     pub strategy_name: String,
@@ -54,28 +54,28 @@ pub struct CreateBacktestRequest {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BacktestCreated {
+pub(crate) struct BacktestCreated {
     pub backtest_id: String,
     pub state: BacktestState,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BacktestError {
+pub(crate) struct BacktestError {
     pub code: String,
     pub message: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BacktestProgress {
+pub(crate) struct BacktestProgress {
     pub completed: u64,
     pub total: u64,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BacktestStatus {
+pub(crate) struct BacktestStatus {
     pub backtest_id: String,
     pub algorithm_id: String,
     pub build_id: String,
@@ -95,7 +95,7 @@ pub struct BacktestStatus {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BacktestResultItem {
+pub(crate) struct BacktestResultItem {
     pub sequence: u64,
     pub simulation: u64,
     pub result: serde_json::Value,
@@ -103,7 +103,7 @@ pub struct BacktestResultItem {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BacktestResultsPage {
+pub(crate) struct BacktestResultsPage {
     #[serde(flatten)]
     pub page: Page<BacktestResultItem>,
     pub state: BacktestState,
@@ -112,7 +112,7 @@ pub struct BacktestResultsPage {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ExportLink {
+pub(crate) struct ExportLink {
     pub url: String,
     #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,

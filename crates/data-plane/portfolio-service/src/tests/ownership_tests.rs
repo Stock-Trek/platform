@@ -267,7 +267,7 @@ struct SnapshotFeed {
 impl PortfolioFeed for SnapshotFeed {
     async fn set_accounts(
         &self,
-        _cex_id: stock_trek_types::cex::cex_id::CexId,
+        _cex_id: CexId,
         accounts: std::collections::BTreeSet<stock_trek_types::cex::account_id::AccountId>,
     ) -> PlatformResult<()> {
         if accounts.is_empty() {

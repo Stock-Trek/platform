@@ -11,4 +11,4 @@ mod service_tests;
 #[cfg(test)]
 mod test_support_tests;
 
-pub use service::{BackfillOptions, BackfillService};
+pub(crate) use service::{BackfillOptions, BackfillService};

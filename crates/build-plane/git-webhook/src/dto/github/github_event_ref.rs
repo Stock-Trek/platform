@@ -5,7 +5,7 @@ use crate::dto::github::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct GitHubEventRef {
+pub(crate) struct GitHubEventRef {
     pub installation: GitHubInstallation,
     pub r#ref: String,
     pub ref_type: GitHubRefType,

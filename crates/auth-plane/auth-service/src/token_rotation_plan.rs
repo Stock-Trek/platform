@@ -4,14 +4,14 @@ use platform_errors::{PlatformError, PlatformResult};
 use sha2::{Digest, Sha256};
 use std::collections::HashSet;
 
-pub struct TokenRotationIdentity;
+pub(crate) struct TokenRotationIdentity;
 
 impl TokenRotationIdentity {
-    pub fn transaction_id(original_id: &str, replacement_id: &str) -> String {
+    pub(crate) fn transaction_id(original_id: &str, replacement_id: &str) -> String {
         Self::id("transaction", &[original_id, replacement_id])
     }
 
-    pub fn event_id(transaction_id: &str, index: usize, event: &TokenAuditEvent) -> String {
+    pub(crate) fn event_id(transaction_id: &str, index: usize, event: &TokenAuditEvent) -> String {
         let index = index.to_string();
         let action = event.action.to_string();
         let token_id = event.token_id.as_deref().unwrap_or_default();

@@ -13,19 +13,19 @@ use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
 impl GitHubEventConverter {
-    pub fn is_zero_sha(sha: &str) -> bool {
+    pub(crate) fn is_zero_sha(sha: &str) -> bool {
         !sha.is_empty() && sha.bytes().all(|byte| byte == b'0')
     }
 
-    pub fn repo_ids(repositories: Vec<GitHubRepository>) -> Vec<String> {
+    pub(crate) fn repo_ids(repositories: Vec<GitHubRepository>) -> Vec<String> {
         repositories.into_iter().map(Self::repo_id).collect()
     }
 
-    pub fn repo_id(repository: GitHubRepository) -> String {
+    pub(crate) fn repo_id(repository: GitHubRepository) -> String {
         repository.id.to_string()
     }
 
-    pub fn ref_name(r#ref: &str) -> String {
+    pub(crate) fn ref_name(r#ref: &str) -> String {
         r#ref
             .strip_prefix("refs/heads/")
             .or_else(|| r#ref.strip_prefix("refs/tags/"))
@@ -33,7 +33,7 @@ impl GitHubEventConverter {
             .to_string()
     }
 
-    pub fn commit_ref(r#ref: &str) -> Option<(&str, SqsRefType)> {
+    pub(crate) fn commit_ref(r#ref: &str) -> Option<(&str, SqsRefType)> {
         if let Some(branch_name) = r#ref.strip_prefix("refs/heads/") {
             Some((branch_name, SqsRefType::Branch))
         } else if let Some(tag_name) = r#ref.strip_prefix("refs/tags/") {
@@ -43,7 +43,7 @@ impl GitHubEventConverter {
         }
     }
 
-    pub fn ref_type(ref_type: &GitHubRefType) -> Option<SqsRefType> {
+    pub(crate) fn ref_type(ref_type: &GitHubRefType) -> Option<SqsRefType> {
         match ref_type {
             GitHubRefType::Branch => Some(SqsRefType::Branch),
             GitHubRefType::Tag => Some(SqsRefType::Tag),
@@ -51,7 +51,7 @@ impl GitHubEventConverter {
         }
     }
 
-    pub fn host(&self, installation: &GitHubInstallation) -> PlatformResult<String> {
+    pub(crate) fn host(&self, installation: &GitHubInstallation) -> PlatformResult<String> {
         self.allowed_hosts
             .validate_url(&installation.html_url)
             .map_err(|error| match error {
@@ -69,7 +69,7 @@ impl GitHubEventConverter {
             })
     }
 
-    pub fn delivery_id(request: &lambda_http::Request) -> Option<String> {
+    pub(crate) fn delivery_id(request: &lambda_http::Request) -> Option<String> {
         request
             .headers()
             .get("x-github-delivery")
@@ -78,7 +78,7 @@ impl GitHubEventConverter {
             .map(str::to_owned)
     }
 
-    pub fn accept(
+    pub(crate) fn accept(
         host: String,
         delivery_id: Option<String>,
         installation_id: u64,
@@ -95,7 +95,7 @@ impl GitHubEventConverter {
         Ok(EventResponse::Accept(message.chunk()?))
     }
 
-    pub fn verify_signature(request: &lambda_http::Request, secret: &str) -> bool {
+    pub(crate) fn verify_signature(request: &lambda_http::Request, secret: &str) -> bool {
         let signature = request
             .headers()
             .get("x-hub-signature-256")

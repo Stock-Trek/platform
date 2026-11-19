@@ -1,2 +1,2 @@
-pub mod iris;
-pub mod reqwest;
+pub(crate) mod iris;
+pub(crate) mod reqwest;

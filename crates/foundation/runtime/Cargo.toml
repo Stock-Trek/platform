@@ -17,3 +17,6 @@ platform-nats = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["io-util", "macros", "net", "rt", "signal", "sync", "time"] }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

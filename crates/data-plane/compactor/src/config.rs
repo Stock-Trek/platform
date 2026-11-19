@@ -21,7 +21,7 @@ const COMPACTOR_LEASE_INITIAL_TOKEN: &str = "COMPACTOR_LEASE_INITIAL_TOKEN";
 const COMPACTOR_LEASE_CLOCK_SKEW_SECS: &str = "COMPACTOR_LEASE_CLOCK_SKEW_SECS";
 
 #[derive(Debug, Clone)]
-pub struct CompactorConfig {
+pub(crate) struct CompactorConfig {
     pub log_filter: String,
     pub s3_bucket: String,
     pub s3_prefix: String,
@@ -41,11 +41,11 @@ pub struct CompactorConfig {
 }
 
 impl CompactorConfig {
-    pub fn from_env() -> PlatformResult<Self> {
+    pub(crate) fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+    pub(crate) fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(COMPACTOR_S3_BUCKET)?;
         let s3_prefix = vars.required(COMPACTOR_S3_PREFIX)?;
@@ -177,7 +177,7 @@ impl CompactorConfig {
         }
     }
 
-    pub fn lease_ttl_for(&self, kind: platform_archive::ArchiveKind) -> Duration {
+    pub(crate) fn lease_ttl_for(&self, kind: platform_archive::ArchiveKind) -> Duration {
         match kind {
             platform_archive::ArchiveKind::Events => self.lease_ttl_events,
             platform_archive::ArchiveKind::Candles => self.lease_ttl_candles,

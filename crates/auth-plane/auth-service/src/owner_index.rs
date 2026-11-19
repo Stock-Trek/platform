@@ -4,7 +4,7 @@ use platform_errors::{PlatformError, PlatformResult};
 use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 
-pub const OWNER_INDEX_PREFIX: &str = "index/owners/";
+pub(crate) const OWNER_INDEX_PREFIX: &str = "index/owners/";
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct OwnerIndexEntry {

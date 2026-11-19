@@ -13,11 +13,11 @@ use tokio::sync::Mutex;
 use tracing::warn;
 
 #[async_trait]
-pub trait ArchiveBatchSource: Send + Sync {
+pub(crate) trait ArchiveBatchSource: Send + Sync {
     async fn pending_batches(&self) -> PlatformResult<Vec<SourceBatch>>;
 }
 
-pub struct S3ArchiveSource {
+pub(crate) struct S3ArchiveSource {
     pub(super) lister: Arc<dyn ObjectLister>,
     catalog: Arc<dyn ArchiveCatalog>,
     bucket: Bucket,
@@ -28,7 +28,7 @@ pub struct S3ArchiveSource {
 }
 
 impl S3ArchiveSource {
-    pub fn new(
+    pub(crate) fn new(
         catalog: Arc<dyn ArchiveCatalog>,
         lister: Arc<dyn ObjectLister>,
         bucket: Bucket,
@@ -47,7 +47,7 @@ impl S3ArchiveSource {
         }
     }
 
-    pub async fn connect(
+    pub(crate) async fn connect(
         config: &CompactorConfig,
         catalog: Arc<dyn ArchiveCatalog>,
     ) -> PlatformResult<Self> {

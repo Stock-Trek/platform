@@ -1,1 +1,1 @@
-pub mod algorithm;
+pub(crate) mod algorithm;

@@ -3,4 +3,4 @@ mod lifecycle;
 mod runs;
 mod validation;
 
-pub use lifecycle::BotService;
+pub(crate) use lifecycle::BotService;

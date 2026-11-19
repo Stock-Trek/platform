@@ -6,14 +6,14 @@ use platform_aws::SsmSecrets;
 use platform_errors::PlatformResult;
 use platform_github::HostAllowlist;
 
-pub trait EventConverter: Send + Sync {
+pub(crate) trait EventConverter: Send + Sync {
     fn event_response(&self, event: &Request) -> PlatformResult<EventResponse>;
 }
 
-pub struct EventConverters;
+pub(crate) struct EventConverters;
 
 impl EventConverters {
-    pub fn all(
+    pub(crate) fn all(
         secrets: &SsmSecrets,
         allowed_hosts: HostAllowlist,
     ) -> PlatformResult<Vec<Box<dyn EventConverter>>> {

@@ -15,19 +15,19 @@ use stock_trek_types::cex::cex_id::CexId;
 use tracing::{info, warn};
 
 #[derive(Debug, Clone)]
-pub struct BackfillOptions {
+pub(crate) struct BackfillOptions {
     pub event_subject_prefix: String,
 }
 
 impl BackfillOptions {
-    pub fn subject_for(&self, exchange: CexId, stream: &str) -> String {
+    pub(crate) fn subject_for(&self, exchange: CexId, stream: &str) -> String {
         MarketEventSubject::new(&self.event_subject_prefix, exchange).event(stream)
     }
 }
 
 /// Turns gap markers into reconstructed market events on the ingester's event
 /// subjects.
-pub struct BackfillService<S, F, P> {
+pub(crate) struct BackfillService<S, F, P> {
     pub source: S,
     pub fetcher: F,
     pub publisher: P,
@@ -41,7 +41,7 @@ where
     F: MissingEventFetcher,
     P: EventPublisher,
 {
-    pub fn new(
+    pub(crate) fn new(
         source: S,
         fetcher: F,
         publisher: P,
@@ -57,7 +57,7 @@ where
         }
     }
 
-    pub async fn run(self) -> PlatformResult<()> {
+    pub(crate) async fn run(self) -> PlatformResult<()> {
         let pending = self.load_pending().await?;
         Runtime::run_until_shutdown(self.process_gaps(pending)).await
     }
@@ -137,7 +137,7 @@ where
         pending.insert(gap.key(), gap);
     }
 
-    pub async fn load_pending(&self) -> PlatformResult<BTreeMap<String, PendingGap>> {
+    pub(crate) async fn load_pending(&self) -> PlatformResult<BTreeMap<String, PendingGap>> {
         let mut pending = BTreeMap::new();
         for gap in self.retries.load().await? {
             pending.insert(gap.key(), gap);
@@ -145,7 +145,11 @@ where
         Ok(pending)
     }
 
-    pub async fn accept(&mut self, gap: GapMarker, pending: &mut BTreeMap<String, PendingGap>) {
+    pub(crate) async fn accept(
+        &mut self,
+        gap: GapMarker,
+        pending: &mut BTreeMap<String, PendingGap>,
+    ) {
         if !self.fetcher.supports(gap.exchange) {
             let _ = self.source.ack(&gap).await;
             return;

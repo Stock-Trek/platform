@@ -1,3 +1,4 @@
+allow-unwrap-in-tests = true
 large-error-threshold = 256
 
 disallowed-methods = [

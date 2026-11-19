@@ -14,20 +14,20 @@ use std::{
 /// Redeliveries handled by another environment are still deduped downstream
 /// when the build orchestrator consumes them from SQS.
 #[derive(Clone)]
-pub struct DeliveryDedup {
+pub(crate) struct DeliveryDedup {
     seen: Arc<Mutex<LruCache<String, Instant>>>,
     ttl: Duration,
 }
 
 impl DeliveryDedup {
-    pub fn new(capacity: NonZeroUsize, ttl: Duration) -> Self {
+    pub(crate) fn new(capacity: NonZeroUsize, ttl: Duration) -> Self {
         Self {
             seen: Arc::new(Mutex::new(LruCache::new(capacity))),
             ttl,
         }
     }
 
-    pub fn claim(&self, delivery_id: &str) -> Option<DeliveryDedupGuard> {
+    pub(crate) fn claim(&self, delivery_id: &str) -> Option<DeliveryDedupGuard> {
         let mut seen = self.seen.lock();
         if seen
             .get(delivery_id)
@@ -45,19 +45,19 @@ impl DeliveryDedup {
 
     /// Removes `delivery_id` so a later retry can be processed after a failed
     /// attempt.
-    pub fn forget(&self, delivery_id: &str) {
+    pub(crate) fn forget(&self, delivery_id: &str) {
         self.seen.lock().pop(delivery_id);
     }
 }
 
-pub struct DeliveryDedupGuard {
+pub(crate) struct DeliveryDedupGuard {
     dedup: DeliveryDedup,
     delivery_id: String,
     completed: bool,
 }
 
 impl DeliveryDedupGuard {
-    pub fn complete(mut self) {
+    pub(crate) fn complete(mut self) {
         self.completed = true;
     }
 }

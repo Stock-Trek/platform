@@ -23,14 +23,14 @@ use std::{
 use tracing::info;
 
 /// The form field that holds the object body in an S3 pre-signed POST.
-pub const FILE_FIELD: &str = "file";
+pub(crate) const FILE_FIELD: &str = "file";
 
 /// The form field holding the base64-encoded POST policy.
-pub const POLICY_FIELD: &str = "policy";
+pub(crate) const POLICY_FIELD: &str = "policy";
 
 /// A pre-signed POST target for uploading build artifacts.
 #[derive(Debug, Clone)]
-pub struct SignedPost {
+pub(crate) struct SignedPost {
     url: String,
     fields: BTreeMap<String, String>,
     pub max_artifact_size_bytes: Option<NonZeroU64>,
@@ -38,7 +38,7 @@ pub struct SignedPost {
 }
 
 impl SignedPost {
-    pub fn from_build_request(
+    pub(crate) fn from_build_request(
         payload: &BuildRequestSignedPost,
         timeout: Duration,
     ) -> PlatformResult<Self> {
@@ -49,7 +49,7 @@ impl SignedPost {
         })
     }
 
-    pub fn new(
+    pub(crate) fn new(
         url: String,
         fields: BTreeMap<String, String>,
         timeout: Duration,
@@ -87,7 +87,7 @@ impl SignedPost {
     }
 
     /// Override the artifact size limit advertised by the signed POST policy.
-    pub fn with_max_artifact_size(mut self, max_bytes: NonZeroU64) -> Self {
+    pub(crate) fn with_max_artifact_size(mut self, max_bytes: NonZeroU64) -> Self {
         self.max_artifact_size_bytes = Some(max_bytes);
         self
     }
@@ -109,13 +109,13 @@ impl SignedPost {
     }
 
     /// Upload `path` using the configured pre-signed POST.
-    pub async fn upload(&self, path: &Path) -> PlatformResult<()> {
+    pub(crate) async fn upload(&self, path: &Path) -> PlatformResult<()> {
         let file_name = Self::file_name(path)?;
         self.upload_named(path, Path::new(&file_name)).await
     }
 
     /// Upload `path` using `name` as the S3 object name.
-    pub async fn upload_named(&self, path: &Path, name: &Path) -> PlatformResult<()> {
+    pub(crate) async fn upload_named(&self, path: &Path, name: &Path) -> PlatformResult<()> {
         let metadata = tokio::fs::metadata(path).await.map_err(|source| {
             PlatformError::io("read artifact", path.display().to_string(), source)
         })?;

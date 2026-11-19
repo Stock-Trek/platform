@@ -208,7 +208,7 @@ impl ArchiveCatalog for IcebergCatalog {
     async fn expire_snapshots(
         &self,
         table: ArchiveIcebergTable,
-        older_than: platform_types::TimestampMilliseconds,
+        older_than: TimestampMilliseconds,
         retain_last: usize,
         context: &CommitContext,
     ) -> PlatformResult<usize> {

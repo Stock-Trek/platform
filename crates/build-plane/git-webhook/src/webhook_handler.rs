@@ -39,10 +39,10 @@ impl WebhookOutcome {
     }
 }
 
-pub struct WebhookHandler;
+pub(crate) struct WebhookHandler;
 
 impl WebhookHandler {
-    pub async fn handle(
+    pub(crate) async fn handle(
         &self,
         context: &RsWebhookContext,
         event: Request,

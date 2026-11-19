@@ -34,3 +34,6 @@ stock-trek-types = { workspace = true, features = ["serde"] }
 tokio = { workspace = true, features = ["fs", "macros", "rt", "rt-multi-thread", "sync", "time"] }
 tracing = { workspace = true }
 uuid = { workspace = true }
+
+[lints]
+workspace = true

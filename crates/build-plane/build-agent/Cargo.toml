@@ -22,3 +22,6 @@ tempfile = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "macros", "net", "process", "rt", "rt-multi-thread", "time"] }
 tracing = { workspace = true }
 zip = { workspace = true, default-features = false, features = ["deflate"] }
+
+[lints]
+workspace = true

@@ -7,11 +7,11 @@ use chrono::{DateTime, Duration, Utc};
 use parking_lot::Mutex;
 use std::collections::HashMap;
 
-pub const ACCESS_TTL: Duration = Duration::minutes(15);
-pub const REFRESH_TTL: Duration = Duration::hours(12);
-pub const STEP_UP_TTL: Duration = Duration::minutes(5);
-pub const LOGIN_SCOPES: [Scope; 2] = [Scope::Read, Scope::Manage];
-pub const STEP_UP_SCOPES: [Scope; 3] = [Scope::Read, Scope::Manage, Scope::Admin];
+pub(super) const ACCESS_TTL: Duration = Duration::minutes(15);
+pub(super) const REFRESH_TTL: Duration = Duration::hours(12);
+pub(super) const STEP_UP_TTL: Duration = Duration::minutes(5);
+pub(super) const LOGIN_SCOPES: [Scope; 2] = [Scope::Read, Scope::Manage];
+pub(super) const STEP_UP_SCOPES: [Scope; 3] = [Scope::Read, Scope::Manage, Scope::Admin];
 
 struct Login {
     owner: String,
@@ -32,14 +32,14 @@ struct State {
     access: HashMap<String, AccessSession>,
 }
 
-pub struct SessionStore {
+pub(crate) struct SessionStore {
     signer: JwtSigner,
     state: Mutex<State>,
     refresh: RefreshStore,
 }
 
 impl SessionStore {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             signer: JwtSigner::generate(),
             state: Mutex::new(State::default()),
@@ -48,7 +48,7 @@ impl SessionStore {
     }
 
     #[allow(dead_code)]
-    pub fn register_login(&self, login_id: &str, owner: &str, secret: &str) {
+    pub(crate) fn register_login(&self, login_id: &str, owner: &str, secret: &str) {
         self.state.lock().logins.insert(
             login_id.to_string(),
             Login {
@@ -58,19 +58,19 @@ impl SessionStore {
         );
     }
 
-    pub fn verify_login(&self, login_id: &str, secret: &str) -> Option<String> {
+    pub(crate) fn verify_login(&self, login_id: &str, secret: &str) -> Option<String> {
         let state = self.state.lock();
         let login = state.logins.get(login_id)?;
         (login.secret == secret).then(|| login.owner.clone())
     }
 
-    pub fn verify_login_by_owner(&self, owner: &str, secret: &str) -> Option<String> {
+    pub(crate) fn verify_login_by_owner(&self, owner: &str, secret: &str) -> Option<String> {
         let state = self.state.lock();
         let login = state.logins.values().find(|login| login.owner == owner)?;
         (login.secret == secret).then(|| login.owner.clone())
     }
 
-    pub fn issue_login(&self, owner: &str, now: DateTime<Utc>) -> SessionTokens {
+    pub(crate) fn issue_login(&self, owner: &str, now: DateTime<Utc>) -> SessionTokens {
         let family = Id::mint("family");
         let (tokens, session_id) = self.mint_tokens(
             owner,
@@ -90,7 +90,7 @@ impl SessionStore {
         tokens
     }
 
-    pub fn access(&self, token: &str, now: DateTime<Utc>) -> Option<(String, Vec<Scope>)> {
+    pub(crate) fn access(&self, token: &str, now: DateTime<Utc>) -> Option<(String, Vec<Scope>)> {
         let claims = self.signer.verify_access(token)?;
         let state = self.state.lock();
         let session = state.access.get(&claims.sid)?;
@@ -105,11 +105,11 @@ impl SessionStore {
         Some((session.owner.clone(), session.scopes.clone()))
     }
 
-    pub fn session_id(&self, token: &str) -> Option<String> {
+    pub(crate) fn session_id(&self, token: &str) -> Option<String> {
         self.signer.verify_session_id(token)
     }
 
-    pub fn revoked(&self, session_id: &str) -> bool {
+    pub(crate) fn revoked(&self, session_id: &str) -> bool {
         let state = self.state.lock();
         state
             .access
@@ -117,7 +117,7 @@ impl SessionStore {
             .is_none_or(|session| session.revoked)
     }
 
-    pub fn rotate_refresh(&self, token: &str, now: DateTime<Utc>) -> Option<SessionTokens> {
+    pub(crate) fn rotate_refresh(&self, token: &str, now: DateTime<Utc>) -> Option<SessionTokens> {
         match self
             .refresh
             .rotate(token, now, |owner, family, family_expiry| {
@@ -136,7 +136,7 @@ impl SessionStore {
         }
     }
 
-    pub fn issue_step_up(&self, owner: &str, now: DateTime<Utc>) -> StepUpTokens {
+    pub(crate) fn issue_step_up(&self, owner: &str, now: DateTime<Utc>) -> StepUpTokens {
         let (tokens, session_id) = self.mint_tokens(owner, &STEP_UP_SCOPES, now, STEP_UP_TTL, None);
         let mut state = self.state.lock();
         Self::admit(&mut state, "", &session_id, &tokens);
@@ -146,7 +146,7 @@ impl SessionStore {
         }
     }
 
-    pub fn revoke(&self, token: &str) {
+    pub(crate) fn revoke(&self, token: &str) {
         let Some(session_id) = self.signer.verify_session_id(token) else {
             return;
         };

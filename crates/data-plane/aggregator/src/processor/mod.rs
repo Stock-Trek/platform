@@ -22,4 +22,4 @@ mod tests;
 
 pub use config::ProcessorConfig;
 pub use engine::CandleProcessor;
-pub use update::ProcessorUpdate;
+pub(crate) use update::ProcessorUpdate;

@@ -38,3 +38,6 @@ tokio = { workspace = true, features = ["macros", "rt"] }
 tracing = { workspace = true }
 url = { workspace = true, features = ["serde"], optional = true }
 zip = { workspace = true, default-features = false, features = ["deflate"], optional = true }
+
+[lints]
+workspace = true

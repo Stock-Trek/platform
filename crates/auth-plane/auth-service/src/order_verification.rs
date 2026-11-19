@@ -6,7 +6,7 @@ use crate::{
 use chrono::{DateTime, Utc};
 use platform_errors::PlatformResult;
 
-pub const CLOCK_SKEW_SECONDS: i64 = 60;
+pub(crate) const CLOCK_SKEW_SECONDS: i64 = 60;
 
 impl AuthService {
     pub async fn verify_order_request(

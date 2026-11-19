@@ -15,7 +15,7 @@ use stock_trek_types::cex::cex_id::CexId;
 use tracing::debug;
 
 #[derive(Debug, Clone)]
-pub struct IngestOptions {
+pub(crate) struct IngestOptions {
     pub exchange: CexId,
     pub subject_prefix: String,
 }
@@ -30,7 +30,7 @@ impl IngestOptions {
     }
 }
 
-pub struct Ingester<P> {
+pub(crate) struct Ingester<P> {
     publisher: Arc<P>,
     options: IngestOptions,
     sequences: HashMap<String, SequenceTracker>,
@@ -39,7 +39,11 @@ pub struct Ingester<P> {
 }
 
 impl<P: EventPublisher> Ingester<P> {
-    pub fn new(publisher: Arc<P>, options: IngestOptions, store: Arc<dyn SequenceStore>) -> Self {
+    pub(crate) fn new(
+        publisher: Arc<P>,
+        options: IngestOptions,
+        store: Arc<dyn SequenceStore>,
+    ) -> Self {
         Self {
             publisher,
             options,
@@ -49,7 +53,7 @@ impl<P: EventPublisher> Ingester<P> {
         }
     }
 
-    pub async fn ingest(&mut self, message: ParsedMessage) -> PlatformResult<()> {
+    pub(crate) async fn ingest(&mut self, message: ParsedMessage) -> PlatformResult<()> {
         let ParsedMessage {
             stream,
             sequence,

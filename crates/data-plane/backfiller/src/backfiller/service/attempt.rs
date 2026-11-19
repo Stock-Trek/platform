@@ -19,7 +19,7 @@ where
     F: MissingEventFetcher,
     P: EventPublisher,
 {
-    pub async fn attempt(
+    pub(crate) async fn attempt(
         &self,
         pending: PendingGap,
         all_pending: &mut BTreeMap<String, PendingGap>,

@@ -5,7 +5,7 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RunRequest {
+pub(crate) struct RunRequest {
     pub cwasm_get_url: String,
     pub cwasm_sha256: String,
     pub cwasm_size: u64,
@@ -24,12 +24,12 @@ pub struct RunRequest {
     rename_all = "camelCase",
     rename_all_fields = "camelCase"
 )]
-pub enum RunCommand {
+pub(crate) enum RunCommand {
     Algorithm { strategy_name: String },
 }
 
 impl RunRequest {
-    pub fn from_record(
+    pub(crate) fn from_record(
         record: &RunRecord,
         cwasm_get_url: String,
         order_request_url: String,
@@ -51,7 +51,7 @@ impl RunRequest {
         }
     }
 
-    pub fn log_key(record: &RunRecord) -> String {
+    pub(crate) fn log_key(record: &RunRecord) -> String {
         format!(
             "logs/{}/{}.log",
             record.algorithm_id,
@@ -59,7 +59,7 @@ impl RunRequest {
         )
     }
 
-    pub fn to_json(&self) -> PlatformResult<String> {
+    pub(crate) fn to_json(&self) -> PlatformResult<String> {
         serde_json::to_string(self).map_err(PlatformError::external)
     }
 }

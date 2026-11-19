@@ -10,16 +10,16 @@ use hyper::body::Bytes;
 use hyper::{Method, Response, StatusCode};
 use std::sync::Arc;
 
-pub struct SessionApi {
+pub(crate) struct SessionApi {
     sessions: Arc<SessionService>,
 }
 
 impl SessionApi {
-    pub fn new(sessions: Arc<SessionService>) -> Self {
+    pub(crate) fn new(sessions: Arc<SessionService>) -> Self {
         Self { sessions }
     }
 
-    pub fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
+    pub(crate) fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         match request.segments().as_slice() {
             ["session"] => match *request.method() {
                 Method::POST => self.login(request),

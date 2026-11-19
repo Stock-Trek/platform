@@ -14,7 +14,7 @@ const CANDLES_DURABLE_NAME: &str = "archiver-candles";
 
 /// Source of records that should be written to the archive.
 #[async_trait]
-pub trait ArchiveSource: Send {
+pub(crate) trait ArchiveSource: Send {
     /// Returns `None` when the source has reached its end.
     async fn next_record(&mut self) -> PlatformResult<Option<ArchiveRecord>>;
 
@@ -32,7 +32,7 @@ pub trait ArchiveSource: Send {
 /// a restart instead of being lost. The consumer acknowledgement window is
 /// derived from the flush interval so a buffered batch is not redelivered while
 /// it is waiting to be flushed.
-pub struct NatsArchiveSource {
+pub(crate) struct NatsArchiveSource {
     events: JetStreamConsumer,
     candles: JetStreamConsumer,
     in_flight: VecDeque<InFlight>,
@@ -51,7 +51,7 @@ enum Consumer {
 }
 
 impl NatsArchiveSource {
-    pub async fn connect(config: &ArchiverConfig) -> PlatformResult<Self> {
+    pub(crate) async fn connect(config: &ArchiverConfig) -> PlatformResult<Self> {
         let ack_wait = config.ack_wait();
         let events = JetStreamConsumer::connect_with_start_and_ack_wait(
             &config.nats_url,

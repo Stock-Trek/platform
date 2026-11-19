@@ -7,17 +7,17 @@ use std::{sync::Arc, time::Instant};
 use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Clone)]
-pub struct HealthReporter {
+pub(super) struct HealthReporter {
     cex_id: CexId,
     sink: Arc<dyn ConnectorHealthSink>,
 }
 
 impl HealthReporter {
-    pub fn new(cex_id: CexId, sink: Arc<dyn ConnectorHealthSink>) -> Self {
+    pub(super) fn new(cex_id: CexId, sink: Arc<dyn ConnectorHealthSink>) -> Self {
         Self { cex_id, sink }
     }
 
-    pub async fn publish(
+    pub(super) async fn publish(
         &self,
         state: ConnectorState,
         subscriptions: usize,

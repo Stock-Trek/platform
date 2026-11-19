@@ -9,12 +9,12 @@ use crate::sequence_tracker::{
 
 /// Sequence state kept in process memory.
 #[derive(Debug, Default)]
-pub struct InMemorySequenceStore {
+pub(crate) struct InMemorySequenceStore {
     trackers: Mutex<HashMap<String, SequenceTracker>>,
 }
 
 impl InMemorySequenceStore {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 }

@@ -9,14 +9,14 @@ use std::{
 };
 use wasmtime::Engine;
 
-pub struct Watchdog {
+pub(super) struct Watchdog {
     finished: Arc<(Mutex<bool>, Condvar)>,
     timed_out: Arc<AtomicBool>,
     handle: Option<thread::JoinHandle<()>>,
 }
 
 impl Watchdog {
-    pub fn start(engine: Engine, timeout: Duration) -> Self {
+    pub(super) fn start(engine: Engine, timeout: Duration) -> Self {
         let finished = Arc::new((Mutex::new(false), Condvar::new()));
         let timed_out = Arc::new(AtomicBool::new(false));
         let thread_finished = Arc::clone(&finished);
@@ -37,7 +37,7 @@ impl Watchdog {
         }
     }
 
-    pub fn timed_out(&self) -> bool {
+    pub(super) fn timed_out(&self) -> bool {
         self.timed_out.load(Ordering::SeqCst)
     }
 }

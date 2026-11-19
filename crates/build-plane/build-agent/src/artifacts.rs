@@ -4,27 +4,27 @@ use platform_errors::{PlatformError, PlatformResult};
 use std::{io::Write, path::PathBuf, sync::Arc};
 use tempfile::TempDir;
 
-pub const WASM_MANIFEST: &str = "crates/sandbox-plane/runner/Cargo.toml";
-pub const WASM_TARGET: &str = "wasm32-wasip1";
-pub const WASM_PROFILE: &str = "agent";
-pub const WASM_ARTIFACT_FILE: &str = "platform_runner.wasm";
-pub const CWASM_ARTIFACT_FILE: &str = "runner.cwasm";
-pub const SOURCE_TARGET_DIR: &str = "target";
-pub const USER_GENERATED_DIR: &str = "crates/sandbox-plane/runner/src/user_generated";
-pub const USER_GENERATED_ARCHIVE: &str = "sources.zip";
-pub const COMPILE_OUTPUT_FILE: &str = "compile-output.txt";
-pub const WORKSPACE_ENTRIES: &[&str] = &[
+pub(crate) const WASM_MANIFEST: &str = "crates/sandbox-plane/runner/Cargo.toml";
+pub(crate) const WASM_TARGET: &str = "wasm32-wasip1";
+pub(crate) const WASM_PROFILE: &str = "agent";
+pub(crate) const WASM_ARTIFACT_FILE: &str = "platform_runner.wasm";
+pub(crate) const CWASM_ARTIFACT_FILE: &str = "runner.cwasm";
+pub(crate) const SOURCE_TARGET_DIR: &str = "target";
+pub(crate) const USER_GENERATED_DIR: &str = "crates/sandbox-plane/runner/src/user_generated";
+pub(crate) const USER_GENERATED_ARCHIVE: &str = "sources.zip";
+pub(crate) const COMPILE_OUTPUT_FILE: &str = "compile-output.txt";
+pub(crate) const WORKSPACE_ENTRIES: &[&str] = &[
     "Cargo.toml",
     "Cargo.lock",
     "crates",
     ".cargo",
     "rust-toolchain.toml",
 ];
-pub const CARGO: &str = "cargo";
-pub const WASMTIME: &str = "wasmtime";
+pub(crate) const CARGO: &str = "cargo";
+pub(crate) const WASMTIME: &str = "wasmtime";
 
 #[derive(Clone)]
-pub struct Artifacts {
+pub(crate) struct Artifacts {
     pub signed_post: SignedPost,
     pub source_get_url: String,
     pub source_dir: PathBuf,
@@ -35,7 +35,7 @@ pub struct Artifacts {
 }
 
 impl Artifacts {
-    pub fn with_source_limits(
+    pub(crate) fn with_source_limits(
         signed_post: SignedPost,
         source_get_url: String,
         source_dir: PathBuf,
@@ -60,7 +60,7 @@ impl Artifacts {
         })
     }
 
-    pub async fn compile(&self) -> PlatformResult<PathBuf> {
+    pub(crate) async fn compile(&self) -> PlatformResult<PathBuf> {
         self.prepare_workspace()?;
         let sources = self.unpack_source().await?;
         Self::validate_user_generated(&sources)?;
@@ -69,7 +69,7 @@ impl Artifacts {
         self.compile_wasm(&wasm).await
     }
 
-    pub fn command_output(command: &str, output: &std::process::Output) -> Vec<u8> {
+    pub(crate) fn command_output(command: &str, output: &std::process::Output) -> Vec<u8> {
         let mut captured = Vec::new();
         let _ = write!(
             captured,
@@ -88,11 +88,11 @@ impl Artifacts {
         captured
     }
 
-    pub fn set_compile_output(&self, output: Vec<u8>) {
+    pub(crate) fn set_compile_output(&self, output: Vec<u8>) {
         *self.compile_output.lock() = Some(output);
     }
 
-    pub fn take_compile_output(&self) -> Option<Vec<u8>> {
+    pub(crate) fn take_compile_output(&self) -> Option<Vec<u8>> {
         self.compile_output.lock().take()
     }
 }

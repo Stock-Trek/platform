@@ -18,18 +18,18 @@ struct Record {
     body: Bytes,
 }
 
-pub struct IdempotencyStore {
+pub(crate) struct IdempotencyStore {
     records: Mutex<HashMap<String, Record>>,
 }
 
 impl IdempotencyStore {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             records: Mutex::new(HashMap::new()),
         }
     }
 
-    pub fn apply(
+    pub(crate) fn apply(
         &self,
         request: &ApiRequest,
         owner: &str,

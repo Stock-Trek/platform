@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum AlgorithmState {
+pub(crate) enum AlgorithmState {
     Active,
     #[allow(dead_code)]
     Disconnected,
@@ -12,7 +12,7 @@ pub enum AlgorithmState {
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
-pub struct Repository {
+pub(crate) struct Repository {
     pub provider: String,
     pub host: String,
     pub repo: String,
@@ -20,7 +20,7 @@ pub struct Repository {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AlgorithmSummary {
+pub(crate) struct AlgorithmSummary {
     pub algorithm_id: String,
     pub name: String,
     pub repository: Repository,
@@ -31,7 +31,7 @@ pub struct AlgorithmSummary {
 }
 
 impl AlgorithmSummary {
-    pub fn default_git_ref(&self) -> String {
+    pub(crate) fn default_git_ref(&self) -> String {
         let default_ref = &self.default_ref;
         if default_ref.starts_with("heads/") || default_ref.starts_with("tags/") {
             default_ref.clone()
@@ -43,7 +43,7 @@ impl AlgorithmSummary {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum BuildState {
+pub(crate) enum BuildState {
     Queued,
     Building,
     Ready,
@@ -51,7 +51,7 @@ pub enum BuildState {
 }
 
 impl BuildState {
-    pub fn parse(value: &str) -> Option<Self> {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
         match value {
             "queued" => Some(Self::Queued),
             "building" => Some(Self::Building),
@@ -61,14 +61,14 @@ impl BuildState {
         }
     }
 
-    pub fn is_incomplete(&self) -> bool {
+    pub(crate) fn is_incomplete(&self) -> bool {
         matches!(self, Self::Queued | Self::Building)
     }
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BuildSummary {
+pub(crate) struct BuildSummary {
     pub build_id: String,
     pub algorithm_id: String,
     #[serde(rename = "ref")]
@@ -86,7 +86,7 @@ pub struct BuildSummary {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct TriggerBuildRequest {
+pub(crate) struct TriggerBuildRequest {
     #[serde(rename = "ref")]
     pub git_ref: Option<String>,
     pub commit: Option<String>,
@@ -94,14 +94,14 @@ pub struct TriggerBuildRequest {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Strategy {
+pub(crate) struct Strategy {
     pub name: String,
     pub description: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct BuildLogLink {
+pub(crate) struct BuildLogLink {
     pub url: String,
     #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,

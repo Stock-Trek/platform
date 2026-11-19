@@ -154,12 +154,12 @@ impl AggregatorState {
 }
 
 /// Serializes grouped open candles as one deterministically sorted list.
-pub mod open_candles {
+pub(super) mod open_candles {
     use platform_market_data::{Candle, CandleKey};
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::collections::HashMap;
 
-    pub fn serialize<S>(
+    pub(crate) fn serialize<S>(
         candles: &HashMap<CandleKey, Vec<Candle>>,
         serializer: S,
     ) -> Result<S::Ok, S::Error>
@@ -174,7 +174,9 @@ pub mod open_candles {
         values.serialize(serializer)
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<HashMap<CandleKey, Vec<Candle>>, D::Error>
+    pub(crate) fn deserialize<'de, D>(
+        deserializer: D,
+    ) -> Result<HashMap<CandleKey, Vec<Candle>>, D::Error>
     where
         D: Deserializer<'de>,
     {

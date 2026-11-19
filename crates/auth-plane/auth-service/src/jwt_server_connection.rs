@@ -13,10 +13,10 @@ use tokio::{net::TcpStream, sync::watch};
 
 const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub struct JwtServerConnection;
+pub(crate) struct JwtServerConnection;
 
 impl JwtServerConnection {
-    pub async fn serve(
+    pub(crate) async fn serve(
         stream: TcpStream,
         service: Arc<AuthService>,
         sigv4: Arc<SigV4Config>,

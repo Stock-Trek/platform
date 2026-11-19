@@ -119,7 +119,7 @@ impl SsmSecrets {
         timeouts: Timeouts,
         deadline: Deadline,
         operation: &'static str,
-        future: impl std::future::Future<Output = PlatformResult<T>>,
+        future: impl Future<Output = PlatformResult<T>>,
     ) -> PlatformResult<T> {
         let timeout = timeouts.operation_timeout(deadline)?;
         tokio::time::timeout(timeout, future)

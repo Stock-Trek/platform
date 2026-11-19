@@ -5,10 +5,10 @@ use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 const USER_GENERATED_PREFIX: &str = "crates/sandbox-plane/runner/src/user_generated/";
 
-pub struct SourceArchive;
+pub(crate) struct SourceArchive;
 
 impl SourceArchive {
-    pub fn create(files: &[GitFile]) -> PlatformResult<Vec<u8>> {
+    pub(crate) fn create(files: &[GitFile]) -> PlatformResult<Vec<u8>> {
         let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
         for file in files {

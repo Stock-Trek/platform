@@ -16,7 +16,7 @@ const WEBHOOK_SECRET_FAILURE_BACKOFF_SECS: &str = "WEBHOOK_SECRET_FAILURE_BACKOF
 
 /// Configuration required by the webhook process.
 #[derive(Debug, Clone)]
-pub struct WebhookConfig {
+pub(crate) struct WebhookConfig {
     pub log_filter: String,
     pub lambda_function_name: String,
     pub deadline_buffer: Duration,
@@ -32,11 +32,11 @@ pub struct WebhookConfig {
 }
 
 impl WebhookConfig {
-    pub fn from_env() -> PlatformResult<Self> {
+    pub(crate) fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+    pub(crate) fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         Ok(Self {
             log_filter: vars.required_log_filter(RUST_LOG)?,
             lambda_function_name: vars.required(AWS_LAMBDA_FUNCTION_NAME)?,

@@ -11,7 +11,7 @@ const PAGE_LIMIT: u64 = 1_000;
 
 /// One exchange record reconstructed from a REST API.
 #[derive(Debug, Clone)]
-pub struct BackfilledEvent {
+pub(crate) struct BackfilledEvent {
     pub sequence: u64,
     pub exchange_timestamp: TimestampMilliseconds,
     /// The exchange-specific `data` object, without the stream envelope.
@@ -20,7 +20,7 @@ pub struct BackfilledEvent {
 
 /// Fetches the exchange records covered by a gap marker.
 #[async_trait]
-pub trait MissingEventFetcher: Send + Sync {
+pub(crate) trait MissingEventFetcher: Send + Sync {
     fn supports(&self, _exchange: CexId) -> bool {
         true
     }
@@ -61,19 +61,23 @@ where
 }
 
 #[derive(Default)]
-pub struct FetcherRegistry {
+pub(crate) struct FetcherRegistry {
     fetchers: HashMap<CexId, Arc<dyn MissingEventFetcher>>,
 }
 
 impl FetcherRegistry {
-    pub fn insert<F>(&mut self, exchange: CexId, fetcher: F) -> Option<Arc<dyn MissingEventFetcher>>
+    pub(crate) fn insert<F>(
+        &mut self,
+        exchange: CexId,
+        fetcher: F,
+    ) -> Option<Arc<dyn MissingEventFetcher>>
     where
         F: MissingEventFetcher + 'static,
     {
         self.fetchers.insert(exchange, Arc::new(fetcher))
     }
 
-    pub fn fetcher(&self, exchange: CexId) -> Option<&dyn MissingEventFetcher> {
+    pub(crate) fn fetcher(&self, exchange: CexId) -> Option<&dyn MissingEventFetcher> {
         self.fetchers.get(&exchange).map(|fetcher| fetcher.as_ref())
     }
 
@@ -110,7 +114,7 @@ impl MissingEventFetcher for FetcherRegistry {
 }
 
 /// Shared pagination structure for exchange-specific REST fetchers.
-pub struct PaginatedFetcher<S> {
+pub(crate) struct PaginatedFetcher<S> {
     source: S,
 }
 
@@ -118,11 +122,11 @@ impl<S> PaginatedFetcher<S>
 where
     S: EventPageSource,
 {
-    pub fn new(source: S) -> Self {
+    pub(crate) fn new(source: S) -> Self {
         Self { source }
     }
 
-    pub async fn fetch_range(
+    pub(crate) async fn fetch_range(
         &self,
         symbol: &str,
         missing_from: u64,

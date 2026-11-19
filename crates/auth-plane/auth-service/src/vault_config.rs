@@ -52,7 +52,7 @@ impl VaultTokenStoreConfig {
         if self.address.trim().is_empty() {
             return Err(PlatformError::config_empty("vault_address"));
         }
-        let address = reqwest::Url::parse(self.address.trim())
+        let address = Url::parse(self.address.trim())
             .map_err(|e| PlatformError::config_invalid_source("vault_address", e))?;
         if !UrlScheme::from_url(&address).is_some_and(UrlScheme::is_http)
             || address.host_str().is_none()

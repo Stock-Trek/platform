@@ -11,7 +11,7 @@ const DURABLE_NAME: &str = "backfiller-gaps";
 
 /// Source of gap markers emitted by the ingester.
 #[async_trait]
-pub trait GapMarkerSource: Send {
+pub(crate) trait GapMarkerSource: Send {
     /// Returns `None` when the source has reached its end. Sources that wait
     /// indefinitely for new gaps must keep waiting through idle periods instead
     /// of reporting `None`.
@@ -27,13 +27,13 @@ pub trait GapMarkerSource: Send {
 ///
 /// Gap markers are acknowledged only after delivery to the backfiller, so
 /// unprocessed gaps are redelivered after a restart instead of being lost.
-pub struct NatsGapMarkerSource {
+pub(crate) struct NatsGapMarkerSource {
     gaps: JetStreamConsumer,
     in_flight: Option<Message>,
 }
 
 impl NatsGapMarkerSource {
-    pub async fn connect(config: &BackfillerConfig) -> PlatformResult<Self> {
+    pub(crate) async fn connect(config: &BackfillerConfig) -> PlatformResult<Self> {
         let subject =
             MarketEventSubject::new(&config.gap_subject_prefix, config.exchange).gap_wildcard();
         let durable = format!("{DURABLE_NAME}-{}", config.exchange).to_lowercase();

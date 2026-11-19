@@ -28,7 +28,7 @@ const MAINTAINER_MAX_REWRITE_BYTES_PER_HOUR: &str = "MAINTAINER_MAX_REWRITE_BYTE
 const MAINTAINER_MAX_WORK_SECS: &str = "MAINTAINER_MAX_WORK_SECS";
 
 #[derive(Debug, Clone)]
-pub struct MaintainerConfig {
+pub(crate) struct MaintainerConfig {
     pub log_filter: String,
     pub s3_bucket: String,
     pub output_prefix: String,
@@ -42,11 +42,11 @@ pub struct MaintainerConfig {
 }
 
 impl MaintainerConfig {
-    pub fn from_env() -> PlatformResult<Self> {
+    pub(crate) fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+    pub(crate) fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let s3_bucket = vars.required(MAINTAINER_S3_BUCKET)?;
         let output_prefix = vars.required(MAINTAINER_OUTPUT_PREFIX)?;

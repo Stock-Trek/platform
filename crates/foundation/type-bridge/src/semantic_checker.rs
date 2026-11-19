@@ -5,10 +5,10 @@ use stock_trek_types::cex::{
 };
 
 #[derive(Debug, Clone)]
-pub struct SemanticChecker;
+pub(crate) struct SemanticChecker;
 
 impl SemanticChecker {
-    pub fn consistent_or_err(
+    pub(crate) fn consistent_or_err(
         &self,
         order_request: &OrderRequest<AssetId, Decimal>,
         capabilities: &[CexCapability],

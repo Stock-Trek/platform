@@ -12,7 +12,7 @@ use crate::cwasm::backtest::{
 };
 
 impl Spec {
-    pub fn step_context(
+    pub(super) fn step_context(
         &self,
         step: usize,
         rng: &mut StdRng,

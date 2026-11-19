@@ -11,3 +11,6 @@ test-utils = []
 [dependencies]
 parking_lot = { workspace = true }
 metrics = { workspace = true }
+
+[lints]
+workspace = true

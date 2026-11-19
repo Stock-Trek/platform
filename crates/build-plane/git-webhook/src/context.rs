@@ -16,7 +16,7 @@ use std::{
 };
 use tokio::sync::{Mutex, MutexGuard, RwLock};
 
-pub type Converters = Arc<Vec<Box<dyn EventConverter>>>;
+pub(crate) type Converters = Arc<Vec<Box<dyn EventConverter>>>;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum LoadReason {
@@ -24,7 +24,7 @@ enum LoadReason {
     SignatureRefresh,
 }
 
-pub struct RsWebhookContext {
+pub(crate) struct RsWebhookContext {
     pub sqs: Sqs,
     sdk_config: SdkConfig,
     timeouts: Timeouts,
@@ -41,7 +41,7 @@ pub struct RsWebhookContext {
 }
 
 impl RsWebhookContext {
-    pub async fn new(config: &WebhookConfig) -> PlatformResult<Self> {
+    pub(crate) async fn new(config: &WebhookConfig) -> PlatformResult<Self> {
         let aws_timeouts = config.aws_timeouts;
         let sdk_config = platform_aws::Aws::load_sdk_config(aws_timeouts).await;
         let sqs = Sqs::new(
@@ -82,18 +82,18 @@ impl RsWebhookContext {
         Ok(context)
     }
 
-    pub fn dedup(&self) -> &DeliveryDedup {
+    pub(crate) fn dedup(&self) -> &DeliveryDedup {
         &self.dedup
     }
 
-    pub fn deadline_buffer(&self) -> Duration {
+    pub(crate) fn deadline_buffer(&self) -> Duration {
         self.deadline_buffer
     }
 
     /// Returns the current converters, loading secrets on first use. Failed
     /// loads are throttled by a jittered backoff so a flood of unauthenticated
     /// webhooks cannot amplify into unbounded SSM traffic.
-    pub async fn converters(&self, deadline: Deadline) -> PlatformResult<Converters> {
+    pub(crate) async fn converters(&self, deadline: Deadline) -> PlatformResult<Converters> {
         if let Some(converters) = self.converters.read().await.clone() {
             return Ok(converters);
         }
@@ -106,7 +106,7 @@ impl RsWebhookContext {
     /// rate limiting them stops forged webhooks from amplifying into a stream
     /// of outbound auth calls; callers should fall back to the cached
     /// converters (and reject the request) when `None` is returned.
-    pub async fn refresh_converters(
+    pub(crate) async fn refresh_converters(
         &self,
         deadline: Deadline,
     ) -> PlatformResult<Option<Converters>> {

@@ -14,19 +14,19 @@ use std::{
     path::{Path, PathBuf},
 };
 
-pub type PairKey = (String, String, String);
+pub(super) type PairKey = (String, String, String);
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ReplayRecord {
+pub(crate) struct ReplayRecord {
     pub pair: PairKey,
     pub event: MarketEvent,
     pub trades: Vec<Trade>,
 }
 
-pub type ReplayKey = (PairKey, i64, u64, String, String);
+pub(super) type ReplayKey = (PairKey, i64, u64, String, String);
 
 impl ReplayRecord {
-    pub fn key(&self) -> ReplayKey {
+    pub(crate) fn key(&self) -> ReplayKey {
         (
             self.pair.clone(),
             Self::event_timestamp(&self.event).0,
@@ -36,7 +36,7 @@ impl ReplayRecord {
         )
     }
 
-    pub fn event_timestamp(event: &MarketEvent) -> TimestampMilliseconds {
+    pub(crate) fn event_timestamp(event: &MarketEvent) -> TimestampMilliseconds {
         event.exchange_timestamp.unwrap_or(event.received_at)
     }
 }
@@ -161,42 +161,42 @@ impl SpillWriter for ReplayRunWriter {
     }
 }
 
-pub struct ReplaySpill {
+pub(crate) struct ReplaySpill {
     sorter: SpillSorter<ReplayCodec>,
 }
 
 impl ReplaySpill {
-    pub fn new(directory: impl Into<PathBuf>, limit: usize) -> PlatformResult<Self> {
+    pub(crate) fn new(directory: impl Into<PathBuf>, limit: usize) -> PlatformResult<Self> {
         Ok(Self {
             sorter: SpillSorter::with_codec(directory, limit, ReplayCodec)?,
         })
     }
 
-    pub fn push(&mut self, record: ReplayRecord) -> PlatformResult<()> {
+    pub(crate) fn push(&mut self, record: ReplayRecord) -> PlatformResult<()> {
         self.sorter.push_record(record)
     }
 
-    pub fn spilled_records(&self) -> usize {
+    pub(crate) fn spilled_records(&self) -> usize {
         self.sorter.spilled_records()
     }
 
-    pub fn usage(&self) -> SpillUsage {
+    pub(crate) fn usage(&self) -> SpillUsage {
         self.sorter.usage()
     }
 
-    pub fn finish(&mut self) -> PlatformResult<ReplayRecords> {
+    pub(crate) fn finish(&mut self) -> PlatformResult<ReplayRecords> {
         Ok(ReplayRecords {
             records: self.sorter.finish()?,
         })
     }
 }
 
-pub struct ReplayRecords {
+pub(crate) struct ReplayRecords {
     records: SpillRecords<ReplayCodec>,
 }
 
 impl ReplayRecords {
-    pub fn next_record(&mut self) -> PlatformResult<Option<ReplayRecord>> {
+    pub(crate) fn next_record(&mut self) -> PlatformResult<Option<ReplayRecord>> {
         self.records.next_record()
     }
 }

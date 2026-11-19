@@ -19,10 +19,10 @@ impl DecodedFrame {
 }
 
 /// Extracts the raw payload bytes from an iris websocket message.
-pub struct FrameBytes;
+pub(super) struct FrameBytes;
 
 impl FrameBytes {
-    pub fn from_message(message: Message) -> Result<Vec<u8>, ConnectionError> {
+    pub(super) fn from_message(message: Message) -> Result<Vec<u8>, ConnectionError> {
         if message.is_text() {
             message
                 .as_text()

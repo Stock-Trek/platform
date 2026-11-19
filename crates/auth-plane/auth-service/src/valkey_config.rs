@@ -3,7 +3,7 @@ use platform_types::UrlScheme;
 use reqwest::Url;
 use std::{fmt, time::Duration};
 
-pub const DEFAULT_VALKEY_REPLAY_PREFIX: &str = "auth-replay";
+pub(crate) const DEFAULT_VALKEY_REPLAY_PREFIX: &str = "auth-replay";
 const MAX_KEY_PREFIX_LENGTH: usize = 128;
 
 #[derive(Clone)]

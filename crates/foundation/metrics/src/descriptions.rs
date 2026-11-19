@@ -48,32 +48,36 @@ pub const MARKET_DATA_ARCHIVE_COMMIT_OUTCOMES_TOTAL: &str =
     "market_data_archive_commit_outcomes_total";
 pub const MARKET_DATA_ARCHIVE_RECOVERY_OBJECTS_TOTAL: &str =
     "market_data_archive_recovery_objects_total";
-pub const MARKET_DATA_ARCHIVE_RECOVERY_PAGE_FILES_TOTAL: &str =
+pub(crate) const MARKET_DATA_ARCHIVE_RECOVERY_PAGE_FILES_TOTAL: &str =
     "market_data_archive_recovery_page_files_total";
-pub const MARKET_DATA_ARCHIVE_RECOVERY_PAGE_BYTES_TOTAL: &str =
+pub(crate) const MARKET_DATA_ARCHIVE_RECOVERY_PAGE_BYTES_TOTAL: &str =
     "market_data_archive_recovery_page_bytes_total";
-pub const MARKET_DATA_ARCHIVE_RECOVERY_REMAINING_OBJECTS: &str =
+pub(crate) const MARKET_DATA_ARCHIVE_RECOVERY_REMAINING_OBJECTS: &str =
     "market_data_archive_recovery_remaining_objects";
-pub const MARKET_DATA_COMPACTOR_INVENTORY_OBJECTS: &str = "market_data_compactor_inventory_objects";
-pub const MARKET_DATA_COMPACTOR_PENDING_OBJECTS: &str = "market_data_compactor_pending_objects";
-pub const MARKET_DATA_ARCHIVE_LISTING_PAGES_TOTAL: &str = "market_data_archive_listing_pages_total";
-pub const MARKET_DATA_ARCHIVE_LISTING_OBJECTS_TOTAL: &str =
+pub(crate) const MARKET_DATA_COMPACTOR_INVENTORY_OBJECTS: &str =
+    "market_data_compactor_inventory_objects";
+pub(crate) const MARKET_DATA_COMPACTOR_PENDING_OBJECTS: &str =
+    "market_data_compactor_pending_objects";
+pub(crate) const MARKET_DATA_ARCHIVE_LISTING_PAGES_TOTAL: &str =
+    "market_data_archive_listing_pages_total";
+pub(crate) const MARKET_DATA_ARCHIVE_LISTING_OBJECTS_TOTAL: &str =
     "market_data_archive_listing_objects_total";
-pub const MARKET_DATA_ARCHIVE_INDEX_PAGES_READ_TOTAL: &str =
+pub(crate) const MARKET_DATA_ARCHIVE_INDEX_PAGES_READ_TOTAL: &str =
     "market_data_archive_index_pages_read_total";
-pub const MARKET_DATA_ARCHIVE_INDEX_BLOCKS_READ_TOTAL: &str =
+pub(crate) const MARKET_DATA_ARCHIVE_INDEX_BLOCKS_READ_TOTAL: &str =
     "market_data_archive_index_blocks_read_total";
-pub const MARKET_DATA_ARCHIVE_INDEX_CACHE_HITS_TOTAL: &str =
+pub(crate) const MARKET_DATA_ARCHIVE_INDEX_CACHE_HITS_TOTAL: &str =
     "market_data_archive_index_cache_hits_total";
-pub const MARKET_DATA_ARCHIVE_INDEX_CACHE_MISSES_TOTAL: &str =
+pub(crate) const MARKET_DATA_ARCHIVE_INDEX_CACHE_MISSES_TOTAL: &str =
     "market_data_archive_index_cache_misses_total";
-pub const MARKET_DATA_ARCHIVE_INDEX_FALLBACK_SCANS_TOTAL: &str =
+pub(crate) const MARKET_DATA_ARCHIVE_INDEX_FALLBACK_SCANS_TOTAL: &str =
     "market_data_archive_index_fallback_scans_total";
-pub const MARKET_DATA_COMPACTOR_POLL_DURATION_SECONDS: &str =
+pub(crate) const MARKET_DATA_COMPACTOR_POLL_DURATION_SECONDS: &str =
     "market_data_compactor_poll_duration_seconds";
-pub const MARKET_DATA_COMPACTOR_BACKLOG_AGE_SECONDS: &str =
+pub(crate) const MARKET_DATA_COMPACTOR_BACKLOG_AGE_SECONDS: &str =
     "market_data_compactor_backlog_age_seconds";
-pub const MARKET_DATA_COMPACTOR_BACKLOG_GROWTH: &str = "market_data_compactor_backlog_growth";
+pub(crate) const MARKET_DATA_COMPACTOR_BACKLOG_GROWTH: &str =
+    "market_data_compactor_backlog_growth";
 pub const MARKET_DATA_S3_RETRIES_TOTAL: &str = "market_data_s3_retries_total";
 pub const MARKET_DATA_AGGREGATOR_CHECKPOINT_AGE_SECONDS: &str =
     "market_data_aggregator_checkpoint_age_seconds";

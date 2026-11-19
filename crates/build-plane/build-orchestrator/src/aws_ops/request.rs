@@ -4,7 +4,7 @@ use platform_messages::{
     BuildRequest as BuildRequestPayload, BuildRequestSignedPost, GitSource, SqsRefType,
 };
 
-pub struct BuildRequest {
+pub(crate) struct BuildRequest {
     pub source: GitSource,
     pub repo_id: String,
     pub ref_name: String,
@@ -15,7 +15,7 @@ pub struct BuildRequest {
 }
 
 impl BuildRequest {
-    pub fn payload(&self) -> PlatformResult<Vec<u8>> {
+    pub(crate) fn payload(&self) -> PlatformResult<Vec<u8>> {
         let payload = BuildRequestPayload {
             git_host: self.source.host().to_string(),
             git_provider: self.source.name().to_string(),

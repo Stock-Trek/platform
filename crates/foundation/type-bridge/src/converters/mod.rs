@@ -1,1 +1,1 @@
-pub mod binance;
+pub(crate) mod binance;

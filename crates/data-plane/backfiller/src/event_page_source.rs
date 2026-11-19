@@ -4,7 +4,7 @@ use platform_errors::PlatformResult;
 
 /// A page of exchange records ordered by sequence id.
 #[async_trait]
-pub trait EventPageSource: Send + Sync {
+pub(crate) trait EventPageSource: Send + Sync {
     async fn fetch_page(
         &self,
         symbol: &str,

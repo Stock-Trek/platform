@@ -4,9 +4,9 @@ use platform_errors::{PlatformError, PlatformResult};
 use secrecy::{ExposeSecret, SecretString};
 use subtle::ConstantTimeEq;
 
-pub const MAX_TOKEN_ID_LENGTH: usize = 256;
-pub const MAX_OWNER_LENGTH: usize = 256;
-pub const MAX_SECRET_LENGTH: usize = 256;
+pub(crate) const MAX_TOKEN_ID_LENGTH: usize = 256;
+pub(crate) const MAX_OWNER_LENGTH: usize = 256;
+pub(crate) const MAX_SECRET_LENGTH: usize = 256;
 
 const SECRET_LENGTH: usize = 32;
 

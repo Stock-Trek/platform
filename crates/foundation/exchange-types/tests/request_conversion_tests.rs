@@ -24,7 +24,7 @@ fn signer(api_key: &str, secret: &str) -> Signer {
         api_key: api_key.into(),
         secret: SecretString::from(secret),
     })
-    .unwrap()
+    .expect("hmac signer construction is infallible")
 }
 
 #[test]

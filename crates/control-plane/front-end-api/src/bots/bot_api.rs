@@ -13,14 +13,14 @@ use hyper::body::Bytes;
 use hyper::{Method, Response, StatusCode};
 use std::sync::Arc;
 
-pub struct BotApi {
+pub(crate) struct BotApi {
     bots: Arc<BotService>,
     sessions: Arc<SessionService>,
     idempotency: Arc<IdempotencyStore>,
 }
 
 impl BotApi {
-    pub fn new(
+    pub(crate) fn new(
         bots: Arc<BotService>,
         sessions: Arc<SessionService>,
         idempotency: Arc<IdempotencyStore>,
@@ -32,7 +32,7 @@ impl BotApi {
         }
     }
 
-    pub fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
+    pub(crate) fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         match request.segments().as_slice() {
             ["bots"] => match *request.method() {
                 Method::POST => self.create(request),

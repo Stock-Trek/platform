@@ -11,7 +11,7 @@ use std::fmt::Display;
 
 const USER_GENERATED_DIRECTORY: &str = "src/algorithms";
 
-pub enum Task {
+pub(crate) enum Task {
     AllReposAdd {
         source: GitSource,
     },
@@ -33,7 +33,7 @@ pub enum Task {
 }
 
 impl Task {
-    pub fn route(&self) -> &'static str {
+    pub(crate) fn route(&self) -> &'static str {
         match self {
             Self::AllReposAdd { .. } => "all_repos_add",
             Self::MultiRepoAdd { .. } => "multi_repo_add",
@@ -42,7 +42,7 @@ impl Task {
         }
     }
 
-    pub async fn handle(
+    pub(crate) async fn handle(
         &self,
         request_context: RequestContext<&RsOrchestratorContext>,
     ) -> PlatformResult<()> {

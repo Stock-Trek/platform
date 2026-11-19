@@ -1,7 +1,7 @@
 use platform_errors::PlatformResult;
 use std::{future::Future, pin::Pin};
 
-pub type SubmissionFuture<'connector, Request, Response, VerificationRequest> = Pin<
+pub(crate) type SubmissionFuture<'connector, Request, Response, VerificationRequest> = Pin<
     Box<
         dyn Future<
                 Output = PlatformResult<SubmissionOutcome<Request, Response, VerificationRequest>>,

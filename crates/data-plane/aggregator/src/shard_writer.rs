@@ -12,7 +12,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 #[derive(Clone)]
-pub struct ShardWriter {
+pub(crate) struct ShardWriter {
     config: AggregatorConfig,
     archive_recovery: Option<Arc<S3ArchiveRecovery>>,
     checkpoints: Arc<dyn StateStore>,
@@ -22,7 +22,7 @@ pub struct ShardWriter {
 }
 
 impl ShardWriter {
-    pub fn new(
+    pub(crate) fn new(
         config: AggregatorConfig,
         archive_recovery: Option<Arc<S3ArchiveRecovery>>,
         checkpoints: Arc<dyn StateStore>,
@@ -40,7 +40,7 @@ impl ShardWriter {
         }
     }
 
-    pub async fn run(self) -> PlatformResult<()> {
+    pub(crate) async fn run(self) -> PlatformResult<()> {
         let source_stream = JetStream::stream_name(&self.config.shard_subject_prefix);
         Supervisor::supervise("shard", move || {
             let writer = self.clone();

@@ -15,7 +15,7 @@ use std::sync::Arc;
 const MIN_COMMIT_LENGTH: usize = 7;
 const MAX_COMMIT_LENGTH: usize = 40;
 
-pub struct BuildApi {
+pub(super) struct BuildApi {
     builds: Arc<BuildStore>,
     sessions: Arc<SessionService>,
     bots: Arc<BotStore>,
@@ -24,7 +24,7 @@ pub struct BuildApi {
 }
 
 impl BuildApi {
-    pub fn new(
+    pub(super) fn new(
         builds: Arc<BuildStore>,
         sessions: Arc<SessionService>,
         bots: Arc<BotStore>,
@@ -40,7 +40,7 @@ impl BuildApi {
         }
     }
 
-    pub fn route(
+    pub(super) fn route(
         &self,
         request: &ApiRequest,
         algorithm_id: &str,

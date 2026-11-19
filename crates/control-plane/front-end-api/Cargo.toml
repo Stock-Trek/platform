@@ -29,3 +29,6 @@ tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sig
 tokio-websockets = { workspace = true, features = ["server", "sha1_smol"] }
 tracing = { workspace = true }
 uuid = { workspace = true, features = ["v4"] }
+
+[lints]
+workspace = true

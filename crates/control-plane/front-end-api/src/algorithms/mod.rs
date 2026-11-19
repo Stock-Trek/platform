@@ -8,9 +8,9 @@ pub(crate) mod commit_resolution;
 #[cfg(test)]
 mod build_tests;
 
-pub use algorithm_api::AlgorithmApi;
-pub use algorithm_types::{
+pub(crate) use algorithm_api::AlgorithmApi;
+pub(crate) use algorithm_types::{
     AlgorithmState, AlgorithmSummary, BuildLogLink, BuildState, BuildSummary, Repository, Strategy,
     TriggerBuildRequest,
 };
-pub use build_store::BuildStore;
+pub(crate) use build_store::BuildStore;

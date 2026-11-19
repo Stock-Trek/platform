@@ -9,3 +9,6 @@ publish = false
 platform-errors = { workspace = true }
 platform-types = { workspace = true }
 rand = { workspace = true }
+
+[lints]
+workspace = true

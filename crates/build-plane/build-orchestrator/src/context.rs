@@ -12,7 +12,7 @@ use platform_github::GitHubAuth;
 use platform_sqs::{Sqs, SqsConfig, SqsDedup};
 use std::time::Duration;
 
-pub struct RsOrchestratorContext {
+pub(crate) struct RsOrchestratorContext {
     pub lambda: Lambda,
     pub s3: S3,
     pub sqs: Sqs,
@@ -23,7 +23,7 @@ pub struct RsOrchestratorContext {
 }
 
 impl RsOrchestratorContext {
-    pub async fn new(config: &OrchestratorConfig) -> PlatformResult<Self> {
+    pub(crate) async fn new(config: &OrchestratorConfig) -> PlatformResult<Self> {
         let aws_timeouts = config.aws_timeouts;
         let sdk_config = platform_aws::Aws::load_sdk_config(aws_timeouts).await;
         let lambda = Lambda::new(

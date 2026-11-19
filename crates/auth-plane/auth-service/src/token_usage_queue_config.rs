@@ -2,9 +2,9 @@ use crate::ValkeyReplayStoreConfig;
 use platform_errors::{PlatformError, PlatformResult};
 use std::{fmt, time::Duration};
 
-pub const DEFAULT_TOKEN_USAGE_QUEUE_PREFIX: &str = "auth-usage";
-pub const DEFAULT_TOKEN_USAGE_QUEUE_CAPACITY: usize = 10_000;
-pub const DEFAULT_TOKEN_USAGE_QUEUE_BATCH_SIZE: usize = 100;
+pub(crate) const DEFAULT_TOKEN_USAGE_QUEUE_PREFIX: &str = "auth-usage";
+pub(crate) const DEFAULT_TOKEN_USAGE_QUEUE_CAPACITY: usize = 10_000;
+pub(crate) const DEFAULT_TOKEN_USAGE_QUEUE_BATCH_SIZE: usize = 100;
 
 #[derive(Clone)]
 pub struct TokenUsageQueueConfig {

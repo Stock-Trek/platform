@@ -11,3 +11,6 @@ serde_json = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
 strum = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
+
+[lints]
+workspace = true

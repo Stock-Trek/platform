@@ -4,26 +4,26 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LoginRequest {
+pub(crate) struct LoginRequest {
     pub login_id: String,
     pub login_secret: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct RefreshRequest {
+pub(crate) struct RefreshRequest {
     pub refresh_token: String,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct StepUpRequest {
+pub(crate) struct StepUpRequest {
     pub login_secret: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct SessionTokens {
+pub(crate) struct SessionTokens {
     pub token: String,
     #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,
@@ -40,7 +40,7 @@ pub struct SessionTokens {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StepUpTokens {
+pub(crate) struct StepUpTokens {
     pub token: String,
     #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,

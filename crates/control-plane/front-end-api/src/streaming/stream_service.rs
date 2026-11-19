@@ -12,9 +12,9 @@ use std::sync::Arc;
 
 const MAX_SUBSCRIPTIONS: usize = 32;
 
-pub const MAX_SUBSCRIPTIONS_PER_CONNECTION: usize = MAX_SUBSCRIPTIONS;
+pub(crate) const MAX_SUBSCRIPTIONS_PER_CONNECTION: usize = MAX_SUBSCRIPTIONS;
 
-pub enum Subscription {
+pub(crate) enum Subscription {
     Joined {
         replay: Vec<Frame>,
         live: tokio::sync::broadcast::Receiver<Frame>,
@@ -29,7 +29,7 @@ struct Connection {
     epochs: HashMap<String, u64>,
 }
 
-pub struct StreamService {
+pub(crate) struct StreamService {
     tickets: TicketStore,
     registry: Arc<ChannelRegistry>,
     connections: Mutex<HashMap<String, Connection>>,
@@ -40,7 +40,7 @@ pub struct StreamService {
 }
 
 impl StreamService {
-    pub fn new(
+    pub(crate) fn new(
         registry: Arc<ChannelRegistry>,
         accounts: Arc<AccountService>,
         builds: Arc<BuildStore>,
@@ -58,7 +58,7 @@ impl StreamService {
         }
     }
 
-    pub fn issue_ticket(
+    pub(crate) fn issue_ticket(
         &self,
         owner: &str,
         session_id: &str,
@@ -67,11 +67,15 @@ impl StreamService {
         self.tickets.issue(owner, session_id, now)
     }
 
-    pub fn redeem_ticket(&self, ticket: &str, now: DateTime<Utc>) -> Option<(String, String)> {
+    pub(crate) fn redeem_ticket(
+        &self,
+        ticket: &str,
+        now: DateTime<Utc>,
+    ) -> Option<(String, String)> {
         self.tickets.redeem(ticket, now)
     }
 
-    pub fn connect(&self, connection_id: &str, owner: &str) {
+    pub(crate) fn connect(&self, connection_id: &str, owner: &str) {
         self.connections.lock().insert(
             connection_id.to_string(),
             Connection {
@@ -81,11 +85,11 @@ impl StreamService {
         );
     }
 
-    pub fn disconnect(&self, connection_id: &str) {
+    pub(crate) fn disconnect(&self, connection_id: &str) {
         self.connections.lock().remove(connection_id);
     }
 
-    pub fn connection_count(&self, owner: &str) -> u64 {
+    pub(crate) fn connection_count(&self, owner: &str) -> u64 {
         self.connections
             .lock()
             .values()
@@ -93,7 +97,7 @@ impl StreamService {
             .count() as u64
     }
 
-    pub fn subscription_count(&self, owner: &str) -> u64 {
+    pub(crate) fn subscription_count(&self, owner: &str) -> u64 {
         self.connections
             .lock()
             .values()
@@ -103,7 +107,7 @@ impl StreamService {
             .unwrap_or(0)
     }
 
-    pub fn owns_channel(&self, owner: &str, channel: &str) -> bool {
+    pub(crate) fn owns_channel(&self, owner: &str, channel: &str) -> bool {
         match channel.split_once('.') {
             Some(("portfolio", id)) => self.accounts.get(owner, id).is_ok(),
             Some(("runs", id)) => self.bots.get(owner, id).is_some(),
@@ -113,7 +117,7 @@ impl StreamService {
         }
     }
 
-    pub fn subscribe(
+    pub(crate) fn subscribe(
         &self,
         connection_id: &str,
         channel: &str,
@@ -141,13 +145,13 @@ impl StreamService {
         }
     }
 
-    pub fn unsubscribe(&self, connection_id: &str, channel: &str) {
+    pub(crate) fn unsubscribe(&self, connection_id: &str, channel: &str) {
         if let Some(connection) = self.connections.lock().get_mut(connection_id) {
             connection.epochs.remove(channel);
         }
     }
 
-    pub fn subscription_epoch(&self, connection_id: &str, channel: &str) -> Option<u64> {
+    pub(crate) fn subscription_epoch(&self, connection_id: &str, channel: &str) -> Option<u64> {
         self.connections
             .lock()
             .get(connection_id)?
@@ -156,7 +160,7 @@ impl StreamService {
             .copied()
     }
 
-    pub fn registry(&self) -> &Arc<ChannelRegistry> {
+    pub(crate) fn registry(&self) -> &Arc<ChannelRegistry> {
         &self.registry
     }
 }

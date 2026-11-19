@@ -29,3 +29,6 @@ tokio-websockets = { workspace = true, default-features = false }
 [dev-dependencies]
 metrics = { workspace = true }
 platform-metrics = { workspace = true, features = ["test-utils"] }
+
+[lints]
+workspace = true

@@ -4,7 +4,7 @@ use strum::Display;
 #[derive(Debug, Display, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
-pub enum GitHubEventType {
+pub(crate) enum GitHubEventType {
     Create,
     Delete,
     InstallationRepositories,

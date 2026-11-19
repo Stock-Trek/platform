@@ -6,22 +6,27 @@ use crate::bots::{Run, RunFilter, RunLogLink, RunPage, RunState};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
-pub enum CancelOutcome {
+pub(crate) enum CancelOutcome {
     Canceled(Run),
     Requested,
     Unchanged(Run),
 }
 
-pub struct RunService {
+pub(crate) struct RunService {
     runs: Arc<RunStore>,
 }
 
 impl RunService {
-    pub fn new(runs: Arc<RunStore>) -> Self {
+    pub(crate) fn new(runs: Arc<RunStore>) -> Self {
         Self { runs }
     }
 
-    pub fn list(&self, auth: &AuthContext, filter: &RunFilter, query: &PageQuery) -> RunPage {
+    pub(crate) fn list(
+        &self,
+        auth: &AuthContext,
+        filter: &RunFilter,
+        query: &PageQuery,
+    ) -> RunPage {
         let runs = self.runs.list(auth.owner(), filter);
         let stream_sequence = filter
             .bot_id
@@ -34,13 +39,13 @@ impl RunService {
         }
     }
 
-    pub fn get(&self, auth: &AuthContext, run_id: &str) -> Result<Run, Problem> {
+    pub(crate) fn get(&self, auth: &AuthContext, run_id: &str) -> Result<Run, Problem> {
         self.runs
             .get(auth.owner(), run_id)
             .ok_or_else(|| Problem::not_found("run does not exist"))
     }
 
-    pub fn cancel(
+    pub(crate) fn cancel(
         &self,
         auth: &AuthContext,
         run_id: &str,
@@ -71,7 +76,7 @@ impl RunService {
         }
     }
 
-    pub fn log(&self, auth: &AuthContext, run_id: &str) -> Result<RunLogLink, Problem> {
+    pub(crate) fn log(&self, auth: &AuthContext, run_id: &str) -> Result<RunLogLink, Problem> {
         self.runs
             .log(auth.owner(), run_id)
             .ok_or_else(|| Problem::not_found("no run log exists yet"))

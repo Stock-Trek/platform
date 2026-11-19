@@ -26,14 +26,14 @@ pub(super) struct BuildRow {
     pub(super) log: Option<String>,
 }
 
-pub struct BuildStore {
+pub(crate) struct BuildStore {
     pub(super) algorithms: Mutex<Vec<super::algorithm_store::AlgorithmRow>>,
     pub(super) builds: Mutex<Vec<BuildRow>>,
     registry: Arc<ChannelRegistry>,
 }
 
 impl BuildStore {
-    pub fn new(registry: Arc<ChannelRegistry>) -> Self {
+    pub(crate) fn new(registry: Arc<ChannelRegistry>) -> Self {
         Self {
             algorithms: Mutex::new(Vec::new()),
             builds: Mutex::new(Vec::new()),
@@ -41,7 +41,7 @@ impl BuildStore {
         }
     }
 
-    pub fn create_build(
+    pub(crate) fn create_build(
         &self,
         owner: &str,
         algorithm_id: &str,
@@ -121,7 +121,7 @@ impl BuildStore {
             .cloned()
     }
 
-    pub fn builds(
+    pub(crate) fn builds(
         &self,
         owner: &str,
         algorithm_id: &str,
@@ -140,7 +140,12 @@ impl BuildStore {
         listed
     }
 
-    pub fn build(&self, owner: &str, algorithm_id: &str, build_id: &str) -> Option<BuildSummary> {
+    pub(crate) fn build(
+        &self,
+        owner: &str,
+        algorithm_id: &str,
+        build_id: &str,
+    ) -> Option<BuildSummary> {
         self.builds
             .lock()
             .iter()
@@ -152,7 +157,7 @@ impl BuildStore {
             .map(|row| row.build.clone())
     }
 
-    pub fn ready_build(
+    pub(crate) fn ready_build(
         &self,
         owner: &str,
         algorithm_id: &str,
@@ -163,7 +168,7 @@ impl BuildStore {
     }
 
     #[allow(dead_code)]
-    pub fn mark_ready(
+    pub(crate) fn mark_ready(
         &self,
         owner: &str,
         algorithm_id: &str,
@@ -204,7 +209,7 @@ impl BuildStore {
         }
     }
 
-    pub fn strategies(
+    pub(crate) fn strategies(
         &self,
         owner: &str,
         algorithm_id: &str,
@@ -222,7 +227,7 @@ impl BuildStore {
             .map(|row| row.strategies.clone())
     }
 
-    pub fn build_log(
+    pub(crate) fn build_log(
         &self,
         owner: &str,
         algorithm_id: &str,
@@ -244,7 +249,7 @@ impl BuildStore {
     }
 
     #[allow(dead_code)]
-    pub fn attach_log(&self, owner: &str, algorithm_id: &str, build_id: &str, url: &str) {
+    pub(crate) fn attach_log(&self, owner: &str, algorithm_id: &str, build_id: &str, url: &str) {
         let mut builds = self.builds.lock();
         if let Some(row) = builds.iter_mut().find(|row| {
             row.owner == owner
@@ -256,7 +261,7 @@ impl BuildStore {
         }
     }
 
-    pub fn delete_build(&self, owner: &str, algorithm_id: &str, build_id: &str) -> bool {
+    pub(crate) fn delete_build(&self, owner: &str, algorithm_id: &str, build_id: &str) -> bool {
         let mut builds = self.builds.lock();
         let before = builds.len();
         builds.retain(|row| {

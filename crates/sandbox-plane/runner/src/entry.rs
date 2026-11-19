@@ -13,17 +13,17 @@ Usage:
   program Preferences <strategy_name>
   program Signals <strategy_name> <strategy_context_path>";
 
-pub struct Entry;
+pub(crate) struct Entry;
 
 impl Entry {
-    pub fn run_command(command: Command) -> i32 {
+    pub(crate) fn run_command(command: Command) -> i32 {
         std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| Runner::run(command)))
             .unwrap_or(ExitCode::BotErrorPanic.code())
     }
 
     /// # Safety
     /// This is called from the host binary which must ensure correct args
-    pub unsafe fn run(argc: i32, argv: *const *const c_char) -> i32 {
+    pub(crate) unsafe fn run(argc: i32, argv: *const *const c_char) -> i32 {
         if argc < 2 {
             eprintln!("{USAGE}");
             return ExitCode::ServerEntryIncorrectArgCount.code();
@@ -48,7 +48,7 @@ impl Entry {
 /// # Safety
 /// This is called from the host binary which must ensure correct args
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn entry(argc: i32, argv: *const *const c_char) -> i32 {
+pub(crate) unsafe extern "C" fn entry(argc: i32, argv: *const *const c_char) -> i32 {
     unsafe { Entry::run(argc, argv) }
 }
 

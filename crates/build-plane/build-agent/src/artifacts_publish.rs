@@ -12,14 +12,14 @@ use tracing::info;
 use zip::{CompressionMethod, ZipWriter, write::SimpleFileOptions};
 
 impl Artifacts {
-    pub async fn publish(&self, cwasm: &Path) -> PlatformResult<()> {
+    pub(crate) async fn publish(&self, cwasm: &Path) -> PlatformResult<()> {
         self.publish_source().await?;
         self.publish_cwasm(cwasm).await?;
         info!("published build artifacts");
         Ok(())
     }
 
-    pub async fn publish_failure(&self, error: &PlatformError) -> PlatformResult<()> {
+    pub(crate) async fn publish_failure(&self, error: &PlatformError) -> PlatformResult<()> {
         let source_result = self.publish_source().await;
         if let Err(source_error) = &source_result {
             tracing::error!(
@@ -88,7 +88,7 @@ impl Artifacts {
         Ok(())
     }
 
-    pub fn source_archive(root: &Path, files: &[PathBuf]) -> PlatformResult<Vec<u8>> {
+    pub(crate) fn source_archive(root: &Path, files: &[PathBuf]) -> PlatformResult<Vec<u8>> {
         let mut archive = ZipWriter::new(Cursor::new(Vec::new()));
         let options = SimpleFileOptions::default().compression_method(CompressionMethod::Deflated);
         for file in files {

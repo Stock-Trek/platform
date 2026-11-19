@@ -3,7 +3,7 @@ use chrono::{DateTime, Duration, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 
 const NONCE_LENGTH: usize = 32;
-pub const MAX_NONCE_LENGTH: usize = 128;
+pub(crate) const MAX_NONCE_LENGTH: usize = 128;
 const PROTOCOL: &str = "platform-auth-service/order-request";
 const VERSION: &str = "v1";
 const ALGORITHM: &str = "HMAC-SHA256";

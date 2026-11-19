@@ -6,14 +6,14 @@ use http_body_util::Full;
 use hyper::{Method, Response, StatusCode, body::Bytes};
 use std::sync::Arc;
 
-pub struct AccountApi {
+pub(crate) struct AccountApi {
     accounts: Arc<AccountService>,
     sessions: Arc<SessionService>,
     idempotency: Arc<crate::api::IdempotencyStore>,
 }
 
 impl AccountApi {
-    pub fn new(
+    pub(crate) fn new(
         accounts: Arc<AccountService>,
         sessions: Arc<SessionService>,
         idempotency: Arc<crate::api::IdempotencyStore>,
@@ -25,7 +25,7 @@ impl AccountApi {
         }
     }
 
-    pub fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
+    pub(crate) fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         match request.segments().as_slice() {
             ["accounts"] => match *request.method() {
                 Method::POST => self.link(request),

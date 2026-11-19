@@ -1,17 +1,17 @@
 use std::time::Duration;
 use tokio::{sync::watch, task::JoinHandle, time::timeout};
 
-pub struct AccountWatcher {
+pub(super) struct AccountWatcher {
     shutdown: watch::Sender<bool>,
     task: JoinHandle<()>,
 }
 
 impl AccountWatcher {
-    pub fn new(shutdown: watch::Sender<bool>, task: JoinHandle<()>) -> Self {
+    pub(super) fn new(shutdown: watch::Sender<bool>, task: JoinHandle<()>) -> Self {
         Self { shutdown, task }
     }
 
-    pub async fn stop(self) {
+    pub(super) async fn stop(self) {
         let Self { shutdown, mut task } = self;
         let _ = shutdown.send(true);
         if timeout(Duration::from_secs(2), &mut task).await.is_err() {

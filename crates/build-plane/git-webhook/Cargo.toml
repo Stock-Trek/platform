@@ -30,3 +30,6 @@ strum = { workspace = true, features = ["derive"] }
 subtle = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

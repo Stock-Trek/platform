@@ -3,7 +3,7 @@ use platform_exchange_types::binance::klines::BinanceKlinesInterval;
 
 /// The market data stream behind a Binance stream name.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum MarketStreamKind {
+pub(crate) enum MarketStreamKind {
     Trade,
     Depth,
     BookTicker,
@@ -61,13 +61,13 @@ impl MarketStreamKind {
 
 /// A parsed Binance stream name such as `btcusdt@trade`.
 #[derive(Debug, Clone)]
-pub struct MarketStream {
+pub(crate) struct MarketStream {
     pub symbol: String,
     pub kind: MarketStreamKind,
 }
 
 impl MarketStream {
-    pub fn parse(stream: &str) -> PlatformResult<Self> {
+    pub(crate) fn parse(stream: &str) -> PlatformResult<Self> {
         let Some((symbol, suffix)) = stream.split_once('@') else {
             return Err(PlatformError::bad_value(
                 "stream",

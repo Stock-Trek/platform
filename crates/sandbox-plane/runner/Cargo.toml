@@ -41,3 +41,13 @@ wasmtime-wasi = { workspace = true, features = ["p1"] }
 wasmtime = { workspace = true, features = ["cranelift", "wat"] }
 tokio = { workspace = true, features = ["test-util"] }
 tokio-websockets = { workspace = true, features = ["server"] }
+
+# Mirrors the workspace lints (which cannot be selectively overridden) with the
+# unsafe allowance this crate needs for raw FFI into the wasm host and compiled module.
+[lints.rust]
+unsafe_code = "allow"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+
+[lints.clippy]
+unwrap_used = "deny"

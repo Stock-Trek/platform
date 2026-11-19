@@ -5,10 +5,10 @@ use platform_messages::{BuildOutcome, BuildRequest};
 use platform_metrics::BuildMetrics;
 use std::time::{Instant, SystemTime};
 
-pub struct BuildAgent;
+pub(crate) struct BuildAgent;
 
 impl BuildAgent {
-    pub async fn handle(
+    pub(crate) async fn handle(
         handler: Handler,
         event: LambdaEvent<BuildRequest>,
     ) -> PlatformResult<BuildOutcome> {
@@ -28,7 +28,10 @@ impl BuildAgent {
         }
     }
 
-    pub fn handle_error(error: PlatformError, started_at: Instant) -> PlatformResult<BuildOutcome> {
+    pub(crate) fn handle_error(
+        error: PlatformError,
+        started_at: Instant,
+    ) -> PlatformResult<BuildOutcome> {
         let duration = started_at.elapsed();
         if error.retryability().is_retryable() {
             BuildMetrics::record_retryable_failure(error.error_type(), duration);

@@ -24,3 +24,6 @@ url = { workspace = true }
 
 [dev-dependencies]
 parking_lot = { workspace = true }
+
+[lints]
+workspace = true

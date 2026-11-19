@@ -7,13 +7,13 @@ use std::time::Duration;
 pub const ACK_WAIT: Duration = Duration::from_secs(30);
 
 /// Maximum age of a message retained in a market-data stream.
-pub const STREAM_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
+pub(super) const STREAM_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// Maximum number of bytes retained in a market-data stream (10 GiB).
-pub const STREAM_MAX_BYTES: i64 = 10 * 1024 * 1024 * 1024;
+pub(super) const STREAM_MAX_BYTES: i64 = 10 * 1024 * 1024 * 1024;
 
 /// Maximum number of messages retained in a market-data stream.
-pub const STREAM_MAX_MESSAGES: i64 = 100_000_000;
+pub(super) const STREAM_MAX_MESSAGES: i64 = 100_000_000;
 
 /// JetStream and KV naming conventions shared by the publisher, consumer, and
 /// KV store.

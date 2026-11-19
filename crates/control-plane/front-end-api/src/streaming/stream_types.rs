@@ -2,12 +2,12 @@ use chrono::{DateTime, Utc};
 use serde::Serialize;
 use serde_json::Value;
 
-pub const TICKET_TTL_SECONDS: u64 = 60;
-pub const REPLAY_WINDOW: usize = 256;
+pub(crate) const TICKET_TTL_SECONDS: u64 = 60;
+pub(crate) const REPLAY_WINDOW: usize = 256;
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct StreamTicket {
+pub(crate) struct StreamTicket {
     pub ticket: String,
     #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,
@@ -15,7 +15,7 @@ pub struct StreamTicket {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct GapDetail {
+pub(crate) struct GapDetail {
     pub after_sequence: u64,
     pub head_sequence: u64,
     pub reason: GapReason,
@@ -23,20 +23,20 @@ pub struct GapDetail {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum GapReason {
+pub(crate) enum GapReason {
     Expired,
     AheadOfHead,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ErrorDetail {
+pub(crate) struct ErrorDetail {
     pub code: &'static str,
     pub channel: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
-pub struct Frame {
+pub(crate) struct Frame {
     pub channel: String,
     pub sequence: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -56,7 +56,7 @@ pub struct Frame {
 }
 
 impl Frame {
-    pub fn data(channel: &str, sequence: u64, data: Value) -> Self {
+    pub(crate) fn data(channel: &str, sequence: u64, data: Value) -> Self {
         Self {
             channel: channel.to_string(),
             sequence,
@@ -70,7 +70,7 @@ impl Frame {
         }
     }
 
-    pub fn gap(channel: &str, detail: GapDetail) -> Self {
+    pub(crate) fn gap(channel: &str, detail: GapDetail) -> Self {
         Self {
             channel: channel.to_string(),
             sequence: detail.head_sequence,
@@ -84,7 +84,7 @@ impl Frame {
         }
     }
 
-    pub fn error(channel: &str, code: &'static str) -> Self {
+    pub(crate) fn error(channel: &str, code: &'static str) -> Self {
         Self {
             channel: channel.to_string(),
             sequence: 0,
@@ -101,7 +101,12 @@ impl Frame {
         }
     }
 
-    pub fn backtest_result(channel: &str, sequence: u64, simulation: u64, result: Value) -> Self {
+    pub(crate) fn backtest_result(
+        channel: &str,
+        sequence: u64,
+        simulation: u64,
+        result: Value,
+    ) -> Self {
         Self {
             channel: channel.to_string(),
             sequence,
@@ -115,7 +120,7 @@ impl Frame {
         }
     }
 
-    pub fn backtest_final(channel: &str, sequence: u64, state: &str) -> Self {
+    pub(crate) fn backtest_final(channel: &str, sequence: u64, state: &str) -> Self {
         Self {
             channel: channel.to_string(),
             sequence,

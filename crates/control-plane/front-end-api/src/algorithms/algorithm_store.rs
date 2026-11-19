@@ -11,7 +11,7 @@ pub(super) struct AlgorithmRow {
 
 impl BuildStore {
     #[allow(dead_code)]
-    pub fn register_algorithm(
+    pub(crate) fn register_algorithm(
         &self,
         owner: &str,
         name: &str,
@@ -39,7 +39,7 @@ impl BuildStore {
         summary
     }
 
-    pub fn list_algorithms(&self, owner: &str) -> Vec<AlgorithmSummary> {
+    pub(crate) fn list_algorithms(&self, owner: &str) -> Vec<AlgorithmSummary> {
         let rows = self.algorithms.lock();
         rows.iter()
             .rev()
@@ -48,7 +48,7 @@ impl BuildStore {
             .collect()
     }
 
-    pub fn algorithm(&self, owner: &str, algorithm_id: &str) -> Option<AlgorithmSummary> {
+    pub(crate) fn algorithm(&self, owner: &str, algorithm_id: &str) -> Option<AlgorithmSummary> {
         self.algorithms
             .lock()
             .iter()
@@ -56,14 +56,18 @@ impl BuildStore {
             .map(|row| row.summary.clone())
     }
 
-    pub fn owns_algorithm(&self, owner: &str, algorithm_id: &str) -> bool {
+    pub(crate) fn owns_algorithm(&self, owner: &str, algorithm_id: &str) -> bool {
         self.algorithms
             .lock()
             .iter()
             .any(|row| row.owner == owner && row.summary.algorithm_id == algorithm_id)
     }
 
-    pub fn archive_algorithm(&self, owner: &str, algorithm_id: &str) -> Option<AlgorithmSummary> {
+    pub(crate) fn archive_algorithm(
+        &self,
+        owner: &str,
+        algorithm_id: &str,
+    ) -> Option<AlgorithmSummary> {
         let mut rows = self.algorithms.lock();
         let row = rows
             .iter_mut()

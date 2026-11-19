@@ -13,3 +13,6 @@ platform-types = { workspace = true }
 rust_decimal = { workspace = true }
 stock-trek-types = { workspace = true, features = ["serde"] }
 tracing = { workspace = true }
+
+[lints]
+workspace = true

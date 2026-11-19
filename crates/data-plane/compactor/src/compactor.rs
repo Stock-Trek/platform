@@ -21,7 +21,7 @@ use std::{fs::File, sync::Arc};
 use tracing::{info, warn};
 
 #[derive(Debug, Default, Clone, Copy)]
-pub struct CompactionStats {
+pub(crate) struct CompactionStats {
     pub source_files: usize,
     pub records_read: usize,
     pub records_written: usize,
@@ -31,7 +31,7 @@ pub struct CompactionStats {
 
 /// Compacts a batch of raw archive files into partitioned output files.
 #[async_trait]
-pub trait BatchCompactor: Send + Sync {
+pub(crate) trait BatchCompactor: Send + Sync {
     async fn compact(&self, batch: &SourceBatch) -> PlatformResult<CompactionStats>;
 
     async fn maintain(&self) -> PlatformResult<()> {
@@ -51,7 +51,7 @@ pub trait BatchCompactor: Send + Sync {
 /// Iceberg snapshot. That snapshot is the compacted/raw handoff: source objects
 /// below it are never replayed, while all other raw objects remain in the tail.
 /// Raw objects are intentionally left in place.
-pub struct Compactor {
+pub(crate) struct Compactor {
     client: S3Client,
     catalog: Arc<dyn ArchiveCatalog>,
     bucket: String,
@@ -66,7 +66,7 @@ pub struct Compactor {
 }
 
 impl Compactor {
-    pub async fn connect(
+    pub(crate) async fn connect(
         config: &CompactorConfig,
         catalog: Arc<dyn ArchiveCatalog>,
         leases: Arc<dyn LeaseStore>,
@@ -87,7 +87,7 @@ impl Compactor {
         })
     }
 
-    pub async fn compact(&self, batch: &SourceBatch) -> PlatformResult<CompactionStats> {
+    pub(crate) async fn compact(&self, batch: &SourceBatch) -> PlatformResult<CompactionStats> {
         let table = ArchiveIcebergTable::compacted(batch.kind);
         let digest = batch.digest();
         let scope = LeaseScope::new(self.lease_scope(batch));

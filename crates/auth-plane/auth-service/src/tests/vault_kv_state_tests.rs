@@ -2,7 +2,7 @@ use serde_json::{Value, json};
 use std::collections::{BTreeSet, HashMap};
 
 #[derive(Clone, Debug)]
-pub struct CapturedRequest {
+pub(super) struct CapturedRequest {
     pub method: String,
     pub path: String,
     pub query: Option<String>,
@@ -11,12 +11,12 @@ pub struct CapturedRequest {
 }
 
 #[derive(Default)]
-pub struct VaultKvState {
+pub(super) struct VaultKvState {
     entries: HashMap<String, Vec<Value>>,
 }
 
 impl VaultKvState {
-    pub fn put_response(&mut self, id: &str, body: &Value) -> (u16, Value) {
+    pub(super) fn put_response(&mut self, id: &str, body: &Value) -> (u16, Value) {
         let Some(data) = body.get("data").cloned() else {
             return (400, json!({ "errors": ["missing data"] }));
         };
@@ -41,7 +41,7 @@ impl VaultKvState {
         }
     }
 
-    pub fn get_response(&self, id: &str) -> (u16, Value) {
+    pub(super) fn get_response(&self, id: &str) -> (u16, Value) {
         let Some((data, version)) = self.read(id) else {
             return (404, json!({ "errors": [] }));
         };
@@ -62,18 +62,18 @@ impl VaultKvState {
         )
     }
 
-    pub fn list_response(&self, directory: &str) -> (u16, Value) {
+    pub(super) fn list_response(&self, directory: &str) -> (u16, Value) {
         match self.list(directory) {
             Some(keys) => (200, json!({ "data": { "keys": keys } })),
             None => (404, json!({ "errors": [] })),
         }
     }
 
-    pub fn delete(&mut self, id: &str) {
+    pub(super) fn delete(&mut self, id: &str) {
         self.entries.remove(id);
     }
 
-    pub fn seed(&mut self, key: &str) {
+    pub(super) fn seed(&mut self, key: &str) {
         self.entries
             .entry(key.to_string())
             .or_insert_with(|| vec![json!({})]);
@@ -91,7 +91,7 @@ impl VaultKvState {
         Ok(current + 1)
     }
 
-    pub fn read(&self, id: &str) -> Option<(Value, u64)> {
+    pub(super) fn read(&self, id: &str) -> Option<(Value, u64)> {
         let versions = self.entries.get(id)?;
         let version = versions.len() as u64;
         Some((versions.last()?.clone(), version))

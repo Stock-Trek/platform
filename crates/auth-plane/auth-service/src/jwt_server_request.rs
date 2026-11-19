@@ -18,10 +18,10 @@ const BODY_READ_TIMEOUT: Duration = Duration::from_secs(10);
 const JWT_PATH: &str = "/jwt";
 const JWKS_PATH: &str = "/.well-known/jwks.json";
 
-pub struct JwtServerRequest;
+pub(crate) struct JwtServerRequest;
 
 impl JwtServerRequest {
-    pub async fn dispatch(
+    pub(crate) async fn dispatch(
         service: &AuthService,
         sigv4: &SigV4Config,
         request: Request<Incoming>,
@@ -153,7 +153,7 @@ impl JwtServerRequest {
         }
     }
 
-    pub fn error(status: StatusCode) -> Response<Full<Bytes>> {
+    pub(crate) fn error(status: StatusCode) -> Response<Full<Bytes>> {
         Response::builder()
             .status(status)
             .body(Full::new(Bytes::from_static(b"JWT request failed")))

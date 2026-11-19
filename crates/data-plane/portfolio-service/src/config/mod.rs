@@ -11,5 +11,5 @@ pub use freshness::FreshnessConfig;
 pub use order_request::OrderRequestConfig;
 pub use ownership::OwnershipConfig;
 pub use portfolio_config::PortfolioConfig;
-pub use portfolio_exchanges::PortfolioExchanges;
+pub(crate) use portfolio_exchanges::PortfolioExchanges;
 pub use update::UpdateConfig;

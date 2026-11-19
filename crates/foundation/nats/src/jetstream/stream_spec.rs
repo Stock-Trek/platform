@@ -3,10 +3,10 @@ use async_nats::jetstream::stream;
 use platform_errors::{PlatformError, PlatformResult};
 use std::time::Duration;
 
-pub const MIN_STREAM_REPLICAS: usize = 1;
-pub const MAX_STREAM_REPLICAS: usize = 5;
-pub const DEFAULT_STREAM_REPLICAS: usize = 3;
-pub const DEFAULT_DUPLICATE_WINDOW: Duration = Duration::from_secs(120);
+pub(super) const MIN_STREAM_REPLICAS: usize = 1;
+pub(super) const MAX_STREAM_REPLICAS: usize = 5;
+pub(super) const DEFAULT_STREAM_REPLICAS: usize = 3;
+pub(super) const DEFAULT_DUPLICATE_WINDOW: Duration = Duration::from_secs(120);
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct StreamSpec {

@@ -19,20 +19,20 @@ const OUTPUT_BATCH_SIZE: usize = 8_192;
 
 /// Counts the archive objects produced by a rebuild.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct CandleWriteStats {
+pub(crate) struct CandleWriteStats {
     pub objects: usize,
     pub records: usize,
 }
 
 /// Supplies closed candles to the sink in its object order: archive bucket,
 /// routing bucket, compacted partition, sort key, and record identity.
-pub trait CandleRecordSource: Send {
+pub(crate) trait CandleRecordSource: Send {
     fn next_candle(&mut self) -> PlatformResult<Option<ClosedCandle>>;
 }
 
 /// Writes regenerated candles to the archive.
 #[async_trait]
-pub trait CandleSink: Send + Sync {
+pub(crate) trait CandleSink: Send + Sync {
     /// Writes every candle from the ordered source, one object per partition
     /// group, and registers all objects after they are uploaded.
     async fn write(
@@ -49,7 +49,7 @@ pub trait CandleSink: Send + Sync {
 /// and registered in the compacted candle table. Every object is encoded to a
 /// temporary file and uploaded from that file, so an output object never has
 /// to be buffered in memory.
-pub struct S3CandleSink {
+pub(crate) struct S3CandleSink {
     s3_client: aws_sdk_s3::Client,
     catalog: Arc<dyn ArchiveCatalog>,
     bucket: Bucket,
@@ -59,7 +59,7 @@ pub struct S3CandleSink {
 }
 
 impl S3CandleSink {
-    pub async fn connect(
+    pub(crate) async fn connect(
         bucket: &str,
         prefix: &str,
         bucket_millis: i64,

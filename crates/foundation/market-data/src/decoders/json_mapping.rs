@@ -45,11 +45,11 @@ impl<M: JsonMapping> Codec<(), DecodedFrame> for MappedJsonCodec<M> {
 }
 
 /// Helpers shared by JSON mappings for common websocket frame shapes.
-pub struct JsonFrame;
+pub(super) struct JsonFrame;
 
 impl JsonFrame {
     /// Splits the common `{"stream": ..., "data": ...}` envelope.
-    pub fn split_envelope(
+    pub(super) fn split_envelope(
         message: Value,
     ) -> Result<(Option<String>, Map<String, Value>), IngesterError> {
         match message {
@@ -71,7 +71,7 @@ impl JsonFrame {
         }
     }
 
-    pub fn encode(frame: &[u8]) -> String {
+    pub(super) fn encode(frame: &[u8]) -> String {
         BASE64.encode(frame)
     }
 }

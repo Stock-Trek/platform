@@ -11,7 +11,7 @@ use reqwest::{Method, StatusCode};
 use serde_json::Value;
 
 impl VaultClient {
-    pub async fn owner_index(&self, owner: &str) -> PlatformResult<Option<OwnerIndex>> {
+    pub(crate) async fn owner_index(&self, owner: &str) -> PlatformResult<Option<OwnerIndex>> {
         let key = OwnerIndex::storage_key(owner);
         let Some((data, _)) = self.get_value_entry(&key).await? else {
             return Ok(None);
@@ -29,7 +29,7 @@ impl VaultClient {
         }
     }
 
-    pub async fn put_owner_index(&self, index: &OwnerIndex) -> PlatformResult<()> {
+    pub(crate) async fn put_owner_index(&self, index: &OwnerIndex) -> PlatformResult<()> {
         let key = OwnerIndex::storage_key(index.owner());
         let value = index.to_value();
         for _ in 0..MAX_UPDATE_ATTEMPTS {
@@ -55,7 +55,7 @@ impl VaultClient {
         Err(Self::owner_index_conflict(&key))
     }
 
-    pub async fn upsert_owner_index_token(&self, token: &ApiToken) -> PlatformResult<()> {
+    pub(crate) async fn upsert_owner_index_token(&self, token: &ApiToken) -> PlatformResult<()> {
         let owner = token.owner();
         let key = OwnerIndex::storage_key(owner);
         let entry = OwnerIndexEntry::from_token(token);
@@ -90,7 +90,11 @@ impl VaultClient {
         Err(Self::owner_index_conflict(&key))
     }
 
-    pub async fn remove_owner_index_token(&self, owner: &str, id: &str) -> PlatformResult<()> {
+    pub(crate) async fn remove_owner_index_token(
+        &self,
+        owner: &str,
+        id: &str,
+    ) -> PlatformResult<()> {
         let key = OwnerIndex::storage_key(owner);
         for _ in 0..MAX_UPDATE_ATTEMPTS {
             let Some((data, version)) = self.get_value_entry(&key).await? else {
@@ -113,7 +117,7 @@ impl VaultClient {
         Err(Self::owner_index_conflict(&key))
     }
 
-    pub async fn owner_indexes(&self) -> PlatformResult<Vec<OwnerIndex>> {
+    pub(crate) async fn owner_indexes(&self) -> PlatformResult<Vec<OwnerIndex>> {
         let mut indexes = Vec::new();
         for key in self.owner_index_keys().await? {
             let Some((data, _)) = self.get_value_entry(&key).await? else {

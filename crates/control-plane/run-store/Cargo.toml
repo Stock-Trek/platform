@@ -9,3 +9,6 @@ publish = false
 aws-sdk-dynamodb = { workspace = true }
 chrono = { workspace = true }
 platform-errors = { workspace = true }
+
+[lints]
+workspace = true

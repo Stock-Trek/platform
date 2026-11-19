@@ -262,7 +262,7 @@ async fn connector_updates_authorize_orders_before_and_after_recovery() {
     for update in sink.updates.lock().clone() {
         assert_eq!(
             restarted.apply_portfolio_update(update),
-            crate::PortfolioUpdateOutcome::Applied
+            PortfolioUpdateOutcome::Applied
         );
     }
     let recovered =

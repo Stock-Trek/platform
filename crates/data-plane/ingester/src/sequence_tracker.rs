@@ -4,7 +4,7 @@ use platform_nats::{JetStream, KeyValue};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum SequenceObservation {
+pub(crate) enum SequenceObservation {
     First,
     InOrder,
     Gap { missing_from: u64, missing_to: u64 },
@@ -13,7 +13,7 @@ pub enum SequenceObservation {
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
-pub struct SequenceTracker {
+pub(crate) struct SequenceTracker {
     /// First sequence that has not yet been published or covered by a gap
     /// marker.
     ///
@@ -25,25 +25,25 @@ pub struct SequenceTracker {
 
 /// Durable storage for per-stream sequence progress.
 #[async_trait]
-pub trait SequenceStore: Send + Sync {
+pub(crate) trait SequenceStore: Send + Sync {
     async fn load(&self, key: &str) -> PlatformResult<Option<SequenceTracker>>;
 
     async fn save(&self, key: &str, tracker: &SequenceTracker) -> PlatformResult<()>;
 }
 
 /// Sequence state persisted in a NATS KV bucket.
-pub struct NatsSequenceStore {
+pub(crate) struct NatsSequenceStore {
     values: KeyValue,
 }
 
 impl NatsSequenceStore {
-    pub async fn connect(nats_url: &str, subject_prefix: &str) -> PlatformResult<Self> {
+    pub(crate) async fn connect(nats_url: &str, subject_prefix: &str) -> PlatformResult<Self> {
         let bucket = Self::bucket_name(subject_prefix);
         let values = KeyValue::connect(nats_url, "platform-ingester-sequences", &bucket).await?;
         Ok(Self { values })
     }
 
-    pub fn bucket_name(subject_prefix: &str) -> String {
+    pub(crate) fn bucket_name(subject_prefix: &str) -> String {
         JetStream::kv_bucket_name(&format!("{subject_prefix}.ingester-sequences"))
     }
 }
@@ -67,7 +67,7 @@ impl SequenceStore for NatsSequenceStore {
 mod next_sequence {
     use serde::{Deserialize, Deserializer, Serializer};
 
-    pub fn serialize<S>(next: &Option<u128>, serializer: S) -> Result<S::Ok, S::Error>
+    pub(super) fn serialize<S>(next: &Option<u128>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -77,7 +77,7 @@ mod next_sequence {
         }
     }
 
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<u128>, D::Error>
+    pub(super) fn deserialize<'de, D>(deserializer: D) -> Result<Option<u128>, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -96,7 +96,7 @@ impl SequenceTracker {
     ///
     /// Call [`Self::commit`] only after the event has been published, so a
     /// failed publish remains visible as a gap to the next event.
-    pub fn observe_range(&self, first: u64, last: u64) -> SequenceObservation {
+    pub(crate) fn observe_range(&self, first: u64, last: u64) -> SequenceObservation {
         debug_assert!(first <= last, "sequence range must not be inverted");
         let first = first.min(last);
 
@@ -126,7 +126,7 @@ impl SequenceTracker {
     }
 
     /// Marks the inclusive range ending at `last` as successfully handled.
-    pub fn commit(&mut self, last: u64) {
+    pub(crate) fn commit(&mut self, last: u64) {
         self.next = Some(u128::from(last) + 1);
     }
 
@@ -135,7 +135,7 @@ impl SequenceTracker {
     /// This establishes the event as missing when it is the first observation
     /// for the stream. Later observations already have an earlier boundary, so
     /// they keep their existing next sequence.
-    pub fn record_failure(&mut self, first: u64) {
+    pub(crate) fn record_failure(&mut self, first: u64) {
         if self.next.is_none() {
             self.next = Some(u128::from(first));
         }

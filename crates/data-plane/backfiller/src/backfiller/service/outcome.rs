@@ -7,7 +7,7 @@ use platform_metrics::{
 use tracing::{info, warn};
 
 #[derive(Clone, Copy)]
-pub enum GapOutcome<'a> {
+pub(super) enum GapOutcome<'a> {
     Error {
         error: &'a str,
         message: &'static str,
@@ -23,7 +23,7 @@ pub enum GapOutcome<'a> {
 }
 
 impl GapOutcome<'_> {
-    pub fn record(self, pending: &PendingGap) {
+    pub(super) fn record(self, pending: &PendingGap) {
         MarketDataMetrics::record_backfill_gap_outcome(self.metric());
         match self {
             Self::Error { error, message } => warn!(

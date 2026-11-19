@@ -11,13 +11,13 @@ use std::sync::{
 
 /// Test queue that applies usage immediately, preserving synchronous test
 /// expectations while production code always goes through the durable queue.
-pub struct ImmediateTokenUsageQueue {
+pub(super) struct ImmediateTokenUsageQueue {
     store: Arc<dyn TokenStore>,
     inner: Arc<MemoryTokenUsageQueue>,
 }
 
 impl ImmediateTokenUsageQueue {
-    pub fn new(store: Arc<dyn TokenStore>) -> Self {
+    pub(super) fn new(store: Arc<dyn TokenStore>) -> Self {
         Self {
             store,
             inner: Arc::new(MemoryTokenUsageQueue::new(usize::MAX)),
@@ -52,24 +52,24 @@ impl TokenUsageQueue for ImmediateTokenUsageQueue {
     }
 }
 
-pub struct ToggleTokenUsageQueue {
+pub(super) struct ToggleTokenUsageQueue {
     inner: MemoryTokenUsageQueue,
     failing: AtomicBool,
 }
 
 impl ToggleTokenUsageQueue {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             inner: MemoryTokenUsageQueue::new(1024),
             failing: AtomicBool::new(false),
         }
     }
 
-    pub fn fail(&self) {
+    pub(super) fn fail(&self) {
         self.failing.store(true, Ordering::SeqCst);
     }
 
-    pub fn succeed(&self) {
+    pub(super) fn succeed(&self) {
         self.failing.store(false, Ordering::SeqCst);
     }
 }

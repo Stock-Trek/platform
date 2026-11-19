@@ -8,12 +8,12 @@ use stock_trek_types::cex::cex_id::CexId;
 use tokio::sync::Mutex;
 
 #[derive(Debug, Default)]
-pub struct InMemoryGapRetryStore {
+pub(crate) struct InMemoryGapRetryStore {
     pub pending: Mutex<HashMap<String, PendingGap>>,
 }
 
 impl InMemoryGapRetryStore {
-    pub async fn snapshot(&self) -> Vec<PendingGap> {
+    pub(crate) async fn snapshot(&self) -> Vec<PendingGap> {
         self.pending.lock().await.values().cloned().collect()
     }
 }

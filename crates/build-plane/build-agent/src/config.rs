@@ -17,7 +17,7 @@ const BUILD_AGENT_FAILURE_PUBLISH_BUDGET_SECS: &str = "BUILD_AGENT_FAILURE_PUBLI
 /// so a missing or invalid environment variable fails startup instead of the
 /// first build.
 #[derive(Debug, Clone)]
-pub struct AgentConfig {
+pub(crate) struct AgentConfig {
     pub log_filter: String,
     pub lambda_function_name: String,
     pub build_timeout: Duration,
@@ -30,11 +30,11 @@ pub struct AgentConfig {
 }
 
 impl AgentConfig {
-    pub fn from_env() -> PlatformResult<Self> {
+    pub(crate) fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+    pub(crate) fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let build_timeout = vars.required_positive_duration_secs(BUILD_AGENT_TIMEOUT_SECS)?;
         let source_download_timeout =
             vars.required_positive_duration_secs(BUILD_AGENT_SOURCE_DOWNLOAD_TIMEOUT_SECS)?;

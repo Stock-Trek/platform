@@ -1,7 +1,7 @@
-pub mod lambda;
-pub mod post_policy;
-pub mod request;
-pub mod s3_client;
+pub(crate) mod lambda;
+pub(crate) mod post_policy;
+pub(crate) mod request;
+pub(crate) mod s3_client;
 
 #[cfg(test)]
 mod post_policy_tests;

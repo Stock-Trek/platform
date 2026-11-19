@@ -4,19 +4,19 @@ use chrono::{DateTime, SecondsFormat, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 use std::collections::HashMap;
 
-pub const ALGORITHM_ID: &str = "algorithmId";
-pub const OWNER: &str = "owner";
-pub const SCHEDULED_AT: &str = "scheduledAt";
-pub const CWASM_KEY: &str = "cwasmKey";
-pub const CWASM_SHA256: &str = "cwasmSha256";
-pub const CWASM_SIZE: &str = "cwasmSize";
-pub const WASMTIME_VERSION: &str = "wasmtimeVersion";
-pub const STRATEGY_NAME: &str = "strategyName";
-pub const STATUS: &str = "status";
-pub const COMPLETED_AT: &str = "completedAt";
-pub const ERROR: &str = "error";
+pub(crate) const ALGORITHM_ID: &str = "algorithmId";
+pub(crate) const OWNER: &str = "owner";
+pub(crate) const SCHEDULED_AT: &str = "scheduledAt";
+pub(crate) const CWASM_KEY: &str = "cwasmKey";
+pub(crate) const CWASM_SHA256: &str = "cwasmSha256";
+pub(crate) const CWASM_SIZE: &str = "cwasmSize";
+pub(crate) const WASMTIME_VERSION: &str = "wasmtimeVersion";
+pub(crate) const STRATEGY_NAME: &str = "strategyName";
+pub(crate) const STATUS: &str = "status";
+pub(crate) const COMPLETED_AT: &str = "completedAt";
+pub(crate) const ERROR: &str = "error";
 
-pub type Item = HashMap<String, AttributeValue>;
+pub(crate) type Item = HashMap<String, AttributeValue>;
 
 /// A scheduled algorithm run together with everything the runner needs to
 /// execute it.

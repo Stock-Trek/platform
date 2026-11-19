@@ -10,14 +10,14 @@ use std::time::Duration;
 use stock_trek_types::cex::cex_id::CexId;
 use tracing::warn;
 
-pub const RETRY_DELAY: Duration = Duration::from_secs(5);
-pub const MAX_RETRY_DELAY: Duration = Duration::from_secs(5 * 60);
+pub(crate) const RETRY_DELAY: Duration = Duration::from_secs(5);
+pub(crate) const MAX_RETRY_DELAY: Duration = Duration::from_secs(5 * 60);
 const RETRY_POLICY: RetryPolicy =
     RetryPolicy::exponential(usize::MAX, RETRY_DELAY, MAX_RETRY_DELAY).without_jitter();
 
 /// A gap range that still needs data, together with its retry schedule.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-pub struct PendingGap {
+pub(crate) struct PendingGap {
     pub exchange: CexId,
     pub stream: String,
     pub missing_from: u64,
@@ -28,7 +28,7 @@ pub struct PendingGap {
 }
 
 impl PendingGap {
-    pub fn from_gap(gap: &GapMarker, next_attempt_at: TimestampMilliseconds) -> Self {
+    pub(crate) fn from_gap(gap: &GapMarker, next_attempt_at: TimestampMilliseconds) -> Self {
         Self {
             exchange: gap.exchange,
             stream: gap.stream.clone(),
@@ -40,7 +40,7 @@ impl PendingGap {
         }
     }
 
-    pub fn from_range(
+    pub(crate) fn from_range(
         gap: &GapMarker,
         missing_from: u64,
         missing_to: u64,
@@ -59,7 +59,7 @@ impl PendingGap {
         }
     }
 
-    pub fn key(&self) -> String {
+    pub(crate) fn key(&self) -> String {
         format!(
             "{}.{}.{}.{}",
             self.exchange,
@@ -69,7 +69,7 @@ impl PendingGap {
         )
     }
 
-    pub fn gap_marker(&self, detected_at: TimestampMilliseconds) -> GapMarker {
+    pub(crate) fn gap_marker(&self, detected_at: TimestampMilliseconds) -> GapMarker {
         GapMarker {
             exchange: self.exchange,
             stream: self.stream.clone(),
@@ -81,15 +81,15 @@ impl PendingGap {
         }
     }
 
-    pub fn is_due(&self, now: TimestampMilliseconds) -> bool {
+    pub(crate) fn is_due(&self, now: TimestampMilliseconds) -> bool {
         self.next_attempt_at <= now
     }
 
-    pub fn retry_delay(attempts: u32) -> Duration {
+    pub(crate) fn retry_delay(attempts: u32) -> Duration {
         RETRY_POLICY.delay(usize::try_from(attempts).unwrap_or(usize::MAX))
     }
 
-    pub fn retry_at(now: TimestampMilliseconds, attempts: u32) -> TimestampMilliseconds {
+    pub(crate) fn retry_at(now: TimestampMilliseconds, attempts: u32) -> TimestampMilliseconds {
         TimestampMilliseconds(now.0.saturating_add(
             i64::try_from(Self::retry_delay(attempts).as_millis()).unwrap_or(i64::MAX),
         ))
@@ -97,7 +97,7 @@ impl PendingGap {
 }
 
 #[async_trait]
-pub trait GapRetryStore: Send + Sync {
+pub(crate) trait GapRetryStore: Send + Sync {
     async fn load(&self) -> PlatformResult<Vec<PendingGap>>;
 
     async fn save(&self, pending: &PendingGap) -> PlatformResult<()>;
@@ -105,12 +105,12 @@ pub trait GapRetryStore: Send + Sync {
     async fn remove(&self, key: &str) -> PlatformResult<()>;
 }
 
-pub struct NatsGapRetryStore {
+pub(crate) struct NatsGapRetryStore {
     key_value: KeyValue,
 }
 
 impl NatsGapRetryStore {
-    pub async fn connect(config: &BackfillerConfig) -> PlatformResult<Self> {
+    pub(crate) async fn connect(config: &BackfillerConfig) -> PlatformResult<Self> {
         let bucket =
             JetStream::kv_bucket_name(&format!("{}.backfill-retries", config.gap_subject_prefix));
         let key_value =

@@ -9,7 +9,7 @@ use jsonwebtoken::jwk::JwkSet;
 use platform_errors::{AuthError, PlatformError, PlatformResult};
 use std::sync::Arc;
 
-pub const MAX_UPDATE_ATTEMPTS: usize = 5;
+pub(crate) const MAX_UPDATE_ATTEMPTS: usize = 5;
 
 pub struct AuthServiceConfig {
     pub token_lifetime: Duration,

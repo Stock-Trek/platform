@@ -8,7 +8,7 @@ use std::{
 
 const OUTPUT_BATCH_SIZE: usize = 8_192;
 
-pub struct PartitionOutput {
+pub(crate) struct PartitionOutput {
     pub partition: String,
     pub path: PathBuf,
     pub records: usize,
@@ -31,7 +31,7 @@ impl PartitionOutput {
         Ok(self)
     }
 
-    pub fn write_all(
+    pub(crate) fn write_all(
         kind: ArchiveKind,
         mut records: PartitionRecords,
         directory: &Path,

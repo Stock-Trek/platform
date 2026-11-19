@@ -23,3 +23,6 @@ tracing = { workspace = true }
 parking_lot = { workspace = true }
 platform-market-data = { workspace = true }
 stock-trek-types = { workspace = true }
+
+[lints]
+workspace = true

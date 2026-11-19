@@ -5,7 +5,7 @@ use tokio::sync::broadcast;
 
 const LIVE_BUFFER: usize = 1024;
 
-pub enum SubscribeOutcome {
+pub(crate) enum SubscribeOutcome {
     Joined {
         replay: Vec<Frame>,
         live: broadcast::Receiver<Frame>,
@@ -31,18 +31,18 @@ impl ChannelState {
     }
 }
 
-pub struct ChannelRegistry {
+pub(crate) struct ChannelRegistry {
     channels: Mutex<HashMap<String, ChannelState>>,
 }
 
 impl ChannelRegistry {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             channels: Mutex::new(HashMap::new()),
         }
     }
 
-    pub fn publish(&self, channel: &str, frame: Frame) -> u64 {
+    pub(crate) fn publish(&self, channel: &str, frame: Frame) -> u64 {
         let mut channels = self.channels.lock();
         let state = channels
             .entry(channel.to_string())
@@ -59,7 +59,7 @@ impl ChannelRegistry {
         sequence
     }
 
-    pub fn sequence(&self, channel: &str) -> u64 {
+    pub(crate) fn sequence(&self, channel: &str) -> u64 {
         self.channels
             .lock()
             .get(channel)
@@ -67,7 +67,7 @@ impl ChannelRegistry {
             .unwrap_or(0)
     }
 
-    pub fn subscribe(&self, channel: &str, last_sequence: Option<u64>) -> SubscribeOutcome {
+    pub(crate) fn subscribe(&self, channel: &str, last_sequence: Option<u64>) -> SubscribeOutcome {
         let mut channels = self.channels.lock();
         let state = channels
             .entry(channel.to_string())
@@ -127,7 +127,7 @@ impl ChannelRegistry {
     }
 
     #[cfg(test)]
-    pub fn frames(&self, channel: &str) -> Vec<Frame> {
+    pub(crate) fn frames(&self, channel: &str) -> Vec<Frame> {
         self.channels
             .lock()
             .get(channel)
@@ -135,7 +135,7 @@ impl ChannelRegistry {
             .unwrap_or_default()
     }
 
-    pub fn forget(&self, channel: &str) {
+    pub(crate) fn forget(&self, channel: &str) {
         self.channels.lock().remove(channel);
     }
 }

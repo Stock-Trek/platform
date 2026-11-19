@@ -30,8 +30,8 @@ pub enum Encryptor {
     EcdsaP256(p256::ecdsa::SigningKey),
     EcdsaP384(p384::ecdsa::SigningKey),
     Ed25519(ed25519_compact::SecretKey),
-    HmacSha256(secrecy::SecretSlice<u8>),
-    HmacSha512(secrecy::SecretSlice<u8>),
+    HmacSha256(SecretSlice<u8>),
+    HmacSha512(SecretSlice<u8>),
     RsaSha256(Box<RsaPkcs1v15SigningKey<Sha256>>),
 }
 
@@ -143,12 +143,12 @@ impl Encryptor {
                 Ok(signature.to_vec())
             }
             Self::HmacSha256(signing_slice) => {
-                let mut mac = Hmac::<sha2::Sha256>::new_from_slice(signing_slice.expose_secret())
+                let mut mac = Hmac::<Sha256>::new_from_slice(signing_slice.expose_secret())
                     .map_err(|e| {
-                    PlatformError::Exchange(ExchangeError::CryptoKey(format!(
-                        "HMAC-SHA256 key error: {e}"
-                    )))
-                })?;
+                        PlatformError::Exchange(ExchangeError::CryptoKey(format!(
+                            "HMAC-SHA256 key error: {e}"
+                        )))
+                    })?;
                 mac.update(bytes);
                 Ok(mac.finalize().into_bytes().to_vec())
             }

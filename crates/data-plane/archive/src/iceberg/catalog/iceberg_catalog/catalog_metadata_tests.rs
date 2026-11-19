@@ -801,7 +801,7 @@ async fn a_lost_lease_blocks_property_updates_before_they_are_submitted() {
     let table = MetadataTable::with_batches(&[]);
     let context = CommitContext::default()
         .with_lease("compact:events:prefix", "owner-a", 7)
-        .with_authorizer(std::sync::Arc::new(DeniedAuthorizer));
+        .with_authorizer(Arc::new(DeniedAuthorizer));
 
     assert!(
         catalog

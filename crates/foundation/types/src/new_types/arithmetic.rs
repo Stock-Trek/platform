@@ -20,7 +20,7 @@ pub trait CheckedRem<Rhs> {
     fn checked_rem(self, rhs: Rhs) -> Result<Self::Output, ArithmeticError>;
 }
 
-pub trait RawCheckedRem: Copy {
+pub(super) trait RawCheckedRem: Copy {
     fn raw_checked_rem(self, divisor: Self) -> Result<Self, ArithmeticError>;
 }
 

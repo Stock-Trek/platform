@@ -26,8 +26,8 @@ pub struct PublishAck {
     pub duplicate: bool,
 }
 
-impl From<async_nats::jetstream::publish::PublishAck> for PublishAck {
-    fn from(ack: async_nats::jetstream::publish::PublishAck) -> Self {
+impl From<jetstream::publish::PublishAck> for PublishAck {
+    fn from(ack: jetstream::publish::PublishAck) -> Self {
         Self {
             stream: ack.stream,
             sequence: ack.sequence,

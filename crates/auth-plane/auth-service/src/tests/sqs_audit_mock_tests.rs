@@ -8,28 +8,28 @@ use platform_errors::{PlatformResult, SqsError};
 use platform_time::Deadline;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
-pub struct MockAuditQueue {
+pub(super) struct MockAuditQueue {
     batches: Mutex<Vec<Vec<TokenAuditEvent>>>,
     fail: AtomicBool,
 }
 
 impl MockAuditQueue {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             batches: Mutex::new(Vec::new()),
             fail: AtomicBool::new(false),
         }
     }
 
-    pub fn fail(&self) {
+    pub(super) fn fail(&self) {
         self.fail.store(true, Ordering::SeqCst);
     }
 
-    pub fn batches(&self) -> Vec<Vec<TokenAuditEvent>> {
+    pub(super) fn batches(&self) -> Vec<Vec<TokenAuditEvent>> {
         self.batches.lock().clone()
     }
 
-    pub fn events(&self) -> Vec<TokenAuditEvent> {
+    pub(super) fn events(&self) -> Vec<TokenAuditEvent> {
         self.batches.lock().iter().flatten().cloned().collect()
     }
 }
@@ -45,14 +45,14 @@ impl AuditQueue for MockAuditQueue {
     }
 }
 
-pub struct RecreateOnSecondGet {
+pub(super) struct RecreateOnSecondGet {
     inner: MemoryTokenStore,
     replacement: ApiToken,
     gets: AtomicUsize,
 }
 
 impl RecreateOnSecondGet {
-    pub fn new(replacement: ApiToken) -> Self {
+    pub(super) fn new(replacement: ApiToken) -> Self {
         Self {
             inner: MemoryTokenStore::default(),
             replacement,
@@ -60,7 +60,7 @@ impl RecreateOnSecondGet {
         }
     }
 
-    pub async fn put(&self, token: &ApiToken) -> PlatformResult<()> {
+    pub(super) async fn put(&self, token: &ApiToken) -> PlatformResult<()> {
         self.inner.put(token).await
     }
 

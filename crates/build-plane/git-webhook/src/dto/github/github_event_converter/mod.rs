@@ -5,4 +5,4 @@ mod responses;
 #[cfg(test)]
 mod tests;
 
-pub use converter::GitHubEventConverter;
+pub(crate) use converter::GitHubEventConverter;

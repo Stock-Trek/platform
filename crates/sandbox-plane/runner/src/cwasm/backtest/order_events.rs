@@ -1,11 +1,11 @@
 use serde_json::{Value, json};
 use stock_trek::types::{AccountId, AssetId, CexId, OrderRequest, Tag};
 
-pub struct OrderEvents;
+pub(super) struct OrderEvents;
 
 impl OrderEvents {
     #[allow(clippy::too_many_arguments)]
-    pub fn placed(
+    pub(super) fn placed(
         kind: &str,
         cex_id: &CexId,
         account_id: &AccountId,
@@ -29,7 +29,7 @@ impl OrderEvents {
         })
     }
 
-    pub fn cancelled(
+    pub(super) fn cancelled(
         cex_id: Option<&CexId>,
         account_id: Option<&AccountId>,
         tag: &Option<Tag>,
@@ -42,7 +42,7 @@ impl OrderEvents {
         })
     }
 
-    pub fn request_value(order_request: &OrderRequest<AssetId, f64>) -> Value {
+    pub(super) fn request_value(order_request: &OrderRequest<AssetId, f64>) -> Value {
         serde_json::to_value(order_request).unwrap_or(Value::Null)
     }
 }

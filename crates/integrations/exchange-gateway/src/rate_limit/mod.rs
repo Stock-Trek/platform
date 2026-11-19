@@ -1,6 +1,6 @@
-pub mod limiter_registry;
-pub mod limiter_state;
-pub mod rate_limiter;
+pub(crate) mod limiter_registry;
+pub(crate) mod limiter_state;
+pub(crate) mod rate_limiter;
 
 #[cfg(test)]
 mod limiter_registry_tests;

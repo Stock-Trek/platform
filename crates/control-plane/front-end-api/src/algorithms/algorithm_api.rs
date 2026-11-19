@@ -8,14 +8,14 @@ use hyper::body::Bytes;
 use hyper::{Method, Response, StatusCode};
 use std::sync::Arc;
 
-pub struct AlgorithmApi {
+pub(crate) struct AlgorithmApi {
     builds: Arc<BuildStore>,
     sessions: Arc<SessionService>,
     builds_api: BuildApi,
 }
 
 impl AlgorithmApi {
-    pub fn new(
+    pub(crate) fn new(
         builds: Arc<BuildStore>,
         sessions: Arc<SessionService>,
         bots: Arc<crate::bots::BotStore>,
@@ -29,7 +29,7 @@ impl AlgorithmApi {
         }
     }
 
-    pub fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
+    pub(crate) fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         match request.segments().as_slice() {
             ["algorithms"] => match *request.method() {
                 Method::GET => self.list(request),

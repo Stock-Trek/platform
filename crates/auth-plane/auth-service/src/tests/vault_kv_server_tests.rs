@@ -13,7 +13,7 @@ use std::{
     thread::{self, JoinHandle},
 };
 
-pub struct MockVault {
+pub(super) struct MockVault {
     address: SocketAddr,
     state: Arc<Mutex<VaultKvState>>,
     requests: Arc<Mutex<Vec<CapturedRequest>>>,
@@ -22,7 +22,7 @@ pub struct MockVault {
 }
 
 impl MockVault {
-    pub fn start(mount: &str) -> Self {
+    pub(super) fn start(mount: &str) -> Self {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
         let address = listener.local_addr().unwrap();
         let mount = mount.to_string();
@@ -54,19 +54,19 @@ impl MockVault {
         }
     }
 
-    pub fn url(&self) -> String {
+    pub(super) fn url(&self) -> String {
         format!("http://{}", self.address)
     }
 
-    pub fn requests(&self) -> Vec<CapturedRequest> {
+    pub(super) fn requests(&self) -> Vec<CapturedRequest> {
         self.requests.lock().clone()
     }
 
-    pub fn seed(&self, key: &str) {
+    pub(super) fn seed(&self, key: &str) {
         self.state.lock().seed(key);
     }
 
-    pub fn current(&self, id: &str) -> Option<(serde_json::Value, u64)> {
+    pub(super) fn current(&self, id: &str) -> Option<(serde_json::Value, u64)> {
         self.state.lock().read(id)
     }
 

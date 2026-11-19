@@ -11,14 +11,14 @@ use hyper::body::Bytes;
 use hyper::{Method, Response, StatusCode};
 use std::sync::Arc;
 
-pub struct LimitsApi {
+pub(crate) struct LimitsApi {
     limits: Arc<LimitService>,
     sessions: Arc<SessionService>,
     streams: Arc<StreamService>,
 }
 
 impl LimitsApi {
-    pub fn new(
+    pub(crate) fn new(
         limits: Arc<LimitService>,
         sessions: Arc<SessionService>,
         streams: Arc<StreamService>,
@@ -30,7 +30,7 @@ impl LimitsApi {
         }
     }
 
-    pub fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
+    pub(crate) fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         match request.segments().as_slice() {
             ["limits"] => match *request.method() {
                 Method::GET => self.limits(request),

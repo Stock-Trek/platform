@@ -20,13 +20,13 @@ const BINANCE_API_KEY_HEADER: &str = "X-MBX-APIKEY";
 /// Each variant carries the codec that understands that format for the
 /// configured exchange, so the transport does not need exchange knowledge.
 #[derive(Clone)]
-pub enum StreamFormat {
+pub(crate) enum StreamFormat {
     Json(SharedCodec),
     Binary(SharedCodec),
 }
 
 impl StreamFormat {
-    pub fn for_exchange(value: &str, exchange: CexId) -> Result<Self, IngesterError> {
+    pub(crate) fn for_exchange(value: &str, exchange: CexId) -> Result<Self, IngesterError> {
         match value.trim().to_ascii_lowercase().as_str() {
             "json" => Ok(Self::Json(CodecFactory::json_codec(exchange))),
             "binary" | "binance_sbe" | "binance-sbe" => {
@@ -58,12 +58,12 @@ impl fmt::Debug for StreamFormat {
 
 /// Source of parsed exchange websocket messages.
 #[async_trait]
-pub trait MarketMessageSource: Send + Sync {
+pub(crate) trait MarketMessageSource: Send + Sync {
     async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> PlatformResult<()>;
 }
 
 /// Websocket transport shared by all exchange codecs.
-pub struct WebsocketSource {
+pub(crate) struct WebsocketSource {
     exchange: CexId,
     url: String,
     api_key: Option<String>,
@@ -71,7 +71,7 @@ pub struct WebsocketSource {
 }
 
 impl WebsocketSource {
-    pub fn new(
+    pub(crate) fn new(
         exchange: CexId,
         url: impl Into<String>,
         api_key: Option<String>,
@@ -85,7 +85,7 @@ impl WebsocketSource {
         }
     }
 
-    pub fn from_config(config: &IngesterConfig) -> Self {
+    pub(crate) fn from_config(config: &IngesterConfig) -> Self {
         Self::new(
             config.exchange,
             config.websocket_url.clone(),
@@ -94,7 +94,7 @@ impl WebsocketSource {
         )
     }
 
-    pub async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> PlatformResult<()> {
+    pub(crate) async fn run(&self, sender: mpsc::Sender<ParsedMessage>) -> PlatformResult<()> {
         IngesterConfig::validate_trade_streams(self.exchange, &self.url)?;
         let codec = match &self.stream_format {
             StreamFormat::Json(codec) | StreamFormat::Binary(codec) => codec.clone(),
@@ -135,7 +135,7 @@ impl WebsocketSource {
         Ok(config)
     }
 
-    pub fn api_key_header(exchange: CexId) -> PlatformResult<&'static str> {
+    pub(crate) fn api_key_header(exchange: CexId) -> PlatformResult<&'static str> {
         match exchange {
             CexId::Binance => Ok(BINANCE_API_KEY_HEADER),
             exchange => Err(PlatformError::Exchange(

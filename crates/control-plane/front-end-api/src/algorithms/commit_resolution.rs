@@ -3,7 +3,7 @@ use sha1::{Digest, Sha1};
 const FULL_COMMIT_LENGTH: usize = 40;
 
 #[derive(Debug)]
-pub enum CommitError {
+pub(crate) enum CommitError {
     Unresolved,
 }
 

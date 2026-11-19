@@ -113,12 +113,12 @@ impl SpillWriter for SpillRunWriter {
     }
 }
 
-pub struct CandleSpill {
+pub(crate) struct CandleSpill {
     sorter: SpillSorter<CandleCodec>,
 }
 
 impl CandleSpill {
-    pub fn new(
+    pub(crate) fn new(
         directory: impl Into<PathBuf>,
         bucket_millis: i64,
         layer: ArchiveTableLayer,
@@ -136,31 +136,31 @@ impl CandleSpill {
         })
     }
 
-    pub fn push(&mut self, candle: ClosedCandle) -> PlatformResult<()> {
+    pub(crate) fn push(&mut self, candle: ClosedCandle) -> PlatformResult<()> {
         self.sorter.push_record(ArchiveRecord::ClosedCandle(candle))
     }
 
-    pub fn spilled_records(&self) -> usize {
+    pub(crate) fn spilled_records(&self) -> usize {
         self.sorter.spilled_records()
     }
 
-    pub fn usage(&self) -> SpillUsage {
+    pub(crate) fn usage(&self) -> SpillUsage {
         self.sorter.usage()
     }
 
-    pub fn finish(&mut self) -> PlatformResult<CandleRecords> {
+    pub(crate) fn finish(&mut self) -> PlatformResult<CandleRecords> {
         Ok(CandleRecords {
             records: self.sorter.finish()?,
         })
     }
 }
 
-pub struct CandleRecords {
+pub(crate) struct CandleRecords {
     records: SpillRecords<CandleCodec>,
 }
 
 impl CandleRecords {
-    pub fn next_candle(&mut self) -> PlatformResult<Option<ClosedCandle>> {
+    pub(crate) fn next_candle(&mut self) -> PlatformResult<Option<ClosedCandle>> {
         let Some(record) = self.records.next_record()? else {
             return Ok(None);
         };

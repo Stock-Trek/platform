@@ -4,7 +4,7 @@ use platform_runtime::Runtime;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{info, warn};
 
-pub struct CompactorRunner<S, C> {
+pub(crate) struct CompactorRunner<S, C> {
     config: CompactorConfig,
     source: S,
     compactor: C,
@@ -15,7 +15,7 @@ where
     S: ArchiveBatchSource,
     C: BatchCompactor,
 {
-    pub fn new(config: CompactorConfig, source: S, compactor: C) -> Self {
+    pub(crate) fn new(config: CompactorConfig, source: S, compactor: C) -> Self {
         Self {
             config,
             source,
@@ -23,7 +23,7 @@ where
         }
     }
 
-    pub async fn run(self) -> PlatformResult<()> {
+    pub(crate) async fn run(self) -> PlatformResult<()> {
         let Self {
             config,
             source,
@@ -55,7 +55,7 @@ where
         }
     }
 
-    pub async fn run_cycle(source: &S, compactor: &C) -> PlatformResult<()> {
+    pub(crate) async fn run_cycle(source: &S, compactor: &C) -> PlatformResult<()> {
         let started = std::time::Instant::now();
         let batches = source.pending_batches().await?;
         info!(batches = batches.len(), "scanning archive for compaction");

@@ -13,3 +13,6 @@ stock-trek-types = { workspace = true, features = ["serde"] }
 
 [dev-dependencies]
 serde_json.workspace = true
+
+[lints]
+workspace = true

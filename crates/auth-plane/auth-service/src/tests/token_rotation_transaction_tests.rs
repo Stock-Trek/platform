@@ -65,7 +65,7 @@ impl RotationFixture {
         let mut retired = original.clone();
         retired
             .metadata
-            .begin_rotation(replacement.id(), now + chrono::Duration::seconds(60));
+            .begin_rotation(replacement.id(), now + Duration::seconds(60));
         let events = vec![
             TokenAuditEvent::new(TokenAuditAction::Rotated, now)
                 .with_token(original.id(), Some(original.owner())),
@@ -189,7 +189,7 @@ async fn rotation_transactions_assign_event_ids() {
     let mut retired = original.clone();
     retired
         .metadata
-        .begin_rotation("token-b", now + chrono::Duration::seconds(60));
+        .begin_rotation("token-b", now + Duration::seconds(60));
     let mut replacement =
         ApiToken::generate("token-b", original.owner(), now, TestFixture::metadata()).unwrap();
     replacement.metadata.rotated_from = Some(original.id().to_string());
@@ -198,13 +198,8 @@ async fn rotation_transactions_assign_event_ids() {
         TokenAuditEvent::new(TokenAuditAction::Issued, now),
     ];
 
-    let transaction = crate::token_rotation_transaction::TokenRotationTransaction::new(
-        original,
-        retired,
-        replacement,
-        events,
-    )
-    .unwrap();
+    let transaction =
+        TokenRotationTransaction::new(original, retired, replacement, events).unwrap();
 
     assert!(
         transaction

@@ -1,7 +1,7 @@
 use crate::api::Problem;
 use chrono::{Datelike, NaiveDate};
 
-pub struct CronExpression;
+pub(super) struct CronExpression;
 
 const FIELDS: usize = 5;
 const FIELD_BOUNDS: [(u32, u32); FIELDS] = [(0, 59), (0, 23), (1, 31), (1, 12), (0, 7)];
@@ -9,7 +9,7 @@ const REFERENCE_START: NaiveDate = NaiveDate::from_ymd_opt(2028, 1, 1).expect("r
 const REFERENCE_DAYS: u32 = 366;
 
 impl CronExpression {
-    pub fn validated(expression: &str) -> Result<(), Problem> {
+    pub(super) fn validated(expression: &str) -> Result<(), Problem> {
         let fields: Vec<&str> = expression.split_whitespace().collect();
         if fields.len() != FIELDS {
             return Err(Problem::validation_failed(
@@ -22,7 +22,7 @@ impl CronExpression {
         Ok(())
     }
 
-    pub fn runs_per_day(expression: &str) -> u64 {
+    pub(super) fn runs_per_day(expression: &str) -> u64 {
         Self::matching_minutes(expression)
             .unwrap_or(0)
             .div_ceil(u64::from(REFERENCE_DAYS))
@@ -149,10 +149,10 @@ impl CronExpression {
     }
 }
 
-pub struct TimezoneName;
+pub(super) struct TimezoneName;
 
 impl TimezoneName {
-    pub fn validated(name: &str) -> Result<(), Problem> {
+    pub(super) fn validated(name: &str) -> Result<(), Problem> {
         let valid = !name.is_empty()
             && name.len() <= 64
             && name

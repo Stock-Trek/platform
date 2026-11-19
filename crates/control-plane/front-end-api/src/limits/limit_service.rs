@@ -10,44 +10,44 @@ use serde::Serialize;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
-pub const QUOTA_LINKED_ACCOUNTS: &str = "linkedAccounts";
-pub const QUOTA_ALGORITHMS: &str = "algorithms";
-pub const QUOTA_BOTS: &str = "bots";
-pub const QUOTA_SCHEDULED_RUNS_PER_DAY: &str = "scheduledRunsPerDay";
-pub const QUOTA_CONCURRENT_BACKTESTS: &str = "concurrentBacktests";
-pub const QUOTA_STREAM_CONNECTIONS: &str = "streamConnections";
-pub const QUOTA_STREAM_SUBSCRIPTIONS: &str = "concurrentStreamSubscriptions";
-pub const QUOTA_API_REQUESTS_PER_MINUTE: &str = "apiRequestsPerMinute";
-pub const QUOTA_AD_HOC_RUNS_PER_HOUR: &str = "adHocRunsPerHour";
-pub const QUOTA_MAX_REQUEST_BYTES: &str = "maxRequestBytes";
-pub const QUOTA_MAX_RESULT_BYTES: &str = "maxBacktestResultBytes";
+pub(crate) const QUOTA_LINKED_ACCOUNTS: &str = "linkedAccounts";
+pub(super) const QUOTA_ALGORITHMS: &str = "algorithms";
+pub(crate) const QUOTA_BOTS: &str = "bots";
+pub(crate) const QUOTA_SCHEDULED_RUNS_PER_DAY: &str = "scheduledRunsPerDay";
+pub(crate) const QUOTA_CONCURRENT_BACKTESTS: &str = "concurrentBacktests";
+pub(crate) const QUOTA_STREAM_CONNECTIONS: &str = "streamConnections";
+pub(crate) const QUOTA_STREAM_SUBSCRIPTIONS: &str = "concurrentStreamSubscriptions";
+pub(super) const QUOTA_API_REQUESTS_PER_MINUTE: &str = "apiRequestsPerMinute";
+pub(super) const QUOTA_AD_HOC_RUNS_PER_HOUR: &str = "adHocRunsPerHour";
+pub(super) const QUOTA_MAX_REQUEST_BYTES: &str = "maxRequestBytes";
+pub(super) const QUOTA_MAX_RESULT_BYTES: &str = "maxBacktestResultBytes";
 
 const REQUEST_RATE_WINDOW: Duration = Duration::minutes(1);
 const AD_HOC_RATE_WINDOW: Duration = Duration::hours(1);
-pub const MAX_RESULT_BYTES: u64 = 1024 * 1024;
+pub(crate) const MAX_RESULT_BYTES: u64 = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct LimitEntry {
+pub(crate) struct LimitEntry {
     pub limit: u64,
     pub used: u64,
 }
 
-pub struct LimitSources {
+pub(crate) struct LimitSources {
     pub accounts: Arc<AccountStore>,
     pub builds: Arc<BuildStore>,
     pub bots: Arc<BotStore>,
     pub backtests: Arc<BacktestStore>,
 }
 
-pub struct LimitService {
+pub(crate) struct LimitService {
     sources: LimitSources,
     request_throttle: Throttle,
     ad_hoc_throttle: Throttle,
 }
 
 impl LimitService {
-    pub fn new(sources: LimitSources) -> Self {
+    pub(crate) fn new(sources: LimitSources) -> Self {
         Self {
             sources,
             request_throttle: Throttle::new(REQUEST_RATE_WINDOW),
@@ -55,7 +55,11 @@ impl LimitService {
         }
     }
 
-    pub fn effective(&self, owner: &str, now: DateTime<Utc>) -> BTreeMap<&'static str, LimitEntry> {
+    pub(crate) fn effective(
+        &self,
+        owner: &str,
+        now: DateTime<Utc>,
+    ) -> BTreeMap<&'static str, LimitEntry> {
         let mut entries = BTreeMap::new();
         for quota in [
             QUOTA_LINKED_ACCOUNTS,
@@ -75,7 +79,7 @@ impl LimitService {
         entries
     }
 
-    pub fn check(
+    pub(crate) fn check(
         &self,
         owner: &str,
         quota: &'static str,
@@ -94,7 +98,7 @@ impl LimitService {
         }
     }
 
-    pub fn check_replacement(
+    pub(crate) fn check_replacement(
         &self,
         owner: &str,
         quota: &'static str,
@@ -114,7 +118,7 @@ impl LimitService {
         }
     }
 
-    pub fn check_rate(
+    pub(crate) fn check_rate(
         &self,
         owner: &str,
         quota: &'static str,
@@ -130,21 +134,29 @@ impl LimitService {
         }
     }
 
-    pub fn check_request_rate(&self, owner: &str, now: DateTime<Utc>) -> Result<(), Problem> {
+    pub(crate) fn check_request_rate(
+        &self,
+        owner: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), Problem> {
         let limit = self.limit(QUOTA_API_REQUESTS_PER_MINUTE);
         self.request_throttle
             .check(owner, limit, now)
             .map_err(Problem::rate_limited)
     }
 
-    pub fn check_ad_hoc_run_rate(&self, bot_id: &str, now: DateTime<Utc>) -> Result<(), Problem> {
+    pub(crate) fn check_ad_hoc_run_rate(
+        &self,
+        bot_id: &str,
+        now: DateTime<Utc>,
+    ) -> Result<(), Problem> {
         let limit = self.limit(QUOTA_AD_HOC_RUNS_PER_HOUR);
         self.ad_hoc_throttle
             .check(bot_id, limit, now)
             .map_err(Problem::rate_limited)
     }
 
-    pub fn entry(&self, owner: &str, quota: &str, now: DateTime<Utc>) -> LimitEntry {
+    pub(crate) fn entry(&self, owner: &str, quota: &str, now: DateTime<Utc>) -> LimitEntry {
         LimitEntry {
             limit: self.limit(quota),
             used: self.used(owner, quota, now),

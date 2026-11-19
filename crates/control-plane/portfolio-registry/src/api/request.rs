@@ -12,7 +12,7 @@ use tokio::time::timeout;
 const MAX_REQUEST_BYTES: usize = 64 * 1024;
 const BODY_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub fn json_response<T: Serialize>(status: StatusCode, value: &T) -> Response<Full<Bytes>> {
+pub(crate) fn json_response<T: Serialize>(status: StatusCode, value: &T) -> Response<Full<Bytes>> {
     match serde_json::to_vec(value) {
         Ok(body) => Response::builder()
             .status(status)
@@ -23,14 +23,16 @@ pub fn json_response<T: Serialize>(status: StatusCode, value: &T) -> Response<Fu
     }
 }
 
-pub fn empty_response(status: StatusCode) -> Response<Full<Bytes>> {
+pub(crate) fn empty_response(status: StatusCode) -> Response<Full<Bytes>> {
     Response::builder()
         .status(status)
         .body(Full::new(Bytes::new()))
         .unwrap_or_else(|_| Response::new(Full::new(Bytes::new())))
 }
 
-pub async fn read_json<T: DeserializeOwned>(request: Request<Incoming>) -> Result<T, ApiError> {
+pub(crate) async fn read_json<T: DeserializeOwned>(
+    request: Request<Incoming>,
+) -> Result<T, ApiError> {
     let too_large = request
         .headers()
         .get(CONTENT_LENGTH)
@@ -55,7 +57,7 @@ pub async fn read_json<T: DeserializeOwned>(request: Request<Incoming>) -> Resul
         .map_err(|error| ApiError::bad_request(error.to_string()))
 }
 
-pub fn bearer(request: &Request<Incoming>) -> Result<&str, ApiError> {
+pub(crate) fn bearer(request: &Request<Incoming>) -> Result<&str, ApiError> {
     let value = request
         .headers()
         .get(AUTHORIZATION)
