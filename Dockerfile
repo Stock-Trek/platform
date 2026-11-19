@@ -59,6 +59,7 @@ RUN case "${TARGETARCH}" in \
 FROM base AS builder
 
 WORKDIR /app
+COPY ./bin ./bin
 COPY ./crates ./crates
 COPY ./proto ./proto
 COPY ./Cargo.lock ./Cargo.lock
@@ -78,6 +79,7 @@ COPY ./crates/foundation/messages ./crates/foundation/messages
 COPY ./crates/foundation/types ./crates/foundation/types
 COPY ./crates/sandbox-plane/exit-codes ./crates/sandbox-plane/exit-codes
 COPY ./crates/sandbox-plane/runner ./crates/sandbox-plane/runner
+COPY ./bin ./bin
 COPY ./Cargo.lock ./Cargo.lock
 COPY ./Cargo.toml ./Cargo.toml
 COPY ./rust-toolchain.toml ./rust-toolchain.toml

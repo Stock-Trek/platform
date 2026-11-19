@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "platform-compactor"
+path = "../../../bin/compactor/main.rs"
+
 [dependencies]
 async-trait = { workspace = true }
 aws-sdk-s3 = { workspace = true }

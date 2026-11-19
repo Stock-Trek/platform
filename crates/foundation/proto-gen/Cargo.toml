@@ -8,6 +8,10 @@ publish = false
 [lib]
 crate-type = ["lib"]
 
+[[bin]]
+name = "platform-proto-gen"
+path = "../../../bin/proto-gen/main.rs"
+
 [dependencies]
 prost-build = { workspace = true }
 protoc-bin-vendored = { workspace = true }

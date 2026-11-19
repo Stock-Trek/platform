@@ -5,6 +5,10 @@ edition.workspace = true
 rust-version.workspace = true
 publish = false
 
+[[bin]]
+name = "platform-archiver"
+path = "../../../bin/archiver/main.rs"
+
 [dependencies]
 async-trait = { workspace = true }
 aws-sdk-s3 = { workspace = true }
