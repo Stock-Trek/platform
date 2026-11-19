@@ -2,10 +2,11 @@ use crate::api::{ApiServer, FrontEndApi, FrontEndApiDeps};
 use crate::auth::SessionStore;
 use crate::config::FrontEndApiConfig;
 use platform_errors::PlatformResult;
-use platform_runtime::Service;
+use platform_runtime::{HealthRunner, Service};
 use std::sync::Arc;
 
 const SERVICE: Service = Service::new("platform-front-end-api");
+const HEALTH_SERVICE: &str = "FRONT_END_API";
 
 pub struct FrontEndApiRunner;
 
@@ -20,6 +21,8 @@ impl FrontEndApiRunner {
         }));
         let server = ApiServer::bind(config.bind_address(), api).await?;
         tracing::info!(address = %server.local_addr()?, "front-end api listening");
-        server.serve().await
+        let health = HealthRunner::from_service_env(HEALTH_SERVICE).await?;
+        health.mark_ready();
+        health.run(server.serve()).await
     }
 }

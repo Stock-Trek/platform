@@ -1,7 +1,6 @@
 mod api_connection;
 mod api_server;
 mod cors;
-mod health_route;
 mod idempotency;
 mod ids;
 mod page;
@@ -13,8 +12,6 @@ mod router;
 pub(crate) mod timestamp;
 
 #[cfg(test)]
-mod health_tests;
-#[cfg(test)]
 mod page_tests;
 #[cfg(test)]
 mod request_tests;
@@ -23,7 +20,6 @@ mod timestamp_tests;
 
 pub use api_connection::ApiConnection;
 pub use api_server::ApiServer;
-pub use health_route::HealthRoute;
 pub use idempotency::IdempotencyStore;
 pub use ids::Id;
 pub use page::{Page, PageQuery};

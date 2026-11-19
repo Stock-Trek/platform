@@ -30,6 +30,17 @@ pub struct AlgorithmSummary {
     pub latest_ready_build_id: Option<String>,
 }
 
+impl AlgorithmSummary {
+    pub fn default_git_ref(&self) -> String {
+        let default_ref = &self.default_ref;
+        if default_ref.starts_with("heads/") || default_ref.starts_with("tags/") {
+            default_ref.clone()
+        } else {
+            format!("heads/{default_ref}")
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildState {

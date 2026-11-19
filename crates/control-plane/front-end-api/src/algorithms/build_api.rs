@@ -102,7 +102,9 @@ impl BuildApi {
                         "builds can only be triggered while the algorithm is active",
                     ));
                 }
-                let git_ref = trigger.git_ref.unwrap_or(algorithm.default_ref);
+                let git_ref = trigger
+                    .git_ref
+                    .unwrap_or_else(|| algorithm.default_git_ref());
                 Self::validate_ref(&git_ref)?;
                 let commit = trigger.commit;
                 if let Some(commit) = &commit {
