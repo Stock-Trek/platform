@@ -36,10 +36,11 @@ pub struct FrontEndApiDeps {
 impl FrontEndApi {
     pub fn new(deps: FrontEndApiDeps) -> Self {
         let accounts_store = Arc::new(AccountStore::new());
-        let builds = Arc::new(BuildStore::new());
+        let registry = Arc::new(ChannelRegistry::new());
+        let runs_store = Arc::new(RunStore::new(Arc::clone(&registry)));
+        let backtests_store = Arc::new(BacktestStore::new(Arc::clone(&registry)));
+        let builds = Arc::new(BuildStore::new(Arc::clone(&registry)));
         let bots_store = Arc::new(BotStore::new());
-        let runs_store = Arc::new(RunStore::new());
-        let backtests_store = Arc::new(BacktestStore::new());
         let limits = Arc::new(LimitService::new(LimitSources {
             accounts: Arc::clone(&accounts_store),
             builds: Arc::clone(&builds),
@@ -64,7 +65,7 @@ impl FrontEndApi {
             Arc::clone(&limits),
         ));
         let streams = Arc::new(StreamService::new(
-            Arc::new(ChannelRegistry::new()),
+            registry,
             Arc::clone(&accounts),
             Arc::clone(&builds),
             Arc::clone(&bots_store),
@@ -133,14 +134,13 @@ impl RequestHandler for FrontEndApi {
             return HealthRoute::dispatch(request.method());
         }
         let header_request_id = Self::header_request_id(request.headers());
+        let request_id = header_request_id
+            .clone()
+            .unwrap_or_else(|| format!("req_{}", uuid::Uuid::new_v4().simple()));
         let parsed = match ApiRequest::parse(request, Some(peer)).await {
             Ok(parsed) => parsed,
-            Err(problem) => {
-                return problem.response(header_request_id.as_deref().unwrap_or_default());
-            }
+            Err(problem) => return problem.response(&request_id),
         };
-        let request_id =
-            header_request_id.unwrap_or_else(|| format!("req_{}", uuid::Uuid::new_v4().simple()));
         let outcome = match *parsed.method() {
             Method::OPTIONS => Ok(self.cors.preflight(&parsed)),
             _ => self.route(&parsed),

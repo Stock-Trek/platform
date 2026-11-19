@@ -5,9 +5,13 @@ use crate::api::{ApiRequest, PageQuery};
 use crate::auth::{AuthContext, Scope};
 use crate::backtests::BacktestStore;
 use crate::bots::bot_types::Schedule;
-use crate::bots::{Bot, BotState, BotStore, CreateBotRequest, PatchBotRequest, RunStore};
+use crate::bots::{
+    Bot, BotState, BotStore, CreateBotRequest, PatchBotRequest, Run, RunFilter, RunState, RunStore,
+    RunTrigger,
+};
 use crate::limits::{LimitService, LimitSources};
-use chrono::Utc;
+use crate::streaming::ChannelRegistry;
+use chrono::{DateTime, Duration, Utc};
 use hyper::{HeaderMap, Method, Uri, body::Bytes};
 use std::sync::Arc;
 use stock_trek_types::cex::cex_id::CexId;
@@ -26,25 +30,28 @@ impl Fixture {
     const STRATEGY: &'static str = "momentum_v2";
 
     fn new() -> Self {
+        let registry = Arc::new(ChannelRegistry::new());
         let accounts = Arc::new(AccountStore::new());
-        let builds = Arc::new(BuildStore::new());
+        let builds = Arc::new(BuildStore::new(Arc::clone(&registry)));
         let bots = Arc::new(BotStore::new());
-        let runs = Arc::new(RunStore::new());
+        let runs = Arc::new(RunStore::new(Arc::clone(&registry)));
         let limits = Arc::new(LimitService::new(LimitSources {
             accounts: accounts.clone(),
             builds: builds.clone(),
             bots: bots.clone(),
-            backtests: Arc::new(BacktestStore::new()),
+            backtests: Arc::new(BacktestStore::new(Arc::clone(&registry))),
         }));
         let algorithm =
             builds.register_algorithm(Self::OWNER, "momentum", "acme/momentum", "heads/main");
-        let build = builds.create_build(
-            Self::OWNER,
-            &algorithm.algorithm_id,
-            "heads/main",
-            "9f2b3c4d",
-            Utc::now(),
-        );
+        let build = builds
+            .create_build(
+                Self::OWNER,
+                &algorithm.algorithm_id,
+                "heads/main",
+                None,
+                Utc::now(),
+            )
+            .expect("head build");
         builds.mark_ready(
             Self::OWNER,
             &algorithm.algorithm_id,
@@ -230,4 +237,59 @@ fn merge_patches_reject_explicit_nulls() {
     assert_eq!(patch.name.as_deref(), Some("renamed"));
     assert!(patch.build_id.is_none());
     assert!(patch.schedule.is_none());
+}
+
+fn retained_run(run_id: &str, state: RunState, completed_at: Option<DateTime<Utc>>) -> Run {
+    Run {
+        run_id: run_id.to_string(),
+        bot_id: "bot_ret".to_string(),
+        algorithm_id: "algorithm_ret".to_string(),
+        build_id: None,
+        strategy_name: None,
+        trigger: RunTrigger::Schedule,
+        scheduled_at: Utc::now(),
+        state,
+        completed_at,
+        log_available: false,
+        cancel_requested: false,
+        error: None,
+        skip_reason: None,
+    }
+}
+
+#[test]
+fn terminal_runs_leave_the_store_after_ninety_days() {
+    let runs = RunStore::new(Arc::new(ChannelRegistry::new()));
+    let mut fresh = retained_run("run_fresh", RunState::Completed, None);
+    fresh.completed_at = Some(Utc::now() - Duration::days(89));
+    let mut stale = retained_run("run_stale", RunState::Canceled, None);
+    stale.completed_at = Some(Utc::now() - Duration::days(91));
+    runs.insert(Fixture::OWNER, fresh);
+    runs.insert(Fixture::OWNER, stale);
+    assert!(runs.get(Fixture::OWNER, "run_fresh").is_some());
+    assert!(runs.get(Fixture::OWNER, "run_stale").is_none());
+    assert_eq!(runs.list(Fixture::OWNER, &RunFilter::default()).len(), 1);
+}
+
+#[test]
+fn skipped_runs_leave_the_store_after_seven_days() {
+    let runs = RunStore::new(Arc::new(ChannelRegistry::new()));
+    let mut fresh = retained_run("run_fresh", RunState::Skipped, None);
+    fresh.completed_at = Some(Utc::now() - Duration::days(6));
+    let mut stale = retained_run("run_stale", RunState::Skipped, None);
+    stale.completed_at = Some(Utc::now() - Duration::days(8));
+    runs.insert(Fixture::OWNER, fresh);
+    runs.insert(Fixture::OWNER, stale);
+    assert!(runs.get(Fixture::OWNER, "run_fresh").is_some());
+    assert!(runs.get(Fixture::OWNER, "run_stale").is_none());
+}
+
+#[test]
+fn active_runs_are_retained_indefinitely() {
+    let runs = RunStore::new(Arc::new(ChannelRegistry::new()));
+    runs.insert(
+        Fixture::OWNER,
+        retained_run("run_pending", RunState::Pending, None),
+    );
+    assert!(runs.get(Fixture::OWNER, "run_pending").is_some());
 }

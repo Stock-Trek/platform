@@ -8,14 +8,17 @@ use crate::accounts::AccountStore;
 use crate::algorithms::BuildStore;
 use crate::backtests::BacktestStore;
 use crate::bots::BotStore;
+use crate::streaming::ChannelRegistry;
 use chrono::Utc;
+use std::sync::Arc;
 
 fn service() -> LimitService {
+    let registry = || Arc::new(ChannelRegistry::new());
     LimitService::new(LimitSources {
         accounts: AccountStore::new().into(),
-        builds: BuildStore::new().into(),
+        builds: BuildStore::new(registry()).into(),
         bots: BotStore::new().into(),
-        backtests: BacktestStore::new().into(),
+        backtests: BacktestStore::new(registry()).into(),
     })
 }
 

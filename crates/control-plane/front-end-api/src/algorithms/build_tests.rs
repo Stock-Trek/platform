@@ -7,6 +7,7 @@ use crate::auth::{SessionService, SessionStore};
 use crate::backtests::BacktestStore;
 use crate::bots::BotStore;
 use crate::limits::{LimitService, LimitSources};
+use crate::streaming::ChannelRegistry;
 use chrono::Utc;
 use http_body_util::Full;
 use hyper::{HeaderMap, Method, Uri, body::Bytes};
@@ -23,19 +24,21 @@ impl Fixture {
     const LOGIN_ID: &'static str = "login_9f2b";
     const LOGIN_SECRET: &'static str = "correct-horse";
     const OWNER: &'static str = "user_7gk2";
-    const COMMIT: &'static str = "9f2b3c4d";
 
     fn new() -> Self {
-        let builds = Arc::new(BuildStore::new());
+        let registry = Arc::new(ChannelRegistry::new());
+        let builds = Arc::new(BuildStore::new(Arc::clone(&registry)));
         let algorithm =
             builds.register_algorithm(Self::OWNER, "momentum", "acme/momentum", "heads/main");
-        let build = builds.create_build(
-            Self::OWNER,
-            &algorithm.algorithm_id,
-            "heads/main",
-            Self::COMMIT,
-            Utc::now(),
-        );
+        let build = builds
+            .create_build(
+                Self::OWNER,
+                &algorithm.algorithm_id,
+                "heads/main",
+                None,
+                Utc::now(),
+            )
+            .expect("head build");
         builds.mark_ready(
             Self::OWNER,
             &algorithm.algorithm_id,
@@ -52,7 +55,7 @@ impl Fixture {
             accounts: Arc::new(AccountStore::new()),
             builds: builds.clone(),
             bots: Arc::new(BotStore::new()),
-            backtests: Arc::new(BacktestStore::new()),
+            backtests: Arc::new(BacktestStore::new(Arc::clone(&registry))),
         }));
         let sessions = Arc::new(SessionService::new(store.clone(), limits));
         let tokens = store.issue_login(Self::OWNER, Utc::now());
@@ -61,7 +64,7 @@ impl Fixture {
                 builds.clone(),
                 sessions,
                 Arc::new(BotStore::new()),
-                Arc::new(BacktestStore::new()),
+                Arc::new(BacktestStore::new(Arc::new(ChannelRegistry::new()))),
                 Arc::new(IdempotencyStore::new()),
             ),
             builds,
@@ -130,7 +133,7 @@ fn triggering_a_build_returns_the_queued_build() {
             &fixture.request(
                 Method::POST,
                 &fixture.trigger(),
-                r#"{"ref": "heads/main", "commit": "abcdef1234567"}"#,
+                r#"{"ref": "heads/develop"}"#,
             ),
             &fixture.algorithm_id,
         )
@@ -138,20 +141,66 @@ fn triggering_a_build_returns_the_queued_build() {
     assert_eq!(response.status(), hyper::StatusCode::ACCEPTED);
     let build = Fixture::json(&response);
     assert_eq!(build["state"], "queued");
-    assert_eq!(build["commit"], "abcdef1234567");
+    let commit = build["commit"].as_str().expect("commit");
+    assert_eq!(commit.len(), 40);
+    assert!(
+        commit
+            .chars()
+            .all(|character| character.is_ascii_hexdigit())
+    );
+}
+
+#[test]
+fn triggering_a_build_resolves_a_commit_abbreviation() {
+    let fixture = Fixture::new();
+    let ready = fixture
+        .builds
+        .builds(
+            Fixture::OWNER,
+            &fixture.algorithm_id,
+            Some("heads/main"),
+            Some(crate::algorithms::BuildState::Ready),
+        )
+        .remove(0);
+    let abbreviation = &ready.commit[..7];
+    let body = format!(r#"{{"ref": "heads/main", "commit": "{abbreviation}"}}"#);
+    let response = fixture
+        .api
+        .route(
+            &fixture.request(Method::POST, &fixture.trigger(), &body),
+            &fixture.algorithm_id,
+        )
+        .expect("trigger");
+    assert_eq!(response.status(), hyper::StatusCode::ACCEPTED);
+    let build = Fixture::json(&response);
+    assert_eq!(build["commit"], ready.commit.as_str());
+    assert_eq!(build["buildId"], ready.build_id.as_str());
+}
+
+#[test]
+fn triggering_a_build_rejects_an_unknown_commit() {
+    let fixture = Fixture::new();
+    let problem = fixture
+        .api
+        .route(
+            &fixture.request(
+                Method::POST,
+                &fixture.trigger(),
+                r#"{"ref": "heads/main", "commit": "abcdef1234567"}"#,
+            ),
+            &fixture.algorithm_id,
+        )
+        .expect_err("unknown commits are rejected");
+    assert_eq!(problem.status(), hyper::StatusCode::BAD_REQUEST);
 }
 
 #[test]
 fn triggering_a_build_reuses_an_identical_ready_build() {
     let fixture = Fixture::new();
-    let body = format!(
-        r#"{{"ref": "heads/main", "commit": "{}"}}"#,
-        Fixture::COMMIT
-    );
     let response = fixture
         .api
         .route(
-            &fixture.request(Method::POST, &fixture.trigger(), &body),
+            &fixture.request(Method::POST, &fixture.trigger(), "{}"),
             &fixture.algorithm_id,
         )
         .expect("trigger");

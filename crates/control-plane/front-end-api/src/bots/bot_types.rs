@@ -6,7 +6,11 @@ use serde::{Deserialize, Serialize};
 pub const MIN_INTERVAL_SECONDS: u32 = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "snake_case")]
+#[serde(
+    tag = "kind",
+    rename_all = "snake_case",
+    rename_all_fields = "camelCase"
+)]
 pub enum Schedule {
     Interval {
         every_seconds: u32,

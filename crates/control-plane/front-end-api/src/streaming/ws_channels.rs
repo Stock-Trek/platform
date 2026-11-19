@@ -9,12 +9,12 @@ use tokio::task::JoinSet;
 use tokio_websockets::Message;
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub(super) struct ClientAction {
-    action: String,
-    channel: String,
+    pub(super) action: String,
+    pub(super) channel: String,
     #[serde(default)]
-    last_sequence: Option<u64>,
+    pub(super) last_sequence: Option<u64>,
 }
 
 impl Connection {

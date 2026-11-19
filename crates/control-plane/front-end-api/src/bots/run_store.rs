@@ -1,7 +1,12 @@
 use crate::bots::{Run, RunFilter, RunLogLink, RunState};
-use chrono::{DateTime, Utc};
+use crate::streaming::channel_registry::ChannelRegistry;
+use crate::streaming::stream_types::Frame;
+use chrono::{DateTime, Duration, Utc};
 use parking_lot::Mutex;
-use std::collections::HashMap;
+use std::sync::Arc;
+
+const RUN_RETENTION: Duration = Duration::days(90);
+const SKIPPED_RETENTION: Duration = Duration::days(7);
 
 struct RunRow {
     owner: String,
@@ -16,37 +21,38 @@ struct RunLog {
 
 pub struct RunStore {
     rows: Mutex<Vec<RunRow>>,
-    sequences: Mutex<HashMap<String, u64>>,
+    registry: Arc<ChannelRegistry>,
 }
 
 impl RunStore {
-    pub fn new() -> Self {
+    pub fn new(registry: Arc<ChannelRegistry>) -> Self {
         Self {
             rows: Mutex::new(Vec::new()),
-            sequences: Mutex::new(HashMap::new()),
+            registry,
         }
     }
 
     pub fn insert(&self, owner: &str, run: Run) {
-        let bot_id = run.bot_id.clone();
-        self.rows.lock().push(RunRow {
+        let mut rows = self.rows.lock();
+        rows.push(RunRow {
             owner: owner.to_string(),
-            run,
+            run: run.clone(),
             log: None,
         });
-        Self::bump(&self.sequences, &bot_id);
+        Self::publish(&self.registry, &run.bot_id, &run);
     }
 
     pub fn get(&self, owner: &str, run_id: &str) -> Option<Run> {
-        self.rows
-            .lock()
-            .iter()
+        let mut rows = self.rows.lock();
+        Self::sweep(&mut rows);
+        rows.iter()
             .find(|row| row.owner == owner && row.run.run_id == run_id)
             .map(|row| row.run.clone())
     }
 
     pub fn list(&self, owner: &str, filter: &RunFilter) -> Vec<Run> {
-        let rows = self.rows.lock();
+        let mut rows = self.rows.lock();
+        Self::sweep(&mut rows);
         let mut listed: Vec<&Run> = rows
             .iter()
             .filter(|row| row.owner == owner)
@@ -58,9 +64,9 @@ impl RunStore {
     }
 
     pub fn active(&self, bot_id: &str) -> Option<Run> {
-        self.rows
-            .lock()
-            .iter()
+        let mut rows = self.rows.lock();
+        Self::sweep(&mut rows);
+        rows.iter()
             .map(|row| &row.run)
             .find(|run| {
                 run.bot_id == bot_id && matches!(run.state, RunState::Pending | RunState::Running)
@@ -79,12 +85,14 @@ impl RunStore {
             .iter_mut()
             .find(|row| row.owner == owner && row.run.run_id == run_id)?;
         row.run = update(row.run.clone());
-        Self::bump(&self.sequences, &row.run.bot_id);
-        Some(row.run.clone())
+        let run = row.run.clone();
+        Self::publish(&self.registry, &run.bot_id, &run);
+        Some(run)
     }
 
     pub fn log(&self, owner: &str, run_id: &str) -> Option<RunLogLink> {
-        let rows = self.rows.lock();
+        let mut rows = self.rows.lock();
+        Self::sweep(&mut rows);
         let row = rows
             .iter()
             .find(|row| row.owner == owner && row.run.run_id == run_id)?;
@@ -107,11 +115,45 @@ impl RunStore {
                 expires_at,
             });
             row.run.log_available = true;
+            let run = row.run.clone();
+            Self::publish(&self.registry, &run.bot_id, &run);
         }
     }
 
     pub fn stream_sequence(&self, bot_id: &str) -> u64 {
-        self.sequences.lock().get(bot_id).copied().unwrap_or(0)
+        self.registry.sequence(&Self::channel(bot_id))
+    }
+
+    fn channel(bot_id: &str) -> String {
+        format!("runs.{bot_id}")
+    }
+
+    fn publish(registry: &ChannelRegistry, bot_id: &str, run: &Run) {
+        let channel = Self::channel(bot_id);
+        let frame = Frame::data(
+            &channel,
+            0,
+            serde_json::to_value(run).expect("run serializes"),
+        );
+        registry.publish(&channel, frame);
+    }
+
+    fn sweep(rows: &mut Vec<RunRow>) {
+        let now = Utc::now();
+        rows.retain(|row| !Self::expired(&row.run, now));
+    }
+
+    fn expired(run: &Run, now: DateTime<Utc>) -> bool {
+        let Some(completed_at) = run.completed_at else {
+            return false;
+        };
+        match run.state {
+            RunState::Pending | RunState::Running => false,
+            RunState::Skipped => completed_at + SKIPPED_RETENTION <= now,
+            RunState::Completed | RunState::Failed | RunState::Canceled => {
+                completed_at + RUN_RETENTION <= now
+            }
+        }
     }
 
     fn matches(run: &Run, filter: &RunFilter) -> bool {
@@ -122,11 +164,5 @@ impl RunStore {
             && filter.state.is_none_or(|state| run.state == state)
             && filter.from.is_none_or(|from| run.scheduled_at >= from)
             && filter.to.is_none_or(|to| run.scheduled_at <= to)
-    }
-
-    fn bump(sequences: &Mutex<HashMap<String, u64>>, bot_id: &str) {
-        let mut sequences = sequences.lock();
-        let next = sequences.get(bot_id).copied().unwrap_or(0) + 1;
-        sequences.insert(bot_id.to_string(), next);
     }
 }

@@ -1,7 +1,7 @@
-mod channel_registry;
+pub(crate) mod channel_registry;
 mod stream_api;
 mod stream_service;
-mod stream_types;
+pub(crate) mod stream_types;
 mod ticket_store;
 mod ws;
 mod ws_channels;

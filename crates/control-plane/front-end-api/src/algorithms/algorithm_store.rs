@@ -5,6 +5,7 @@ use crate::api::Id;
 pub(super) struct AlgorithmRow {
     pub(super) owner: String,
     pub(super) summary: AlgorithmSummary,
+    pub(super) known_commits: Vec<String>,
 }
 
 impl BuildStore {
@@ -32,6 +33,7 @@ impl BuildStore {
         self.algorithms.lock().push(AlgorithmRow {
             owner: owner.to_string(),
             summary: summary.clone(),
+            known_commits: Vec::new(),
         });
         summary
     }
