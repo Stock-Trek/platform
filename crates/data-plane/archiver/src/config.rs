@@ -23,7 +23,7 @@ const ARCHIVER_RECOVERY_PAGE_FILES: &str = "ARCHIVER_RECOVERY_PAGE_FILES";
 const ARCHIVER_RECOVERY_PAGE_BYTES: &str = "ARCHIVER_RECOVERY_PAGE_BYTES";
 
 #[derive(Debug, Clone)]
-pub struct ArchiverConfig {
+pub(crate) struct ArchiverConfig {
     pub log_filter: String,
     pub nats_url: String,
     pub event_subject_prefix: String,
@@ -45,11 +45,11 @@ pub struct ArchiverConfig {
 }
 
 impl ArchiverConfig {
-    pub fn from_env() -> PlatformResult<Self> {
+    pub(crate) fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+    pub(crate) fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let nats_url = Config::required_nats_url(vars, ARCHIVER_NATS_URL)?;
         let event_subject_prefix =
@@ -151,7 +151,7 @@ impl ArchiverConfig {
     /// Messages are only acknowledged after a successful durable flush, so the
     /// window must exceed the flush interval. The extra [`ACK_WAIT`] margin
     /// leaves time for the flush itself without triggering redelivery.
-    pub fn ack_wait(&self) -> Duration {
+    pub(crate) fn ack_wait(&self) -> Duration {
         self.flush_interval.saturating_add(ACK_WAIT)
     }
 }

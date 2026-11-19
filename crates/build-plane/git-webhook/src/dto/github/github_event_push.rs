@@ -4,7 +4,7 @@ use crate::dto::github::{
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct GitHubEventPush {
+pub(crate) struct GitHubEventPush {
     pub after: String,
     pub before: String,
     pub created: bool,

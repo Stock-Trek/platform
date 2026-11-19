@@ -11,8 +11,8 @@ use crate::cwasm::backtest::{
     worker_runtime::WorkerRuntime,
 };
 
-pub type Balances = BTreeMap<CexId, BTreeMap<AccountId, BTreeMap<AssetId, f64>>>;
-pub type PriceMap = BTreeMap<(CexId, AssetId, AssetId), f64>;
+pub(super) type Balances = BTreeMap<CexId, BTreeMap<AccountId, BTreeMap<AssetId, f64>>>;
+pub(super) type PriceMap = BTreeMap<(CexId, AssetId, AssetId), f64>;
 
 pub struct Backtest;
 

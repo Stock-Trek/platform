@@ -3,8 +3,8 @@ use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 use serde_json::{Value, json};
 
-pub const ROTATION_TRANSACTION_FIELD: &str = "__rotation_transaction__";
-pub const ROTATION_TRANSACTION_PREFIX: &str = "rotation/transactions/";
+pub(crate) const ROTATION_TRANSACTION_FIELD: &str = "__rotation_transaction__";
+pub(crate) const ROTATION_TRANSACTION_PREFIX: &str = "rotation/transactions/";
 
 /// The durable intent to rotate a token.
 ///

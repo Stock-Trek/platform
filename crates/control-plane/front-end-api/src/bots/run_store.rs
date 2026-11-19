@@ -19,20 +19,20 @@ struct RunLog {
     expires_at: DateTime<Utc>,
 }
 
-pub struct RunStore {
+pub(crate) struct RunStore {
     rows: Mutex<Vec<RunRow>>,
     registry: Arc<ChannelRegistry>,
 }
 
 impl RunStore {
-    pub fn new(registry: Arc<ChannelRegistry>) -> Self {
+    pub(crate) fn new(registry: Arc<ChannelRegistry>) -> Self {
         Self {
             rows: Mutex::new(Vec::new()),
             registry,
         }
     }
 
-    pub fn insert(&self, owner: &str, run: Run) {
+    pub(crate) fn insert(&self, owner: &str, run: Run) {
         let mut rows = self.rows.lock();
         rows.push(RunRow {
             owner: owner.to_string(),
@@ -42,7 +42,7 @@ impl RunStore {
         Self::publish(&self.registry, &run.bot_id, &run);
     }
 
-    pub fn get(&self, owner: &str, run_id: &str) -> Option<Run> {
+    pub(crate) fn get(&self, owner: &str, run_id: &str) -> Option<Run> {
         let mut rows = self.rows.lock();
         Self::sweep(&mut rows);
         rows.iter()
@@ -50,7 +50,7 @@ impl RunStore {
             .map(|row| row.run.clone())
     }
 
-    pub fn list(&self, owner: &str, filter: &RunFilter) -> Vec<Run> {
+    pub(crate) fn list(&self, owner: &str, filter: &RunFilter) -> Vec<Run> {
         let mut rows = self.rows.lock();
         Self::sweep(&mut rows);
         let mut listed: Vec<&Run> = rows
@@ -63,7 +63,7 @@ impl RunStore {
         listed.into_iter().cloned().collect()
     }
 
-    pub fn active(&self, bot_id: &str) -> Option<Run> {
+    pub(crate) fn active(&self, bot_id: &str) -> Option<Run> {
         let mut rows = self.rows.lock();
         Self::sweep(&mut rows);
         rows.iter()
@@ -74,7 +74,7 @@ impl RunStore {
             .cloned()
     }
 
-    pub fn update(
+    pub(crate) fn update(
         &self,
         owner: &str,
         run_id: &str,
@@ -90,7 +90,7 @@ impl RunStore {
         Some(run)
     }
 
-    pub fn log(&self, owner: &str, run_id: &str) -> Option<RunLogLink> {
+    pub(crate) fn log(&self, owner: &str, run_id: &str) -> Option<RunLogLink> {
         let mut rows = self.rows.lock();
         Self::sweep(&mut rows);
         let row = rows
@@ -104,7 +104,13 @@ impl RunStore {
     }
 
     #[allow(dead_code)]
-    pub fn attach_log(&self, owner: &str, run_id: &str, url: &str, expires_at: DateTime<Utc>) {
+    pub(crate) fn attach_log(
+        &self,
+        owner: &str,
+        run_id: &str,
+        url: &str,
+        expires_at: DateTime<Utc>,
+    ) {
         let mut rows = self.rows.lock();
         if let Some(row) = rows
             .iter_mut()
@@ -120,7 +126,7 @@ impl RunStore {
         }
     }
 
-    pub fn stream_sequence(&self, bot_id: &str) -> u64 {
+    pub(crate) fn stream_sequence(&self, bot_id: &str) -> u64 {
         self.registry.sequence(&Self::channel(bot_id))
     }
 

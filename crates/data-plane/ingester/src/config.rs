@@ -15,7 +15,7 @@ const INGESTER_NATS_URL: &str = "INGESTER_NATS_URL";
 const INGESTER_NATS_SUBJECT_PREFIX: &str = "INGESTER_NATS_SUBJECT_PREFIX";
 
 #[derive(Debug, Clone)]
-pub struct IngesterConfig {
+pub(crate) struct IngesterConfig {
     pub log_filter: String,
     pub exchange: CexId,
     pub websocket_url: String,
@@ -26,11 +26,11 @@ pub struct IngesterConfig {
 }
 
 impl IngesterConfig {
-    pub fn from_env() -> PlatformResult<Self> {
+    pub(crate) fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+    pub(crate) fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let exchange = Config::required_exchange(vars, INGESTER_EXCHANGE)?;
         let websocket_url = vars.required_url(INGESTER_WEBSOCKET_URL, &UrlScheme::WEBSOCKET)?;
@@ -58,7 +58,10 @@ impl IngesterConfig {
     /// Rejects subscribing to both individual and aggregate trade streams for
     /// the same symbol. They carry the same economic trades with independent
     /// sequence numbers, so consuming both would double-count every trade.
-    pub fn validate_trade_streams(exchange: CexId, websocket_url: &str) -> PlatformResult<()> {
+    pub(crate) fn validate_trade_streams(
+        exchange: CexId,
+        websocket_url: &str,
+    ) -> PlatformResult<()> {
         if exchange != CexId::Binance {
             return Ok(());
         }

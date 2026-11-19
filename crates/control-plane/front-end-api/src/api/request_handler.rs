@@ -7,6 +7,6 @@ use hyper::{
 use std::net::SocketAddr;
 
 #[async_trait]
-pub trait RequestHandler: Send + Sync {
+pub(crate) trait RequestHandler: Send + Sync {
     async fn handle(&self, request: Request<Incoming>, peer: SocketAddr) -> Response<Full<Bytes>>;
 }

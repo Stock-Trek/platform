@@ -17,7 +17,7 @@ use std::sync::{
     atomic::{AtomicUsize, Ordering},
 };
 
-pub struct OneGapSource {
+pub(super) struct OneGapSource {
     pub gap: Option<GapMarker>,
     pub acked: Arc<Mutex<Vec<GapMarker>>>,
 }
@@ -34,7 +34,7 @@ impl GapMarkerSource for OneGapSource {
     }
 }
 
-pub struct OnceFetcher {
+pub(super) struct OnceFetcher {
     pub events: Mutex<Vec<BackfilledEvent>>,
 }
 
@@ -45,7 +45,7 @@ impl MissingEventFetcher for OnceFetcher {
     }
 }
 
-pub struct StreamRangeFetcher {
+pub(super) struct StreamRangeFetcher {
     pub empty_stream: String,
 }
 
@@ -62,7 +62,7 @@ impl MissingEventFetcher for StreamRangeFetcher {
 }
 
 #[derive(Default)]
-pub struct RecordingPublisher {
+pub(super) struct RecordingPublisher {
     pub sequences: Mutex<Vec<u64>>,
 }
 
@@ -77,10 +77,10 @@ impl EventPublisher for RecordingPublisher {
     }
 }
 
-pub struct TestFixtures;
+pub(super) struct TestFixtures;
 
 impl TestFixtures {
-    pub fn event(sequence: u64) -> BackfilledEvent {
+    pub(super) fn event(sequence: u64) -> BackfilledEvent {
         BackfilledEvent {
             sequence,
             exchange_timestamp: TimestampMilliseconds(sequence as i64),
@@ -88,7 +88,7 @@ impl TestFixtures {
         }
     }
 
-    pub fn options() -> BackfillOptions {
+    pub(super) fn options() -> BackfillOptions {
         BackfillOptions {
             event_subject_prefix: "market.events".to_string(),
         }
@@ -96,20 +96,20 @@ impl TestFixtures {
 }
 
 #[derive(Clone, Copy)]
-pub enum SavePolicy {
+pub(super) enum SavePolicy {
     Allow,
     AfterFirstSave,
     ForStream(&'static str),
 }
 
-pub struct ControlledStore {
+pub(super) struct ControlledStore {
     inner: Arc<InMemoryGapRetryStore>,
     policy: SavePolicy,
     saves: AtomicUsize,
 }
 
 impl ControlledStore {
-    pub fn new(inner: Arc<InMemoryGapRetryStore>, policy: SavePolicy) -> Self {
+    pub(super) fn new(inner: Arc<InMemoryGapRetryStore>, policy: SavePolicy) -> Self {
         Self {
             inner,
             policy,

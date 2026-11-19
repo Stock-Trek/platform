@@ -3,7 +3,7 @@ use crate::bots::{Bot, BotState, KillResponse, RunState};
 use chrono::{DateTime, Utc};
 
 impl BotService {
-    pub fn kill(
+    pub(crate) fn kill(
         &self,
         auth: &crate::auth::AuthContext,
         account_ids: Option<Vec<String>>,
@@ -17,11 +17,16 @@ impl BotService {
         self.stop_bots(owner, bots, now)
     }
 
-    pub fn referencing_accounts(&self, owner: &str, account_ids: &[String]) -> Vec<Bot> {
+    pub(crate) fn referencing_accounts(&self, owner: &str, account_ids: &[String]) -> Vec<Bot> {
         self.bots.referencing_accounts(owner, account_ids)
     }
 
-    pub fn disable_bots(&self, owner: &str, bots: Vec<Bot>, now: DateTime<Utc>) -> KillResponse {
+    pub(crate) fn disable_bots(
+        &self,
+        owner: &str,
+        bots: Vec<Bot>,
+        now: DateTime<Utc>,
+    ) -> KillResponse {
         self.stop_bots(owner, bots, now)
     }
 

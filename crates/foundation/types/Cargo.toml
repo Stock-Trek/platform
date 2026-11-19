@@ -11,3 +11,6 @@ serde = { workspace = true, features = ["derive"] }
 strum = { workspace = true, features = ["derive"] }
 thiserror = { workspace = true }
 url = { workspace = true, features = ["serde"] }
+
+[lints]
+workspace = true

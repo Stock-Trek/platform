@@ -5,18 +5,18 @@ use std::{io, time::Duration};
 
 const JWKS_REQUEST_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub enum Source {
+pub(crate) enum Source {
     Remote(JwksFetcher),
     Static,
 }
 
-pub struct JwksFetcher {
+pub(crate) struct JwksFetcher {
     client: reqwest::Client,
     url: String,
 }
 
 impl Source {
-    pub async fn fetch(&self) -> PlatformResult<JwtVerifier> {
+    pub(crate) async fn fetch(&self) -> PlatformResult<JwtVerifier> {
         match self {
             Self::Remote(fetcher) => fetcher.fetch().await,
             Self::Static => Err(PlatformError::auth_invalid_jwt("JWKS source is not remote")),
@@ -25,7 +25,7 @@ impl Source {
 }
 
 impl JwksFetcher {
-    pub fn new(url: impl Into<String>) -> PlatformResult<Self> {
+    pub(crate) fn new(url: impl Into<String>) -> PlatformResult<Self> {
         let url = url.into();
         let parsed = reqwest::Url::parse(&url)
             .map_err(|error| PlatformError::auth_invalid_field("jwks_url", error.to_string()))?;
@@ -42,7 +42,7 @@ impl JwksFetcher {
         Ok(Self { client, url })
     }
 
-    pub async fn fetch(&self) -> PlatformResult<JwtVerifier> {
+    pub(crate) async fn fetch(&self) -> PlatformResult<JwtVerifier> {
         let response = self
             .client
             .get(&self.url)

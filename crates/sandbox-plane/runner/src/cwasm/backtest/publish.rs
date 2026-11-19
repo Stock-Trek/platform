@@ -31,16 +31,16 @@ impl ClientCache {
     }
 }
 
-pub struct ResultPublisher;
+pub(super) struct ResultPublisher;
 
 impl ResultPublisher {
-    pub async fn stream(spec: &Spec, result: &Value) -> Result<(), BacktestError> {
+    pub(super) async fn stream(spec: &Spec, result: &Value) -> Result<(), BacktestError> {
         Self::stream_result(&spec.results_stream_url, result)
             .await
             .map_err(|error| BacktestError::Publish(format!("results stream failed: {error}")))
     }
 
-    pub async fn post(spec: &Spec, result: &Value) -> Result<(), BacktestError> {
+    pub(super) async fn post(spec: &Spec, result: &Value) -> Result<(), BacktestError> {
         Self::post_result(&spec.results_post_url, result)
             .await
             .map_err(|error| BacktestError::Publish(format!("results post failed: {error}")))

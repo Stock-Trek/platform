@@ -36,7 +36,7 @@ pub struct S3ArchivedEventSource {
     shard: ShardId,
     shard_count: usize,
     objects: VecDeque<ArchiveObject>,
-    reader: Option<platform_archive::ArchiveParquetStream<ParquetReader>>,
+    reader: Option<ArchiveParquetStream<ParquetReader>>,
     /// Keeps the recovery slot held for as long as an object is being streamed.
     _reader_permit: Option<OwnedSemaphorePermit>,
     recovery_slots: Arc<Semaphore>,

@@ -3,7 +3,7 @@ use chrono::{DateTime, Utc};
 use platform_errors::{PlatformError, PlatformResult};
 use serde::{Deserialize, Serialize};
 
-pub const CLOCK_SKEW_SECONDS: i64 = 60;
+pub(crate) const CLOCK_SKEW_SECONDS: i64 = 60;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct IssuedJwt {

@@ -15,7 +15,7 @@ use std::sync::Arc;
 
 const REQUEST_ID_HEADER: &str = "x-request-id";
 
-pub struct FrontEndApi {
+pub(crate) struct FrontEndApi {
     accounts: Arc<AccountApi>,
     algorithms: Arc<AlgorithmApi>,
     auth: Arc<SessionApi>,
@@ -27,13 +27,13 @@ pub struct FrontEndApi {
     cors: Cors,
 }
 
-pub struct FrontEndApiDeps {
+pub(crate) struct FrontEndApiDeps {
     pub session_store: Arc<SessionStore>,
     pub allowed_origins: Vec<String>,
 }
 
 impl FrontEndApi {
-    pub fn new(deps: FrontEndApiDeps) -> Self {
+    pub(crate) fn new(deps: FrontEndApiDeps) -> Self {
         let accounts_store = Arc::new(AccountStore::new());
         let registry = Arc::new(ChannelRegistry::new());
         let runs_store = Arc::new(RunStore::new(Arc::clone(&registry)));

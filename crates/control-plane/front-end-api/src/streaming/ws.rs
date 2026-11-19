@@ -40,10 +40,10 @@ impl PongTracker {
     }
 }
 
-pub struct Connection;
+pub(super) struct Connection;
 
 impl Connection {
-    pub fn accept_key(key: &str) -> Option<String> {
+    pub(super) fn accept_key(key: &str) -> Option<String> {
         let key = key.trim();
         (key.len() == KEY_LENGTH && STANDARD.decode(key).is_ok()).then(|| {
             let digest = Sha1::digest(format!("{key}{WEBSOCKET_MAGIC}").as_bytes());
@@ -51,7 +51,7 @@ impl Connection {
         })
     }
 
-    pub async fn serve(
+    pub(super) async fn serve(
         ws: WebSocketStream<TokioIo<Upgraded>>,
         service: Arc<StreamService>,
         sessions: Arc<SessionService>,

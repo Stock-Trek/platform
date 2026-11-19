@@ -96,7 +96,7 @@ impl KeyValue {
         Ok(self.status().await?.info.config.max_bytes)
     }
 
-    async fn status(&self) -> PlatformResult<async_nats::jetstream::kv::bucket::Status> {
+    async fn status(&self) -> PlatformResult<kv::bucket::Status> {
         self.store
             .status()
             .await

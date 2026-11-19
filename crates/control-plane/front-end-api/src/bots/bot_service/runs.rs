@@ -5,7 +5,7 @@ use crate::bots::{Bot, BotState, Run, RunState, RunTrigger, SkipReason};
 use chrono::{DateTime, Utc};
 
 impl BotService {
-    pub fn trigger_ad_hoc_run(
+    pub(crate) fn trigger_ad_hoc_run(
         &self,
         auth: &AuthContext,
         bot_id: &str,
@@ -53,7 +53,7 @@ impl BotService {
     }
 
     #[allow(dead_code)]
-    pub fn record_skipped_tick(
+    pub(crate) fn record_skipped_tick(
         &self,
         owner: &str,
         bot: &Bot,

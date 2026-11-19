@@ -13,21 +13,21 @@ use std::collections::HashMap;
 
 /// In-memory state store used by tests.
 #[derive(Debug, Default)]
-pub struct InMemoryStateStore {
+pub(crate) struct InMemoryStateStore {
     checkpoints: Mutex<HashMap<ShardId, (u64, CheckpointRecord)>>,
 }
 
 impl InMemoryStateStore {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self::default()
     }
 
-    pub fn get(&self, shard: ShardId) -> Option<CheckpointRecord> {
+    pub(crate) fn get(&self, shard: ShardId) -> Option<CheckpointRecord> {
         self.load_with_revision(shard)
             .map(|(checkpoint, _)| checkpoint)
     }
 
-    pub fn load_with_revision(&self, shard: ShardId) -> Option<(CheckpointRecord, u64)> {
+    pub(crate) fn load_with_revision(&self, shard: ShardId) -> Option<(CheckpointRecord, u64)> {
         self.checkpoints
             .lock()
             .get(&shard)

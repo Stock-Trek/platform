@@ -23,11 +23,11 @@ use tokio::task::JoinHandle;
 use tokio::time::{self, MissedTickBehavior};
 
 /// Maximum number of updates waiting for the projection writer.
-pub const DEFAULT_CHANNEL_CAPACITY: usize = 1_024;
+pub(super) const DEFAULT_CHANNEL_CAPACITY: usize = 1_024;
 /// How long an open-candle write may wait for more updates to coalesce.
-pub const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
+pub(super) const DEFAULT_FLUSH_INTERVAL: Duration = Duration::from_millis(10);
 /// Maximum number of queued open mutations and closed candles before a flush.
-pub const DEFAULT_MAX_PENDING: usize = 4_096;
+pub(super) const DEFAULT_MAX_PENDING: usize = 4_096;
 
 #[derive(Debug)]
 enum OpenMutation {

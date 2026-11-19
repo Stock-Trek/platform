@@ -14,7 +14,7 @@ use tracing::{error, info};
 
 const MESSAGE_CHANNEL_CAPACITY: usize = 1_024;
 
-pub struct IngesterRunner<S, P> {
+pub(crate) struct IngesterRunner<S, P> {
     config: IngesterConfig,
     source: S,
     publisher: Arc<P>,
@@ -26,7 +26,7 @@ where
     S: MarketMessageSource + 'static,
     P: EventPublisher + 'static,
 {
-    pub fn new(
+    pub(crate) fn new(
         config: IngesterConfig,
         source: S,
         publisher: Arc<P>,
@@ -40,7 +40,7 @@ where
         }
     }
 
-    pub async fn run(self) -> PlatformResult<()> {
+    pub(crate) async fn run(self) -> PlatformResult<()> {
         let Self {
             config,
             source,

@@ -12,17 +12,17 @@ use hyper::body::Bytes;
 use hyper::{Method, Response, StatusCode};
 use std::sync::Arc;
 
-pub struct RunApi {
+pub(crate) struct RunApi {
     runs: Arc<RunService>,
     sessions: Arc<SessionService>,
 }
 
 impl RunApi {
-    pub fn new(runs: Arc<RunService>, sessions: Arc<SessionService>) -> Self {
+    pub(crate) fn new(runs: Arc<RunService>, sessions: Arc<SessionService>) -> Self {
         Self { runs, sessions }
     }
 
-    pub fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
+    pub(crate) fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         match request.segments().as_slice() {
             ["runs"] => match *request.method() {
                 Method::GET => self.list(request),
@@ -98,12 +98,12 @@ impl RunApi {
     fn timestamp(
         request: &ApiRequest,
         name: &str,
-    ) -> Result<Option<chrono::DateTime<chrono::Utc>>, Problem> {
+    ) -> Result<Option<chrono::DateTime<Utc>>, Problem> {
         let Some(value) = request.query(name) else {
             return Ok(None);
         };
         chrono::DateTime::parse_from_rfc3339(value)
-            .map(|parsed| parsed.with_timezone(&chrono::Utc))
+            .map(|parsed| parsed.with_timezone(&Utc))
             .map(Some)
             .map_err(|_| {
                 Problem::validation_failed(format!("{name} must be an RFC 3339 timestamp"))

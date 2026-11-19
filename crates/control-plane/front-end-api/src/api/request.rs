@@ -9,11 +9,11 @@ use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::net::SocketAddr;
 
-pub const MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
+pub(crate) const MAX_REQUEST_BODY_BYTES: usize = 1024 * 1024;
 const VERSION_SEGMENT: &str = "v1";
 
 #[derive(Debug)]
-pub struct ApiRequest {
+pub(crate) struct ApiRequest {
     method: Method,
     path: String,
     segments: Vec<String>,
@@ -25,7 +25,7 @@ pub struct ApiRequest {
 }
 
 impl ApiRequest {
-    pub async fn parse(
+    pub(crate) async fn parse(
         request: Request<Incoming>,
         peer: Option<SocketAddr>,
     ) -> Result<Self, Problem> {
@@ -63,7 +63,7 @@ impl ApiRequest {
         Ok(parsed)
     }
 
-    pub fn from_parts(
+    pub(crate) fn from_parts(
         method: Method,
         uri: hyper::Uri,
         headers: HeaderMap,
@@ -126,27 +126,27 @@ impl ApiRequest {
         String::from_utf8_lossy(&decoded).into_owned()
     }
 
-    pub fn method(&self) -> &Method {
+    pub(crate) fn method(&self) -> &Method {
         &self.method
     }
 
-    pub fn segments(&self) -> Vec<&str> {
+    pub(crate) fn segments(&self) -> Vec<&str> {
         self.segments.iter().map(String::as_str).collect()
     }
 
-    pub fn query(&self, name: &str) -> Option<&str> {
+    pub(crate) fn query(&self, name: &str) -> Option<&str> {
         self.query.get(name).map(String::as_str)
     }
 
-    pub fn header(&self, name: &str) -> Option<&str> {
+    pub(crate) fn header(&self, name: &str) -> Option<&str> {
         self.headers.get(name).and_then(|value| value.to_str().ok())
     }
 
-    pub fn body(&self) -> &[u8] {
+    pub(crate) fn body(&self) -> &[u8] {
         &self.body
     }
 
-    pub fn bearer(&self) -> Result<&str, Problem> {
+    pub(crate) fn bearer(&self) -> Result<&str, Problem> {
         let value = self
             .header("authorization")
             .ok_or_else(|| Problem::unauthorized("bearer token is required"))?;
@@ -156,13 +156,13 @@ impl ApiRequest {
             .ok_or_else(|| Problem::unauthorized("authorization must use the Bearer scheme"))
     }
 
-    pub fn idempotency_key(&self) -> Option<String> {
+    pub(crate) fn idempotency_key(&self) -> Option<String> {
         self.header("idempotency-key")
             .filter(|key| !key.is_empty())
             .map(str::to_string)
     }
 
-    pub fn if_match(&self) -> Result<Option<u64>, Problem> {
+    pub(crate) fn if_match(&self) -> Result<Option<u64>, Problem> {
         let Some(value) = self.header("if-match") else {
             return Ok(None);
         };
@@ -173,23 +173,23 @@ impl ApiRequest {
         Ok(Some(version))
     }
 
-    pub fn peer(&self) -> Option<SocketAddr> {
+    pub(crate) fn peer(&self) -> Option<SocketAddr> {
         self.peer
     }
 
-    pub fn headers(&self) -> &HeaderMap {
+    pub(crate) fn headers(&self) -> &HeaderMap {
         &self.headers
     }
 
-    pub fn extensions(&self) -> &hyper::http::Extensions {
+    pub(crate) fn extensions(&self) -> &hyper::http::Extensions {
         &self.extensions
     }
 
-    pub fn origin(&self) -> Option<&str> {
+    pub(crate) fn origin(&self) -> Option<&str> {
         self.header("origin")
     }
 
-    pub fn json<T: DeserializeOwned>(&self) -> Result<T, Problem> {
+    pub(crate) fn json<T: DeserializeOwned>(&self) -> Result<T, Problem> {
         if self.body.is_empty() {
             return Err(Problem::validation_failed(
                 "a JSON request body is required",
@@ -199,14 +199,14 @@ impl ApiRequest {
             .map_err(|error| Problem::validation_failed(error.to_string()))
     }
 
-    pub fn json_optional<T: DeserializeOwned>(&self) -> Result<Option<T>, Problem> {
+    pub(crate) fn json_optional<T: DeserializeOwned>(&self) -> Result<Option<T>, Problem> {
         if self.body.is_empty() {
             return Ok(None);
         }
         self.json().map(Some)
     }
 
-    pub fn require_json_content_type(&self) -> Result<(), Problem> {
+    pub(crate) fn require_json_content_type(&self) -> Result<(), Problem> {
         let content_type = self.header("content-type").unwrap_or_default();
         if content_type.starts_with("application/json")
             || content_type.starts_with("application/merge-patch+json")
@@ -219,7 +219,7 @@ impl ApiRequest {
         }
     }
 
-    pub fn require_merge_patch_content_type(&self) -> Result<(), Problem> {
+    pub(crate) fn require_merge_patch_content_type(&self) -> Result<(), Problem> {
         let content_type = self.header("content-type").unwrap_or_default();
         if content_type.starts_with("application/merge-patch+json") {
             Ok(())

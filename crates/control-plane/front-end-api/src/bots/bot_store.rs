@@ -7,25 +7,25 @@ struct BotRow {
     bot: Bot,
 }
 
-pub struct BotStore {
+pub(crate) struct BotStore {
     rows: Mutex<Vec<BotRow>>,
 }
 
 impl BotStore {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             rows: Mutex::new(Vec::new()),
         }
     }
 
-    pub fn insert(&self, owner: &str, bot: Bot) {
+    pub(crate) fn insert(&self, owner: &str, bot: Bot) {
         self.rows.lock().push(BotRow {
             owner: owner.to_string(),
             bot,
         });
     }
 
-    pub fn list(&self, owner: &str, state: Option<BotState>) -> Vec<Bot> {
+    pub(crate) fn list(&self, owner: &str, state: Option<BotState>) -> Vec<Bot> {
         let rows = self.rows.lock();
         let mut listed: Vec<&Bot> = rows
             .iter()
@@ -40,7 +40,7 @@ impl BotStore {
         listed.into_iter().cloned().collect()
     }
 
-    pub fn get(&self, owner: &str, bot_id: &str) -> Option<Bot> {
+    pub(crate) fn get(&self, owner: &str, bot_id: &str) -> Option<Bot> {
         self.rows
             .lock()
             .iter()
@@ -48,7 +48,7 @@ impl BotStore {
             .map(|row| row.bot.clone())
     }
 
-    pub fn update(
+    pub(crate) fn update(
         &self,
         owner: &str,
         bot_id: &str,
@@ -65,7 +65,7 @@ impl BotStore {
         Some(row.bot.clone())
     }
 
-    pub fn count(&self, owner: &str) -> usize {
+    pub(crate) fn count(&self, owner: &str) -> usize {
         self.rows
             .lock()
             .iter()
@@ -73,7 +73,7 @@ impl BotStore {
             .count()
     }
 
-    pub fn referencing_accounts(&self, owner: &str, account_ids: &[String]) -> Vec<Bot> {
+    pub(crate) fn referencing_accounts(&self, owner: &str, account_ids: &[String]) -> Vec<Bot> {
         self.rows
             .lock()
             .iter()
@@ -89,7 +89,12 @@ impl BotStore {
             .collect()
     }
 
-    pub fn pinning_build(&self, owner: &str, algorithm_id: &str, build_id: &str) -> Vec<Bot> {
+    pub(crate) fn pinning_build(
+        &self,
+        owner: &str,
+        algorithm_id: &str,
+        build_id: &str,
+    ) -> Vec<Bot> {
         self.rows
             .lock()
             .iter()
@@ -102,7 +107,7 @@ impl BotStore {
             .collect()
     }
 
-    pub fn all(&self, owner: &str) -> Vec<Bot> {
+    pub(crate) fn all(&self, owner: &str) -> Vec<Bot> {
         self.list(owner, None)
     }
 }

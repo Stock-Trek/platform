@@ -9,7 +9,7 @@ use std::collections::HashSet;
 use tracing::warn;
 
 impl S3ParquetSink {
-    pub async fn recover_uncommitted(&self) -> PlatformResult<()> {
+    pub(crate) async fn recover_uncommitted(&self) -> PlatformResult<()> {
         let prefix = self.prefix.trim_matches('/');
         let list_prefix = if prefix.is_empty() {
             String::new()

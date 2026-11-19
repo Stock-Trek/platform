@@ -5,10 +5,10 @@ use rust_decimal::Decimal;
 use std::collections::BTreeMap;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId, trading_pair::TradingPair};
 
-pub struct Fixtures;
+pub(super) struct Fixtures;
 
 impl Fixtures {
-    pub fn trade(price: &str, timestamp: i64) -> Trade {
+    pub(super) fn trade(price: &str, timestamp: i64) -> Trade {
         Self::trade_for(
             TradingPair::new(AssetId::Bitcoin, AssetId::TetherUSD),
             price,
@@ -16,7 +16,7 @@ impl Fixtures {
         )
     }
 
-    pub fn trade_for(pair: TradingPair, price: &str, timestamp: i64) -> Trade {
+    pub(super) fn trade_for(pair: TradingPair, price: &str, timestamp: i64) -> Trade {
         Trade {
             exchange: CexId::Binance,
             trading_pair: pair,
@@ -26,7 +26,7 @@ impl Fixtures {
         }
     }
 
-    pub fn event(sequence: u64, timestamp: i64) -> MarketEvent {
+    pub(super) fn event(sequence: u64, timestamp: i64) -> MarketEvent {
         MarketEvent {
             exchange: CexId::Binance,
             stream: "btcusdt@trade".to_string(),
@@ -37,11 +37,11 @@ impl Fixtures {
         }
     }
 
-    pub fn one_minute() -> AlignedWindow {
+    pub(super) fn one_minute() -> AlignedWindow {
         AlignedWindow::try_from("1m").unwrap()
     }
 
-    pub fn gap(detected_at: i64) -> GapMarker {
+    pub(super) fn gap(detected_at: i64) -> GapMarker {
         GapMarker {
             exchange: CexId::Binance,
             stream: "btcusdt@trade".to_string(),
@@ -53,7 +53,7 @@ impl Fixtures {
         }
     }
 
-    pub fn retention_config(
+    pub(super) fn retention_config(
         intervals: Vec<AlignedWindow>,
         caps: &[(AlignedWindow, usize)],
         allowed_lateness: DurationMilliseconds,

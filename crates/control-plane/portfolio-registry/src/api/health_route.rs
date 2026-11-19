@@ -7,14 +7,14 @@ use hyper::{
 
 const ALLOWED_METHODS: &[Method] = &[Method::GET, Method::HEAD];
 
-pub struct HealthRoute;
+pub(crate) struct HealthRoute;
 
 impl HealthRoute {
-    pub fn matches(request: &Request<Incoming>) -> bool {
+    pub(crate) fn matches(request: &Request<Incoming>) -> bool {
         matches!(request.uri().path(), "/healthz" | "/readyz")
     }
 
-    pub fn dispatch(request: &Request<Incoming>) -> Result<Response<Full<Bytes>>, ApiError> {
+    pub(crate) fn dispatch(request: &Request<Incoming>) -> Result<Response<Full<Bytes>>, ApiError> {
         match *request.method() {
             Method::GET | Method::HEAD => Ok(empty_response(StatusCode::NO_CONTENT)),
             _ => Err(ApiError::method_not_allowed(ALLOWED_METHODS)),

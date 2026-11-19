@@ -32,7 +32,7 @@ const MAX_SIGNED_URL_EXPIRY: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const SIGNED_POST_UPLOAD_MARGIN_SECS: u64 = 5 * 60;
 
 #[derive(Clone)]
-pub struct GitHubConfig {
+pub(crate) struct GitHubConfig {
     pub app_id: u64,
     pub private_key: SecretString,
     pub timeouts: Timeouts,
@@ -57,7 +57,7 @@ impl fmt::Debug for GitHubConfig {
 
 /// Configuration required by the orchestrator process.
 #[derive(Debug, Clone)]
-pub struct OrchestratorConfig {
+pub(crate) struct OrchestratorConfig {
     pub log_filter: String,
     pub lambda_function_name: String,
     pub deadline_buffer: Duration,
@@ -72,11 +72,11 @@ pub struct OrchestratorConfig {
 }
 
 impl OrchestratorConfig {
-    pub fn from_env() -> PlatformResult<Self> {
+    pub(crate) fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+    pub(crate) fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let aws_timeouts = Timeouts::from_durations(
             vars.required_duration_secs(AWS_CONNECT_TIMEOUT_SECS)?,
             vars.required_duration_secs(AWS_OPERATION_TIMEOUT_SECS)?,
@@ -155,7 +155,7 @@ impl OrchestratorConfig {
         })
     }
 
-    pub fn github_app_config(&self) -> GitHubAppConfig {
+    pub(crate) fn github_app_config(&self) -> GitHubAppConfig {
         GitHubAppConfig::new(
             self.github.app_id,
             self.github.private_key.expose_secret().to_owned(),

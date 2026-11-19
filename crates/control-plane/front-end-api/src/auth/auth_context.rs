@@ -3,21 +3,25 @@ use serde::Serialize;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum Scope {
+pub(crate) enum Scope {
     Read,
     Manage,
     Admin,
 }
 
 #[derive(Debug, Clone)]
-pub struct AuthContext {
+pub(crate) struct AuthContext {
     owner: String,
     token: String,
     scopes: Vec<Scope>,
 }
 
 impl AuthContext {
-    pub fn new(owner: impl Into<String>, token: impl Into<String>, scopes: Vec<Scope>) -> Self {
+    pub(crate) fn new(
+        owner: impl Into<String>,
+        token: impl Into<String>,
+        scopes: Vec<Scope>,
+    ) -> Self {
         Self {
             owner: owner.into(),
             token: token.into(),
@@ -25,15 +29,15 @@ impl AuthContext {
         }
     }
 
-    pub fn owner(&self) -> &str {
+    pub(crate) fn owner(&self) -> &str {
         &self.owner
     }
 
-    pub fn token(&self) -> &str {
+    pub(crate) fn token(&self) -> &str {
         &self.token
     }
 
-    pub fn require(&self, scope: Scope) -> Result<(), Problem> {
+    pub(crate) fn require(&self, scope: Scope) -> Result<(), Problem> {
         if self.scopes.contains(&scope) {
             Ok(())
         } else {
@@ -44,7 +48,7 @@ impl AuthContext {
         }
     }
 
-    pub fn require_admin(&self) -> Result<(), Problem> {
+    pub(crate) fn require_admin(&self) -> Result<(), Problem> {
         if self.scopes.contains(&Scope::Admin) {
             Ok(())
         } else {
@@ -54,7 +58,7 @@ impl AuthContext {
 }
 
 impl Scope {
-    pub fn as_str(&self) -> &'static str {
+    pub(crate) fn as_str(&self) -> &'static str {
         match self {
             Self::Read => "read",
             Self::Manage => "manage",

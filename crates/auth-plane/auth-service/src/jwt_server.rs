@@ -79,7 +79,7 @@ impl From<JwtServerError> for PlatformError {
     }
 }
 
-pub struct JwtServer {
+pub(crate) struct JwtServer {
     listener: TcpListener,
     service: Arc<AuthService>,
     sigv4: Arc<SigV4Config>,
@@ -87,7 +87,7 @@ pub struct JwtServer {
 }
 
 impl JwtServer {
-    pub fn new(listener: TcpListener, service: AuthService, sigv4: SigV4Config) -> Self {
+    pub(crate) fn new(listener: TcpListener, service: AuthService, sigv4: SigV4Config) -> Self {
         Self {
             listener,
             service: Arc::new(service),
@@ -96,11 +96,11 @@ impl JwtServer {
         }
     }
 
-    pub async fn serve(self) -> PlatformResult<()> {
+    pub(crate) async fn serve(self) -> PlatformResult<()> {
         self.serve_with_shutdown(Runtime::shutdown_signal()).await
     }
 
-    pub async fn serve_with_shutdown<F>(self, shutdown: F) -> PlatformResult<()>
+    pub(crate) async fn serve_with_shutdown<F>(self, shutdown: F) -> PlatformResult<()>
     where
         F: Future<Output = PlatformResult<()>> + Send,
     {

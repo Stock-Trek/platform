@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum RunState {
+pub(crate) enum RunState {
     Pending,
     Running,
     Completed,
@@ -14,7 +14,7 @@ pub enum RunState {
 }
 
 impl RunState {
-    pub fn parse(value: &str) -> Option<Self> {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
         match value {
             "pending" => Some(Self::Pending),
             "running" => Some(Self::Running),
@@ -29,7 +29,7 @@ impl RunState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum RunTrigger {
+pub(crate) enum RunTrigger {
     #[allow(dead_code)]
     Schedule,
     AdHoc,
@@ -37,7 +37,7 @@ pub enum RunTrigger {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum SkipReason {
+pub(crate) enum SkipReason {
     #[allow(dead_code)]
     Overlap,
     #[allow(dead_code)]
@@ -46,7 +46,7 @@ pub enum SkipReason {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum RunErrorKind {
+pub(crate) enum RunErrorKind {
     #[allow(dead_code)]
     Client,
     #[allow(dead_code)]
@@ -55,7 +55,7 @@ pub enum RunErrorKind {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum RunErrorCode {
+pub(crate) enum RunErrorCode {
     InvalidContext,
     InvalidPortfolio,
     InvalidRequest,
@@ -67,7 +67,7 @@ pub enum RunErrorCode {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub struct RunError {
+pub(crate) struct RunError {
     pub kind: RunErrorKind,
     pub code: RunErrorCode,
     pub message: String,
@@ -75,7 +75,7 @@ pub struct RunError {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Run {
+pub(crate) struct Run {
     pub run_id: String,
     pub bot_id: String,
     pub algorithm_id: String,
@@ -96,7 +96,7 @@ pub struct Run {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct RunLogLink {
+pub(crate) struct RunLogLink {
     pub url: String,
     #[serde(with = "crate::api::timestamp::milliseconds")]
     pub expires_at: DateTime<Utc>,
@@ -104,12 +104,12 @@ pub struct RunLogLink {
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct CancelResponse {
+pub(crate) struct CancelResponse {
     pub cancel_requested: bool,
 }
 
 #[derive(Debug, Serialize)]
-pub struct RunPage {
+pub(crate) struct RunPage {
     #[serde(flatten)]
     pub page: Page<Run>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -117,7 +117,7 @@ pub struct RunPage {
 }
 
 #[derive(Debug, Default)]
-pub struct RunFilter {
+pub(crate) struct RunFilter {
     pub bot_id: Option<String>,
     pub state: Option<RunState>,
     pub from: Option<DateTime<Utc>>,

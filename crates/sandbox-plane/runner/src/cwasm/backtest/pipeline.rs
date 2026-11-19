@@ -10,18 +10,18 @@ use std::{
 
 use crate::cwasm::backtest::{BacktestError, worker_runtime::WorkerRuntime};
 
-pub const SIMULATION_QUEUE_DEPTH: usize = 2;
+pub(super) const SIMULATION_QUEUE_DEPTH: usize = 2;
 
 #[derive(Debug)]
-pub struct SimulationOutcome {
+pub(super) struct SimulationOutcome {
     pub result: Result<Value, BacktestError>,
     pub stream_error: Option<BacktestError>,
 }
 
-pub struct SimulationPipeline;
+pub(super) struct SimulationPipeline;
 
 impl SimulationPipeline {
-    pub fn run<P, S>(
+    pub(super) fn run<P, S>(
         simulation_count: u32,
         worker_count: u32,
         publisher_count: u32,

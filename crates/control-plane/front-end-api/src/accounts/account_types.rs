@@ -6,7 +6,7 @@ use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ConnectorState {
+pub(crate) enum ConnectorState {
     Connecting,
     Connected,
     #[allow(dead_code)]
@@ -16,7 +16,7 @@ pub enum ConnectorState {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum ConnectorReason {
+pub(crate) enum ConnectorReason {
     InvalidCredentials,
     #[allow(dead_code)]
     InsufficientPermissions,
@@ -28,7 +28,7 @@ pub enum ConnectorReason {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Connector {
+pub(crate) struct Connector {
     pub state: ConnectorState,
     pub reason: Option<ConnectorReason>,
     #[serde(with = "crate::api::timestamp::milliseconds")]
@@ -36,7 +36,7 @@ pub struct Connector {
 }
 
 impl Connector {
-    pub fn starting(now: DateTime<Utc>) -> Self {
+    pub(crate) fn starting(now: DateTime<Utc>) -> Self {
         Self {
             state: ConnectorState::Connecting,
             reason: None,
@@ -44,7 +44,7 @@ impl Connector {
         }
     }
 
-    pub fn connected(now: DateTime<Utc>) -> Self {
+    pub(crate) fn connected(now: DateTime<Utc>) -> Self {
         Self {
             state: ConnectorState::Connected,
             reason: None,
@@ -52,7 +52,7 @@ impl Connector {
         }
     }
 
-    pub fn failed(reason: ConnectorReason, now: DateTime<Utc>) -> Self {
+    pub(crate) fn failed(reason: ConnectorReason, now: DateTime<Utc>) -> Self {
         Self {
             state: ConnectorState::Error,
             reason: Some(reason),
@@ -63,7 +63,7 @@ impl Connector {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct AccountSummary {
+pub(crate) struct AccountSummary {
     pub account_id: String,
     pub cex_id: CexId,
     pub label: String,
@@ -75,14 +75,14 @@ pub struct AccountSummary {
 }
 
 impl AccountSummary {
-    pub fn etag_version(&self) -> u64 {
+    pub(crate) fn etag_version(&self) -> u64 {
         self.version
     }
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct LinkAccountRequest {
+pub(crate) struct LinkAccountRequest {
     pub cex_id: CexId,
     pub label: String,
     pub api_key: String,
@@ -90,7 +90,7 @@ pub struct LinkAccountRequest {
 }
 
 impl LinkAccountRequest {
-    pub fn validated(self) -> Result<Self, Problem> {
+    pub(crate) fn validated(self) -> Result<Self, Problem> {
         let length = self.label.chars().count();
         if (1..=64).contains(&length) {
             Ok(self)
@@ -104,14 +104,14 @@ impl LinkAccountRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct CredentialsRequest {
+pub(crate) struct CredentialsRequest {
     pub api_key: String,
     pub api_secret: String,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct ForceUnlinkResponse {
+pub(crate) struct ForceUnlinkResponse {
     pub disabled_bot_ids: Vec<String>,
     pub canceled_run_ids: Vec<String>,
 }

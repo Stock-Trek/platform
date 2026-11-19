@@ -5,20 +5,20 @@ use platform_errors::PlatformResult;
 use std::collections::VecDeque;
 
 #[derive(Debug)]
-pub struct MemoryTokenAuditLog {
+pub(crate) struct MemoryTokenAuditLog {
     events: Mutex<VecDeque<TokenAuditEvent>>,
     capacity: usize,
 }
 
 impl MemoryTokenAuditLog {
-    pub fn new(capacity: usize) -> Self {
+    pub(crate) fn new(capacity: usize) -> Self {
         Self {
             events: Mutex::new(VecDeque::new()),
             capacity,
         }
     }
 
-    pub fn events(&self) -> Vec<TokenAuditEvent> {
+    pub(crate) fn events(&self) -> Vec<TokenAuditEvent> {
         self.events.lock().iter().cloned().collect()
     }
 }

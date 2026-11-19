@@ -5,17 +5,17 @@ use secrecy::ExposeSecret;
 use serde_json::Value;
 
 const TOKEN_HEADER: &str = "X-Vault-Token";
-pub const TOMBSTONE_FIELD: &str = "__platform_deleted__";
+pub(crate) const TOMBSTONE_FIELD: &str = "__platform_deleted__";
 
-pub use crate::vault_write::WriteCondition;
+pub(crate) use crate::vault_write::WriteCondition;
 
-pub struct VaultClient {
+pub(crate) struct VaultClient {
     pub client: reqwest::Client,
     pub config: VaultTokenStoreConfig,
 }
 
 impl VaultClient {
-    pub fn new(config: VaultTokenStoreConfig) -> PlatformResult<Self> {
+    pub(crate) fn new(config: VaultTokenStoreConfig) -> PlatformResult<Self> {
         let client = reqwest::Client::builder()
             .timeout(config.timeout())
             .redirect(reqwest::redirect::Policy::none())
@@ -24,19 +24,19 @@ impl VaultClient {
         Ok(Self { client, config })
     }
 
-    pub fn url_for_path(&self, area: &str, path: &str) -> PlatformResult<Url> {
+    pub(crate) fn url_for_path(&self, area: &str, path: &str) -> PlatformResult<Url> {
         let mut segments = vec![area];
         segments.extend(path.split('/').filter(|segment| !segment.is_empty()));
         self.config.url(&segments)
     }
 
-    pub fn request(&self, method: Method, url: Url) -> reqwest::RequestBuilder {
+    pub(crate) fn request(&self, method: Method, url: Url) -> reqwest::RequestBuilder {
         self.client
             .request(method, url)
             .header(TOKEN_HEADER, self.config.token.expose_secret())
     }
 
-    pub async fn send(
+    pub(crate) async fn send(
         &self,
         operation: &'static str,
         target: &str,
@@ -48,7 +48,7 @@ impl VaultClient {
             .map_err(|e| VaultError::transport(operation, target, e))
     }
 
-    pub async fn require_success(
+    pub(crate) async fn require_success(
         &self,
         operation: &'static str,
         target: &str,
@@ -68,7 +68,7 @@ impl VaultClient {
         ))
     }
 
-    pub async fn parse_json(
+    pub(crate) async fn parse_json(
         &self,
         operation: &'static str,
         target: &str,

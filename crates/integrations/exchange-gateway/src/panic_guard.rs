@@ -13,26 +13,26 @@ thread_local! {
 
 static PANIC_HOOK: Once = Once::new();
 
-pub struct CaughtPanic {
+pub(crate) struct CaughtPanic {
     payload: Box<dyn Any + Send>,
     message: String,
 }
 
 impl CaughtPanic {
-    pub fn message(&self) -> &str {
+    pub(crate) fn message(&self) -> &str {
         &self.message
     }
 
-    pub fn into_payload(self) -> Box<dyn Any + Send> {
+    pub(crate) fn into_payload(self) -> Box<dyn Any + Send> {
         self.payload
     }
 }
 
-pub struct PanicUtils;
+pub(crate) struct PanicUtils;
 
 impl PanicUtils {
     /// Runs `f`, converting a panic into an `Err` containing the panic message.
-    pub fn catch_panic<F, R>(f: F) -> Result<R, CaughtPanic>
+    pub(crate) fn catch_panic<F, R>(f: F) -> Result<R, CaughtPanic>
     where
         F: FnOnce() -> R,
     {
@@ -44,7 +44,7 @@ impl PanicUtils {
         })
     }
     /// Polls `future` to completion, catching any panic raised while it is being polled and returning it as an `Err`
-    pub async fn catch_panic_async<F, T>(future: F) -> Result<T, CaughtPanic>
+    pub(crate) async fn catch_panic_async<F, T>(future: F) -> Result<T, CaughtPanic>
     where
         F: Future<Output = T>,
     {

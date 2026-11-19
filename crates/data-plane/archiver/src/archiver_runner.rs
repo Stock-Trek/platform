@@ -11,7 +11,7 @@ use std::time::Instant;
 use tokio::time::{self, MissedTickBehavior};
 use tracing::{info, warn};
 
-pub struct ArchiverRunner<S, K> {
+pub(crate) struct ArchiverRunner<S, K> {
     config: ArchiverConfig,
     source: S,
     sink: K,
@@ -22,7 +22,7 @@ where
     S: ArchiveSource,
     K: ArchiveSink,
 {
-    pub fn new(config: ArchiverConfig, source: S, sink: K) -> Self {
+    pub(crate) fn new(config: ArchiverConfig, source: S, sink: K) -> Self {
         Self {
             config,
             source,
@@ -30,7 +30,7 @@ where
         }
     }
 
-    pub async fn run(self) -> PlatformResult<()> {
+    pub(crate) async fn run(self) -> PlatformResult<()> {
         let Self {
             config,
             mut source,

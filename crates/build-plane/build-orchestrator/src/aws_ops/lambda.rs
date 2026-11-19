@@ -3,24 +3,24 @@ use aws_sdk_lambda::{Client as LambdaClient, primitives::Blob, types::Invocation
 use platform_errors::{PlatformError, PlatformResult, TimeoutError};
 use platform_time::{Deadline, Timeouts};
 
-pub struct LambdaConfig {
+pub(crate) struct LambdaConfig {
     pub function_name: String,
 }
 
 impl LambdaConfig {
-    pub fn new(function_name: String) -> Self {
+    pub(crate) fn new(function_name: String) -> Self {
         Self { function_name }
     }
 }
 
-pub struct Lambda {
+pub(crate) struct Lambda {
     client: LambdaClient,
     config: LambdaConfig,
     timeouts: Timeouts,
 }
 
 impl Lambda {
-    pub fn new(client: LambdaClient, timeouts: Timeouts, config: LambdaConfig) -> Self {
+    pub(crate) fn new(client: LambdaClient, timeouts: Timeouts, config: LambdaConfig) -> Self {
         Self {
             client,
             config,
@@ -28,7 +28,11 @@ impl Lambda {
         }
     }
 
-    pub async fn run_build(&self, request: BuildRequest, deadline: Deadline) -> PlatformResult<()> {
+    pub(crate) async fn run_build(
+        &self,
+        request: BuildRequest,
+        deadline: Deadline,
+    ) -> PlatformResult<()> {
         let payload = request.payload()?;
         tracing::info!(
             function = %self.config.function_name,

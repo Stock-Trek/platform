@@ -1,6 +1,6 @@
 use stock_trek::prelude::*;
 
-pub struct AlgorithmStub;
+pub(crate) struct AlgorithmStub;
 
 impl Default for AlgorithmStub {
     fn default() -> Self {

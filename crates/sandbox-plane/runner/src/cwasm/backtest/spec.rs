@@ -12,7 +12,7 @@ use crate::cwasm::backtest::{
     worker_limits::WorkerLimits,
 };
 
-pub struct Spec {
+pub(super) struct Spec {
     pub strategy_name: String,
     pub strategy_context: StrategyContextDto,
     pub initial_balances: Balances,
@@ -34,7 +34,7 @@ pub struct Spec {
 }
 
 impl Spec {
-    pub fn new(command: &Command) -> Result<Self, BacktestError> {
+    pub(super) fn new(command: &Command) -> Result<Self, BacktestError> {
         let Command::Backtest {
             strategy_name,
             strategy_context_path,

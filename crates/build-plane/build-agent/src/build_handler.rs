@@ -8,7 +8,7 @@ use std::{
 use tokio::time::timeout;
 
 #[derive(Clone)]
-pub struct Handler {
+pub(crate) struct Handler {
     build_timeout: Duration,
     failure_publish_budget: Duration,
     source_dir: PathBuf,
@@ -17,7 +17,7 @@ pub struct Handler {
 }
 
 impl Handler {
-    pub fn with_source_limits(
+    pub(crate) fn with_source_limits(
         build_timeout: Duration,
         failure_publish_budget: Duration,
         source_dir: PathBuf,
@@ -33,7 +33,11 @@ impl Handler {
         }
     }
 
-    pub async fn handle(&self, request: BuildRequest, deadline: Instant) -> PlatformResult<()> {
+    pub(crate) async fn handle(
+        &self,
+        request: BuildRequest,
+        deadline: Instant,
+    ) -> PlatformResult<()> {
         tracing::info!(
             git_host = %request.git_host,
             git_provider = %request.git_provider,

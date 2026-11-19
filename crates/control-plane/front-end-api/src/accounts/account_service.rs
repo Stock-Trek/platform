@@ -12,14 +12,14 @@ use std::time::Duration;
 
 const CONNECTOR_DELAY: Duration = Duration::from_millis(100);
 
-pub struct AccountService {
+pub(crate) struct AccountService {
     accounts: Arc<AccountStore>,
     bots: Arc<BotService>,
     limits: Arc<LimitService>,
 }
 
 impl AccountService {
-    pub fn new(
+    pub(crate) fn new(
         accounts: Arc<AccountStore>,
         bots: Arc<BotService>,
         limits: Arc<LimitService>,
@@ -31,7 +31,7 @@ impl AccountService {
         }
     }
 
-    pub fn link(
+    pub(crate) fn link(
         &self,
         auth: &AuthContext,
         request: &LinkAccountRequest,
@@ -58,17 +58,17 @@ impl AccountService {
         Ok(summary)
     }
 
-    pub fn list(&self, owner: &str) -> Vec<AccountSummary> {
+    pub(crate) fn list(&self, owner: &str) -> Vec<AccountSummary> {
         self.accounts.list(owner)
     }
 
-    pub fn get(&self, owner: &str, account_id: &str) -> Result<AccountSummary, Problem> {
+    pub(crate) fn get(&self, owner: &str, account_id: &str) -> Result<AccountSummary, Problem> {
         self.accounts
             .get(owner, account_id)
             .ok_or_else(|| Problem::not_found("account does not exist"))
     }
 
-    pub fn replace_credentials(
+    pub(crate) fn replace_credentials(
         &self,
         auth: &AuthContext,
         account_id: &str,
@@ -98,7 +98,7 @@ impl AccountService {
         });
     }
 
-    pub fn unlink(
+    pub(crate) fn unlink(
         &self,
         auth: &AuthContext,
         account_id: &str,
@@ -130,7 +130,11 @@ impl AccountService {
         Ok(response)
     }
 
-    pub fn snapshot(&self, owner: &str, account_id: &str) -> Result<PortfolioSnapshot, Problem> {
+    pub(crate) fn snapshot(
+        &self,
+        owner: &str,
+        account_id: &str,
+    ) -> Result<PortfolioSnapshot, Problem> {
         let account = self.get(owner, account_id)?;
         Ok(self
             .accounts
@@ -138,7 +142,7 @@ impl AccountService {
             .unwrap_or_else(|| PortfolioSnapshot::pending(&account.account_id, account.cex_id)))
     }
 
-    pub fn snapshots(&self, owner: &str) -> Vec<PortfolioSnapshot> {
+    pub(crate) fn snapshots(&self, owner: &str) -> Vec<PortfolioSnapshot> {
         self.accounts.snapshots(owner)
     }
 }

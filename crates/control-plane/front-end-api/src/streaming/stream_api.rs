@@ -20,14 +20,14 @@ use std::sync::Arc;
 const STREAM_CONNECTION_RETRY_SECONDS: u64 = 1;
 const WEBSOCKET_VERSION: &str = "13";
 
-pub struct StreamApi {
+pub(crate) struct StreamApi {
     streams: Arc<StreamService>,
     limits: Arc<LimitService>,
     sessions: Arc<SessionService>,
 }
 
 impl StreamApi {
-    pub fn new(
+    pub(crate) fn new(
         streams: Arc<StreamService>,
         limits: Arc<LimitService>,
         sessions: Arc<SessionService>,
@@ -39,7 +39,7 @@ impl StreamApi {
         }
     }
 
-    pub fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
+    pub(crate) fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         match request.segments().as_slice() {
             ["stream"] => match *request.method() {
                 Method::GET => self.stream(request),

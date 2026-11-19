@@ -7,7 +7,7 @@ pub const ACCOUNT_KEY: &str = "accountKey";
 pub const OWNER: &str = "owner";
 pub const ACTIVE: &str = "active";
 pub const VERSION: &str = "version";
-pub const RECORD: &str = "record";
+pub(crate) const RECORD: &str = "record";
 pub const PENDING_EVENTS: &str = "pendingEvents";
 
 pub struct OwnershipItem;

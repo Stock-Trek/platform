@@ -5,12 +5,12 @@ use secrecy::{ExposeSecret, SecretString};
 use sha2::Sha256;
 use subtle::ConstantTimeEq;
 
-pub struct OrderRequestSigner {
+pub(crate) struct OrderRequestSigner {
     mac: Hmac<Sha256>,
 }
 
 impl OrderRequestSigner {
-    pub fn new(secret: &SecretString) -> PlatformResult<Self> {
+    pub(crate) fn new(secret: &SecretString) -> PlatformResult<Self> {
         if secret.expose_secret().trim().is_empty() {
             return Err(PlatformError::auth_invalid_field(
                 "secret",
@@ -24,7 +24,7 @@ impl OrderRequestSigner {
         Ok(Self { mac })
     }
 
-    pub fn sign_order_request(
+    pub(crate) fn sign_order_request(
         &self,
         context: &OrderRequestContext,
         order_request: &[u8],
@@ -34,7 +34,7 @@ impl OrderRequestSigner {
         Ok(data_encoding::HEXLOWER.encode(&mac.finalize().into_bytes()))
     }
 
-    pub fn verify_order_request(
+    pub(crate) fn verify_order_request(
         &self,
         context: &OrderRequestContext,
         order_request: &[u8],

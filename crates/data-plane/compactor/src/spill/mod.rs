@@ -4,5 +4,5 @@ mod partition;
 #[cfg(test)]
 mod tests;
 
-pub use dedupe::DedupeSpill;
-pub use partition::{PartitionItem, PartitionRecords, PartitionSpill};
+pub(crate) use dedupe::DedupeSpill;
+pub(crate) use partition::{PartitionItem, PartitionRecords, PartitionSpill};

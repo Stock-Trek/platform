@@ -8,7 +8,7 @@ use std::sync::{
 use std::time::Duration;
 use tokio::sync::{Notify, watch};
 
-pub struct TestStore {
+pub(super) struct TestStore {
     inner: MemoryTokenStore,
     get_calls: AtomicUsize,
     fail: AtomicBool,
@@ -19,7 +19,7 @@ pub struct TestStore {
 }
 
 impl TestStore {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             inner: MemoryTokenStore::default(),
             get_calls: AtomicUsize::new(0),
@@ -31,31 +31,31 @@ impl TestStore {
         }
     }
 
-    pub async fn insert(&self, token: &ApiToken) {
+    pub(super) async fn insert(&self, token: &ApiToken) {
         self.inner.put(token).await.unwrap();
     }
 
-    pub fn get_calls(&self) -> usize {
+    pub(super) fn get_calls(&self) -> usize {
         self.get_calls.load(Ordering::SeqCst)
     }
 
-    pub fn set_fail(&self, fail: bool) {
+    pub(super) fn set_fail(&self, fail: bool) {
         self.fail.store(fail, Ordering::SeqCst);
     }
 
-    pub fn set_permanent_fail(&self, fail: bool) {
+    pub(super) fn set_permanent_fail(&self, fail: bool) {
         self.permanent_fail.store(fail, Ordering::SeqCst);
     }
 
-    pub fn hold_reads(&self) {
+    pub(super) fn hold_reads(&self) {
         self.hold.store(true, Ordering::SeqCst);
     }
 
-    pub fn release_reads(&self) {
+    pub(super) fn release_reads(&self) {
         self.released.send_replace(true);
     }
 
-    pub async fn wait_until_read_starts(&self) {
+    pub(super) async fn wait_until_read_starts(&self) {
         self.started.notified().await;
     }
 
@@ -131,10 +131,10 @@ impl TokenStore for TestStore {
     }
 }
 
-pub struct Fixture;
+pub(super) struct Fixture;
 
 impl Fixture {
-    pub fn config(
+    pub(super) fn config(
         freshness_millis: u64,
         max_stale_millis: u64,
         failure_threshold: usize,
@@ -151,11 +151,11 @@ impl Fixture {
         .unwrap()
     }
 
-    pub fn cached(store: Arc<TestStore>, config: TokenCacheConfig) -> CachedTokenStore {
+    pub(super) fn cached(store: Arc<TestStore>, config: TokenCacheConfig) -> CachedTokenStore {
         CachedTokenStore::new(store, config)
     }
 
-    pub async fn wait_for_started(started: &AtomicUsize, count: usize) {
+    pub(super) async fn wait_for_started(started: &AtomicUsize, count: usize) {
         tokio::time::timeout(Duration::from_secs(1), async {
             while started.load(Ordering::SeqCst) < count {
                 tokio::task::yield_now().await;

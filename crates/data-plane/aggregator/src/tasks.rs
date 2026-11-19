@@ -12,10 +12,10 @@ use std::sync::Arc;
 use tokio::task::JoinSet;
 use tracing::{error, info};
 
-pub struct Tasks;
+pub(crate) struct Tasks;
 
 impl Tasks {
-    pub async fn run_with_health(
+    pub(crate) async fn run_with_health(
         config: AggregatorConfig,
         archive_recovery: Option<Arc<S3ArchiveRecovery>>,
         health: HealthState,

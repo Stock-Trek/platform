@@ -21,13 +21,13 @@ const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_RETRIES: u8 = 3;
 
 /// Reconstructs Binance gaps from REST snapshots.
-pub struct BinanceGapFetcher {
+pub(crate) struct BinanceGapFetcher {
     connector: Arc<Connector<BinanceExchange, ReqwestHttpClient>>,
     api_key: String,
 }
 
 impl BinanceGapFetcher {
-    pub fn try_new(
+    pub(crate) fn try_new(
         config: &BackfillerConfig,
         credentials: ApiKeyCredentials,
     ) -> PlatformResult<Self> {

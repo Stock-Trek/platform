@@ -54,7 +54,7 @@ impl ConsumerStart {
 /// that happened while the process was down.
 pub struct JetStreamConsumer {
     client: Client,
-    consumer: async_nats::jetstream::consumer::Consumer<pull::Config>,
+    consumer: jetstream::consumer::Consumer<pull::Config>,
     stream: String,
     durable: String,
     filter: String,

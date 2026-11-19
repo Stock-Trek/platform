@@ -63,10 +63,10 @@ const ALL_VARS: [(&str, &str); 25] = [
     (UPDATE_RETRY_BACKOFF_SECS, "2"),
 ];
 
-pub struct Fixture;
+pub(super) struct Fixture;
 
 impl Fixture {
-    pub fn config(vars: &[(&str, &str)]) -> PlatformResult<PortfolioConfig> {
+    pub(super) fn config(vars: &[(&str, &str)]) -> PlatformResult<PortfolioConfig> {
         PortfolioConfig::from_vars(&EnvVars::from_map(
             vars.iter()
                 .map(|(name, value)| ((*name).to_string(), (*value).to_string())),

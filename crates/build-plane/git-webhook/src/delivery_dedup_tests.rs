@@ -2,7 +2,7 @@ use crate::delivery_dedup::DeliveryDedup;
 use std::{num::NonZeroUsize, time::Duration};
 
 impl DeliveryDedup {
-    pub fn is_duplicate(&self, delivery_id: &str) -> bool {
+    pub(crate) fn is_duplicate(&self, delivery_id: &str) -> bool {
         match self.claim(delivery_id) {
             Some(guard) => {
                 guard.complete();

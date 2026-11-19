@@ -9,16 +9,16 @@ use stock_trek::{
     types::{AssetId, CexId},
 };
 
-pub type MarketData = BTreeMap<CexId, BTreeMap<(AssetId, AssetId), BTreeMap<u32, Series>>>;
+pub(super) type MarketData = BTreeMap<CexId, BTreeMap<(AssetId, AssetId), BTreeMap<u32, Series>>>;
 
 #[derive(Clone)]
-pub struct Series {
+pub(super) struct Series {
     pub candles: Vec<MarketCandleDto>,
     pub ends: Vec<u64>,
 }
 
 impl Series {
-    pub fn load(
+    pub(super) fn load(
         market_data: &StrategyContextDto,
         pairs: &[(AssetId, AssetId)],
         window_numbers: &[u32],

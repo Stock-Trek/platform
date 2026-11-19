@@ -9,7 +9,7 @@ use std::{
 };
 
 impl ArtifactPost {
-    pub fn for_test(
+    pub(crate) fn for_test(
         url: String,
         fields: BTreeMap<String, String>,
         max_artifact_size_bytes: NonZeroU64,

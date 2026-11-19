@@ -6,10 +6,10 @@ use tokio::{net::TcpStream, sync::watch};
 
 const HEADER_READ_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub struct ApiConnection;
+pub(crate) struct ApiConnection;
 
 impl ApiConnection {
-    pub async fn serve(
+    pub(crate) async fn serve(
         stream: TcpStream,
         handler: Arc<dyn RequestHandler>,
         mut shutdown: watch::Receiver<bool>,

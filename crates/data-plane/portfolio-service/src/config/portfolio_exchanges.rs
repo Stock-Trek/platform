@@ -10,10 +10,10 @@ use secrecy::{ExposeSecret, SecretString};
 use std::{collections::BTreeSet, sync::Arc};
 use stock_trek_types::cex::{account_id::AccountId, cex_id::CexId};
 
-pub struct PortfolioExchanges;
+pub(crate) struct PortfolioExchanges;
 
 impl PortfolioExchanges {
-    pub fn from_vars(
+    pub(crate) fn from_vars(
         vars: &EnvVars,
         selected: Option<&BTreeSet<CexId>>,
     ) -> PlatformResult<Vec<PortfolioExchangeConfig>> {

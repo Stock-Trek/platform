@@ -3,7 +3,7 @@ use crate::bots::cron::{CronExpression, TimezoneName};
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 
-pub const MIN_INTERVAL_SECONDS: u32 = 10;
+pub(crate) const MIN_INTERVAL_SECONDS: u32 = 10;
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(
@@ -11,7 +11,7 @@ pub const MIN_INTERVAL_SECONDS: u32 = 10;
     rename_all = "snake_case",
     rename_all_fields = "camelCase"
 )]
-pub enum Schedule {
+pub(crate) enum Schedule {
     Interval {
         every_seconds: u32,
         misfire_grace_seconds: Option<u32>,
@@ -24,7 +24,7 @@ pub enum Schedule {
 }
 
 impl Schedule {
-    pub fn validated(self) -> Result<Self, Problem> {
+    pub(crate) fn validated(self) -> Result<Self, Problem> {
         match &self {
             Self::Interval {
                 every_seconds,
@@ -63,7 +63,7 @@ impl Schedule {
         every_seconds.min(60)
     }
 
-    pub fn runs_per_day(&self) -> u64 {
+    pub(crate) fn runs_per_day(&self) -> u64 {
         match self {
             Self::Interval { every_seconds, .. } => (86_400 / u64::from(*every_seconds)).max(1),
             Self::Cron { expression, .. } => CronExpression::runs_per_day(expression),
@@ -73,14 +73,14 @@ impl Schedule {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
-pub enum BotState {
+pub(crate) enum BotState {
     Enabled,
     Disabled,
     Archived,
 }
 
 impl BotState {
-    pub fn parse(value: &str) -> Option<Self> {
+    pub(crate) fn parse(value: &str) -> Option<Self> {
         match value {
             "enabled" => Some(Self::Enabled),
             "disabled" => Some(Self::Disabled),
@@ -92,7 +92,7 @@ impl BotState {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Bot {
+pub(crate) struct Bot {
     pub bot_id: String,
     pub name: String,
     pub algorithm_id: String,
@@ -112,7 +112,7 @@ pub struct Bot {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct CreateBotRequest {
+pub(crate) struct CreateBotRequest {
     pub name: String,
     pub algorithm_id: String,
     pub build_id: String,
@@ -123,7 +123,7 @@ pub struct CreateBotRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct PatchBotRequest {
+pub(crate) struct PatchBotRequest {
     pub name: Option<String>,
     pub build_id: Option<String>,
     pub strategy_name: Option<String>,
@@ -135,7 +135,7 @@ impl PatchBotRequest {
     const REQUIRED_FIELDS: [&str; 5] =
         ["name", "buildId", "strategyName", "accountIds", "schedule"];
 
-    pub fn merge_patch(value: &serde_json::Value) -> Result<Self, Problem> {
+    pub(crate) fn merge_patch(value: &serde_json::Value) -> Result<Self, Problem> {
         for field in Self::REQUIRED_FIELDS {
             if value.get(field).is_some_and(|field| field.is_null()) {
                 return Err(Problem::validation_failed(format!(
@@ -150,13 +150,13 @@ impl PatchBotRequest {
 
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct KillRequest {
+pub(crate) struct KillRequest {
     pub account_ids: Option<Vec<String>>,
 }
 
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct KillResponse {
+pub(crate) struct KillResponse {
     pub disabled_bot_ids: Vec<String>,
     pub canceled_run_ids: Vec<String>,
 }

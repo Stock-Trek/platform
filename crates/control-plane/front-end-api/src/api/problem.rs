@@ -10,14 +10,14 @@ use serde_json::json;
 const ERROR_TYPE_BASE: &str = "https://api.example.com/errors/";
 
 #[derive(Debug, Clone, Serialize)]
-pub struct QuotaDetail {
+pub(crate) struct QuotaDetail {
     pub quota: &'static str,
     pub limit: u64,
     pub used: u64,
 }
 
 #[derive(Debug)]
-pub struct Problem {
+pub(crate) struct Problem {
     status: StatusCode,
     code: &'static str,
     title: &'static str,
@@ -45,7 +45,7 @@ impl Problem {
         }
     }
 
-    pub fn validation_failed(detail: impl Into<String>) -> Self {
+    pub(crate) fn validation_failed(detail: impl Into<String>) -> Self {
         Self::new(
             StatusCode::BAD_REQUEST,
             "validation_failed",
@@ -54,7 +54,7 @@ impl Problem {
         )
     }
 
-    pub fn unauthorized(detail: impl Into<String>) -> Self {
+    pub(crate) fn unauthorized(detail: impl Into<String>) -> Self {
         Self::new(
             StatusCode::UNAUTHORIZED,
             "unauthorized",
@@ -63,11 +63,11 @@ impl Problem {
         )
     }
 
-    pub fn forbidden(detail: impl Into<String>) -> Self {
+    pub(crate) fn forbidden(detail: impl Into<String>) -> Self {
         Self::new(StatusCode::FORBIDDEN, "forbidden", "Forbidden", detail)
     }
 
-    pub fn step_up_required() -> Self {
+    pub(crate) fn step_up_required() -> Self {
         Self::new(
             StatusCode::FORBIDDEN,
             "step_up_required",
@@ -76,7 +76,7 @@ impl Problem {
         )
     }
 
-    pub fn quota_exceeded(quota: QuotaDetail) -> Self {
+    pub(crate) fn quota_exceeded(quota: QuotaDetail) -> Self {
         Self::new(
             StatusCode::FORBIDDEN,
             "quota_exceeded",
@@ -86,11 +86,11 @@ impl Problem {
         .with_quota(quota)
     }
 
-    pub fn not_found(detail: impl Into<String>) -> Self {
+    pub(crate) fn not_found(detail: impl Into<String>) -> Self {
         Self::new(StatusCode::NOT_FOUND, "not_found", "Not found", detail)
     }
 
-    pub fn method_not_allowed(allowed: &[Method]) -> Self {
+    pub(crate) fn method_not_allowed(allowed: &[Method]) -> Self {
         let allow = allowed
             .iter()
             .map(Method::as_str)
@@ -105,7 +105,7 @@ impl Problem {
         .with_allow(allow)
     }
 
-    pub fn already_exists(detail: impl Into<String>) -> Self {
+    pub(crate) fn already_exists(detail: impl Into<String>) -> Self {
         Self::new(
             StatusCode::CONFLICT,
             "already_exists",
@@ -114,7 +114,7 @@ impl Problem {
         )
     }
 
-    pub fn state_conflict(detail: impl Into<String>) -> Self {
+    pub(crate) fn state_conflict(detail: impl Into<String>) -> Self {
         Self::new(
             StatusCode::CONFLICT,
             "state_conflict",
@@ -123,7 +123,7 @@ impl Problem {
         )
     }
 
-    pub fn idempotency_conflict() -> Self {
+    pub(crate) fn idempotency_conflict() -> Self {
         Self::new(
             StatusCode::CONFLICT,
             "idempotency_conflict",
@@ -132,7 +132,7 @@ impl Problem {
         )
     }
 
-    pub fn precondition_failed() -> Self {
+    pub(crate) fn precondition_failed() -> Self {
         Self::new(
             StatusCode::PRECONDITION_FAILED,
             "precondition_failed",
@@ -141,7 +141,7 @@ impl Problem {
         )
     }
 
-    pub fn payload_too_large() -> Self {
+    pub(crate) fn payload_too_large() -> Self {
         Self::new(
             StatusCode::PAYLOAD_TOO_LARGE,
             "payload_too_large",
@@ -150,7 +150,7 @@ impl Problem {
         )
     }
 
-    pub fn precondition_required() -> Self {
+    pub(crate) fn precondition_required() -> Self {
         Self::new(
             StatusCode::PRECONDITION_REQUIRED,
             "precondition_required",
@@ -159,7 +159,7 @@ impl Problem {
         )
     }
 
-    pub fn rate_limited(retry_after: u64) -> Self {
+    pub(crate) fn rate_limited(retry_after: u64) -> Self {
         Self::new(
             StatusCode::TOO_MANY_REQUESTS,
             "rate_limited",
@@ -169,7 +169,7 @@ impl Problem {
         .with_retry_after(retry_after)
     }
 
-    pub fn internal(detail: impl Into<String>) -> Self {
+    pub(crate) fn internal(detail: impl Into<String>) -> Self {
         Self::new(
             StatusCode::INTERNAL_SERVER_ERROR,
             "internal",
@@ -178,7 +178,7 @@ impl Problem {
         )
     }
 
-    pub fn unavailable() -> Self {
+    pub(crate) fn unavailable() -> Self {
         Self::new(
             StatusCode::SERVICE_UNAVAILABLE,
             "unavailable",
@@ -203,11 +203,11 @@ impl Problem {
     }
 
     #[cfg(test)]
-    pub fn status(&self) -> StatusCode {
+    pub(crate) fn status(&self) -> StatusCode {
         self.status
     }
 
-    pub fn response(self, request_id: &str) -> Response<Full<Bytes>> {
+    pub(crate) fn response(self, request_id: &str) -> Response<Full<Bytes>> {
         let mut body = json!({
             "type": format!("{ERROR_TYPE_BASE}{}", self.code.replace('_', "-")),
             "title": self.title,

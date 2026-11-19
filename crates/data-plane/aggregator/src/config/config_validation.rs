@@ -11,7 +11,7 @@ use std::time::Duration;
 use stock_trek_types::cex::{asset_id::AssetId, cex_id::CexId};
 use strum::EnumCount;
 
-pub const ESTIMATED_BYTES_PER_CLOSED_CANDLE: u64 = 512;
+pub(super) const ESTIMATED_BYTES_PER_CLOSED_CANDLE: u64 = 512;
 
 impl AggregatorConfig {
     pub fn validate_kv_bucket(name: &str, bucket: &str) -> PlatformResult<()> {
@@ -186,7 +186,7 @@ impl AggregatorConfig {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct RetentionLimits {
+pub(super) struct RetentionLimits {
     pub static_pair_ceiling: u64,
     pub static_key_ceiling: u64,
     pub worst_case_retained_candles_per_shard: u64,
@@ -194,7 +194,7 @@ pub struct RetentionLimits {
 }
 
 impl RetentionLimits {
-    pub fn calculate(
+    pub(super) fn calculate(
         intervals: &[AlignedWindow],
         caps: &BTreeMap<AlignedWindow, usize>,
         shard_count: usize,

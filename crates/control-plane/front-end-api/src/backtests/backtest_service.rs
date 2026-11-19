@@ -15,14 +15,14 @@ use std::sync::Arc;
 const EXPORT_TTL: Duration = Duration::hours(1);
 const RATE_LIMIT_RETRY_SECONDS: u64 = 60;
 
-pub struct BacktestService {
+pub(crate) struct BacktestService {
     builds: Arc<BuildStore>,
     backtests: Arc<BacktestStore>,
     limits: Arc<LimitService>,
 }
 
 impl BacktestService {
-    pub fn new(
+    pub(crate) fn new(
         builds: Arc<BuildStore>,
         backtests: Arc<BacktestStore>,
         limits: Arc<LimitService>,
@@ -34,7 +34,7 @@ impl BacktestService {
         }
     }
 
-    pub fn create(
+    pub(crate) fn create(
         &self,
         auth: &AuthContext,
         request: &CreateBacktestRequest,
@@ -87,7 +87,7 @@ impl BacktestService {
         })
     }
 
-    pub fn list(
+    pub(crate) fn list(
         &self,
         auth: &AuthContext,
         state: Option<BacktestState>,
@@ -96,7 +96,7 @@ impl BacktestService {
         Page::of(self.backtests.list(auth.owner(), state), query)
     }
 
-    pub fn results(
+    pub(crate) fn results(
         &self,
         auth: &AuthContext,
         backtest_id: &str,
@@ -118,11 +118,15 @@ impl BacktestService {
         })
     }
 
-    pub fn status(&self, auth: &AuthContext, backtest_id: &str) -> Result<BacktestStatus, Problem> {
+    pub(crate) fn status(
+        &self,
+        auth: &AuthContext,
+        backtest_id: &str,
+    ) -> Result<BacktestStatus, Problem> {
         self.not_found_or(auth.owner(), backtest_id)
     }
 
-    pub fn cancel(
+    pub(crate) fn cancel(
         &self,
         auth: &AuthContext,
         backtest_id: &str,
@@ -144,13 +148,17 @@ impl BacktestService {
             .ok_or_else(|| Problem::not_found("backtest does not exist"))
     }
 
-    pub fn not_found_or(&self, owner: &str, backtest_id: &str) -> Result<BacktestStatus, Problem> {
+    pub(crate) fn not_found_or(
+        &self,
+        owner: &str,
+        backtest_id: &str,
+    ) -> Result<BacktestStatus, Problem> {
         self.backtests
             .status(owner, backtest_id)
             .ok_or_else(|| Problem::not_found("backtest does not exist"))
     }
 
-    pub fn export(
+    pub(crate) fn export(
         &self,
         auth: &AuthContext,
         backtest_id: &str,

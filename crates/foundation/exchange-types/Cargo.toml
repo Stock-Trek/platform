@@ -34,3 +34,6 @@ url = { workspace = true }
 [dev-dependencies]
 getrandom = { version = "0.4", features = ["sys_rng"] }
 tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true

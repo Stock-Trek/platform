@@ -16,7 +16,7 @@ const RUN_INVOKER_TABLE: &str = "RUN_INVOKER_TABLE";
 
 /// Configuration required by the run invoker process.
 #[derive(Debug, Clone)]
-pub struct RunInvokerConfig {
+pub(crate) struct RunInvokerConfig {
     pub log_filter: String,
     pub table: String,
     pub artifact_bucket: String,
@@ -30,11 +30,11 @@ pub struct RunInvokerConfig {
 }
 
 impl RunInvokerConfig {
-    pub fn from_env() -> PlatformResult<Self> {
+    pub(crate) fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+    pub(crate) fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         Ok(Self {
             log_filter: vars.required_log_filter(RUST_LOG)?,
             table: vars.required(RUN_INVOKER_TABLE)?,

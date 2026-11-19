@@ -15,7 +15,7 @@ use tokio::process::Command;
 use tracing::info;
 
 impl Artifacts {
-    pub fn prepare_workspace(&self) -> PlatformResult<()> {
+    pub(crate) fn prepare_workspace(&self) -> PlatformResult<()> {
         let workspace = self.build_dir.path();
         if !self.source_dir.join("Cargo.toml").is_file() {
             return Err(PlatformError::Config(ConfigError::Build(format!(
@@ -48,7 +48,7 @@ impl Artifacts {
         Ok(())
     }
 
-    pub async fn unpack_source(&self) -> PlatformResult<Vec<PathBuf>> {
+    pub(crate) async fn unpack_source(&self) -> PlatformResult<Vec<PathBuf>> {
         let source = Source::download(&self.source_get_url, self.source_limits).await?;
         source.extract(
             self.build_dir.path(),
@@ -56,7 +56,7 @@ impl Artifacts {
         )
     }
 
-    pub fn validate_user_generated(sources: &[PathBuf]) -> PlatformResult<()> {
+    pub(crate) fn validate_user_generated(sources: &[PathBuf]) -> PlatformResult<()> {
         for path in sources {
             stock_trek_check::verify::verify(path.display().to_string()).map_err(|error| {
                 PlatformError::Validation(ValidationError::InvalidValue {
@@ -69,7 +69,7 @@ impl Artifacts {
         Ok(())
     }
 
-    pub async fn build_wasm(&self, target_dir: &Path) -> PlatformResult<PathBuf> {
+    pub(crate) async fn build_wasm(&self, target_dir: &Path) -> PlatformResult<PathBuf> {
         let workspace = self.build_dir.path();
         let manifest = workspace.join(WASM_MANIFEST);
         let module = target_dir
@@ -119,7 +119,7 @@ impl Artifacts {
     /// The prebuilt target directory baked into the image is copied into a
     /// fresh temporary directory every time, so cargo never sees artifacts
     /// produced by user code from an earlier invocation.
-    pub async fn prepare_target_dir(&self) -> PlatformResult<TempDir> {
+    pub(crate) async fn prepare_target_dir(&self) -> PlatformResult<TempDir> {
         let cache_root = self.build_cache_dir.clone();
         std_fs::create_dir_all(&cache_root).map_err(|source| {
             PlatformError::io(
@@ -162,7 +162,7 @@ impl Artifacts {
         Ok(target_dir)
     }
 
-    pub async fn compile_wasm(&self, module: &Path) -> PlatformResult<PathBuf> {
+    pub(crate) async fn compile_wasm(&self, module: &Path) -> PlatformResult<PathBuf> {
         let output = self.build_dir.path().join(CWASM_ARTIFACT_FILE);
         let command_output = Command::new(WASMTIME)
             .arg("compile")

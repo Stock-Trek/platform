@@ -19,7 +19,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use stock_trek_types::cex::cex_id::CexId;
 
 #[derive(Default)]
-pub struct FakeSource {
+pub(super) struct FakeSource {
     pub records: Vec<SourceRecord>,
     pub fail: bool,
     pub acked: Arc<Mutex<usize>>,
@@ -45,7 +45,7 @@ impl MarketSource for FakeSource {
 }
 
 #[derive(Default, Clone)]
-pub struct FakeSink {
+pub(super) struct FakeSink {
     pub open_updates: Arc<Mutex<usize>>,
     pub closed_updates: Arc<Mutex<usize>>,
     pub deleted_open_updates: Arc<Mutex<usize>>,
@@ -53,15 +53,15 @@ pub struct FakeSink {
 }
 
 impl FakeSink {
-    pub fn open_updates(&self) -> usize {
+    pub(super) fn open_updates(&self) -> usize {
         *self.open_updates.lock()
     }
 
-    pub fn closed_updates(&self) -> usize {
+    pub(super) fn closed_updates(&self) -> usize {
         *self.closed_updates.lock()
     }
 
-    pub fn deleted_open_updates(&self) -> usize {
+    pub(super) fn deleted_open_updates(&self) -> usize {
         *self.deleted_open_updates.lock()
     }
 }
@@ -96,7 +96,7 @@ impl ClosedCandlePublisher for FakeSink {
     }
 }
 
-pub struct FailingCheckpointStore;
+pub(super) struct FailingCheckpointStore;
 
 #[async_trait]
 impl StateStore for FailingCheckpointStore {
@@ -113,7 +113,7 @@ impl StateStore for FailingCheckpointStore {
     }
 }
 
-pub struct SignalingSource {
+pub(super) struct SignalingSource {
     pub records: Vec<SourceRecord>,
     pub signal: QuiesceSignal,
     pub polls: Arc<AtomicUsize>,
@@ -138,10 +138,10 @@ impl MarketSource for SignalingSource {
     }
 }
 
-pub struct Fixtures;
+pub(super) struct Fixtures;
 
 impl Fixtures {
-    pub fn config() -> AggregatorConfig {
+    pub(super) fn config() -> AggregatorConfig {
         AggregatorConfig {
             log_filter: "info".to_string(),
             nats_url: "nats://localhost:4222".to_string(),
@@ -171,7 +171,7 @@ impl Fixtures {
         }
     }
 
-    pub fn trade_event(timestamp_ms: i64) -> MarketEvent {
+    pub(super) fn trade_event(timestamp_ms: i64) -> MarketEvent {
         MarketEvent {
             exchange: CexId::Binance,
             stream: "btcusdt@trade".to_string(),
@@ -183,7 +183,7 @@ impl Fixtures {
         }
     }
 
-    pub fn non_trade_event(timestamp_ms: i64) -> MarketEvent {
+    pub(super) fn non_trade_event(timestamp_ms: i64) -> MarketEvent {
         MarketEvent {
             stream: "btcusdt@depth".to_string(),
             sequence: Some(2),
@@ -192,7 +192,7 @@ impl Fixtures {
         }
     }
 
-    pub fn record(input: MarketInput, sequence: u64) -> SourceRecord {
+    pub(super) fn record(input: MarketInput, sequence: u64) -> SourceRecord {
         SourceRecord::new(
             input,
             Message {
@@ -205,11 +205,14 @@ impl Fixtures {
         )
     }
 
-    pub fn closed_open_keys(update: &ProcessorUpdate, state: &AggregatorState) -> Vec<CandleKey> {
+    pub(super) fn closed_open_keys(
+        update: &ProcessorUpdate,
+        state: &AggregatorState,
+    ) -> Vec<CandleKey> {
         crate::runner::output_writer::CandleOutputWriter::closed_open_keys(update, state)
     }
 
-    pub async fn wait_for_polls(polls: &Arc<AtomicUsize>, count: usize) {
+    pub(super) async fn wait_for_polls(polls: &Arc<AtomicUsize>, count: usize) {
         tokio::time::timeout(std::time::Duration::from_secs(1), async {
             while polls.load(Ordering::SeqCst) < count {
                 tokio::task::yield_now().await;

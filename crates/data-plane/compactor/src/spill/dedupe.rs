@@ -14,7 +14,7 @@ use std::{
 /// Once the in-memory map reaches the configured limit it is sorted by record
 /// key and spilled to a Parquet run. The runs are merged back in order at the
 /// end, selecting the record from the latest run for duplicate keys.
-pub struct DedupeSpill {
+pub(crate) struct DedupeSpill {
     kind: ArchiveKind,
     directory: PathBuf,
     limit: usize,
@@ -23,7 +23,7 @@ pub struct DedupeSpill {
 }
 
 impl DedupeSpill {
-    pub fn new(
+    pub(crate) fn new(
         kind: ArchiveKind,
         directory: impl Into<PathBuf>,
         limit: usize,
@@ -45,7 +45,7 @@ impl DedupeSpill {
         })
     }
 
-    pub fn push(&mut self, record: ArchiveRecord) -> PlatformResult<()> {
+    pub(crate) fn push(&mut self, record: ArchiveRecord) -> PlatformResult<()> {
         self.records.insert(record.key(), record);
         if self.records.len() >= self.limit {
             self.spill()?;
@@ -53,7 +53,7 @@ impl DedupeSpill {
         Ok(())
     }
 
-    pub fn finish(mut self) -> PlatformResult<DedupedRecords> {
+    pub(crate) fn finish(mut self) -> PlatformResult<DedupedRecords> {
         if self.runs.is_empty() {
             let mut entries = self.records.into_iter().collect::<Vec<_>>();
             entries.sort_by(|left, right| left.0.cmp(&right.0));
@@ -93,13 +93,13 @@ impl DedupeSpill {
     }
 }
 
-pub enum DedupedRecords {
+pub(crate) enum DedupedRecords {
     Memory(IntoIter<ArchiveRecord>),
     Runs(DedupeMerge),
 }
 
 impl DedupedRecords {
-    pub fn next_record(&mut self) -> PlatformResult<Option<ArchiveRecord>> {
+    pub(crate) fn next_record(&mut self) -> PlatformResult<Option<ArchiveRecord>> {
         match self {
             Self::Memory(records) => Ok(records.next()),
             Self::Runs(merge) => merge.next_record(),
@@ -138,7 +138,7 @@ impl Ord for DedupeEntry {
     }
 }
 
-pub struct DedupeMerge {
+pub(crate) struct DedupeMerge {
     runs: Vec<SpillRunReader>,
     heap: BinaryHeap<DedupeEntry>,
 }

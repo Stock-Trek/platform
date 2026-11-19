@@ -1,9 +1,9 @@
 use serde_json::Value;
 
-pub struct BacktestResults;
+pub(super) struct BacktestResults;
 
 impl BacktestResults {
-    pub fn collate(simulations: Vec<Value>) -> Value {
+    pub(super) fn collate(simulations: Vec<Value>) -> Value {
         Value::Array(simulations)
     }
 }

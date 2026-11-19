@@ -24,20 +24,20 @@ struct VerifiedTicketClaims {
     exp: i64,
 }
 
-pub struct TicketStore {
+pub(super) struct TicketStore {
     signer: JwtSigner,
     outstanding: Mutex<HashSet<String>>,
 }
 
 impl TicketStore {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             signer: JwtSigner::generate(),
             outstanding: Mutex::new(HashSet::new()),
         }
     }
 
-    pub fn issue(
+    pub(super) fn issue(
         &self,
         owner: &str,
         session_id: &str,
@@ -56,7 +56,7 @@ impl TicketStore {
         (ticket, expires_at)
     }
 
-    pub fn redeem(&self, ticket: &str, now: DateTime<Utc>) -> Option<(String, String)> {
+    pub(super) fn redeem(&self, ticket: &str, now: DateTime<Utc>) -> Option<(String, String)> {
         let claims = self.signer.verify::<VerifiedTicketClaims>(ticket)?;
         if claims.exp <= now.timestamp() || claims.iat > claims.exp {
             return None;

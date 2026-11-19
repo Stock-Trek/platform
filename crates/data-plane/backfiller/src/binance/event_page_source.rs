@@ -18,13 +18,13 @@ use platform_types::TimestampMilliseconds;
 use std::sync::Arc;
 
 /// Reads Binance REST pages used to reconstruct market-data gaps.
-pub struct BinanceEventPageSource {
+pub(crate) struct BinanceEventPageSource {
     connector: Arc<Connector<BinanceExchange, ReqwestHttpClient>>,
     api_key: String,
 }
 
 impl BinanceEventPageSource {
-    pub fn from_arc(
+    pub(crate) fn from_arc(
         connector: Arc<Connector<BinanceExchange, ReqwestHttpClient>>,
         api_key: String,
     ) -> Self {
@@ -52,7 +52,7 @@ impl BinanceEventPageSource {
         }
     }
 
-    pub async fn fetch_depth(&self, symbol: &str) -> PlatformResult<Vec<BackfilledEvent>> {
+    pub(crate) async fn fetch_depth(&self, symbol: &str) -> PlatformResult<Vec<BackfilledEvent>> {
         let request = BinanceDepthRequest::new(symbol.to_string(), Some(1_000));
         let response = self.submit(request).await?.depth()?;
         Ok(vec![BinanceEventParser::depth(
@@ -62,7 +62,7 @@ impl BinanceEventPageSource {
         )])
     }
 
-    pub async fn fetch_book_ticker(
+    pub(crate) async fn fetch_book_ticker(
         &self,
         symbol: &str,
         observed_sequence: u64,

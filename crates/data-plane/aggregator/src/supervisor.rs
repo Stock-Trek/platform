@@ -7,14 +7,14 @@ use std::{
 };
 use tracing::{error, warn};
 
-pub struct Supervisor;
+pub(crate) struct Supervisor;
 
 impl Supervisor {
-    pub const INITIAL_RESTART_DELAY: Duration = Duration::from_secs(1);
-    pub const MAX_RESTART_DELAY: Duration = Duration::from_secs(30);
-    pub const HEALTHY_RUN_THRESHOLD: Duration = Duration::from_secs(60);
+    pub(crate) const INITIAL_RESTART_DELAY: Duration = Duration::from_secs(1);
+    pub(crate) const MAX_RESTART_DELAY: Duration = Duration::from_secs(30);
+    pub(crate) const HEALTHY_RUN_THRESHOLD: Duration = Duration::from_secs(60);
 
-    pub async fn supervise<F, Fut>(name: &'static str, mut run: F) -> PlatformResult<()>
+    pub(crate) async fn supervise<F, Fut>(name: &'static str, mut run: F) -> PlatformResult<()>
     where
         F: FnMut() -> Fut,
         Fut: Future<Output = PlatformResult<()>>,

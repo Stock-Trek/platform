@@ -11,14 +11,14 @@ use std::sync::Arc;
 const LOGIN_THROTTLE_LIMIT: u64 = 10;
 const LOGIN_THROTTLE_WINDOW: Duration = Duration::minutes(1);
 
-pub struct SessionService {
+pub(crate) struct SessionService {
     store: Arc<SessionStore>,
     limits: Arc<LimitService>,
     failed_logins: Throttle,
 }
 
 impl SessionService {
-    pub fn new(store: Arc<SessionStore>, limits: Arc<LimitService>) -> Self {
+    pub(crate) fn new(store: Arc<SessionStore>, limits: Arc<LimitService>) -> Self {
         Self {
             store,
             limits,
@@ -26,7 +26,7 @@ impl SessionService {
         }
     }
 
-    pub fn login(
+    pub(crate) fn login(
         &self,
         request: &LoginRequest,
         source: Option<IpAddr>,
@@ -51,7 +51,7 @@ impl SessionService {
         }
     }
 
-    pub fn refresh(&self, request: &RefreshRequest) -> Result<SessionTokens, Problem> {
+    pub(crate) fn refresh(&self, request: &RefreshRequest) -> Result<SessionTokens, Problem> {
         self.store
             .rotate_refresh(&request.refresh_token, Utc::now())
             .ok_or_else(|| {
@@ -59,7 +59,7 @@ impl SessionService {
             })
     }
 
-    pub fn step_up(
+    pub(crate) fn step_up(
         &self,
         auth: &AuthContext,
         request: &StepUpRequest,
@@ -85,11 +85,15 @@ impl SessionService {
         }
     }
 
-    pub fn revoke(&self, auth: &AuthContext) {
+    pub(crate) fn revoke(&self, auth: &AuthContext) {
         self.store.revoke(auth.token());
     }
 
-    pub fn authorize(&self, token: &str, now: DateTime<Utc>) -> Result<AuthContext, Problem> {
+    pub(crate) fn authorize(
+        &self,
+        token: &str,
+        now: DateTime<Utc>,
+    ) -> Result<AuthContext, Problem> {
         let (owner, scopes) = self
             .store
             .access(token, now)
@@ -97,7 +101,7 @@ impl SessionService {
         Ok(AuthContext::new(owner, token, scopes))
     }
 
-    pub fn authorize_request(
+    pub(crate) fn authorize_request(
         &self,
         request: &ApiRequest,
         scope: Scope,
@@ -108,17 +112,17 @@ impl SessionService {
         Ok(auth)
     }
 
-    pub fn authorize_admin(&self, request: &ApiRequest) -> Result<AuthContext, Problem> {
+    pub(crate) fn authorize_admin(&self, request: &ApiRequest) -> Result<AuthContext, Problem> {
         let auth = self.authorize_request(request, Scope::Manage)?;
         auth.require_admin()?;
         Ok(auth)
     }
 
-    pub fn session_id(&self, token: &str) -> Option<String> {
+    pub(crate) fn session_id(&self, token: &str) -> Option<String> {
         self.store.session_id(token)
     }
 
-    pub fn revoked(&self, session_id: &str) -> bool {
+    pub(crate) fn revoked(&self, session_id: &str) -> bool {
         self.store.revoked(session_id)
     }
 

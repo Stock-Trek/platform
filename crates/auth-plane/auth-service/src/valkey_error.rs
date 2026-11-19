@@ -4,18 +4,18 @@ use redis::{ErrorKind, RedisError};
 
 const TARGET: &str = "valkey-replay-store";
 
-pub struct ValkeyError;
+pub(crate) struct ValkeyError;
 
 impl ValkeyError {
-    pub fn store(operation: &'static str, error: RedisError) -> ReplayStoreError {
+    pub(crate) fn store(operation: &'static str, error: RedisError) -> ReplayStoreError {
         ReplayStoreError::unavailable(operation, Self::retryable(&error), error)
     }
 
-    pub fn connect(error: ReplayStoreError) -> PlatformError {
+    pub(crate) fn connect(error: ReplayStoreError) -> PlatformError {
         PlatformError::auth_store("connect", TARGET, error.is_retryable(), error)
     }
 
-    pub fn result<T>(result: Result<T, ReplayStoreError>) -> PlatformResult<T> {
+    pub(crate) fn result<T>(result: Result<T, ReplayStoreError>) -> PlatformResult<T> {
         result.map_err(Self::connect)
     }
 

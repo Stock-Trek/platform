@@ -11,8 +11,8 @@ use std::{ops::Deref, sync::Arc, time::Duration};
 use tokio::{sync::mpsc::UnboundedSender, task::JoinHandle};
 use tracing::{debug, warn};
 
-pub type ClockSyncFailureCallback = Arc<dyn Fn(&PlatformError) + Send + Sync>;
-pub type SharedClockSyncFailureCallback = Arc<Mutex<Option<ClockSyncFailureCallback>>>;
+pub(crate) type ClockSyncFailureCallback = Arc<dyn Fn(&PlatformError) + Send + Sync>;
+pub(crate) type SharedClockSyncFailureCallback = Arc<Mutex<Option<ClockSyncFailureCallback>>>;
 
 pub struct AutoResyncConnector<Exchange, Client> {
     connector: Arc<Connector<Exchange, Client>>,

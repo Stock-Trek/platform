@@ -33,7 +33,7 @@ const AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_OPEN_
 const VAULT_TIMEOUT: Duration = Duration::from_secs(10);
 
 #[derive(Clone)]
-pub struct JwtServerConfig {
+pub(crate) struct JwtServerConfig {
     log_filter: String,
     bind_address: SocketAddr,
     vault: VaultTokenStoreConfig,
@@ -46,11 +46,11 @@ pub struct JwtServerConfig {
 }
 
 impl JwtServerConfig {
-    pub fn from_env() -> PlatformResult<Self> {
+    pub(crate) fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+    pub(crate) fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let vault = VaultTokenStoreConfig::new(
             vars.required_url(AUTH_SERVICE_VAULT_ADDRESS, &UrlScheme::HTTP)?,
             SecretString::from(vars.required(AUTH_SERVICE_VAULT_TOKEN)?),
@@ -104,40 +104,40 @@ impl JwtServerConfig {
         })
     }
 
-    pub fn log_filter(&self) -> &str {
+    pub(crate) fn log_filter(&self) -> &str {
         &self.log_filter
     }
 
-    pub fn bind_address(&self) -> SocketAddr {
+    pub(crate) fn bind_address(&self) -> SocketAddr {
         self.bind_address
     }
 
-    pub fn vault(&self) -> &VaultTokenStoreConfig {
+    pub(crate) fn vault(&self) -> &VaultTokenStoreConfig {
         &self.vault
     }
 
-    pub fn valkey(&self) -> &ValkeyReplayStoreConfig {
+    pub(crate) fn valkey(&self) -> &ValkeyReplayStoreConfig {
         &self.valkey
     }
 
-    pub fn sigv4(&self) -> &SigV4Config {
+    pub(crate) fn sigv4(&self) -> &SigV4Config {
         &self.sigv4
     }
 
     #[cfg(test)]
-    pub fn jwt_key_id(&self) -> &str {
+    pub(crate) fn jwt_key_id(&self) -> &str {
         &self.jwt_key_id
     }
 
-    pub fn usage_queue(&self) -> &TokenUsageQueueConfig {
+    pub(crate) fn usage_queue(&self) -> &TokenUsageQueueConfig {
         &self.usage_queue
     }
 
-    pub fn token_cache(&self) -> &TokenCacheConfig {
+    pub(crate) fn token_cache(&self) -> &TokenCacheConfig {
         &self.token_cache
     }
 
-    pub fn jwt_signing_key(&self) -> PlatformResult<JwtSigningKey> {
+    pub(crate) fn jwt_signing_key(&self) -> PlatformResult<JwtSigningKey> {
         use secrecy::ExposeSecret;
         JwtSigningKey::from_pkcs8_pem(&self.jwt_key_id, self.jwt_private_key_pem.expose_secret())
     }

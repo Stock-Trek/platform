@@ -1,10 +1,10 @@
 use chrono::{DateTime, SecondsFormat, Utc};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
-pub mod milliseconds {
+pub(crate) mod milliseconds {
     use super::{DateTime, Deserialize, Deserializer, SecondsFormat, Serialize, Serializer, Utc};
 
-    pub fn serialize<S>(value: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
+    pub(crate) fn serialize<S>(value: &DateTime<Utc>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -14,7 +14,7 @@ pub mod milliseconds {
     }
 
     #[allow(dead_code)]
-    pub fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
+    pub(crate) fn deserialize<'de, D>(deserializer: D) -> Result<DateTime<Utc>, D::Error>
     where
         D: Deserializer<'de>,
     {
@@ -24,10 +24,13 @@ pub mod milliseconds {
             .map_err(serde::de::Error::custom)
     }
 
-    pub mod option {
+    pub(crate) mod option {
         use super::{DateTime, Deserialize, Deserializer, Serialize, Serializer, Utc};
 
-        pub fn serialize<S>(value: &Option<DateTime<Utc>>, serializer: S) -> Result<S::Ok, S::Error>
+        pub(crate) fn serialize<S>(
+            value: &Option<DateTime<Utc>>,
+            serializer: S,
+        ) -> Result<S::Ok, S::Error>
         where
             S: Serializer,
         {
@@ -40,7 +43,9 @@ pub mod milliseconds {
         }
 
         #[allow(dead_code)]
-        pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<DateTime<Utc>>, D::Error>
+        pub(crate) fn deserialize<'de, D>(
+            deserializer: D,
+        ) -> Result<Option<DateTime<Utc>>, D::Error>
         where
             D: Deserializer<'de>,
         {

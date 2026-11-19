@@ -4,7 +4,7 @@ use parking_lot::Mutex;
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 
-pub const REFRESH_REPLAY_GRACE: Duration = Duration::seconds(10);
+pub(super) const REFRESH_REPLAY_GRACE: Duration = Duration::seconds(10);
 
 fn digest(token: &str) -> String {
     hex::encode(Sha256::digest(token.as_bytes()))
@@ -25,7 +25,7 @@ struct RefreshEntry {
     state: RefreshState,
 }
 
-pub enum Rotation {
+pub(super) enum Rotation {
     None,
     Rotated(SessionTokens),
     Replayed(SessionTokens),
@@ -38,25 +38,25 @@ struct State {
     families: HashMap<String, DateTime<Utc>>,
 }
 
-pub struct RefreshStore {
+pub(super) struct RefreshStore {
     state: Mutex<State>,
 }
 
 impl RefreshStore {
-    pub fn new() -> Self {
+    pub(super) fn new() -> Self {
         Self {
             state: Mutex::new(State::default()),
         }
     }
 
-    pub fn open_family(&self, family: &str, expires_at: DateTime<Utc>) {
+    pub(super) fn open_family(&self, family: &str, expires_at: DateTime<Utc>) {
         self.state
             .lock()
             .families
             .insert(family.to_string(), expires_at);
     }
 
-    pub fn enroll(&self, token: String, owner: &str, family: &str) {
+    pub(super) fn enroll(&self, token: String, owner: &str, family: &str) {
         self.state.lock().entries.insert(
             digest(&token),
             RefreshEntry {
@@ -67,7 +67,7 @@ impl RefreshStore {
         );
     }
 
-    pub fn rotate(
+    pub(super) fn rotate(
         &self,
         token: &str,
         now: DateTime<Utc>,
@@ -121,7 +121,7 @@ impl RefreshStore {
         Rotation::Rotated(replacement)
     }
 
-    pub fn revoke_family(&self, family: &str) {
+    pub(super) fn revoke_family(&self, family: &str) {
         let mut state = self.state.lock();
         Self::revoke(&mut state, family);
     }

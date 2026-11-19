@@ -18,12 +18,12 @@ use tokio::{
     task::JoinHandle,
 };
 
-pub const OWNER: &str = "portfolio-owner";
+pub(super) const OWNER: &str = "portfolio-owner";
 
-pub struct Fixture;
+pub(super) struct Fixture;
 
 impl Fixture {
-    pub fn order_request() -> OrderRequest<AssetId, f64> {
+    pub(super) fn order_request() -> OrderRequest<AssetId, f64> {
         OrderRequest::MarketBuy {
             base: AssetId::Bitcoin,
             quote: AssetId::TetherUSD,
@@ -33,7 +33,7 @@ impl Fixture {
         }
     }
 
-    pub fn unsigned() -> UnsignedOrderRequest {
+    pub(super) fn unsigned() -> UnsignedOrderRequest {
         UnsignedOrderRequest::new(
             CexId::Binance,
             AccountId("account-1".to_string()),
@@ -42,7 +42,7 @@ impl Fixture {
         )
     }
 
-    pub async fn auth_service() -> (AuthService, ApiToken) {
+    pub(super) async fn auth_service() -> (AuthService, ApiToken) {
         let store = Arc::new(MemoryTokenStore::default());
         let now = Utc::now();
         let metadata = TokenMetadata::new(now + Duration::days(30), TokenScope::DEFAULT).unwrap();
@@ -62,19 +62,19 @@ impl Fixture {
         (service, token)
     }
 
-    pub fn address() -> SocketAddr {
+    pub(super) fn address() -> SocketAddr {
         std::net::TcpListener::bind("127.0.0.1:0")
             .unwrap()
             .local_addr()
             .unwrap()
     }
 
-    pub async fn downstream() -> (String, JoinHandle<String>) {
+    pub(super) async fn downstream() -> (String, JoinHandle<String>) {
         let (url, task, _, _) = Self::downstream_task(false).await;
         (url, task)
     }
 
-    pub async fn controlled_downstream() -> (
+    pub(super) async fn controlled_downstream() -> (
         String,
         JoinHandle<String>,
         oneshot::Sender<()>,
@@ -147,7 +147,7 @@ impl Fixture {
         String::from_utf8(bytes[header_end..header_end + content_length].to_vec()).unwrap()
     }
 
-    pub async fn running_server(
+    pub(super) async fn running_server(
         delivery_url: &str,
         auth_service: AuthService,
     ) -> (SocketAddr, JoinHandle<PlatformResult<()>>) {

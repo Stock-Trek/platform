@@ -10,10 +10,10 @@ use tokio::net::TcpListener;
 
 const SERVICE: Service = Service::new("platform-auth-service");
 
-pub struct AuthServiceRunner;
+pub(crate) struct AuthServiceRunner;
 
 impl AuthServiceRunner {
-    pub async fn run(config: JwtServerConfig) -> PlatformResult<()> {
+    pub(crate) async fn run(config: JwtServerConfig) -> PlatformResult<()> {
         SERVICE.init_logging(config.log_filter())?;
         let _metrics = SERVICE.init_metrics("platform/auth-service")?;
         let vault = Arc::new(VaultTokenStore::new(config.vault().clone())?);

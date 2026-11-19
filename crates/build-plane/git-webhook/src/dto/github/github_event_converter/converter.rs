@@ -8,16 +8,16 @@ use platform_github::HostAllowlist;
 use platform_metrics::EventMetrics;
 
 const GITHUB_WEBHOOK_SECRET: &str = "GITHUB_WEBHOOK_SECRET";
-pub const UNKNOWN_ACTION: &str = "unknown";
-pub const NO_ACTION: &str = "none";
+pub(super) const UNKNOWN_ACTION: &str = "unknown";
+pub(super) const NO_ACTION: &str = "none";
 
-pub struct GitHubEventConverter {
+pub(crate) struct GitHubEventConverter {
     pub secret: String,
     pub allowed_hosts: HostAllowlist,
 }
 
 impl GitHubEventConverter {
-    pub fn new(secrets: &SsmSecrets, allowed_hosts: HostAllowlist) -> PlatformResult<Self> {
+    pub(crate) fn new(secrets: &SsmSecrets, allowed_hosts: HostAllowlist) -> PlatformResult<Self> {
         let secret = secrets.get(GITHUB_WEBHOOK_SECRET)?;
         if secret.is_empty() {
             Err(PlatformError::config_empty(GITHUB_WEBHOOK_SECRET))?;

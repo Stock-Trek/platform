@@ -7,10 +7,10 @@ use platform_messages::SqsMessage;
 use platform_metrics::{RouteMetrics, SqsMetrics};
 use platform_time::{Deadline, RequestContext};
 
-pub struct SqsHandler;
+pub(crate) struct SqsHandler;
 
 impl SqsHandler {
-    pub async fn handle(
+    pub(crate) async fn handle(
         &self,
         context: &RsOrchestratorContext,
         event: LambdaEvent<SqsEvent>,

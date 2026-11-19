@@ -7,7 +7,7 @@ use crate::cwasm::backtest::{
     market_data::{MarketData, Series},
 };
 
-pub struct MarketSlot {
+pub(super) struct MarketSlot {
     pub cex: CexId,
     pub cex_key: String,
     pub pair: (AssetId, AssetId),
@@ -17,7 +17,7 @@ pub struct MarketSlot {
 }
 
 impl MarketSlot {
-    pub fn build_all(
+    pub(super) fn build_all(
         strategy_context: &StrategyContextDto,
         data: &MarketData,
         pairs: &[(AssetId, AssetId)],

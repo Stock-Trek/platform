@@ -10,7 +10,7 @@ use serde_json::json;
 use std::time::SystemTime;
 use tracing::{error, info};
 
-pub struct RunInvoker {
+pub(crate) struct RunInvoker {
     config: RunInvokerConfig,
     runner: Runner,
     store: RunStore,
@@ -20,7 +20,7 @@ pub struct RunInvoker {
 }
 
 impl RunInvoker {
-    pub fn new(
+    pub(crate) fn new(
         config: RunInvokerConfig,
         store: RunStore,
         s3: S3Client,
@@ -38,7 +38,7 @@ impl RunInvoker {
         }
     }
 
-    pub async fn run(self) -> PlatformResult<()> {
+    pub(crate) async fn run(self) -> PlatformResult<()> {
         info!(
             table = %self.config.table,
             artifact_bucket = %self.config.artifact_bucket,

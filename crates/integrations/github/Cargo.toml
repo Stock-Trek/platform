@@ -19,3 +19,6 @@ parking_lot = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 tokio = { workspace = true, features = ["time"] }
 url = { workspace = true, features = ["serde"] }
+
+[lints]
+workspace = true

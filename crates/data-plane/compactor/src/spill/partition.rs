@@ -5,7 +5,7 @@ use platform_errors::{PlatformError, PlatformResult};
 use std::{cmp::Ordering, collections::BinaryHeap, path::PathBuf, vec::IntoIter};
 
 /// A record plus the cached values used to order its compaction output.
-pub struct PartitionItem {
+pub(crate) struct PartitionItem {
     pub partition: String,
     pub sort_key: ArchiveSortKey,
     pub record: ArchiveRecord,
@@ -31,7 +31,7 @@ impl PartitionItem {
 
 /// Sorts and spills records by output partition, keeping the in-memory working
 /// set bounded by the configured limit.
-pub struct PartitionSpill {
+pub(crate) struct PartitionSpill {
     kind: ArchiveKind,
     directory: PathBuf,
     limit: usize,
@@ -40,7 +40,7 @@ pub struct PartitionSpill {
 }
 
 impl PartitionSpill {
-    pub fn new(
+    pub(crate) fn new(
         kind: ArchiveKind,
         directory: impl Into<PathBuf>,
         limit: usize,
@@ -62,7 +62,7 @@ impl PartitionSpill {
         })
     }
 
-    pub fn push(&mut self, record: ArchiveRecord) -> PlatformResult<()> {
+    pub(crate) fn push(&mut self, record: ArchiveRecord) -> PlatformResult<()> {
         self.records.push(PartitionItem::new(record));
         if self.records.len() >= self.limit {
             self.spill()?;
@@ -70,7 +70,7 @@ impl PartitionSpill {
         Ok(())
     }
 
-    pub fn finish(mut self) -> PlatformResult<PartitionRecords> {
+    pub(crate) fn finish(mut self) -> PlatformResult<PartitionRecords> {
         if self.runs.is_empty() {
             self.records.sort_by(PartitionItem::compare);
             return Ok(PartitionRecords::Memory(self.records.into_iter()));
@@ -105,13 +105,13 @@ impl PartitionSpill {
     }
 }
 
-pub enum PartitionRecords {
+pub(crate) enum PartitionRecords {
     Memory(IntoIter<PartitionItem>),
     Runs(PartitionMerge),
 }
 
 impl PartitionRecords {
-    pub fn next_item(&mut self) -> PlatformResult<Option<PartitionItem>> {
+    pub(crate) fn next_item(&mut self) -> PlatformResult<Option<PartitionItem>> {
         match self {
             Self::Memory(items) => Ok(items.next()),
             Self::Runs(merge) => merge.next_item(),
@@ -149,7 +149,7 @@ impl Ord for PartitionEntry {
     }
 }
 
-pub struct PartitionMerge {
+pub(crate) struct PartitionMerge {
     runs: Vec<SpillRunReader>,
     heap: BinaryHeap<PartitionEntry>,
 }

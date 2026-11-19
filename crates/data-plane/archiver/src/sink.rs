@@ -22,7 +22,7 @@ const UPLOAD_MAX_BACKOFF: Duration = Duration::from_millis(500 * UPLOAD_MAX_ATTE
 
 /// Writes a batch of de-duplicated records to long-term storage.
 #[async_trait]
-pub trait ArchiveSink: Send + Sync {
+pub(crate) trait ArchiveSink: Send + Sync {
     /// Writes the records, reordering them in place so callers can keep
     /// ownership of the batch and retry it if the write fails.
     async fn write(&self, records: &mut [ArchiveRecord]) -> PlatformResult<()>;
@@ -34,7 +34,7 @@ pub trait ArchiveSink: Send + Sync {
 /// the catalog commit fails, retrying the same records writes the same object
 /// and commits the same data file instead of creating a duplicate. Objects left
 /// uncommitted by an earlier run are registered during startup.
-pub struct S3ParquetSink {
+pub(crate) struct S3ParquetSink {
     pub(crate) s3_client: S3Client,
     pub(crate) objects: Arc<dyn ObjectStore>,
     pub(crate) row_counter: Arc<dyn ParquetRowCounter>,
@@ -52,7 +52,7 @@ pub struct S3ParquetSink {
 }
 
 impl S3ParquetSink {
-    pub async fn connect(
+    pub(crate) async fn connect(
         config: &ArchiverConfig,
         catalog: Arc<dyn ArchiveCatalog>,
         leases: Arc<dyn LeaseStore>,

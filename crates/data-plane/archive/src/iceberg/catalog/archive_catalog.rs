@@ -127,7 +127,7 @@ pub trait ArchiveCatalog: Send + Sync {
     async fn expire_snapshots(
         &self,
         _table: ArchiveIcebergTable,
-        _older_than: platform_types::TimestampMilliseconds,
+        _older_than: TimestampMilliseconds,
         _retain_last: usize,
         _context: &CommitContext,
     ) -> PlatformResult<usize> {

@@ -1,29 +1,29 @@
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
-pub struct RepositoriesParams {
+pub(super) struct RepositoriesParams {
     pub per_page: u32,
     pub page: u32,
 }
 
 #[derive(Debug, Serialize)]
-pub struct CommitsParams<'a> {
+pub(super) struct CommitsParams<'a> {
     pub sha: &'a str,
     pub per_page: u32,
 }
 
 #[derive(Debug, Serialize)]
-pub struct TreeParams {
+pub(super) struct TreeParams {
     pub recursive: u8,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GitHubCommit {
+pub(super) struct GitHubCommit {
     pub sha: String,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GitHubTree {
+pub(super) struct GitHubTree {
     #[serde(default)]
     pub tree: Vec<GitHubTreeEntry>,
     #[serde(default)]
@@ -31,7 +31,7 @@ pub struct GitHubTree {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GitHubTreeEntry {
+pub(super) struct GitHubTreeEntry {
     pub path: String,
     #[serde(default)]
     pub mode: String,
@@ -43,7 +43,7 @@ pub struct GitHubTreeEntry {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct GitHubBlob {
+pub(super) struct GitHubBlob {
     #[serde(default)]
     pub content: Option<String>,
     #[serde(default)]
@@ -51,7 +51,7 @@ pub struct GitHubBlob {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct InstallationRepositoriesResponse {
+pub(super) struct InstallationRepositoriesResponse {
     pub repositories: Vec<GitHubRepo>,
 }
 

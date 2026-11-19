@@ -20,7 +20,7 @@ use std::{
 };
 use stock_trek_types::cex::{account_id::AccountId, asset_id::AssetId, cex_id::CexId};
 
-pub struct TestCredentialProvider {
+pub(super) struct TestCredentialProvider {
     pub acquired: Arc<AtomicUsize>,
     pub renewed: Arc<AtomicUsize>,
     pub revoked: Arc<AtomicUsize>,
@@ -60,7 +60,7 @@ impl TestCredentialProvider {
 }
 
 #[derive(Default)]
-pub struct TestAuthBinder;
+pub(super) struct TestAuthBinder;
 
 #[async_trait::async_trait]
 impl AuthBinder for TestAuthBinder {
@@ -84,7 +84,7 @@ impl iris::Listener<serde_json::Value> for TestListener {
     async fn on_message(&self, _message: serde_json::Value) {}
 }
 
-pub struct TestTransport {
+pub(super) struct TestTransport {
     pub acquired: Arc<AtomicUsize>,
     pub renewed: Arc<AtomicUsize>,
     pub revoked: Arc<AtomicUsize>,
@@ -98,7 +98,7 @@ pub struct TestTransport {
 }
 
 impl TestTransport {
-    pub fn new(refresh_interval: Duration, reconnect_backoff: Duration) -> Self {
+    pub(super) fn new(refresh_interval: Duration, reconnect_backoff: Duration) -> Self {
         Self {
             acquired: Arc::new(AtomicUsize::new(0)),
             renewed: Arc::new(AtomicUsize::new(0)),
@@ -122,23 +122,23 @@ impl TestTransport {
         }
     }
 
-    pub fn acquired(&self) -> usize {
+    pub(super) fn acquired(&self) -> usize {
         self.acquired.load(Ordering::SeqCst)
     }
 
-    pub fn renewed(&self) -> usize {
+    pub(super) fn renewed(&self) -> usize {
         self.renewed.load(Ordering::SeqCst)
     }
 
-    pub fn revoked(&self) -> usize {
+    pub(super) fn revoked(&self) -> usize {
         self.revoked.load(Ordering::SeqCst)
     }
 
-    pub fn opened(&self) -> usize {
+    pub(super) fn opened(&self) -> usize {
         self.opened.load(Ordering::SeqCst)
     }
 
-    pub async fn wait_for_revoke(&self) {
+    pub(super) async fn wait_for_revoke(&self) {
         self.revoked_signal.notified().await;
     }
 
@@ -208,17 +208,17 @@ impl PortfolioExchange for TestTransport {
     }
 }
 
-pub struct Fixture;
+pub(super) struct Fixture;
 
 impl Fixture {
-    pub fn credentials() -> ApiKeyCredentials {
+    pub(super) fn credentials() -> ApiKeyCredentials {
         ApiKeyCredentials {
             api_key: "api-key".to_string(),
             secret: secrecy::SecretString::from("secret"),
         }
     }
 
-    pub fn account() -> AccountId {
+    pub(super) fn account() -> AccountId {
         AccountId::new("primary")
     }
 }

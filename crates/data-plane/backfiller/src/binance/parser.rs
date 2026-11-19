@@ -4,10 +4,10 @@ use platform_types::TimestampMilliseconds;
 use serde_json::json;
 
 /// Converts Binance REST records into the event shape emitted by the ingester.
-pub struct BinanceEventParser;
+pub(crate) struct BinanceEventParser;
 
 impl BinanceEventParser {
-    pub fn trade(symbol: &str, trade: &BinanceTradeResponse) -> BackfilledEvent {
+    pub(crate) fn trade(symbol: &str, trade: &BinanceTradeResponse) -> BackfilledEvent {
         BackfilledEvent {
             sequence: trade.id,
             exchange_timestamp: trade.time,
@@ -25,7 +25,7 @@ impl BinanceEventParser {
         }
     }
 
-    pub fn depth(
+    pub(crate) fn depth(
         symbol: &str,
         depth: &BinanceDepthResponse,
         timestamp: TimestampMilliseconds,
@@ -45,7 +45,7 @@ impl BinanceEventParser {
         }
     }
 
-    pub fn book_ticker(
+    pub(crate) fn book_ticker(
         symbol: &str,
         sequence: u64,
         bid_price: &str,

@@ -20,10 +20,10 @@ use zip::ZipArchive;
 const USER_GENERATED_DIR: &str = "crates/sandbox-plane/runner/src/user_generated";
 const USER_GENERATED_PREFIX: &str = "crates/sandbox-plane/runner/src/user_generated/";
 
-pub const DEFAULT_SOURCE_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
-pub const DEFAULT_MAX_SOURCE_ARCHIVE_BYTES: NonZeroU64 =
+pub(crate) const DEFAULT_SOURCE_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(60);
+pub(crate) const DEFAULT_MAX_SOURCE_ARCHIVE_BYTES: NonZeroU64 =
     NonZeroU64::new(16 * 1024 * 1024).expect("default source archive limit is non-zero");
-pub const DEFAULT_MAX_EXTRACTED_SOURCE_BYTES: NonZeroU64 =
+pub(crate) const DEFAULT_MAX_EXTRACTED_SOURCE_BYTES: NonZeroU64 =
     NonZeroU64::new(64 * 1024 * 1024).expect("default extracted source limit is non-zero");
 
 /// Resource limits applied while downloading and extracting user sources.
@@ -31,14 +31,14 @@ pub const DEFAULT_MAX_EXTRACTED_SOURCE_BYTES: NonZeroU64 =
 /// Every limit is non-zero and therefore always enforced, so an archive cannot
 /// exhaust the agent's memory or ephemeral disk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SourceLimits {
+pub(crate) struct SourceLimits {
     pub download_timeout: Duration,
     pub max_archive_bytes: NonZeroU64,
     pub max_extracted_bytes: NonZeroU64,
 }
 
 impl SourceLimits {
-    pub const fn new(
+    pub(crate) const fn new(
         download_timeout: Duration,
         max_archive_bytes: NonZeroU64,
         max_extracted_bytes: NonZeroU64,
@@ -61,12 +61,12 @@ impl Default for SourceLimits {
     }
 }
 
-pub struct Source {
+pub(crate) struct Source {
     pub bytes: Vec<u8>,
 }
 
 impl Source {
-    pub async fn download(url: &str, limits: SourceLimits) -> PlatformResult<Self> {
+    pub(crate) async fn download(url: &str, limits: SourceLimits) -> PlatformResult<Self> {
         let client = reqwest::Client::builder()
             .timeout(limits.download_timeout)
             .build()
@@ -132,7 +132,7 @@ impl Source {
             .saturating_add(u64::try_from(additional).unwrap_or(u64::MAX))
     }
 
-    pub fn extract(
+    pub(crate) fn extract(
         &self,
         destination: &Path,
         max_extracted_bytes: NonZeroU64,

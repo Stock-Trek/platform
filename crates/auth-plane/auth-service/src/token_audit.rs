@@ -9,8 +9,8 @@ use strum::{Display, EnumString};
 
 static EVENT_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
-pub const AUDIT_EVENT_FIELD: &str = "__platform_audit_event__";
-pub const AUDIT_EVENT_PREFIX: &str = "audit/events/";
+pub(crate) const AUDIT_EVENT_FIELD: &str = "__platform_audit_event__";
+pub(crate) const AUDIT_EVENT_PREFIX: &str = "audit/events/";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Display, EnumString, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -80,10 +80,10 @@ pub trait TokenAuditLog: Send + Sync {
     async fn record(&self, event: TokenAuditEvent) -> PlatformResult<()>;
 }
 
-pub struct TokenAuditOutbox;
+pub(crate) struct TokenAuditOutbox;
 
 impl TokenAuditOutbox {
-    pub fn ensure_event_id(event: &mut TokenAuditEvent) {
+    pub(crate) fn ensure_event_id(event: &mut TokenAuditEvent) {
         if event.event_id.is_none() {
             event.event_id = Some(Self::generate_event_id());
         }
@@ -98,7 +98,7 @@ impl TokenAuditOutbox {
         )
     }
 
-    pub fn standalone_document(event: &TokenAuditEvent) -> PlatformResult<Value> {
+    pub(crate) fn standalone_document(event: &TokenAuditEvent) -> PlatformResult<Value> {
         let mut document = Map::new();
         document.insert(AUDIT_EVENT_FIELD.to_string(), Value::Bool(true));
         document.insert(
@@ -110,7 +110,7 @@ impl TokenAuditOutbox {
         Ok(Value::Object(document))
     }
 
-    pub fn standalone_event(value: &Value) -> PlatformResult<Option<TokenAuditEvent>> {
+    pub(crate) fn standalone_event(value: &Value) -> PlatformResult<Option<TokenAuditEvent>> {
         if !Self::is_standalone_document(value) {
             return Ok(None);
         }
@@ -122,22 +122,22 @@ impl TokenAuditOutbox {
         Ok(Some(event))
     }
 
-    pub fn is_standalone_document(value: &Value) -> bool {
+    pub(crate) fn is_standalone_document(value: &Value) -> bool {
         value
             .get(AUDIT_EVENT_FIELD)
             .and_then(Value::as_bool)
             .is_some_and(|standalone| standalone)
     }
 
-    pub fn is_storage_key(key: &str) -> bool {
+    pub(crate) fn is_storage_key(key: &str) -> bool {
         key.starts_with(AUDIT_EVENT_PREFIX)
     }
 
-    pub fn storage_key(event_id: &str) -> String {
+    pub(crate) fn storage_key(event_id: &str) -> String {
         format!("{AUDIT_EVENT_PREFIX}{event_id}")
     }
 
-    pub fn require_event_id(event: &TokenAuditEvent) -> PlatformResult<&str> {
+    pub(crate) fn require_event_id(event: &TokenAuditEvent) -> PlatformResult<&str> {
         event.event_id().ok_or_else(|| {
             PlatformError::auth_store(
                 "relay",

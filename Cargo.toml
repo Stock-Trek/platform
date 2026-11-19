@@ -7,6 +7,14 @@ version = "0.2.0"
 edition = "2024"
 rust-version = "1.99.0"
 
+[workspace.lints.rust]
+unsafe_code = "forbid"
+unreachable_pub = "warn"
+unused_qualifications = "warn"
+
+[workspace.lints.clippy]
+unwrap_used = "deny"
+
 [workspace.dependencies]
 platform-auth-relay = { path = "crates/auth-plane/auth-relay" }
 platform-auth-service = { path = "crates/auth-plane/auth-service" }

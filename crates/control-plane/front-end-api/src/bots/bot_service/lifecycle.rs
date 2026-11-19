@@ -7,7 +7,7 @@ use crate::limits::{LimitService, QUOTA_BOTS, QUOTA_SCHEDULED_RUNS_PER_DAY};
 use chrono::{DateTime, Utc};
 use std::sync::Arc;
 
-pub struct BotService {
+pub(crate) struct BotService {
     pub(super) bots: Arc<BotStore>,
     pub(super) runs: Arc<RunStore>,
     pub(super) accounts: Arc<AccountStore>,
@@ -16,7 +16,7 @@ pub struct BotService {
 }
 
 impl BotService {
-    pub fn new(
+    pub(crate) fn new(
         bots: Arc<BotStore>,
         runs: Arc<RunStore>,
         accounts: Arc<AccountStore>,
@@ -32,7 +32,7 @@ impl BotService {
         }
     }
 
-    pub fn create(
+    pub(crate) fn create(
         &self,
         auth: &AuthContext,
         request: &CreateBotRequest,
@@ -73,7 +73,7 @@ impl BotService {
         Ok(self.projected(bot))
     }
 
-    pub fn list(
+    pub(crate) fn list(
         &self,
         auth: &AuthContext,
         state: Option<BotState>,
@@ -88,7 +88,7 @@ impl BotService {
         Page::of(bots, query)
     }
 
-    pub fn get(&self, auth: &AuthContext, bot_id: &str) -> Result<Bot, Problem> {
+    pub(crate) fn get(&self, auth: &AuthContext, bot_id: &str) -> Result<Bot, Problem> {
         self.bots
             .get(auth.owner(), bot_id)
             .map(|bot| self.projected(bot))
@@ -101,7 +101,7 @@ impl BotService {
         bot
     }
 
-    pub fn patch(
+    pub(crate) fn patch(
         &self,
         auth: &AuthContext,
         bot_id: &str,
@@ -157,7 +157,7 @@ impl BotService {
             .ok_or_else(|| Problem::not_found("bot does not exist"))
     }
 
-    pub fn enable(
+    pub(crate) fn enable(
         &self,
         auth: &AuthContext,
         bot_id: &str,
@@ -190,7 +190,7 @@ impl BotService {
             .ok_or_else(|| Problem::not_found("bot does not exist"))
     }
 
-    pub fn disable(
+    pub(crate) fn disable(
         &self,
         auth: &AuthContext,
         bot_id: &str,
@@ -211,7 +211,7 @@ impl BotService {
             .ok_or_else(|| Problem::not_found("bot does not exist"))
     }
 
-    pub fn archive(
+    pub(crate) fn archive(
         &self,
         auth: &AuthContext,
         bot_id: &str,

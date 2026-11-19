@@ -12,7 +12,7 @@ use tracing::warn;
 
 /// Deterministic processing settings for a rebuild.
 #[derive(Debug, Clone)]
-pub struct RebuildOptions {
+pub(crate) struct RebuildOptions {
     pub processor: ProcessorConfig,
     /// Epoch assigned to every regenerated candle.
     ///
@@ -27,7 +27,7 @@ pub struct RebuildOptions {
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
-pub struct RebuildStats {
+pub(crate) struct RebuildStats {
     pub events_read: usize,
     pub trade_stream_groups: usize,
     pub trades_applied: usize,
@@ -54,7 +54,7 @@ pub struct RebuildStats {
 /// files that are not globally ordered.
 impl RebuildOptions {
     /// Decodes one archived event and stages its per-pair replay records.
-    pub fn push_event(
+    pub(crate) fn push_event(
         &self,
         event: MarketEvent,
         decoders: &mut HashMap<CexId, SharedTradeDecoder>,
@@ -118,7 +118,7 @@ impl RebuildOptions {
 
     /// Replays the merged event stream and spills every closed candle in the
     /// sink's object order.
-    pub fn replay(
+    pub(crate) fn replay(
         &self,
         events: ReplayRecords,
         candles: &mut CandleSpill,

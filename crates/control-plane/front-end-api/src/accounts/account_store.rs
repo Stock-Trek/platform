@@ -9,13 +9,13 @@ use stock_trek_types::cex::cex_id::CexId;
 const MIN_CREDENTIAL_LENGTH: usize = 16;
 const MAX_CREDENTIAL_LENGTH: usize = 256;
 
-pub struct Credentials {
+pub(crate) struct Credentials {
     pub api_key: String,
     pub api_secret: String,
 }
 
 impl Credentials {
-    pub fn new(api_key: &str, api_secret: &str) -> Self {
+    pub(crate) fn new(api_key: &str, api_secret: &str) -> Self {
         Self {
             api_key: api_key.to_string(),
             api_secret: api_secret.to_string(),
@@ -36,7 +36,7 @@ impl Credentials {
 }
 
 #[derive(Debug)]
-pub enum LinkConflict {
+pub(crate) enum LinkConflict {
     LabelTaken,
 }
 
@@ -47,20 +47,20 @@ struct AccountRow {
     linked_at: DateTime<Utc>,
 }
 
-pub struct AccountStore {
+pub(crate) struct AccountStore {
     rows: Mutex<Vec<AccountRow>>,
     snapshots: Mutex<HashMap<String, PortfolioSnapshot>>,
 }
 
 impl AccountStore {
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             rows: Mutex::new(Vec::new()),
             snapshots: Mutex::new(HashMap::new()),
         }
     }
 
-    pub fn link(
+    pub(crate) fn link(
         &self,
         owner: &str,
         cex_id: CexId,
@@ -98,14 +98,14 @@ impl AccountStore {
         Ok(summary)
     }
 
-    pub fn list(&self, owner: &str) -> Vec<AccountSummary> {
+    pub(crate) fn list(&self, owner: &str) -> Vec<AccountSummary> {
         let rows = self.rows.lock();
         let mut listed: Vec<&AccountRow> = rows.iter().filter(|row| row.owner == owner).collect();
         listed.sort_by_key(|row| std::cmp::Reverse(row.linked_at));
         listed.into_iter().map(|row| row.summary.clone()).collect()
     }
 
-    pub fn get(&self, owner: &str, account_id: &str) -> Option<AccountSummary> {
+    pub(crate) fn get(&self, owner: &str, account_id: &str) -> Option<AccountSummary> {
         self.rows
             .lock()
             .iter()
@@ -113,7 +113,7 @@ impl AccountStore {
             .map(|row| row.summary.clone())
     }
 
-    pub fn replace_credentials(
+    pub(crate) fn replace_credentials(
         &self,
         owner: &str,
         account_id: &str,
@@ -131,7 +131,7 @@ impl AccountStore {
         Some(row.summary.clone())
     }
 
-    pub fn validate(
+    pub(crate) fn validate(
         &self,
         owner: &str,
         account_id: &str,
@@ -148,7 +148,7 @@ impl AccountStore {
         Some(row.summary.clone())
     }
 
-    pub fn unlink(&self, owner: &str, account_id: &str) -> bool {
+    pub(crate) fn unlink(&self, owner: &str, account_id: &str) -> bool {
         let mut rows = self.rows.lock();
         let length = rows.len();
         rows.retain(|row| !(row.owner == owner && row.summary.account_id == account_id));
@@ -156,12 +156,12 @@ impl AccountStore {
         rows.len() != length
     }
 
-    pub fn active(&self, owner: &str, account_id: &str) -> bool {
+    pub(crate) fn active(&self, owner: &str, account_id: &str) -> bool {
         self.get(owner, account_id)
             .is_some_and(|account| account.active)
     }
 
-    pub fn count(&self, owner: &str) -> usize {
+    pub(crate) fn count(&self, owner: &str) -> usize {
         self.rows
             .lock()
             .iter()
@@ -169,12 +169,12 @@ impl AccountStore {
             .count()
     }
 
-    pub fn snapshot(&self, owner: &str, account_id: &str) -> Option<PortfolioSnapshot> {
+    pub(crate) fn snapshot(&self, owner: &str, account_id: &str) -> Option<PortfolioSnapshot> {
         self.get(owner, account_id)?;
         self.snapshots.lock().get(account_id).cloned()
     }
 
-    pub fn snapshots(&self, owner: &str) -> Vec<PortfolioSnapshot> {
+    pub(crate) fn snapshots(&self, owner: &str) -> Vec<PortfolioSnapshot> {
         self.list(owner)
             .iter()
             .filter_map(|account| self.snapshot(owner, &account.account_id))

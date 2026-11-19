@@ -7,7 +7,7 @@ use crate::rebuild::{
 use platform_errors::{PlatformError, PlatformResult};
 use std::path::{Path, PathBuf};
 
-pub struct SpillSorter<C: SpillCodec> {
+pub(super) struct SpillSorter<C: SpillCodec> {
     directory: PathBuf,
     limit: usize,
     codec: C,
@@ -19,7 +19,7 @@ pub struct SpillSorter<C: SpillCodec> {
 }
 
 impl<C: SpillCodec> SpillSorter<C> {
-    pub fn with_codec(
+    pub(super) fn with_codec(
         directory: impl Into<PathBuf>,
         limit: usize,
         codec: C,
@@ -44,7 +44,7 @@ impl<C: SpillCodec> SpillSorter<C> {
         })
     }
 
-    pub fn push_record(&mut self, record: C::Record) -> PlatformResult<()> {
+    pub(super) fn push_record(&mut self, record: C::Record) -> PlatformResult<()> {
         let key = self.codec.key(&record);
         self.entries.push((key, record));
         if self.entries.len() >= self.limit {
@@ -53,15 +53,15 @@ impl<C: SpillCodec> SpillSorter<C> {
         Ok(())
     }
 
-    pub fn spilled_records(&self) -> usize {
+    pub(super) fn spilled_records(&self) -> usize {
         self.spilled
     }
 
-    pub fn usage(&self) -> SpillUsage {
+    pub(super) fn usage(&self) -> SpillUsage {
         self.usage
     }
 
-    pub fn finish(&mut self) -> PlatformResult<SpillRecords<C>> {
+    pub(super) fn finish(&mut self) -> PlatformResult<SpillRecords<C>> {
         if self.runs.is_empty() {
             self.entries
                 .sort_by(|(left, _), (right, _)| left.cmp(right));

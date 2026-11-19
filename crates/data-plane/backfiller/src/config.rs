@@ -28,13 +28,13 @@ const SECRETS_LOAD_BUFFER: Duration = Duration::from_secs(5);
 /// SSM parameter names holding an exchange's API key and secret or private
 /// signing key for one trading mode.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct ExchangeSecretNames {
+pub(crate) struct ExchangeSecretNames {
     pub api_key: String,
     pub api_secret: String,
 }
 
 impl ExchangeSecretNames {
-    pub fn new(exchange: CexId, trading_mode: TradingMode) -> Self {
+    pub(crate) fn new(exchange: CexId, trading_mode: TradingMode) -> Self {
         let exchange = exchange.to_string().to_uppercase();
         let trading_mode = trading_mode.to_string().to_uppercase();
         let prefix = format!("{EXCHANGE_SECRET_PREFIX}_{exchange}_{trading_mode}");
@@ -46,7 +46,7 @@ impl ExchangeSecretNames {
 }
 
 #[derive(Debug, Clone)]
-pub struct BackfillerConfig {
+pub(crate) struct BackfillerConfig {
     pub log_filter: String,
     pub exchange: CexId,
     pub trading_mode: TradingMode,
@@ -61,7 +61,7 @@ pub struct BackfillerConfig {
 impl BackfillerConfig {
     /// Loads the exchange API credentials for this backfiller's exchange and
     /// trading mode from SSM.
-    pub async fn exchange_credentials(&self) -> PlatformResult<ApiKeyCredentials> {
+    pub(crate) async fn exchange_credentials(&self) -> PlatformResult<ApiKeyCredentials> {
         let timeouts = Timeouts::from_durations(AWS_CONNECT_TIMEOUT, AWS_OPERATION_TIMEOUT);
         let sdk_config = Aws::load_sdk_config(timeouts).await;
         let deadline = Deadline::new(
@@ -78,11 +78,11 @@ impl BackfillerConfig {
         })
     }
 
-    pub fn from_env() -> PlatformResult<Self> {
+    pub(crate) fn from_env() -> PlatformResult<Self> {
         Self::from_vars(&EnvVars::from_env())
     }
 
-    pub fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
+    pub(crate) fn from_vars(vars: &EnvVars) -> PlatformResult<Self> {
         let log_filter = Config::log_filter(vars)?;
         let exchange = Config::required_exchange(vars, BACKFILLER_EXCHANGE)?;
         let trading_mode = vars.required_parsed::<TradingMode>(BACKFILLER_EXCHANGE_TRADING_MODE)?;

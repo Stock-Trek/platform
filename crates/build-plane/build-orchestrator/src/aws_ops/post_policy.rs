@@ -16,14 +16,14 @@ use std::{
 
 const MIN_OBJECT_SIZE_BYTES: u64 = 0;
 
-pub struct ArtifactPost {
+pub(crate) struct ArtifactPost {
     pub url: String,
     pub fields: BTreeMap<String, String>,
     pub max_artifact_size_bytes: NonZeroU64,
 }
 
 impl ArtifactPost {
-    pub fn max_artifact_size_bytes(&self) -> NonZeroU64 {
+    pub(crate) fn max_artifact_size_bytes(&self) -> NonZeroU64 {
         self.max_artifact_size_bytes
     }
 
@@ -36,13 +36,13 @@ impl ArtifactPost {
     }
 }
 
-pub struct ArtifactPostSigner {
+pub(crate) struct ArtifactPostSigner {
     signer: PresignedPostSigner,
     max_artifact_size_bytes: NonZeroU64,
 }
 
 impl ArtifactPostSigner {
-    pub fn new(
+    pub(crate) fn new(
         bucket: String,
         region: String,
         endpoint_url: Option<String>,
@@ -54,7 +54,7 @@ impl ArtifactPostSigner {
         }
     }
 
-    pub fn sign(
+    pub(crate) fn sign(
         &self,
         credentials: &Credentials,
         key_prefix: &str,

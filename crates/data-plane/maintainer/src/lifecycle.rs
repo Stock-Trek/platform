@@ -16,20 +16,20 @@ const ABORT_DAYS: i32 = 7;
 /// Intelligent-Tiering and aborts incomplete multipart uploads. It never
 /// expires any archive prefix, so the maintenance runner stays the only
 /// deletion path for raw objects.
-pub struct LifecycleBackstop {
+pub(crate) struct LifecycleBackstop {
     client: S3Client,
     bucket: String,
 }
 
 impl LifecycleBackstop {
-    pub fn new(client: S3Client, bucket: impl Into<String>) -> Self {
+    pub(crate) fn new(client: S3Client, bucket: impl Into<String>) -> Self {
         Self {
             client,
             bucket: bucket.into(),
         }
     }
 
-    pub async fn apply(&self) -> PlatformResult<()> {
+    pub(crate) async fn apply(&self) -> PlatformResult<()> {
         self.client
             .put_bucket_lifecycle_configuration()
             .bucket(&self.bucket)

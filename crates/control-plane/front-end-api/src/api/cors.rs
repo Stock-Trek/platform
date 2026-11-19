@@ -21,18 +21,22 @@ const ALLOWED_HEADERS: [&str; 5] = [
 const ALLOWED_METHODS: [&str; 5] = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 const PREFLIGHT_MAX_AGE_SECONDS: u32 = 600;
 
-pub struct Cors {
+pub(super) struct Cors {
     allowed_origins: HashSet<String>,
 }
 
 impl Cors {
-    pub fn new(allowed_origins: Vec<String>) -> Self {
+    pub(super) fn new(allowed_origins: Vec<String>) -> Self {
         Self {
             allowed_origins: allowed_origins.into_iter().collect(),
         }
     }
 
-    pub fn preflight(&self, request: &ApiRequest, request_id: &str) -> Response<Full<Bytes>> {
+    pub(super) fn preflight(
+        &self,
+        request: &ApiRequest,
+        request_id: &str,
+    ) -> Response<Full<Bytes>> {
         match self.allowed(request.origin()) {
             Some(origin) => {
                 let mut response = Respond::empty(StatusCode::NO_CONTENT);
@@ -51,7 +55,7 @@ impl Cors {
         }
     }
 
-    pub fn apply(
+    pub(super) fn apply(
         &self,
         request: &ApiRequest,
         mut response: Response<Full<Bytes>>,

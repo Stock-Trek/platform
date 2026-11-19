@@ -8,3 +8,6 @@ publish = false
 [dependencies]
 platform-errors = { workspace = true }
 platform-time = { workspace = true }
+
+[lints]
+workspace = true

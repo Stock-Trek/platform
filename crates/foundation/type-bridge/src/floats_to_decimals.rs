@@ -7,19 +7,22 @@ use stock_trek_types::cex::{
 };
 
 #[derive(Debug, Clone, Copy)]
-pub struct FloatsToDecimals {
+pub(crate) struct FloatsToDecimals {
     trading_precision: TradingPrecision,
     rounding: CexRoundingPreferences,
 }
 
 impl FloatsToDecimals {
-    pub fn new(trading_precision: TradingPrecision, rounding: CexRoundingPreferences) -> Self {
+    pub(crate) fn new(
+        trading_precision: TradingPrecision,
+        rounding: CexRoundingPreferences,
+    ) -> Self {
         Self {
             trading_precision,
             rounding,
         }
     }
-    pub fn floats_to_decimals(
+    pub(crate) fn floats_to_decimals(
         &self,
         order_request: OrderRequest<AssetId, f64>,
     ) -> PlatformResult<OrderRequest<AssetId, Decimal>> {

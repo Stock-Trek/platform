@@ -16,7 +16,7 @@ use tracing::{info, warn};
 /// Owns the four-stage maintenance runner in production: snapshot expiry,
 /// orphan cleanup, compacted and ledger rewriting, and raw-table cleanup with
 /// raw object deletion, on a fixed interval with an optional dry-run mode.
-pub struct MaintainerRunner {
+pub(crate) struct MaintainerRunner {
     config: MaintainerConfig,
     catalog: Arc<dyn ArchiveCatalog>,
     objects: Arc<dyn ObjectStore>,
@@ -24,7 +24,7 @@ pub struct MaintainerRunner {
 }
 
 impl MaintainerRunner {
-    pub async fn connect(config: MaintainerConfig) -> PlatformResult<Self> {
+    pub(crate) async fn connect(config: MaintainerConfig) -> PlatformResult<Self> {
         let catalog = Arc::new(IcebergCatalog::connect(&config.iceberg).await?);
         catalog.validate_contract().await?;
         let client = S3::s3_client().await;
@@ -46,7 +46,7 @@ impl MaintainerRunner {
     }
 
     /// Installs the S3 lifecycle backstop policy once at startup.
-    pub async fn apply_lifecycle_backstop(&self) -> PlatformResult<()> {
+    pub(crate) async fn apply_lifecycle_backstop(&self) -> PlatformResult<()> {
         if !self.config.s3_lifecycle_enabled {
             info!("S3 lifecycle backstop disabled by configuration");
             return Ok(());
@@ -56,7 +56,7 @@ impl MaintainerRunner {
             .await
     }
 
-    pub async fn run(self) -> PlatformResult<()> {
+    pub(crate) async fn run(self) -> PlatformResult<()> {
         let mut ticker = time::interval(self.config.interval);
         ticker.set_missed_tick_behavior(MissedTickBehavior::Skip);
         info!(
@@ -77,7 +77,7 @@ impl MaintainerRunner {
         .await
     }
 
-    pub async fn run_maintenance(&self) -> PlatformResult<()> {
+    pub(crate) async fn run_maintenance(&self) -> PlatformResult<()> {
         let executor = ArchiveMaintenanceExecutor::new(
             self.catalog.clone(),
             self.objects.clone(),

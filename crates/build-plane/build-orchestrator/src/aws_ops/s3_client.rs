@@ -11,7 +11,7 @@ use platform_time::{Deadline, Timeouts};
 use std::{num::NonZeroU64, time::Duration};
 
 #[derive(Debug, Clone)]
-pub struct S3Config {
+pub(crate) struct S3Config {
     pub user_artifacts_bucket: String,
     pub max_source_archive_size_bytes: NonZeroU64,
     pub max_artifact_size_bytes: NonZeroU64,
@@ -19,11 +19,11 @@ pub struct S3Config {
     pub endpoint_url: Option<String>,
 }
 
-pub struct UploadedObject {
+pub(crate) struct UploadedObject {
     pub signed_get_url: String,
 }
 
-pub struct S3 {
+pub(crate) struct S3 {
     client: S3Client,
     signer: ArtifactPostSigner,
     credentials_provider: SharedCredentialsProvider,
@@ -48,7 +48,7 @@ impl S3 {
         }
     }
 
-    pub fn from_sdk_config(
+    pub(crate) fn from_sdk_config(
         sdk_config: &SdkConfig,
         timeouts: Timeouts,
         config: S3Config,
@@ -85,7 +85,7 @@ impl S3 {
         ))
     }
 
-    pub async fn signed_post(
+    pub(crate) async fn signed_post(
         &self,
         key_prefix: &str,
         deadline: Deadline,
@@ -99,7 +99,7 @@ impl S3 {
         )
     }
 
-    pub async fn put_object(
+    pub(crate) async fn put_object(
         &self,
         key: &str,
         contents: Vec<u8>,
@@ -136,7 +136,11 @@ impl S3 {
         Ok(UploadedObject { signed_get_url })
     }
 
-    pub async fn signed_get_url(&self, key: &str, deadline: Deadline) -> PlatformResult<String> {
+    pub(crate) async fn signed_get_url(
+        &self,
+        key: &str,
+        deadline: Deadline,
+    ) -> PlatformResult<String> {
         let target = format!("s3://{}/{key}", self.config.user_artifacts_bucket);
         let presigning_config = PresigningConfig::expires_in(self.config.signed_url_expiry)
             .map_err(|error| {

@@ -6,12 +6,12 @@ use std::fmt::Display;
 const SOURCE_PREFIX: &str = "source/";
 const ARTIFACT_PREFIX: &str = "artifact/";
 
-pub struct S3Keys {
+pub(crate) struct S3Keys {
     ref_key: String,
 }
 
 impl S3Keys {
-    pub fn new<RepoId, Remote>(
+    pub(crate) fn new<RepoId, Remote>(
         git_remote: &Remote,
         repo_id: RepoId,
         ref_name: &str,
@@ -42,27 +42,27 @@ impl S3Keys {
         })
     }
 
-    pub fn ref_key(&self) -> &str {
+    pub(crate) fn ref_key(&self) -> &str {
         &self.ref_key
     }
 
-    pub fn source_prefix(&self) -> String {
+    pub(crate) fn source_prefix(&self) -> String {
         format!("{}{SOURCE_PREFIX}", self.ref_key())
     }
 
-    pub fn source_key(&self) -> String {
+    pub(crate) fn source_key(&self) -> String {
         format!("{}algorithms.zip", self.source_prefix())
     }
 
-    pub fn artifact_prefix(&self) -> String {
+    pub(crate) fn artifact_prefix(&self) -> String {
         format!("{}{ARTIFACT_PREFIX}", self.ref_key())
     }
 
-    pub fn artifact_key(&self) -> String {
+    pub(crate) fn artifact_key(&self) -> String {
         format!("{}runner.cwasm", self.artifact_prefix())
     }
 
-    pub fn compile_output_key(&self) -> String {
+    pub(crate) fn compile_output_key(&self) -> String {
         format!("{}compile-output.txt", self.artifact_prefix())
     }
 

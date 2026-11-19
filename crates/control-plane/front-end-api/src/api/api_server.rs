@@ -13,14 +13,14 @@ use tokio::{
 const MAX_CONNECTIONS: usize = 128;
 const DRAIN_TIMEOUT: Duration = Duration::from_secs(10);
 
-pub struct ApiServer {
+pub(crate) struct ApiServer {
     listener: TcpListener,
     handler: Arc<dyn RequestHandler>,
     slots: Arc<Semaphore>,
 }
 
 impl ApiServer {
-    pub async fn bind(
+    pub(crate) async fn bind(
         address: SocketAddr,
         handler: Arc<dyn RequestHandler>,
     ) -> PlatformResult<Self> {
@@ -34,15 +34,15 @@ impl ApiServer {
         })
     }
 
-    pub fn local_addr(&self) -> PlatformResult<SocketAddr> {
+    pub(crate) fn local_addr(&self) -> PlatformResult<SocketAddr> {
         self.listener.local_addr().map_err(PlatformError::external)
     }
 
-    pub async fn serve(self) -> PlatformResult<()> {
+    pub(crate) async fn serve(self) -> PlatformResult<()> {
         self.serve_with_shutdown(Runtime::shutdown_signal()).await
     }
 
-    pub async fn serve_with_shutdown<F>(self, shutdown: F) -> PlatformResult<()>
+    pub(crate) async fn serve_with_shutdown<F>(self, shutdown: F) -> PlatformResult<()>
     where
         F: Future<Output = PlatformResult<()>> + Send,
     {

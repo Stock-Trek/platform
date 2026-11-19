@@ -9,14 +9,14 @@ use hyper::body::Bytes;
 use hyper::{Method, Response, StatusCode};
 use std::sync::Arc;
 
-pub struct BacktestApi {
+pub(crate) struct BacktestApi {
     backtests: Arc<BacktestService>,
     sessions: Arc<SessionService>,
     idempotency: Arc<IdempotencyStore>,
 }
 
 impl BacktestApi {
-    pub fn new(
+    pub(crate) fn new(
         backtests: Arc<BacktestService>,
         sessions: Arc<SessionService>,
         idempotency: Arc<IdempotencyStore>,
@@ -28,7 +28,7 @@ impl BacktestApi {
         }
     }
 
-    pub fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
+    pub(crate) fn route(&self, request: &ApiRequest) -> Result<Response<Full<Bytes>>, Problem> {
         match request.segments().as_slice() {
             ["backtests"] => match *request.method() {
                 Method::POST => self.create(request),

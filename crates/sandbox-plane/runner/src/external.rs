@@ -25,10 +25,10 @@ unsafe extern "C" {
     );
 }
 
-pub struct Enqueue;
+pub(crate) struct Enqueue;
 
 impl Enqueue {
-    pub fn metadata(name: &str, description: &str) -> StockTrekResult<()> {
+    pub(crate) fn metadata(name: &str, description: &str) -> StockTrekResult<()> {
         unsafe {
             queue_metadata(
                 name.as_ptr(),
@@ -40,7 +40,7 @@ impl Enqueue {
         Ok(())
     }
 
-    pub fn preferences(preferences: Preferences) -> StockTrekResult<()> {
+    pub(crate) fn preferences(preferences: Preferences) -> StockTrekResult<()> {
         let preferences_json = Self::to_json(&preferences)?;
         unsafe {
             queue_preferences(preferences_json.as_ptr(), preferences_json.len());
@@ -48,7 +48,7 @@ impl Enqueue {
         Ok(())
     }
 
-    pub fn signals(signals: Signals) -> StockTrekResult<()> {
+    pub(crate) fn signals(signals: Signals) -> StockTrekResult<()> {
         let signals_json = Self::to_json(&signals)?;
         unsafe {
             queue_signals(signals_json.as_ptr(), signals_json.len());
@@ -56,7 +56,7 @@ impl Enqueue {
         Ok(())
     }
 
-    pub fn strategy(command: Command) -> StockTrekResult<()> {
+    pub(crate) fn strategy(command: Command) -> StockTrekResult<()> {
         let strategy_json = Self::to_json(&command)?;
         unsafe {
             queue_strategy(strategy_json.as_ptr(), strategy_json.len());
@@ -64,7 +64,7 @@ impl Enqueue {
         Ok(())
     }
 
-    pub fn action(
+    pub(crate) fn action(
         action: &ResolvedAction,
         recovery_policy: &RecoveryPolicy,
     ) -> StockTrekResult<()> {

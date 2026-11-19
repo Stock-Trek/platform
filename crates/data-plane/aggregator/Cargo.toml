@@ -35,3 +35,6 @@ base64 = { workspace = true }
 metrics = { workspace = true }
 platform-metrics = { workspace = true, features = ["test-utils"] }
 tokio = { workspace = true, features = ["test-util"] }
+
+[lints]
+workspace = true

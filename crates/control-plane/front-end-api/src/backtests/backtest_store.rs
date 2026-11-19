@@ -16,20 +16,20 @@ struct BacktestRow {
     results: Vec<BacktestResultItem>,
 }
 
-pub struct BacktestStore {
+pub(crate) struct BacktestStore {
     rows: Mutex<Vec<BacktestRow>>,
     registry: Arc<ChannelRegistry>,
 }
 
 impl BacktestStore {
-    pub fn new(registry: Arc<ChannelRegistry>) -> Self {
+    pub(crate) fn new(registry: Arc<ChannelRegistry>) -> Self {
         Self {
             rows: Mutex::new(Vec::new()),
             registry,
         }
     }
 
-    pub fn insert(&self, owner: &str, status: BacktestStatus) {
+    pub(crate) fn insert(&self, owner: &str, status: BacktestStatus) {
         self.rows.lock().push(BacktestRow {
             owner: owner.to_string(),
             build_id: status.build_id.clone(),
@@ -38,7 +38,7 @@ impl BacktestStore {
         });
     }
 
-    pub fn list(&self, owner: &str, state: Option<BacktestState>) -> Vec<BacktestStatus> {
+    pub(crate) fn list(&self, owner: &str, state: Option<BacktestState>) -> Vec<BacktestStatus> {
         let rows = self.rows.lock();
         let mut listed: Vec<BacktestStatus> = rows
             .iter()
@@ -50,7 +50,7 @@ impl BacktestStore {
         listed
     }
 
-    pub fn status(&self, owner: &str, backtest_id: &str) -> Option<BacktestStatus> {
+    pub(crate) fn status(&self, owner: &str, backtest_id: &str) -> Option<BacktestStatus> {
         self.rows
             .lock()
             .iter()
@@ -58,7 +58,7 @@ impl BacktestStore {
             .map(|row| row.status.clone())
     }
 
-    pub fn update(
+    pub(crate) fn update(
         &self,
         owner: &str,
         backtest_id: &str,
@@ -77,7 +77,7 @@ impl BacktestStore {
         Some(rows[index].status.clone())
     }
 
-    pub fn results(
+    pub(crate) fn results(
         &self,
         owner: &str,
         backtest_id: &str,
@@ -98,7 +98,13 @@ impl BacktestStore {
     }
 
     #[allow(dead_code)]
-    pub fn append_result(&self, owner: &str, backtest_id: &str, simulation: u64, result: Value) {
+    pub(crate) fn append_result(
+        &self,
+        owner: &str,
+        backtest_id: &str,
+        simulation: u64,
+        result: Value,
+    ) {
         let oversized =
             serde_json::to_vec(&result).is_ok_and(|bytes| bytes.len() as u64 > MAX_RESULT_BYTES);
         let mut rows = self.rows.lock();
@@ -130,7 +136,7 @@ impl BacktestStore {
         row.status.stream_sequence = sequence;
     }
 
-    pub fn count_active(&self, owner: &str) -> usize {
+    pub(crate) fn count_active(&self, owner: &str) -> usize {
         self.rows
             .lock()
             .iter()
@@ -138,7 +144,7 @@ impl BacktestStore {
             .count()
     }
 
-    pub fn delete_for_build(&self, build_id: &str) {
+    pub(crate) fn delete_for_build(&self, build_id: &str) {
         let mut rows = self.rows.lock();
         let mut removed = Vec::new();
         rows.retain(|row| {

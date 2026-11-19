@@ -7,14 +7,14 @@ use stock_trek_types::cex::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
-pub enum OrderType {
+pub(crate) enum OrderType {
     Limit,
     Market,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PendingOrder {
+pub(crate) struct PendingOrder {
     pub tag: Tag,
     pub symbol: TradingPair,
     pub side: Side,
@@ -28,14 +28,14 @@ pub struct PendingOrder {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PortfolioAsset {
+pub(crate) struct PortfolioAsset {
     pub asset: AssetId,
     pub total: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct PortfolioSnapshot {
+pub(crate) struct PortfolioSnapshot {
     pub account_id: String,
     pub cex_id: CexId,
     #[serde(with = "milliseconds::option")]
@@ -46,7 +46,7 @@ pub struct PortfolioSnapshot {
 }
 
 impl PortfolioSnapshot {
-    pub fn pending(account_id: &str, cex_id: CexId) -> Self {
+    pub(crate) fn pending(account_id: &str, cex_id: CexId) -> Self {
         Self {
             account_id: account_id.to_string(),
             cex_id,

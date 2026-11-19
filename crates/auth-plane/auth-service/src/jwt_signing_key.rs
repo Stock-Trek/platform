@@ -10,8 +10,8 @@ use jsonwebtoken::{
 use platform_errors::{PlatformError, PlatformResult};
 use std::fmt;
 
-pub const JWT_SIGNING_ALGORITHM: Algorithm = Algorithm::EdDSA;
-pub const DEFAULT_JWT_KEY_ID: &str = "auth-service";
+pub(crate) const JWT_SIGNING_ALGORITHM: Algorithm = Algorithm::EdDSA;
+pub(crate) const DEFAULT_JWT_KEY_ID: &str = "auth-service";
 const JWT_KEY_FIELD: &str = "jwt_private_key";
 
 pub struct JwtSigningKey {

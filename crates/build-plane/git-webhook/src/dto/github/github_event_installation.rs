@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use strum::Display;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct GitHubEventInstallation {
+pub(crate) struct GitHubEventInstallation {
     pub action: GitHubEventInstallationAction,
     pub installation: GitHubInstallation,
     #[serde(default)]
@@ -15,7 +15,7 @@ pub struct GitHubEventInstallation {
 #[derive(Debug, Display, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
-pub enum GitHubEventInstallationAction {
+pub(crate) enum GitHubEventInstallationAction {
     Created,
     Deleted,
     NewPermissionsAccepted,

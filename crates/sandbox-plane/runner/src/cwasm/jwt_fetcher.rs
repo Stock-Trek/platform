@@ -13,14 +13,14 @@ const CONNECT_TIMEOUT: Duration = Duration::from_secs(2);
 const READ_TIMEOUT: Duration = Duration::from_secs(10);
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 
-pub struct FetchedJwt {
+pub(super) struct FetchedJwt {
     pub token: String,
     pub refresh_at: Instant,
     pub expires_at: Instant,
 }
 
 #[derive(Clone)]
-pub struct JwtFetcher {
+pub(super) struct JwtFetcher {
     url: reqwest::Url,
     owner: String,
     client: reqwest::Client,
@@ -28,7 +28,7 @@ pub struct JwtFetcher {
 }
 
 impl JwtFetcher {
-    pub fn with_sigv4(
+    pub(super) fn with_sigv4(
         url: &str,
         owner: impl Into<String>,
         sigv4: &SigV4Config,
@@ -74,7 +74,7 @@ impl JwtFetcher {
         })
     }
 
-    pub async fn fetch(&self) -> PlatformResult<FetchedJwt> {
+    pub(super) async fn fetch(&self) -> PlatformResult<FetchedJwt> {
         let body = serde_json::to_vec(&JwtRequest::new(self.owner.clone()))
             .map_err(PlatformError::external)?;
         let mut headers =
