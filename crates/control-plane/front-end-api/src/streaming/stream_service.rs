@@ -2,7 +2,7 @@ use crate::accounts::AccountService;
 use crate::algorithms::BuildStore;
 use crate::backtests::BacktestStore;
 use crate::bots::BotStore;
-use crate::streaming::channel_registry::{ChannelRegistry, SubscribeOutcome};
+use crate::streaming::channel_registry::{ChannelRegistry, SubscribeOutcome as RegistryOutcome};
 use crate::streaming::stream_types::Frame;
 use crate::streaming::ticket_store::TicketStore;
 use chrono::{DateTime, Utc};
@@ -14,9 +14,19 @@ const MAX_SUBSCRIPTIONS: usize = 32;
 
 pub const MAX_SUBSCRIPTIONS_PER_CONNECTION: usize = MAX_SUBSCRIPTIONS;
 
+pub enum Subscription {
+    Joined {
+        replay: Vec<Frame>,
+        live: tokio::sync::broadcast::Receiver<Frame>,
+        epoch: u64,
+    },
+    Gap(Frame),
+    UnknownChannel,
+}
+
 struct Connection {
     owner: String,
-    channels: Vec<String>,
+    epochs: HashMap<String, u64>,
 }
 
 pub struct StreamService {
@@ -66,7 +76,7 @@ impl StreamService {
             connection_id.to_string(),
             Connection {
                 owner: owner.to_string(),
-                channels: Vec::new(),
+                epochs: HashMap::new(),
             },
         );
     }
@@ -88,7 +98,7 @@ impl StreamService {
             .lock()
             .values()
             .filter(|connection| connection.owner == owner)
-            .map(|connection| connection.channels.len() as u64)
+            .map(|connection| connection.epochs.len() as u64)
             .max()
             .unwrap_or(0)
     }
@@ -108,28 +118,42 @@ impl StreamService {
         connection_id: &str,
         channel: &str,
         last_sequence: Option<u64>,
-    ) -> SubscribeOutcome {
+    ) -> Subscription {
         let mut connections = self.connections.lock();
-        if !connections.contains_key(connection_id) {
-            return SubscribeOutcome::UnknownChannel;
-        }
-        let connection = connections.get_mut(connection_id).expect("checked above");
-        if connection.channels.len() >= MAX_SUBSCRIPTIONS {
-            return SubscribeOutcome::Gap(Frame::error(channel, "quota_exceeded"));
+        let Some(connection) = connections.get_mut(connection_id) else {
+            return Subscription::UnknownChannel;
+        };
+        if connection.epochs.len() >= MAX_SUBSCRIPTIONS && !connection.epochs.contains_key(channel)
+        {
+            return Subscription::Gap(Frame::error(channel, "quota_exceeded"));
         }
         match self.registry.subscribe(channel, last_sequence) {
-            SubscribeOutcome::Joined { replay, live } => {
-                connection.channels.push(channel.to_string());
-                SubscribeOutcome::Joined { replay, live }
+            RegistryOutcome::Joined { replay, live } => {
+                let epoch = connection.epochs.get(channel).copied().unwrap_or(0) + 1;
+                connection.epochs.insert(channel.to_string(), epoch);
+                Subscription::Joined {
+                    replay,
+                    live,
+                    epoch,
+                }
             }
-            outcome => outcome,
+            RegistryOutcome::Gap(frame) => Subscription::Gap(frame),
         }
     }
 
     pub fn unsubscribe(&self, connection_id: &str, channel: &str) {
         if let Some(connection) = self.connections.lock().get_mut(connection_id) {
-            connection.channels.retain(|existing| existing != channel);
+            connection.epochs.remove(channel);
         }
+    }
+
+    pub fn subscription_epoch(&self, connection_id: &str, channel: &str) -> Option<u64> {
+        self.connections
+            .lock()
+            .get(connection_id)?
+            .epochs
+            .get(channel)
+            .copied()
     }
 
     pub fn registry(&self) -> &Arc<ChannelRegistry> {

@@ -11,7 +11,6 @@ pub enum SubscribeOutcome {
         live: broadcast::Receiver<Frame>,
     },
     Gap(Frame),
-    UnknownChannel,
 }
 
 struct ChannelState {
@@ -19,6 +18,17 @@ struct ChannelState {
     frames: VecDeque<Frame>,
     full_replay: bool,
     live: broadcast::Sender<Frame>,
+}
+
+impl ChannelState {
+    fn new(channel: &str) -> Self {
+        Self {
+            sequence: 0,
+            frames: VecDeque::new(),
+            full_replay: channel.starts_with("backtests."),
+            live: broadcast::channel(LIVE_BUFFER).0,
+        }
+    }
 }
 
 pub struct ChannelRegistry {
@@ -37,12 +47,7 @@ impl ChannelRegistry {
         let mut channels = self.channels.lock();
         let state = channels
             .entry(channel.to_string())
-            .or_insert_with(|| ChannelState {
-                sequence: 0,
-                frames: VecDeque::new(),
-                full_replay: channel.starts_with("backtests."),
-                live: broadcast::channel(LIVE_BUFFER).0,
-            });
+            .or_insert_with(|| ChannelState::new(channel));
         state.sequence += 1;
         let sequence = state.sequence;
         let mut frame = frame;
@@ -65,9 +70,9 @@ impl ChannelRegistry {
 
     pub fn subscribe(&self, channel: &str, last_sequence: Option<u64>) -> SubscribeOutcome {
         let mut channels = self.channels.lock();
-        let Some(state) = channels.get_mut(channel) else {
-            return SubscribeOutcome::UnknownChannel;
-        };
+        let state = channels
+            .entry(channel.to_string())
+            .or_insert_with(|| ChannelState::new(channel));
         match Self::replay(state, channel, last_sequence) {
             Ok(replay) => SubscribeOutcome::Joined {
                 replay,

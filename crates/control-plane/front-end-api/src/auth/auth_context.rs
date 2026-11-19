@@ -1,23 +1,12 @@
 use crate::api::Problem;
 use serde::Serialize;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Scope {
     Read,
     Manage,
     Admin,
-}
-
-impl Scope {
-    pub fn parse(value: &str) -> Option<Self> {
-        match value {
-            "read" => Some(Self::Read),
-            "manage" => Some(Self::Manage),
-            "admin" => Some(Self::Admin),
-            _ => None,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]

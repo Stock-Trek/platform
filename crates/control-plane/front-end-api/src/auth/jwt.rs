@@ -15,9 +15,10 @@ const SIGNATURE_LENGTH: usize = 64;
 struct AccessClaims<'a> {
     iss: &'a str,
     sub: &'a str,
+    owner: &'a str,
     aud: &'a str,
     sid: &'a str,
-    scope: String,
+    scope: Vec<Scope>,
     iat: i64,
     exp: i64,
 }
@@ -28,8 +29,9 @@ pub struct VerifiedAccess {
     iss: String,
     aud: String,
     pub sub: String,
+    pub owner: String,
     pub sid: String,
-    pub scope: String,
+    pub scope: Vec<Scope>,
     iat: i64,
     pub exp: i64,
 }
@@ -75,9 +77,10 @@ impl JwtSigner {
         let claims = AccessClaims {
             iss: ISSUER,
             sub: owner,
+            owner,
             aud: AUDIENCE,
             sid: session_id,
-            scope: Self::scope(scopes),
+            scope: scopes.to_vec(),
             iat: now.timestamp(),
             exp: expires_at.timestamp(),
         };
@@ -86,28 +89,15 @@ impl JwtSigner {
 
     pub fn verify_access(&self, token: &str) -> Option<VerifiedAccess> {
         let claims = self.verify::<VerifiedAccess>(token)?;
-        (claims.iss == ISSUER && claims.aud == AUDIENCE && claims.iat <= claims.exp)
+        (claims.iss == ISSUER
+            && claims.aud == AUDIENCE
+            && claims.iat <= claims.exp
+            && claims.owner == claims.sub)
             .then_some(claims)
     }
 
     pub fn verify_session_id(&self, token: &str) -> Option<String> {
         self.verify_access(token).map(|claims| claims.sid)
-    }
-
-    pub fn scopes(claim: &str) -> Option<Vec<Scope>> {
-        claim
-            .split(' ')
-            .filter(|scope| !scope.is_empty())
-            .map(Scope::parse)
-            .collect::<Option<Vec<_>>>()
-    }
-
-    fn scope(scopes: &[Scope]) -> String {
-        scopes
-            .iter()
-            .map(|scope| scope.as_str())
-            .collect::<Vec<_>>()
-            .join(" ")
     }
 
     fn split(token: &str) -> Option<(&str, &str, Signature)> {

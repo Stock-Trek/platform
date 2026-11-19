@@ -1,7 +1,6 @@
 use crate::api::{ApiServer, FrontEndApi, FrontEndApiDeps};
 use crate::auth::SessionStore;
 use crate::config::FrontEndApiConfig;
-use platform_auth_service::JwksCache;
 use platform_errors::PlatformResult;
 use platform_runtime::Service;
 use std::sync::Arc;
@@ -15,7 +14,6 @@ impl FrontEndApiRunner {
         SERVICE.init_logging(config.log_filter())?;
         let _metrics = SERVICE.init_metrics("platform/front-end-api")?;
         let store = Arc::new(SessionStore::new());
-        let _jwks = JwksCache::new(config.jwks_url())?;
         let api = Arc::new(FrontEndApi::new(FrontEndApiDeps {
             session_store: store,
             allowed_origins: config.allowed_origins().to_vec(),

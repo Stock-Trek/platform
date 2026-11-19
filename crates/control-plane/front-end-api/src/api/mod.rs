@@ -17,6 +17,8 @@ mod health_tests;
 #[cfg(test)]
 mod page_tests;
 #[cfg(test)]
+mod request_tests;
+#[cfg(test)]
 mod timestamp_tests;
 
 pub use api_connection::ApiConnection;

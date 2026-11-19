@@ -132,11 +132,15 @@ impl RequestHandler for FrontEndApi {
         if HealthRoute::matches(request.uri().path()) {
             return HealthRoute::dispatch(request.method());
         }
+        let header_request_id = Self::header_request_id(request.headers());
         let parsed = match ApiRequest::parse(request, Some(peer)).await {
             Ok(parsed) => parsed,
-            Err(problem) => return problem.response(""),
+            Err(problem) => {
+                return problem.response(header_request_id.as_deref().unwrap_or_default());
+            }
         };
-        let request_id = Self::request_id(&parsed);
+        let request_id =
+            header_request_id.unwrap_or_else(|| format!("req_{}", uuid::Uuid::new_v4().simple()));
         let outcome = match *parsed.method() {
             Method::OPTIONS => Ok(self.cors.preflight(&parsed)),
             _ => self.route(&parsed),
@@ -154,9 +158,11 @@ impl RequestHandler for FrontEndApi {
 }
 
 impl FrontEndApi {
-    fn request_id(request: &ApiRequest) -> String {
-        request
-            .request_id()
-            .unwrap_or_else(|| format!("req_{}", uuid::Uuid::new_v4().simple()))
+    pub(super) fn header_request_id(headers: &hyper::HeaderMap) -> Option<String> {
+        headers
+            .get(REQUEST_ID_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .filter(|value| !value.is_empty())
+            .map(str::to_string)
     }
 }
