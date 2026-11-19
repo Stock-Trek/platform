@@ -9,11 +9,11 @@ rust-version = "1.99.0"
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
-unreachable_pub = "warn"
-unused_qualifications = "warn"
+unreachable_pub = "forbid"
+unused_qualifications = "deny"
 
 [workspace.lints.clippy]
-unwrap_used = "deny"
+unwrap_used = "forbid"
 
 [workspace.dependencies]
 platform-auth-relay = { path = "crates/auth-plane/auth-relay" }
