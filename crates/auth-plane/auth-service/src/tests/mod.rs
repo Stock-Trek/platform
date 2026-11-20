@@ -42,6 +42,7 @@ mod token_cache_mutation_tests;
 mod token_cache_support_tests;
 mod token_cache_tests;
 mod token_cas_tests;
+mod token_drain_tests;
 mod token_expiry_tests;
 mod token_lifecycle_tests;
 mod token_metadata_invariant_tests;

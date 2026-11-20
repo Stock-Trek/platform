@@ -16,7 +16,6 @@ unused_qualifications = "deny"
 unwrap_used = "forbid"
 
 [workspace.dependencies]
-platform-auth-relay = { path = "crates/auth-plane/auth-relay" }
 platform-auth-service = { path = "crates/auth-plane/auth-service" }
 
 platform-build-agent = { path = "crates/build-plane/build-agent" }

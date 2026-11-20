@@ -23,8 +23,10 @@ httpdate = { workspace = true }
 hyper = { workspace = true }
 hyper-util = { workspace = true }
 jsonwebtoken = { workspace = true, default-features = false, features = ["aws_lc_rs"] }
+aws-sdk-sqs = { workspace = true, features = ["default-https-client", "rt-tokio"] }
 lru = { workspace = true }
 parking_lot = { workspace = true }
+platform-aws = { workspace = true }
 platform-config = { workspace = true }
 platform-errors = { workspace = true }
 platform-metrics = { workspace = true }

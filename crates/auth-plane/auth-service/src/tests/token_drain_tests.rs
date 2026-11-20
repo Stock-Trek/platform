@@ -1,13 +1,13 @@
-use crate::{AuthRelay, AuthRelayConfig, AuthRelayRunner};
+use crate::{
+    MemoryTokenStore, MemoryTokenUsageQueue, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
+    TokenStore, TokenUsageQueue,
+    token_drain::TokenDrain,
+    token_usage::TokenUsage,
+};
 use async_trait::async_trait;
 use chrono::Utc;
 use parking_lot::Mutex;
-use platform_auth_service::{
-    MemoryTokenStore, MemoryTokenUsageQueue, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
-    TokenStore, TokenUsageQueueConfig, VaultTokenStoreConfig,
-};
 use platform_errors::{PlatformError, PlatformResult};
-use platform_time::Timeouts;
 use std::sync::{
     Arc,
     atomic::{AtomicBool, Ordering},
@@ -46,7 +46,7 @@ impl TokenAuditLog for ToggleAudit {
         if self.failing.load(Ordering::SeqCst) {
             return Err(PlatformError::auth_store(
                 "audit",
-                "relay-test",
+                "drain-test",
                 true,
                 "sink unavailable".to_string(),
             ));
@@ -56,10 +56,10 @@ impl TokenAuditLog for ToggleAudit {
     }
 }
 
-struct RelayFixture;
+struct DrainFixture;
 
-impl RelayFixture {
-    async fn store() -> Arc<MemoryTokenStore> {
+impl DrainFixture {
+    async fn store_with_pending_audit() -> Arc<MemoryTokenStore> {
         let store = Arc::new(MemoryTokenStore::default());
         store
             .append_audit(
@@ -75,90 +75,70 @@ impl RelayFixture {
     fn usage_queue() -> Arc<MemoryTokenUsageQueue> {
         Arc::new(MemoryTokenUsageQueue::new(1024))
     }
-
-    fn config() -> AuthRelayConfig {
-        AuthRelayConfig {
-            log_filter: "info".to_string(),
-            vault: VaultTokenStoreConfig::new(
-                "https://vault.example.com",
-                "vault-token",
-                "platform-tokens",
-                Duration::from_secs(10),
-            )
-            .expect("valid vault config"),
-            audit_queue_url: "https://sqs.example.com/123/audit".to_string(),
-            audit_timeout: Duration::from_secs(5),
-            aws_timeouts: Timeouts::from_durations(Duration::from_secs(5), Duration::from_secs(15)),
-            usage_queue: TokenUsageQueueConfig::new(
-                "redis://valkey.example.com:6379",
-                "auth-usage",
-                Duration::from_secs(5),
-                1000,
-                100,
-            )
-            .expect("valid usage queue config"),
-        }
-    }
 }
 
 #[tokio::test]
 async fn drains_pending_events_after_a_later_successful_attempt() {
-    let store = RelayFixture::store().await;
+    let store = DrainFixture::store_with_pending_audit().await;
     let audit = Arc::new(ToggleAudit::new());
     audit.fail();
-    let relay = AuthRelay::new(
+    let drain = TokenDrain::new(
         store.clone(),
         audit.clone(),
-        RelayFixture::usage_queue(),
+        DrainFixture::usage_queue(),
         100,
+        Duration::from_secs(3600),
     );
 
-    assert!(relay.drain().await.is_err());
+    assert!(drain.drain().await.is_err());
     assert_eq!(store.pending_audits().await.unwrap().len(), 1);
 
     audit.succeed();
-    assert_eq!(relay.drain().await.unwrap(), 1);
+    assert_eq!(drain.drain().await.unwrap(), 1);
     assert!(store.pending_audits().await.unwrap().is_empty());
     assert_eq!(audit.events().len(), 1);
     assert_eq!(audit.events()[0].event_id(), Some("event-a"));
 }
 
 #[tokio::test]
-async fn runner_drains_pending_events_in_a_single_pass() {
-    let store = RelayFixture::store().await;
+async fn drains_a_pending_usage_record_and_relays_its_audit_event() {
+    let store = Arc::new(MemoryTokenStore::default());
     let audit = Arc::new(ToggleAudit::new());
-    let runner = AuthRelayRunner::new(
-        RelayFixture::config(),
-        AuthRelay::new(
-            store.clone(),
-            audit.clone(),
-            RelayFixture::usage_queue(),
-            100,
-        ),
-    );
+    let queue = DrainFixture::usage_queue();
+    let queue_handle = queue.clone();
+    queue
+        .enqueue(TokenUsage::audit(
+            TokenAuditEvent::new(TokenAuditAction::SignatureVerified, Utc::now())
+                .with_event_id("event-b")
+                .with_token("token-b", Some("owner-b")),
+        ))
+        .await
+        .expect("enqueue usage");
+    let drain = TokenDrain::new(store.clone(), audit.clone(), queue, 100, Duration::from_secs(3600));
 
-    runner.run().await.expect("single relay pass");
+    let applied_and_delivered = drain.drain().await.unwrap();
 
+    assert_eq!(applied_and_delivered, 2);
+    assert!(queue_handle.is_empty());
     assert!(store.pending_audits().await.unwrap().is_empty());
     assert_eq!(audit.events().len(), 1);
+    assert_eq!(audit.events()[0].event_id(), Some("event-b"));
 }
 
 #[tokio::test]
-async fn runner_returns_delivery_failures_so_the_cron_job_can_retry() {
-    let store = RelayFixture::store().await;
+async fn returns_delivery_failures_so_the_next_cycle_can_retry() {
+    let store = DrainFixture::store_with_pending_audit().await;
     let audit = Arc::new(ToggleAudit::new());
     audit.fail();
-    let runner = AuthRelayRunner::new(
-        RelayFixture::config(),
-        AuthRelay::new(
-            store.clone(),
-            audit.clone(),
-            RelayFixture::usage_queue(),
-            100,
-        ),
+    let drain = TokenDrain::new(
+        store.clone(),
+        audit.clone(),
+        DrainFixture::usage_queue(),
+        100,
+        Duration::from_secs(3600),
     );
 
-    assert!(runner.run().await.is_err());
+    assert!(drain.drain().await.is_err());
 
     assert_eq!(store.pending_audits().await.unwrap().len(), 1);
 }

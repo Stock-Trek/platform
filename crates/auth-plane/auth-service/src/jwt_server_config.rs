@@ -2,9 +2,10 @@ use crate::{
     TokenCacheConfig, TokenUsageQueueConfig, ValkeyReplayStoreConfig, VaultTokenStoreConfig,
     jwt_signing_key::JwtSigningKey,
 };
-use platform_config::{EnvVars, RUST_LOG};
+use platform_config::{AWS_CONNECT_TIMEOUT_SECS, AWS_OPERATION_TIMEOUT_SECS, EnvVars, RUST_LOG};
 use platform_errors::PlatformResult;
 use platform_sigv4::SigV4Config;
+use platform_time::Timeouts;
 use platform_types::UrlScheme;
 use secrecy::SecretString;
 use std::{fmt, net::SocketAddr, time::Duration};
@@ -23,6 +24,9 @@ const AUTH_SERVICE_USAGE_QUEUE_BATCH_SIZE: &str = "AUTH_SERVICE_USAGE_QUEUE_BATC
 const AUTH_SERVICE_VALKEY_KEY_PREFIX: &str = "AUTH_SERVICE_VALKEY_KEY_PREFIX";
 const AUTH_SERVICE_VALKEY_TIMEOUT_SECS: &str = "AUTH_SERVICE_VALKEY_TIMEOUT_SECS";
 const AUTH_SERVICE_VALKEY_URL: &str = "AUTH_SERVICE_VALKEY_URL";
+const AUTH_SERVICE_AUDIT_QUEUE_URL: &str = "AUTH_SERVICE_AUDIT_QUEUE_URL";
+const AUTH_SERVICE_AUDIT_TIMEOUT_SECS: &str = "AUTH_SERVICE_AUDIT_TIMEOUT_SECS";
+const AUTH_SERVICE_DRAIN_INTERVAL_SECS: &str = "AUTH_SERVICE_DRAIN_INTERVAL_SECS";
 const AUTH_SERVICE_TOKEN_CACHE_MAX_ENTRIES: &str = "AUTH_SERVICE_TOKEN_CACHE_MAX_ENTRIES";
 const AUTH_SERVICE_TOKEN_CACHE_NEGATIVE_ENTRIES: &str = "AUTH_SERVICE_TOKEN_CACHE_NEGATIVE_ENTRIES";
 const AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS";
@@ -43,6 +47,10 @@ pub(crate) struct JwtServerConfig {
     jwt_private_key_pem: SecretString,
     usage_queue: TokenUsageQueueConfig,
     token_cache: TokenCacheConfig,
+    audit_queue_url: String,
+    audit_timeout: Duration,
+    drain_interval: Duration,
+    aws_timeouts: Timeouts,
 }
 
 impl JwtServerConfig {
@@ -91,6 +99,15 @@ impl JwtServerConfig {
                 AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS,
             ],
         )?;
+        let audit_queue_url = vars.required_url(AUTH_SERVICE_AUDIT_QUEUE_URL, &UrlScheme::HTTP)?;
+        let audit_timeout =
+            vars.required_positive_duration_secs(AUTH_SERVICE_AUDIT_TIMEOUT_SECS)?;
+        let drain_interval =
+            vars.required_positive_duration_secs(AUTH_SERVICE_DRAIN_INTERVAL_SECS)?;
+        let aws_timeouts = Timeouts::from_durations(
+            vars.required_positive_duration_secs(AWS_CONNECT_TIMEOUT_SECS)?,
+            vars.required_positive_duration_secs(AWS_OPERATION_TIMEOUT_SECS)?,
+        );
         Ok(Self {
             log_filter: vars.required_log_filter(RUST_LOG)?,
             bind_address: vars.required_parsed(AUTH_SERVICE_BIND_ADDR)?,
@@ -101,6 +118,10 @@ impl JwtServerConfig {
             jwt_private_key_pem,
             usage_queue,
             token_cache,
+            audit_queue_url,
+            audit_timeout,
+            drain_interval,
+            aws_timeouts,
         })
     }
 
@@ -137,6 +158,22 @@ impl JwtServerConfig {
         &self.token_cache
     }
 
+    pub(crate) fn audit_queue_url(&self) -> &str {
+        &self.audit_queue_url
+    }
+
+    pub(crate) fn audit_timeout(&self) -> Duration {
+        self.audit_timeout
+    }
+
+    pub(crate) fn drain_interval(&self) -> Duration {
+        self.drain_interval
+    }
+
+    pub(crate) fn aws_timeouts(&self) -> Timeouts {
+        self.aws_timeouts
+    }
+
     pub(crate) fn jwt_signing_key(&self) -> PlatformResult<JwtSigningKey> {
         use secrecy::ExposeSecret;
         JwtSigningKey::from_pkcs8_pem(&self.jwt_key_id, self.jwt_private_key_pem.expose_secret())
@@ -156,6 +193,7 @@ impl fmt::Debug for JwtServerConfig {
             .field("jwt_private_key_pem", &"<redacted>")
             .field("usage_queue", &self.usage_queue)
             .field("token_cache", &self.token_cache)
+            .field("audit_queue_url", &self.audit_queue_url)
             .finish()
     }
 }

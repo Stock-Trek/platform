@@ -1,6 +1,7 @@
 use crate::{
     AuthService, AuthServiceConfig, CachedTokenStore, ValkeyReplayStore, ValkeyTokenUsageQueue,
     VaultTokenStore, jwt_server::JwtServer, jwt_server_config::JwtServerConfig,
+    token_drain::TokenDrain,
 };
 use chrono::Duration;
 use platform_errors::{PlatformError, PlatformResult};
@@ -17,9 +18,19 @@ impl AuthServiceRunner {
         SERVICE.init_logging(config.log_filter())?;
         let _metrics = SERVICE.init_metrics("platform/auth-service")?;
         let vault = Arc::new(VaultTokenStore::new(config.vault().clone())?);
-        let store = Arc::new(CachedTokenStore::new(vault, config.token_cache().clone()));
+        let store = Arc::new(CachedTokenStore::new(vault.clone(), config.token_cache().clone()));
         let replay = Arc::new(ValkeyReplayStore::connect(config.valkey().clone()).await?);
         let usage = Arc::new(ValkeyTokenUsageQueue::connect(config.usage_queue().clone()).await?);
+        let drain = TokenDrain::connect(
+            vault,
+            usage.clone(),
+            config.audit_queue_url().to_string(),
+            config.audit_timeout(),
+            config.aws_timeouts(),
+            config.usage_queue().batch_size(),
+            config.drain_interval(),
+        )
+        .await?;
         let service = AuthService::with_jwt_signing_key(
             store,
             AuthServiceConfig {
@@ -37,6 +48,13 @@ impl AuthServiceRunner {
         let server = JwtServer::new(listener, service, config.sigv4().clone());
         let health = HealthRunner::from_service_env("AUTH_SERVICE").await?;
         health.mark_ready();
-        health.run(server.serve()).await
+        health.run(Self::serve_with_drain(server, drain)).await
+    }
+
+    async fn serve_with_drain(server: JwtServer, drain: TokenDrain) -> PlatformResult<()> {
+        tokio::select! {
+            result = server.serve() => result,
+            result = drain.run() => result,
+        }
     }
 }

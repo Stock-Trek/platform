@@ -1,5 +1,5 @@
 use crate::jwt_server_config::JwtServerConfig;
-use platform_config::EnvVars;
+use platform_config::{AWS_CONNECT_TIMEOUT_SECS, AWS_OPERATION_TIMEOUT_SECS, EnvVars};
 use platform_errors::PlatformResult;
 use std::{collections::HashMap, time::Duration};
 
@@ -24,6 +24,9 @@ const TOKEN_CACHE_FRESHNESS_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SEC
 const TOKEN_CACHE_MAX_STALE_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_MAX_STALE_SECS";
 const TOKEN_CACHE_FAILURE_THRESHOLD: &str = "AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD";
 const TOKEN_CACHE_OPEN_SECS: &str = "AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS";
+const AUDIT_QUEUE_URL: &str = "AUTH_SERVICE_AUDIT_QUEUE_URL";
+const AUDIT_TIMEOUT_SECS: &str = "AUTH_SERVICE_AUDIT_TIMEOUT_SECS";
+const DRAIN_INTERVAL_SECS: &str = "AUTH_SERVICE_DRAIN_INTERVAL_SECS";
 const SIGV4_CREDENTIALS: &str = "SIGV4_CREDENTIALS";
 const SIGV4_REGION: &str = "SIGV4_REGION";
 const SIGV4_SERVICE: &str = "SIGV4_SERVICE";
@@ -64,6 +67,14 @@ impl Fixture {
             (VALKEY_KEY_PREFIX.to_string(), "auth-replay".to_string()),
             (VALKEY_TIMEOUT_SECS.to_string(), "2".to_string()),
             (
+                AUDIT_QUEUE_URL.to_string(),
+                "https://sqs.example.com/123/audit".to_string(),
+            ),
+            (AUDIT_TIMEOUT_SECS.to_string(), "5".to_string()),
+            (DRAIN_INTERVAL_SECS.to_string(), "30".to_string()),
+            (AWS_CONNECT_TIMEOUT_SECS.to_string(), "5".to_string()),
+            (AWS_OPERATION_TIMEOUT_SECS.to_string(), "15".to_string()),
+            (
                 SIGV4_CREDENTIALS.to_string(),
                 SIGV4_CREDENTIALS_JSON.to_string(),
             ),
@@ -93,6 +104,40 @@ fn imports_a_pkcs8_private_key_from_the_environment() {
     assert_eq!(config.valkey().url(), "redis://valkey.example.com:6379");
     assert_eq!(config.valkey().key_prefix(), "auth-replay");
     assert_eq!(config.valkey().timeout(), Duration::from_secs(2));
+}
+
+#[test]
+fn configures_the_token_drain_from_the_environment() {
+    let config = Fixture::config(&[]).unwrap();
+
+    assert_eq!(config.audit_queue_url(), "https://sqs.example.com/123/audit");
+    assert_eq!(config.audit_timeout(), Duration::from_secs(5));
+    assert_eq!(config.drain_interval(), Duration::from_secs(30));
+    assert_eq!(
+        config.aws_timeouts().connect.duration(),
+        Some(Duration::from_secs(5))
+    );
+    assert_eq!(
+        config.aws_timeouts().operation.duration(),
+        Some(Duration::from_secs(15))
+    );
+}
+
+#[test]
+fn rejects_invalid_drain_configuration() {
+    for (name, value) in [
+        (AUDIT_QUEUE_URL, "not a url"),
+        (AUDIT_QUEUE_URL, "file:///tmp/audit"),
+        (AUDIT_TIMEOUT_SECS, "0"),
+        (DRAIN_INTERVAL_SECS, "0"),
+        (AWS_CONNECT_TIMEOUT_SECS, "0"),
+        (AWS_OPERATION_TIMEOUT_SECS, "0"),
+    ] {
+        assert!(
+            Fixture::config(&[(name, value)]).is_err(),
+            "{name}={value}"
+        );
+    }
 }
 
 #[test]

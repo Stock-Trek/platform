@@ -3971,31 +3971,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "platform-auth-relay"
-version = "0.2.0"
-dependencies = [
- "async-trait",
- "aws-sdk-sqs",
- "chrono",
- "parking_lot",
- "platform-auth-service",
- "platform-aws",
- "platform-config",
- "platform-errors",
- "platform-runtime",
- "platform-sqs",
- "platform-time",
- "platform-types",
- "secrecy",
- "tokio",
- "tracing",
-]
-
-[[package]]
 name = "platform-auth-service"
 version = "0.2.0"
 dependencies = [
  "async-trait",
+ "aws-sdk-sqs",
  "chrono",
  "data-encoding",
  "ed25519-compact",
@@ -4007,6 +3987,7 @@ dependencies = [
  "jsonwebtoken",
  "lru",
  "parking_lot",
+ "platform-aws",
  "platform-config",
  "platform-errors",
  "platform-messages",
