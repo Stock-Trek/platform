@@ -15,7 +15,7 @@ Any replacement should prefer these; introducing a new system is an option only 
 | DynamoDB | portfolio ownership registry, scheduled run records |
 | Valkey | order replay protection, token-usage queue |
 | Vault | auth tokens, exchange credentials |
-| SQS | build fan-out, auth audit relay |
+| SQS | build fan-out, auth audit delivery |
 | SSM Parameter Store | webhook and backfiller secrets |
 
 ## How each store is judged

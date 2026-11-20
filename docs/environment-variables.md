@@ -128,7 +128,7 @@ Entries older than `PORTFOLIO_TOKEN_CACHE_FRESHNESS_SECS` are refreshed on the n
 The breaker opens after `PORTFOLIO_TOKEN_CACHE_FAILURE_THRESHOLD` retryable read failures and allows one half-open probe after `PORTFOLIO_TOKEN_CACHE_OPEN_SECS`.
 
 Signed order verification appends usage records to the durable Valkey queue instead of writing `last_used_at` and audit outbox entries synchronously.
-The queue URL, prefix, and capacity must match the auth service and auth relay so a single relay drains records from both services.
+The queue URL, prefix, and capacity must match the auth service so its drain applies records from both services.
 
 Replay protection fails closed when Valkey is unavailable.
 The replay key prefix must contain only colon-separated segments of ASCII letters, digits, `-`, and `_`.
@@ -455,9 +455,13 @@ A JWT request must carry a valid SigV4 signature from a configured caller, and t
 | `AUTH_SERVICE_VALKEY_KEY_PREFIX` | Prefix for replay-protection keys in the shared Valkey backend. |
 | `AUTH_SERVICE_VALKEY_TIMEOUT_SECS` | Connection and command timeout for the replay Valkey backend, in seconds. |
 | `AUTH_SERVICE_VALKEY_URL` | `redis://`, `rediss://`, `valkey://`, or `valkeys://` URL of the shared Valkey replay backend. |
+| `AUTH_SERVICE_AUDIT_QUEUE_URL` | SQS queue URL that receives token audit events. |
+| `AUTH_SERVICE_AUDIT_TIMEOUT_SECS` | Maximum time spent delivering one audit event, in seconds. |
+| `AUTH_SERVICE_DRAIN_INTERVAL_SECS` | Interval between drains of pending usage records and audit events, in seconds. |
 
 Authentication and signing append usage records to a durable Valkey stream instead of writing `last_used_at` and audit outbox entries synchronously.
 Requests fail closed if the queue reaches capacity so audit records are not silently dropped.
+Each replica drains pending usage records and audit events to SQS on `AUTH_SERVICE_DRAIN_INTERVAL_SECS`.
 
 #### Optional token cache
 
@@ -476,29 +480,8 @@ Entries older than `AUTH_SERVICE_TOKEN_CACHE_FRESHNESS_SECS` are refreshed on th
 The breaker opens after `AUTH_SERVICE_TOKEN_CACHE_FAILURE_THRESHOLD` retryable read failures and allows one half-open probe after `AUTH_SERVICE_TOKEN_CACHE_OPEN_SECS`.
 Token mutations made through the auth service refresh or invalidate the corresponding entry.
 
-### Auth relay
-
-The auth relay performs a single drain of pending token usage records, token audit events, and rotation materializations from the Vault token store to SQS, then exits.
-Run it from a cron job every few minutes so events are retried even when auth-service is idle or SQS is temporarily unavailable.
-Auth operations only append usage records to the durable queue; a failed drain leaves them pending for the next scheduled run.
-
-#### Required
-
-| Variable | Description |
-| --- | --- |
-| `AUTH_RELAY_AUDIT_QUEUE_URL` | SQS queue URL that receives auth-service token audit events. |
-| `AUTH_RELAY_AUDIT_TIMEOUT_SECS` | Maximum time spent delivering one audit event, in seconds. |
-| `AUTH_RELAY_VAULT_ADDRESS` | Base URL of the Vault instance that stores auth-service tokens. |
-| `AUTH_RELAY_VAULT_MOUNT` | Vault KV mount containing auth-service tokens. |
-| `AUTH_RELAY_VAULT_TIMEOUT_SECS` | Connection and request timeout for Vault, in seconds. |
-| `AUTH_RELAY_VAULT_TOKEN` | Vault token used to read and acknowledge auth-service token events. |
-| `AUTH_RELAY_USAGE_QUEUE_URL` | Valkey connection URL for the durable token usage queue. Must match the auth service. |
-| `AUTH_RELAY_USAGE_QUEUE_PREFIX` | Key prefix for the token usage queue stream and consumer group. Must match the auth service. |
-| `AUTH_RELAY_USAGE_QUEUE_TIMEOUT_SECS` | Connection and command timeout for the usage queue, in seconds. |
-| `AUTH_RELAY_USAGE_QUEUE_CAPACITY` | Maximum number of queued usage records before requests fail closed. Must match the auth service. |
-| `AUTH_RELAY_USAGE_QUEUE_BATCH_SIZE` | Maximum number of usage records applied by one drain. |
-
-The auth relay also uses the shared AWS timeout variables listed under [Build orchestrator](#build-orchestrator).
+The auth service also uses the shared AWS timeout variables listed under [Build orchestrator](#build-orchestrator) to deliver audit events to SQS.
+A failed drain leaves usage reservations and audit outbox entries pending for the next cycle, so delivery stays at-least-once with stable event IDs that consumers can use as idempotency keys.
 
 ## Sandbox plane
 
@@ -508,7 +491,7 @@ The native cwasm host reads these required variables when it starts.
 Missing, empty, and invalid values fail startup.
 Place-order actions are submitted without signatures to the portfolio service, which signs them with the auth-service token owned by the run request owner.
 The runner fetches and caches a bearer JWT from the auth service and sends it with every order request; the portfolio service rejects requests without an EdDSA JWT signed by a key in the auth service JWKS, which it caches locally.
-Auth operations append usage and audit records to the durable Valkey queue; the separate auth relay service applies them and delivers audit events to SQS.
+Auth operations append usage and audit records to the durable Valkey queue; the auth service applies them and delivers audit events to SQS.
 
 #### Required
 

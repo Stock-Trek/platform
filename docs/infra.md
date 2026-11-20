@@ -9,7 +9,7 @@ Full variable definitions are in [environment-variables.md](environment-variable
 | --- | --- | --- |
 | Market data | Ingester, Backfiller, Aggregator, Archiver, Compactor, Rebuilder, Maintainer | NATS JetStream and KV, S3-compatible storage, Iceberg REST catalog and warehouse |
 | Portfolio | Portfolio service, Portfolio registry, Exchange gateway | NATS JetStream and KV, DynamoDB, Valkey, Vault, SQS, exchange REST/WebSocket endpoints |
-| Auth | Auth service, Auth relay | Valkey, Vault, SQS, shared Ed25519 key and JWKS endpoint |
+| Auth | Auth service | Valkey, Vault, SQS, shared Ed25519 key and JWKS endpoint |
 | Build | Build orchestrator, Git webhook, Build agent | Lambda, S3, SQS, GitHub App credentials, SSM Parameter Store |
 | Control | Run invoker, Run store | Lambda, DynamoDB, S3 artifact and log buckets |
 | Sandbox | CWASM invoker, Runner | S3 artifacts, auth-service and portfolio order endpoints |
@@ -50,7 +50,7 @@ Values come from the process environment except GitHub webhook and backfiller se
 - The aggregator pair ceiling, shard count, per-interval closed-candle caps, and memory budget pass the worst-case startup memory check.
   Rebuilder spill storage and record limits fit available disk and memory.
 - Portfolio service and registry use identical ownership/update stream settings.
-  Auth service, portfolio service, and auth relay use matching Valkey queue settings.
+  Auth service and portfolio service use matching Valkey queue settings.
 
 ### NATS buckets and streams
 
@@ -126,7 +126,7 @@ A live compacted output or retained batch keeps its source and output claims and
    Confirm storage, retention, replicas, and limits with `nats stream info`.
 3. Register GitHub App credentials, webhook secrets, exchange API credentials, SigV4 callers, and the shared auth-service JWT private key.
    Every auth replica must use the same key so tokens signed by one replica verify against another replica's JWKS.
-4. Deploy the auth service, then the auth relay on a short cron schedule.
+4. Deploy the auth service.
    Deploy the portfolio registry before the portfolio service so ownership events populate the owner/account registry before orders are accepted.
 5. Deploy the archiver and compactor before enabling archive-backed aggregator replay.
    Select the replay policy: `checkpoint` resumes a compatible checkpoint or rebuilds from the archive and raw tail; `archive` ignores checkpoints and rebuilds from the archive and raw tail; `earliest` replays the live source from the beginning; `latest` processes only messages published after startup.
@@ -333,7 +333,7 @@ Restore in this order:
 5. If rotation fails, roll back to the previous Vault version and restart the connector.
    Verify update age recovers and no ownership events were lost.
 
-Auth token mutations invalidate or refresh the bounded token cache; usage and audit records drain through the auth relay.
+Auth token mutations invalidate or refresh the bounded token cache; usage and audit records drain through the auth service.
 
 ## Portfolio runbooks
 
@@ -372,7 +372,7 @@ Auth token mutations invalidate or refresh the bounded token cache; usage and au
 2. Stop ingestion and backfilling, then stop the aggregator after it checkpoints.
    Stop the compactor, archiver, and rebuilder after in-flight work completes and leases are released.
    Stop the maintainer in the same window and keep its lease bucket intact until the process is stopped; a stopped maintainer deletes nothing, so backups and teardown checks run against a frozen archive.
-3. Run the auth relay until usage and audit queues drain.
+3. Keep the auth service running until usage and audit queues drain.
    Stop auth and control services only after consumers and scheduled runs are idle.
 4. Back up NATS streams, checkpoints, and the read-model KV bucket before deleting or recreating them.
    Never reset a fencing generation or delete a lease tombstone during a normal restart.

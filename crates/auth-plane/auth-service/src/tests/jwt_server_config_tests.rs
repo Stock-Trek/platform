@@ -110,7 +110,10 @@ fn imports_a_pkcs8_private_key_from_the_environment() {
 fn configures_the_token_drain_from_the_environment() {
     let config = Fixture::config(&[]).unwrap();
 
-    assert_eq!(config.audit_queue_url(), "https://sqs.example.com/123/audit");
+    assert_eq!(
+        config.audit_queue_url(),
+        "https://sqs.example.com/123/audit"
+    );
     assert_eq!(config.audit_timeout(), Duration::from_secs(5));
     assert_eq!(config.drain_interval(), Duration::from_secs(30));
     assert_eq!(
@@ -133,10 +136,7 @@ fn rejects_invalid_drain_configuration() {
         (AWS_CONNECT_TIMEOUT_SECS, "0"),
         (AWS_OPERATION_TIMEOUT_SECS, "0"),
     ] {
-        assert!(
-            Fixture::config(&[(name, value)]).is_err(),
-            "{name}={value}"
-        );
+        assert!(Fixture::config(&[(name, value)]).is_err(), "{name}={value}");
     }
 }
 

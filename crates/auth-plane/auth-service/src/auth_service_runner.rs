@@ -18,7 +18,10 @@ impl AuthServiceRunner {
         SERVICE.init_logging(config.log_filter())?;
         let _metrics = SERVICE.init_metrics("platform/auth-service")?;
         let vault = Arc::new(VaultTokenStore::new(config.vault().clone())?);
-        let store = Arc::new(CachedTokenStore::new(vault.clone(), config.token_cache().clone()));
+        let store = Arc::new(CachedTokenStore::new(
+            vault.clone(),
+            config.token_cache().clone(),
+        ));
         let replay = Arc::new(ValkeyReplayStore::connect(config.valkey().clone()).await?);
         let usage = Arc::new(ValkeyTokenUsageQueue::connect(config.usage_queue().clone()).await?);
         let drain = TokenDrain::connect(

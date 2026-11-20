@@ -1,8 +1,6 @@
 use crate::{
     MemoryTokenStore, MemoryTokenUsageQueue, TokenAuditAction, TokenAuditEvent, TokenAuditLog,
-    TokenStore, TokenUsageQueue,
-    token_drain::TokenDrain,
-    token_usage::TokenUsage,
+    TokenStore, TokenUsageQueue, token_drain::TokenDrain, token_usage::TokenUsage,
 };
 use async_trait::async_trait;
 use chrono::Utc;
@@ -114,7 +112,13 @@ async fn drains_a_pending_usage_record_and_relays_its_audit_event() {
         ))
         .await
         .expect("enqueue usage");
-    let drain = TokenDrain::new(store.clone(), audit.clone(), queue, 100, Duration::from_secs(3600));
+    let drain = TokenDrain::new(
+        store.clone(),
+        audit.clone(),
+        queue,
+        100,
+        Duration::from_secs(3600),
+    );
 
     let applied_and_delivered = drain.drain().await.unwrap();
 
